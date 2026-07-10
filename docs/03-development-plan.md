@@ -18,7 +18,8 @@ Solo engineer + Claude Code, working stage by stage per `02-roadmap.md`. Each st
 ## Tooling decisions
 
 - **C# for everything that touches Openness** (export, import, compile, enumeration). Openness is a .NET API; C# is the native, best-documented path. Ship as a CLI (`openness-cli`) with plain-text/JSON output so Claude Code can drive it. See ADR-0002.
-- **Python allowed for text-side tooling** (IR manipulation, extraction to CSV/XLSX, reports) where it's faster to build. The IR is the contract between the two worlds.
+- **C# for the SimaticML↔IR converter too**, despite it never touching Openness — revised in ADR-0002 once `openness-cli` made a .NET toolchain a hard requirement on this machine anyway (it needed the .NET SDK and the .NET Framework 4.8 Developer Pack installed from scratch); a second runtime for the converter wasn't earning its keep. `System.Xml.Linq` is also a strong fit for querying the SimaticML wiring graph.
+- **Python reserved for later text-side tooling** — concretely, the S5 extractors (`extract/`: extraction to CSV/XLSX, reports) where its ecosystem (pandas/openpyxl) is a genuine advantage and nothing else forces a second runtime onto the machine. Not needed yet. The IR is the contract between whichever languages sit on either side of it.
 - **Git for everything:** IR files, patterns, docs, tooling. SimaticML exports are committed too (they're the evidence), but the IR is the artifact humans diff. Normalize SimaticML (strip volatile IDs) before commit so diffs are meaningful — see `08-testing-strategy.md`.
 - **AutoHotkey macros** stay for UI actions Openness can't do; each remaining macro is a candidate for replacement as Openness coverage grows.
 

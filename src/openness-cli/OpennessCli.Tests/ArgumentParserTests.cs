@@ -32,7 +32,7 @@ public class ArgumentParserTests
     {
         var result = ArgumentParser.Parse(new[] { "list", "C:\\proj\\My.ap20" });
 
-        var success = Assert.IsType<ParseResult.Success>(result);
+        var success = Assert.IsType<ParseResult.ListSuccess>(result);
         Assert.Equal("C:\\proj\\My.ap20", success.Options.ProjectIdentifier);
         Assert.False(success.Options.Json);
         Assert.Null(success.Options.TiaInstallOverride);
@@ -52,7 +52,7 @@ public class ArgumentParserTests
             "--timeout-open", "999",
         });
 
-        var success = Assert.IsType<ParseResult.Success>(result);
+        var success = Assert.IsType<ParseResult.ListSuccess>(result);
         Assert.Equal("C:\\proj\\My.ap20", success.Options.ProjectIdentifier);
         Assert.True(success.Options.Json);
         Assert.Equal("C:\\custom\\dir", success.Options.TiaInstallOverride);
@@ -65,7 +65,7 @@ public class ArgumentParserTests
     {
         var result = ArgumentParser.Parse(new[] { "list", "--json", "C:\\proj\\My.ap20" });
 
-        var success = Assert.IsType<ParseResult.Success>(result);
+        var success = Assert.IsType<ParseResult.ListSuccess>(result);
         Assert.Equal("C:\\proj\\My.ap20", success.Options.ProjectIdentifier);
         Assert.True(success.Options.Json);
     }

@@ -10,9 +10,9 @@ public class OutputFormatterTests
 {
     private static readonly IReadOnlyList<BlockInfo> SampleBlocks = new[]
     {
-        new BlockInfo("Main", BlockType.OB, 1, "LAD", IsSafety: false, Path: "PLC_1/Program blocks"),
-        new BlockInfo("FB_ConveyorControl", BlockType.FB, 1, "LAD", IsSafety: false, Path: "PLC_1/Program blocks"),
-        new BlockInfo("FB_EStopChain", BlockType.FB, 2, "F_LAD", IsSafety: true, Path: "PLC_1/Program blocks/Safety"),
+        new BlockInfo("Main", BlockType.OB, 1, "LAD", IsSafety: false, Path: "PLC_1/Program blocks", IsConsistent: true),
+        new BlockInfo("FB_ConveyorControl", BlockType.FB, 1, "LAD", IsSafety: false, Path: "PLC_1/Program blocks", IsConsistent: true),
+        new BlockInfo("FB_EStopChain", BlockType.FB, 2, "F_LAD", IsSafety: true, Path: "PLC_1/Program blocks/Safety", IsConsistent: true),
     };
 
     [Fact]
@@ -74,5 +74,135 @@ public class OutputFormatterTests
         var json = OutputFormatter.FormatJson(System.Array.Empty<BlockInfo>());
         using var doc = JsonDocument.Parse(json);
         Assert.Equal(0, doc.RootElement.GetArrayLength());
+    }
+
+    private static readonly CompileResult CleanCompile = new(
+        CompileState.Success,
+        ErrorCount: 0,
+        WarningCount: 0,
+        Messages: new[] { new CompileMessage(CompileState.Success, "Compiling finished (errors: 0; warnings: 0)", "PLC_1") });
+
+    private static readonly CompileResult FailedCompile = new(
+        CompileState.Error,
+        ErrorCount: 1,
+        WarningCount: 2,
+        Messages: new[]
+        {
+            new CompileMessage(CompileState.Error, "Tag 'Foo' does not exist", "PlantAutoControl/Network 3"),
+            new CompileMessage(CompileState.Warning, "Unused temp variable", "PlantAutoControl/Network 1"),
+        });
+
+    [Fact]
+    public void FormatCompileTable_ShowsStateAndCounts()
+    {
+        var table = OutputFormatter.FormatCompileTable(CleanCompile);
+
+        Assert.Contains("STATE: Success", table);
+        Assert.Contains("ERRORS: 0", table);
+        Assert.Contains("WARNINGS: 0", table);
+    }
+
+    [Fact]
+    public void FormatCompileTable_ListsEachMessageWithPathAndDescription()
+    {
+        var table = OutputFormatter.FormatCompileTable(FailedCompile);
+
+        Assert.Contains("PlantAutoControl/Network 3", table);
+        Assert.Contains("Tag 'Foo' does not exist", table);
+        Assert.Contains("PlantAutoControl/Network 1", table);
+        Assert.Contains("Unused temp variable", table);
+    }
+
+    [Fact]
+    public void FormatCompileJson_RoundTripsStateErrorsWarningsAndMessages()
+    {
+        var json = OutputFormatter.FormatCompileJson(FailedCompile);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.Equal("Error", root.GetProperty("state").GetString());
+        Assert.Equal(1, root.GetProperty("errors").GetInt32());
+        Assert.Equal(2, root.GetProperty("warnings").GetInt32());
+
+        var messages = root.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("Tag 'Foo' does not exist", messages[0].GetProperty("description").GetString());
+        Assert.Equal("PlantAutoControl/Network 3", messages[0].GetProperty("path").GetString());
+    }
+
+    private static readonly SanityCheckResult HealthyResult = new(
+        TotalBlocks: 42,
+        InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) });
+
+    private static readonly SanityCheckResult UnhealthyResult = new(
+        TotalBlocks: 42,
+        InconsistentBlocks: new[]
+        {
+            new BlockConsistencyIssue("ControlMain", "S7-1200 G2 station_2/JOB9002_PLC/Control", "LAD"),
+        },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) });
+
+    [Fact]
+    public void SanityCheckResult_Healthy_WhenNoIssuesAndAllCompilesSucceed()
+    {
+        Assert.True(HealthyResult.IsHealthy);
+    }
+
+    [Fact]
+    public void SanityCheckResult_Unhealthy_WhenAnyBlockInconsistent()
+    {
+        Assert.False(UnhealthyResult.IsHealthy);
+    }
+
+    [Fact]
+    public void SanityCheckResult_Unhealthy_WhenAnyDeviceCompileFails()
+    {
+        var result = new SanityCheckResult(
+            TotalBlocks: 1,
+            InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
+            DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile) });
+
+        Assert.False(result.IsHealthy);
+    }
+
+    [Fact]
+    public void FormatSanityCheckTable_Healthy_SaysHealthy()
+    {
+        var table = OutputFormatter.FormatSanityCheckTable(HealthyResult);
+
+        Assert.Contains("OVERALL: HEALTHY", table);
+        Assert.Contains("BLOCKS: 42", table);
+        Assert.Contains("INCONSISTENT: 0", table);
+    }
+
+    [Fact]
+    public void FormatSanityCheckTable_Unhealthy_ListsInconsistentBlocksAndDeviceCompiles()
+    {
+        var table = OutputFormatter.FormatSanityCheckTable(UnhealthyResult);
+
+        Assert.Contains("OVERALL: ISSUES FOUND", table);
+        Assert.Contains("ControlMain", table);
+        Assert.Contains("S7-1200 G2 station_2/JOB9002_PLC/Control", table);
+        Assert.Contains("S7-1200 G2 station_2/JOB9002_PLC: Success", table);
+    }
+
+    [Fact]
+    public void FormatSanityCheckJson_RoundTripsHealthAndDetail()
+    {
+        var json = OutputFormatter.FormatSanityCheckJson(UnhealthyResult);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.False(root.GetProperty("healthy").GetBoolean());
+        Assert.Equal(42, root.GetProperty("totalBlocks").GetInt32());
+
+        var inconsistent = root.GetProperty("inconsistentBlocks");
+        Assert.Equal(1, inconsistent.GetArrayLength());
+        Assert.Equal("ControlMain", inconsistent[0].GetProperty("name").GetString());
+
+        var deviceCompiles = root.GetProperty("deviceCompiles");
+        Assert.Equal(1, deviceCompiles.GetArrayLength());
+        Assert.Equal("Success", deviceCompiles[0].GetProperty("state").GetString());
     }
 }

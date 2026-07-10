@@ -38,3 +38,31 @@ Machine reference (this PC): `Siemens.Engineering.dll` for V20 lives at `C:\Prog
 
 ## API surface reference
 Full confirmed object-model shape (TiaPortal/Project/Device/DeviceItem/PlcSoftware/PlcBlockGroup/PlcBlock/ProgrammingLanguage), obtained by reflecting on the installed DLL: `docs/notes/openness-api-surface-v20.md`.
+
+## "Inconsistent blocks and PLC data types (UDT) cannot be exported"
+Hit repeatedly, 2026-07-10/11, on `station_2` of `JOB9002 - Tom White Waste` (scratch copy):
+`PlcBlock.Export()` throws this for a block whose `IsConsistent` is false. First seen exporting
+`PlantAutoControl` before any import work that session; seen again 2026-07-11 on `PerimeterSafetyAlarms`
+*after* a clean import + two successive project-wide compiles both reporting
+`State=Success, Errors=0, Warnings=0` — and confirmed to also block exporting `ControlMain`, a
+block untouched by any of this session's work.
+
+**Root cause narrowed by `openness-cli sanity-check` (2026-07-11).** Ran it against the whole
+project: 180 blocks total, **15 inconsistent**, all in `station_2/JOB9002_PLC` under two groups —
+`Map IO/Simulation` (the simulation-mode blocks: `Simulation`, `DOLSim`, `VSDSim`, and 7
+`*DOLSim` data blocks) and `Control`/`Alarms` (`ControlMain`, `PlantAutoControl`, `AlarmsMain`,
+`PerimeterSafetyAlarms`). **Both device compiles (`station_1/JOB9001_PLC` and `station_2/JOB9002_PLC`) report
+`Success, Errors=0, Warnings=0` at the same time** — conclusively confirming a clean
+project-wide compile does not clear these 15 blocks' `IsConsistent` flag; it isn't a timing
+issue or something a second compile fixes.
+
+The clustering (simulation-mode blocks + the blocks that reference them, `ControlMain` calls
+into `PlantAutoControl`, `AlarmsMain` into `PerimeterSafetyAlarms`) suggests a *scoped* inconsistency — possibly
+tied to `06-lad-conventions.md` C-111's simulation-mode wiring specifically — rather than a
+whole-project corruption, but that's a hypothesis, not confirmed. Still unresolved and still
+outside `openness-cli`'s reach — needs the project owner to check directly in TIA Portal (does
+the UI's own compile/consistency view agree with Openness's `IsConsistent`? does a manual
+recompile of just these 15 clear it?). `openness-cli export`/`compile` don't attempt to work
+around this; they report the real Siemens exception and stop, per design philosophy #10.
+`openness-cli sanity-check <project>` is the fast way to re-check this list without needing a
+failed export to discover it (metadata-only per block, no export attempt).

@@ -14,4 +14,5 @@ public sealed record BlockInfo(
     int Number,
     string Language,
     bool IsSafety,
-    string Path);
+    string Path,
+    bool IsConsistent);

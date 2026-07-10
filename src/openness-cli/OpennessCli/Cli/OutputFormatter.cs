@@ -10,7 +10,7 @@ namespace OpennessCli.Cli;
 
 public static class OutputFormatter
 {
-    private static readonly string[] Headers = { "TYPE", "NUMBER", "NAME", "LANGUAGE", "SAFETY", "PATH" };
+    private static readonly string[] Headers = { "TYPE", "NUMBER", "NAME", "LANGUAGE", "SAFETY", "CONSISTENT", "PATH" };
 
     public static string FormatTable(IReadOnlyList<BlockInfo> blocks)
     {
@@ -44,8 +44,96 @@ public static class OutputFormatter
             name = b.Name,
             language = b.Language,
             safety = b.IsSafety,
+            consistent = b.IsConsistent,
             path = b.Path,
         });
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    public static string FormatCompileTable(CompileResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("STATE: ").Append(result.State).Append('\n');
+        sb.Append("ERRORS: ").Append(result.ErrorCount).Append("  WARNINGS: ").Append(result.WarningCount).Append('\n');
+
+        if (result.Messages.Count > 0)
+        {
+            sb.Append('\n');
+            foreach (var message in result.Messages)
+            {
+                sb.Append('[').Append(message.State).Append("] ");
+                if (!string.IsNullOrEmpty(message.Path))
+                {
+                    sb.Append(message.Path).Append(": ");
+                }
+
+                sb.Append(message.Description).Append('\n');
+            }
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatCompileJson(CompileResult result)
+    {
+        var payload = new
+        {
+            state = result.State.ToString(),
+            errors = result.ErrorCount,
+            warnings = result.WarningCount,
+            messages = result.Messages.Select(m => new
+            {
+                state = m.State.ToString(),
+                description = m.Description,
+                path = m.Path,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    public static string FormatSanityCheckTable(SanityCheckResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("OVERALL: ").Append(result.IsHealthy ? "HEALTHY" : "ISSUES FOUND").Append('\n');
+        sb.Append("BLOCKS: ").Append(result.TotalBlocks).Append("  INCONSISTENT: ").Append(result.InconsistentBlocks.Count).Append('\n');
+
+        if (result.InconsistentBlocks.Count > 0)
+        {
+            sb.Append('\n').Append("Inconsistent blocks:\n");
+            foreach (var block in result.InconsistentBlocks)
+            {
+                sb.Append("  ").Append(block.Path).Append('/').Append(block.Name).Append(" (").Append(block.Language).Append(")\n");
+            }
+        }
+
+        sb.Append('\n').Append("Device compiles:\n");
+        foreach (var device in result.DeviceCompiles)
+        {
+            sb.Append("  ").Append(device.DevicePath).Append(": ").Append(device.Compile.State)
+                .Append(" (errors=").Append(device.Compile.ErrorCount)
+                .Append(", warnings=").Append(device.Compile.WarningCount).Append(")\n");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatSanityCheckJson(SanityCheckResult result)
+    {
+        var payload = new
+        {
+            healthy = result.IsHealthy,
+            totalBlocks = result.TotalBlocks,
+            inconsistentBlocks = result.InconsistentBlocks.Select(b => new { name = b.Name, path = b.Path, language = b.Language }),
+            deviceCompiles = result.DeviceCompiles.Select(d => new
+            {
+                device = d.DevicePath,
+                state = d.Compile.State.ToString(),
+                errors = d.Compile.ErrorCount,
+                warnings = d.Compile.WarningCount,
+            }),
+        };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
@@ -57,6 +145,7 @@ public static class OutputFormatter
         b.Name,
         b.Language,
         b.IsSafety ? "SAFETY" : string.Empty,
+        b.IsConsistent ? string.Empty : "INCONSISTENT",
         b.Path,
     };
 

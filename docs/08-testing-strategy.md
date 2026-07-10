@@ -35,4 +35,4 @@ Open item (risk R-07): PLCSIM Advanced has historically targeted S7-1500 — con
 - **AI capability checks per stage:** each roadmap stage's exit criteria are effectively acceptance tests (10 accurate explanations, 10/10 compiling generations, 10/10 clean modifications). Track results in `docs/notes/stage-gates.md`.
 - **Regression on modification (S7):** after a targeted edit, every *untouched* network must be IR-identical. This is an automated check, not a review step.
 - **Safety filter test:** a reference project containing an F-block must cause export to refuse — tested like any other behavior.
-- **PC-side code:** normal unit tests (xUnit for C#, pytest for Python). The converter is the highest-value target.
+- **PC-side code:** normal unit tests — xUnit for C# (`openness-cli`, converter, per ADR-0002's revision); pytest reserved for Python tooling once it exists (`extract/`, S5). The converter is the highest-value target.
