@@ -11,7 +11,7 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 | `03-development-plan.md` | How the work gets done: setup, tooling, milestones, cadence |
 | `04-design-philosophy.md` | The 10 principles that settle design arguments |
 | `05-architecture.md` | Pipeline, components, repo layout, portability strategy |
-| `06-lad-conventions.md` | LAD style guide — **stub, must be filled with real site rules before S4** |
+| `06-lad-conventions.md` | LAD style guide — **populated**; remaining gaps tracked in its own "To fill in" section |
 | `07-pattern-library-spec.md` | What a pattern is and how one earns library admission |
 | `08-testing-strategy.md` | Golden round-trip, compile gate, simulation layers |
 | `09-risk-register.md` | Risks R-01…R-12 + assumption log |
@@ -24,6 +24,5 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 
 ## Your immediate to-dos
 
-1. Fill in `06-lad-conventions.md` with real site conventions (blocks S4).
-2. Decide the data boundary (`13`) with whoever owns that call (doesn't block S0–S6 on the reference project).
-3. Verify assumption log items A-01/A-02 during S0.
+1. Decide the data boundary (`13`) with whoever owns that call (doesn't block S0–S6 on the reference project).
+2. Verify assumption log items A-01/A-02 during S0.

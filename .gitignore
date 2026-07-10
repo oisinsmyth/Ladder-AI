@@ -19,6 +19,11 @@ venv/
 *.zap[0-9][0-9]
 scratch/
 *.plf
+*.backup
+
+# Real site scratch-copy projects (Amber-tier, docs/13-data-boundary.md) — never commit,
+# not just the .apNN (Logs/, .backup, etc. aren't covered by the patterns above)
+JOB9002 - Tom White Waste - Scratch Copy/
 
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
 Siemens.Engineering*.dll

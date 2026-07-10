@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      Siemens.Engineering.dll targets .NET Framework 4.8 and calls a .NET-Framework-only
+      Assembly.Load overload internally — it fails to load under .NET (Core) 5+.
+      net48 is required, not a preference.
+    -->
+    <TiaOpennessDir Condition="'$(TiaOpennessDir)' == ''">$(TIA_OPENNESS_PATH)</TiaOpennessDir>
+    <TiaOpennessDir Condition="'$(TiaOpennessDir)' == ''">C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20</TiaOpennessDir>
+  </PropertyGroup>
+
+</Project>
