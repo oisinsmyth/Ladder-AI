@@ -1,0 +1,30 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# TIA Portal projects — never commit; exports live in simatic-ml/
+*.ap20
+*.ap[0-9][0-9]
+*.zap[0-9][0-9]
+scratch/
+*.plf
+
+# Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
+Siemens.Engineering*.dll
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp

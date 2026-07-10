@@ -1,0 +1,8 @@
+# Normalize line endings; IR and docs diff as text
+* text=auto
+*.md text
+*.ir text
+*.xml text
+*.cs text
+*.py text
+*.yaml text
