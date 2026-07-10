@@ -28,10 +28,21 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
 
 - **2026-07-10 — "JOB9002 - Tom White Waste" (scratch copy).** Private engineering project, Amber-tier
   (identifying identifying name; not sanitized). Explicit per-project approval given by the
-  project owner to use it for A-01/A-02 Openness verification spikes (`docs/notes/stage-gates.md`
-  S0). No sanitization pass applied. Scoped to this verification use — not a blanket approval
-  for future work; re-confirm before using this project for anything beyond the A-01/A-02 spikes.
-  The project contains two linked PLC stations, `station_1/JOB9001_PLC` and `station_2/JOB9002_PLC`
-  (`PLCToPLCComs`/`LSNTP_Server` between them) — confirmed by the project owner to be the same
-  site (two phases/PLCs of Tom White Waste), so both are covered by this approval, not just the
-  station matching the project's own name.
+  project owner. No sanitization pass applied. Per-project, not blanket — re-confirm before
+  using this project for anything beyond what's listed below. The project contains two linked
+  PLC stations, `station_1/JOB9001_PLC` and `station_2/JOB9002_PLC` (`PLCToPLCComs`/`LSNTP_Server`
+  between them) — confirmed by the project owner to be the same site (two phases/PLCs of Tom
+  White Waste), so both are covered by this approval, not just the station matching the
+  project's own name.
+  - **Scope, as approved:**
+    1. A-01/A-02 Openness verification spikes (`docs/notes/stage-gates.md` S0) — done.
+    2. **2026-07-10, extended:** S1 IR/converter design work — grounding ADR-0001 and
+       `ir/SPEC.md` against real SimaticML structure (`docs/adr/adr-0001-ir-format.md`).
+  - **Rule for this and any future scope:** example content pulled from JOB9002 into a *committed*
+    doc (`ir/SPEC.md`, ADRs, anything under `docs/`) must be genericized — invented tag/instance
+    names, never copied verbatim from the real project. Structural findings (XML element shapes,
+    schema) are not identifying and may be documented directly; specific values
+    (tag names, equipment names, comment text) are not, and get invented replacements.
+  - JOB9002 is a design-time aid only — it does not become the committed `tests/golden/` corpus;
+    that still needs a purpose-built Green project (`docs/notes/stage-gates.md`, S1 overall plan
+    item 8).

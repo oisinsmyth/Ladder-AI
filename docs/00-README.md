@@ -19,7 +19,7 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 | `11-review-workflow.md` | The human review checklist — what "reviewed" means |
 | `12-glossary.md` | Project vocabulary |
 | `13-data-boundary.md` | What data may reach the AI — **draft, needs a decision (R-08)** |
-| `adr-0000…0002` | Decision records: template, IR format (proposed), tooling languages (accepted) |
+| `adr-0000…0002` | Decision records: template, IR format (accepted), tooling languages (accepted) |
 | `CLAUDE.md` | The distilled operating manual Claude Code reads every session |
 
 ## Your immediate to-dos

@@ -64,8 +64,12 @@ ladder-ai/
 
 The IR and everything above it never references Siemens-specific concepts without an abstraction (e.g. instruction names map through an instruction table). Adding Rockwell/Beckhoff/Codesys later = new converter + instruction table entries. The acceptance test for "vendor-neutral enough": could this IR file describe the same logic exported from a different vendor's tool? If a Siemens-ism leaks above the converter, that's a bug.
 
-## Open design questions (resolve via ADRs during S1)
+## Design questions resolved in S1
 
-- IR concrete syntax: custom structured text format vs. constrained YAML/JSON vs. PLCopen XML itself with a readable projection. (PLCopen XML is the compatibility target either way; the question is what humans and Claude read.)
-- Where tag tables/UDTs/DBs live in IR — same format or a simpler tabular one.
-- How much layout/geometry to preserve vs. regenerate on import.
+- IR concrete syntax: custom structured text — readable expression form for reducible
+  series/parallel logic, explicit node/wire fallback per-network otherwise. Decided in
+  ADR-0001, spec'd in `ir/SPEC.md`.
+- Tag tables/UDTs/DBs: a simpler tabular sub-format, not the network-graph form — they carry
+  typed members with no wiring, structurally distinct from code blocks. `ir/SPEC.md`.
+- Layout/geometry preservation: deliberately left open, pending an empirical answer from the
+  golden-file harness (S1 item 6) on whether TIA's own re-layout-on-import is sufficient.

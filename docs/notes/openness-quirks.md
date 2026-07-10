@@ -17,6 +17,11 @@ seen on a clean approval state.
 - User must be in the "Siemens TIA Openness" Windows group (log off/on to take effect).
 - One Portal instance/session — no parallel Openness sessions.
 - Project open is slow; don't kill and retry.
+- `PlcBlock.Export()` can return without producing a file, no exception thrown — observed once
+  during the ADR-0001 grounding spike (2026-07-11), first of three sequential exports in one
+  process. Immediate retry on the same call succeeded. Cause unconfirmed (Portal-side timing?).
+  Mitigation for real `export` subcommand work (S1 item 5): verify the output file actually
+  exists after `Export()` returns before treating it as success; retry once before failing.
 
 ## .NET target framework — net48 required, not net8.0-windows
 Confirmed empirically while building `openness-cli` (2026-07-10): a `net8.0-windows` console app referencing `Siemens.Engineering.dll` by path builds cleanly, but fails at runtime the moment any API is called (e.g. `TiaPortal.GetProcesses()`):
