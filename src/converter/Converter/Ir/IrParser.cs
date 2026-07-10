@@ -181,6 +181,7 @@ public static partial class IrParser
             i++;
 
             var contactUIds = new List<int>();
+            var contactOperandAccessUIds = new List<int>();
             while (i < lines.Length && lines[i].StartsWith("    contact ", StringComparison.Ordinal))
             {
                 if (!SidecarIndexedLineRegex().IsMatch(lines[i]))
@@ -190,6 +191,14 @@ public static partial class IrParser
 
                 contactUIds.Add(int.Parse(lines[i][(lines[i].LastIndexOf('=') + 1)..].Trim()));
                 i++;
+
+                if (i >= lines.Length || !SidecarIndexedOperandLineRegex().IsMatch(lines[i]))
+                {
+                    throw new IrFormatException($"Expected '    contact {contactUIds.Count - 1} operand = <uid>' in SIDECAR for network {number}.");
+                }
+
+                contactOperandAccessUIds.Add(int.Parse(lines[i][(lines[i].LastIndexOf('=') + 1)..].Trim()));
+                i++;
             }
 
             if (i >= lines.Length || !lines[i].StartsWith("    coil = ", StringComparison.Ordinal))
@@ -198,6 +207,14 @@ public static partial class IrParser
             }
 
             var coilUId = int.Parse(lines[i]["    coil = ".Length..].Trim());
+            i++;
+
+            if (i >= lines.Length || !lines[i].StartsWith("    coil operand = ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected '    coil operand = <uid>' in SIDECAR for network {number}.");
+            }
+
+            var coilOperandAccessUId = int.Parse(lines[i]["    coil operand = ".Length..].Trim());
             i++;
 
             var wireUIds = new List<int>();
@@ -212,7 +229,7 @@ public static partial class IrParser
                 i++;
             }
 
-            assignments.Add(new CoilAssignmentSidecar(railWireUId, contactUIds, coilUId, wireUIds));
+            assignments.Add(new CoilAssignmentSidecar(railWireUId, contactUIds, contactOperandAccessUIds, coilUId, coilOperandAccessUId, wireUIds));
         }
 
         return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments);
@@ -272,4 +289,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^    (?<kind>contact|wire) (?<index>\d+) = (?<uid>\d+)$")]
     private static partial Regex SidecarIndexedLineRegex();
+
+    [GeneratedRegex(@"^    contact (?<index>\d+) operand = (?<uid>\d+)$")]
+    private static partial Regex SidecarIndexedOperandLineRegex();
 }

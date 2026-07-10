@@ -287,6 +287,53 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new InvalidOperationException($"Could not obtain a compilable service for device '{path}'.");
         }
 
+        return RunCompile(compilable);
+    }
+
+    public CompileResult CompileBlock(string blockName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CompileBlock)}.");
+        }
+
+        var matches = FindMatchingBlocks(_project, blockName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new BlockNotFoundException(blockName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousBlockException(blockName, matches.Select(m => m.Path));
+        }
+
+        var block = matches[0].Block;
+        var language = block.ProgrammingLanguage.ToString();
+        if (SafetyClassifier.IsSafety(language))
+        {
+            throw new SafetyContentRefusedException(blockName, language);
+        }
+
+        // PlcBlock implements IEngineeringServiceProvider like DeviceItem/PlcSoftware do, and
+        // this GetService<ICompilable>() call is confirmed live, 2026-07-11, to actually return
+        // a working per-block compiler — not documented anywhere, found by reflecting on the
+        // installed DLL then testing live rather than assuming device-level compile was the only
+        // granularity available (see docs/notes/openness-quirks.md).
+        var compilable = block.GetService<ICompilable>()
+            ?? throw new InvalidOperationException(
+                $"Block '{blockName}' does not expose an ICompilable service — expected one to be available (confirmed live on other blocks, see docs/notes/openness-quirks.md).");
+
+        return RunCompile(compilable);
+    }
+
+    private static CompileResult RunCompile(ICompilable compilable)
+    {
         var result = compilable.Compile();
         var messages = new List<CompileMessage>();
         foreach (CompilerResultMessage message in result.Messages)

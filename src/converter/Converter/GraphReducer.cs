@@ -138,6 +138,7 @@ public static class GraphReducer
         var accessEntries = new List<SidecarAccessEntry>();
         var operandTags = new List<string>();
         var operandWireUIds = new List<int>();
+        var contactOperandAccessUIds = new List<int>();
 
         foreach (var contact in contactChain)
         {
@@ -145,6 +146,7 @@ public static class GraphReducer
             visitedWireUIds.Add(wireUId);
             operandWireUIds.Add(wireUId);
             operandTags.Add(tag.TagPath);
+            contactOperandAccessUIds.Add(tag.UId);
             if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
             {
                 accessEntries.Add(tag);
@@ -180,7 +182,13 @@ public static class GraphReducer
         wireUIds.Add(coilOperandWireUId);
 
         var assignment = new CoilAssignment(coilTag.TagPath, condition);
-        var sidecar = new CoilAssignmentSidecar(railWireUId, contactChain.Select(c => c.UId).ToList(), coil.UId, wireUIds);
+        var sidecar = new CoilAssignmentSidecar(
+            railWireUId,
+            contactChain.Select(c => c.UId).ToList(),
+            contactOperandAccessUIds,
+            coil.UId,
+            coilTag.UId,
+            wireUIds);
 
         return (assignment, sidecar, accessEntries);
     }

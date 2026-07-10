@@ -89,7 +89,64 @@ public static class FlgNetParser
                 "SliceAccessModifier found on a non-final <Component> — only the last component was observed to carry one.");
         }
 
-        return new AccessNode(RequireIntAttribute(access, "UId"), scope, path, sliceModifier);
+        var arrayIndex = ParseArrayIndex(components[^1]);
+        if (components.Take(components.Count - 1).Any(c => c.Attribute("AccessModifier")?.Value == "Array"))
+        {
+            throw new UnsupportedConstructException(
+                "Array-indexed Component found on a non-final <Component> — only the last component was observed to carry one.");
+        }
+
+        return new AccessNode(RequireIntAttribute(access, "UId"), scope, path, sliceModifier, arrayIndex);
+    }
+
+    // Array subscript access (e.g. `CommsProcessData.Node_Error[1]`) — confirmed real 2026-07-11:
+    // `<Component Name="Node_Error" AccessModifier="Array"><Access Scope="LiteralConstant">
+    // <Constant><ConstantType>DInt</ConstantType><ConstantValue>1</ConstantValue></Constant>
+    // </Access></Component>`. Only this exact shape (literal constant, DInt) has been observed —
+    // a computed/variable index would need a different nested Access scope, refused rather than
+    // guessed at.
+    private static int? ParseArrayIndex(XElement component)
+    {
+        var accessModifier = component.Attribute("AccessModifier")?.Value;
+        var nestedAccess = component.Element(Ns + "Access");
+
+        if (accessModifier is null && nestedAccess is null)
+        {
+            return null;
+        }
+
+        if (accessModifier != "Array" || nestedAccess is null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Component Name=\"{component.Attribute("Name")?.Value}\"> has an unrecognized array-index shape " +
+                "(expected AccessModifier=\"Array\" together with a nested <Access>).");
+        }
+
+        var indexScope = RequireAttribute(nestedAccess, "Scope");
+        if (indexScope != "LiteralConstant")
+        {
+            throw new UnsupportedConstructException(
+                $"Array index Access scope '{indexScope}' is not supported — only a literal constant index has been observed.");
+        }
+
+        var constant = nestedAccess.Element(Ns + "Constant")
+            ?? throw new SimaticMlFormatException("Array index <Access> is missing its <Constant> element.");
+        var constantType = constant.Element(Ns + "ConstantType")?.Value
+            ?? throw new SimaticMlFormatException("Array index <Constant> is missing <ConstantType>.");
+        if (constantType != "DInt")
+        {
+            throw new UnsupportedConstructException(
+                $"Array index constant type '{constantType}' is not supported — only DInt has been observed.");
+        }
+
+        var constantValue = constant.Element(Ns + "ConstantValue")?.Value
+            ?? throw new SimaticMlFormatException("Array index <Constant> is missing <ConstantValue>.");
+        if (!int.TryParse(constantValue, out var index))
+        {
+            throw new SimaticMlFormatException($"Array index constant value is not an integer: '{constantValue}'.");
+        }
+
+        return index;
     }
 
     private static WireNode ParseWire(XElement wire)

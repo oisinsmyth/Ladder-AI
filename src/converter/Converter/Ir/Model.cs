@@ -50,7 +50,20 @@ public sealed record SidecarAccessEntry(string TagPath, int UId);
 // (one wire, many endpoints — confirmed real, 2026-07-11) — it is not exclusively "owned" by
 // any one assignment the way every other wire in the chain is. WireUIds holds everything else,
 // in order: [operand_0, flow_0to1, operand_1, flow_1to2, ..., operand_last, flow_lastToCoil, coilOperand].
-public sealed record CoilAssignmentSidecar(int RailWireUId, IReadOnlyList<int> ContactUIds, int CoilUId, IReadOnlyList<int> WireUIds);
+//
+// ContactOperandAccessUIds/CoilOperandAccessUId carry the exact source Access-element UId for
+// each operand, positionally — confirmed necessary real, 2026-07-11: the same tag path can be
+// referenced by two genuinely separate <Access> elements (different UIds) in the same network
+// (e.g. two independent assignments both reading "CommsProcessData.Node_Error"), so a
+// TagPath-keyed lookup at rebuild time is ambiguous/wrong. These make regeneration exact
+// without needing to look anything up by tag path.
+public sealed record CoilAssignmentSidecar(
+    int RailWireUId,
+    IReadOnlyList<int> ContactUIds,
+    IReadOnlyList<int> ContactOperandAccessUIds,
+    int CoilUId,
+    int CoilOperandAccessUId,
+    IReadOnlyList<int> WireUIds);
 
 public sealed record NetworkSidecar(
     int NetworkNumber,

@@ -97,6 +97,17 @@ public class ExportImportCompileArgumentParserTests
         var success = Assert.IsType<ParseResult.CompileSuccess>(result);
         Assert.Equal("station_2", success.Options.Device);
         Assert.True(success.Options.Json);
+        Assert.Null(success.Options.Block);
+    }
+
+    [Fact]
+    public void Parse_Compile_WithBlock_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "compile", "MyProject", "--block", "NodeStatusAlarms", "--device", "station_1" });
+
+        var success = Assert.IsType<ParseResult.CompileSuccess>(result);
+        Assert.Equal("NodeStatusAlarms", success.Options.Block);
+        Assert.Equal("station_1", success.Options.Device);
     }
 
     [Fact]

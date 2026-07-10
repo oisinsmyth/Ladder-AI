@@ -83,9 +83,11 @@ public static class IrSerializer
             for (var i = 0; i < assignment.ContactUIds.Count; i++)
             {
                 sb.Append("    contact ").Append(i).Append(" = ").Append(assignment.ContactUIds[i]).Append('\n');
+                sb.Append("    contact ").Append(i).Append(" operand = ").Append(assignment.ContactOperandAccessUIds[i]).Append('\n');
             }
 
             sb.Append("    coil = ").Append(assignment.CoilUId).Append('\n');
+            sb.Append("    coil operand = ").Append(assignment.CoilOperandAccessUId).Append('\n');
 
             for (var i = 0; i < assignment.WireUIds.Count; i++)
             {

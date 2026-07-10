@@ -4,21 +4,59 @@ namespace Converter.SimaticMl;
 // addressing (06-lad-conventions.md C-501: "DB_Alarms.EStopAlarm0.%X3", a documented exception
 // to C-301) — confirmed real, 2026-07-11, as `SliceAccessModifier="x15"` on the LAST <Component>
 // of an Access's Symbol path. Always assumed to be on the last component only.
-public sealed record AccessNode(int UId, string Scope, IReadOnlyList<string> ComponentPath, string? SliceAccessModifier = null)
+//
+// ArrayIndex carries a second real construct found the same day: a literal-constant array
+// subscript on the final Component (`CommsProcessData.Node_Error[n]`) — confirmed from an
+// untouched sibling block after a round-trip on the affected block silently collapsed three
+// distinct array elements (Node_Error[1], [2], [3]) into one indistinguishable tag path, a real
+// data-loss bug caught by the project owner reviewing the result in TIA, not by a test. XML
+// shape: `<Component Name="Node_Error" AccessModifier="Array"><Access Scope="LiteralConstant">
+// <Constant><ConstantType>DInt</ConstantType><ConstantValue>n</ConstantValue></Constant>
+// </Access></Component>`. Seen only on the last component, same as SliceAccessModifier, and
+// never confirmed together with one on the same Component — but nothing here assumes they're
+// mutually exclusive.
+public sealed record AccessNode(
+    int UId,
+    string Scope,
+    IReadOnlyList<string> ComponentPath,
+    string? SliceAccessModifier = null,
+    int? ArrayIndex = null)
 {
-    // ".%X15" notation matches the site's own documented convention exactly, so the IR reads
-    // the same way an engineer already writes/reads it, not a converter-invented notation.
-    public string DottedPath => SliceAccessModifier is null
-        ? string.Join('.', ComponentPath)
-        : $"{string.Join('.', ComponentPath)}.%{SliceAccessModifier.ToUpperInvariant()}";
+    // "[n]" and ".%X15" notation composed together — array index before slice, matching the one
+    // real case observed of a not-yet-seen combination; the site's own ".%X15" convention is
+    // preserved exactly, "[n]" is the natural/obvious choice for array subscript, not otherwise
+    // used by the IR.
+    public string DottedPath
+    {
+        get
+        {
+            var path = string.Join('.', ComponentPath);
+            if (ArrayIndex is not null)
+            {
+                path += $"[{ArrayIndex}]";
+            }
+
+            if (SliceAccessModifier is not null)
+            {
+                path += $".%{SliceAccessModifier.ToUpperInvariant()}";
+            }
+
+            return path;
+        }
+    }
 
     /// <summary>Inverse of <see cref="DottedPath"/> — used when rebuilding an AccessNode from an IR tag string.</summary>
     public static AccessNode FromDottedPath(int uid, string scope, string dottedPath)
     {
-        var sliceMatch = System.Text.RegularExpressions.Regex.Match(dottedPath, @"^(?<path>.+)\.%(?<slice>[A-Za-z]\d+)$");
-        return sliceMatch.Success
-            ? new AccessNode(uid, scope, sliceMatch.Groups["path"].Value.Split('.'), sliceMatch.Groups["slice"].Value.ToLowerInvariant())
-            : new AccessNode(uid, scope, dottedPath.Split('.'), null);
+        var sliceMatch = System.Text.RegularExpressions.Regex.Match(dottedPath, @"^(?<rest>.+)\.%(?<slice>[A-Za-z]\d+)$");
+        var slice = sliceMatch.Success ? sliceMatch.Groups["slice"].Value.ToLowerInvariant() : null;
+        var rest = sliceMatch.Success ? sliceMatch.Groups["rest"].Value : dottedPath;
+
+        var arrayMatch = System.Text.RegularExpressions.Regex.Match(rest, @"^(?<path>.+)\[(?<index>\d+)\]$");
+        var arrayIndex = arrayMatch.Success ? int.Parse(arrayMatch.Groups["index"].Value) : (int?)null;
+        var path = arrayMatch.Success ? arrayMatch.Groups["path"].Value : rest;
+
+        return new AccessNode(uid, scope, path.Split('.'), slice, arrayIndex);
     }
 }
 

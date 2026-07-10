@@ -15,9 +15,24 @@ public static class FlgNetWriter
                 .Select((component, index) =>
                 {
                     var element = new XElement(ns + "Component", new XAttribute("Name", component));
-                    if (index == access.ComponentPath.Count - 1 && access.SliceAccessModifier is not null)
+                    if (index == access.ComponentPath.Count - 1)
                     {
-                        element.Add(new XAttribute("SliceAccessModifier", access.SliceAccessModifier));
+                        if (access.ArrayIndex is not null)
+                        {
+                            element.Add(new XAttribute("AccessModifier", "Array"));
+                            element.Add(new XElement(
+                                ns + "Access",
+                                new XAttribute("Scope", "LiteralConstant"),
+                                new XElement(
+                                    ns + "Constant",
+                                    new XElement(ns + "ConstantType", "DInt"),
+                                    new XElement(ns + "ConstantValue", access.ArrayIndex.Value))));
+                        }
+
+                        if (access.SliceAccessModifier is not null)
+                        {
+                            element.Add(new XAttribute("SliceAccessModifier", access.SliceAccessModifier));
+                        }
                     }
 
                     return element;

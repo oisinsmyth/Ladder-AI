@@ -35,6 +35,32 @@ Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boun
   documented alarm-bit convention (`DB_Alarms.EStopAlarm0.%X3`), seen as
   `SliceAccessModifier="x15"` on an Access's last `<Component>`. Preserved in the IR using the
   same `.%X15` notation the site already uses, not a converter-invented one.
+- **The same tag path can appear on two distinct `<Access>` elements (different UIds) within one
+  network** — surfaced live, 2026-07-11 (`NodeStatusAlarms`): `FlgNetBuilder` rebuilt each operand's
+  source Access UId via a `TagPath`-keyed dictionary, which crashed (`ArgumentException`,
+  duplicate key) the first time this shape appeared. Fixed by threading the exact source Access
+  UId positionally instead — `CoilAssignmentSidecar.ContactOperandAccessUIds`/
+  `CoilOperandAccessUId`, captured once by `GraphReducer` at reduce time — so rebuild never needs
+  to look an Access UId up by tag path at all. (This particular collision turned out to have a
+  more specific cause — see array-index addressing below — but the fix is correct regardless of
+  *why* two Access elements ever share a tag path.)
+- **Array-subscript addressing is real, and was being silently dropped — a genuine data-loss bug,
+  not just the crash above.** `"CommsProcessData".Node_Error` is a `BOOL` array; three separate
+  elements (`Node_Error[1]`, `[2]`, `[3]`) feed three independent alarm bits. The converter had no
+  concept of array indexing, so all three collapsed to the identical `CommsProcessData.Node_Error`
+  tag path in the IR — indistinguishable to a reviewing engineer, and *also* the direct cause of
+  the `FlgNetBuilder` crash above (three genuinely different Access elements, one ambiguous path).
+  Caught live, 2026-07-11, by the project owner reviewing the round-tripped `NodeStatusAlarms` block
+  directly in TIA and noticing the array index was gone — not by a test. Ground truth for the fix
+  was pulled from a real, untouched sibling block (`station_1/JOB9001_PLC/Alrams/NodeStatusAlarms`,
+  never imported into) rather than guessed: `<Component Name="Node_Error" AccessModifier="Array">
+  <Access Scope="LiteralConstant"><Constant><ConstantType>DInt</ConstantType>
+  <ConstantValue>n</ConstantValue></Constant></Access></Component>`. Fixed by adding
+  `AccessNode.ArrayIndex` (only a literal-constant `DInt` index is supported — anything else is a
+  hard error, not a guess), IR notation `Node_Error[n]`, seen only on the last `Component` (same
+  precedent as `SliceAccessModifier`). Verified against the untouched sibling block: `to-ir` now
+  shows 15 distinct `Node_Error[0..14]` tag paths, and `to-ir → to-xml` regenerates the exact
+  source XML shape with the correct index per element.
 
 **Live-verified end-to-end, 2026-07-11**: `export → to-ir → to-xml → import → compile` against a
 real 2-network, multi-assignment, slice-addressed block (`PerimeterSafetyAlarms`) — import returned the

@@ -26,7 +26,6 @@ public static class FlgNetBuilder
                 $"records {sidecar.Assignments.Count}.");
         }
 
-        var accessByPath = sidecar.AccessUIds.ToDictionary(a => a.TagPath, a => a);
         var parts = new List<PartNode>();
         var wires = new List<WireNode>();
         var railEndpointsByWireUId = new Dictionary<int, List<WireEndpoint>>();
@@ -34,7 +33,7 @@ public static class FlgNetBuilder
         for (var a = 0; a < network.Assignments.Count; a++)
         {
             var assignmentSidecar = sidecar.Assignments[a];
-            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, accessByPath, parts, wires);
+            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, parts, wires);
 
             // First element of this chain (first contact, or the coil itself if none) is
             // powered from the rail — record its endpoint under the shared rail wire UId.
@@ -66,7 +65,6 @@ public static class FlgNetBuilder
         CoilAssignment assignment,
         CoilAssignmentSidecar sidecar,
         int networkNumber,
-        Dictionary<string, SidecarAccessEntry> accessByPath,
         List<PartNode> parts,
         List<WireNode> wires)
     {
@@ -91,10 +89,10 @@ public static class FlgNetBuilder
             var contactUId = sidecar.ContactUIds[i];
             parts.Add(new PartNode(contactUId, "Contact"));
 
-            var operandAccess = accessByPath[operandTags[i]];
+            var operandAccessUId = sidecar.ContactOperandAccessUIds[i];
             wires.Add(new WireNode(sidecar.WireUIds[2 * i], new[]
             {
-                new WireEndpoint(EndpointKind.IdentCon, operandAccess.UId, null),
+                new WireEndpoint(EndpointKind.IdentCon, operandAccessUId, null),
                 new WireEndpoint(EndpointKind.NameCon, contactUId, "operand"),
             }));
 
@@ -110,10 +108,9 @@ public static class FlgNetBuilder
 
         parts.Add(new PartNode(sidecar.CoilUId, "Coil"));
 
-        var coilAccess = accessByPath[assignment.CoilTag];
         wires.Add(new WireNode(sidecar.WireUIds[^1], new[]
         {
-            new WireEndpoint(EndpointKind.IdentCon, coilAccess.UId, null),
+            new WireEndpoint(EndpointKind.IdentCon, sidecar.CoilOperandAccessUId, null),
             new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "operand"),
         }));
     }

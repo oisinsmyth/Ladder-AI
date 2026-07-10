@@ -21,6 +21,7 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 | `13-data-boundary.md` | What data may reach the AI — **draft, needs a decision (R-08)** |
 | `adr-0000…0002` | Decision records: template, IR format (accepted), tooling languages (accepted) |
 | `CLAUDE.md` | The distilled operating manual Claude Code reads every session |
+| `CHANGELOG.md` (repo root) | Hand-maintained, dated record of what changed and why — Git doesn't generate this on its own |
 
 ## Your immediate to-dos
 

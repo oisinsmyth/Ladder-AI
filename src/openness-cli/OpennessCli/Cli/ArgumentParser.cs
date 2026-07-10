@@ -30,6 +30,7 @@ public sealed record ImportCommandOptions(
 public sealed record CompileCommandOptions(
     string ProjectIdentifier,
     string? Device,
+    string? Block,
     bool Json,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
@@ -64,7 +65,7 @@ public static class ArgumentParser
         "  openness-cli list          <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli export        <project> --block <name> --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli import        <project> --group <device>/<path> <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli compile       <project> [--device <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli compile       <project> [--device <name>] [--block <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.";
 
@@ -315,6 +316,7 @@ public static class ArgumentParser
     {
         string? projectIdentifier = null;
         string? device = null;
+        string? block = null;
         var json = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -328,6 +330,13 @@ public static class ArgumentParser
                     if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
                     {
                         return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--block":
+                    if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
+                    {
+                        return new ParseResult.Failure(blockErr);
                     }
 
                     break;
@@ -370,7 +379,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, json, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

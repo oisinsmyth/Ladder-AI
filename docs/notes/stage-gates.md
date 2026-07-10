@@ -99,3 +99,116 @@ needs the project owner to check directly in TIA Portal.
 cleanly — real evidence the design works. The specific claim "this round-trips losslessly"
 stays unproven pending either the project's consistency state getting resolved, or a re-run
 against a block/project that isn't affected by it.
+
+#### Cold-open re-test + second full attempt, 2026-07-11
+
+Project owner saved and closed the scratch project and TIA Portal entirely, then asked for a
+fresh re-run. `sanity-check` against a fresh Portal launch reproduced byte-identical results (180
+blocks, same 15 inconsistent, both device compiles `Success`) — rules out session-state/caching
+as the explanation. Full detail: `docs/notes/openness-quirks.md`.
+
+Chose a different, previously-unaffected block (`NodeStatusAlarms`, `station_2/JOB9002_PLC/Alarms`) to
+attempt a clean full round-trip. Hit a new, real converter bug on `converter to-xml`: the same
+tag path can be referenced by two distinct `<Access>` XML elements (different UIds) in one
+network, which crashed `FlgNetBuilder`'s `TagPath`-keyed rebuild lookup. Fixed by threading the
+exact source Access UId positionally through `CoilAssignmentSidecar` instead of re-deriving it by
+tag path at rebuild time — no XML was hand-patched (hard rule 7); full detail:
+`src/converter/README.md`. All 17 converter tests still pass.
+
+With the fix, `export → to-ir → to-xml → import → compile` ran clean end-to-end on `NodeStatusAlarms`
+(import returned the block with no errors; compile reported `Success, Errors=0, Warnings=0`).
+Stage 6 (re-export for the `Normalizer` equivalence check) still didn't run: `sanity-check`
+immediately after showed `NodeStatusAlarms` newly flagged inconsistent (16 total now, the original 15
+plus this one), and a second compile didn't clear it.
+
+**Root cause found, same session:** project owner opened the newly-inconsistent `NodeStatusAlarms` in
+the TIA UI to inspect it directly and spotted the actual defect — `"CommsProcessData".Node_Error` is
+a `BOOL` array, and three separate array elements (`[1]`, `[2]`, `[3]`) feed three separate alarm
+bits (`ModbusAlarm.%X0/1/2`). The converter's `AccessNode` had no concept of array-subscript
+addressing, so all three `Node_Error[n]` references collapsed to the identical, ambiguous
+`CommsProcessData.Node_Error` in the IR — this is also what caused the earlier `FlgNetBuilder`
+crash (three genuinely different Access elements sharing one indistinguishable tag path). Ground
+truth for the fix was pulled from an untouched sibling block (`station_1/JOB9001_PLC/Alrams/
+NodeStatusAlarms`, never imported into) rather than guessed: `<Component Name="Node_Error"
+AccessModifier="Array"><Access Scope="LiteralConstant"><Constant><ConstantType>DInt</ConstantType>
+<ConstantValue>n</ConstantValue></Constant></Access></Component>`. Fixed by adding
+`AccessNode.ArrayIndex`, parsed/written explicitly, IR notation `Node_Error[n]`. Verified against
+that same untouched block: `to-ir` now shows 15 distinct `Node_Error[0..14]` tag paths instead of
+one collapsed path, and `to-ir → to-xml` regenerates the exact `AccessModifier="Array"` + nested
+`Constant` structure with the correct per-element index. Full detail: `src/converter/README.md`.
+
+**Follow-up test, same session — the array-index fix was real, but it wasn't the reason blocks go
+inconsistent.** `station_2/NodeStatusAlarms`'s copy in the scratch project was already contaminated
+by the pre-fix import (and the pristine original had been deleted in scratchpad cleanup), so
+re-testing it wouldn't prove anything. Instead ran the full chain against the untouched
+`station_1/JOB9001_PLC/Alrams/NodeStatusAlarms`: `export → to-ir → to-xml` (regenerated XML inspected
+directly and confirmed byte-structurally correct — same `AccessModifier="Array"` shape, correct
+per-element index, as the original) → `import` (succeeded) → `compile` (`Success, Errors=0,
+Warnings=0`). `sanity-check` immediately after still showed `NodeStatusAlarms` newly inconsistent
+(plus its caller `AlarmMain`, same clustering pattern as station_2) — on content now verified
+correct, not just "compiled so probably fine." A second compile didn't clear it either; `export`
+kept refusing.
+
+**Conclusion:** `IsConsistent = false` after import is not explained by content defects — it
+reproduces on genuinely byte-correct, round-tripped content just as it did on the earlier
+array-index-lossy content. It looks like an inherent side effect of `Import()` in this
+project/TIA version (importing a block flags it and its caller(s) inconsistent; device-level
+`Compile()` never clears it), separate from converter correctness. Full detail:
+`docs/notes/openness-quirks.md`. Whether the original 15 pre-existing inconsistent blocks were
+introduced the same way (an earlier round of Import() before this session) is now a plausible
+explanation, still unconfirmed — needs the project owner to check in the TIA UI.
+
+**Resolved, same session: block-level compile clears it; device-level `compile` doesn't.** Project
+owner opened `station_1/NodeStatusAlarms` in the TIA UI, ran block-level "Compile (only changes)", then
+compiled the whole PLC. `sanity-check` immediately after: `NodeStatusAlarms` and `AlarmMain`
+(station_1) both cleared — back to the original 16 (station_2's pre-existing set, plus the still-
+contaminated `station_2/NodeStatusAlarms`). Root cause: `ICompilable.Compile()` on a `DeviceItem` —
+the only compile granularity Openness's object model exposes, and what `openness-cli
+compile`/`sanity-check` use — is **not equivalent** to TIA's own block-level compile for clearing
+`IsConsistent` after `Import()`. A real Openness/TIA behavior, not a converter or `openness-cli`
+bug. Full detail: `docs/notes/openness-quirks.md`.
+
+**Practical implication (hard rule 4):** a device-level `compile` after `import` isn't sufficient
+proof a generated/modified block is clean — the compile gate needs a block-level compile too,
+which today only exists via the TIA UI. Worth adding block-level compile to `openness-cli` if this
+keeps mattering past S1.
+
+**Stage 6 reached, same session, immediately after the block-level compile.** With
+`station_1/NodeStatusAlarms` cleared, `export` was retried — succeeded (previously refused every
+time). Inspected the re-exported XML directly: 15/15 `AccessModifier="Array"` array-index
+Components and 15/15 `SliceAccessModifier` slice-access Components present, matching the original
+exactly. This is the walking skeleton's actual target assertion
+(`SimaticML → IR → SimaticML' → import → compile → re-export → SimaticML''`, `SimaticML'' ≡
+SimaticML`), reached end-to-end for the first time this project, on real production LAD data
+(multi-assignment, array-indexed, slice-addressed). A formal `Normalizer`-based automated diff
+(vs. this manual field-count check) is still open — `tests/golden/`'s `Normalizer` exists but
+hasn't been run against this pair.
+
+**Gap closed, same session: `openness-cli compile --block <name>` added, no TIA UI step needed.**
+Reflecting on the installed V20 DLL showed `PlcBlock` implements `IEngineeringServiceProvider`
+just like `DeviceItem`/`PlcSoftware` — untested territory, so verified live with a throwaway spike
+before building anything: `plcBlock.GetService<ICompilable>()` returns non-null, and calling
+`.Compile()` on `station_2/NodeStatusAlarms` (still inconsistent) flipped `IsConsistent` to `true`
+immediately, no UI interaction. Built `IOpennessGateway.CompileBlock` on top of this and wired it
+to a new `--block` flag on `compile`; same safety refusal and `--device` disambiguation as
+`export`. All 68 openness-cli tests pass.
+
+Live-verified against the full remaining inconsistent list: `openness-cli compile --block
+PerimeterSafetyAlarms` cleared it — one of the *original* 15 pre-existing blocks, predating this session
+entirely, proving the original mystery and this session's self-inflicted cases share the exact
+same mechanism. Ran `--block` compile across every remaining inconsistent block (the
+`Simulation`/`DOLSim`/`VSDSim` cluster, `ControlMain`, `PlantAutoControl`, `AlarmsMain`) — one real
+finding along the way: `ControlMain` failed with a genuine `State=Error` the first time (it calls
+`PlantAutoControl`, compiled after it in this run), then succeeded cleanly once retried after
+`PlantAutoControl` was clean — compile order matters for callers. Final `sanity-check`:
+**`OVERALL: HEALTHY`, 0 of 180 blocks inconsistent.** Full detail: `docs/notes/openness-quirks.md`,
+`src/openness-cli/README.md`.
+
+**Updated bottom line:** the converter/CLI's output is accepted by `Import()`, is byte-structurally
+correct against real array-indexed data, compiles clean at both device and block level, and
+round-trips through a real `export` with the array-index and slice-access structures intact. S1's
+core technical claim — lossless SimaticML↔IR round-trip for this converter slice — now has live,
+end-to-end evidence. The compile-gate gap (hard rule 4) that required a human TIA UI step is
+closed: `openness-cli compile --block <name>` does it programmatically, and using it end to end
+brought the entire scratch project (both stations, 180 blocks) to fully healthy for the first time
+this session.

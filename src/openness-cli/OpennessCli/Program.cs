@@ -115,7 +115,9 @@ internal static class Program
     private static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.Compile(options.Device);
+        var result = options.Block is null
+            ? gateway.Compile(options.Device)
+            : gateway.CompileBlock(options.Block, options.Device);
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
         return result.State == Model.CompileState.Success ? ExitCodes.Success : ExitCodes.CompileFailed;
     }

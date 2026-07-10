@@ -32,6 +32,16 @@ public interface IOpennessGateway : IDisposable
     CompileResult Compile(string? deviceFilter);
 
     /// <summary>
+    /// Compiles a single named block via its own <c>ICompilable</c> service — distinct from,
+    /// and NOT equivalent to, whole-device <see cref="Compile"/>. Confirmed live, 2026-07-11
+    /// (docs/notes/openness-quirks.md): a block freshly re-imported via Openness's Import()
+    /// gets flagged IsConsistent=false, and device-level Compile() reports Success without ever
+    /// clearing that flag — this is what does. <paramref name="deviceFilter"/> disambiguates the
+    /// same way as <see cref="ExportBlock"/>. Refuses safety content, same as export/import.
+    /// </summary>
+    CompileResult CompileBlock(string blockName, string? deviceFilter);
+
+    /// <summary>
     /// Read-only health check: enumerates every block's consistency flag (no export attempt
     /// needed — cheaper and more precise than probing via Export()) and compiles every PLC
     /// device found in the project. Exists to answer "is this project's Openness state OK"
