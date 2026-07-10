@@ -6,9 +6,13 @@ anyway). Built in S1, `net8.0` (no `Siemens.Engineering` dependency, so unlike `
 it isn't pinned to `net48`).
 
 ```
-converter to-ir  <file>    # SimaticML → IR
-converter to-xml <file>    # IR → SimaticML
+converter to-ir  <file>                                   # SimaticML → IR
+converter to-xml <file>                                   # IR → SimaticML
+converter sanitize <file> --map <mapping.json> --out <path>  # SimaticML → sanitized SimaticML
 ```
+
+`to-ir`/`to-xml`/`sanitize` all auto-detect DB vs code-block content (root element name for XML
+input, first line for IR/text input) and route accordingly — no separate flag needed.
 
 ## Current scope (walking skeleton)
 
@@ -36,7 +40,7 @@ Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boun
   `SliceAccessModifier="x15"` on an Access's last `<Component>`. Preserved in the IR using the
   same `.%X15` notation the site already uses, not a converter-invented one.
 - **The same tag path can appear on two distinct `<Access>` elements (different UIds) within one
-  network** — surfaced live, 2026-07-11 (`NodeStatusAlarms`): `FlgNetBuilder` rebuilt each operand's
+  network** — surfaced live, 2026-07-10 (`NodeStatusAlarms`): `FlgNetBuilder` rebuilt each operand's
   source Access UId via a `TagPath`-keyed dictionary, which crashed (`ArgumentException`,
   duplicate key) the first time this shape appeared. Fixed by threading the exact source Access
   UId positionally instead — `CoilAssignmentSidecar.ContactOperandAccessUIds`/
@@ -50,7 +54,7 @@ Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boun
   concept of array indexing, so all three collapsed to the identical `CommsProcessData.Node_Error`
   tag path in the IR — indistinguishable to a reviewing engineer, and *also* the direct cause of
   the `FlgNetBuilder` crash above (three genuinely different Access elements, one ambiguous path).
-  Caught live, 2026-07-11, by the project owner reviewing the round-tripped `NodeStatusAlarms` block
+  Caught live, 2026-07-10, by the project owner reviewing the round-tripped `NodeStatusAlarms` block
   directly in TIA and noticing the array index was gone — not by a test. Ground truth for the fix
   was pulled from a real, untouched sibling block (`station_1/JOB9001_PLC/Alrams/NodeStatusAlarms`,
   never imported into) rather than guessed: `<Component Name="Node_Error" AccessModifier="Array">
@@ -62,7 +66,7 @@ Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boun
   shows 15 distinct `Node_Error[0..14]` tag paths, and `to-ir → to-xml` regenerates the exact
   source XML shape with the correct index per element.
 
-**Live-verified end-to-end, 2026-07-11**: `export → to-ir → to-xml → import → compile` against a
+**Live-verified end-to-end, 2026-07-10**: `export → to-ir → to-xml → import → compile` against a
 real 2-network, multi-assignment, slice-addressed block (`PerimeterSafetyAlarms`) — import returned the
 block cleanly, compile reported `State=Success, Errors=0, Warnings=0` on two separate runs. The
 outer block-export XML wrapper is no longer a guess — three requirements were found and fixed
@@ -78,9 +82,44 @@ The final re-export/comparison step of that live run didn't complete — blocked
 reproducing it on an untouched block); see `docs/notes/openness-quirks.md`.
 
 Still open (not yet needed by this slice's fixtures, not guessed at): exact source attribute
-for negated contacts, exact `Part Name` for an AND-merge, instance-DB representation detail,
-and whether `DocumentInfo` (product/version provenance in the wrapper) is actually required by
-`Import()` or was just never tested without it.
+for negated contacts, exact `Part Name` for an AND-merge, and full instance-DB / structured-member
+support (see below — the shape is understood, just deferred). `DocumentInfo` (product/version
+provenance in the wrapper) is confirmed present in real full-project exports but not required —
+our own writer never emits one and `Import()` has never complained.
+
+## DB support (GlobalDB only)
+
+Deliberately narrow, same discipline as the LAD side — **`SW.Blocks.GlobalDB`, `Static` section
+only, scalar and `Array[m..n] of <scalar>` members**. Confirmed against three real GlobalDB
+exports, 2026-07-10 (`CommsProcessData`, 11 members; `Alarms`, 4; `Input`, 47 — none had structured
+content, so all three round-trip cleanly end to end):
+
+- **DB kind is the root element name** (`SW.Blocks.GlobalDB` vs `SW.Blocks.InstanceDB`), not a
+  field — corrects `ir/SPEC.md`'s original sketch, which had it as a `KIND` line.
+- **Retention (`Remanence`) is per-member, not per-DB** — also corrects the original sketch.
+  `RETAIN` appears on the IR member line, omitted when non-retentive.
+- **`StartValue` is captured verbatim**, whatever literal syntax the source uses (`FALSE`, `2.0`,
+  `16#0000`, `'text'`, `T#1H`) — never parsed/understood. One real DB (`ConveyorMotor1`, an instance
+  DB, out of scope below) had a string start value that was a descriptive equipment name —
+  confirms string values are a real sanitization surface, not hypothetical.
+- **Every member's `AttributeList` (`ExternalAccessible`/`Visible`/`Writable`, `SetPoint`) was
+  identical boilerplate** (`true/true/true/false`) on every scalar/array member across all three
+  real DBs — `DbSourceParser` hard-errors if a member ever differs, rather than assume the pattern
+  holds universally.
+- **`Member`/`AttributeList`/`StartValue` inherit the `Interface` XML namespace** from the
+  ancestor `<Sections xmlns="...">` rather than redeclaring it — a real bug caught immediately by
+  testing against `CommsProcessData`: looking them up as unnamespaced elements (`Element("StartValue")`)
+  silently returned null for every one, making every `BooleanAttribute` read back as "absent."
+  Fixed by searching by `LocalName` (parse side) and explicitly namespacing every written element
+  (write side), matching the rest of this parser's existing discipline.
+
+**Explicitly out of scope, hard error (design philosophy #10):** `SW.Blocks.InstanceDB` (real,
+confirmed to carry `InstanceOfName`/`InstanceOfType` — but every real instance DB inspected
+(`ConveyorMotor1`) also has UDT-typed and system-function-block-instance-typed members, e.g. a
+`TON_TIME` timer instance with its own nested `PT`/`ET`/`IN`/`Q` sub-members, so instance-DB
+support and structured-member support are deferred together — a converter that opens an instance
+DB and immediately hard-errors on its first member isn't worth half-building); any member with
+nested `<Sections>`; any non-`Static` Interface section with content.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

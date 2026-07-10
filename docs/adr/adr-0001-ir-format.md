@@ -1,7 +1,7 @@
 # ADR-0001 — Intermediate Representation format
 
 - **Status:** Accepted
-- **Date:** 2026-07-11
+- **Date:** 2026-07-10
 
 ## Context
 

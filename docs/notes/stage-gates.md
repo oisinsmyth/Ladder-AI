@@ -32,7 +32,7 @@ Record acceptance-test results here at each gate (10 accurate explanations, 10/1
 
 ### S1 (walking skeleton — Contact/Coil-only slice, overall plan items 4–6)
 
-Real findings from the live proof against `JOB9002` blocks (2026-07-11), each a correctness gap
+Real findings from the live proof against `JOB9002` blocks (2026-07-10), each a correctness gap
 found and fixed, not guessed at — full detail in `src/converter/README.md`:
 
 - **Multiple independent rungs per network are real** — a 16-independent-rung alarm-bit network
@@ -57,7 +57,7 @@ found and fixed, not guessed at — full detail in `src/converter/README.md`:
 - `PlcBlock.Export()` refuses to export an "inconsistent" block (needs recompile in TIA) with a
   clear error.
 
-#### Result, 2026-07-11 — did the walking skeleton pass its own test? Partially.
+#### Result, 2026-07-10 — did the walking skeleton pass its own test? Partially.
 
 Layer 1's actual assertion (`docs/08-testing-strategy.md`) is
 `SimaticML → IR → SimaticML' → import → compile → re-export → SimaticML''`, with
@@ -84,7 +84,7 @@ a block untouched by any work this session, and it matches an identical error hi
 `station_2` PLC software's inconsistency predates this session's import, isn't caused by it, and
 a clean project-wide compile (checked twice) doesn't clear it either.
 
-**Precisely characterized, 2026-07-11, by the new `openness-cli sanity-check <project>`**
+**Precisely characterized, 2026-07-10, by the new `openness-cli sanity-check <project>`**
 (built specifically to answer this — reads every block's `IsConsistent` flag directly, no export
 attempt needed, plus compiles every PLC device found): 180 blocks total, **15 inconsistent**,
 all under `station_2/JOB9002_PLC`, clustered in `Map IO/Simulation` (simulation-mode blocks) and
@@ -100,7 +100,7 @@ cleanly — real evidence the design works. The specific claim "this round-trips
 stays unproven pending either the project's consistency state getting resolved, or a re-run
 against a block/project that isn't affected by it.
 
-#### Cold-open re-test + second full attempt, 2026-07-11
+#### Cold-open re-test + second full attempt, 2026-07-10
 
 Project owner saved and closed the scratch project and TIA Portal entirely, then asked for a
 fresh re-run. `sanity-check` against a fresh Portal launch reproduced byte-identical results (180
@@ -212,3 +212,100 @@ end-to-end evidence. The compile-gate gap (hard rule 4) that required a human TI
 closed: `openness-cli compile --block <name>` does it programmatically, and using it end to end
 brought the entire scratch project (both stations, 180 blocks) to fully healthy for the first time
 this session.
+
+### S1 item 1 (reference project) — Phase 1 complete, 2026-07-10
+
+Seeded the purpose-built Green reference project (`ir/reference/`, `simatic-ml/reference/`) —
+S1's stated exit criteria runs against "the reference project," which didn't exist before this;
+everything proven above ran against `JOB9002`, explicitly excluded from becoming the committed
+corpus. One block (`NodeStatusAlarms`, structurally derived and sanitized from a real one —
+`docs/13-data-boundary.md` has the recorded, non-identifying basis; `tests/golden/README.md`
+has the technical detail) is now committed, and the full live round-trip
+(`export → to-ir → to-xml → import → compile → re-export`) ran against a real, separate TIA
+project, ending with `Normalizer.AreSemanticallyEquivalent` — the actual Layer 1 assertion 2
+(`08-testing-strategy.md`), not the manual field-count check used earlier this session —
+returning **true** for the first time.
+
+Getting there surfaced three more real, previously-unknown gaps, each found by the process
+working exactly as designed ("new constructs found in real projects... failing, then fixed"):
+
+1. **A block referencing another block's data needs that block compiled first, in the target
+   project too** — the imported FC referenced two DBs that didn't exist in the brand-new
+   reference project at all (only in the source project). Not a bug; expected given hard rule 3.
+   Required two small placeholder DBs (matching real declared types — `Array[0..14] of Bool`,
+   `Word` — confirmed with the project owner rather than guessed) plus compiling them before the
+   FC that depends on them, same dependency-order lesson as `ControlMain`/`PlantAutoControl` above.
+2. **`openness-cli compile`'s diagnostic messages were silently incomplete.** `CompilerResultMessage`
+   has a nested `Messages` tree (confirmed by reflecting on the DLL) that `OpennessGateway` only
+   ever read one level of — every past compile failure this session showed a bare error count with
+   an empty description. Fixed by recursing; immediately paid for itself by revealing the real
+   cause of item 1 above ("Block ... that is accessed has not been compiled") instead of an opaque
+   `errors: 30`.
+3. **`Wire` UId is not preserved through a real TIA import/compile cycle** — contrary to the
+   original sidecar design assumption. TIA reassigns every wire's own UId on its own (the shared
+   rail wire moved from 126 to a fresh 81, everything else shifted), even though the *set* of
+   connections was byte-identical. `Normalizer.cs` now treats wire identity as its endpoint set,
+   not its UId, and wire order as non-significant — both confirmed real, not guessed. Two smaller,
+   related gaps fixed alongside it: `BlockSourceParser` was silently dropping a `Title` field
+   (distinct from `Comment`) and would've silently dropped real FC/FB parameters (`Interface`) —
+   both now hard-error if ever non-empty/non-boilerplate, rather than vanish quietly.
+
+Full detail on all of these: `tests/golden/README.md`, `docs/notes/openness-quirks.md`.
+
+**Not yet done** (deliberately out of scope for Phase 1, per the approved plan): only one block;
+no DB/UDT round-trip (the two placeholder DBs are hand-created scaffolding, not converter output);
+no TON/MOVE/comparisons/calls/branches; no automated CI wiring (the real round-trip needs a live
+Portal session, same as `RoundTripRunner.RunFull` always required). Growing the corpus is
+follow-on work using the now-proven pattern.
+
+### S1 item 1 (reference project) — Phase 2: real DB round-trip, 2026-07-10
+
+Closed the biggest Phase 1 gap: DB/UDT round-trip was placeholder scaffolding, not converter
+output. Built `DbSourceParser`/`DbSourceWriter`/`DbIrSerializer`/`DbIrParser` for
+`SW.Blocks.GlobalDB` (`Static` section, scalar and `Array[m..n] of <scalar>` members —
+`src/converter/README.md` has the full scope), grounded against three real DBs
+(`CommsProcessData`/11 members, `Alarms`/4, `Input`/47 — all fully brought in, not just the
+members the paired FC references, per your call). `ir/SPEC.md`'s DB sketch had two things wrong,
+corrected: DB kind is the source's root element name, not a field; retention is per-member, not
+per-DB. `converter sanitize`/`to-ir`/`to-xml` now auto-detect DB vs code-block content.
+
+Three real bugs found and fixed, same discipline as Phase 1 — caught by testing against real
+data, not invented:
+
+1. **`Member`/`AttributeList`/`StartValue` inherit the `Interface` XML namespace** from the
+   ancestor `<Sections xmlns="...">` rather than redeclaring it — looking them up as unnamespaced
+   elements silently returned null for every one on both parse and write, making every
+   `BooleanAttribute` read back as "absent." Caught immediately (first real DB tried).
+2. **A structural-section scan used `.Descendants()` instead of direct children**, so a
+   structured member's own nested `<Sections>` (inside its own `<Member>`, e.g. a timer instance)
+   was wrongly picked up as a top-level DB section, producing a less specific hard-error than the
+   dedicated structured-member check was designed to give. Caught by this converter's own test
+   suite, not live data.
+3. **A blanket `"Interface"` strip in `Normalizer` — correct for code blocks (confirmed
+   boilerplate by a parser-level guard), wrong for DBs.** Applied unconditionally, it would have
+   made every DB round-trip trivially pass without ever comparing member content — the exact
+   silent-false-positive the golden harness exists to prevent. Fixed with a structural test (a
+   DB's `Interface` always has a `Static` Section, a code block's never does), not a blanket name
+   match. Two new permanent `NormalizerTests` guard this distinction specifically.
+
+Explicitly deferred as one unit (an instance DB example (`ConveyorMotor1`) needs both together, so a
+converter that opens an instance DB and immediately hard-errors on its first member isn't worth
+half-building): `SW.Blocks.InstanceDB`, and any member with nested `<Sections>` (UDT-typed or
+system-function-block-instance-typed, e.g. a `TON_TIME` timer).
+
+**Second FC block: searched, not found this pass.** Tried `PerimeterSafetyAlarms`/`GeneralAlarms`
+(OR-merge instructions) and `StatusAlarms` (a `LiteralConstant` access, likely a comparison) —
+all in the `Alarms` group station_1 also has, all outside current LAD scope. `ShutdownControl`
+itself converts cleanly but every single dependency is a structured member on an Instance DB
+(`<Instance>.IO.ShutdownComplete`) — the exact deferred case above. Checked 12 candidates total
+without finding a clean fit; most of this project's Control-group logic depends on Instance DBs,
+most of its Alarms-group logic uses OR-merges. A real, useful finding about this codebase's
+converter-scope gaps, not a dead end — the next FC block waits on either OR-merge support or
+instance-DB support, whichever comes first.
+
+Live pipeline: sanitized all three DBs (dependency-order compile, DBs before `NodeStatusAlarms`,
+which was re-verified still compiles against the real — not placeholder — DBs), full round-trip
+against the real reference project, `Normalizer.AreSemanticallyEquivalent` **true** for all
+three. Committed: `ir/reference/{CommsProcessData,AlarmWords,EquipmentStatus}.ir` +
+matching `simatic-ml/reference/*.xml`. All 114 tests pass across the three suites (35 converter,
+68 openness-cli, 11 golden harness).

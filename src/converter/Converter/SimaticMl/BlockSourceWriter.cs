@@ -7,7 +7,7 @@ namespace Converter.SimaticMl;
 /// content — the inverse of <see cref="BlockSourceParser"/>. The FlgNet content itself
 /// (<see cref="FlgNetWriter"/>) is schema-verified against real exports (ADR-0001 spike). The
 /// surrounding wrapper (this file) reconstructs what's confirmed required by a real
-/// `PlcBlockComposition.Import()` call (2026-07-11): the block element's own "ID" attribute,
+/// `PlcBlockComposition.Import()` call (2026-07-10): the block element's own "ID" attribute,
 /// and a unique "ID" on every `MultilingualText`/`MultilingualTextItem` (comments) — TIA
 /// rejected each of these in turn as they were found missing, one live-import attempt at a
 /// time. `DocumentInfo` (product/version provenance) hasn't been confirmed required or not;
@@ -24,7 +24,7 @@ public static class BlockSourceWriter
         // impossible for an arbitrarily large real block.
         var nextAuxId = 100_000;
 
-        // Namespace is required by Import() even when empty — confirmed real, 2026-07-11
+        // Namespace is required by Import() even when empty — confirmed real, 2026-07-10
         // ("Missing 'Namespace' identifier attribute"). Not currently captured from the
         // source (BlockSourceParser doesn't read it) — written empty, matching every real
         // export inspected so far (`<Namespace />`), until a project with a non-empty one

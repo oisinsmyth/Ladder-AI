@@ -1,6 +1,6 @@
 # IR format specification
 
-**Status: v1 — decided per ADR-0001 (2026-07-11), against real S7-1200 G2 SimaticML exports.**
+**Status: v1 — decided per ADR-0001 (2026-07-10), against real S7-1200 G2 SimaticML exports.**
 Grammar details not yet exercised by a real converter (this is a spec, not an implementation)
 may still shift when `src/converter/` is built and run against the golden suite (S1 overall
 plan items 4–7) — anything marked **[converter-verify]** below is a contract, not a guarantee.
@@ -122,6 +122,10 @@ than prose here.
 
 ## Tag tables, UDTs, DBs
 
+**Status: DB shape below is converter-verified (2026-07-10, against three real GlobalDB
+exports — `src/converter/README.md`); the original sketch had two things wrong, corrected here.
+UDT support is still a sketch, not yet built.**
+
 Simpler tabular sub-format — no wiring, so the network grammar above doesn't apply:
 
 ```
@@ -130,18 +134,42 @@ UDT <Name>
   <member> : <Type>
 
 DB <Name>
-  KIND <Global|Instance|Array>
-  RETENTIVE <true|false>
+  ROOTID <id>
+  NUMBER <n>
+  COMMENT "<text>"                        # omitted if empty, same rule as BLOCK
   MEMBERS
-    <member> : <Type> [= <start value>]
-    <member> : <Type> [= <start value>]
+    <member> : <Type>
+    <member> : <Type> RETAIN
+    <member> : <Type> = <start value>
+    <member> : <Type> RETAIN = <start value>
 ```
 
-Instance DBs (`DB KIND Instance`) additionally reference the FB they instantiate — exact
-attribute TBD when the converter is built against a real instance DB export
-**[converter-verify]**. Nested UDT-typed members inside a DB reference the UDT by name rather
-than inlining its members, mirroring how the source and the site's own conventions (C-302) treat
-UDTs as the reusable unit.
+Two corrections from the original sketch, both wrong until checked against a real export:
+
+- **DB kind (`Global`/`Instance`) is not a field** — it's the source's own root element name
+  (`SW.Blocks.GlobalDB` vs `SW.Blocks.InstanceDB`), so the IR doesn't carry a `KIND` line at all;
+  which converter code path parses/writes a file already establishes it.
+- **Retention is per-member, not per-DB** — the source's `Remanence` attribute lives on each
+  `<Member>`, not once on the DB. `RETAIN` appears on the member line, omitted when non-retentive
+  (the common case), matching the "absence means default" rule used elsewhere in this spec.
+
+`<Type>` is written verbatim as the source shows it (e.g. `Array[0..14] of Bool`) — not
+re-parsed into a separate array/type grammar; this converter slice never needs to understand it
+structurally, only preserve it exactly. `<start value>` is likewise verbatim, in whatever literal
+syntax the source uses (`FALSE`, `2.0`, `16#0000`, `'text'`, `T#1H`) — confirmed real, not
+invented; string values (`'text'`) are the one case with real sanitization implications (a real
+example was a descriptive equipment name), everything else is structural.
+
+Instance DBs (`SW.Blocks.InstanceDB`) carry `<InstanceOfName>`/`<InstanceOfType>` (the FB they
+instantiate) — confirmed real, 2026-07-10, but not yet built: every instance DB example inspected
+also had UDT-typed and system-function-block-instance-typed members (e.g. a `TON_TIME` timer
+instance, itself carrying nested `PT`/`ET`/`IN`/`Q` sub-members) that this converter slice
+doesn't model yet either, so instance DB support and structured-member support are deferred
+together as one unit — no value in a converter that opens an instance DB and immediately hard
+errors on its first member. Nested UDT-typed/structured members inside a DB will reference the
+type by name rather than inlining its members when this is built, mirroring how the source and
+the site's own conventions (C-302) treat UDTs as the reusable unit — not yet implemented,
+grammar TBD **[converter-verify]**.
 
 ## Comment/title placement
 

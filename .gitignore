@@ -25,8 +25,16 @@ scratch/
 # not just the .apNN (Logs/, .backup, etc. aren't covered by the patterns above)
 JOB9002 - Tom White Waste - Scratch Copy/
 
+# The reference TIA project itself (S1 item 1) — same reasoning: never commit the live TIA
+# project folder, only the sanitized exports it produces (simatic-ml/reference/, ir/reference/)
+SampleProject/
+
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
 Siemens.Engineering*.dll
+
+# Sanitization mapping files (real name -> invented name) — never commit; the point of a
+# sanitized artifact is that nothing links it back to the real source, including this
+sanitization/
 
 # OS / editor
 Thumbs.db

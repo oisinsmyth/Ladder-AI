@@ -10,7 +10,38 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-10
 
-**Fix converter data-loss bugs found via live TIA testing; add block-level compile support**
+**Seed the reference project: sanitizer, DB round-trip support, auto project-switching**
+
+- Added `converter sanitize` — a new subcommand that renames every identifying value in a
+  parsed block/DB via a hand-authored, never-committed mapping file (`docs/13-data-boundary.md`),
+  hard-erroring on anything left unmapped. Reuses the existing parse/write pipeline; the
+  transform is just a rename pass on the parsed model.
+- Seeded S1's purpose-built Green reference project (`ir/reference/`, `simatic-ml/reference/`) —
+  didn't exist before this; everything proven so far ran against `JOB9002`, explicitly barred from
+  becoming the committed corpus. One FC (`NodeStatusAlarms`) plus three complete DBs
+  (`CommsProcessData`/11 members, `AlarmWords`/4, `EquipmentStatus`/47) are now committed, each
+  proven through a real `export → sanitize → to-ir → to-xml → import → compile → re-export`
+  cycle ending in `Normalizer.AreSemanticallyEquivalent` — the actual Layer 1 losslessness
+  assertion, not a manual spot-check — returning true.
+- Built real DB round-trip support (`DbSourceParser`/`DbSourceWriter`/DB IR format) — the two
+  DBs the FC depends on were hand-made placeholders until now. Found and fixed three real bugs
+  along the way: `Member`/`AttributeList`/`StartValue` XML-namespace inheritance silently
+  dropping every attribute on parse and write; a structural-section scan that wrongly recursed
+  into a structured member's own nested content; and a blanket `Normalizer` strip rule that
+  would have made every DB round-trip trivially pass without comparing real member content —
+  correct for code blocks, wrong for DBs, now a structural check instead of a name match.
+- Fixed a second real bug independent of DB work: `openness-cli compile`'s diagnostic messages
+  were silently incomplete (a nested Siemens API message tree only ever read one level deep) —
+  every past compile failure this session showed a bare error count with no explanation.
+- Added automatic TIA project-switching to `openness-cli` — every session up to this point
+  required manually closing whichever project was open before touching a different one; now it
+  saves and closes automatically (`Project.Close()`/`Save()`, confirmed to leave Portal itself
+  running).
+- Searched 12 real blocks for a second FC to bring into the reference project; none fit without
+  either an unsupported instruction (OR-merge, comparisons) or a cascade of new Instance-DB
+  dependencies — a real finding about this codebase's converter-scope gaps, not a dead end.
+
+**Fix converter data-loss bugs found via live TIA testing; add block-level compile support** (`d3cb494`)
 
 - Fixed: array-subscript addressing (`Node_Error[1]`, `[2]`, `[3]`) was silently dropped by the
   converter, collapsing distinct array elements into one ambiguous tag path in the IR — a real

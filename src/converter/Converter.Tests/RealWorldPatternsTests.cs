@@ -7,7 +7,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// Three real-world patterns confirmed against actual JOB9002 exports (2026-07-11), each a
+/// Three real-world patterns confirmed against actual JOB9002 exports (2026-07-10), each a
 /// correctness bug or gap found and fixed during the live proof: multiple independent
 /// coil-per-network rungs sharing one rail wire, empty (`&lt;NetworkSource /&gt;`) networks,
 /// and slice-access (bit-within-word) alarm addressing (06-lad-conventions.md C-501).

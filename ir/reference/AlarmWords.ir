@@ -1,0 +1,8 @@
+DB AlarmWords
+  ROOTID 0
+  NUMBER 93
+  MEMBERS
+    AlarmWord1 : Word
+    AlarmWord0 : Word
+    AlarmWord2 : Word
+    AlarmWord3 : Word

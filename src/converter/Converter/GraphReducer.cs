@@ -6,7 +6,7 @@ namespace Converter;
 /// <summary>
 /// Reduces a Contact/Coil FlgNetwork to the readable IR form (ADR-0001): one or more
 /// independent series chains (Powerrail -> Contact -> Contact -> ... -> Coil), bundled in one
-/// network. Two real-world shapes confirmed against actual exports (2026-07-11), both handled
+/// network. Two real-world shapes confirmed against actual exports (2026-07-10), both handled
 /// explicitly rather than guessed at:
 ///   - Multiple independent chains sharing one network, with no wiring between them (a
 ///     16-independent-rung alarm-bit network).

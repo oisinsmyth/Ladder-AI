@@ -80,7 +80,7 @@ public static class FlgNetParser
         }
 
         // Bit-within-word slice access (site convention C-501) — assumed to appear only on the
-        // last Component, confirmed real 2026-07-11. Any other Component carrying one is outside
+        // last Component, confirmed real 2026-07-10. Any other Component carrying one is outside
         // what's been observed so far; refuse rather than silently take the wrong one.
         var sliceModifier = components[^1].Attribute("SliceAccessModifier")?.Value;
         if (components.Take(components.Count - 1).Any(c => c.Attribute("SliceAccessModifier") is not null))
@@ -99,7 +99,7 @@ public static class FlgNetParser
         return new AccessNode(RequireIntAttribute(access, "UId"), scope, path, sliceModifier, arrayIndex);
     }
 
-    // Array subscript access (e.g. `CommsProcessData.Node_Error[1]`) — confirmed real 2026-07-11:
+    // Array subscript access (e.g. `CommsProcessData.Node_Error[1]`) — confirmed real 2026-07-10:
     // `<Component Name="Node_Error" AccessModifier="Array"><Access Scope="LiteralConstant">
     // <Constant><ConstantType>DInt</ConstantType><ConstantValue>1</ConstantValue></Constant>
     // </Access></Component>`. Only this exact shape (literal constant, DInt) has been observed —

@@ -1,0 +1,194 @@
+BLOCK FC NodeStatusAlarms
+ROOTID 0
+NUMBER 19
+LANGUAGE LAD
+
+NETWORK 1 ""
+  COIL AlarmWords.AlarmWord0.%X0 := CommsProcessData.NodeFault[0]
+  COIL AlarmWords.AlarmWord0.%X1 := CommsProcessData.NodeFault[1]
+  COIL AlarmWords.AlarmWord0.%X2 := CommsProcessData.NodeFault[2]
+  COIL AlarmWords.AlarmWord0.%X3 := CommsProcessData.NodeFault[3]
+  COIL AlarmWords.AlarmWord0.%X4 := CommsProcessData.NodeFault[4]
+  COIL AlarmWords.AlarmWord0.%X5 := CommsProcessData.NodeFault[5]
+  COIL AlarmWords.AlarmWord0.%X6 := CommsProcessData.NodeFault[6]
+  COIL AlarmWords.AlarmWord0.%X7 := CommsProcessData.NodeFault[7]
+  COIL AlarmWords.AlarmWord0.%X8 := CommsProcessData.NodeFault[8]
+  COIL AlarmWords.AlarmWord0.%X9 := CommsProcessData.NodeFault[9]
+  COIL AlarmWords.AlarmWord0.%X10 := CommsProcessData.NodeFault[10]
+  COIL AlarmWords.AlarmWord0.%X11 := CommsProcessData.NodeFault[11]
+  COIL AlarmWords.AlarmWord0.%X12 := CommsProcessData.NodeFault[12]
+  COIL AlarmWords.AlarmWord0.%X13 := CommsProcessData.NodeFault[13]
+  COIL AlarmWords.AlarmWord0.%X14 := CommsProcessData.NodeFault[14]
+
+NETWORK 2 "" [empty]
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access CommsProcessData.NodeFault[0] = 21
+  access AlarmWords.AlarmWord0.%X0 = 22
+  access CommsProcessData.NodeFault[1] = 23
+  access AlarmWords.AlarmWord0.%X1 = 24
+  access CommsProcessData.NodeFault[2] = 25
+  access AlarmWords.AlarmWord0.%X2 = 26
+  access CommsProcessData.NodeFault[3] = 27
+  access AlarmWords.AlarmWord0.%X3 = 28
+  access CommsProcessData.NodeFault[4] = 29
+  access AlarmWords.AlarmWord0.%X4 = 30
+  access CommsProcessData.NodeFault[5] = 31
+  access AlarmWords.AlarmWord0.%X5 = 32
+  access CommsProcessData.NodeFault[6] = 33
+  access AlarmWords.AlarmWord0.%X6 = 34
+  access CommsProcessData.NodeFault[7] = 35
+  access AlarmWords.AlarmWord0.%X7 = 36
+  access CommsProcessData.NodeFault[8] = 37
+  access AlarmWords.AlarmWord0.%X8 = 38
+  access CommsProcessData.NodeFault[9] = 39
+  access AlarmWords.AlarmWord0.%X9 = 40
+  access CommsProcessData.NodeFault[10] = 41
+  access AlarmWords.AlarmWord0.%X10 = 42
+  access CommsProcessData.NodeFault[11] = 43
+  access AlarmWords.AlarmWord0.%X11 = 44
+  access CommsProcessData.NodeFault[12] = 45
+  access AlarmWords.AlarmWord0.%X12 = 46
+  access CommsProcessData.NodeFault[13] = 47
+  access AlarmWords.AlarmWord0.%X13 = 48
+  access CommsProcessData.NodeFault[14] = 49
+  access AlarmWords.AlarmWord0.%X14 = 50
+  assignment 0
+    rail = 126
+    contact 0 = 51
+    contact 0 operand = 21
+    coil = 52
+    coil operand = 22
+    wire 0 = 81
+    wire 1 = 82
+    wire 2 = 83
+  assignment 1
+    rail = 126
+    contact 0 = 53
+    contact 0 operand = 23
+    coil = 54
+    coil operand = 24
+    wire 0 = 84
+    wire 1 = 85
+    wire 2 = 86
+  assignment 2
+    rail = 126
+    contact 0 = 55
+    contact 0 operand = 25
+    coil = 56
+    coil operand = 26
+    wire 0 = 87
+    wire 1 = 88
+    wire 2 = 89
+  assignment 3
+    rail = 126
+    contact 0 = 57
+    contact 0 operand = 27
+    coil = 58
+    coil operand = 28
+    wire 0 = 90
+    wire 1 = 91
+    wire 2 = 92
+  assignment 4
+    rail = 126
+    contact 0 = 59
+    contact 0 operand = 29
+    coil = 60
+    coil operand = 30
+    wire 0 = 93
+    wire 1 = 94
+    wire 2 = 95
+  assignment 5
+    rail = 126
+    contact 0 = 61
+    contact 0 operand = 31
+    coil = 62
+    coil operand = 32
+    wire 0 = 96
+    wire 1 = 97
+    wire 2 = 98
+  assignment 6
+    rail = 126
+    contact 0 = 63
+    contact 0 operand = 33
+    coil = 64
+    coil operand = 34
+    wire 0 = 99
+    wire 1 = 100
+    wire 2 = 101
+  assignment 7
+    rail = 126
+    contact 0 = 65
+    contact 0 operand = 35
+    coil = 66
+    coil operand = 36
+    wire 0 = 102
+    wire 1 = 103
+    wire 2 = 104
+  assignment 8
+    rail = 126
+    contact 0 = 67
+    contact 0 operand = 37
+    coil = 68
+    coil operand = 38
+    wire 0 = 105
+    wire 1 = 106
+    wire 2 = 107
+  assignment 9
+    rail = 126
+    contact 0 = 69
+    contact 0 operand = 39
+    coil = 70
+    coil operand = 40
+    wire 0 = 108
+    wire 1 = 109
+    wire 2 = 110
+  assignment 10
+    rail = 126
+    contact 0 = 71
+    contact 0 operand = 41
+    coil = 72
+    coil operand = 42
+    wire 0 = 111
+    wire 1 = 112
+    wire 2 = 113
+  assignment 11
+    rail = 126
+    contact 0 = 73
+    contact 0 operand = 43
+    coil = 74
+    coil operand = 44
+    wire 0 = 114
+    wire 1 = 115
+    wire 2 = 116
+  assignment 12
+    rail = 126
+    contact 0 = 75
+    contact 0 operand = 45
+    coil = 76
+    coil operand = 46
+    wire 0 = 117
+    wire 1 = 118
+    wire 2 = 119
+  assignment 13
+    rail = 126
+    contact 0 = 77
+    contact 0 operand = 47
+    coil = 78
+    coil operand = 48
+    wire 0 = 120
+    wire 1 = 121
+    wire 2 = 122
+  assignment 14
+    rail = 126
+    contact 0 = 79
+    contact 0 operand = 49
+    coil = 80
+    coil operand = 50
+    wire 0 = 123
+    wire 1 = 124
+    wire 2 = 125
+NETWORK 2
+  compileunit = 8

@@ -1,6 +1,6 @@
 # ADR-0002 — PC-side tooling languages
 
-- **Status:** Accepted (revised 2026-07-11 — converter moved from Python to C#; see Revision below)
+- **Status:** Accepted (revised 2026-07-10 — converter moved from Python to C#; see Revision below)
 - **Date:** 2026-07-09
 
 ## Context
@@ -11,7 +11,7 @@ Openness is a .NET API. Options for driving it: native C#, or Python via pythonn
 
 C# for everything that references `Siemens.Engineering.dll` (`openness-cli`) **and** for the SimaticML↔IR converter (`src/converter/`). Python remains available for tooling that neither touches Openness nor the IR grammar — concretely, the S5 extractors (`extract/`: alarm lists, IO usage → CSV/XLSX, reports) — for whenever that work starts. The IR text format and the CLI command-line contracts (`openness-cli`, `converter`) are the boundary between components regardless of which language sits behind either one.
 
-## Revision (2026-07-11): converter moved from Python to C#
+## Revision (2026-07-10): converter moved from Python to C#
 
 Originally the converter was bucketed into "pure text-side tooling" and defaulted to Python under the general split below. Revisited after `openness-cli` was actually built and the real cost of standing up a .NET toolchain on this machine became concrete evidence rather than a guess: this PC had neither the .NET SDK nor the .NET Framework 4.8 Developer Pack installed, and getting `openness-cli` building required installing both (`docs/notes/openness-quirks.md`). Adding Python 3.12 as a third runtime, on a solo-engineer setup with no CI/ops backing it, is a real recurring cost — not the "faster to build" win the original split assumed, once a .NET toolchain is already a hard requirement for `openness-cli` anyway.
 

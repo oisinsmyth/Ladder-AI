@@ -14,7 +14,7 @@ openness-cli xref          <project>                                           #
 ```
 
 Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell.
-`export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-11 —
+`export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-10 —
 see `docs/notes/stage-gates.md` S1.
 
 ## Setup notes
@@ -52,7 +52,7 @@ openness-cli import <project> --group <device>/<path> <file> [<file> ...] [commo
 openness-cli compile <project> [--device <device>] [--block <name>] [--json] [common flags]
 ```
 
-Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — whole-program compile. With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-11 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`. Non-zero exit when `State != Success`.
+Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — whole-program compile. With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-10 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`. Non-zero exit when `State != Success`.
 
 A block-level compile can fail with a real error (not just an `IsConsistent` artifact) if something it calls hasn't itself been recompiled yet — seen live on `ControlMain` (calls `PlantAutoControl`): failed first, then succeeded cleanly once `PlantAutoControl` had been compiled. Compile callees before callers, or just retry a caller after its callees are clean.
 
@@ -76,6 +76,6 @@ this directly and fast:
 Exit code 0 only if every block is consistent and every device compiles clean; non-zero
 otherwise, with the inconsistent blocks and per-device compile results listed. A device
 compiling clean does **not** imply its blocks are all consistent — confirmed for real,
-2026-07-11: `docs/notes/openness-quirks.md` has a live example where every device compiled
+2026-07-10: `docs/notes/openness-quirks.md` has a live example where every device compiled
 `Success` while 15 blocks stayed flagged inconsistent. Run this any time something in the
 export/import/compile chain is behaving oddly, before assuming it's a converter/CLI bug.

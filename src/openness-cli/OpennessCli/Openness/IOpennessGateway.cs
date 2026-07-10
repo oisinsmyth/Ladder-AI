@@ -33,7 +33,7 @@ public interface IOpennessGateway : IDisposable
 
     /// <summary>
     /// Compiles a single named block via its own <c>ICompilable</c> service — distinct from,
-    /// and NOT equivalent to, whole-device <see cref="Compile"/>. Confirmed live, 2026-07-11
+    /// and NOT equivalent to, whole-device <see cref="Compile"/>. Confirmed live, 2026-07-10
     /// (docs/notes/openness-quirks.md): a block freshly re-imported via Openness's Import()
     /// gets flagged IsConsistent=false, and device-level Compile() reports Success without ever
     /// clearing that flag — this is what does. <paramref name="deviceFilter"/> disambiguates the

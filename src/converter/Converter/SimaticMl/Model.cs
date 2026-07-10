@@ -2,7 +2,7 @@ namespace Converter.SimaticMl;
 
 // SliceAccessModifier carries a real, documented site construct: bit-within-word alarm
 // addressing (06-lad-conventions.md C-501: "DB_Alarms.EStopAlarm0.%X3", a documented exception
-// to C-301) — confirmed real, 2026-07-11, as `SliceAccessModifier="x15"` on the LAST <Component>
+// to C-301) — confirmed real, 2026-07-10, as `SliceAccessModifier="x15"` on the LAST <Component>
 // of an Access's Symbol path. Always assumed to be on the last component only.
 //
 // ArrayIndex carries a second real construct found the same day: a literal-constant array
@@ -85,13 +85,13 @@ public sealed record FlgNetwork(
     IReadOnlyList<PartNode> Parts,
     IReadOnlyList<WireNode> Wires);
 
-// CompileUnit "ID" is opaque — confirmed against a real export (2026-07-11) not to follow the
+// CompileUnit "ID" is opaque — confirmed against a real export (2026-07-10) not to follow the
 // same simple sequential-int scheme as FlgNet's own UIds (a real one came back as "D"). Treated
 // as a string throughout, unlike Part/Wire/Access UId which are FlgNet-internal and stayed int.
 public sealed record CompileUnitSource(string UId, string? Comment, FlgNetwork Network);
 
 // RootUId is the block element's own "ID" attribute (e.g. `<SW.Blocks.FC ID="0">`), separate
-// from its CompileUnits' own IDs — confirmed real and required, 2026-07-11: Import() rejects a
+// from its CompileUnits' own IDs — confirmed real and required, 2026-07-10: Import() rejects a
 // block element with no ID ("Cannot find the required 'ID' attribute element"). Opaque, like
 // CompileUnitSource.UId — not assumed to always be "0" just because that's what one real
 // export showed.

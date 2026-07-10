@@ -45,6 +45,8 @@ public static class BlockSourceParser
             ?? throw new SimaticMlFormatException("Block element is missing its <ObjectList>.");
 
         var blockComment = ReadComment(objectList);
+        MultilingualTextHelper.RequireEmptyTitle(objectList, $"Block '{name}'");
+        RequireDefaultInterface(attributeList, $"Block '{name}'");
 
         var compileUnits = objectList.Elements()
             .Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit")
@@ -79,42 +81,59 @@ public static class BlockSourceParser
 
         var objectList = compileUnit.Element("ObjectList");
         var comment = objectList is null ? null : ReadComment(objectList);
+        if (objectList is not null)
+        {
+            MultilingualTextHelper.RequireEmptyTitle(objectList, $"Network (CompileUnit ID={uid})");
+        }
 
         return new CompileUnitSource(uid, comment, network);
     }
 
     /// <summary>Reads a MultilingualText[CompositionName=Comment]'s en-US Text, or null if empty/absent.</summary>
-    private static string? ReadComment(XElement objectList)
+    private static string? ReadComment(XElement objectList) => MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
+
+    // FC/FB parameters (Input/Output/InOut/Temp/Constant/Return) live here — genuinely semantic
+    // content (a block's own contract), unlike Title/block-config flags. Not modeled/round-tripped
+    // by this converter slice yet, so a block with real parameters must hard-error, not silently
+    // lose them. The only shape confirmed safe to proceed on: every non-Return section empty, and
+    // Return holding exactly the standard parameterless-FC boilerplate (one Void "Ret_Val" member)
+    // — confirmed real, 2026-07-10, on every block seen so far in this slice.
+    private static void RequireDefaultInterface(XElement attributeList, string context)
     {
-        var commentElement = objectList.Elements()
-            .FirstOrDefault(e => e.Name.LocalName == "MultilingualText" && (string?)e.Attribute("CompositionName") == "Comment");
-
-        if (commentElement is null)
+        var interfaceElement = attributeList.Element("Interface");
+        if (interfaceElement is null)
         {
-            return null;
+            return;
         }
 
-        var items = commentElement
-            .Descendants()
-            .Where(e => e.Name.LocalName == "MultilingualTextItem")
-            .Select(item =>
+        var sections = interfaceElement.Descendants().Where(e => e.Name.LocalName == "Section").ToList();
+        foreach (var section in sections)
+        {
+            var sectionName = (string?)section.Attribute("Name");
+            var members = section.Elements().Where(e => e.Name.LocalName == "Member").ToList();
+
+            if (sectionName != "Return")
             {
-                var attrs = item.Element("AttributeList");
-                var culture = attrs?.Elements().FirstOrDefault(e => e.Name.LocalName == "Culture")?.Value;
-                var textValue = attrs?.Elements().FirstOrDefault(e => e.Name.LocalName == "Text")?.Value;
-                return (Culture: culture, Text: textValue);
-            })
-            .ToList();
+                if (members.Count > 0)
+                {
+                    throw new UnsupportedConstructException(
+                        $"{context} has a non-empty Interface section '{sectionName}' — this converter doesn't model block " +
+                        "parameters yet (only Contact/Coil network content).");
+                }
 
-        var nonEnglish = items.FirstOrDefault(item => item.Culture is not null and not "en-US");
-        if (nonEnglish.Culture is not null)
-        {
-            throw new UnsupportedConstructException(
-                $"Comment culture '{nonEnglish.Culture}' found — this converter only supports en-US (site convention C-006, English only).");
+                continue;
+            }
+
+            var isStandardVoidReturn = members.Count == 1
+                && (string?)members[0].Attribute("Name") == "Ret_Val"
+                && (string?)members[0].Attribute("Datatype") == "Void";
+            if (!isStandardVoidReturn)
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} has a non-standard Return interface — this converter doesn't model block " +
+                    "return values yet, only the default parameterless-FC boilerplate.");
+            }
         }
-
-        var text = items.FirstOrDefault(item => item.Culture == "en-US").Text;
-        return string.IsNullOrEmpty(text) ? null : text;
     }
 
     private static string RequireChildValue(XElement parent, string localName)

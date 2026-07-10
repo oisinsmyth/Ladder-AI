@@ -46,3 +46,13 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
   - JOB9002 is a design-time aid only — it does not become the committed `tests/golden/` corpus;
     that still needs a purpose-built Green project (`docs/notes/stage-gates.md`, S1 overall plan
     item 8).
+
+- **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
+  sanitized data, under a separate, private approval not detailed here.** The committed content's
+  structural shapes (wiring topology, instruction types, slice/array addressing) originate from
+  real production PLC data; every tag path, block name, and comment is invented — nothing
+  site- or site-identifying is recorded in this repo. The mapping from real to invented
+  values is intentionally not committed anywhere (`.gitignore`: `sanitization/`) and isn't
+  reconstructable from what's here. This entry exists so the corpus's Green-tier claim
+  ("purpose-built, contains nothing identifying") has a recorded basis rather than none — see
+  `tests/golden/README.md` for what was actually done to it.

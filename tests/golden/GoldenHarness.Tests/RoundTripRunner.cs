@@ -31,13 +31,19 @@ public sealed class RoundTripRunner
         return ProcessRunner.Run(ToolPaths.OpennessCliExe, args.ToArray());
     }
 
-    public ProcessResult Compile(string project, string? device)
+    public ProcessResult Compile(string project, string? device, string? blockName = null)
     {
         var args = new List<string> { "compile", project, "--json" };
         if (device is not null)
         {
             args.Add("--device");
             args.Add(device);
+        }
+
+        if (blockName is not null)
+        {
+            args.Add("--block");
+            args.Add(blockName);
         }
 
         return ProcessRunner.Run(ToolPaths.OpennessCliExe, args.ToArray());
@@ -84,7 +90,12 @@ public sealed class RoundTripRunner
             return RoundTripReport.Failed("import", import);
         }
 
-        var compile = Compile(project, device);
+        // Block-level, not device-level: confirmed real, 2026-07-10 (docs/notes/openness-quirks.md)
+        // — device-level compile reports Success without ever clearing a freshly-imported block's
+        // IsConsistent flag, so the re-export below would refuse ("Inconsistent blocks... cannot
+        // be exported") even on genuinely correct content. Block-level compile is what actually
+        // clears it.
+        var compile = Compile(project, device, blockName);
         if (compile.ExitCode != 0)
         {
             return RoundTripReport.Failed("compile", compile);

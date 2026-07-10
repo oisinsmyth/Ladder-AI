@@ -16,7 +16,7 @@ public abstract record Expr
 public sealed record CoilAssignment(string CoilTag, Expr Condition);
 
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
-// wiring between them — confirmed against a real export, 2026-07-11 (a 16-independent-rung
+// wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
 // alarm-bit network). Assignments is empty for a genuinely empty network (source
 // `<NetworkSource />` with no FlgNet content at all, also confirmed real) — both are
 // unambiguous, not guesses, so both are modeled directly rather than hard-erroring.
@@ -26,7 +26,7 @@ public sealed record IrNetwork(int Number, string Title, IReadOnlyList<CoilAssig
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
-// confirmed real 2026-07-11 — separate from any CompileUnit's own ID). Round-trip-only, like
+// confirmed real 2026-07-10 — separate from any CompileUnit's own ID). Round-trip-only, like
 // NetworkSidecar.CompileUnitUId.
 public sealed record IrBlock(
     string RootUId,
@@ -47,12 +47,12 @@ public sealed record SidecarAccessEntry(string TagPath, int UId);
 
 // RailWireUId is separated from WireUIds because the source wire connecting Powerrail to a
 // chain's first element is often shared across MANY independent chains in the same network
-// (one wire, many endpoints — confirmed real, 2026-07-11) — it is not exclusively "owned" by
+// (one wire, many endpoints — confirmed real, 2026-07-10) — it is not exclusively "owned" by
 // any one assignment the way every other wire in the chain is. WireUIds holds everything else,
 // in order: [operand_0, flow_0to1, operand_1, flow_1to2, ..., operand_last, flow_lastToCoil, coilOperand].
 //
 // ContactOperandAccessUIds/CoilOperandAccessUId carry the exact source Access-element UId for
-// each operand, positionally — confirmed necessary real, 2026-07-11: the same tag path can be
+// each operand, positionally — confirmed necessary real, 2026-07-10: the same tag path can be
 // referenced by two genuinely separate <Access> elements (different UIds) in the same network
 // (e.g. two independent assignments both reading "CommsProcessData.Node_Error"), so a
 // TagPath-keyed lookup at rebuild time is ambiguous/wrong. These make regeneration exact

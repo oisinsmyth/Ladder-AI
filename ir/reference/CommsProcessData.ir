@@ -1,0 +1,16 @@
+DB CommsProcessData
+  ROOTID 0
+  NUMBER 205
+  MEMBERS
+    CommsErrorStatus : Word
+    DbErrorStatus : Word
+    DataLoaded : Bool
+    SequenceStep : USInt
+    SequenceIndex : USInt
+    CommsFault : Bool
+    CommsFaultOneShot : Bool
+    CommsResetPulse : Bool
+    NodeFaultCount : Array[0..14] of Int
+    NodeFault : Array[0..14] of Bool
+    SequenceComplete : Bool
+    ConfigWord : Word = 16#041F

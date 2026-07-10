@@ -18,7 +18,7 @@ seen on a clean approval state.
 - One Portal instance/session — no parallel Openness sessions.
 - Project open is slow; don't kill and retry.
 - `PlcBlock.Export()` can return without producing a file, no exception thrown — observed once
-  during the ADR-0001 grounding spike (2026-07-11), first of three sequential exports in one
+  during the ADR-0001 grounding spike (2026-07-10), first of three sequential exports in one
   process. Immediate retry on the same call succeeded. Cause unconfirmed (Portal-side timing?).
   Mitigation for real `export` subcommand work (S1 item 5): verify the output file actually
   exists after `Export()` returns before treating it as success; retry once before failing.
@@ -40,14 +40,14 @@ Machine reference (this PC): `Siemens.Engineering.dll` for V20 lives at `C:\Prog
 Full confirmed object-model shape (TiaPortal/Project/Device/DeviceItem/PlcSoftware/PlcBlockGroup/PlcBlock/ProgrammingLanguage), obtained by reflecting on the installed DLL: `docs/notes/openness-api-surface-v20.md`.
 
 ## "Inconsistent blocks and PLC data types (UDT) cannot be exported"
-Hit repeatedly, 2026-07-10/11, on `station_2` of `JOB9002 - Tom White Waste` (scratch copy):
+Hit repeatedly, 2026-07-10, on `station_2` of `JOB9002 - Tom White Waste` (scratch copy):
 `PlcBlock.Export()` throws this for a block whose `IsConsistent` is false. First seen exporting
-`PlantAutoControl` before any import work that session; seen again 2026-07-11 on `PerimeterSafetyAlarms`
+`PlantAutoControl` before any import work that session; seen again 2026-07-10 on `PerimeterSafetyAlarms`
 *after* a clean import + two successive project-wide compiles both reporting
 `State=Success, Errors=0, Warnings=0` — and confirmed to also block exporting `ControlMain`, a
 block untouched by any of this session's work.
 
-**Root cause narrowed by `openness-cli sanity-check` (2026-07-11).** Ran it against the whole
+**Root cause narrowed by `openness-cli sanity-check` (2026-07-10).** Ran it against the whole
 project: 180 blocks total, **15 inconsistent**, all in `station_2/JOB9002_PLC` under two groups —
 `Map IO/Simulation` (the simulation-mode blocks: `Simulation`, `DOLSim`, `VSDSim`, and 7
 `*DOLSim` data blocks) and `Control`/`Alarms` (`ControlMain`, `PlantAutoControl`, `AlarmsMain`,
@@ -67,7 +67,7 @@ around this; they report the real Siemens exception and stop, per design philoso
 `openness-cli sanity-check <project>` is the fast way to re-check this list without needing a
 failed export to discover it (metadata-only per block, no export attempt).
 
-**Cold-open re-test, 2026-07-11 (project saved, Portal fully closed, then reopened fresh):**
+**Cold-open re-test, 2026-07-10 (project saved, Portal fully closed, then reopened fresh):**
 `sanity-check` reproduced byte-identical results — same 180 blocks, same 15 inconsistent, same
 paths, both device compiles still `Success`. Rules out session-state/caching explanations
 definitively; the flag survives a save + close + reopen of the whole project.
@@ -176,3 +176,56 @@ had been compiled. Compile order matters for callers; retry a caller after its c
 `compile` after `import` is not sufficient proof a generated/modified block is clean — the compile
 gate now needs `openness-cli compile --block <name>` (or accept a caller retry if it depends on
 something just re-imported), not a TIA UI step.
+
+## `openness-cli compile`'s diagnostic messages were silently incomplete
+
+Found 2026-07-10, while debugging a genuine compile failure on the seeded reference project (a
+new FC referenced two DBs not yet present in the target project — expected, hard rule 3). The
+`--json` output showed `errors: 30` with every message's `Description` empty — useless for
+diagnosing anything. Reflecting on the installed DLL showed why:
+`Siemens.Engineering.Compiler.CompilerResultMessage` has a nested `Messages` property (a
+composition, i.e. a tree, not a flat list) — `OpennessGateway.RunCompile` only ever read the
+top-level `result.Messages`, which are often just a rollup ("Compiling finished (errors: N;
+warnings: 0)") with the real per-error text nested one or more levels inside `Messages`. Fixed by
+recursing (`CollectMessages`) — every past compile failure this session that showed a bare count
+was missing this detail. Immediately useful: recursing revealed the real cause of the DB-dependency
+failure above ("Block 'X' that is accessed has not been compiled") instead of an opaque error count.
+
+## `Wire` UId is not preserved through a real TIA import/compile cycle
+
+Found 2026-07-10, building the first real `Normalizer.AreSemanticallyEquivalent` check that
+compares actual live-round-tripped output byte-for-byte (everything before this used a manual
+field-count spot-check, not the real automated equivalence assertion). The original design
+assumption (ADR-0001, the IR sidecar) was that preserving every source UId in the sidecar
+guarantees exact regeneration — true for our *own* `to-ir`/`to-xml` round-trip, but **not**
+true once the file passes through a real `Import()` + compile cycle: TIA reassigns every `Wire`'s
+own UId on its own terms, regardless of what was sent. Confirmed concretely: the shared rail wire
+(`docs/notes/openness-quirks.md`'s own earlier entry on shared multi-endpoint rail wires) went
+from UId 126 (the source's own value, correctly preserved by our sidecar into the regenerated
+XML) to a fresh 81 on TIA's re-export — and every other wire's UId shifted too — while the *set*
+of connections (which `Access`/`Part` UId each wire references) stayed byte-identical. `Part` and
+`Access` UIds, by contrast, were preserved exactly, unchanged.
+
+**Root cause of the confusion, and the fix:** a wire's real identity is the set of things it
+connects (Powerrail/IdentCon/NameCon references), not its own UId — that was always the wrong
+thing to compare exactly. `Normalizer.cs` now strips `Wire`'s own `UId` attribute (alongside the
+existing `MultilingualText`/`MultilingualTextItem` `ID` stripping) and compares the `Wires`
+collection by content rather than position (TIA also relocates the shared rail wire earlier in
+the list on re-export, not just renumbering it). Two implementation bugs found and fixed on the
+way to this: the attribute-name filter was hardcoded to `"ID"`, silently never matching `Wire`'s
+`"UId"` attribute at all; and the existing `DifferingWireUId_ReturnsFalse` test encoded the
+now-disproven assumption directly — replaced with tests asserting the correct behavior (UId
+differences with the *same* endpoints are benign; endpoint differences are still caught).
+
+## `openness-cli` now switches projects automatically
+
+Every session up to 2026-07-10 required manually asking the project owner to close whichever TIA
+project was open before touching a different one — Openness only allows one project open at a
+time (`Projects.Open()` throws "Another project is already open" otherwise), and this came up
+repeatedly switching between `JOB9002` and the reference project. `Project` exposes both `Close()`
+and `Save()` (confirmed by reflecting on the installed DLL). `OpennessGateway.OpenProject` now
+saves and closes whatever else is open before opening the target, automatically. Confirmed real,
+same reflection pass: `Close()` is scoped to the project, not `TiaPortal` — Portal itself stays
+running throughout, matching File → Close Project in the UI, not File → Exit. Live-verified both
+directions (JOB9002 → reference project → JOB9002) — Portal process confirmed still running
+throughout via `tasklist`, no data lost (`Save()` runs first).

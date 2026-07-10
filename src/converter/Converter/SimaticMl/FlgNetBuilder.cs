@@ -8,7 +8,7 @@ namespace Converter.SimaticMl;
 /// rebuilt independently in <see cref="BuildOneChain"/>. The rail connection is handled
 /// separately and grouped by <see cref="CoilAssignmentSidecar.RailWireUId"/> across all
 /// assignments in the network, since the source frequently uses one shared rail wire (many
-/// endpoints) rather than one rail wire per chain — confirmed real, 2026-07-11.
+/// endpoints) rather than one rail wire per chain — confirmed real, 2026-07-10.
 /// </summary>
 public static class FlgNetBuilder
 {

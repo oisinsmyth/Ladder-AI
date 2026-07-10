@@ -61,8 +61,21 @@ public sealed class OpennessGateway : IOpennessGateway
                 // The identifier can be a project name already open in the attached Portal
                 // instance (common: engineer already has Portal + project open) or a path to
                 // a .apNN file to open fresh. Never re-open something already open.
-                _project = FindAlreadyOpenProject(_tiaPortal.Projects, projectIdentifier)
-                    ?? _tiaPortal.Projects.Open(new FileInfo(projectIdentifier));
+                var alreadyOpen = FindAlreadyOpenProject(_tiaPortal.Projects, projectIdentifier);
+                if (alreadyOpen is not null)
+                {
+                    _project = alreadyOpen;
+                    return;
+                }
+
+                // Openness only allows one project open at a time (confirmed real,
+                // 2026-07-10: Projects.Open() throws "Another project is already open"
+                // otherwise) — save and close whatever else is open first, rather than requiring
+                // a human to do it before every command. Close() is scoped to the project, not
+                // TiaPortal itself (confirmed by reflecting on the installed DLL) — Portal stays
+                // running, ready for the Open() call right after.
+                CloseAnyOtherOpenProject(_tiaPortal.Projects);
+                _project = _tiaPortal.Projects.Open(new FileInfo(projectIdentifier));
             },
             timeout,
             () => new ProjectOpenTimeoutException(timeout));
@@ -84,6 +97,20 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         return null;
+    }
+
+    private static void CloseAnyOtherOpenProject(ProjectComposition projects)
+    {
+        // Snapshot first — Close() mutates the live ProjectComposition, which would otherwise
+        // invalidate enumeration mid-loop. At most one entry in practice (the
+        // single-project-at-a-time constraint this exists to work around) — loop just in case,
+        // not because multiples are expected.
+        var open = projects.Cast<Project>().ToList();
+        foreach (var project in open)
+        {
+            project.Save();
+            project.Close();
+        }
     }
 
     public IReadOnlyList<BlockInfo> EnumerateBlocks()
@@ -321,7 +348,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         // PlcBlock implements IEngineeringServiceProvider like DeviceItem/PlcSoftware do, and
-        // this GetService<ICompilable>() call is confirmed live, 2026-07-11, to actually return
+        // this GetService<ICompilable>() call is confirmed live, 2026-07-10, to actually return
         // a working per-block compiler — not documented anywhere, found by reflecting on the
         // installed DLL then testing live rather than assuming device-level compile was the only
         // granularity available (see docs/notes/openness-quirks.md).
@@ -338,10 +365,25 @@ public sealed class OpennessGateway : IOpennessGateway
         var messages = new List<CompileMessage>();
         foreach (CompilerResultMessage message in result.Messages)
         {
-            messages.Add(new CompileMessage(MapCompileState(message.State), message.Description, message.Path));
+            CollectMessages(message, messages);
         }
 
         return new CompileResult(MapCompileState(result.State), result.ErrorCount, result.WarningCount, messages);
+    }
+
+    // CompilerResultMessage.Messages is a nested tree, not a flat list — confirmed by reflecting
+    // on the installed DLL, 2026-07-10: the top-level message is often just a rollup
+    // ("Compiling finished (errors: N; warnings: 0)") with empty Description, and the actual
+    // per-error text lives in child Messages, arbitrarily deep. Missing this meant every compile
+    // failure reported a count with no way to see why — recurse and keep every node so nothing is
+    // silently dropped.
+    private static void CollectMessages(CompilerResultMessage message, List<CompileMessage> results)
+    {
+        results.Add(new CompileMessage(MapCompileState(message.State), message.Description, message.Path));
+        foreach (CompilerResultMessage child in message.Messages)
+        {
+            CollectMessages(child, results);
+        }
     }
 
     public SanityCheckResult RunSanityCheck()

@@ -1,0 +1,51 @@
+DB EquipmentStatus
+  ROOTID 0
+  NUMBER 15
+  MEMBERS
+    SafetyZone1 : Bool
+    SafetyZone2 : Bool
+    SafetyGate1 : Bool
+    SafetyZone3 : Bool
+    SafetyPullCord1 : Bool
+    Equipment01Fault : Bool
+    Equipment02Fault : Bool
+    Equipment03Fault : Bool
+    Equipment04Fault : Bool
+    Equipment05Fault : Bool
+    Equipment06Fault : Bool
+    Equipment07Fault : Bool
+    Equipment08Fault : Bool
+    Equipment09Fault : Bool
+    Equipment10Fault : Bool
+    Equipment11Fault : Bool
+    Equipment12Fault : Bool
+    Equipment13Fault : Bool
+    Equipment14Running : Bool
+    Equipment14Fault : Bool
+    Equipment15Fault : Bool
+    Equipment16Fault : Bool
+    Equipment17Fault : Bool
+    Equipment18Fault : Bool
+    Equipment18Ready : Bool
+    Equipment18Running : Bool
+    FireDamper1 : Bool
+    FireDamper2 : Bool
+    Equipment19Fault : Bool
+    Equipment20Fault : Bool
+    OpticalSorterMonitor : Bool
+    Equipment21Ready : Bool
+    Equipment21Running : Bool
+    Equipment21CommsWarning : Bool
+    Equipment21CommsError : Bool
+    Spare1 : Bool
+    Spare2 : Bool
+    Spare3 : Bool
+    Spare4 : Bool
+    Spare5 : Bool
+    Spare6 : Bool
+    Spare7 : Bool
+    Spare8 : Bool
+    Spare9 : Bool
+    Spare10 : Bool
+    Spare11 : Bool
+    Test : Array[0..47] of Bool
