@@ -523,10 +523,46 @@ test repurposed (`LiteralConstant` was previously the "unrecognized scope" examp
 recognized scope, so the test's fixture moved to a scope name that's still genuinely unsupported).
 94 converter tests, 68 openness-cli tests, 11 golden-harness tests all pass.
 
-**Not yet live-round-trip-proven.** `ControlDelays` as a whole still needs `Mul`/`Convert`
-elsewhere in the same block regardless; a live re-verification attempt was blocked by TIA Portal
-session state (three Portal processes running, attach/launch timed out at 3 minutes) — not
-retried per this project's "don't kill and retry" discipline (`docs/notes/openness-quirks.md`).
-Both grounded shapes are proven by unit tests built directly from the real export. A purpose-built
-reference-project block (matching the `TimerSample` precedent that closed out TON's own live-proof
-gap) would close this out the same way.
+### S1 item 9 continued: live re-verification, 2026-07-11
+
+The three stale `Siemens.Automation.Portal` processes that blocked the first attempt were
+terminated (project owner's explicit go-ahead — nothing unsaved was open in any of them),
+confirmed clean via `Get-Process`, then `openness-cli` launched a fresh single instance
+successfully. Interesting footnote: a fresh single-session launch also settles at 3
+`Siemens.Automation.Portal` processes on this machine — apparently normal for how V20 starts
+(launcher + main + a helper, or similar), not itself a symptom of a stale/broken state; the
+original attach timeout was something else (transient, unconfirmed).
+
+Fresh `export` of `FC ControlDelays` succeeded immediately. `converter to-ir` against the whole
+block reproduced exactly the predicted result: `UnsupportedConstructException: Unsupported
+instruction 'Mul' (UId=36)` — the *first* construct hit, because `Mul`/`Convert` live entirely in
+Network 1 (`CompileUnit ID="3"`), which comes first in file order and is completely unrelated to
+Eq/Ge (confirmed by grepping the fresh export: `Mul`/`Convert` only ever appear in `ID="3"`;
+`Eq`/`Ge` only in `ID="8"`/`"D"`/`"12"`). Since `to-ir` throws on the first unsupported construct
+across the whole block, Networks 2–4 (all the Eq/Ge content) never actually got exercised by that
+run — a real, honest caveat, not glossed over.
+
+**Isolated Network 2 (`CompileUnit ID="8"`) directly** — extracted its raw `<FlgNet>` content
+from the fresh export into a standalone file (never committed) and ran it through
+`FlgNetParser.Parse` → `GraphReducer.Reduce` → `FlgNetBuilder.Build` → `FlgNetWriter.Write` →
+re-parse directly (a temporary, throwaway test, deleted immediately after). Result — precise and
+better than expected:
+
+- `Eq(32) → Contact(33) → TON(34).IN` reduced **successfully**, no error — confirms the
+  rail-facing-comparison-feeding-a-Contact-feeding-a-TON shape works against genuinely live,
+  unmodified real data, not just the genericized fixture.
+- The Coil's own chain (which needs `O(41)` — the OR-merge combining `Ge(39)`/`Eq(40)`) threw
+  exactly the predicted, already-tested error: `NonReducibleNetworkException: OR-merge UId=41
+  branch 1 is a 'Ge', not a Contact — multi-element/non-contact OR branches are outside this
+  slice.` — from the stack trace, this fired inside `ReduceOneChain` (the Coil's chain), *after*
+  `ReduceTimer` (the TON's `IN` chain) had already succeeded — live proof that the scope decision
+  (comparisons as an ordinary chain position; OR-merge composition deliberately refused by the
+  existing, unmodified check) is exactly right, on the exact real network that motivated it.
+
+**Bottom line:** comparisons are now proven against genuinely live data for the part that's in
+scope, with the deliberately-deferred part confirmed to fail exactly as designed, not by
+accident. A full whole-block `import → compile → re-export → Normalizer` round-trip for
+`ControlDelays` itself still isn't reachable (Network 1's `Mul`/`Convert`, unrelated to
+comparisons) — closing that out would need either MOVE/comparisons-adjacent arithmetic support
+landing too, or a purpose-built reference-project block (matching the `TimerSample` precedent)
+that avoids Network 1's content entirely.

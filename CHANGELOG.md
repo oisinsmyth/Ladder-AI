@@ -29,9 +29,23 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   Same deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases.
 - 11 new converter tests, 1 repurposed (`LiteralConstant` was the old "unrecognized scope"
   example — now real, moved to a scope name that's still genuinely unsupported). 94 converter /
-  68 openness-cli / 11 golden-harness tests all pass. Not yet live-round-trip-proven — `Mul`/
-  `Convert` still needed for `ControlDelays` as a whole, and a live re-check was blocked by TIA
-  Portal session state (not retried, per this project's "don't kill and retry" discipline).
+  68 openness-cli / 11 golden-harness tests all pass.
+
+**S1 item 9 continued: live re-verification against real data**
+
+- Cleared 3 stale TIA Portal processes (project owner's go-ahead) and confirmed a fresh single
+  instance launches fine — settling at 3 processes again turned out to be normal for this
+  machine, not itself the earlier problem.
+- Fresh `export`/`to-ir` of `FC ControlDelays` reproduced the predicted result exactly: hard-errors
+  on `Mul` in Network 1 (unrelated to Eq/Ge, which live entirely in Networks 2–4) before ever
+  reaching the comparison content — a real, honest caveat (Networks 2–4 weren't exercised by that
+  run) rather than declaring victory early.
+- Isolated Network 2 directly (`FlgNetParser` → `GraphReducer` → `FlgNetBuilder` → `FlgNetWriter`,
+  a throwaway test against the real extracted XML, deleted after) and got a precise, better-than-
+  expected result: `Eq(32) → Contact(33) → TON(34).IN` reduced successfully against genuinely
+  live, unmodified data; the Coil's own chain (needing `O(41)`, the OR-merge of two comparisons)
+  threw exactly the predicted, already-tested error, confirming the OR-merge-composition scope
+  decision is correct on the exact real network that motivated it.
 
 **S1 item 8, closed out: TON live round trip, direct-`Q`-wiring support, a second Normalizer fix**
 

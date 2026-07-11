@@ -134,10 +134,12 @@ NETWORK 8 "Run enable delay"
   OR-merge (as a branch, or feeding one) — real (`ControlDelays`' own `O(41)` combines two
   comparisons) but the *existing*, unmodified OR-merge branch check and wire fan-out check already
   safely refuse this shape, so nothing new was built for it; same deferred status as the
-  already-known multi-contact-OR-branch/nested-OR-merge cases. Not yet live-round-trip-proven
-  (TIA Portal session state blocked a re-attempt the same session; `ControlDelays` as a whole also
-  still needs `Mul`/`Convert` elsewhere in the block regardless) — proven by unit tests built
-  directly from the real export, same discipline as every other phase.
+  already-known multi-contact-OR-branch/nested-OR-merge cases. **Live-verified against real data,
+  2026-07-11:** isolating the real network directly confirmed `Eq → Contact → TON.IN` reduces
+  successfully, and the OR-merge-of-comparisons throws exactly the predicted, already-tested
+  error — `docs/notes/stage-gates.md` has the full story. A whole-block `ControlDelays` round-trip
+  still isn't reached (`Mul`/`Convert` in an unrelated network), only the comparisons content
+  itself has been live-proven.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,

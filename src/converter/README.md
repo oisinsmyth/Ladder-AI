@@ -173,13 +173,16 @@ rather than guessed at).
   deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases; not scope
   creep to fix, a legitimate future phase.
 
-**Not yet live-round-trip-proven.** `ControlDelays` as a whole still needs `Mul`/`Convert`
-elsewhere in the same block regardless of comparison support, and a live re-verification attempt
-was blocked by TIA Portal session state (multiple Portal processes, attach timeout) the same
-session — not retried per the project's "don't kill and retry" discipline. Both grounded shapes
-(a rail-facing comparison feeding a Contact; a Contact feeding a mid-chain comparison) are proven
-by unit tests built directly from the real export — see `Converter.Tests/ComparisonTests.cs`. A
-purpose-built reference-project block (matching the `TimerSample` precedent) would close this out.
+**Live-verified against real data, 2026-07-11** (after clearing 3 stale TIA Portal processes and
+confirming a fresh single instance): isolating the real network directly (`FlgNetParser` →
+`GraphReducer` → `FlgNetBuilder` → `FlgNetWriter`, a throwaway test against the live-exported
+XML) confirmed `Eq → Contact → TON.IN` reduces successfully against genuinely live, unmodified
+data, and the Coil's own chain (needing the OR-merge of two comparisons) throws exactly the
+predicted, already-tested error — `docs/notes/stage-gates.md` has the full story. Both grounded
+shapes are additionally proven by unit tests built directly from the real export — see
+`Converter.Tests/ComparisonTests.cs`. A whole-block `ControlDelays` round-trip still isn't
+reached (`Mul`/`Convert` in an unrelated network) — a purpose-built reference-project block
+(matching the `TimerSample` precedent) would close that out specifically.
 
 ## DB support
 
