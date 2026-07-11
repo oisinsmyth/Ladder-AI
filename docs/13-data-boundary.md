@@ -43,6 +43,18 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     names, never copied verbatim from the real project. Structural findings (XML element shapes,
     schema) are not identifying and may be documented directly; specific values
     (tag names, equipment names, comment text) are not, and get invented replacements.
+  - **Clarified 2026-07-11, project owner's call:** the scratch copy's own local filesystem path
+    (needed for `openness-cli`'s cold-open `.apNN` argument) is not covered by the genericization
+    rule above — the project name itself is already committed unredacted in this doc and in
+    `docs/notes/stage-gates.md`, so the path adds no new identifying information. Recorded in
+    `docs/notes/openness-quirks.md` for reuse. Tag/comment/equipment *content* is still governed
+    by the rule above.
+  - **Clarified 2026-07-11, project owner's call:** a UDT/structured-member's own nested field
+    names (e.g. a motor-IO UDT's `InHand`/`Running`/`Fault` members, or a timer instance's
+    `PT`/`ET`/`IN`/`Q`) are treated as structural, not covered by the genericization rule — they
+    are generic controls-engineering vocabulary describing the reusable *type's* shape, not
+    site-specific identifying data the way a DB name, top-level member name, or comment is. Only
+    the DB/member/FB names that reference the type still get invented replacements.
   - JOB9002 is a design-time aid only — it does not become the committed `tests/golden/` corpus;
     that still needs a purpose-built Green project (`docs/notes/stage-gates.md`, S1 overall plan
     item 8).

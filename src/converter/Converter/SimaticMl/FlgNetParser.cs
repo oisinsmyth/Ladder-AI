@@ -13,7 +13,7 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O" };
     private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
 
     public static FlgNetwork Parse(XElement flgNet)
@@ -47,7 +47,10 @@ public static class FlgNetParser
                         "This converter slice supports Contact/Coil only.");
                 }
 
-                parts.Add(new PartNode(RequireIntAttribute(child, "UId"), name));
+                var uid = RequireIntAttribute(child, "UId");
+                var negated = name == "Contact" && ParseNegated(child, uid);
+                var cardinality = name == "O" ? ParseOrCardinality(child, uid) : (int?)null;
+                parts.Add(new PartNode(uid, name, negated, cardinality));
             }
             else
             {
@@ -147,6 +150,57 @@ public static class FlgNetParser
         }
 
         return index;
+    }
+
+    // Only `<Negated Name="operand" />` has been observed on a Contact — anything else (a
+    // second Negated child, or a different Name) is a real but unconfirmed shape, refused
+    // rather than guessed at (design philosophy #10).
+    private static bool ParseNegated(XElement contactPart, int uid)
+    {
+        var negatedElements = contactPart.Elements(Ns + "Negated").ToList();
+        if (negatedElements.Count == 0)
+        {
+            return false;
+        }
+
+        if (negatedElements.Count > 1)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Contact\" UId=\"{uid}\"> has {negatedElements.Count} <Negated> children — only one has been observed.");
+        }
+
+        var name = RequireAttribute(negatedElements[0], "Name");
+        if (name != "operand")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Contact\" UId=\"{uid}\"><Negated Name=\"{name}\"> — only Name=\"operand\" has been observed.");
+        }
+
+        return true;
+    }
+
+    // Only `<TemplateValue Name="Card" Type="Cardinality">N</TemplateValue>` has been observed
+    // on an OR-merge (`Part Name="O"`) — confirmed against two real exports, 2026-07-10.
+    private static int ParseOrCardinality(XElement orPart, int uid)
+    {
+        var templateValue = orPart.Element(Ns + "TemplateValue")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"O\" UId=\"{uid}\"> is missing its <TemplateValue> cardinality element.");
+
+        var name = RequireAttribute(templateValue, "Name");
+        var type = RequireAttribute(templateValue, "Type");
+        if (name != "Card" || type != "Cardinality")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"O\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\"> — only " +
+                "Name=\"Card\" Type=\"Cardinality\" has been observed.");
+        }
+
+        if (!int.TryParse(templateValue.Value, out var cardinality))
+        {
+            throw new SimaticMlFormatException($"<Part Name=\"O\" UId=\"{uid}\">'s cardinality value is not an integer: '{templateValue.Value}'.");
+        }
+
+        return cardinality;
     }
 
     private static WireNode ParseWire(XElement wire)

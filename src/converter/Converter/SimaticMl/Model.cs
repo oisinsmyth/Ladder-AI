@@ -60,7 +60,13 @@ public sealed record AccessNode(
     }
 }
 
-public sealed record PartNode(int UId, string Name);
+// Negated: a normally-closed contact (`<Negated Name="operand" />` child) — Contact-only.
+// Cardinality: an OR-merge's branch count (`<TemplateValue Name="Card" Type="Cardinality">`) —
+// "O"-only. Both confirmed real, 2026-07-10 (docs/notes/stage-gates.md, S1 item 7). Modeled as
+// optional fields on the one PartNode type rather than subtypes since every other Part kind
+// (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch on
+// `Name` for anything Part-shape-specific.
+public sealed record PartNode(int UId, string Name, bool Negated = false, int? Cardinality = null);
 
 public enum EndpointKind
 {
@@ -95,6 +101,23 @@ public sealed record CompileUnitSource(string UId, string? Comment, FlgNetwork N
 // block element with no ID ("Cannot find the required 'ID' attribute element"). Opaque, like
 // CompileUnitSource.UId — not assumed to always be "0" just because that's what one real
 // export showed.
+//
+// StaticMembers: an FB's own Static Interface section — confirmed real, 2026-07-11 (S1 item 7
+// Phase B, MotorDOL). Null when the source has no Static section at all (every FC seen — FCs
+// have no instance data, so no Static section exists in the source to begin with, distinct from
+// an FB with an empty one). Reuses DbMember's full shape (Retain/Version/SetPoint/nested
+// members) — an instance DB's own Static section is a realization of exactly this same shape
+// (DbSourceParser and BlockSourceParser share the same member-parsing helpers).
+//
+// TempMembers: every block seen (FC or FB) has a Temp section, even if empty (`<Section
+// Name="Temp" />`), so this is never null — an empty list is the common case. Every real Temp
+// member seen (MotorDOL) is the bare Name/Datatype shape a DB's own nested member has (no
+// Remanence/Accessibility/AttributeList), so it reuses DbMember too, just never populating
+// Retain/Version/SetPoint/NestedMembers (DbSourceParser hard-errors if a real Temp member ever
+// shows more than that bare shape).
+//
+// Input/Output/InOut/Constant remain hard-error-if-non-empty, unconfirmed — not modeled, not
+// silently accepted.
 public sealed record BlockSource(
     string RootUId,
     string Kind,
@@ -102,7 +125,12 @@ public sealed record BlockSource(
     int Number,
     string Language,
     string? Comment,
-    IReadOnlyList<CompileUnitSource> CompileUnits);
+    IReadOnlyList<CompileUnitSource> CompileUnits,
+    IReadOnlyList<DbMember>? StaticMembers = null,
+    IReadOnlyList<DbMember>? TempMembers = null)
+{
+    public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
+}
 
 public sealed class SimaticMlFormatException : Exception
 {

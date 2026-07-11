@@ -1,4 +1,5 @@
 using System.Text;
+using Converter.SimaticMl;
 
 namespace Converter.Ir;
 
@@ -14,6 +15,12 @@ public static class IrSerializer
         if (!string.IsNullOrEmpty(block.Comment))
         {
             sb.Append("COMMENT \"").Append(EscapeString(block.Comment)).Append("\"\n");
+        }
+
+        if (block.StaticMembers is not null || block.TempMembers.Count > 0)
+        {
+            sb.Append('\n');
+            SerializeInterface(sb, block.StaticMembers, block.TempMembers);
         }
 
         foreach (var network in block.Networks)
@@ -55,9 +62,46 @@ public static class IrSerializer
         }
     }
 
+    // Only emitted when there's real content — matches every FC seen (StaticMembers null,
+    // TempMembers empty), where the whole INTERFACE section is omitted per the "absence means
+    // default" convention used throughout this format. STATIC is its own optional subsection
+    // (null distinguishes "no Static section in source at all" — an FC — from "an FB with an
+    // empty one"); TEMP always shows when non-empty. Member-line grammar (VERSION/RETAIN/
+    // SETPOINT/nested indentation) is identical to a DB's own MEMBERS section — DbMemberLineFormat
+    // is shared between the two, confirmed real 2026-07-11 (S1 item 7 Phase B).
+    private static void SerializeInterface(StringBuilder sb, IReadOnlyList<DbMember>? staticMembers, IReadOnlyList<DbMember> tempMembers)
+    {
+        sb.Append("INTERFACE\n");
+        if (staticMembers is not null)
+        {
+            sb.Append("  STATIC\n");
+            foreach (var member in staticMembers)
+            {
+                DbMemberLineFormat.SerializeLine(sb, "    ", member);
+                if (member.NestedMembers is not null)
+                {
+                    foreach (var nested in member.NestedMembers)
+                    {
+                        DbMemberLineFormat.SerializeLine(sb, "      ", nested);
+                    }
+                }
+            }
+        }
+
+        if (tempMembers.Count > 0)
+        {
+            sb.Append("  TEMP\n");
+            foreach (var member in tempMembers)
+            {
+                DbMemberLineFormat.SerializeLine(sb, "    ", member);
+            }
+        }
+    }
+
     private static string SerializeExpr(Expr expr) => expr switch
     {
         Expr.TagRef tagRef => tagRef.Path,
+        Expr.Not not => $"NOT {SerializeExpr(not.Operand)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
         Expr.And and => string.Join(" AND ", and.Operands.Select(SerializeExpr)),
         Expr.Or { Operands.Count: 0 } => "TRUE",
@@ -80,19 +124,41 @@ public static class IrSerializer
             sb.Append("  assignment ").Append(a).Append('\n');
             sb.Append("    rail = ").Append(assignment.RailWireUId).Append('\n');
 
-            for (var i = 0; i < assignment.ContactUIds.Count; i++)
+            for (var s = 0; s < assignment.Steps.Count; s++)
             {
-                sb.Append("    contact ").Append(i).Append(" = ").Append(assignment.ContactUIds[i]).Append('\n');
-                sb.Append("    contact ").Append(i).Append(" operand = ").Append(assignment.ContactOperandAccessUIds[i]).Append('\n');
+                SerializeStep(sb, "    ", $"step {s}", assignment.Steps[s]);
             }
 
             sb.Append("    coil = ").Append(assignment.CoilUId).Append('\n');
             sb.Append("    coil operand = ").Append(assignment.CoilOperandAccessUId).Append('\n');
+            sb.Append("    coil operandwire = ").Append(assignment.CoilOperandWireUId).Append('\n');
+        }
+    }
 
-            for (var i = 0; i < assignment.WireUIds.Count; i++)
-            {
-                sb.Append("    wire ").Append(i).Append(" = ").Append(assignment.WireUIds[i]).Append('\n');
-            }
+    private static void SerializeStep(StringBuilder sb, string indent, string label, ChainStepSidecar step)
+    {
+        switch (step)
+        {
+            case ChainStepSidecar.ContactStep contact:
+                sb.Append(indent).Append(label).Append(" contact\n");
+                sb.Append(indent).Append("  uid = ").Append(contact.ContactUId).Append('\n');
+                sb.Append(indent).Append("  operand = ").Append(contact.OperandAccessUId).Append('\n');
+                sb.Append(indent).Append("  operandwire = ").Append(contact.OperandWireUId).Append('\n');
+                sb.Append(indent).Append("  negated = ").Append(contact.Negated ? "true" : "false").Append('\n');
+                sb.Append(indent).Append("  out = ").Append(contact.OutgoingWireUId).Append('\n');
+                break;
+            case ChainStepSidecar.OrStep orStep:
+                sb.Append(indent).Append(label).Append(" or\n");
+                sb.Append(indent).Append("  uid = ").Append(orStep.OrPartUId).Append('\n');
+                for (var b = 0; b < orStep.Branches.Count; b++)
+                {
+                    SerializeStep(sb, indent + "  ", $"branch {b}", orStep.Branches[b]);
+                }
+
+                sb.Append(indent).Append("  out = ").Append(orStep.OutgoingWireUId).Append('\n');
+                break;
+            default:
+                throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
     }
 

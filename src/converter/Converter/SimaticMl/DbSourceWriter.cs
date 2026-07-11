@@ -3,42 +3,47 @@ using System.Xml.Linq;
 namespace Converter.SimaticMl;
 
 /// <summary>
-/// Writes a `SW.Blocks.GlobalDB` export XML from a <see cref="DbSource"/> — the inverse of
-/// <see cref="DbSourceParser"/>. `Accessibility="Public"` and the four `BooleanAttribute`s are
-/// written as fixed defaults, matching every real member observed so far
-/// (`DbSourceParser.RequireDefaultBooleanAttributes` hard-errors on parse if a source member
-/// ever differs, so nothing here silently regenerates a value that wasn't actually confirmed).
+/// Writes a `SW.Blocks.GlobalDB`/`SW.Blocks.InstanceDB` export XML from a <see cref="DbSource"/>
+/// — the inverse of <see cref="DbSourceParser"/>. Member-level writing is shared with
+/// <see cref="BlockSourceWriter"/> via <see cref="DbInterfaceMembers"/> — same XML shape for a
+/// DB's own Static section and an FB's Static/Temp sections.
 /// </summary>
 public static class DbSourceWriter
 {
-    private static readonly XNamespace InterfaceNs = "http://www.siemens.com/automation/Openness/SW/Interface/v5";
-
     public static XDocument Write(DbSource db)
     {
         var nextAuxId = 100_000;
 
-        var staticSection = new XElement(InterfaceNs + "Section", new XAttribute("Name", "Static"));
+        var staticSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Static"));
         foreach (var member in db.Members)
         {
-            staticSection.Add(WriteMember(member));
+            staticSection.Add(DbInterfaceMembers.WriteMember(member));
         }
 
         var sectionsElement = new XElement(
-            InterfaceNs + "Sections",
+            DbInterfaceMembers.Ns + "Sections",
             staticSection);
 
-        var attributeList = new XElement(
-            "AttributeList",
-            new XElement("Interface", sectionsElement),
-            new XElement("Name", db.Name),
-            new XElement("Namespace"),
-            new XElement("Number", db.Number),
-            new XElement("ProgrammingLanguage", "DB"));
+        var attributeListChildren = new List<XElement>();
+        if (db.InstanceOfName is not null)
+        {
+            attributeListChildren.Add(new XElement("InstanceOfName", db.InstanceOfName));
+            attributeListChildren.Add(new XElement("InstanceOfType", "FB"));
+        }
+
+        attributeListChildren.Add(new XElement("Interface", sectionsElement));
+        attributeListChildren.Add(new XElement("Name", db.Name));
+        attributeListChildren.Add(new XElement("Namespace"));
+        attributeListChildren.Add(new XElement("Number", db.Number));
+        attributeListChildren.Add(new XElement("ProgrammingLanguage", "DB"));
+
+        var attributeList = new XElement("AttributeList", attributeListChildren);
 
         var objectList = new XElement("ObjectList", WriteComment(db.Comment, ref nextAuxId));
 
+        var rootElementName = db.InstanceOfName is not null ? "SW.Blocks.InstanceDB" : "SW.Blocks.GlobalDB";
         var root = new XElement(
-            "SW.Blocks.GlobalDB",
+            rootElementName,
             new XAttribute("ID", db.RootUId),
             attributeList,
             objectList);
@@ -51,37 +56,7 @@ public static class DbSourceWriter
         return new XDocument(document);
     }
 
-    private static XElement WriteMember(DbMember member)
-    {
-        // Every element here must stay in InterfaceNs (inherited in the real source from the
-        // single xmlns declared on <Sections>, not re-declared per element) — an unnamespaced
-        // XElement nested under a namespaced parent would round-trip as an incorrect explicit
-        // `xmlns=""` reset instead of matching the real shape. Confirmed real, 2026-07-10 (caught
-        // live: parsing this writer's own output, every BooleanAttribute read back as "absent").
-        var attributeList = new XElement(
-            InterfaceNs + "AttributeList",
-            new XElement(InterfaceNs + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(InterfaceNs + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(InterfaceNs + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(InterfaceNs + "BooleanAttribute", new XAttribute("Name", "SetPoint"), new XAttribute("SystemDefined", "true"), "false"));
-
-        var memberElement = new XElement(
-            InterfaceNs + "Member",
-            new XAttribute("Name", member.Name),
-            new XAttribute("Datatype", member.Datatype),
-            new XAttribute("Remanence", member.Retain ? "Retain" : "NonRetain"),
-            new XAttribute("Accessibility", "Public"),
-            attributeList);
-
-        if (member.StartValue is not null)
-        {
-            memberElement.Add(new XElement(InterfaceNs + "StartValue", member.StartValue));
-        }
-
-        return memberElement;
-    }
-
-    private static XElement WriteComment(string? comment, ref int nextAuxId)
+    internal static XElement WriteComment(string? comment, ref int nextAuxId)
     {
         var textId = nextAuxId++;
         var itemId = nextAuxId++;

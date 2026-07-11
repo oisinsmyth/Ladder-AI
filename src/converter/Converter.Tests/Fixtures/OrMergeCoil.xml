@@ -1,0 +1,74 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="GlobalVariable" UId="61">
+      <Symbol>
+        <Component Name="Sensor1" />
+        <Component Name="Fault" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="62">
+      <Symbol>
+        <Component Name="Sensor2" />
+        <Component Name="Fault" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="63">
+      <Symbol>
+        <Component Name="Sensor3" />
+        <Component Name="Fault" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="64">
+      <Symbol>
+        <Component Name="AnyFault" />
+      </Symbol>
+    </Access>
+    <Part Name="Contact" UId="51" />
+    <Part Name="Contact" UId="52" />
+    <Part Name="Contact" UId="53" />
+    <Part Name="O" UId="54">
+      <TemplateValue Name="Card" Type="Cardinality">3</TemplateValue>
+    </Part>
+    <Part Name="Coil" UId="55" />
+  </Parts>
+  <Wires>
+    <Wire UId="70">
+      <Powerrail />
+      <NameCon UId="51" Name="in" />
+      <NameCon UId="52" Name="in" />
+      <NameCon UId="53" Name="in" />
+    </Wire>
+    <Wire UId="71">
+      <IdentCon UId="61" />
+      <NameCon UId="51" Name="operand" />
+    </Wire>
+    <Wire UId="72">
+      <NameCon UId="51" Name="out" />
+      <NameCon UId="54" Name="in1" />
+    </Wire>
+    <Wire UId="73">
+      <IdentCon UId="62" />
+      <NameCon UId="52" Name="operand" />
+    </Wire>
+    <Wire UId="74">
+      <NameCon UId="52" Name="out" />
+      <NameCon UId="54" Name="in2" />
+    </Wire>
+    <Wire UId="75">
+      <IdentCon UId="63" />
+      <NameCon UId="53" Name="operand" />
+    </Wire>
+    <Wire UId="76">
+      <NameCon UId="53" Name="out" />
+      <NameCon UId="54" Name="in3" />
+    </Wire>
+    <Wire UId="77">
+      <NameCon UId="54" Name="out" />
+      <NameCon UId="55" Name="in" />
+    </Wire>
+    <Wire UId="78">
+      <IdentCon UId="64" />
+      <NameCon UId="55" Name="operand" />
+    </Wire>
+  </Wires>
+</FlgNet>

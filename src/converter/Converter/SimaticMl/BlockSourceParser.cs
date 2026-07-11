@@ -46,7 +46,7 @@ public static class BlockSourceParser
 
         var blockComment = ReadComment(objectList);
         MultilingualTextHelper.RequireEmptyTitle(objectList, $"Block '{name}'");
-        RequireDefaultInterface(attributeList, $"Block '{name}'");
+        var (staticMembers, tempMembers) = ParseInterface(attributeList, $"Block '{name}'");
 
         var compileUnits = objectList.Elements()
             .Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit")
@@ -58,7 +58,7 @@ public static class BlockSourceParser
             throw new SimaticMlFormatException($"Block '{name}' has no CompileUnit (network) content.");
         }
 
-        return new BlockSource(rootUId, kind, name, number, language, blockComment, compileUnits);
+        return new BlockSource(rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers);
     }
 
     private static CompileUnitSource ParseCompileUnit(XElement compileUnit)
@@ -92,48 +92,80 @@ public static class BlockSourceParser
     /// <summary>Reads a MultilingualText[CompositionName=Comment]'s en-US Text, or null if empty/absent.</summary>
     private static string? ReadComment(XElement objectList) => MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
 
-    // FC/FB parameters (Input/Output/InOut/Temp/Constant/Return) live here — genuinely semantic
+    // FC/FB parameters (Input/Output/InOut/Constant/Return) live here — genuinely semantic
     // content (a block's own contract), unlike Title/block-config flags. Not modeled/round-tripped
     // by this converter slice yet, so a block with real parameters must hard-error, not silently
-    // lose them. The only shape confirmed safe to proceed on: every non-Return section empty, and
-    // Return holding exactly the standard parameterless-FC boilerplate (one Void "Ret_Val" member)
-    // — confirmed real, 2026-07-10, on every block seen so far in this slice.
-    private static void RequireDefaultInterface(XElement attributeList, string context)
+    // lose them. Every non-Return/Static/Temp section must be empty, and Return must hold exactly
+    // the standard parameterless-FC boilerplate (one Void "Ret_Val" member) — confirmed real,
+    // 2026-07-10, on every block seen so far in this slice.
+    //
+    // Static/Temp are real, confirmed 2026-07-11 (S1 item 7 Phase B, MotorDOL): an FB's own
+    // instance-data declaration (Static, same shape as a DB's own Static section — reused via
+    // DbInterfaceMembers) and its scan-local working variables (Temp, the bare Name/Datatype
+    // shape). Static is absent entirely (not just empty) on every FC seen — no Section element
+    // for it at all — distinct from an FB with one, hence the nullable return.
+    //
+    // Direct children of the <Sections> wrapper only — NOT .Descendants(), which would also pick
+    // up a Static member's own nested <Sections><Section Name="None">...</Section> (a
+    // timer/UDT-typed member's own sub-members) and wrongly require it to be empty before
+    // DbInterfaceMembers.ParseMember's own, more specific structured-member handling ever runs —
+    // same trap DbSourceParser.ParseMembers was fixed for earlier, real recurrence.
+    private static (IReadOnlyList<DbMember>? StaticMembers, IReadOnlyList<DbMember> TempMembers) ParseInterface(XElement attributeList, string context)
     {
         var interfaceElement = attributeList.Element("Interface");
         if (interfaceElement is null)
         {
-            return;
+            return (null, Array.Empty<DbMember>());
         }
 
-        var sections = interfaceElement.Descendants().Where(e => e.Name.LocalName == "Section").ToList();
+        var sectionsWrapper = interfaceElement.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections")
+            ?? throw new SimaticMlFormatException($"{context} Interface is missing its <Sections> wrapper.");
+        var sections = sectionsWrapper.Elements().Where(e => e.Name.LocalName == "Section").ToList();
+
+        IReadOnlyList<DbMember>? staticMembers = null;
+        var tempMembers = Array.Empty<DbMember>() as IReadOnlyList<DbMember>;
+
         foreach (var section in sections)
         {
             var sectionName = (string?)section.Attribute("Name");
-            var members = section.Elements().Where(e => e.Name.LocalName == "Member").ToList();
+            var memberElements = section.Elements().Where(e => e.Name.LocalName == "Member").ToList();
 
-            if (sectionName != "Return")
+            switch (sectionName)
             {
-                if (members.Count > 0)
-                {
-                    throw new UnsupportedConstructException(
-                        $"{context} has a non-empty Interface section '{sectionName}' — this converter doesn't model block " +
-                        "parameters yet (only Contact/Coil network content).");
-                }
+                case "Static":
+                    staticMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context)).ToList();
+                    break;
 
-                continue;
-            }
+                case "Temp":
+                    tempMembers = memberElements.Select(m => DbInterfaceMembers.ParseBareMember(m, context, "Temp")).ToList();
+                    break;
 
-            var isStandardVoidReturn = members.Count == 1
-                && (string?)members[0].Attribute("Name") == "Ret_Val"
-                && (string?)members[0].Attribute("Datatype") == "Void";
-            if (!isStandardVoidReturn)
-            {
-                throw new UnsupportedConstructException(
-                    $"{context} has a non-standard Return interface — this converter doesn't model block " +
-                    "return values yet, only the default parameterless-FC boilerplate.");
+                case "Return":
+                    var isStandardVoidReturn = memberElements.Count == 1
+                        && (string?)memberElements[0].Attribute("Name") == "Ret_Val"
+                        && (string?)memberElements[0].Attribute("Datatype") == "Void";
+                    if (!isStandardVoidReturn)
+                    {
+                        throw new UnsupportedConstructException(
+                            $"{context} has a non-standard Return interface — this converter doesn't model block " +
+                            "return values yet, only the default parameterless-FC boilerplate.");
+                    }
+
+                    break;
+
+                default:
+                    if (memberElements.Count > 0)
+                    {
+                        throw new UnsupportedConstructException(
+                            $"{context} has a non-empty Interface section '{sectionName}' — this converter doesn't model block " +
+                            "parameters yet (only Contact/Coil network content, plus Static/Temp — S1 item 7 Phase B).");
+                    }
+
+                    break;
             }
         }
+
+        return (staticMembers, tempMembers);
     }
 
     private static string RequireChildValue(XElement parent, string localName)

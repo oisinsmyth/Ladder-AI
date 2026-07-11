@@ -47,7 +47,22 @@ public static class FlgNetWriter
 
         foreach (var part in network.Parts)
         {
-            partsElement.Add(new XElement(ns + "Part", new XAttribute("Name", part.Name), new XAttribute("UId", part.UId)));
+            var partElement = new XElement(ns + "Part", new XAttribute("Name", part.Name), new XAttribute("UId", part.UId));
+            if (part.Negated)
+            {
+                partElement.Add(new XElement(ns + "Negated", new XAttribute("Name", "operand")));
+            }
+
+            if (part.Cardinality is not null)
+            {
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", "Card"),
+                    new XAttribute("Type", "Cardinality"),
+                    part.Cardinality.Value));
+            }
+
+            partsElement.Add(partElement);
         }
 
         var wiresElement = new XElement(ns + "Wires");

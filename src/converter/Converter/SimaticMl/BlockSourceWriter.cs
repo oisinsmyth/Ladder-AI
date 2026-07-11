@@ -29,15 +29,22 @@ public static class BlockSourceWriter
         // source (BlockSourceParser doesn't read it) — written empty, matching every real
         // export inspected so far (`<Namespace />`), until a project with a non-empty one
         // is seen and this needs to actually round-trip a value.
-        var attributeList = new XElement(
-            "AttributeList",
-            new XElement("Name", block.Name),
-            new XElement("Namespace"),
-            new XElement("Number", block.Number),
-            new XElement("ProgrammingLanguage", block.Language));
+        var attributeListChildren = new List<XElement>();
+        var interfaceElement = WriteInterface(block.StaticMembers, block.TempMembers);
+        if (interfaceElement is not null)
+        {
+            attributeListChildren.Add(interfaceElement);
+        }
+
+        attributeListChildren.Add(new XElement("Name", block.Name));
+        attributeListChildren.Add(new XElement("Namespace"));
+        attributeListChildren.Add(new XElement("Number", block.Number));
+        attributeListChildren.Add(new XElement("ProgrammingLanguage", block.Language));
+
+        var attributeList = new XElement("AttributeList", attributeListChildren);
 
         var objectList = new XElement("ObjectList");
-        objectList.Add(WriteComment(block.Comment, ref nextAuxId));
+        objectList.Add(DbSourceWriter.WriteComment(block.Comment, ref nextAuxId));
 
         for (var i = 0; i < networks.Count; i++)
         {
@@ -68,7 +75,7 @@ public static class BlockSourceWriter
             networkSource,
             new XElement("ProgrammingLanguage", language));
 
-        var objectList = new XElement("ObjectList", WriteComment(comment, ref nextAuxId));
+        var objectList = new XElement("ObjectList", DbSourceWriter.WriteComment(comment, ref nextAuxId));
 
         return new XElement(
             "SW.Blocks.CompileUnit",
@@ -78,27 +85,54 @@ public static class BlockSourceWriter
             objectList);
     }
 
-    private static XElement WriteComment(string? comment, ref int nextAuxId)
+    // Confirmed real, 2026-07-11 (S1 item 7 Phase B, MotorDOL): Input/Output/InOut/Constant
+    // always empty, Return always the standard parameterless-FC boilerplate, Static (FB only —
+    // absent entirely for an FC, not just empty) and Temp carrying the real member content this
+    // slice now models. Returns null (no <Interface> element at all) when there's nothing to
+    // say — matches every FC seen and this writer's own proven history: Import() has never
+    // complained about its absence.
+    private static XElement? WriteInterface(IReadOnlyList<DbMember>? staticMembers, IReadOnlyList<DbMember> tempMembers)
     {
-        var textId = nextAuxId++;
-        var itemId = nextAuxId++;
-
-        var textElement = new XElement("Text");
-        if (!string.IsNullOrEmpty(comment))
+        if (staticMembers is null && tempMembers.Count == 0)
         {
-            textElement.Value = comment;
+            return null;
         }
 
-        var item = new XElement(
-            "MultilingualTextItem",
-            new XAttribute("ID", itemId),
-            new XAttribute("CompositionName", "Items"),
-            new XElement("AttributeList", new XElement("Culture", "en-US"), textElement));
+        var sectionsChildren = new List<XElement>
+        {
+            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Input")),
+            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Output")),
+            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "InOut")),
+        };
 
-        return new XElement(
-            "MultilingualText",
-            new XAttribute("ID", textId),
-            new XAttribute("CompositionName", "Comment"),
-            new XElement("ObjectList", item));
+        if (staticMembers is not null)
+        {
+            var staticSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Static"));
+            foreach (var member in staticMembers)
+            {
+                staticSection.Add(DbInterfaceMembers.WriteMember(member));
+            }
+
+            sectionsChildren.Add(staticSection);
+        }
+
+        var tempSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Temp"));
+        foreach (var member in tempMembers)
+        {
+            tempSection.Add(DbInterfaceMembers.WriteBareMember(member));
+        }
+
+        sectionsChildren.Add(tempSection);
+        sectionsChildren.Add(new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Constant")));
+        sectionsChildren.Add(new XElement(
+            DbInterfaceMembers.Ns + "Section",
+            new XAttribute("Name", "Return"),
+            new XElement(
+                DbInterfaceMembers.Ns + "Member",
+                new XAttribute("Name", "Ret_Val"),
+                new XAttribute("Datatype", "Void"),
+                new XAttribute("Accessibility", "Public"))));
+
+        return new XElement("Interface", new XElement(DbInterfaceMembers.Ns + "Sections", sectionsChildren));
     }
 }

@@ -17,8 +17,10 @@ like `ModifiedDate`/`CompileDate`.
 
 ## The corpus
 
-Seeded 2026-07-10, one FC and three DBs: `ir/reference/{NodeStatusAlarms,CommsProcessData,
-AlarmWords,EquipmentStatus}.ir` / matching `simatic-ml/reference/*.xml`. Structural shapes were
+Seeded 2026-07-10 with one FC and three DBs, extended 2026-07-11 with a second FC
+(`PerimeterSafetyAlarms`, S1 item 7 Phase A — OR-merge and negated contacts):
+`ir/reference/{NodeStatusAlarms,CommsProcessData,AlarmWords,EquipmentStatus,
+PerimeterSafetyAlarms}.ir` / matching `simatic-ml/reference/*.xml`. Structural shapes were
 derived from sanitized real production PLC data under a private approval — no site or site
 specifics are recorded anywhere in this repo, and the sanitization mapping (real name -> invented
 name) is intentionally never committed (`.gitignore`: `sanitization/`). Every tag path, block/DB
@@ -29,7 +31,7 @@ references. See `docs/13-data-boundary.md`.
 
 The full live round-trip (`export -> to-ir -> to-xml -> [sanitize ->] import -> compile ->
 re-export`, `Layer 1` assertion 2 via `Normalizer.AreSemanticallyEquivalent`) has been run and
-passed against a real TIA project for all four artifacts, DBs compiled before the FC that depends
+passed against a real TIA project for all five artifacts, DBs compiled before the FCs that depend
 on them (`tests/golden/GoldenHarness.Tests/ReferenceProjectRoundTrip.cs` documents how to re-run
 it — needs a live Portal session, not wired into an always-running `[Fact]`, same reasoning as
 `RoundTripRunner.RunFull` itself).
@@ -64,8 +66,18 @@ DB pass (`src/converter/README.md` has the full detail):
   `IsRetainMemResEnabled`, `IsWriteProtectedInAS`, `MemoryReserve`) added to the strip list, same
   reasoning as the FC set above.
 
+FC pass, OR-merge/negation (S1 item 7 Phase A, 2026-07-11):
+
+- **`Part Name="O"` (OR-merge) and `<Negated Name="operand" />` (a normally-closed contact) are
+  real** — confirmed against `PerimeterSafetyAlarms`/`GeneralAlarms`. Neither needed a new `Normalizer`
+  rule: both round-trip UId-for-UId (Part UId, Wire UId, `Cardinality` value all identical
+  pre-import vs. post-compile re-export in the live proof below) — the raw diff between them is
+  only `DocumentInfo`/whitespace, already normalized.
+
 New LAD constructs found in the wild get added to the corpus *first* (failing), then fixed. Still
 out of scope: `SW.Blocks.InstanceDB` and any UDT-typed/structured member (deferred as one unit —
-a real example needs both together); TON/MOVE/comparisons/block calls/branches/OR-merge. A second
+a real example needs both together); TON/MOVE/comparisons/block calls; a multi-contact OR-merge
+branch or a nested OR-merge (real-but-unconfirmed, hard error rather than guessed at). A second
 FC block was searched for (12 candidates) without finding one that's both in current LAD scope
-and free of Instance-DB dependencies — `docs/notes/stage-gates.md` has the detail.
+and free of Instance-DB dependencies — `docs/notes/stage-gates.md` has the detail; OR-merge
+support closed that gap for `PerimeterSafetyAlarms` specifically (now `PerimeterSafetyAlarms`).

@@ -3,44 +3,55 @@ using System.Xml.Linq;
 namespace Converter.SimaticMl;
 
 /// <summary>
-/// Parses a `SW.Blocks.GlobalDB` export (what `openness-cli export` produces for a global DB)
-/// into a <see cref="DbSource"/>. Scope confirmed against three real GlobalDB exports,
-/// 2026-07-10 (`CommsProcessData`, `Alarms`, `Input` — see `src/converter/README.md`): `Static`
-/// section only, scalar and `Array[m..n] of &lt;scalar&gt;` members. Hard-errors on
-/// `SW.Blocks.InstanceDB` (real, out of scope this slice — needs structured-member support too,
-/// deferred as one unit) and on anything this scope hasn't confirmed: non-`Static` section
-/// content, a member with nested `&lt;Sections&gt;` (UDT-typed or system-function-block-typed,
-/// e.g. a timer instance), or a member whose `BooleanAttribute`s differ from the default every
-/// real member observed so far has.
+/// Parses a `SW.Blocks.GlobalDB` or `SW.Blocks.InstanceDB` export (what `openness-cli export`
+/// produces for a DB) into a <see cref="DbSource"/>. Scope confirmed against real exports:
+/// `Static` section only, scalar and `Array[m..n] of &lt;scalar&gt;` members (2026-07-10 — three
+/// real GlobalDBs, `src/converter/README.md`), plus structured members (UDT-typed or
+/// system-function-block instance-typed, e.g. a `TON_TIME` timer) and Instance DBs, one level of
+/// nesting only (2026-07-11, S1 item 7 Phase B — `ir/SPEC.md` "Structured members"). Member-level
+/// parsing (<see cref="DbInterfaceMembers"/>) is shared with <see cref="BlockSourceParser"/>'s
+/// own FB Static/Temp section support — same XML shape both places. Hard-errors on anything this
+/// scope hasn't confirmed: non-`Static` section content, a nested member with any shape beyond
+/// `Name`/`Datatype`/`StartValue`, a doubly-nested structured member, a nested section named
+/// anything but `"None"`, an Instance DB whose `InstanceOfType` isn't `"FB"`, or a member whose
+/// `BooleanAttribute`s differ from the default every real member of its kind has shown so far.
 /// </summary>
 public static class DbSourceParser
 {
-    // Confirmed real, 2026-07-10, on every scalar/array member across three real GlobalDB
-    // exports — flips only on structured members (SetPoint=true), which are out of scope.
-    private static readonly IReadOnlyDictionary<string, bool> DefaultBooleanAttributes = new Dictionary<string, bool>(StringComparer.Ordinal)
-    {
-        ["ExternalAccessible"] = true,
-        ["ExternalVisible"] = true,
-        ["ExternalWritable"] = true,
-        ["SetPoint"] = false,
-    };
-
     public static DbSource Parse(XDocument document)
     {
         var root = document.Root
             ?? throw new SimaticMlFormatException("Export file has no root element.");
 
+        var globalDb = root.Descendants().FirstOrDefault(e => e.Name.LocalName == "SW.Blocks.GlobalDB");
         var instanceDb = root.Descendants().FirstOrDefault(e => e.Name.LocalName == "SW.Blocks.InstanceDB");
-        if (instanceDb is not null)
+
+        if (globalDb is not null)
         {
-            throw new UnsupportedConstructException(
-                "Instance DBs are not supported yet by this converter slice (needs structured/timer-instance " +
-                "member support too — see src/converter/README.md).");
+            return ParseDbElement(globalDb, instanceOfName: null);
         }
 
-        var dbElement = root.Descendants().FirstOrDefault(e => e.Name.LocalName == "SW.Blocks.GlobalDB")
-            ?? throw new SimaticMlFormatException("Could not find an SW.Blocks.GlobalDB element in the export.");
+        if (instanceDb is not null)
+        {
+            var attributeList = instanceDb.Element("AttributeList")
+                ?? throw new SimaticMlFormatException("DB element is missing its <AttributeList>.");
 
+            var instanceOfName = RequireChildValue(attributeList, "InstanceOfName");
+            var instanceOfType = RequireChildValue(attributeList, "InstanceOfType");
+            if (instanceOfType != "FB")
+            {
+                throw new UnsupportedConstructException(
+                    $"Instance DB '{instanceOfName}' has InstanceOfType '{instanceOfType}' — only \"FB\" has been observed.");
+            }
+
+            return ParseDbElement(instanceDb, instanceOfName);
+        }
+
+        throw new SimaticMlFormatException("Could not find an SW.Blocks.GlobalDB or SW.Blocks.InstanceDB element in the export.");
+    }
+
+    private static DbSource ParseDbElement(XElement dbElement, string? instanceOfName)
+    {
         var attributeList = dbElement.Element("AttributeList")
             ?? throw new SimaticMlFormatException("DB element is missing its <AttributeList>.");
 
@@ -62,7 +73,7 @@ public static class DbSourceParser
         var comment = MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
         MultilingualTextHelper.RequireEmptyTitle(objectList, $"DB '{name}'");
 
-        return new DbSource(rootUId, name, number, comment, members);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members);
     }
 
     private static IReadOnlyList<DbMember> ParseMembers(XElement attributeList, string dbName)
@@ -101,61 +112,8 @@ public static class DbSourceParser
 
         return staticSection.Elements()
             .Where(e => e.Name.LocalName == "Member")
-            .Select(m => ParseMember(m, dbName))
+            .Select(m => DbInterfaceMembers.ParseMember(m, $"DB '{dbName}'"))
             .ToList();
-    }
-
-    private static DbMember ParseMember(XElement member, string dbName)
-    {
-        var name = RequireAttribute(member, "Name");
-        var datatype = RequireAttribute(member, "Datatype");
-
-        if (member.Elements().Any(e => e.Name.LocalName == "Sections"))
-        {
-            throw new UnsupportedConstructException(
-                $"DB '{dbName}' member '{name}' has nested structure (UDT-typed or a system-function-block " +
-                "instance, e.g. a timer) — not supported by this converter slice yet.");
-        }
-
-        var remanence = (string?)member.Attribute("Remanence");
-        var retain = remanence switch
-        {
-            "NonRetain" => false,
-            "Retain" => true,
-            _ => throw new SimaticMlFormatException($"DB '{dbName}' member '{name}' has unrecognized Remanence '{remanence}'."),
-        };
-
-        RequireDefaultBooleanAttributes(member, dbName, name);
-
-        // Member/AttributeList/StartValue inherit the Interface namespace declared on the
-        // ancestor <Sections xmlns="..."> — Element("StartValue")/Element("AttributeList")
-        // (implicit empty-namespace XName) never match, silently returning null. Confirmed real,
-        // 2026-07-10 (caught live: every BooleanAttribute read back as "absent"). Search by
-        // LocalName instead, same discipline used everywhere else in this parser.
-        var startValue = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value;
-
-        return new DbMember(name, datatype, retain, string.IsNullOrEmpty(startValue) ? null : startValue);
-    }
-
-    private static void RequireDefaultBooleanAttributes(XElement member, string dbName, string memberName)
-    {
-        var memberAttributeList = member.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
-        var actual = memberAttributeList?
-            .Elements()
-            .Where(e => e.Name.LocalName == "BooleanAttribute")
-            .ToDictionary(e => (string)e.Attribute("Name")!, e => bool.Parse(e.Value), StringComparer.Ordinal)
-            ?? new Dictionary<string, bool>();
-
-        foreach (var (attrName, expected) in DefaultBooleanAttributes)
-        {
-            if (!actual.TryGetValue(attrName, out var value) || value != expected)
-            {
-                throw new UnsupportedConstructException(
-                    $"DB '{dbName}' member '{memberName}' has a non-default BooleanAttribute '{attrName}' " +
-                    $"(expected {expected}, got {(actual.TryGetValue(attrName, out var v) ? v.ToString() : "absent")}) — " +
-                    "not confirmed safe to ignore by this converter slice yet.");
-            }
-        }
     }
 
     private static string RequireChildValue(XElement parent, string localName)

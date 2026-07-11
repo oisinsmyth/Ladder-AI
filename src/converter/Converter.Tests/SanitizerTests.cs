@@ -179,4 +179,155 @@ public class SanitizerTests
         var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.ApplyToDb(db, map));
         Assert.Contains("RealDbName.RealFlag", ex.Message);
     }
+
+    [Fact]
+    public void ApplyToDb_InstanceDb_RenamesInstanceOfNameViaNamesMap()
+    {
+        var db = LoadDbFixture("InstanceDbWithStructuredMembers.xml");
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["ConveyorMotor1"] = "SanitizedConveyor", ["MotorDOL"] = "SanitizedMotorFB", ["TypeDOL"] = "SanitizedType" },
+            Tags = new Dictionary<string, string>
+            {
+                ["ConveyorMotor1.IO"] = "SanitizedConveyor.SanitizedIO",
+                ["ConveyorMotor1.FaultTripTimer2"] = "SanitizedConveyor.SanitizedTimer",
+            },
+        };
+
+        var sanitized = Sanitizer.ApplyToDb(db, map);
+
+        Assert.Equal("SanitizedConveyor", sanitized.Name);
+        Assert.Equal("SanitizedMotorFB", sanitized.InstanceOfName);
+    }
+
+    [Fact]
+    public void ApplyToDb_InstanceDb_MissingInstanceOfNameMapping_HardErrors()
+    {
+        var db = LoadDbFixture("InstanceDbWithStructuredMembers.xml");
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["ConveyorMotor1"] = "SanitizedConveyor" },
+            Tags = new Dictionary<string, string>
+            {
+                ["ConveyorMotor1.IO"] = "SanitizedConveyor.SanitizedIO",
+                ["ConveyorMotor1.FaultTripTimer2"] = "SanitizedConveyor.SanitizedTimer",
+            },
+        };
+
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.ApplyToDb(db, map));
+        Assert.Contains("Names[\"MotorDOL\"]", ex.Message);
+    }
+
+    [Fact]
+    public void ApplyToDb_StructuredMember_PreservesNestedMemberNamesAsStructural()
+    {
+        var db = LoadDbFixture("InstanceDbWithStructuredMembers.xml");
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["ConveyorMotor1"] = "SanitizedConveyor", ["MotorDOL"] = "SanitizedMotorFB", ["TypeDOL"] = "SanitizedType" },
+            Tags = new Dictionary<string, string>
+            {
+                ["ConveyorMotor1.IO"] = "SanitizedConveyor.SanitizedIO",
+                ["ConveyorMotor1.FaultTripTimer2"] = "SanitizedConveyor.SanitizedTimer",
+            },
+        };
+
+        var sanitized = Sanitizer.ApplyToDb(db, map);
+
+        var io = sanitized.Members.Single(m => m.Name == "SanitizedIO");
+        // Nested member names are the UDT/timer's own reusable field names, not site-specific
+        // identifying data — same category as Datatype, so they pass through unmapped.
+        Assert.Equal(new[] { "InHand", "Running" }, io.NestedMembers!.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void ApplyToDb_QuotedUdtDatatype_IsSanitizedViaNamesMap()
+    {
+        var db = LoadDbFixture("GlobalDbWithUdtTypedMember.xml");
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName", ["TypeDOL"] = "SanitizedType" },
+            Tags = new Dictionary<string, string> { ["RealDbName.IO"] = "SanitizedDbName.SanitizedIO" },
+        };
+
+        var sanitized = Sanitizer.ApplyToDb(db, map);
+
+        var io = Assert.Single(sanitized.Members);
+        Assert.Equal("\"SanitizedType\"", io.Datatype);
+    }
+
+    [Fact]
+    public void ApplyToDb_QuotedUdtDatatype_MissingMapping_HardErrors()
+    {
+        var db = LoadDbFixture("GlobalDbWithUdtTypedMember.xml");
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName" },
+            Tags = new Dictionary<string, string> { ["RealDbName.IO"] = "SanitizedDbName.SanitizedIO" },
+        };
+
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.ApplyToDb(db, map));
+        Assert.Contains("Names[\"TypeDOL\"]", ex.Message);
+    }
+
+    [Fact]
+    public void ApplyToDb_NestedMemberStringStartValue_IsSanitized()
+    {
+        var xml = XDocument.Parse("""
+            <Document>
+              <Engineering version="V20" />
+              <SW.Blocks.GlobalDB ID="0">
+                <AttributeList>
+                  <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+              <Section Name="Static">
+                <Member Name="IO" Datatype="&quot;TypeDOL&quot;" Remanence="NonRetain" Accessibility="Public">
+                  <AttributeList>
+                    <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+                  </AttributeList>
+                  <Sections>
+                    <Section Name="None">
+                      <Member Name="EquipmentName" Datatype="String"><StartValue>'Real Equipment Name'</StartValue></Member>
+                    </Section>
+                  </Sections>
+                </Member>
+              </Section>
+            </Sections></Interface>
+                  <Name>RealDbName</Name>
+                  <Namespace />
+                  <Number>7</Number>
+                  <ProgrammingLanguage>DB</ProgrammingLanguage>
+                </AttributeList>
+                <ObjectList>
+                  <MultilingualText ID="1" CompositionName="Comment">
+                    <ObjectList>
+                      <MultilingualTextItem ID="2" CompositionName="Items">
+                        <AttributeList>
+                          <Culture>en-US</Culture>
+                          <Text />
+                        </AttributeList>
+                      </MultilingualTextItem>
+                    </ObjectList>
+                  </MultilingualText>
+                </ObjectList>
+              </SW.Blocks.GlobalDB>
+            </Document>
+            """);
+        var db = DbSourceParser.Parse(xml);
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName", ["TypeDOL"] = "SanitizedType" },
+            Tags = new Dictionary<string, string> { ["RealDbName.IO"] = "SanitizedDbName.IO" },
+            StartValues = new Dictionary<string, string> { ["RealDbName.IO.EquipmentName"] = "'Sanitized Equipment Name'" },
+        };
+
+        var sanitized = Sanitizer.ApplyToDb(db, map);
+
+        var io = Assert.Single(sanitized.Members);
+        var equipmentName = Assert.Single(io.NestedMembers!);
+        Assert.Equal("EquipmentName", equipmentName.Name);
+        Assert.Equal("'Sanitized Equipment Name'", equipmentName.StartValue);
+    }
 }

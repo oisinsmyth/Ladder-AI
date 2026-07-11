@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton: export→to-ir→to-xml→import→compile verified live; re-export blocked by a pre-existing project state issue, not this session's code)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`, and golden harness machinery (`tests/golden/`) built and live-verified for a Contact/Coil-only, multi-assignment, slice-addressed slice. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge, negated contacts (multi-assignment, slice- and array-addressed), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 5 committed corpus artifacts (4 FCs/DBs + `PerimeterSafetyAlarms`). All PC-side suites green: 68 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -309,3 +309,75 @@ against the real reference project, `Normalizer.AreSemanticallyEquivalent` **tru
 three. Committed: `ir/reference/{CommsProcessData,AlarmWords,EquipmentStatus}.ir` +
 matching `simatic-ml/reference/*.xml`. All 114 tests pass across the three suites (35 converter,
 68 openness-cli, 11 golden harness).
+
+### S1 item 7 Phase A (OR-merge + negated contacts), 2026-07-11
+
+Closed the OR-merge half of the Phase 2 gap (`PerimeterSafetyAlarms`/`GeneralAlarms` above). Grounded
+against two fresh real exports before writing any code: `PerimeterSafetyAlarms` (3-way OR of negated
+contacts) and `GeneralAlarms` (33-way OR of plain contacts) — both confirmed the same shape,
+`Part Name="O"` with a `TemplateValue Name="Card" Type="Cardinality">N</TemplateValue>` child,
+each of its `N` `inK` ports fed by exactly one Contact (optionally negated via a
+`<Negated Name="operand" />` child), every branch fed directly by the shared rail wire — no
+branch confirmed real is itself a multi-contact chain.
+
+Design: added `Expr.Not` to the IR (`NOT <tag>` notation, same style as `AND`/`OR`).
+`GraphReducer`'s backward trace now recognizes `Part Name="O"` as a valid rail-facing node (always
+terminates the trace — an OR-merge's branches resolve straight to Powerrail in every case seen, so
+nothing has been observed *behind* one) and resolves each branch independently, hard-erroring on
+a multi-contact branch or a nested OR-merge (both real-but-unconfirmed shapes, refused rather than
+guessed at). The sidecar's flat `ContactUIds`/`WireUIds` lists couldn't represent a chain
+position that fans out, so `CoilAssignmentSidecar` was rebuilt around a recursive
+`ChainStepSidecar` (`ContactStep` | `OrStep`, the latter holding a list of `ContactStep`
+branches) — each step now owns its own outgoing-wire UId directly rather than the old
+interleaved flat-list bookkeeping.
+
+Live proof: `PerimeterSafetyAlarms` — fully in scope once OR-merge + negation landed (8 independent rungs
+in one network: the 3-way negated OR, four more individually-negated single-contact rungs, three
+plain single-contact rungs, all bit-sliced into one alarm word; a second, empty network). Every
+tag it references was already in `sanitization/reference-project.map.json` from the Phase 2
+search. `export → sanitize → to-ir → to-xml → import → block-compile → re-export →
+Normalizer.AreSemanticallyEquivalent` — **true**, first real confirmation that OR-merge and
+negated-contact SimaticML output actually imports and compiles in TIA, not just self-consistent
+in the converter's own model. Committed as `PerimeterSafetyAlarms` (`ir/reference/`,
+`simatic-ml/reference/`) — the fourth reference-project FC block (the `NodeStatusAlarms` name
+carries no OR-merge/negation content, so this is genuinely new coverage, not a duplicate).
+
+All 45 converter tests (10 new: OR-merge reduce/round-trip/serialize, negated-contact
+reduce/round-trip/serialize, IR self-stability with both, two hard-error fixtures for the
+explicitly-deferred shapes) and 11 golden-harness tests pass.
+
+### S1 item 7 Phase B (Instance DB + structured members), 2026-07-11
+
+Closed the deferred half of the Phase 2/Phase A gap (Instance DBs and one-level structured
+members, `ConveyorMotor1`/`FB MotorDOL`). `SW.Blocks.InstanceDB` carries `InstanceOfName`/
+`InstanceOfType` — `InstanceOfType` isn't an IR field since every real instance DB seen has
+`Type="FB"` (writer regenerates the constant; parser hard-errors if a source ever disagrees).
+Structured members (UDT-typed, e.g. `"TypeDOL"`; or system-function-block instance-typed, e.g.
+`TON_TIME` with a `Version` attribute) are **inlined** in the IR one level deep, rather than
+referencing a separately-defined `UDT <Name>` by name — project owner's call, 2026-07-11,
+recorded in `ir/SPEC.md`'s "Structured members" section: reference-by-name is the better
+long-term shape but isn't safely buildable yet (`openness-cli` has no `PlcType`/UDT export
+capability, so a "canonical" UDT shape would have to be guessed at rather than grounded); inline
+needs nothing new since the source DB XML already contains the full nested shape at the
+declaration site. Grounded against a real `ConveyorMotor1` instance DB (an instance of `FB MotorDOL`:
+a `"TypeDOL"`-typed member with 29 scalar sub-members, plus `TON_TIME`/etc. timer members with
+`PT`/`ET`/`IN`/`Q`). Doubly-nested structured members, and any nested `Section` other than
+`"None"`, remain hard errors (real-but-unconfirmed shapes, refused rather than guessed).
+
+New source files `DbMemberLineFormat.cs`/`DbInterfaceMembers.cs`; new fixtures covering
+Instance DBs with structured members, UDT-typed and doubly-nested members, non-`None` nested
+sections, and non-empty FB `Input`/`Static`+`Temp` interfaces; a new `BlockInterfaceTests.cs` and
+263 new lines in `DbConverterTests.cs`. Full detail: `ir/SPEC.md` ("Structured members"),
+`src/converter/README.md` ("DB support").
+
+**Verified 2026-07-11 (this audit pass, run to resolve a doc inconsistency — see
+`CHANGELOG.md`):** all three PC-side suites green — 68 converter tests (up from 45; the +23 is
+this phase's DB/interface/fixture coverage), 68 openness-cli tests (unaffected by this phase,
+confirmed still green), 11 golden-harness tests. Phase B is functionally complete, not merely
+documented as such.
+
+Still deferred: reference-by-name for structured members (needs real UDT/`PlcType` export,
+`ir/SPEC.md`'s explicit "not now" — revisit only as its own deliberate phase); TON/MOVE/
+comparisons/block calls as first-class LAD instructions (still Contact/Coil/OR-merge scope on
+the network-body side); a multi-contact OR-merge branch or a nested OR-merge (real-but-
+unconfirmed, still hard errors).

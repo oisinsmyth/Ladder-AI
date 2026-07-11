@@ -14,17 +14,29 @@ namespace Converter.Ir;
 /// DB &lt;Name&gt;
 ///   ROOTID &lt;id&gt;
 ///   NUMBER &lt;n&gt;
+///   INSTANCEOF &lt;FBName&gt;              # only present for Instance DBs
 ///   COMMENT "&lt;text&gt;"                       # omitted if empty
 ///   MEMBERS
 ///     &lt;member&gt; : &lt;Datatype&gt;
 ///     &lt;member&gt; : &lt;Datatype&gt; RETAIN
 ///     &lt;member&gt; : &lt;Datatype&gt; = &lt;start value&gt;
 ///     &lt;member&gt; : &lt;Datatype&gt; RETAIN = &lt;start value&gt;
+///     &lt;member&gt; : &lt;Datatype&gt; VERSION &lt;v&gt;   # structured members only (2026-07-11, Phase B)
+///       &lt;nested member&gt; : &lt;Datatype&gt;         # one level deeper — structured members only
+///       &lt;nested member&gt; : &lt;Datatype&gt; = &lt;start value&gt;
+///     &lt;member&gt; : &lt;Datatype&gt; SETPOINT      # present only when the source's own SetPoint
+///                                              # BooleanAttribute is true — verbatim, not a
+///                                              # per-kind default (2026-07-11, Phase B: a real
+///                                              # structured member disproved "always true")
 /// ```
 ///
-/// `Datatype` is written verbatim (e.g. `Array[0..14] of Bool`) — the " : "/" RETAIN"/" = "
-/// delimiters are fixed strings the parser anchors on rather than splitting on whitespace, so a
-/// multi-word datatype never needs escaping.
+/// `Datatype` is written verbatim (e.g. `Array[0..14] of Bool`) — the " : "/" RETAIN"/"
+/// SETPOINT"/" = "/" VERSION " delimiters are fixed strings the parser anchors on rather than
+/// splitting on whitespace, so a multi-word datatype never needs escaping. A member line's
+/// trailing tokens always appear in this fixed order when present: `VERSION`, then `RETAIN`, then
+/// `SETPOINT`, then `= <start>` — parsed by stripping from the end (`= <start>` first, then
+/// ` SETPOINT`, then ` RETAIN`, then ` VERSION <v>`), symmetric with how the serializer appends
+/// them.
 /// </summary>
 public static class DbIrSerializer
 {
@@ -34,6 +46,11 @@ public static class DbIrSerializer
         sb.Append("DB ").Append(db.Name).Append('\n');
         sb.Append("  ROOTID ").Append(db.RootUId).Append('\n');
         sb.Append("  NUMBER ").Append(db.Number).Append('\n');
+        if (db.InstanceOfName is not null)
+        {
+            sb.Append("  INSTANCEOF ").Append(db.InstanceOfName).Append('\n');
+        }
+
         if (!string.IsNullOrEmpty(db.Comment))
         {
             sb.Append("  COMMENT \"").Append(EscapeString(db.Comment)).Append("\"\n");
@@ -42,18 +59,14 @@ public static class DbIrSerializer
         sb.Append("  MEMBERS\n");
         foreach (var member in db.Members)
         {
-            sb.Append("    ").Append(member.Name).Append(" : ").Append(member.Datatype);
-            if (member.Retain)
+            DbMemberLineFormat.SerializeLine(sb, "    ", member);
+            if (member.NestedMembers is not null)
             {
-                sb.Append(" RETAIN");
+                foreach (var nested in member.NestedMembers)
+                {
+                    DbMemberLineFormat.SerializeLine(sb, "      ", nested);
+                }
             }
-
-            if (member.StartValue is not null)
-            {
-                sb.Append(" = ").Append(member.StartValue);
-            }
-
-            sb.Append('\n');
         }
 
         return sb.ToString();
@@ -80,6 +93,13 @@ public static class DbIrParser
         var rootUId = RequirePrefixedLine(lines, ref i, "  ROOTID ");
         var number = int.Parse(RequirePrefixedLine(lines, ref i, "  NUMBER "));
 
+        string? instanceOfName = null;
+        if (i < lines.Length && lines[i].StartsWith("  INSTANCEOF ", StringComparison.Ordinal))
+        {
+            instanceOfName = lines[i]["  INSTANCEOF ".Length..];
+            i++;
+        }
+
         string? comment = null;
         if (i < lines.Length && lines[i].StartsWith("  COMMENT \"", StringComparison.Ordinal))
         {
@@ -95,43 +115,22 @@ public static class DbIrParser
         i++;
 
         var members = new List<DbMember>();
-        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
+        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal) && !lines[i].StartsWith("      ", StringComparison.Ordinal))
         {
-            members.Add(ParseMemberLine(lines[i]));
+            var member = DbMemberLineFormat.ParseLine(lines[i], "    ");
             i++;
+
+            var nestedMembers = new List<DbMember>();
+            while (i < lines.Length && lines[i].StartsWith("      ", StringComparison.Ordinal))
+            {
+                nestedMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "      "));
+                i++;
+            }
+
+            members.Add(nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member);
         }
 
-        return new DbSource(rootUId, name, number, comment, members);
-    }
-
-    private static DbMember ParseMemberLine(string line)
-    {
-        var content = line[4..];
-        var colonIndex = content.IndexOf(" : ", StringComparison.Ordinal);
-        if (colonIndex < 0)
-        {
-            throw new IrFormatException($"Expected '<member> : <Datatype>', got: '{line}'");
-        }
-
-        var name = content[..colonIndex];
-        var rest = content[(colonIndex + 3)..];
-
-        string? startValue = null;
-        var eqIndex = rest.IndexOf(" = ", StringComparison.Ordinal);
-        if (eqIndex >= 0)
-        {
-            startValue = rest[(eqIndex + 3)..];
-            rest = rest[..eqIndex];
-        }
-
-        var retain = false;
-        if (rest.EndsWith(" RETAIN", StringComparison.Ordinal))
-        {
-            retain = true;
-            rest = rest[..^" RETAIN".Length];
-        }
-
-        return new DbMember(name, rest, retain, startValue);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members);
     }
 
     private static string RequireLine(string[] lines, ref int i)

@@ -3,8 +3,9 @@ namespace GoldenHarness;
 /// <summary>
 /// The actual reference-project round-trip proof (S1 item 1 — docs/notes/stage-gates.md), first
 /// run 2026-07-10 against `NodeStatusAlarms`, extended the same day with three DBs
-/// (`CommsProcessData`, `AlarmWords`, `EquipmentStatus`) — each pair under `ir/reference/` /
-/// `simatic-ml/reference/`. Same "manual/live, not CI" reasoning as
+/// (`CommsProcessData`, `AlarmWords`, `EquipmentStatus`), extended 2026-07-11 with
+/// `PerimeterSafetyAlarms` (S1 item 7 Phase A: OR-merge + negated contacts) — each pair under
+/// `ir/reference/` / `simatic-ml/reference/`. Same "manual/live, not CI" reasoning as
 /// <see cref="RoundTripRunner.RunFull"/> itself — needs a live Portal session and the actual
 /// reference TIA project, so deliberately not an always-running [Fact]. Call
 /// <see cref="RunAll"/> by hand (or from a throwaway test with a [Fact] attribute added
@@ -27,6 +28,7 @@ public static class ReferenceProjectRoundTrip
         "AlarmWords",
         "EquipmentStatus",
         "NodeStatusAlarms",
+        "PerimeterSafetyAlarms",
     };
 
     public static RoundTripReport Run(string blockName, string workDir)

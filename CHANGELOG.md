@@ -8,6 +8,45 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-11
+
+**S1 item 7 Phase A: OR-merge + negated contacts, live-proven in the reference project**
+
+- Added `Expr.Not` to the IR (`NOT <tag>` notation) and generalized `GraphReducer`'s backward
+  trace to recognize `Part Name="O"` (OR-merge) as a valid rail-facing chain position — grounded
+  against two fresh real exports (`PerimeterSafetyAlarms`: 3-way OR of negated contacts; `GeneralAlarms`:
+  33-way OR of plain contacts), both confirming every OR-merge branch is exactly one Contact
+  (optionally negated via `<Negated Name="operand" />`) fed directly by the shared rail wire.
+  Rebuilt `CoilAssignmentSidecar`'s flat contact/wire lists as a recursive `ChainStepSidecar`
+  (`ContactStep`/`OrStep`) to represent a chain position that fans out. A multi-contact OR branch
+  or a nested OR-merge — both real but unconfirmed — hard-error rather than guess.
+- Live proof: `PerimeterSafetyAlarms` (8 independent rungs — the 3-way negated OR plus 7 more
+  single-contact rungs, 4 negated) taken through `sanitize → to-ir → to-xml → import →
+  block-compile → re-export → Normalizer.AreSemanticallyEquivalent` — **true**, the first real
+  confirmation that OR-merge/negated-contact SimaticML output actually imports and compiles in
+  TIA. Committed as `PerimeterSafetyAlarms`, the reference project's second FC block — every tag
+  it needed was already in the sanitization map from the earlier 12-block search that found this
+  gap in the first place.
+- 10 new converter tests (45 total), all three suites still green.
+
+**S1 item 7 Phase B: Instance DB + one-level structured members**
+
+- Added `SW.Blocks.InstanceDB` support (`InstanceOfName`/`InstanceOfType`, the latter regenerated
+  as a constant rather than carried as an IR field) and one-level structured-member round-trip
+  for both Global and Instance DBs — UDT-typed (e.g. `"TypeDOL"`) and system-function-block
+  instance-typed (e.g. `TON_TIME`, `PT`/`ET`/`IN`/`Q`) members are inlined directly in the IR
+  rather than referenced by name, a deliberate call (`ir/SPEC.md` "Structured members") made
+  because there's no UDT/`PlcType` export capability yet to safely derive a canonical
+  reference-by-name shape from. Grounded against a real `ConveyorMotor1` instance DB (`FB MotorDOL`).
+- New source files `DbMemberLineFormat.cs`/`DbInterfaceMembers.cs`; new fixtures for
+  Instance DBs with structured members, UDT-typed and doubly-nested members (hard-error case),
+  non-`None` nested sections (hard-error case), and non-empty FB interfaces; new
+  `BlockInterfaceTests.cs` plus 263 new lines in `DbConverterTests.cs`.
+- Doubly-nested structured members and non-`None` nested sections remain hard errors
+  (real-but-unconfirmed shapes).
+- Verified 2026-07-11 (during a docs audit that flagged this phase as undocumented): 68 converter
+  tests (up from 45), 68 openness-cli tests, 11 golden-harness tests, all green.
+
 ## 2026-07-10
 
 **Seed the reference project: sanitizer, DB round-trip support, auto project-switching**

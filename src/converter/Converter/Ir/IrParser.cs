@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Converter.SimaticMl;
 
 namespace Converter.Ir;
 
@@ -29,6 +30,8 @@ public static partial class IrParser
             comment = ParseQuotedString(lines[i]["COMMENT ".Length..]);
             i++;
         }
+
+        var (staticMembers, tempMembers) = ParseInterface(lines, ref i);
 
         var networks = new List<IrNetwork>();
         while (i < lines.Length && lines[i] != "SIDECAR")
@@ -61,7 +64,63 @@ public static partial class IrParser
             sidecars.Add(ParseSidecarNetwork(lines, ref i));
         }
 
-        return (new IrBlock(rootUId, kind, name, number, language, comment, networks), sidecars);
+        return (new IrBlock(rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers), sidecars);
+    }
+
+    // Optional — only present when the source had real Static/Temp content (S1 item 7 Phase B,
+    // 2026-07-11). A single blank-line separator precedes "INTERFACE", same convention as the
+    // one preceding each NETWORK — skipped here rather than left for the caller, since this is
+    // the one place that separator has a specific fixed follower to check for.
+    private static (IReadOnlyList<DbMember>? StaticMembers, IReadOnlyList<DbMember> TempMembers) ParseInterface(string[] lines, ref int i)
+    {
+        var lookahead = i;
+        if (lookahead < lines.Length && string.IsNullOrWhiteSpace(lines[lookahead]))
+        {
+            lookahead++;
+        }
+
+        if (lookahead >= lines.Length || lines[lookahead] != "INTERFACE")
+        {
+            return (null, Array.Empty<DbMember>());
+        }
+
+        i = lookahead + 1;
+
+        IReadOnlyList<DbMember>? staticMembers = null;
+        if (i < lines.Length && lines[i] == "  STATIC")
+        {
+            i++;
+            var parsed = new List<DbMember>();
+            while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal) && !lines[i].StartsWith("      ", StringComparison.Ordinal))
+            {
+                var member = DbMemberLineFormat.ParseLine(lines[i], "    ");
+                i++;
+
+                var nestedMembers = new List<DbMember>();
+                while (i < lines.Length && lines[i].StartsWith("      ", StringComparison.Ordinal))
+                {
+                    nestedMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "      "));
+                    i++;
+                }
+
+                parsed.Add(nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member);
+            }
+
+            staticMembers = parsed;
+        }
+
+        var tempMembers = new List<DbMember>();
+        if (i < lines.Length && lines[i] == "  TEMP")
+        {
+            i++;
+            while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
+            {
+                tempMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "    "));
+                i++;
+            }
+        }
+
+        return (staticMembers, tempMembers);
     }
 
     public static IrNetwork ParseNetworkOnly(string text)
@@ -123,14 +182,25 @@ public static partial class IrParser
 
         if (text.Contains(" AND "))
         {
-            var operands = text.Split(" AND ", StringSplitOptions.TrimEntries).Select(t => (Expr)new Expr.TagRef(t)).ToList();
+            var operands = text.Split(" AND ", StringSplitOptions.TrimEntries).Select(ParseExprTerm).ToList();
             return new Expr.And(operands);
         }
 
         if (text.Contains(" OR "))
         {
-            var operands = text.Split(" OR ", StringSplitOptions.TrimEntries).Select(t => (Expr)new Expr.TagRef(t)).ToList();
+            var operands = text.Split(" OR ", StringSplitOptions.TrimEntries).Select(ParseExprTerm).ToList();
             return new Expr.Or(operands);
+        }
+
+        return ParseExprTerm(text);
+    }
+
+    private static Expr ParseExprTerm(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith("NOT ", StringComparison.Ordinal))
+        {
+            return new Expr.Not(ParseExprTerm(text["NOT ".Length..]));
         }
 
         return new Expr.TagRef(text);
@@ -180,25 +250,12 @@ public static partial class IrParser
             var railWireUId = int.Parse(lines[i]["    rail = ".Length..].Trim());
             i++;
 
-            var contactUIds = new List<int>();
-            var contactOperandAccessUIds = new List<int>();
-            while (i < lines.Length && lines[i].StartsWith("    contact ", StringComparison.Ordinal))
+            var steps = new List<ChainStepSidecar>();
+            var s = 0;
+            while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
             {
-                if (!SidecarIndexedLineRegex().IsMatch(lines[i]))
-                {
-                    throw new IrFormatException($"Malformed sidecar contact line: '{lines[i]}'");
-                }
-
-                contactUIds.Add(int.Parse(lines[i][(lines[i].LastIndexOf('=') + 1)..].Trim()));
-                i++;
-
-                if (i >= lines.Length || !SidecarIndexedOperandLineRegex().IsMatch(lines[i]))
-                {
-                    throw new IrFormatException($"Expected '    contact {contactUIds.Count - 1} operand = <uid>' in SIDECAR for network {number}.");
-                }
-
-                contactOperandAccessUIds.Add(int.Parse(lines[i][(lines[i].LastIndexOf('=') + 1)..].Trim()));
-                i++;
+                steps.Add(ParseStep(lines, ref i, "    ", $"step {s}"));
+                s++;
             }
 
             if (i >= lines.Length || !lines[i].StartsWith("    coil = ", StringComparison.Ordinal))
@@ -217,22 +274,76 @@ public static partial class IrParser
             var coilOperandAccessUId = int.Parse(lines[i]["    coil operand = ".Length..].Trim());
             i++;
 
-            var wireUIds = new List<int>();
-            while (i < lines.Length && lines[i].StartsWith("    wire ", StringComparison.Ordinal))
+            if (i >= lines.Length || !lines[i].StartsWith("    coil operandwire = ", StringComparison.Ordinal))
             {
-                if (!SidecarIndexedLineRegex().IsMatch(lines[i]))
-                {
-                    throw new IrFormatException($"Malformed sidecar wire line: '{lines[i]}'");
-                }
-
-                wireUIds.Add(int.Parse(lines[i][(lines[i].LastIndexOf('=') + 1)..].Trim()));
-                i++;
+                throw new IrFormatException($"Expected '    coil operandwire = <uid>' in SIDECAR for network {number}.");
             }
 
-            assignments.Add(new CoilAssignmentSidecar(railWireUId, contactUIds, contactOperandAccessUIds, coilUId, coilOperandAccessUId, wireUIds));
+            var coilOperandWireUId = int.Parse(lines[i]["    coil operandwire = ".Length..].Trim());
+            i++;
+
+            assignments.Add(new CoilAssignmentSidecar(railWireUId, steps, coilUId, coilOperandAccessUId, coilOperandWireUId));
         }
 
         return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments);
+    }
+
+    private static bool IsStepHeader(string line, string indent, string label) =>
+        line == indent + label + " contact" || line == indent + label + " or";
+
+    private static ChainStepSidecar ParseStep(string[] lines, ref int i, string indent, string label)
+    {
+        var header = RequireLine(lines, ref i);
+        var contactHeader = indent + label + " contact";
+        var orHeader = indent + label + " or";
+        if (header == contactHeader)
+        {
+            return ParseContactStepBody(lines, ref i, indent + "  ");
+        }
+
+        if (header == orHeader)
+        {
+            return ParseOrStepBody(lines, ref i, indent + "  ");
+        }
+
+        throw new IrFormatException($"Expected '{contactHeader}' or '{orHeader}', got: '{header}'");
+    }
+
+    private static ChainStepSidecar.ContactStep ParseContactStepBody(string[] lines, ref int i, string indent)
+    {
+        var uid = int.Parse(RequirePrefixedLine(lines, ref i, indent + "uid = "));
+        var operand = int.Parse(RequirePrefixedLine(lines, ref i, indent + "operand = "));
+        var operandWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "operandwire = "));
+        var negated = RequirePrefixedLine(lines, ref i, indent + "negated = ").Trim() == "true";
+        var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
+        return new ChainStepSidecar.ContactStep(uid, operand, operandWire, negated, outWire);
+    }
+
+    private static ChainStepSidecar.OrStep ParseOrStepBody(string[] lines, ref int i, string indent)
+    {
+        var uid = int.Parse(RequirePrefixedLine(lines, ref i, indent + "uid = "));
+
+        var branches = new List<ChainStepSidecar.ContactStep>();
+        var b = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], indent, $"branch {b}"))
+        {
+            var branch = ParseStep(lines, ref i, indent, $"branch {b}");
+            if (branch is not ChainStepSidecar.ContactStep contactBranch)
+            {
+                throw new IrFormatException("OR-merge branch must be a single contact.");
+            }
+
+            branches.Add(contactBranch);
+            b++;
+        }
+
+        if (branches.Count == 0)
+        {
+            throw new IrFormatException("OR-merge step has no branches.");
+        }
+
+        var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
+        return new ChainStepSidecar.OrStep(uid, branches, outWire);
     }
 
     private static string RequireLine(string[] lines, ref int i)
@@ -286,10 +397,4 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  assignment (?<index>\d+)$")]
     private static partial Regex AssignmentHeaderRegex();
-
-    [GeneratedRegex(@"^    (?<kind>contact|wire) (?<index>\d+) = (?<uid>\d+)$")]
-    private static partial Regex SidecarIndexedLineRegex();
-
-    [GeneratedRegex(@"^    contact (?<index>\d+) operand = (?<uid>\d+)$")]
-    private static partial Regex SidecarIndexedOperandLineRegex();
 }

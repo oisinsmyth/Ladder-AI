@@ -44,6 +44,15 @@ public static class Sanitizer
             sanitizedUnits.Add(unit with { Comment = sanitizedComment, Network = sanitizedNetwork });
         }
 
+        // Static/Temp (an FB's own instance-data/working-variable declarations, S1 item 7 Phase
+        // B) are top-level, freely-named members exactly like a DB's own — same Tags-map
+        // sanitization, same SanitizeMember helper. Unlike a structured member's *nested*
+        // sub-fields (treated as structural, project owner's call — see
+        // docs/13-data-boundary.md), these are chosen per-block by whoever wrote it and can carry
+        // real meaning, so they aren't given the structural exemption.
+        var sanitizedStaticMembers = block.StaticMembers?.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+        var sanitizedTempMembers = block.TempMembers.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+
         if (missing.Count > 0)
         {
             throw new SanitizationMapException(
@@ -51,7 +60,14 @@ public static class Sanitizer
                 string.Join("\n  ", missing));
         }
 
-        return block with { Name = sanitizedName!, Comment = sanitizedBlockComment, CompileUnits = sanitizedUnits };
+        return block with
+        {
+            Name = sanitizedName!,
+            Comment = sanitizedBlockComment,
+            CompileUnits = sanitizedUnits,
+            StaticMembers = sanitizedStaticMembers,
+            TempMembers = sanitizedTempMembers,
+        };
     }
 
     /// <summary>
@@ -70,6 +86,17 @@ public static class Sanitizer
             map.Names.TryGetValue(db.Name, out var mappedName) ? mappedName : null,
             $"Names[\"{db.Name}\"]",
             missing);
+
+        // InstanceOfName is an FB name — same identifying category as a DB/block name, so it
+        // goes through the same map.Names table, not silently passed through. Null only for a
+        // Global DB, in which case there's nothing to map.
+        var sanitizedInstanceOfName = db.InstanceOfName is null
+            ? null
+            : Require(
+                map.Names.TryGetValue(db.InstanceOfName, out var mappedInstanceOf) ? mappedInstanceOf : null,
+                $"Names[\"{db.InstanceOfName}\"]",
+                missing);
+
         var sanitizedComment = SanitizeComment(
             db.Comment,
             map.Comments.TryGetValue(db.Name, out var mappedComment) ? mappedComment : null,
@@ -85,12 +112,15 @@ public static class Sanitizer
                 string.Join("\n  ", missing));
         }
 
-        return db with { Name = sanitizedName!, Comment = sanitizedComment, Members = sanitizedMembers };
+        return db with { Name = sanitizedName!, InstanceOfName = sanitizedInstanceOfName, Comment = sanitizedComment, Members = sanitizedMembers };
     }
 
-    private static DbMember SanitizeMember(string dbName, DbMember member, SanitizationMap map, List<string> missing)
+    // ownerName is a DB name for DbSource.Members, or a block (FC/FB) name for
+    // BlockSource.StaticMembers/TempMembers — the same Tags-map convention
+    // ("<Owner>.<Member>" -> "<InventedOwner>.<InventedMember>") covers both, one shared mapping.
+    private static DbMember SanitizeMember(string ownerName, DbMember member, SanitizationMap map, List<string> missing)
     {
-        var realPath = $"{dbName}.{member.Name}";
+        var realPath = $"{ownerName}.{member.Name}";
         if (!map.Tags.TryGetValue(realPath, out var invented))
         {
             missing.Add($"Tags[\"{realPath}\"]");
@@ -100,26 +130,38 @@ public static class Sanitizer
         var separatorIndex = invented.IndexOf('.');
         if (separatorIndex < 0)
         {
-            throw new SanitizationMapException($"Tags[\"{realPath}\"] = \"{invented}\" isn't a dotted \"Db.Member\" path.");
+            throw new SanitizationMapException($"Tags[\"{realPath}\"] = \"{invented}\" isn't a dotted \"Owner.Member\" path.");
         }
 
-        var sanitizedStartValue = SanitizeStartValue(member.StartValue, dbName, member.Name, map, missing);
+        var sanitizedStartValue = SanitizeStartValue(member.StartValue, ownerName, member.Name, map, missing);
+        var sanitizedDatatype = SanitizeDatatype(member.Datatype, map, missing);
 
-        return member with { Name = invented[(separatorIndex + 1)..], StartValue = sanitizedStartValue };
+        // Nested members (a structured member's own sub-fields, e.g. a UDT's InHand/Running or a
+        // timer's PT/ET/IN/Q) are treated as structural, same category as their own scalar
+        // Datatype (Bool/Time/etc — never itself a quoted UDT reference, since double-nesting is
+        // hard-errored) — they're the reusable type's own field names, not site-specific
+        // identifying data, so they aren't renamed. Their StartValue *can* still carry
+        // identifying string content (same real risk the top-level rule exists for), so that
+        // alone is still sanitized.
+        var sanitizedNestedMembers = member.NestedMembers?
+            .Select(nested => nested with { StartValue = SanitizeStartValue(nested.StartValue, ownerName, $"{member.Name}.{nested.Name}", map, missing) })
+            .ToList();
+
+        return member with { Name = invented[(separatorIndex + 1)..], Datatype = sanitizedDatatype, StartValue = sanitizedStartValue, NestedMembers = sanitizedNestedMembers };
     }
 
     // Only string-typed StartValues (Siemens single-quote literal syntax, e.g. 'Some Text') can
     // carry identifying content — confirmed real, 2026-07-10 (a real DB's string start value
     // was a descriptive equipment name). Every other literal syntax (bool/numeric/hex/time) is
     // structural, not identifying, and passes through unmapped.
-    private static string? SanitizeStartValue(string? startValue, string dbName, string memberName, SanitizationMap map, List<string> missing)
+    private static string? SanitizeStartValue(string? startValue, string ownerName, string memberName, SanitizationMap map, List<string> missing)
     {
         if (startValue is null || !(startValue.StartsWith('\'') && startValue.EndsWith('\'')))
         {
             return startValue;
         }
 
-        var key = $"{dbName}.{memberName}";
+        var key = $"{ownerName}.{memberName}";
         if (!map.StartValues.TryGetValue(key, out var invented))
         {
             missing.Add($"StartValues[\"{key}\"]");
@@ -127,6 +169,28 @@ public static class Sanitizer
         }
 
         return invented;
+    }
+
+    // A quoted Datatype (e.g. `"TypeDOL"`) is a reference to a user-defined type — the same
+    // identifying-name category as a DB/block/FB name (site convention C-302: UDTs are named,
+    // reusable, per-project), confirmed real 2026-07-11 (S1 item 7 Phase B). Every other
+    // Datatype string (Bool, Word, TON_TIME, Array[0..2] of Int, ...) is a built-in or
+    // system-function-block type name, structural, and passes through verbatim.
+    private static string SanitizeDatatype(string datatype, SanitizationMap map, List<string> missing)
+    {
+        if (datatype.Length < 2 || datatype[0] != '"' || datatype[^1] != '"')
+        {
+            return datatype;
+        }
+
+        var realTypeName = datatype[1..^1];
+        if (!map.Names.TryGetValue(realTypeName, out var invented))
+        {
+            missing.Add($"Names[\"{realTypeName}\"]");
+            return datatype;
+        }
+
+        return $"\"{invented}\"";
     }
 
     private static FlgNetwork SanitizeNetwork(FlgNetwork network, SanitizationMap map, List<string> missing)

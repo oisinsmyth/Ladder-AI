@@ -81,11 +81,15 @@ public static class GraphReducer
         int networkNumber,
         HashSet<int> visitedWireUIds)
     {
-        // Backward-trace from the coil to the rail, collecting contacts (rail-to-coil order)
-        // and the "flow" wire feeding each element — except the very first one, which touches
-        // Powerrail and may be shared with sibling chains (tracked as railWireUId instead).
-        var contactChain = new List<PartNode>();
-        var flowWireUIds = new List<int>(); // one per element after the first: contact[1..].in and coil.in
+        // Backward-trace from the coil to the rail, one position at a time (rail-to-coil order
+        // once reversed). Each position is either a single Contact (the chain continues further
+        // upstream) or an OR-merge (Part Name="O") — confirmed real, 2026-07-10, always
+        // rail-facing: every branch of every OR-merge seen resolves to exactly one Contact fed
+        // directly by Powerrail, so an OR-merge always terminates the trace, the same as
+        // Powerrail itself does for a plain chain.
+        var accessEntries = new List<SidecarAccessEntry>();
+        var steps = new List<ChainStepSidecar>();
+        var stepExprs = new List<Expr>();
         var currentInPort = (coil.UId, "in");
         var railWireUId = -1;
 
@@ -123,34 +127,37 @@ public static class GraphReducer
                 ?? throw new NonReducibleNetworkException(
                     $"Network {networkNumber}: wire {wire.UId} references unknown part UId={other.UId}.");
 
-            if (upstreamPart.Name != "Contact")
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: upstream of UId={currentInPort.Item1} is a '{upstreamPart.Name}', not a Contact — outside this slice.");
-            }
-
             visitedWireUIds.Add(wire.UId);
-            flowWireUIds.Insert(0, wire.UId);
-            contactChain.Insert(0, upstreamPart);
-            currentInPort = (upstreamPart.UId, "in");
-        }
+            var outgoingWireUId = wire.UId;
 
-        var accessEntries = new List<SidecarAccessEntry>();
-        var operandTags = new List<string>();
-        var operandWireUIds = new List<int>();
-        var contactOperandAccessUIds = new List<int>();
-
-        foreach (var contact in contactChain)
-        {
-            var (tag, wireUId) = ResolveOperand(wiresByPort, accessByUId, contact.UId, networkNumber);
-            visitedWireUIds.Add(wireUId);
-            operandWireUIds.Add(wireUId);
-            operandTags.Add(tag.TagPath);
-            contactOperandAccessUIds.Add(tag.UId);
-            if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
+            if (upstreamPart.Name == "Contact")
             {
-                accessEntries.Add(tag);
+                var (tag, operandWireUId) = ResolveOperand(wiresByPort, accessByUId, upstreamPart.UId, networkNumber);
+                visitedWireUIds.Add(operandWireUId);
+                if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
+                {
+                    accessEntries.Add(tag);
+                }
+
+                Expr operandExpr = upstreamPart.Negated ? new Expr.Not(new Expr.TagRef(tag.TagPath)) : new Expr.TagRef(tag.TagPath);
+                steps.Insert(0, new ChainStepSidecar.ContactStep(upstreamPart.UId, tag.UId, operandWireUId, upstreamPart.Negated, outgoingWireUId));
+                stepExprs.Insert(0, operandExpr);
+                currentInPort = (upstreamPart.UId, "in");
+                continue;
             }
+
+            if (upstreamPart.Name == "O")
+            {
+                var (orStep, orExpr, orRailWireUId) = ResolveOrMerge(
+                    network, wiresByPort, accessByUId, upstreamPart, outgoingWireUId, networkNumber, visitedWireUIds, accessEntries);
+                steps.Insert(0, orStep);
+                stepExprs.Insert(0, orExpr);
+                railWireUId = orRailWireUId;
+                break;
+            }
+
+            throw new NonReducibleNetworkException(
+                $"Network {networkNumber}: upstream of UId={currentInPort.Item1} is a '{upstreamPart.Name}', not a Contact — outside this slice.");
         }
 
         var (coilTag, coilOperandWireUId) = ResolveOperand(wiresByPort, accessByUId, coil.UId, networkNumber);
@@ -160,37 +167,110 @@ public static class GraphReducer
             accessEntries.Add(coilTag);
         }
 
-        Expr condition = operandTags.Count switch
+        Expr condition = stepExprs.Count switch
         {
             0 => new Expr.And(Array.Empty<Expr>()), // coil wired directly to the rail — always on
-            1 => new Expr.TagRef(operandTags[0]),
-            _ => new Expr.And(operandTags.Select(t => (Expr)new Expr.TagRef(t)).ToList()),
+            1 => stepExprs[0],
+            _ => new Expr.And(stepExprs),
         };
 
-        // Interleave to match FlgNetBuilder's regeneration order: operand_0, flow_to_1,
-        // operand_1, flow_to_2, ..., operand_last, flow_toCoil, coilOperand. flowWireUIds has
-        // one entry per contact after the first, plus the final flow into the coil — i.e.
-        // exactly contactChain.Count entries (flow-into-contact[1..] is Count-1, plus
-        // flow-into-coil is 1 more).
-        var wireUIds = new List<int>();
-        for (var i = 0; i < contactChain.Count; i++)
-        {
-            wireUIds.Add(operandWireUIds[i]);
-            wireUIds.Add(flowWireUIds[i]);
-        }
-
-        wireUIds.Add(coilOperandWireUId);
-
         var assignment = new CoilAssignment(coilTag.TagPath, condition);
-        var sidecar = new CoilAssignmentSidecar(
-            railWireUId,
-            contactChain.Select(c => c.UId).ToList(),
-            contactOperandAccessUIds,
-            coil.UId,
-            coilTag.UId,
-            wireUIds);
+        var sidecar = new CoilAssignmentSidecar(railWireUId, steps, coil.UId, coilTag.UId, coilOperandWireUId);
 
         return (assignment, sidecar, accessEntries);
+    }
+
+    // An OR-merge is always rail-facing (confirmed real, 2026-07-10): every branch resolves to
+    // exactly one Contact fed directly by Powerrail. A branch that is itself a multi-element
+    // chain, or shares its OR-merge with a differently-wired rail, is real-but-unconfirmed —
+    // refused rather than guessed at.
+    private static (ChainStepSidecar.OrStep OrStep, Expr Expr, int RailWireUId) ResolveOrMerge(
+        FlgNetwork network,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        PartNode orPart,
+        int outgoingWireUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds,
+        List<SidecarAccessEntry> accessEntries)
+    {
+        if (orPart.Cardinality is not int cardinality || cardinality < 1)
+        {
+            throw new NonReducibleNetworkException($"Network {networkNumber}: OR-merge UId={orPart.UId} has no usable cardinality.");
+        }
+
+        var branches = new List<ChainStepSidecar.ContactStep>();
+        var branchExprs = new List<Expr>();
+        var railWireUId = -1;
+
+        for (var k = 1; k <= cardinality; k++)
+        {
+            var inPort = (orPart.UId, $"in{k}");
+            var branchWire = RequireWireAt(wiresByPort, inPort, networkNumber);
+            var others = branchWire.Endpoints
+                .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == orPart.UId && e.PortName == $"in{k}"))
+                .ToList();
+
+            if (others.Count != 1)
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} wire {branchWire.UId} has fan-out — not a single-contact branch.");
+            }
+
+            var other = others[0];
+            if (other.Kind != EndpointKind.NameCon || other.PortName != "out")
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} is fed from an unsupported endpoint ({other.Kind}).");
+            }
+
+            var branchPart = network.Parts.FirstOrDefault(p => p.UId == other.UId)
+                ?? throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} references unknown part UId={other.UId}.");
+
+            if (branchPart.Name != "Contact")
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} is a '{branchPart.Name}', not a Contact — " +
+                    "multi-element/non-contact OR branches are outside this slice.");
+            }
+
+            visitedWireUIds.Add(branchWire.UId);
+
+            var branchInWire = RequireWireAt(wiresByPort, (branchPart.UId, "in"), networkNumber);
+            if (!branchInWire.Endpoints.Any(e => e.Kind == EndpointKind.Powerrail))
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} contact UId={branchPart.UId} is not fed " +
+                    "directly from Powerrail — multi-contact OR branches are outside this slice.");
+            }
+
+            if (railWireUId == -1)
+            {
+                railWireUId = branchInWire.UId;
+            }
+            else if (railWireUId != branchInWire.UId)
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branches are fed from different rail wires " +
+                    $"({railWireUId} vs {branchInWire.UId}) — only a single shared rail wire has been observed.");
+            }
+
+            visitedWireUIds.Add(branchInWire.UId);
+
+            var (tag, operandWireUId) = ResolveOperand(wiresByPort, accessByUId, branchPart.UId, networkNumber);
+            visitedWireUIds.Add(operandWireUId);
+            if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
+            {
+                accessEntries.Add(tag);
+            }
+
+            Expr branchExpr = branchPart.Negated ? new Expr.Not(new Expr.TagRef(tag.TagPath)) : new Expr.TagRef(tag.TagPath);
+            branches.Add(new ChainStepSidecar.ContactStep(branchPart.UId, tag.UId, operandWireUId, branchPart.Negated, branchWire.UId));
+            branchExprs.Add(branchExpr);
+        }
+
+        return (new ChainStepSidecar.OrStep(orPart.UId, branches, outgoingWireUId), new Expr.Or(branchExprs), railWireUId);
     }
 
     private static (SidecarAccessEntry Tag, int WireUId) ResolveOperand(

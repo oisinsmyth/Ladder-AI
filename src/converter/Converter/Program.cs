@@ -151,7 +151,7 @@ internal static class Program
             sidecars.Add(reduced.Sidecar);
         }
 
-        var irBlock = new IrBlock(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks);
+        var irBlock = new IrBlock(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers);
         var irText = IrSerializer.SerializeBlock(irBlock, sidecars);
 
         var outPath = Path.ChangeExtension(sourcePath, ".ir");
@@ -187,7 +187,7 @@ internal static class Program
             networkComments.Add(string.IsNullOrEmpty(block.Networks[i].Title) ? null : block.Networks[i].Title);
         }
 
-        var blockSource = new BlockSource(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>());
+        var blockSource = new BlockSource(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers);
         var xml = BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkComments);
 
         var outPath = Path.ChangeExtension(sourcePath, ".xml");

@@ -136,12 +136,16 @@ UDT <Name>
 DB <Name>
   ROOTID <id>
   NUMBER <n>
+  INSTANCEOF <FBName>                     # only present for Instance DBs — see below
   COMMENT "<text>"                        # omitted if empty, same rule as BLOCK
   MEMBERS
     <member> : <Type>
     <member> : <Type> RETAIN
     <member> : <Type> = <start value>
     <member> : <Type> RETAIN = <start value>
+    <member> : <Type> VERSION <v>         # only present when the source carries one (below)
+      <nested member> : <Type>            # structured members only — one level, see below
+      <nested member> : <Type> = <start value>
 ```
 
 Two corrections from the original sketch, both wrong until checked against a real export:
@@ -161,15 +165,46 @@ invented; string values (`'text'`) are the one case with real sanitization impli
 example was a descriptive equipment name), everything else is structural.
 
 Instance DBs (`SW.Blocks.InstanceDB`) carry `<InstanceOfName>`/`<InstanceOfType>` (the FB they
-instantiate) — confirmed real, 2026-07-10, but not yet built: every instance DB example inspected
-also had UDT-typed and system-function-block-instance-typed members (e.g. a `TON_TIME` timer
-instance, itself carrying nested `PT`/`ET`/`IN`/`Q` sub-members) that this converter slice
-doesn't model yet either, so instance DB support and structured-member support are deferred
-together as one unit — no value in a converter that opens an instance DB and immediately hard
-errors on its first member. Nested UDT-typed/structured members inside a DB will reference the
-type by name rather than inlining its members when this is built, mirroring how the source and
-the site's own conventions (C-302) treat UDTs as the reusable unit — not yet implemented,
-grammar TBD **[converter-verify]**.
+instantiate) — confirmed real, 2026-07-10, converter-verified 2026-07-11 (S1 item 7 Phase B).
+`InstanceOfType` is not carried as an IR field: every real instance DB seen has `Type="FB"`, so
+the writer always regenerates that constant and the parser hard-errors if a source ever disagrees
+(the same "don't carry a field whose value is always the one confirmed constant" reasoning DB
+kind itself already uses above). `INSTANCEOF <FBName>` is the only new top-level DB line, omitted
+for Global DBs (absence-means-default, same convention as `COMMENT`).
+
+**Structured members — inline, decided 2026-07-11 (project owner's call).** Two representations
+were weighed: inline the nested members directly at each use site (chosen), or have a DB member
+reference a separately-defined `UDT <Name>` (this section's existing top-level form) by name,
+carrying only per-instance overrides — closer to how a controls engineer already thinks about
+UDTs (site convention C-302: the reusable unit) and how a programming language treats a data
+class. Reference-by-name is the better long-term shape but isn't safely buildable yet: there is
+no UDT export capability (`openness-cli` only touches `PlcBlock`s, not `PlcType`s), so the
+"canonical" UDT shape would have to be derived by guessing from whichever DB happens to be
+converted first — in tension with this project's core no-guessing discipline (`04-design-philosophy.md`
+#7/#10). Inline needs nothing new: the DB source XML already contains the full nested shape at
+the point of declaration (TIA writes it out redundantly with the UDT/timer's own definition, not
+just a type-name pointer), so it round-trips with zero new converter capability. Revisit
+reference-by-name as its own deliberate phase once real UDT export exists — not by drifting back
+into it without an ADR (`10-non-goals.md`'s "not now" discipline).
+
+Two structured-member shapes confirmed real, both one level of nesting, never deeper (a nested
+member that is itself structured is a hard error — unconfirmed shape):
+
+- **UDT-typed** (`Datatype` is a quoted type name, e.g. `"TypeDOL"`) — nested members are plain
+  scalars, each optionally carrying its own `<StartValue>` (confirmed: a real one had 29, all
+  scalar, several with non-default start values).
+- **System-function-block instance** (`Datatype` is `TON_TIME`/`TOF_TIME`/`TONR_TIME`, plus a
+  `Version` attribute the plain scalar/UDT case doesn't necessarily carry — captured generically
+  whenever the source has one, not tied to a specific `Datatype`) — nested members are the
+  instance's own static data (`PT`/`ET`/`IN`/`Q` for `TON_TIME`), never carrying a `StartValue` in
+  any real example seen.
+
+Nested members themselves are structurally minimal — confirmed real: only `Name`/`Datatype`
+attributes and an optional `<StartValue>` child, no `Remanence`, no `Accessibility`, no
+`AttributeList`. The parser hard-errors on any other attribute or child on a nested member
+(catches an unconfirmed `Remanence`, a doubly-nested structured member, or a nested `Section`
+named anything but `"None"` — all real-but-unconfirmed, refused rather than guessed at, same
+mechanism handling all three since none has ever been seen).
 
 ## Comment/title placement
 

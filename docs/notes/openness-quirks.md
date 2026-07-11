@@ -13,6 +13,18 @@ binary before this session, or attaching to an already-open UI session doesn't t
 same prompt a fresh launch would. Dialog text is still uncaptured — this item stays open until
 seen on a clean approval state.
 
+## Project paths (local machine reference)
+Recorded 2026-07-11 at the project owner's explicit instruction (`docs/13-data-boundary.md`'s
+redaction rule covers tag/comment/structural *content* pulled from JOB9002, not the scratch copy's
+own local filesystem path — the project name itself is already committed unredacted elsewhere in
+this doc and in `docs/notes/stage-gates.md`, so the path adds no new identifying information).
+Needed because `openness-cli`'s cold-open path (`<project>` as a `.apNN` file, not an
+already-open project name) requires an absolute path — a relative one throws
+`"The argument 'path' cannot be a relative path."`
+
+- JOB9002 scratch copy: `C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch
+  Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20`
+
 ## Known constraints
 - User must be in the "Siemens TIA Openness" Windows group (log off/on to take effect).
 - One Portal instance/session — no parallel Openness sessions.
