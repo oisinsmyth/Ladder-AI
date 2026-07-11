@@ -212,6 +212,19 @@ public static partial class IrParser
         return ParseExprTerm(text);
     }
 
+    // Longer operators first so e.g. ">=" is never mistaken for a "=" search hitting inside it —
+    // in practice the exact character sequences never actually overlap (see ComparisonTokens'
+    // own note), but ordering longest-first is the safer, more obviously-correct habit anyway.
+    // Only "=" and ">=" (Eq/Ge) are ever emitted by this converter today; the rest are recognized
+    // here because they're already part of the documented IR grammar (`ir/SPEC.md`'s
+    // readable-form table), not because the converter builds networks that use them — Ne/Le/Gt/Lt
+    // remain hard errors at the SimaticML level (FlgNetParser's SupportedComparisonPartNames).
+    private static readonly (string Operator, string Token)[] ComparisonTokens =
+    {
+        (">=", " >= "), ("<=", " <= "), ("<>", " <> "),
+        ("=", " = "), (">", " > "), ("<", " < "),
+    };
+
     private static Expr ParseExprTerm(string text)
     {
         text = text.Trim();
@@ -220,12 +233,30 @@ public static partial class IrParser
             return new Expr.Not(ParseExprTerm(text["NOT ".Length..]));
         }
 
-        // A time literal (e.g. "T#100MS") is recognized by its "T#" prefix — the same convention
-        // already used for DB StartValues — rather than by consulting the sidecar, so the IR text
-        // alone stays unambiguous to a reader. Confirmed real, 2026-07-11 (FB MotorDOL's TON PT).
-        if (text.StartsWith("T#", StringComparison.Ordinal))
+        foreach (var (op, token) in ComparisonTokens)
         {
-            return new Expr.TimeLiteral(text);
+            var index = text.IndexOf(token, StringComparison.Ordinal);
+            if (index >= 0)
+            {
+                return new Expr.Compare(op, ParseLeaf(text[..index]), ParseLeaf(text[(index + token.Length)..]));
+            }
+        }
+
+        return ParseLeaf(text);
+    }
+
+    // A literal (e.g. "T#100MS" or a bare integer like "1"/"-1") is recognized by shape rather
+    // than by consulting the sidecar, so the IR text alone stays unambiguous to a reader. "T#"
+    // is the existing time-literal convention (confirmed real, 2026-07-11, FB MotorDOL's TON PT);
+    // a bare (optionally negative) integer is a comparison operand (FC ControlDelays) — safe to
+    // recognize this way since a real tag path is never purely numeric (06-lad-conventions.md
+    // C-005: starts with a letter).
+    private static Expr ParseLeaf(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith("T#", StringComparison.Ordinal) || IntegerLiteralRegex().IsMatch(text))
+        {
+            return new Expr.Literal(text);
         }
 
         return new Expr.TagRef(text);
@@ -271,7 +302,8 @@ public static partial class IrParser
                 throw new IrFormatException($"Malformed sidecar constant line: '{lines[i]}'");
             }
 
-            constantEntries.Add(new SidecarConstantEntry(match.Groups["value"].Value, int.Parse(match.Groups["uid"].Value)));
+            var constantType = match.Groups["type"].Value == "none" ? null : match.Groups["type"].Value;
+            constantEntries.Add(new SidecarConstantEntry(match.Groups["value"].Value, int.Parse(match.Groups["uid"].Value), constantType));
             i++;
         }
 
@@ -357,23 +389,7 @@ public static partial class IrParser
             throw new IrFormatException($"Expected a 'preset' line in SIDECAR for network {networkNumber}'s timer.");
         }
 
-        TimerPresetSidecar preset;
-        if (lines[i].StartsWith("    preset tag = ", StringComparison.Ordinal))
-        {
-            var parts = lines[i]["    preset tag = ".Length..].Split(' ');
-            preset = new TimerPresetSidecar.TagPreset(int.Parse(parts[0]), int.Parse(parts[1]));
-            i++;
-        }
-        else if (lines[i].StartsWith("    preset literal = ", StringComparison.Ordinal))
-        {
-            var parts = lines[i]["    preset literal = ".Length..].Split(' ');
-            preset = new TimerPresetSidecar.LiteralPreset(int.Parse(parts[0]), int.Parse(parts[1]));
-            i++;
-        }
-        else
-        {
-            throw new IrFormatException($"Expected '    preset tag = <uid> <wire>' or '    preset literal = <uid> <wire>', got: '{lines[i]}'");
-        }
+        var preset = ParseOperand(lines, ref i, "    ", "preset");
 
         OpenConnectionSidecar? et = null;
         if (i < lines.Length && lines[i].StartsWith("    et = ", StringComparison.Ordinal))
@@ -388,7 +404,8 @@ public static partial class IrParser
     }
 
     private static bool IsStepHeader(string line, string indent, string label) =>
-        line == indent + label + " contact" || line == indent + label + " or" || line == indent + label + " timeroutput";
+        line == indent + label + " contact" || line == indent + label + " or"
+        || line == indent + label + " timeroutput" || line == indent + label + " compare";
 
     private static ChainStepSidecar ParseStep(string[] lines, ref int i, string indent, string label)
     {
@@ -396,6 +413,7 @@ public static partial class IrParser
         var contactHeader = indent + label + " contact";
         var orHeader = indent + label + " or";
         var timerOutputHeader = indent + label + " timeroutput";
+        var compareHeader = indent + label + " compare";
         if (header == contactHeader)
         {
             return ParseContactStepBody(lines, ref i, indent + "  ");
@@ -411,7 +429,12 @@ public static partial class IrParser
             return ParseTimerOutputStepBody(lines, ref i, indent + "  ");
         }
 
-        throw new IrFormatException($"Expected '{contactHeader}', '{orHeader}', or '{timerOutputHeader}', got: '{header}'");
+        if (header == compareHeader)
+        {
+            return ParseCompareStepBody(lines, ref i, indent + "  ");
+        }
+
+        throw new IrFormatException($"Expected '{contactHeader}', '{orHeader}', '{timerOutputHeader}', or '{compareHeader}', got: '{header}'");
     }
 
     private static ChainStepSidecar.TimerOutputStep ParseTimerOutputStepBody(string[] lines, ref int i, string indent)
@@ -420,6 +443,41 @@ public static partial class IrParser
         var port = RequirePrefixedLine(lines, ref i, indent + "port = ");
         var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
         return new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outWire);
+    }
+
+    private static ChainStepSidecar.CompareStep ParseCompareStepBody(string[] lines, ref int i, string indent)
+    {
+        var partName = RequirePrefixedLine(lines, ref i, indent + "partname = ");
+        var uid = int.Parse(RequirePrefixedLine(lines, ref i, indent + "uid = "));
+        var srcType = RequirePrefixedLine(lines, ref i, indent + "srctype = ");
+        var left = ParseOperand(lines, ref i, indent, "left");
+        var right = ParseOperand(lines, ref i, indent, "right");
+        var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
+        return new ChainStepSidecar.CompareStep(uid, partName, srcType, left, right, outWire);
+    }
+
+    // Shared tag-or-literal operand parsing — the inverse of IrSerializer.SerializeOperand, used
+    // by a TON's PT and a comparison's left/right operand alike.
+    private static OperandSidecar ParseOperand(string[] lines, ref int i, string indent, string label)
+    {
+        var tagPrefix = indent + label + " tag = ";
+        var literalPrefix = indent + label + " literal = ";
+        if (i < lines.Length && lines[i].StartsWith(tagPrefix, StringComparison.Ordinal))
+        {
+            var parts = lines[i][tagPrefix.Length..].Split(' ');
+            i++;
+            return new OperandSidecar.TagOperand(int.Parse(parts[0]), int.Parse(parts[1]));
+        }
+
+        if (i < lines.Length && lines[i].StartsWith(literalPrefix, StringComparison.Ordinal))
+        {
+            var parts = lines[i][literalPrefix.Length..].Split(' ');
+            i++;
+            return new OperandSidecar.LiteralOperand(int.Parse(parts[0]), int.Parse(parts[1]));
+        }
+
+        throw new IrFormatException(
+            $"Expected '{tagPrefix}<uid> <wire>' or '{literalPrefix}<uid> <wire>', got: '{(i < lines.Length ? lines[i] : "<end of input>")}'");
     }
 
     private static int? ParseRail(string text)
@@ -517,8 +575,11 @@ public static partial class IrParser
     [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+) (?<scope>\S+)$")]
     private static partial Regex SidecarAccessLineRegex();
 
-    [GeneratedRegex(@"^  constant (?<value>\S+) = (?<uid>\d+)$")]
+    [GeneratedRegex(@"^  constant (?<value>\S+) = (?<uid>\d+) (?<type>\S+)$")]
     private static partial Regex SidecarConstantLineRegex();
+
+    [GeneratedRegex(@"^-?\d+$")]
+    private static partial Regex IntegerLiteralRegex();
 
     [GeneratedRegex(@"^  timer (?<index>\d+)$")]
     private static partial Regex TimerHeaderRegex();

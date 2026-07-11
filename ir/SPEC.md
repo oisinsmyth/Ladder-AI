@@ -66,7 +66,7 @@ lookup table entry:
 | `Contact` | bare tag reference, e.g. `Sensor1.Ok` |
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
-| `Eq` / `Ne` / `Ge` / `Le` / `Gt` / `Lt` | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
+| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne` / `Le` / `Gt` / `Lt` **[converter-verify part names]** — same status as AND-merge, not built | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) | `OR` |
 | `A` (AND-merge) **[converter-verify part name]** | `AND` |
 
@@ -125,6 +125,19 @@ NETWORK 8 "Run enable delay"
   Surfaced a real, separate finding in the golden harness: TIA reassigns `Access` element UIds on
   its own Import()/Compile()/Export() cycle too, exactly parallel to the already-documented Wire
   UId volatility — `tests/golden/README.md` has the fix.
+- **Comparisons (`Eq`/`Ge`), built 2026-07-11 (next capability after TON).** Grounded against a
+  real export, `FC ControlDelays`. Key finding: a comparison behaves like a **Contact**, not an
+  OR-merge or TON — a pass-through chain position (`in1`/`in2` are its two operands, tag or a new
+  top-level `Access Scope="LiteralConstant"` literal — distinct from `TypedConstant`, which has no
+  `<ConstantType>` child), whose own rail-facing/continuation port is `pre` (genuinely different
+  from a Contact's `in`). Deliberately **not** modeled this phase: a comparison composing with an
+  OR-merge (as a branch, or feeding one) — real (`ControlDelays`' own `O(41)` combines two
+  comparisons) but the *existing*, unmodified OR-merge branch check and wire fan-out check already
+  safely refuse this shape, so nothing new was built for it; same deferred status as the
+  already-known multi-contact-OR-branch/nested-OR-merge cases. Not yet live-round-trip-proven
+  (TIA Portal session state blocked a re-attempt the same session; `ControlDelays` as a whole also
+  still needs `Mul`/`Convert` elsewhere in the block regardless) — proven by unit tests built
+  directly from the real export, same discipline as every other phase.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,
@@ -287,3 +300,12 @@ question, left open on purpose rather than guessed).
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
   passed — see `tests/golden/README.md`.
+- `Ne`/`Le`/`Gt`/`Lt` Part Names — only `Eq`/`Ge` confirmed real (`FC ControlDelays`); same
+  status as AND-merge.
+- A comparison composing with an OR-merge (as a branch, or feeding one) — real
+  (`ControlDelays`' `O(41)`) but deliberately not modeled; the existing OR-merge branch/fan-out
+  checks already safely refuse it.
+- A full live TIA round-trip for comparisons specifically — not yet reached. `ControlDelays` as a
+  whole also needs `Mul`/`Convert` elsewhere in the block regardless of comparison support; a
+  purpose-built reference-project block (matching the `TimerSample` precedent) would close this
+  out the same way it did for TON's direct-`Q` case.

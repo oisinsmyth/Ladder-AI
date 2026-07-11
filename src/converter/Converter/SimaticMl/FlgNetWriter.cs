@@ -47,11 +47,22 @@ public static class FlgNetWriter
 
         foreach (var constant in network.Constants)
         {
+            // ConstantType present -> LiteralConstant (a comparison operand); absent ->
+            // TypedConstant (a TON PT literal) — the two scopes are mirror images, never mixed.
+            var scope = constant.ConstantType is not null ? "LiteralConstant" : "TypedConstant";
+            var constantChildren = new List<XElement>();
+            if (constant.ConstantType is not null)
+            {
+                constantChildren.Add(new XElement(ns + "ConstantType", constant.ConstantType));
+            }
+
+            constantChildren.Add(new XElement(ns + "ConstantValue", constant.Value));
+
             partsElement.Add(new XElement(
                 ns + "Access",
-                new XAttribute("Scope", "TypedConstant"),
+                new XAttribute("Scope", scope),
                 new XAttribute("UId", constant.UId),
-                new XElement(ns + "Constant", new XElement(ns + "ConstantValue", constant.Value))));
+                new XElement(ns + "Constant", constantChildren)));
         }
 
         foreach (var part in network.Parts)
@@ -96,6 +107,15 @@ public static class FlgNetWriter
                     new XAttribute("Name", "time_type"),
                     new XAttribute("Type", "Type"),
                     part.TimeType));
+            }
+
+            if (part.SrcType is not null)
+            {
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", "SrcType"),
+                    new XAttribute("Type", "Type"),
+                    part.SrcType));
             }
 
             partsElement.Add(partElement);

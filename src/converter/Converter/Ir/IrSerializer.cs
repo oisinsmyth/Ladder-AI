@@ -109,12 +109,13 @@ public static class IrSerializer
     private static string SerializeExpr(Expr expr) => expr switch
     {
         Expr.TagRef tagRef => tagRef.Path,
-        Expr.TimeLiteral literal => literal.Value,
+        Expr.Literal literal => literal.Value,
         Expr.Not not => $"NOT {SerializeExpr(not.Operand)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
         Expr.And and => string.Join(" AND ", and.Operands.Select(SerializeExpr)),
         Expr.Or { Operands.Count: 0 } => "TRUE",
         Expr.Or or => string.Join(" OR ", or.Operands.Select(SerializeExpr)),
+        Expr.Compare compare => $"{SerializeExpr(compare.Left)} {compare.Operator} {SerializeExpr(compare.Right)}",
         _ => throw new IrFormatException($"Unsupported expression node: {expr.GetType().Name}"),
     };
 
@@ -129,7 +130,8 @@ public static class IrSerializer
 
         foreach (var constant in sidecar.ConstantUIds)
         {
-            sb.Append("  constant ").Append(constant.Value).Append(" = ").Append(constant.UId).Append('\n');
+            sb.Append("  constant ").Append(constant.Value).Append(" = ").Append(constant.UId)
+              .Append(' ').Append(constant.ConstantType ?? "none").Append('\n');
         }
 
         for (var t = 0; t < sidecar.Timers.Count; t++)
@@ -149,17 +151,7 @@ public static class IrSerializer
                 SerializeStep(sb, "    ", $"step {s}", timer.Steps[s]);
             }
 
-            switch (timer.Preset)
-            {
-                case TimerPresetSidecar.TagPreset tagPreset:
-                    sb.Append("    preset tag = ").Append(tagPreset.AccessUId).Append(' ').Append(tagPreset.WireUId).Append('\n');
-                    break;
-                case TimerPresetSidecar.LiteralPreset literalPreset:
-                    sb.Append("    preset literal = ").Append(literalPreset.ConstantUId).Append(' ').Append(literalPreset.WireUId).Append('\n');
-                    break;
-                default:
-                    throw new IrFormatException($"Unsupported TON preset kind: {timer.Preset.GetType().Name}");
-            }
+            SerializeOperand(sb, "    ", "preset", timer.Preset);
 
             if (timer.Et is { } et)
             {
@@ -212,8 +204,34 @@ public static class IrSerializer
                 sb.Append(indent).Append("  port = ").Append(timerOutput.Port).Append('\n');
                 sb.Append(indent).Append("  out = ").Append(timerOutput.OutgoingWireUId).Append('\n');
                 break;
+            case ChainStepSidecar.CompareStep compare:
+                sb.Append(indent).Append(label).Append(" compare\n");
+                sb.Append(indent).Append("  partname = ").Append(compare.PartName).Append('\n');
+                sb.Append(indent).Append("  uid = ").Append(compare.ComparePartUId).Append('\n');
+                sb.Append(indent).Append("  srctype = ").Append(compare.SrcType).Append('\n');
+                SerializeOperand(sb, indent + "  ", "left", compare.Left);
+                SerializeOperand(sb, indent + "  ", "right", compare.Right);
+                sb.Append(indent).Append("  out = ").Append(compare.OutgoingWireUId).Append('\n');
+                break;
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
+        }
+    }
+
+    // Shared tag-or-literal operand serialization — used by a TON's PT and a comparison's
+    // left/right operand alike (see OperandSidecar's own doc comment).
+    private static void SerializeOperand(StringBuilder sb, string indent, string label, OperandSidecar operand)
+    {
+        switch (operand)
+        {
+            case OperandSidecar.TagOperand tagOperand:
+                sb.Append(indent).Append(label).Append(" tag = ").Append(tagOperand.AccessUId).Append(' ').Append(tagOperand.WireUId).Append('\n');
+                break;
+            case OperandSidecar.LiteralOperand literalOperand:
+                sb.Append(indent).Append(label).Append(" literal = ").Append(literalOperand.ConstantUId).Append(' ').Append(literalOperand.WireUId).Append('\n');
+                break;
+            default:
+                throw new IrFormatException($"Unsupported operand kind: {operand.GetType().Name}");
         }
     }
 

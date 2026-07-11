@@ -20,13 +20,22 @@ public abstract record Expr
     // source shape ties negation to any particular operand kind).
     public sealed record Not(Expr Operand) : Expr;
 
-    // A TON's PT fed by a literal time constant (`Access Scope="TypedConstant"`) rather than a
-    // tag — confirmed real, 2026-07-11, `FC ControlDelays` (`T#100MS`). Kept distinct from
-    // TagRef (not just reused with the literal text as the "path") because it regenerates to a
-    // genuinely different XML shape (`<Constant>`, not `<Symbol>`) — the sidecar needs the two
-    // told apart, so the model does too. Value is stored verbatim, never interpreted (same
-    // discipline as DB StartValue).
-    public sealed record TimeLiteral(string Value) : Expr;
+    // A literal operand fed to a TON's `PT` (`Access Scope="TypedConstant"`, e.g. `T#100MS`) or
+    // a comparison's `in1`/`in2` (`Access Scope="LiteralConstant"` at the top level, e.g. `1`) —
+    // confirmed real, 2026-07-11 (`FB MotorDOL`/`FC ControlDelays`, and `FC ControlDelays` again
+    // for the comparison case). One node covers both: at the IR-text level there's no reader-
+    // relevant difference (both just render their verbatim value), and the sidecar — not this
+    // node — is what carries which of the two source shapes produced it, for exact regeneration.
+    // Kept distinct from TagRef (not just reused with the literal text as the "path") because it
+    // regenerates to a genuinely different XML shape (`<Constant>`, not `<Symbol>`). Value is
+    // stored verbatim, never interpreted (same discipline as DB StartValue).
+    public sealed record Literal(string Value) : Expr;
+
+    // A comparison (`Eq`/`Ge` confirmed real, 2026-07-11, `FC ControlDelays`; `Ne`/`Le`/`Gt`/`Lt`
+    // unconfirmed — same status as the AND-merge Part Name, not built). Operator is the IR-text
+    // infix symbol (`=`, `>=`, ...) already sketched in `ir/SPEC.md`'s readable-form table.
+    // Left/Right are ordered (not just an operand set) since `>=`/`<=`/`>`/`<` aren't symmetric.
+    public sealed record Compare(string Operator, Expr Left, Expr Right) : Expr;
 }
 
 // A TON instance used in a network — confirmed real, 2026-07-11, both as a multi-instance
@@ -103,9 +112,11 @@ public sealed record IrBlock(
 // reference is grounded.
 public sealed record SidecarAccessEntry(string TagPath, int UId, string Scope);
 
-// A TON's PT literal (Access Scope="TypedConstant") — sidecar counterpart of SidecarAccessEntry
-// for the constant case. Value is verbatim, same discipline as everywhere else in this format.
-public sealed record SidecarConstantEntry(string Value, int UId);
+// A literal operand — sidecar counterpart of SidecarAccessEntry for the constant case. Value is
+// verbatim, same discipline as everywhere else in this format. ConstantType is null for
+// TypedConstant (TON's PT) and set for LiteralConstant (a comparison operand, e.g. "Int") —
+// mirrors ConstantAccessNode's own field, confirmed real 2026-07-11.
+public sealed record SidecarConstantEntry(string Value, int UId, string? ConstantType = null);
 
 // One position in a chain, rail-to-coil. Confirmed real, 2026-07-10: a position is either a
 // single contact, or an OR-merge of several single-contact branches (`Part Name="O"` with a
@@ -137,20 +148,46 @@ public abstract record ChainStepSidecar
     // is null when its first step is a TimerOutputStep). "ET" as an upstream leaf is not
     // modeled — no live example — GraphReducer only accepts "Q" here.
     public sealed record TimerOutputStep(int TonPartUId, string Port, int OutgoingWireUId) : ChainStepSidecar;
+
+    // A comparison (`Eq`/`Ge`) as an ordinary chain position — confirmed real, 2026-07-11,
+    // `FC ControlDelays`. Behaves like ContactStep, not like OrStep/TimerOutputStep: it's a
+    // pass-through position, not a terminal — its own rail-facing/continuation port is `pre`
+    // (not `in`, genuinely different naming, not a typo), and after resolving its own two
+    // operands (Left/Right — order matters, not just a set, since `>=`/`<=`/`>`/`<` aren't
+    // symmetric) the backward trace continues from `(ComparePartUId, "pre")` exactly as it would
+    // from a Contact's own `in`. PartName is carried (not just Operator) so the exact source Part
+    // Name regenerates unambiguously — `Operator` is IR/Expr-facing, `PartName` is XML-facing,
+    // kept as two fields rather than deriving one from the other.
+    //
+    // Composing with an OR-merge (as a branch, or feeding one) is real (`FC ControlDelays`'
+    // `O(41)` combines two comparisons) but deliberately not modeled this phase — the *existing*
+    // OR-merge branch check (`branchPart.Name != "Contact"`) and the *existing* wire fan-out
+    // check already safely refuse this shape without any new code, so nothing guesses at it.
+    // Same deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases.
+    public sealed record CompareStep(
+        int ComparePartUId,
+        string PartName,
+        string SrcType,
+        OperandSidecar Left,
+        OperandSidecar Right,
+        int OutgoingWireUId) : ChainStepSidecar;
 }
 
-// A TON's PT source — either a tag (AccessUId, resolved the same way a Contact operand is) or a
-// literal time constant (ConstantUId, Access Scope="TypedConstant"). Both confirmed real,
-// 2026-07-11 (FB MotorDOL / FC ControlDelays respectively).
-public abstract record TimerPresetSidecar
+// A tag-or-literal operand — used by a TON's `PT` and, since 2026-07-11, a comparison's `in1`/
+// `in2` (`FC ControlDelays`). TagOperand resolves the same way a Contact operand does
+// (AccessUId); LiteralOperand is a TypedConstant or LiteralConstant (ConstantUId — which kind is
+// carried by the referenced SidecarConstantEntry/ConstantAccessNode, not duplicated here). Named
+// generically (not "TimerPreset") since it's no longer TON-specific — reusing one shape for both
+// is the same design choice already made for TON's own Instance reference reusing AccessNode.
+public abstract record OperandSidecar
 {
-    private TimerPresetSidecar()
+    private OperandSidecar()
     {
     }
 
-    public sealed record TagPreset(int AccessUId, int WireUId) : TimerPresetSidecar;
+    public sealed record TagOperand(int AccessUId, int WireUId) : OperandSidecar;
 
-    public sealed record LiteralPreset(int ConstantUId, int WireUId) : TimerPresetSidecar;
+    public sealed record LiteralOperand(int ConstantUId, int WireUId) : OperandSidecar;
 }
 
 // A wire to an OpenCon endpoint — both UIds must be preserved exactly for regeneration
@@ -176,7 +213,7 @@ public sealed record TimerBindingSidecar(
     IReadOnlyList<string> InstanceComponentPath,
     int? RailWireUId,
     IReadOnlyList<ChainStepSidecar> Steps,
-    TimerPresetSidecar Preset,
+    OperandSidecar Preset,
     OpenConnectionSidecar? Et);
 
 // RailWireUId is separated from the per-step wires because the source wire connecting Powerrail

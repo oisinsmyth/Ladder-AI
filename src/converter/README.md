@@ -139,6 +139,48 @@ volatility) — see `tests/golden/README.md`. All instance scopes/shapes, both P
 `Q`-consumption paths are covered by unit tests built directly from the real exports (fixtures,
 not guessed) — see `Converter.Tests/TonTests.cs`.
 
+## Comparisons (S1 item 9, 2026-07-11)
+
+`Part Name="Eq"`/`"Ge"` — grounded against a real export, `FC ControlDelays`. Only these two are
+confirmed real; `Ne`/`Le`/`Gt`/`Lt` Part Names are unconfirmed (same status as AND-merge, refused
+rather than guessed at).
+
+- **Key finding: a comparison behaves like a `Contact`, not an OR-merge or TON.** It's a
+  pass-through chain position — its own rail-facing/continuation port is `pre` (genuinely
+  different from a Contact's `in`, not a typo), so after resolving its own two operands the
+  backward trace continues from `(comparePartUId, "pre")` exactly as it would from a Contact's
+  `in`. `GraphReducer.TraceChain`'s upstream dispatch table now varies **both** the "out"-
+  equivalent port (already varied per part kind since TON) and the "in"-equivalent continuation
+  port (new — previously hardcoded to `"in"`) by part kind.
+- Operands (`in1`/`in2`) are each a tag or a literal — reuses/generalizes the same resolver TON's
+  `PT` already used (renamed `ResolveTagOrLiteralOperand`, parameterized by port). The literal
+  case is a **new top-level Access scope**, `LiteralConstant` — previously only seen *nested*
+  inside an array-index `<Component>`; the top-level use always carries a `<ConstantType>`
+  (e.g. `Int`), the exact opposite of `TypedConstant` (TON's `PT` literal, never has one).
+  `ConstantAccessNode`/`SidecarConstantEntry` gained a nullable `ConstantType` field rather than a
+  second type, mirroring how `AccessNode` already carries its own `Scope` generically.
+- `Expr.TimeLiteral` generalized to `Expr.Literal` (covers both TON's time literals and
+  comparisons' numeric literals — no reader-relevant difference at the IR-text level, both just
+  render their verbatim value). The IR parser recognizes a literal by shape (`T#` prefix, or a
+  bare optionally-negative integer — safe since a real tag path is never purely numeric,
+  `06-lad-conventions.md` C-005) rather than consulting the sidecar.
+- **Deliberately not modeled: a comparison composing with an OR-merge** (as a branch, or feeding
+  one). Real — `ControlDelays`' own `O(41)` combines two comparisons (`Ge`/`Eq`) as branches, each
+  itself fed by another OR-merge rather than Powerrail directly. The *existing*, unmodified
+  OR-merge branch check (`branchPart.Name != "Contact"`) and the *existing* wire fan-out check
+  already safely refuse this shape — proven by a dedicated test
+  (`ComparisonTests.Reduce_ComparisonAsOrMergeBranch_ThrowsNonReducible`), not just assumed. Same
+  deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases; not scope
+  creep to fix, a legitimate future phase.
+
+**Not yet live-round-trip-proven.** `ControlDelays` as a whole still needs `Mul`/`Convert`
+elsewhere in the same block regardless of comparison support, and a live re-verification attempt
+was blocked by TIA Portal session state (multiple Portal processes, attach timeout) the same
+session — not retried per the project's "don't kill and retry" discipline. Both grounded shapes
+(a rail-facing comparison feeding a Contact; a Contact feeding a mid-chain comparison) are proven
+by unit tests built directly from the real export — see `Converter.Tests/ComparisonTests.cs`. A
+purpose-built reference-project block (matching the `TimerSample` precedent) would close this out.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

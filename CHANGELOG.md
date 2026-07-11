@@ -10,6 +10,29 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-11
 
+**S1 item 9: comparisons (Eq/Ge)**
+
+- Added `Part Name="Eq"`/`"Ge"` support, grounded against a real export (`FC ControlDelays`)
+  before building anything. Real finding: a comparison behaves like a `Contact` (a pass-through
+  chain position with its own rail-facing/continuation port, `pre`), not a terminal leaf like an
+  OR-merge or TON — `GraphReducer.TraceChain`'s upstream dispatch now varies both the "out"- and
+  "in"-equivalent port names by part kind (previously only the "out" side varied, since TON).
+- New top-level `Access Scope="LiteralConstant"` (a comparison's literal operand, e.g. `1`) —
+  always carries a `<ConstantType>`, the mirror image of TON's `TypedConstant` (never has one).
+  `ConstantAccessNode`/`SidecarConstantEntry` gained a nullable `ConstantType` field;
+  `Expr.TimeLiteral` generalized to `Expr.Literal` (both literal kinds render identically in text).
+- Scope decision made during implementation: `ControlDelays`' own network composes two
+  comparisons via a second OR-merge, each fed by a first OR-merge rather than Powerrail directly.
+  Rather than build a larger, riskier OR-merge-branches-as-recursive-chains generalization this
+  session, confirmed the *existing* OR-merge branch/fan-out checks already safely refuse this
+  shape without new code — verified with a dedicated test against the real shape, not assumed.
+  Same deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases.
+- 11 new converter tests, 1 repurposed (`LiteralConstant` was the old "unrecognized scope"
+  example — now real, moved to a scope name that's still genuinely unsupported). 94 converter /
+  68 openness-cli / 11 golden-harness tests all pass. Not yet live-round-trip-proven — `Mul`/
+  `Convert` still needed for `ControlDelays` as a whole, and a live re-check was blocked by TIA
+  Portal session state (not retried, per this project's "don't kill and retry" discipline).
+
 **S1 item 8, closed out: TON live round trip, direct-`Q`-wiring support, a second Normalizer fix**
 
 - Project owner built `FC TimerSample`/`DB_Timers` directly in the reference project

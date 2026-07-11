@@ -75,6 +75,10 @@ public sealed record AccessNode(
 // indirection an ordinary `<Access>` uses. This also means a future FC/FB call's own instance
 // argument can reuse AccessNode rather than needing a redesign.
 //
+// SrcType: a comparison's (`Eq`/`Ge`) own `<TemplateValue Name="SrcType" Type="Type">` —
+// confirmed real, 2026-07-11, `FC ControlDelays` (`Int` in every instance seen; stored verbatim,
+// not assumed fixed).
+//
 // All optional fields live on the one PartNode type rather than subtypes since every other Part
 // kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
 // on `Name` for anything Part-shape-specific.
@@ -85,16 +89,18 @@ public sealed record PartNode(
     int? Cardinality = null,
     string? TonVersion = null,
     string? TimeType = null,
-    AccessNode? Instance = null);
+    AccessNode? Instance = null,
+    string? SrcType = null);
 
-// A TON's `PT` can be fed by a literal time constant instead of a tag — confirmed real,
-// 2026-07-11, `FC ControlDelays`: `<Access Scope="TypedConstant" UId="24">
-// <Constant><ConstantValue>T#100MS</ConstantValue></Constant></Access>` — no `<ConstantType>`
-// child (unlike the LiteralConstant array-index shape, which always has one). Modeled
-// separately from AccessNode rather than jammed into it: this carries a literal value, not a
-// component path, so the two concepts don't share a representation. Value is stored verbatim,
+// A literal operand — either a TON `PT` (`Access Scope="TypedConstant"`, `ConstantType` absent)
+// or a comparison operand (`Access Scope="LiteralConstant"` used at the *top level* — sibling to
+// Contact/Eq under `<Parts>`, distinct from the array-index-only nested use of the same scope
+// string — `ConstantType` always present, e.g. `Int`). Both confirmed real, 2026-07-11 (`FB
+// MotorDOL/FC ControlDelays` and `FC ControlDelays` respectively). Unified into one type (not two)
+// since both are "an Access carrying a literal Constant, no Symbol" — ConstantType is the one
+// real difference, modeled as nullable rather than as a second type. Value is stored verbatim,
 // never interpreted (same discipline as DB StartValue).
-public sealed record ConstantAccessNode(int UId, string Value);
+public sealed record ConstantAccessNode(int UId, string Value, string? ConstantType = null);
 
 public enum EndpointKind
 {

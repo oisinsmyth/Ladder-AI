@@ -73,7 +73,7 @@ public class TonTests
         Assert.Equal("GlobalVariable", timerSidecar.InstanceScope);
         Assert.Equal(new[] { "RunEnableDelay" }, timerSidecar.InstanceComponentPath);
         Assert.Equal(41, timerSidecar.RailWireUId);
-        var tagPreset = Assert.IsType<TimerPresetSidecar.TagPreset>(timerSidecar.Preset);
+        var tagPreset = Assert.IsType<OperandSidecar.TagOperand>(timerSidecar.Preset);
         Assert.Equal(44, tagPreset.WireUId);
         Assert.NotNull(timerSidecar.Et);
         Assert.Equal(45, timerSidecar.Et!.WireUId);
@@ -90,11 +90,11 @@ public class TonTests
         var timer = Assert.Single(reduced.Network.Timers);
         Assert.Equal("GeneralDelayTimer1", timer.InstancePath);
         Assert.Equal("IO.Run", Assert.IsType<Expr.TagRef>(timer.In).Path);
-        Assert.Equal("T#100MS", Assert.IsType<Expr.TimeLiteral>(timer.Pt).Value);
+        Assert.Equal("T#100MS", Assert.IsType<Expr.Literal>(timer.Pt).Value);
 
         var timerSidecar = Assert.Single(reduced.Sidecar.Timers);
         Assert.Equal("LocalVariable", timerSidecar.InstanceScope);
-        var literalPreset = Assert.IsType<TimerPresetSidecar.LiteralPreset>(timerSidecar.Preset);
+        var literalPreset = Assert.IsType<OperandSidecar.LiteralOperand>(timerSidecar.Preset);
         Assert.Equal(22, literalPreset.ConstantUId);
     }
 
@@ -154,7 +154,7 @@ public class TonTests
 
         var timer = Assert.Single(reduced.Network.Timers);
         Assert.Equal("GeneralEnableDelay", timer.InstancePath);
-        Assert.Equal("T#100MS", Assert.IsType<Expr.TimeLiteral>(timer.Pt).Value);
+        Assert.Equal("T#100MS", Assert.IsType<Expr.Literal>(timer.Pt).Value);
 
         var assignment = Assert.Single(reduced.Network.Assignments);
         Assert.Equal("PlantControl.GeneralEnable", assignment.CoilTag);

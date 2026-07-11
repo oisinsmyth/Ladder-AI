@@ -484,3 +484,49 @@ project's 6th/7th artifacts (`ir/reference/{TimerSample,DB_Timers}.ir`,
 committed files (fresh export → to-ir → to-xml → import → compile → re-export →
 `Normalizer.AreSemanticallyEquivalent`) — **true** for both — before committing, not assumed from
 the earlier scratchpad run.
+
+### S1 item 9 (comparisons, Eq/Ge), 2026-07-11
+
+Next converter capability after TON, per the user's choice among four candidates (comparisons,
+MOVE, RCoil/SCoil, block calls) — picked as the lowest-design-risk option since the IR syntax was
+already sketched in this doc's readable-form table. Grounded against a real export before
+building anything, `FC ControlDelays`: only `Eq`/`Ge` directly observed (`Ne`/`Le`/`Gt`/`Lt`
+unconfirmed, same status as AND-merge).
+
+Real finding that changed the original framing: a comparison isn't "just another leaf kind like
+TON" — it behaves like a **Contact**, a pass-through chain position, not a terminal. Its own
+rail-facing/continuation port is `pre` (not `in`, genuinely different). This required generalizing
+`GraphReducer.TraceChain`'s dispatch on **both** sides (the upstream "out"-equivalent port, already
+varied per part kind since TON, and — new — the continuation "in"-equivalent port, previously
+hardcoded). A second real finding: `Access Scope="LiteralConstant"` used at the *top level*
+(a comparison's literal operand, e.g. `1`) — always carries a `<ConstantType>`, the exact
+opposite of TON's `TypedConstant` (never has one). `ConstantAccessNode`/`SidecarConstantEntry`
+gained a nullable `ConstantType` field; `Expr.TimeLiteral` generalized to `Expr.Literal` (covers
+both, no reader-relevant difference in rendered text).
+
+**Scope decision, made during implementation, not pre-approved in the plan:** `ControlDelays`'
+own real network combines two comparisons (`Ge`/`Eq`) via a *second* OR-merge (`O(41)`), each
+comparison itself fed by a *first* OR-merge (`O(38)`) rather than Powerrail directly — a
+comparison-composes-with-OR-merge shape. Tracing this by hand (not guessing) showed the
+**existing, unmodified** OR-merge branch check (`branchPart.Name != "Contact"`) and wire fan-out
+check already safely refuse it — so rather than build a larger OR-merge-branches-as-recursive-
+chains generalization (real complexity, but riskier to get right under the same session's time
+budget), this phase ships Eq/Ge as an ordinary chain position only, leaving the OR-composition
+case exactly as safely refused as it already was. Verified with a dedicated test using a fixture
+built from the real `O(41)` shape (genericized per `docs/13-data-boundary.md`), not just assumed.
+Same deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases — a
+legitimate future phase, not silently dropped.
+
+11 new converter tests (`ComparisonTests.cs`: rail-facing and mid-chain reduce/round-trip/
+serialize, the OR-merge-composition hard-error, an unconfirmed-Part-Name hard-error); one existing
+test repurposed (`LiteralConstant` was previously the "unrecognized scope" example — now a real,
+recognized scope, so the test's fixture moved to a scope name that's still genuinely unsupported).
+94 converter tests, 68 openness-cli tests, 11 golden-harness tests all pass.
+
+**Not yet live-round-trip-proven.** `ControlDelays` as a whole still needs `Mul`/`Convert`
+elsewhere in the same block regardless; a live re-verification attempt was blocked by TIA Portal
+session state (three Portal processes running, attach/launch timed out at 3 minutes) — not
+retried per this project's "don't kill and retry" discipline (`docs/notes/openness-quirks.md`).
+Both grounded shapes are proven by unit tests built directly from the real export. A purpose-built
+reference-project block (matching the `TimerSample` precedent that closed out TON's own live-proof
+gap) would close this out the same way.

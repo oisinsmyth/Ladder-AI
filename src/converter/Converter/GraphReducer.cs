@@ -69,21 +69,24 @@ public static class GraphReducer
 
             foreach (var entry in constantEntries)
             {
-                if (!allConstantEntries.Any(e => e.UId == entry.UId))
-                {
-                    allConstantEntries.Add(entry);
-                }
+                AddConstantEntry(allConstantEntries, entry);
             }
         }
 
         foreach (var coil in coils)
         {
-            var (assignment, sidecar, accessEntries) = ReduceOneChain(network, coil, wiresByPort, accessByUId, networkNumber, visitedWireUIds);
+            var (assignment, sidecar, accessEntries, constantEntries) =
+                ReduceOneChain(network, coil, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
             assignments.Add(assignment);
             assignmentSidecars.Add(sidecar);
             foreach (var entry in accessEntries)
             {
                 AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
             }
         }
 
@@ -99,17 +102,19 @@ public static class GraphReducer
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
-    private static (CoilAssignment Assignment, CoilAssignmentSidecar Sidecar, List<SidecarAccessEntry> AccessEntries) ReduceOneChain(
+    private static (CoilAssignment Assignment, CoilAssignmentSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceOneChain(
         FlgNetwork network,
         PartNode coil,
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
         int networkNumber,
         HashSet<int> visitedWireUIds)
     {
         var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
         var (condition, steps, railWireUId) = TraceChain(
-            network, (coil.UId, "in"), wiresByPort, accessByUId, networkNumber, visitedWireUIds, accessEntries);
+            network, (coil.UId, "in"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
         var (coilTag, coilOperandWireUId) = ResolveOperand(wiresByPort, accessByUId, coil.UId, networkNumber);
         visitedWireUIds.Add(coilOperandWireUId);
@@ -118,7 +123,7 @@ public static class GraphReducer
         var assignment = new CoilAssignment(coilTag.TagPath, condition);
         var sidecar = new CoilAssignmentSidecar(railWireUId, steps, coil.UId, coilTag.UId, coilOperandWireUId);
 
-        return (assignment, sidecar, accessEntries);
+        return (assignment, sidecar, accessEntries, constantEntries);
     }
 
     // A TON's IN is reduced exactly like a Coil's condition — same backward trace, terminating
@@ -143,10 +148,10 @@ public static class GraphReducer
         var constantEntries = new List<SidecarConstantEntry>();
 
         var (inExpr, inSteps, inRailWireUId) = TraceChain(
-            network, (ton.UId, "IN"), wiresByPort, accessByUId, networkNumber, visitedWireUIds, accessEntries);
+            network, (ton.UId, "IN"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-        var (ptExpr, presetSidecar) = ResolvePreset(
-            wiresByPort, accessByUId, constantsByUId, ton.UId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        var (ptExpr, presetSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, ton.UId, "PT", networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
         var et = ResolveOptionalOutputPort(wiresByPort, ton.UId, "ET", networkNumber, visitedWireUIds);
 
@@ -170,45 +175,62 @@ public static class GraphReducer
         return (binding, sidecar, accessEntries, constantEntries);
     }
 
-    // Resolves a TON's PT: a single IdentCon-fed operand (no chain, unlike IN) that's either an
-    // ordinary tag (AccessNode) or a literal time constant (ConstantAccessNode) — both confirmed
-    // real, 2026-07-11 (FB MotorDOL / FC ControlDelays respectively).
-    private static (Expr Expr, TimerPresetSidecar Sidecar) ResolvePreset(
+    // Resolves a single IdentCon-fed operand (no chain, unlike a boolean chain position) that's
+    // either an ordinary tag (AccessNode) or a literal constant (ConstantAccessNode) — used for
+    // a TON's `PT` (confirmed real 2026-07-11, FB MotorDOL / FC ControlDelays) and, since the
+    // same date, a comparison's `in1`/`in2` (FC ControlDelays) — one shared resolver rather than
+    // duplicating the tag-vs-constant branch per caller, parameterized by which port to resolve.
+    private static (Expr Expr, OperandSidecar Sidecar) ResolveTagOrLiteralOperand(
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,
         Dictionary<int, ConstantAccessNode> constantsByUId,
-        int tonUId,
+        int partUId,
+        string port,
         int networkNumber,
         HashSet<int> visitedWireUIds,
         List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries)
     {
-        var wire = RequireWireAt(wiresByPort, (tonUId, "PT"), networkNumber);
+        var wire = RequireWireAt(wiresByPort, (partUId, port), networkNumber);
         var identCon = wire.Endpoints.FirstOrDefault(e => e.Kind == EndpointKind.IdentCon)
             ?? throw new NonReducibleNetworkException(
-                $"Network {networkNumber}: PT wire {wire.UId} for TON UId={tonUId} has no IdentCon source.");
+                $"Network {networkNumber}: {port} wire {wire.UId} for UId={partUId} has no IdentCon source.");
 
         visitedWireUIds.Add(wire.UId);
 
         if (accessByUId.TryGetValue(identCon.UId!.Value, out var access))
         {
             AddAccessEntry(accessEntries, new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope));
-            return (new Expr.TagRef(access.DottedPath), new TimerPresetSidecar.TagPreset(access.UId, wire.UId));
+            return (new Expr.TagRef(access.DottedPath), new OperandSidecar.TagOperand(access.UId, wire.UId));
         }
 
         if (constantsByUId.TryGetValue(identCon.UId!.Value, out var constant))
         {
-            if (!constantEntries.Any(e => e.UId == constant.UId))
-            {
-                constantEntries.Add(new SidecarConstantEntry(constant.Value, constant.UId));
-            }
-
-            return (new Expr.TimeLiteral(constant.Value), new TimerPresetSidecar.LiteralPreset(constant.UId, wire.UId));
+            AddConstantEntry(constantEntries, new SidecarConstantEntry(constant.Value, constant.UId, constant.ConstantType));
+            return (new Expr.Literal(constant.Value), new OperandSidecar.LiteralOperand(constant.UId, wire.UId));
         }
 
         throw new NonReducibleNetworkException(
-            $"Network {networkNumber}: PT wire {wire.UId} for TON UId={tonUId} references unknown Access/Constant UId={identCon.UId}.");
+            $"Network {networkNumber}: {port} wire {wire.UId} for UId={partUId} references unknown Access/Constant UId={identCon.UId}.");
     }
+
+    private static void AddConstantEntry(List<SidecarConstantEntry> entries, SidecarConstantEntry entry)
+    {
+        if (!entries.Any(e => e.UId == entry.UId))
+        {
+            entries.Add(entry);
+        }
+    }
+
+    // IR-text infix operator per Part Name — only Eq/Ge confirmed real (ir/SPEC.md's readable-form
+    // table already sketches the full IEC family, but Ne/Le/Gt/Lt Part Names are unconfirmed, so
+    // only these two are reachable — SupportedComparisonPartNames gates this at parse time).
+    private static string ComparisonOperator(string partName) => partName switch
+    {
+        "Eq" => "=",
+        "Ge" => ">=",
+        _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
+    };
 
     // ET is an optional output port — confirmed real, 2026-07-11: entirely absent from <Wires>,
     // or wired to OpenCon (FB MotorDOL). A wire to any other endpoint is refused — no live
@@ -252,8 +274,9 @@ public static class GraphReducer
 
     // Shared backward trace from a starting port (a Coil's "in", or a TON's "IN") to the rail —
     // one position at a time, rail-to-coil order once reversed. Each position is a single
-    // Contact (chain continues further upstream), an OR-merge (Part Name="O"), or an
-    // already-defined TON's Q output — the last confirmed real, 2026-07-11, `FC TimerSample`
+    // Contact or comparison (Eq/Ge — confirmed real, 2026-07-11, FC ControlDelays; both are
+    // pass-through positions, chain continues further upstream), an OR-merge (Part Name="O"), or
+    // an already-defined TON's Q output — the last confirmed real, 2026-07-11, `FC TimerSample`
     // (purpose-built by the project owner to close this gap: Q wired directly into a plain
     // Coil). OR-merge and TON-via-Q are both always rail-facing/terminal — nothing further
     // upstream to trace within *this* chain. When a TON's Q terminates the chain, the chain
@@ -265,9 +288,11 @@ public static class GraphReducer
         (int UId, string Port) startPort,
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
         int networkNumber,
         HashSet<int> visitedWireUIds,
-        List<SidecarAccessEntry> accessEntries)
+        List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries)
     {
         var steps = new List<ChainStepSidecar>();
         var stepExprs = new List<Expr>();
@@ -308,12 +333,12 @@ public static class GraphReducer
                 ?? throw new NonReducibleNetworkException(
                     $"Network {networkNumber}: wire {wire.UId} references unknown part UId={other.UId}.");
 
-            // Each upstream part kind has its own "out"-equivalent port name: Contact/O use
+            // Each upstream part kind has its own "out"-equivalent port name: Contact/O/Eq/Ge use
             // "out"; a TON's only confirmed real upstream leaf is "Q" ("ET" has no live example
             // as a consumed leaf, refused like any other unrecognized shape).
             var expectedPort = upstreamPart.Name switch
             {
-                "Contact" or "O" => "out",
+                "Contact" or "O" or "Eq" or "Ge" => "out",
                 "TON" => "Q",
                 _ => null,
             };
@@ -346,6 +371,28 @@ public static class GraphReducer
                 steps.Insert(0, new ChainStepSidecar.ContactStep(upstreamPart.UId, tag.UId, operandWireUId, upstreamPart.Negated, outgoingWireUId));
                 stepExprs.Insert(0, operandExpr);
                 currentInPort = (upstreamPart.UId, "in");
+                continue;
+            }
+
+            if (upstreamPart.Name == "Eq" || upstreamPart.Name == "Ge")
+            {
+                var (leftExpr, leftOperand) = ResolveTagOrLiteralOperand(
+                    wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in1", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+                var (rightExpr, rightOperand) = ResolveTagOrLiteralOperand(
+                    wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in2", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+                var compareStep = new ChainStepSidecar.CompareStep(
+                    upstreamPart.UId,
+                    upstreamPart.Name,
+                    upstreamPart.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: comparison UId={upstreamPart.UId} has no SrcType."),
+                    leftOperand,
+                    rightOperand,
+                    outgoingWireUId);
+                steps.Insert(0, compareStep);
+                stepExprs.Insert(0, new Expr.Compare(ComparisonOperator(upstreamPart.Name), leftExpr, rightExpr));
+                // Eq/Ge's own rail-facing/continuation port is "pre" — genuinely different from
+                // a Contact's "in", not a typo (confirmed real, 2026-07-11, FC ControlDelays).
+                currentInPort = (upstreamPart.UId, "pre");
                 continue;
             }
 

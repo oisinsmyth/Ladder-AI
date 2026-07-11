@@ -13,7 +13,12 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge" };
+
+    // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
+    // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
+    // guessed at even though the IEC family strongly suggests what they'd be named.
+    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge" };
     private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
 
     // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
@@ -46,6 +51,10 @@ public static class FlgNetParser
                 {
                     constants.Add(ParseTypedConstant(child));
                 }
+                else if (scope == "LiteralConstant")
+                {
+                    constants.Add(ParseTopLevelLiteralConstant(child));
+                }
                 else
                 {
                     accessNodes.Add(ParseAccess(child));
@@ -58,7 +67,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON only.");
+                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -68,6 +77,11 @@ public static class FlgNetParser
                 {
                     var (version, timeType, instance) = ParseTon(child, uid);
                     parts.Add(new PartNode(uid, name, TonVersion: version, TimeType: timeType, Instance: instance));
+                }
+                else if (SupportedComparisonPartNames.Contains(name))
+                {
+                    var srcType = ParseComparisonSrcType(child, name, uid);
+                    parts.Add(new PartNode(uid, name, SrcType: srcType));
                 }
                 else
                 {
@@ -105,6 +119,48 @@ public static class FlgNetParser
             ?? throw new SimaticMlFormatException($"<Access Scope=\"TypedConstant\" UId=\"{uid}\">'s <Constant> is missing <ConstantValue>.");
 
         return new ConstantAccessNode(uid, value);
+    }
+
+    // LiteralConstant used as a *top-level* Access (sibling to Contact/Eq under <Parts>) — a
+    // comparison's (Eq/Ge) literal operand. Confirmed real, 2026-07-11, FC ControlDelays:
+    // `<Access Scope="LiteralConstant" UId="22"><Constant><ConstantType>Int</ConstantType>
+    // <ConstantValue>1</ConstantValue></Constant></Access>` — always has a <ConstantType>,
+    // the exact opposite of TypedConstant's shape, so the two are validated as mirror images
+    // rather than guessed at. Distinct from the *nested* LiteralConstant use inside an array-index
+    // Component (ParseArrayIndex) — same scope string, different position, not reused here.
+    private static ConstantAccessNode ParseTopLevelLiteralConstant(XElement access)
+    {
+        var uid = RequireIntAttribute(access, "UId");
+        var constant = access.Element(Ns + "Constant")
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"LiteralConstant\" UId=\"{uid}\"> is missing its <Constant> element.");
+
+        var constantType = constant.Element(Ns + "ConstantType")?.Value
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"LiteralConstant\" UId=\"{uid}\">'s <Constant> is missing <ConstantType> — only a typed literal has been observed at the top level.");
+
+        var value = constant.Element(Ns + "ConstantValue")?.Value
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"LiteralConstant\" UId=\"{uid}\">'s <Constant> is missing <ConstantValue>.");
+
+        return new ConstantAccessNode(uid, value, constantType);
+    }
+
+    // A comparison's (Eq/Ge) own <TemplateValue Name="SrcType" Type="Type"> — confirmed real,
+    // 2026-07-11, FC ControlDelays (`Int` in every instance seen; stored verbatim, not assumed
+    // fixed to that one value).
+    private static string ParseComparisonSrcType(XElement comparisonPart, string partName, int uid)
+    {
+        var templateValue = comparisonPart.Element(Ns + "TemplateValue")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue> SrcType element.");
+
+        var name = RequireAttribute(templateValue, "Name");
+        var type = RequireAttribute(templateValue, "Type");
+        if (name != "SrcType" || type != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\"> — only " +
+                "Name=\"SrcType\" Type=\"Type\" has been observed.");
+        }
+
+        return templateValue.Value;
     }
 
     // A TON's own Instance reference — same Scope values as an ordinary Access, but the

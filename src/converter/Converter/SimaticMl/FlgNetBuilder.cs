@@ -47,13 +47,12 @@ public static class FlgNetBuilder
             // to IN; not yet seen live but the same mechanism, so handled identically).
             if (timerSidecar.RailWireUId is int timerRailWireUId)
             {
-                // Rail-facing endpoints: every first-step Contact/OR-branch uses its own "in"
-                // port (same as a Coil's chain — RailFacingUIds is agnostic to what it's
-                // feeding); only when there are no steps at all is the rail wired straight to
-                // the TON itself, whose port is "IN" (uppercase) — genuinely different from a
-                // Contact's "in", not a typo.
+                // Rail-facing endpoints: every first-step Contact/OR-branch/comparison uses its
+                // own rail-facing port (RailFacingEndpoints already knows which — "in" for
+                // Contact, "pre" for a comparison); only when there are no steps at all is the
+                // rail wired straight to the TON itself, whose port is "IN" (uppercase).
                 var railFacingEndpoints = timerSidecar.Steps.Count > 0
-                    ? RailFacingUIds(timerSidecar.Steps[0]).Select(uid => (UId: uid, Port: "in"))
+                    ? RailFacingEndpoints(timerSidecar.Steps[0])
                     : new[] { (UId: timerSidecar.TonPartUId, Port: "IN") };
                 AddRailEndpoints(railEndpointsByWireUId, timerRailWireUId, railFacingEndpoints);
             }
@@ -69,12 +68,13 @@ public static class FlgNetBuilder
             // FC TimerSample).
             if (assignmentSidecar.RailWireUId is int coilRailWireUId)
             {
-                // The rail-facing UIds for this chain: the single first step's contact if it's a
-                // plain Contact, every branch's contact if it's an OR-merge (all branches share
+                // The rail-facing endpoints for this chain: the single first step's own
+                // rail-facing port (RailFacingEndpoints — "in" for Contact, "pre" for a
+                // comparison), every branch's contact if it's an OR-merge (all branches share
                 // the rail, confirmed real 2026-07-10), or the coil itself if the chain has no
                 // steps — a Coil's own port is "in" (lowercase) either way, unlike a TON's "IN".
                 var railFacingEndpoints = assignmentSidecar.Steps.Count > 0
-                    ? RailFacingUIds(assignmentSidecar.Steps[0]).Select(uid => (UId: uid, Port: "in"))
+                    ? RailFacingEndpoints(assignmentSidecar.Steps[0])
                     : new[] { (UId: assignmentSidecar.CoilUId, Port: "in") };
                 AddRailEndpoints(railEndpointsByWireUId, coilRailWireUId, railFacingEndpoints);
             }
@@ -94,7 +94,7 @@ public static class FlgNetBuilder
             .Select(entry => AccessNode.FromDottedPath(entry.UId, entry.Scope, entry.TagPath))
             .ToList();
         var constants = sidecar.ConstantUIds
-            .Select(entry => new ConstantAccessNode(entry.UId, entry.Value))
+            .Select(entry => new ConstantAccessNode(entry.UId, entry.Value, entry.ConstantType))
             .ToList();
 
         return new FlgNetwork(accessNodes, parts, wires, constants);
@@ -124,7 +124,7 @@ public static class FlgNetBuilder
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
             var nextTarget = i + 1 < sidecar.Steps.Count
-                ? new WireEndpoint(EndpointKind.NameCon, EntryUId(sidecar.Steps[i + 1]), "in")
+                ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "IN");
 
             BuildStep(sidecar.Steps[i], nextTarget, parts, wires);
@@ -133,25 +133,7 @@ public static class FlgNetBuilder
         var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
         parts.Add(new PartNode(sidecar.TonPartUId, "TON", TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
 
-        switch (sidecar.Preset)
-        {
-            case TimerPresetSidecar.TagPreset tagPreset:
-                wires.Add(new WireNode(tagPreset.WireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.IdentCon, tagPreset.AccessUId, null),
-                    new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "PT"),
-                }));
-                break;
-            case TimerPresetSidecar.LiteralPreset literalPreset:
-                wires.Add(new WireNode(literalPreset.WireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.IdentCon, literalPreset.ConstantUId, null),
-                    new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "PT"),
-                }));
-                break;
-            default:
-                throw new IrFormatException($"Unsupported TON preset kind: {sidecar.Preset.GetType().Name}");
-        }
+        wires.Add(BuildOperandWire(sidecar.Preset, sidecar.TonPartUId, "PT"));
 
         if (sidecar.Et is { } et)
         {
@@ -162,6 +144,23 @@ public static class FlgNetBuilder
             }));
         }
     }
+
+    // A tag-or-literal operand wire — used for a TON's PT and a comparison's in1/in2 alike (see
+    // OperandSidecar's own doc comment for why this is shared rather than TON-specific).
+    private static WireNode BuildOperandWire(OperandSidecar operand, int partUId, string port) => operand switch
+    {
+        OperandSidecar.TagOperand tagOperand => new WireNode(tagOperand.WireUId, new[]
+        {
+            new WireEndpoint(EndpointKind.IdentCon, tagOperand.AccessUId, null),
+            new WireEndpoint(EndpointKind.NameCon, partUId, port),
+        }),
+        OperandSidecar.LiteralOperand literalOperand => new WireNode(literalOperand.WireUId, new[]
+        {
+            new WireEndpoint(EndpointKind.IdentCon, literalOperand.ConstantUId, null),
+            new WireEndpoint(EndpointKind.NameCon, partUId, port),
+        }),
+        _ => throw new IrFormatException($"Unsupported operand kind: {operand.GetType().Name}"),
+    };
 
     private static void BuildOneChain(
         CoilAssignment assignment,
@@ -182,7 +181,7 @@ public static class FlgNetBuilder
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
             var nextTarget = i + 1 < sidecar.Steps.Count
-                ? new WireEndpoint(EndpointKind.NameCon, EntryUId(sidecar.Steps[i + 1]), "in")
+                ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "in");
 
             BuildStep(sidecar.Steps[i], nextTarget, parts, wires);
@@ -254,35 +253,55 @@ public static class FlgNetBuilder
                 }));
                 break;
 
+            case ChainStepSidecar.CompareStep compare:
+                parts.Add(new PartNode(compare.ComparePartUId, compare.PartName, SrcType: compare.SrcType));
+                wires.Add(BuildOperandWire(compare.Left, compare.ComparePartUId, "in1"));
+                wires.Add(BuildOperandWire(compare.Right, compare.ComparePartUId, "in2"));
+                wires.Add(new WireNode(compare.OutgoingWireUId, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, compare.ComparePartUId, "out"),
+                    outgoingTarget,
+                }));
+                break;
+
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
     }
 
-    // The UId a following step wires its "in" to. Only ever called with a step at index >= 1;
-    // an OrStep/TimerOutputStep is always rail-facing/terminal (steps[0] only), so in practice
-    // this only ever sees ContactStep — handled generally anyway since nothing about the shape
-    // rules it out for a future position other than "first".
-    private static int EntryUId(ChainStepSidecar step) => step switch
+    // The port a following step wires its own "out" into — "in" for Contact/O, "pre" for a
+    // comparison (genuinely different port name, not a typo — confirmed real, 2026-07-11,
+    // FC ControlDelays). Only ever called with a step at index >= 1; an OrStep/TimerOutputStep is
+    // always rail-facing/terminal (steps[0] only), so in practice this only ever sees
+    // ContactStep/CompareStep — handled generally anyway since nothing about the shape rules out
+    // a future position other than "first" for the others.
+    private static WireEndpoint EntryTarget(ChainStepSidecar step) => step switch
     {
-        ChainStepSidecar.ContactStep contact => contact.ContactUId,
-        ChainStepSidecar.OrStep orStep => orStep.OrPartUId,
-        ChainStepSidecar.TimerOutputStep timerOutput => timerOutput.TonPartUId,
+        ChainStepSidecar.ContactStep contact => new WireEndpoint(EndpointKind.NameCon, contact.ContactUId, "in"),
+        ChainStepSidecar.OrStep orStep => new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "in"),
+        ChainStepSidecar.TimerOutputStep timerOutput => new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, "in"),
+        ChainStepSidecar.CompareStep compare => new WireEndpoint(EndpointKind.NameCon, compare.ComparePartUId, "pre"),
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 
-    // The rail-facing UId(s) of a chain's first step: the contact itself, or every OR-merge
-    // branch's contact (all fed by the same shared rail wire, confirmed real 2026-07-10).
-    private static IReadOnlyList<int> RailFacingUIds(ChainStepSidecar step) => step switch
+    // The rail-facing endpoint(s) of a chain's first step: the contact's own "in", the
+    // comparison's own "pre" (genuinely different port, not a typo), or every OR-merge branch's
+    // contact "in" (all fed by the same shared rail wire, confirmed real 2026-07-10; a branch is
+    // always a Contact, never itself a comparison — see OrMergeOfComparisons.xml/
+    // ComparisonTests.cs for why that's deliberately still refused, not guessed at).
+    private static IReadOnlyList<(int UId, string Port)> RailFacingEndpoints(ChainStepSidecar step) => step switch
     {
-        ChainStepSidecar.ContactStep contact => new[] { contact.ContactUId },
-        ChainStepSidecar.OrStep orStep => orStep.Branches.Select(b => b.ContactUId).ToArray(),
+        ChainStepSidecar.ContactStep contact => new[] { (contact.ContactUId, "in") },
+        ChainStepSidecar.OrStep orStep => orStep.Branches.Select(b => (b.ContactUId, "in")).ToArray(),
+        ChainStepSidecar.CompareStep compare => new[] { (compare.ComparePartUId, "pre") },
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 
     private static int CountExprLeaves(Expr expr) => expr switch
     {
         Expr.TagRef => 1,
+        Expr.Literal => 1,
+        Expr.Compare => 1,
         Expr.Not not => CountExprLeaves(not.Operand),
         Expr.And and => and.Operands.Sum(CountExprLeaves),
         Expr.Or or => or.Operands.Sum(CountExprLeaves),
@@ -294,6 +313,7 @@ public static class FlgNetBuilder
         ChainStepSidecar.ContactStep => 1,
         ChainStepSidecar.OrStep orStep => orStep.Branches.Count,
         ChainStepSidecar.TimerOutputStep => 1,
+        ChainStepSidecar.CompareStep => 1,
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 }
