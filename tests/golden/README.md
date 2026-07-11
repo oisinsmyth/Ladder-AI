@@ -18,23 +18,27 @@ like `ModifiedDate`/`CompileDate`.
 ## The corpus
 
 Seeded 2026-07-10 with one FC and three DBs, extended 2026-07-11 with a second FC
-(`PerimeterSafetyAlarms`, S1 item 7 Phase A — OR-merge and negated contacts):
+(`PerimeterSafetyAlarms`, S1 item 7 Phase A — OR-merge and negated contacts) and again the same
+day with a 6th/7th artifact (`TimerSample`/`DB_Timers`, S1 item 8 — TON support, built directly
+in the reference project by the project owner rather than derived from real production data,
+since a TON-only block free of comparisons/Move/RCoil didn't exist in the real grounding
+projects):
 `ir/reference/{NodeStatusAlarms,CommsProcessData,AlarmWords,EquipmentStatus,
-PerimeterSafetyAlarms}.ir` / matching `simatic-ml/reference/*.xml`. Structural shapes were
-derived from sanitized real production PLC data under a private approval — no site or site
-specifics are recorded anywhere in this repo, and the sanitization mapping (real name -> invented
-name) is intentionally never committed (`.gitignore`: `sanitization/`). Every tag path, block/DB
-name, member name, and comment in the committed files is invented; only structure (wiring
-topology, instruction types, slice/array addressing, member types/retention) reflects something
-real — DBs are brought in *complete* (all members), not trimmed to only what the paired FC
-references. See `docs/13-data-boundary.md`.
+PerimeterSafetyAlarms,TimerSample,DB_Timers}.ir` / matching `simatic-ml/reference/*.xml`.
+Structural shapes for the first five were derived from sanitized real production PLC data under
+a private approval — no site or site specifics are recorded anywhere in this repo, and the
+sanitization mapping (real name -> invented name) is intentionally never committed (`.gitignore`:
+`sanitization/`). Every tag path, block/DB name, member name, and comment in the committed files
+is invented; only structure (wiring topology, instruction types, slice/array addressing, member
+types/retention) reflects something real — DBs are brought in *complete* (all members), not
+trimmed to only what the paired FC references. See `docs/13-data-boundary.md`.
 
 The full live round-trip (`export -> to-ir -> to-xml -> [sanitize ->] import -> compile ->
 re-export`, `Layer 1` assertion 2 via `Normalizer.AreSemanticallyEquivalent`) has been run and
-passed against a real TIA project for all five artifacts, DBs compiled before the FCs that depend
-on them (`tests/golden/GoldenHarness.Tests/ReferenceProjectRoundTrip.cs` documents how to re-run
-it — needs a live Portal session, not wired into an always-running `[Fact]`, same reasoning as
-`RoundTripRunner.RunFull` itself).
+passed against a real TIA project for all seven artifacts, DBs compiled before the FCs that
+depend on them (`tests/golden/GoldenHarness.Tests/ReferenceProjectRoundTrip.cs` documents how to
+re-run it — needs a live Portal session, not wired into an always-running `[Fact]`, same
+reasoning as `RoundTripRunner.RunFull` itself).
 
 Real gaps found and fixed along the way (not glossed over), FC pass:
 
@@ -76,8 +80,33 @@ FC pass, OR-merge/negation (S1 item 7 Phase A, 2026-07-11):
 
 New LAD constructs found in the wild get added to the corpus *first* (failing), then fixed. Still
 out of scope: `SW.Blocks.InstanceDB` and any UDT-typed/structured member (deferred as one unit —
-a real example needs both together); TON/MOVE/comparisons/block calls; a multi-contact OR-merge
+a real example needs both together); MOVE/comparisons/block calls; a multi-contact OR-merge
 branch or a nested OR-merge (real-but-unconfirmed, hard error rather than guessed at). A second
 FC block was searched for (12 candidates) without finding one that's both in current LAD scope
 and free of Instance-DB dependencies — `docs/notes/stage-gates.md` has the detail; OR-merge
 support closed that gap for `PerimeterSafetyAlarms` specifically (now `PerimeterSafetyAlarms`).
+
+## TON round-trip proof, and a second Normalizer finding (2026-07-11)
+
+`FC TimerSample` (purpose-built by the project owner in `SampleProject` — the reference project's
+own live TIA copy — specifically to close out TON support) ran the full `export → to-ir → to-xml
+→ import → compile → re-export → Normalizer` cycle and passed. Since committed to the corpus
+alongside `DB_Timers` (6th/7th artifacts — see "The corpus" above).
+
+Getting there surfaced a real, second UId-volatility finding, parallel to the already-documented
+Wire one: **TIA reassigns `Access` element UIds on its own Import()/Compile()/Export() cycle
+too** — contrary to the earlier assumption that Part/Access UIds stay stable (only Wire's own UId
+was known to be volatile until now). Unlike Wire, an Access is *referenced* elsewhere (every
+`IdentCon`), so a plain attribute strip isn't enough: `Normalizer.Strip` now builds a per-network
+map from each Access's own UId to a content-derived key (its `Scope`+`Symbol`, or its literal
+constant value) and rewrites both the Access element itself and every `IdentCon` pointing at it
+to that key before comparing — so two documents compare equal regardless of which arbitrary
+number TIA assigned to which Access. Scoped **per `<FlgNet>`** (one map per network), not
+flattened across the whole document — UId numbering restarts at the top of every network, so a
+document-wide map silently collided real entries across networks in a 3-network block; caught
+live by this exact test, a single-network fixture would never have exposed it.
+
+Also fixed alongside it: `<Parts>` order (like `<Wires>` order, already normalized) isn't
+semantically meaningful either — TIA doesn't preserve `BlockSourceWriter`'s own Access/Part
+ordering on re-export. Both fixes are covered by the existing `NormalizerTests.cs` suite pattern
+(11 tests, all still passing) plus this live round-trip itself.

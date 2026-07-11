@@ -62,11 +62,39 @@ public sealed record AccessNode(
 
 // Negated: a normally-closed contact (`<Negated Name="operand" />` child) — Contact-only.
 // Cardinality: an OR-merge's branch count (`<TemplateValue Name="Card" Type="Cardinality">`) —
-// "O"-only. Both confirmed real, 2026-07-10 (docs/notes/stage-gates.md, S1 item 7). Modeled as
-// optional fields on the one PartNode type rather than subtypes since every other Part kind
-// (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch on
-// `Name` for anything Part-shape-specific.
-public sealed record PartNode(int UId, string Name, bool Negated = false, int? Cardinality = null);
+// "O"-only. Both confirmed real, 2026-07-10 (docs/notes/stage-gates.md, S1 item 7).
+//
+// TonVersion/TimeType/Instance: a TON's own `Version="1.0"` attribute, its
+// `<TemplateValue Name="time_type" Type="Type">Time</TemplateValue>`, and its
+// `<Instance Scope="..." UId="..."><Component .../></Instance>` — confirmed real, 2026-07-11,
+// against `FB MotorDOL` (Scope="LocalVariable", multi-instance in the calling FB's own iDB) and
+// `FC ControlDelays` (Scope="GlobalVariable", a standalone instance DB named directly by a
+// single Component — not a two-component "DB_Timers.Member" path). Modeled as an AccessNode
+// (not a new type) because the Instance element carries exactly the same data shape (scope +
+// component path) as an ordinary Access — the `<Instance>` wrapper just skips the `<Symbol>`
+// indirection an ordinary `<Access>` uses. This also means a future FC/FB call's own instance
+// argument can reuse AccessNode rather than needing a redesign.
+//
+// All optional fields live on the one PartNode type rather than subtypes since every other Part
+// kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
+// on `Name` for anything Part-shape-specific.
+public sealed record PartNode(
+    int UId,
+    string Name,
+    bool Negated = false,
+    int? Cardinality = null,
+    string? TonVersion = null,
+    string? TimeType = null,
+    AccessNode? Instance = null);
+
+// A TON's `PT` can be fed by a literal time constant instead of a tag — confirmed real,
+// 2026-07-11, `FC ControlDelays`: `<Access Scope="TypedConstant" UId="24">
+// <Constant><ConstantValue>T#100MS</ConstantValue></Constant></Access>` — no `<ConstantType>`
+// child (unlike the LiteralConstant array-index shape, which always has one). Modeled
+// separately from AccessNode rather than jammed into it: this carries a literal value, not a
+// component path, so the two concepts don't share a representation. Value is stored verbatim,
+// never interpreted (same discipline as DB StartValue).
+public sealed record ConstantAccessNode(int UId, string Value);
 
 public enum EndpointKind
 {
@@ -89,7 +117,11 @@ public sealed record WireNode(int UId, IReadOnlyList<WireEndpoint> Endpoints);
 public sealed record FlgNetwork(
     IReadOnlyList<AccessNode> AccessNodes,
     IReadOnlyList<PartNode> Parts,
-    IReadOnlyList<WireNode> Wires);
+    IReadOnlyList<WireNode> Wires,
+    IReadOnlyList<ConstantAccessNode>? Constants = null)
+{
+    public IReadOnlyList<ConstantAccessNode> Constants { get; init; } = Constants ?? Array.Empty<ConstantAccessNode>();
+}
 
 // CompileUnit "ID" is opaque — confirmed against a real export (2026-07-10) not to follow the
 // same simple sequential-int scheme as FlgNet's own UIds (a real one came back as "D"). Treated

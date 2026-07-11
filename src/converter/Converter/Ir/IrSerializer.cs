@@ -56,6 +56,14 @@ public static class IrSerializer
         }
 
         sb.Append('\n');
+        foreach (var timer in network.Timers)
+        {
+            sb.Append("  TON(").Append(timer.InstancePath)
+              .Append(", IN := ").Append(SerializeExpr(timer.In))
+              .Append(", PT := ").Append(SerializeExpr(timer.Pt))
+              .Append(")\n");
+        }
+
         foreach (var assignment in network.Assignments)
         {
             sb.Append("  COIL ").Append(assignment.CoilTag).Append(" := ").Append(SerializeExpr(assignment.Condition)).Append('\n');
@@ -101,6 +109,7 @@ public static class IrSerializer
     private static string SerializeExpr(Expr expr) => expr switch
     {
         Expr.TagRef tagRef => tagRef.Path,
+        Expr.TimeLiteral literal => literal.Value,
         Expr.Not not => $"NOT {SerializeExpr(not.Operand)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
         Expr.And and => string.Join(" AND ", and.Operands.Select(SerializeExpr)),
@@ -115,14 +124,54 @@ public static class IrSerializer
         sb.Append("  compileunit = ").Append(sidecar.CompileUnitUId).Append('\n');
         foreach (var access in sidecar.AccessUIds)
         {
-            sb.Append("  access ").Append(access.TagPath).Append(" = ").Append(access.UId).Append('\n');
+            sb.Append("  access ").Append(access.TagPath).Append(" = ").Append(access.UId).Append(' ').Append(access.Scope).Append('\n');
+        }
+
+        foreach (var constant in sidecar.ConstantUIds)
+        {
+            sb.Append("  constant ").Append(constant.Value).Append(" = ").Append(constant.UId).Append('\n');
+        }
+
+        for (var t = 0; t < sidecar.Timers.Count; t++)
+        {
+            var timer = sidecar.Timers[t];
+            sb.Append("  timer ").Append(t).Append('\n');
+            sb.Append("    tonpartuid = ").Append(timer.TonPartUId).Append('\n');
+            sb.Append("    version = ").Append(timer.Version).Append('\n');
+            sb.Append("    timetype = ").Append(timer.TimeType).Append('\n');
+            sb.Append("    instanceuid = ").Append(timer.InstanceUId).Append('\n');
+            sb.Append("    instancescope = ").Append(timer.InstanceScope).Append('\n');
+            sb.Append("    instancepath = ").Append(string.Join('.', timer.InstanceComponentPath)).Append('\n');
+            sb.Append("    rail = ").Append(SerializeRail(timer.RailWireUId)).Append('\n');
+
+            for (var s = 0; s < timer.Steps.Count; s++)
+            {
+                SerializeStep(sb, "    ", $"step {s}", timer.Steps[s]);
+            }
+
+            switch (timer.Preset)
+            {
+                case TimerPresetSidecar.TagPreset tagPreset:
+                    sb.Append("    preset tag = ").Append(tagPreset.AccessUId).Append(' ').Append(tagPreset.WireUId).Append('\n');
+                    break;
+                case TimerPresetSidecar.LiteralPreset literalPreset:
+                    sb.Append("    preset literal = ").Append(literalPreset.ConstantUId).Append(' ').Append(literalPreset.WireUId).Append('\n');
+                    break;
+                default:
+                    throw new IrFormatException($"Unsupported TON preset kind: {timer.Preset.GetType().Name}");
+            }
+
+            if (timer.Et is { } et)
+            {
+                sb.Append("    et = ").Append(et.WireUId).Append(' ').Append(et.OpenConUId).Append('\n');
+            }
         }
 
         for (var a = 0; a < sidecar.Assignments.Count; a++)
         {
             var assignment = sidecar.Assignments[a];
             sb.Append("  assignment ").Append(a).Append('\n');
-            sb.Append("    rail = ").Append(assignment.RailWireUId).Append('\n');
+            sb.Append("    rail = ").Append(SerializeRail(assignment.RailWireUId)).Append('\n');
 
             for (var s = 0; s < assignment.Steps.Count; s++)
             {
@@ -157,10 +206,21 @@ public static class IrSerializer
 
                 sb.Append(indent).Append("  out = ").Append(orStep.OutgoingWireUId).Append('\n');
                 break;
+            case ChainStepSidecar.TimerOutputStep timerOutput:
+                sb.Append(indent).Append(label).Append(" timeroutput\n");
+                sb.Append(indent).Append("  tonpartuid = ").Append(timerOutput.TonPartUId).Append('\n');
+                sb.Append(indent).Append("  port = ").Append(timerOutput.Port).Append('\n');
+                sb.Append(indent).Append("  out = ").Append(timerOutput.OutgoingWireUId).Append('\n');
+                break;
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
     }
+
+    // A chain that terminates via a TimerOutputStep never touches Powerrail — "none" records
+    // that explicitly rather than a sentinel int, so a reader (or the parser) never mistakes it
+    // for a real, if unusual, wire UId. Confirmed necessary real, 2026-07-11, FC TimerSample.
+    private static string SerializeRail(int? railWireUId) => railWireUId?.ToString() ?? "none";
 
     private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

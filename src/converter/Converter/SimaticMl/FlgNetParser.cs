@@ -13,8 +13,13 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON" };
     private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
+
+    // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
+    // confirmed real, 2026-07-11: LocalVariable (multi-instance, FB MotorDOL) and GlobalVariable
+    // (standalone instance DB, FC ControlDelays).
+    private static readonly HashSet<string> SupportedInstanceScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
 
     public static FlgNetwork Parse(XElement flgNet)
     {
@@ -29,13 +34,22 @@ public static class FlgNetParser
             ?? throw new SimaticMlFormatException("<FlgNet> is missing its <Wires> element.");
 
         var accessNodes = new List<AccessNode>();
+        var constants = new List<ConstantAccessNode>();
         var parts = new List<PartNode>();
 
         foreach (var child in partsElement.Elements())
         {
             if (child.Name == Ns + "Access")
             {
-                accessNodes.Add(ParseAccess(child));
+                var scope = RequireAttribute(child, "Scope");
+                if (scope == "TypedConstant")
+                {
+                    constants.Add(ParseTypedConstant(child));
+                }
+                else
+                {
+                    accessNodes.Add(ParseAccess(child));
+                }
             }
             else if (child.Name == Ns + "Part")
             {
@@ -44,13 +58,21 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil only.");
+                        "This converter slice supports Contact/Coil/O/TON only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
                 var negated = name == "Contact" && ParseNegated(child, uid);
                 var cardinality = name == "O" ? ParseOrCardinality(child, uid) : (int?)null;
-                parts.Add(new PartNode(uid, name, negated, cardinality));
+                if (name == "TON")
+                {
+                    var (version, timeType, instance) = ParseTon(child, uid);
+                    parts.Add(new PartNode(uid, name, TonVersion: version, TimeType: timeType, Instance: instance));
+                }
+                else
+                {
+                    parts.Add(new PartNode(uid, name, negated, cardinality));
+                }
             }
             else
             {
@@ -60,7 +82,74 @@ public static class FlgNetParser
 
         var wires = wiresElement.Elements(Ns + "Wire").Select(ParseWire).ToList();
 
-        return new FlgNetwork(accessNodes, parts, wires);
+        return new FlgNetwork(accessNodes, parts, wires, constants);
+    }
+
+    // TypedConstant Access — only a top-level PT source, never a Contact/Coil operand (those
+    // still go through ParseAccess/SupportedAccessScopes unchanged). Only a bare <ConstantValue>
+    // has been observed (no <ConstantType>, unlike the nested LiteralConstant array-index shape)
+    // — confirmed real, 2026-07-11, FC ControlDelays: `T#100MS`.
+    private static ConstantAccessNode ParseTypedConstant(XElement access)
+    {
+        var uid = RequireIntAttribute(access, "UId");
+        var constant = access.Element(Ns + "Constant")
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"TypedConstant\" UId=\"{uid}\"> is missing its <Constant> element.");
+
+        if (constant.Element(Ns + "ConstantType") is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Access Scope=\"TypedConstant\" UId=\"{uid}\">'s <Constant> has a <ConstantType> child — only a bare <ConstantValue> has been observed.");
+        }
+
+        var value = constant.Element(Ns + "ConstantValue")?.Value
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"TypedConstant\" UId=\"{uid}\">'s <Constant> is missing <ConstantValue>.");
+
+        return new ConstantAccessNode(uid, value);
+    }
+
+    // A TON's own Instance reference — same Scope values as an ordinary Access, but the
+    // Component path is a direct child (no <Symbol> wrapper) — confirmed real, 2026-07-11.
+    private static (string Version, string TimeType, AccessNode Instance) ParseTon(XElement tonPart, int uid)
+    {
+        var version = RequireAttribute(tonPart, "Version");
+
+        var instanceElement = tonPart.Element(Ns + "Instance")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\"> is missing its <Instance> element.");
+        var instanceScope = RequireAttribute(instanceElement, "Scope");
+        if (!SupportedInstanceScopes.Contains(instanceScope))
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance Scope=\"{instanceScope}\"> — only GlobalVariable/LocalVariable have been observed.");
+        }
+
+        var instanceUId = RequireIntAttribute(instanceElement, "UId");
+        var instanceComponents = instanceElement.Elements(Ns + "Component").ToList();
+        if (instanceComponents.Count == 0)
+        {
+            throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance> has no <Component> path elements.");
+        }
+
+        if (instanceComponents.Any(c => c.Attribute("SliceAccessModifier") is not null || c.Attribute("AccessModifier") is not null))
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance> has a slice/array-indexed Component — not observed on an Instance reference.");
+        }
+
+        var instancePath = instanceComponents.Select(c => RequireAttribute(c, "Name")).ToList();
+        var instance = new AccessNode(instanceUId, instanceScope, instancePath);
+
+        var templateValue = tonPart.Element(Ns + "TemplateValue")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\"> is missing its <TemplateValue> time-type element.");
+        var templateName = RequireAttribute(templateValue, "Name");
+        var templateType = RequireAttribute(templateValue, "Type");
+        if (templateName != "time_type" || templateType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"TON\" UId=\"{uid}\">'s <TemplateValue Name=\"{templateName}\" Type=\"{templateType}\"> — only " +
+                "Name=\"time_type\" Type=\"Type\" has been observed.");
+        }
+
+        return (version, templateValue.Value, instance);
     }
 
     private static AccessNode ParseAccess(XElement access)

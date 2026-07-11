@@ -34,18 +34,47 @@ public static class GraphReducer
         }
 
         var accessByUId = network.AccessNodes.ToDictionary(a => a.UId);
+        var constantsByUId = network.Constants.ToDictionary(c => c.UId);
         var wiresByPort = BuildPortIndex(network.Wires);
 
+        var tonParts = network.Parts.Where(p => p.Name == "TON").ToList();
         var coils = network.Parts.Where(p => p.Name == "Coil").ToList();
-        if (coils.Count == 0)
+        if (coils.Count == 0 && tonParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil or TON found.");
         }
 
         var assignments = new List<CoilAssignment>();
         var assignmentSidecars = new List<CoilAssignmentSidecar>();
+        var timerBindings = new List<TimerBinding>();
+        var timerSidecars = new List<TimerBindingSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
+        var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
+
+        // Timers are reduced first (order doesn't affect correctness — a Coil's own chain can
+        // only reference a TON's Q via an ordinary Access elsewhere, see the note on
+        // ChainStepSidecar, never via direct wire-graph traversal into this pass — but doing
+        // timers first keeps their statements first in emitted IR, reads naturally).
+        foreach (var ton in tonParts)
+        {
+            var (binding, sidecar, accessEntries, constantEntries) =
+                ReduceTimer(network, ton, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            timerBindings.Add(binding);
+            timerSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                if (!allConstantEntries.Any(e => e.UId == entry.UId))
+                {
+                    allConstantEntries.Add(entry);
+                }
+            }
+        }
 
         foreach (var coil in coils)
         {
@@ -54,10 +83,7 @@ public static class GraphReducer
             assignmentSidecars.Add(sidecar);
             foreach (var entry in accessEntries)
             {
-                if (!allAccessEntries.Any(e => e.TagPath == entry.TagPath && e.UId == entry.UId))
-                {
-                    allAccessEntries.Add(entry);
-                }
+                AddAccessEntry(allAccessEntries, entry);
             }
         }
 
@@ -68,8 +94,8 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        var irNetwork = new IrNetwork(networkNumber, title, assignments);
-        var networkSidecar = new NetworkSidecar(networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars);
+        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings);
+        var networkSidecar = new NetworkSidecar(networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -81,21 +107,176 @@ public static class GraphReducer
         int networkNumber,
         HashSet<int> visitedWireUIds)
     {
-        // Backward-trace from the coil to the rail, one position at a time (rail-to-coil order
-        // once reversed). Each position is either a single Contact (the chain continues further
-        // upstream) or an OR-merge (Part Name="O") — confirmed real, 2026-07-10, always
-        // rail-facing: every branch of every OR-merge seen resolves to exactly one Contact fed
-        // directly by Powerrail, so an OR-merge always terminates the trace, the same as
-        // Powerrail itself does for a plain chain.
         var accessEntries = new List<SidecarAccessEntry>();
+        var (condition, steps, railWireUId) = TraceChain(
+            network, (coil.UId, "in"), wiresByPort, accessByUId, networkNumber, visitedWireUIds, accessEntries);
+
+        var (coilTag, coilOperandWireUId) = ResolveOperand(wiresByPort, accessByUId, coil.UId, networkNumber);
+        visitedWireUIds.Add(coilOperandWireUId);
+        AddAccessEntry(accessEntries, coilTag);
+
+        var assignment = new CoilAssignment(coilTag.TagPath, condition);
+        var sidecar = new CoilAssignmentSidecar(railWireUId, steps, coil.UId, coilTag.UId, coilOperandWireUId);
+
+        return (assignment, sidecar, accessEntries);
+    }
+
+    // A TON's IN is reduced exactly like a Coil's condition — same backward trace, terminating
+    // at the TON's own "IN" port instead of a Coil's "in" (and, like a Coil's chain, may itself
+    // terminate at another TON's Q instead of the rail — see TraceChain). PT is fed by an
+    // IdentCon directly (no chain — it's a single operand, tag or literal), unlike Coil's own
+    // "operand" pattern only in that there's no intervening Contact-chain concept for it. `Q`
+    // itself is deliberately *not* validated here — whether/how it's consumed (an ordinary
+    // Access elsewhere, confirmed real FC ControlDelays; or a direct wire into another chain,
+    // confirmed real FC TimerSample) is entirely the consuming chain's concern via TraceChain;
+    // this reduction only owns IN/PT/ET.
+    private static (TimerBinding Binding, TimerBindingSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceTimer(
+        FlgNetwork network,
+        PartNode ton,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (inExpr, inSteps, inRailWireUId) = TraceChain(
+            network, (ton.UId, "IN"), wiresByPort, accessByUId, networkNumber, visitedWireUIds, accessEntries);
+
+        var (ptExpr, presetSidecar) = ResolvePreset(
+            wiresByPort, accessByUId, constantsByUId, ton.UId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var et = ResolveOptionalOutputPort(wiresByPort, ton.UId, "ET", networkNumber, visitedWireUIds);
+
+        var instance = ton.Instance
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Instance reference.");
+        var instancePath = string.Join('.', instance.ComponentPath);
+
+        var binding = new TimerBinding(instancePath, inExpr, ptExpr);
+        var sidecar = new TimerBindingSidecar(
+            ton.UId,
+            ton.TonVersion ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Version."),
+            ton.TimeType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no time_type."),
+            instance.UId,
+            instance.Scope,
+            instance.ComponentPath,
+            inRailWireUId,
+            inSteps,
+            presetSidecar,
+            et);
+
+        return (binding, sidecar, accessEntries, constantEntries);
+    }
+
+    // Resolves a TON's PT: a single IdentCon-fed operand (no chain, unlike IN) that's either an
+    // ordinary tag (AccessNode) or a literal time constant (ConstantAccessNode) — both confirmed
+    // real, 2026-07-11 (FB MotorDOL / FC ControlDelays respectively).
+    private static (Expr Expr, TimerPresetSidecar Sidecar) ResolvePreset(
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int tonUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds,
+        List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries)
+    {
+        var wire = RequireWireAt(wiresByPort, (tonUId, "PT"), networkNumber);
+        var identCon = wire.Endpoints.FirstOrDefault(e => e.Kind == EndpointKind.IdentCon)
+            ?? throw new NonReducibleNetworkException(
+                $"Network {networkNumber}: PT wire {wire.UId} for TON UId={tonUId} has no IdentCon source.");
+
+        visitedWireUIds.Add(wire.UId);
+
+        if (accessByUId.TryGetValue(identCon.UId!.Value, out var access))
+        {
+            AddAccessEntry(accessEntries, new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope));
+            return (new Expr.TagRef(access.DottedPath), new TimerPresetSidecar.TagPreset(access.UId, wire.UId));
+        }
+
+        if (constantsByUId.TryGetValue(identCon.UId!.Value, out var constant))
+        {
+            if (!constantEntries.Any(e => e.UId == constant.UId))
+            {
+                constantEntries.Add(new SidecarConstantEntry(constant.Value, constant.UId));
+            }
+
+            return (new Expr.TimeLiteral(constant.Value), new TimerPresetSidecar.LiteralPreset(constant.UId, wire.UId));
+        }
+
+        throw new NonReducibleNetworkException(
+            $"Network {networkNumber}: PT wire {wire.UId} for TON UId={tonUId} references unknown Access/Constant UId={identCon.UId}.");
+    }
+
+    // ET is an optional output port — confirmed real, 2026-07-11: entirely absent from <Wires>,
+    // or wired to OpenCon (FB MotorDOL). A wire to any other endpoint is refused — no live
+    // example of a *used* ET exists yet (unlike Q, which TraceChain now handles as a genuine
+    // chain leaf when wired directly to a consumer — see ChainStepSidecar.TimerOutputStep).
+    private static OpenConnectionSidecar? ResolveOptionalOutputPort(
+        Dictionary<(int, string), WireNode> wiresByPort,
+        int tonUId,
+        string port,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        if (!wiresByPort.TryGetValue((tonUId, port), out var wire))
+        {
+            return null;
+        }
+
+        var others = wire.Endpoints
+            .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == tonUId && e.PortName == port))
+            .ToList();
+
+        if (others.Count != 1 || others[0].Kind != EndpointKind.OpenCon)
+        {
+            throw new UnsupportedConstructException(
+                $"Network {networkNumber}: TON UId={tonUId}'s '{port}' port is wired to a consumer — only an unconnected " +
+                $"(absent or OpenCon) '{port}' is supported this phase; reading a TON's output back only works via an " +
+                "ordinary Access elsewhere.");
+        }
+
+        visitedWireUIds.Add(wire.UId);
+        return new OpenConnectionSidecar(wire.UId, others[0].UId!.Value);
+    }
+
+    private static void AddAccessEntry(List<SidecarAccessEntry> entries, SidecarAccessEntry entry)
+    {
+        if (!entries.Any(e => e.TagPath == entry.TagPath && e.UId == entry.UId))
+        {
+            entries.Add(entry);
+        }
+    }
+
+    // Shared backward trace from a starting port (a Coil's "in", or a TON's "IN") to the rail —
+    // one position at a time, rail-to-coil order once reversed. Each position is a single
+    // Contact (chain continues further upstream), an OR-merge (Part Name="O"), or an
+    // already-defined TON's Q output — the last confirmed real, 2026-07-11, `FC TimerSample`
+    // (purpose-built by the project owner to close this gap: Q wired directly into a plain
+    // Coil). OR-merge and TON-via-Q are both always rail-facing/terminal — nothing further
+    // upstream to trace within *this* chain. When a TON's Q terminates the chain, the chain
+    // never touches Powerrail at all, so RailWireUId comes back null (see TimerOutputStep's doc
+    // comment). Used identically by ReduceOneChain and ReduceTimer: a TON's IN is reduced
+    // exactly the same way a Coil's condition is, just terminating at a different port name.
+    private static (Expr Condition, List<ChainStepSidecar> Steps, int? RailWireUId) TraceChain(
+        FlgNetwork network,
+        (int UId, string Port) startPort,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds,
+        List<SidecarAccessEntry> accessEntries)
+    {
         var steps = new List<ChainStepSidecar>();
         var stepExprs = new List<Expr>();
-        var currentInPort = (coil.UId, "in");
-        var railWireUId = -1;
+        var currentInPort = startPort;
+        int? railWireUId = null;
 
         while (true)
         {
-            var wire = RequireWireAt(wiresByPort, currentInPort, networkNumber);
+            var wire = RequireWireAt(wiresByPort, (currentInPort.UId, currentInPort.Port), networkNumber);
 
             if (wire.Endpoints.Any(e => e.Kind == EndpointKind.Powerrail))
             {
@@ -107,7 +288,7 @@ public static class GraphReducer
             }
 
             var others = wire.Endpoints
-                .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == currentInPort.Item1 && e.PortName == currentInPort.Item2))
+                .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == currentInPort.UId && e.PortName == currentInPort.Port))
                 .ToList();
 
             if (others.Count != 1)
@@ -117,27 +298,49 @@ public static class GraphReducer
             }
 
             var other = others[0];
-            if (other.Kind != EndpointKind.NameCon || other.PortName != "out")
+            if (other.Kind != EndpointKind.NameCon)
             {
                 throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: wire {wire.UId} feeds {currentInPort} from an unsupported endpoint ({other.Kind}).");
+                    $"Network {networkNumber}: wire {wire.UId} feeds ({currentInPort.UId}, {currentInPort.Port}) from an unsupported endpoint ({other.Kind}).");
             }
 
             var upstreamPart = network.Parts.FirstOrDefault(p => p.UId == other.UId)
                 ?? throw new NonReducibleNetworkException(
                     $"Network {networkNumber}: wire {wire.UId} references unknown part UId={other.UId}.");
 
+            // Each upstream part kind has its own "out"-equivalent port name: Contact/O use
+            // "out"; a TON's only confirmed real upstream leaf is "Q" ("ET" has no live example
+            // as a consumed leaf, refused like any other unrecognized shape).
+            var expectedPort = upstreamPart.Name switch
+            {
+                "Contact" or "O" => "out",
+                "TON" => "Q",
+                _ => null,
+            };
+
+            if (expectedPort is null || other.PortName != expectedPort)
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: wire {wire.UId} feeds ({currentInPort.UId}, {currentInPort.Port}) from " +
+                    $"'{upstreamPart.Name}' via port '{other.PortName}' — outside this slice.");
+            }
+
             visitedWireUIds.Add(wire.UId);
             var outgoingWireUId = wire.UId;
+
+            if (upstreamPart.Name == "TON")
+            {
+                var instancePath = string.Join('.', upstreamPart.Instance!.ComponentPath);
+                steps.Insert(0, new ChainStepSidecar.TimerOutputStep(upstreamPart.UId, "Q", outgoingWireUId));
+                stepExprs.Insert(0, new Expr.TagRef($"{instancePath}.Q"));
+                break;
+            }
 
             if (upstreamPart.Name == "Contact")
             {
                 var (tag, operandWireUId) = ResolveOperand(wiresByPort, accessByUId, upstreamPart.UId, networkNumber);
                 visitedWireUIds.Add(operandWireUId);
-                if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
-                {
-                    accessEntries.Add(tag);
-                }
+                AddAccessEntry(accessEntries, tag);
 
                 Expr operandExpr = upstreamPart.Negated ? new Expr.Not(new Expr.TagRef(tag.TagPath)) : new Expr.TagRef(tag.TagPath);
                 steps.Insert(0, new ChainStepSidecar.ContactStep(upstreamPart.UId, tag.UId, operandWireUId, upstreamPart.Negated, outgoingWireUId));
@@ -157,27 +360,17 @@ public static class GraphReducer
             }
 
             throw new NonReducibleNetworkException(
-                $"Network {networkNumber}: upstream of UId={currentInPort.Item1} is a '{upstreamPart.Name}', not a Contact — outside this slice.");
-        }
-
-        var (coilTag, coilOperandWireUId) = ResolveOperand(wiresByPort, accessByUId, coil.UId, networkNumber);
-        visitedWireUIds.Add(coilOperandWireUId);
-        if (!accessEntries.Any(e => e.TagPath == coilTag.TagPath && e.UId == coilTag.UId))
-        {
-            accessEntries.Add(coilTag);
+                $"Network {networkNumber}: upstream of ({currentInPort.UId}, {currentInPort.Port}) is a '{upstreamPart.Name}', not a Contact — outside this slice.");
         }
 
         Expr condition = stepExprs.Count switch
         {
-            0 => new Expr.And(Array.Empty<Expr>()), // coil wired directly to the rail — always on
+            0 => new Expr.And(Array.Empty<Expr>()), // wired directly to the rail — always on
             1 => stepExprs[0],
             _ => new Expr.And(stepExprs),
         };
 
-        var assignment = new CoilAssignment(coilTag.TagPath, condition);
-        var sidecar = new CoilAssignmentSidecar(railWireUId, steps, coil.UId, coilTag.UId, coilOperandWireUId);
-
-        return (assignment, sidecar, accessEntries);
+        return (condition, steps, railWireUId);
     }
 
     // An OR-merge is always rail-facing (confirmed real, 2026-07-10): every branch resolves to
@@ -289,7 +482,7 @@ public static class GraphReducer
             : throw new NonReducibleNetworkException(
                 $"Network {networkNumber}: operand wire {wire.UId} references unknown Access UId={identCon.UId}.");
 
-        return (new SidecarAccessEntry(access.DottedPath, access.UId), wire.UId);
+        return (new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope), wire.UId);
     }
 
     private static Dictionary<(int, string), WireNode> BuildPortIndex(IReadOnlyList<WireNode> wires)

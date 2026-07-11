@@ -1,0 +1,19 @@
+DB DB_Timers
+  ROOTID 0
+  NUMBER 1
+  MEMBERS
+    SampleTimer0 : TON_TIME VERSION 1.0
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    SampleTimer1 : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    SampleTimer2 : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

@@ -94,11 +94,50 @@ The final re-export/comparison step of that live run didn't complete — blocked
 "inconsistent block" state on that scratch project unrelated to this converter (confirmed by
 reproducing it on an untouched block); see `docs/notes/openness-quirks.md`.
 
-Still open (not yet needed by this slice's fixtures, not guessed at): exact source attribute
-for negated contacts, exact `Part Name` for an AND-merge, and full instance-DB / structured-member
-support (see below — the shape is understood, just deferred). `DocumentInfo` (product/version
-provenance in the wrapper) is confirmed present in real full-project exports but not required —
-our own writer never emits one and `Import()` has never complained.
+Still open (not yet needed by this slice's fixtures, not guessed at): exact `Part Name` for an
+AND-merge. `DocumentInfo` (product/version provenance in the wrapper) is confirmed present in
+real full-project exports but not required — our own writer never emits one and `Import()` has
+never complained.
+
+## TON support (S1 item 8, 2026-07-11)
+
+`Part Name="TON"` — grounded against three real exports: `FB MotorDOL` (`Instance
+Scope="LocalVariable"`, a multi-instance timer living inside the calling FB's own static
+interface — the same `TON_TIME` structured-member shape Phase B built DB-side support for),
+`FC ControlDelays` (`Instance Scope="GlobalVariable"`, a standalone instance DB named directly by
+a single `<Component>`), and `FC TimerSample` (purpose-built by the project owner in the
+reference project specifically to close this out: `Instance Scope="GlobalVariable"` with a
+**two**-component path — `DB_Timers.SampleTimerN`, a named member inside a shared standalone-timer
+DB — and `Q` wired *directly* into a plain `Coil`). All scopes/shapes are modeled via the existing
+`AccessNode` (not a new type) — the `<Instance>` element carries exactly the same data shape
+(scope + component path) as an ordinary `<Access>`, just without the `<Symbol>` wrapper; this also
+means a future FC/FB call's own instance argument can reuse it.
+
+- `IN` reduces via the same chain-trace mechanism as a Coil's condition (refactored into a
+  shared `TraceChain`), terminating at the TON's own `IN` port instead of a Coil's `in`.
+- `PT` is a single IdentCon-fed operand — either a tag (`GlobalVariable`/`LocalVariable`,
+  confirmed both real) or a literal time constant via a new `Access Scope="TypedConstant"`
+  (`<Constant><ConstantValue>T#100MS</ConstantValue></Constant>`, no `<ConstantType>` child —
+  distinct from the array-index `LiteralConstant` scope, which always has one).
+- `Q`/`ET` are optional output ports. Confirmed real, all handled: entirely absent from `<Wires>`
+  (`FC ControlDelays`' `Q`, read back via an *ordinary* Access elsewhere — already-existing
+  Contact/Access machinery, no new mechanism needed); wired to `OpenCon` (`FB MotorDOL`'s `ET`);
+  and wired *directly* into a downstream part — `FC TimerSample`'s `Q` feeding a plain `Coil`,
+  modeled as `ChainStepSidecar.TimerOutputStep` (always chain-terminal, like an OR-merge, except
+  it never touches Powerrail — the owning chain's `RailWireUId` is nullable, `none` in this case).
+  `ET` wired directly to a consumer has no live example and is still refused.
+- **Fixed alongside this:** `FlgNetBuilder` previously rebuilt every ordinary tag Access as
+  hardcoded `Scope="GlobalVariable"`, harmless until now (every tag seen so far happened to be
+  GlobalVariable) but wrong in general — `SidecarAccessEntry` now carries the real source scope.
+
+**Live-round-trip-proven, 2026-07-11.** `FC TimerSample` (3 networks, including one where the
+`IN` reads back two other TONs' `Q` outputs — chained timers, unprompted but exercised for free)
+ran the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle
+against the reference project and passed. This also surfaced and fixed a real golden-harness bug
+(TIA reassigns `Access` UIds on its own import/compile cycle, same as the already-known Wire UId
+volatility) — see `tests/golden/README.md`. All instance scopes/shapes, both PT kinds, and both
+`Q`-consumption paths are covered by unit tests built directly from the real exports (fixtures,
+not guessed) — see `Converter.Tests/TonTests.cs`.
 
 ## DB support
 

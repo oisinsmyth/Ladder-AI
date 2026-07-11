@@ -45,12 +45,39 @@ public static class FlgNetWriter
                 new XElement(ns + "Symbol", componentElements)));
         }
 
+        foreach (var constant in network.Constants)
+        {
+            partsElement.Add(new XElement(
+                ns + "Access",
+                new XAttribute("Scope", "TypedConstant"),
+                new XAttribute("UId", constant.UId),
+                new XElement(ns + "Constant", new XElement(ns + "ConstantValue", constant.Value))));
+        }
+
         foreach (var part in network.Parts)
         {
-            var partElement = new XElement(ns + "Part", new XAttribute("Name", part.Name), new XAttribute("UId", part.UId));
+            var partElement = new XElement(ns + "Part", new XAttribute("Name", part.Name));
+            if (part.TonVersion is not null)
+            {
+                partElement.Add(new XAttribute("Version", part.TonVersion));
+            }
+
+            partElement.Add(new XAttribute("UId", part.UId));
+
             if (part.Negated)
             {
                 partElement.Add(new XElement(ns + "Negated", new XAttribute("Name", "operand")));
+            }
+
+            if (part.Instance is not null)
+            {
+                var instance = part.Instance;
+                var instanceComponents = instance.ComponentPath.Select(c => new XElement(ns + "Component", new XAttribute("Name", c)));
+                partElement.Add(new XElement(
+                    ns + "Instance",
+                    new XAttribute("Scope", instance.Scope),
+                    new XAttribute("UId", instance.UId),
+                    instanceComponents));
             }
 
             if (part.Cardinality is not null)
@@ -60,6 +87,15 @@ public static class FlgNetWriter
                     new XAttribute("Name", "Card"),
                     new XAttribute("Type", "Cardinality"),
                     part.Cardinality.Value));
+            }
+
+            if (part.TimeType is not null)
+            {
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", "time_type"),
+                    new XAttribute("Type", "Type"),
+                    part.TimeType));
             }
 
             partsElement.Add(partElement);

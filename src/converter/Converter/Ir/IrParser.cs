@@ -151,6 +151,23 @@ public static partial class IrParser
             return new IrNetwork(number, title, Array.Empty<CoilAssignment>());
         }
 
+        // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
+        // order for self-stability.
+        var timers = new List<TimerBinding>();
+        while (i < lines.Length && lines[i].StartsWith("  TON(", StringComparison.Ordinal))
+        {
+            var tonMatch = TonLineRegex().Match(lines[i]);
+            if (!tonMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  TON(<path>, IN := <expr>, PT := <expr>)', got: '{lines[i]}'");
+            }
+
+            var inExpr = ParseExpr(tonMatch.Groups["in"].Value);
+            var ptExpr = ParseExprTerm(tonMatch.Groups["pt"].Value);
+            timers.Add(new TimerBinding(tonMatch.Groups["path"].Value, inExpr, ptExpr));
+            i++;
+        }
+
         var assignments = new List<CoilAssignment>();
         while (i < lines.Length && lines[i].StartsWith("  COIL ", StringComparison.Ordinal))
         {
@@ -164,12 +181,12 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0)
+        if (assignments.Count == 0 && timers.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL assignments and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON statements and isn't marked [empty].");
         }
 
-        return new IrNetwork(number, title, assignments);
+        return new IrNetwork(number, title, assignments, timers);
     }
 
     private static Expr ParseExpr(string text)
@@ -203,6 +220,14 @@ public static partial class IrParser
             return new Expr.Not(ParseExprTerm(text["NOT ".Length..]));
         }
 
+        // A time literal (e.g. "T#100MS") is recognized by its "T#" prefix — the same convention
+        // already used for DB StartValues — rather than by consulting the sidecar, so the IR text
+        // alone stays unambiguous to a reader. Confirmed real, 2026-07-11 (FB MotorDOL's TON PT).
+        if (text.StartsWith("T#", StringComparison.Ordinal))
+        {
+            return new Expr.TimeLiteral(text);
+        }
+
         return new Expr.TagRef(text);
     }
 
@@ -233,8 +258,27 @@ public static partial class IrParser
                 throw new IrFormatException($"Malformed sidecar access line: '{lines[i]}'");
             }
 
-            accessEntries.Add(new SidecarAccessEntry(match.Groups["path"].Value, int.Parse(match.Groups["uid"].Value)));
+            accessEntries.Add(new SidecarAccessEntry(match.Groups["path"].Value, int.Parse(match.Groups["uid"].Value), match.Groups["scope"].Value));
             i++;
+        }
+
+        var constantEntries = new List<SidecarConstantEntry>();
+        while (i < lines.Length && lines[i].StartsWith("  constant ", StringComparison.Ordinal))
+        {
+            var match = SidecarConstantLineRegex().Match(lines[i]);
+            if (!match.Success)
+            {
+                throw new IrFormatException($"Malformed sidecar constant line: '{lines[i]}'");
+            }
+
+            constantEntries.Add(new SidecarConstantEntry(match.Groups["value"].Value, int.Parse(match.Groups["uid"].Value)));
+            i++;
+        }
+
+        var timers = new List<TimerBindingSidecar>();
+        while (i < lines.Length && TimerHeaderRegex().IsMatch(lines[i]))
+        {
+            timers.Add(ParseTimerSidecar(lines, ref i, number));
         }
 
         var assignments = new List<CoilAssignmentSidecar>();
@@ -244,10 +288,10 @@ public static partial class IrParser
 
             if (i >= lines.Length || !lines[i].StartsWith("    rail = ", StringComparison.Ordinal))
             {
-                throw new IrFormatException($"Expected '    rail = <uid>' in SIDECAR for network {number}.");
+                throw new IrFormatException($"Expected '    rail = <uid|none>' in SIDECAR for network {number}.");
             }
 
-            var railWireUId = int.Parse(lines[i]["    rail = ".Length..].Trim());
+            var railWireUId = ParseRail(lines[i]["    rail = ".Length..].Trim());
             i++;
 
             var steps = new List<ChainStepSidecar>();
@@ -285,17 +329,73 @@ public static partial class IrParser
             assignments.Add(new CoilAssignmentSidecar(railWireUId, steps, coilUId, coilOperandAccessUId, coilOperandWireUId));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments);
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers);
+    }
+
+    private static TimerBindingSidecar ParseTimerSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  timer <n>" header — index itself isn't needed, position in the list is enough.
+
+        var tonPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    tonpartuid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var timeType = RequirePrefixedLine(lines, ref i, "    timetype = ");
+        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, "    ", $"step {s}"));
+            s++;
+        }
+
+        if (i >= lines.Length)
+        {
+            throw new IrFormatException($"Expected a 'preset' line in SIDECAR for network {networkNumber}'s timer.");
+        }
+
+        TimerPresetSidecar preset;
+        if (lines[i].StartsWith("    preset tag = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    preset tag = ".Length..].Split(' ');
+            preset = new TimerPresetSidecar.TagPreset(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+        else if (lines[i].StartsWith("    preset literal = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    preset literal = ".Length..].Split(' ');
+            preset = new TimerPresetSidecar.LiteralPreset(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+        else
+        {
+            throw new IrFormatException($"Expected '    preset tag = <uid> <wire>' or '    preset literal = <uid> <wire>', got: '{lines[i]}'");
+        }
+
+        OpenConnectionSidecar? et = null;
+        if (i < lines.Length && lines[i].StartsWith("    et = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    et = ".Length..].Split(' ');
+            et = new OpenConnectionSidecar(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+
+        return new TimerBindingSidecar(
+            tonPartUId, version, timeType, instanceUId, instanceScope, instancePath, railWireUId, steps, preset, et);
     }
 
     private static bool IsStepHeader(string line, string indent, string label) =>
-        line == indent + label + " contact" || line == indent + label + " or";
+        line == indent + label + " contact" || line == indent + label + " or" || line == indent + label + " timeroutput";
 
     private static ChainStepSidecar ParseStep(string[] lines, ref int i, string indent, string label)
     {
         var header = RequireLine(lines, ref i);
         var contactHeader = indent + label + " contact";
         var orHeader = indent + label + " or";
+        var timerOutputHeader = indent + label + " timeroutput";
         if (header == contactHeader)
         {
             return ParseContactStepBody(lines, ref i, indent + "  ");
@@ -306,7 +406,26 @@ public static partial class IrParser
             return ParseOrStepBody(lines, ref i, indent + "  ");
         }
 
-        throw new IrFormatException($"Expected '{contactHeader}' or '{orHeader}', got: '{header}'");
+        if (header == timerOutputHeader)
+        {
+            return ParseTimerOutputStepBody(lines, ref i, indent + "  ");
+        }
+
+        throw new IrFormatException($"Expected '{contactHeader}', '{orHeader}', or '{timerOutputHeader}', got: '{header}'");
+    }
+
+    private static ChainStepSidecar.TimerOutputStep ParseTimerOutputStepBody(string[] lines, ref int i, string indent)
+    {
+        var tonPartUId = int.Parse(RequirePrefixedLine(lines, ref i, indent + "tonpartuid = "));
+        var port = RequirePrefixedLine(lines, ref i, indent + "port = ");
+        var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
+        return new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outWire);
+    }
+
+    private static int? ParseRail(string text)
+    {
+        text = text.Trim();
+        return text == "none" ? null : int.Parse(text);
     }
 
     private static ChainStepSidecar.ContactStep ParseContactStepBody(string[] lines, ref int i, string indent)
@@ -389,11 +508,20 @@ public static partial class IrParser
     [GeneratedRegex(@"^  COIL (?<tag>\S+) := (?<expr>.+)$")]
     private static partial Regex CoilLineRegex();
 
+    [GeneratedRegex(@"^  TON\((?<path>[^,]+), IN := (?<in>.+), PT := (?<pt>.+)\)$")]
+    private static partial Regex TonLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
-    [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+)$")]
+    [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+) (?<scope>\S+)$")]
     private static partial Regex SidecarAccessLineRegex();
+
+    [GeneratedRegex(@"^  constant (?<value>\S+) = (?<uid>\d+)$")]
+    private static partial Regex SidecarConstantLineRegex();
+
+    [GeneratedRegex(@"^  timer (?<index>\d+)$")]
+    private static partial Regex TimerHeaderRegex();
 
     [GeneratedRegex(@"^  assignment (?<index>\d+)$")]
     private static partial Regex AssignmentHeaderRegex();

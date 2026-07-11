@@ -377,7 +377,110 @@ confirmed still green), 11 golden-harness tests. Phase B is functionally complet
 documented as such.
 
 Still deferred: reference-by-name for structured members (needs real UDT/`PlcType` export,
-`ir/SPEC.md`'s explicit "not now" — revisit only as its own deliberate phase); TON/MOVE/
-comparisons/block calls as first-class LAD instructions (still Contact/Coil/OR-merge scope on
-the network-body side); a multi-contact OR-merge branch or a nested OR-merge (real-but-
-unconfirmed, still hard errors).
+`ir/SPEC.md`'s explicit "not now" — revisit only as its own deliberate phase); MOVE/comparisons/
+block calls as first-class LAD instructions (TON landed separately, see below; still Contact/
+Coil/OR-merge/TON scope on the network-body side otherwise); a multi-contact OR-merge branch or
+a nested OR-merge (real-but-unconfirmed, still hard errors).
+
+### S1 item 8 (TON support, both instance scopes), 2026-07-11
+
+Grounded against two real exports, at the user's specific request to confirm both a
+`GlobalVariable` and a `LocalVariable` TON instance before building anything (the site convention
+C-407 distinction between multi-instance timers-in-an-equipment-FB and standalone timers-in-
+`DB_Timers`): `FB MotorDOL` (`Instance Scope="LocalVariable"`, its own `GeneralDelayTimer1` — a
+`TON_TIME`-typed structured member, the same shape Phase B already parses/writes on the DB side)
+and `FC ControlDelays` (`Instance Scope="GlobalVariable"`, a single `<Component>` naming its own
+dedicated instance DB directly, `GeneralEnableDelay` — not a two-component `DB_Timers.Member`
+path, resolving that open question). Both scopes are modeled by reusing `AccessNode` rather than
+inventing a new type, since the `<Instance>` element carries exactly the same scope+path shape as
+an ordinary `<Access>` — deliberately, so a future FC/FB call's instance argument can reuse it too.
+
+IR design decision, made with the user before writing code (a deviation from `ir/SPEC.md`'s
+original `timer := TON(...)` sketch): **no bound IR-level name.** TIA has no "timer name" concept
+beyond the instance reference itself, so inventing one would be a synthetic identifier this
+project avoids everywhere else. A TON statement is `TON(<instance path>, IN := <expr>,
+PT := <expr>)`; later references to its output reuse the instance's own dotted path as a plain
+tag reference (e.g. `GeneralEnableDelay.Q`) — not a new IR construct, since the only grounded way
+to read a TON's output back is via an *ordinary* Access elsewhere in the source (confirmed real,
+`FC ControlDelays`), which looks exactly like this in the source XML too.
+
+Real wrinkle found during grounding, changed a design assumption: `FC ControlDelays`' TON has
+**no wire at all** on its own `Q` port — not even `OpenCon`, simply absent from `<Wires>`.
+`GraphReducer`'s `ResolveOptionalOutputPort` treats an entirely absent port the same as an
+`OpenCon`-wired one (both valid); only a `Q`/`ET` wired to a real consumer is refused. That
+refusal is deliberate, not a gap: the only real example of direct `Q`-to-consumer wiring
+(`FB MotorDOL`) feeds an `RCoil`, itself out of scope, so it can't be proven end to end regardless
+— `ChainStepSidecar`'s doc comment in `Model.cs` records this as a considered, not missed, cut.
+
+Also new: `Access Scope="TypedConstant"` for a TON's `PT` fed by a literal (`T#100MS`, `FB
+MotorDOL`) — distinct from the array-index `LiteralConstant` scope (no `ConstantType` child).
+`PT` fed by an ordinary `LocalVariable` tag is also confirmed real (`FC ControlDelays`'
+`GeneralDelayMS`, an FC-local parameter).
+
+**Real, pre-existing bug found and fixed along the way, unrelated to TON specifically but exposed
+by grounding PT-as-tag:** `FlgNetBuilder` rebuilt every ordinary tag Access as hardcoded
+`Scope="GlobalVariable"`, regardless of the real source scope — harmless until now (every plain
+tag seen in every prior phase happened to be GlobalVariable) but exactly the kind of silent scope
+drift (R-05) this project's discipline exists to prevent. `SidecarAccessEntry` now carries the
+real scope per entry.
+
+12 new converter tests (fixtures built directly from both real exports — `WithTon.xml`,
+`WithTonLocalInstance.xml`, `WithTonAndQReadBack.xml` — plus two hard-error fixtures for the
+unsupported-instance-scope and direct-Q-wiring cases); one obsolete test removed (a prior
+"TON is unsupported" hard-error test, now testing behavior that's deliberately changed). All
+80 converter tests, 68 openness-cli tests, 11 golden-harness tests pass.
+
+**Not yet live-round-trip-proven at the block level** (at the time the above was written). Both
+grounding blocks (`MotorDOL`, `ControlDelays`) also use `Eq`/`Ge`/`Mul`/`Convert`
+(comparisons/Move) elsewhere in the same block — a separate, unbuilt converter capability — and
+`to-ir` requires every network in a block to be in scope (no partial-block conversion), so
+neither converts as a whole. Closed the same day — see below.
+
+### S1 item 8, closed out: `FC TimerSample`, live round trip + a second Normalizer finding, 2026-07-11
+
+Project owner built `FC TimerSample` and `DB_Timers` directly in the reference project
+(`SampleProject`) specifically to close out what the unit tests above couldn't reach — a
+TON-only block, free of comparisons/Move/RCoil. Grounding it surfaced two more real gaps, closed
+the same session:
+
+1. **`Instance Scope="GlobalVariable"` with a *two*-component path**
+   (`DB_Timers.SampleTimerN` — a named member inside a shared standalone-timer DB), not just the
+   single-component case grounded earlier (`FC ControlDelays`, `GeneralEnableDelay`). Needed no
+   code change — `AccessNode`'s component-path parsing was never length-restricted.
+2. **`Q` wired *directly* into a plain `Coil`** (no ordinary Access in between) — the one shape
+   deliberately left unmodeled after `FB MotorDOL`'s only example turned out to feed an
+   out-of-scope `RCoil`. Built `ChainStepSidecar.TimerOutputStep`: `GraphReducer`'s shared
+   `TraceChain` now recognizes an upstream `TON` via its `Q` port as a valid, chain-terminal leaf
+   (parallel to how an OR-merge terminates a chain) — except it never touches Powerrail, so
+   `CoilAssignmentSidecar`/`TimerBindingSidecar`'s `RailWireUId` became nullable (`none` in the
+   IR sidecar text when a chain terminates this way). `FlgNetBuilder` skips rail-wiring entirely
+   for a null `RailWireUId`. The IR text itself needed no new grammar — `GeneralDelayTimer1.Q` reads as
+   an ordinary tag reference whether the source wired it directly or via a separate Access.
+
+`TimerSample` itself needed simplifying first: its original Input/Output/Return parameters hit
+`BlockSourceParser`'s existing (unrelated) hard error for real block parameters — full FC/FB
+interface modeling is a separate, deferred piece tied to general block-call support. Project
+owner replaced them with direct references to two new tag DBs (`TempControlBools`,
+`TempControlDInt`) in TIA, keeping the session scoped to TON specifically.
+
+**Live round trip:** `export → to-ir → to-xml → import → compile --block → re-export →
+Normalizer.AreSemanticallyEquivalent` — **true**, first full live proof for TON (3 networks; the
+third's `IN` reads back *two* other TONs' `Q` outputs via ordinary Access — chained timers,
+exercised for free, not deliberately sought). Surfaced and fixed a real, second Normalizer gap:
+TIA reassigns `Access` element UIds on its own Import()/Compile()/Export() cycle too (previously
+only Wire's own UId was known to be volatile) — `tests/golden/README.md` has the full story,
+including a real bug caught in the fix itself (a document-wide UId→content map collided entries
+across networks, since UId numbering restarts per network — caught by this exact 3-network test,
+a single-network fixture would never have exposed it).
+
+12 new converter tests became 4 more after this (reduce/round-trip/serialize for the direct-`Q`
+case, plus repurposing an obsolete hard-error test into a positive one) — 83 converter tests, 68
+openness-cli tests, 11 golden-harness tests (12 during the live investigation, back to 11 once
+the throwaway verification test was removed) all pass.
+
+**Committed to the reference corpus, same session:** `TimerSample`/`DB_Timers` — the reference
+project's 6th/7th artifacts (`ir/reference/{TimerSample,DB_Timers}.ir`,
+`simatic-ml/reference/{TimerSample,DB_Timers}.xml`). Re-verified end to end against the exact
+committed files (fresh export → to-ir → to-xml → import → compile → re-export →
+`Normalizer.AreSemanticallyEquivalent`) — **true** for both — before committing, not assumed from
+the earlier scratchpad run.

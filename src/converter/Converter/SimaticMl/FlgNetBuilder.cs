@@ -26,31 +26,57 @@ public static class FlgNetBuilder
                 $"records {sidecar.Assignments.Count}.");
         }
 
+        if (network.Timers.Count != sidecar.Timers.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Timers.Count} timer(s) but the sidecar records {sidecar.Timers.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var wires = new List<WireNode>();
         var railEndpointsByWireUId = new Dictionary<int, List<WireEndpoint>>();
+
+        for (var t = 0; t < network.Timers.Count; t++)
+        {
+            var timerSidecar = sidecar.Timers[t];
+            BuildTimer(timerSidecar, parts, wires);
+
+            // RailWireUId is null when the chain's first step is a TimerOutputStep — the IN is
+            // fed directly by another TON's Q, never touches Powerrail, so there's nothing to
+            // wire here at all (confirmed real, 2026-07-11, FC TimerSample's own pattern applied
+            // to IN; not yet seen live but the same mechanism, so handled identically).
+            if (timerSidecar.RailWireUId is int timerRailWireUId)
+            {
+                // Rail-facing endpoints: every first-step Contact/OR-branch uses its own "in"
+                // port (same as a Coil's chain — RailFacingUIds is agnostic to what it's
+                // feeding); only when there are no steps at all is the rail wired straight to
+                // the TON itself, whose port is "IN" (uppercase) — genuinely different from a
+                // Contact's "in", not a typo.
+                var railFacingEndpoints = timerSidecar.Steps.Count > 0
+                    ? RailFacingUIds(timerSidecar.Steps[0]).Select(uid => (UId: uid, Port: "in"))
+                    : new[] { (UId: timerSidecar.TonPartUId, Port: "IN") };
+                AddRailEndpoints(railEndpointsByWireUId, timerRailWireUId, railFacingEndpoints);
+            }
+        }
 
         for (var a = 0; a < network.Assignments.Count; a++)
         {
             var assignmentSidecar = sidecar.Assignments[a];
             BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, parts, wires);
 
-            // The rail-facing UIds for this chain: the single first step's contact if it's a
-            // plain Contact, every branch's contact if it's an OR-merge (all branches share the
-            // rail, confirmed real 2026-07-10), or the coil itself if the chain has no steps.
-            var railFacingUIds = assignmentSidecar.Steps.Count > 0
-                ? RailFacingUIds(assignmentSidecar.Steps[0])
-                : new[] { assignmentSidecar.CoilUId };
-
-            if (!railEndpointsByWireUId.TryGetValue(assignmentSidecar.RailWireUId, out var endpoints))
+            // RailWireUId is null when the chain's first step is a TimerOutputStep — the coil is
+            // fed directly by a TON's Q, never touches Powerrail (confirmed real, 2026-07-11,
+            // FC TimerSample).
+            if (assignmentSidecar.RailWireUId is int coilRailWireUId)
             {
-                endpoints = new List<WireEndpoint>();
-                railEndpointsByWireUId[assignmentSidecar.RailWireUId] = endpoints;
-            }
-
-            foreach (var uid in railFacingUIds)
-            {
-                endpoints.Add(new WireEndpoint(EndpointKind.NameCon, uid, "in"));
+                // The rail-facing UIds for this chain: the single first step's contact if it's a
+                // plain Contact, every branch's contact if it's an OR-merge (all branches share
+                // the rail, confirmed real 2026-07-10), or the coil itself if the chain has no
+                // steps — a Coil's own port is "in" (lowercase) either way, unlike a TON's "IN".
+                var railFacingEndpoints = assignmentSidecar.Steps.Count > 0
+                    ? RailFacingUIds(assignmentSidecar.Steps[0]).Select(uid => (UId: uid, Port: "in"))
+                    : new[] { (UId: assignmentSidecar.CoilUId, Port: "in") };
+                AddRailEndpoints(railEndpointsByWireUId, coilRailWireUId, railFacingEndpoints);
             }
         }
 
@@ -61,11 +87,80 @@ public static class FlgNetBuilder
             wires.Add(new WireNode(railWireUId, allEndpoints));
         }
 
+        // Scope is carried per-entry (not assumed) since 2026-07-11 — a plain tag Access can be
+        // LocalVariable-scoped too (an FC/FB's own interface parameter, confirmed real grounding
+        // TON's PT against FC ControlDelays), not only GlobalVariable.
         var accessNodes = sidecar.AccessUIds
-            .Select(entry => AccessNode.FromDottedPath(entry.UId, "GlobalVariable", entry.TagPath))
+            .Select(entry => AccessNode.FromDottedPath(entry.UId, entry.Scope, entry.TagPath))
+            .ToList();
+        var constants = sidecar.ConstantUIds
+            .Select(entry => new ConstantAccessNode(entry.UId, entry.Value))
             .ToList();
 
-        return new FlgNetwork(accessNodes, parts, wires);
+        return new FlgNetwork(accessNodes, parts, wires, constants);
+    }
+
+    private static void AddRailEndpoints(
+        Dictionary<int, List<WireEndpoint>> railEndpointsByWireUId, int railWireUId, IEnumerable<(int UId, string Port)> railFacingEndpoints)
+    {
+        if (!railEndpointsByWireUId.TryGetValue(railWireUId, out var endpoints))
+        {
+            endpoints = new List<WireEndpoint>();
+            railEndpointsByWireUId[railWireUId] = endpoints;
+        }
+
+        foreach (var (uid, port) in railFacingEndpoints)
+        {
+            endpoints.Add(new WireEndpoint(EndpointKind.NameCon, uid, port));
+        }
+    }
+
+    // Builds a TON Part, its IN-chain (identical shape/mechanism to BuildOneChain's chain, just
+    // terminating at "IN" instead of a coil's "in" — and, like a Coil's chain, may have a null
+    // RailWireUId if fed directly by another TON's Q), its PT wire (tag or literal preset), and
+    // its ET wire if the sidecar recorded one (OpenCon only).
+    private static void BuildTimer(TimerBindingSidecar sidecar, List<PartNode> parts, List<WireNode> wires)
+    {
+        for (var i = 0; i < sidecar.Steps.Count; i++)
+        {
+            var nextTarget = i + 1 < sidecar.Steps.Count
+                ? new WireEndpoint(EndpointKind.NameCon, EntryUId(sidecar.Steps[i + 1]), "in")
+                : new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "IN");
+
+            BuildStep(sidecar.Steps[i], nextTarget, parts, wires);
+        }
+
+        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        parts.Add(new PartNode(sidecar.TonPartUId, "TON", TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
+
+        switch (sidecar.Preset)
+        {
+            case TimerPresetSidecar.TagPreset tagPreset:
+                wires.Add(new WireNode(tagPreset.WireUId, new[]
+                {
+                    new WireEndpoint(EndpointKind.IdentCon, tagPreset.AccessUId, null),
+                    new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "PT"),
+                }));
+                break;
+            case TimerPresetSidecar.LiteralPreset literalPreset:
+                wires.Add(new WireNode(literalPreset.WireUId, new[]
+                {
+                    new WireEndpoint(EndpointKind.IdentCon, literalPreset.ConstantUId, null),
+                    new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "PT"),
+                }));
+                break;
+            default:
+                throw new IrFormatException($"Unsupported TON preset kind: {sidecar.Preset.GetType().Name}");
+        }
+
+        if (sidecar.Et is { } et)
+        {
+            wires.Add(new WireNode(et.WireUId, new[]
+            {
+                new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "ET"),
+                new WireEndpoint(EndpointKind.OpenCon, et.OpenConUId, null),
+            }));
+        }
     }
 
     private static void BuildOneChain(
@@ -148,19 +243,31 @@ public static class FlgNetBuilder
                 }));
                 break;
 
+            case ChainStepSidecar.TimerOutputStep timerOutput:
+                // No Part/Access to build — the TON Part itself is built once by BuildTimer;
+                // this just rewires its already-emitted "Q" port to whatever's next. Confirmed
+                // real, 2026-07-11, FC TimerSample.
+                wires.Add(new WireNode(timerOutput.OutgoingWireUId, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, timerOutput.Port),
+                    outgoingTarget,
+                }));
+                break;
+
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
     }
 
     // The UId a following step wires its "in" to. Only ever called with a step at index >= 1;
-    // an OrStep is always rail-facing (steps[0] only, confirmed real 2026-07-10), so in practice
+    // an OrStep/TimerOutputStep is always rail-facing/terminal (steps[0] only), so in practice
     // this only ever sees ContactStep — handled generally anyway since nothing about the shape
     // rules it out for a future position other than "first".
     private static int EntryUId(ChainStepSidecar step) => step switch
     {
         ChainStepSidecar.ContactStep contact => contact.ContactUId,
         ChainStepSidecar.OrStep orStep => orStep.OrPartUId,
+        ChainStepSidecar.TimerOutputStep timerOutput => timerOutput.TonPartUId,
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 
@@ -186,6 +293,7 @@ public static class FlgNetBuilder
     {
         ChainStepSidecar.ContactStep => 1,
         ChainStepSidecar.OrStep orStep => orStep.Branches.Count,
+        ChainStepSidecar.TimerOutputStep => 1,
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 }

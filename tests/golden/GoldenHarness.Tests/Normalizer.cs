@@ -97,24 +97,87 @@ public static class Normalizer
         return XNode.DeepEquals(Strip(original.Root), Strip(reExported.Root));
     }
 
-    public static XElement Strip(XElement element)
+    public static XElement Strip(XElement element) => Strip(element, BuildAccessContentKeyMap(element));
+
+    // An Access element's own UId is volatile too — confirmed real, 2026-07-11 (TON grounding,
+    // FC TimerSample): TIA reassigns Access UIds on its own Import()/Compile()/Export() cycle,
+    // exactly parallel to the already-documented Wire UId finding (docs/notes/openness-quirks.md),
+    // contrary to the earlier assumption that Part/Access UIds stay stable. Unlike Wire, an
+    // Access is *referenced* elsewhere (every <IdentCon>), so a plain strip isn't enough — both
+    // the Access element itself and every IdentCon pointing at it are rewritten to a
+    // content-derived key (Scope+Symbol, or the literal constant value) instead of the raw
+    // number, so two documents compare equal regardless of which arbitrary number TIA assigned
+    // to which Access. Built per-document (each call to the public single-argument Strip), not
+    // shared across both sides being compared — nothing requires the two maps to agree on
+    // numbering, only that each document's own numbering resolves to the same content keys.
+    private static Dictionary<string, string> BuildAccessContentKeyMap(XElement root)
     {
-        var attributes = ElementsWithVolatileId.TryGetValue(element.Name.LocalName, out var volatileAttrName)
-            ? element.Attributes().Where(a => a.Name.LocalName != volatileAttrName)
-            : element.Attributes();
+        var map = new Dictionary<string, string>();
+        foreach (var access in root.DescendantsAndSelf().Where(e => e.Name.LocalName == "Access"))
+        {
+            if ((string?)access.Attribute("UId") is string uid)
+            {
+                map[uid] = AccessContentKey(access);
+            }
+        }
+
+        return map;
+    }
+
+    private static string AccessContentKey(XElement access)
+    {
+        var scope = (string?)access.Attribute("Scope") ?? string.Empty;
+        if (scope == "TypedConstant")
+        {
+            var value = access.Descendants().FirstOrDefault(e => e.Name.LocalName == "ConstantValue")?.Value ?? string.Empty;
+            return $"const:{value}";
+        }
+
+        // The full <Symbol> (component names plus any slice/array modifiers) so two Access
+        // elements only compare equal when truly identical, not just same top-level path.
+        var symbol = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
+        return $"tag:{scope}:{symbol?.ToString(SaveOptions.DisableFormatting)}";
+    }
+
+    private static XElement Strip(XElement element, Dictionary<string, string> accessContentKeyByUId)
+    {
+        // UId numbering restarts at the beginning of every network (each <FlgNet> is its own
+        // numbering scope) — the content-key map must be rebuilt per network too, not flattened
+        // across the whole document, or the same number ("22", "23", ...) reused in a different
+        // network silently clobbers an unrelated entry. Caught live, 2026-07-11, comparing a
+        // real 3-network export (FC TimerSample) — a single-network test fixture would never
+        // have exposed this.
+        if (element.Name.LocalName == "FlgNet")
+        {
+            accessContentKeyByUId = BuildAccessContentKeyMap(element);
+        }
+
+        IEnumerable<XAttribute> attributes;
+        if ((element.Name.LocalName == "Access" || element.Name.LocalName == "IdentCon")
+            && (string?)element.Attribute("UId") is string uid && accessContentKeyByUId.TryGetValue(uid, out var key))
+        {
+            attributes = element.Attributes().Select(a => a.Name.LocalName == "UId" ? new XAttribute("UId", key) : a);
+        }
+        else if (ElementsWithVolatileId.TryGetValue(element.Name.LocalName, out var volatileAttrName))
+        {
+            attributes = element.Attributes().Where(a => a.Name.LocalName != volatileAttrName);
+        }
+        else
+        {
+            attributes = element.Attributes();
+        }
 
         var clone = new XElement(element.Name, attributes);
-        var children = element.Elements().Where(c => !IsVolatile(c)).Select(Strip).ToList();
+        var children = element.Elements().Where(c => !IsVolatile(c)).Select(c => Strip(c, accessContentKeyByUId)).ToList();
 
-        // <Wire> order within <Wires> is not semantically meaningful either (confirmed real,
-        // 2026-07-10, same round-trip that showed Wire UId itself is volatile) — TIA relocates
-        // the shared rail wire earlier in the list on re-export instead of leaving it where
-        // BlockSourceWriter puts it (last). Each wire's own UId is already stripped by this
-        // point (ElementsWithVolatileId), so sort by the wire's remaining content (its endpoints)
-        // for an order- and UId-independent comparison. Deliberately narrow: <Component> order
-        // within <Symbol> (and everything else) still matters positionally and must never be
-        // reordered.
-        if (element.Name.LocalName == "Wires")
+        // <Wire> order within <Wires>, and <Access>/<Part> order within <Parts>, are not
+        // semantically meaningful — confirmed real, 2026-07-10 (Wire) and 2026-07-11 (Parts,
+        // same TON grounding that surfaced the Access-UId finding above): TIA relocates/renumbers
+        // freely, only the topology matters. Each element's own volatile UId is already resolved
+        // by this point, so sort by remaining content for an order-independent comparison.
+        // Deliberately narrow: <Component> order within <Symbol> (and everything else) still
+        // matters positionally and must never be reordered.
+        if (element.Name.LocalName is "Wires" or "Parts")
         {
             children = children.OrderBy(c => c.ToString()).ToList();
         }

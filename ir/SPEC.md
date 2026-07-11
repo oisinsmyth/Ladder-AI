@@ -78,22 +78,53 @@ portability strategy: the table is what makes a future non-Siemens converter pos
 touching the IR or its readers):
 
 ```
-NETWORK 3 "Conveyor Run Permissive"
-  timer := TON(Conveyor1.RunEnableDelay,
-               IN := (Settings.Mode = 2),
-               PT := Settings.RunDelay)
-  COIL Conveyor1.Permissive :=
-    (Sensor1.Ok OR Sensor2.Ok) AND (timer.Q OR Override.Active)
+NETWORK 8 "Run enable delay"
+  TON(RunEnableDelay, IN := Sensor1.Ok, PT := Settings.RunDelay)
+  COIL Conveyor1.Permissive := RunEnableDelay.Q OR Override.Active
 
   CALL FC_Scale(Input := RawValue, Output_Min := 0.0, Output_Max := 100.0, Result => ScaledValue)
 ```
 
+- **TON, confirmed real and built, 2026-07-11 (S1 item 8)** — grounded against `FB MotorDOL`
+  (multi-instance, `Instance Scope="LocalVariable"`) and `FC ControlDelays` (standalone,
+  `Instance Scope="GlobalVariable"`, a single Component naming its own instance DB directly).
+  **No bound IR-level name** (`timer :=`, this doc's original sketch) — project owner's call:
+  TIA has no "timer name" concept beyond the instance reference itself, so inventing one
+  (`timer0`, `timer1`, ...) would be exactly the synthetic-identifier pattern this project avoids
+  elsewhere. A TON statement is `TON(<instance path>, IN := <expr>, PT := <expr>)`; later
+  references to its output reuse the instance's own dotted path as a plain tag reference
+  (`RunEnableDelay.Q` above) — this is not a separate IR construct, and deliberately so: the only
+  grounded way to read a TON's output back is via an *ordinary* Access elsewhere in the source
+  (confirmed real, `FC ControlDelays`), which already looks exactly like this in the source XML
+  too. A TON's `Q`/`ET` wired *directly* into a downstream part (no ordinary Access in between)
+  is a real shape (`FB MotorDOL`) but not modeled — its only real example feeds an `RCoil`,
+  itself out of scope, so it can't be proven end to end yet; the converter refuses this shape
+  clearly rather than guessing. `PT` may be a tag (`GlobalVariable`/`LocalVariable`, same as `IN`)
+  or a literal time constant (`T#100MS`-shaped, a new `Access Scope="TypedConstant"` — distinct
+  from the array-index `LiteralConstant` scope, no `ConstantType` child). Both instance scopes
+  reuse the same `AccessNode` model as an ordinary tag Access (just without the `<Symbol>`
+  wrapper) — deliberately, so a future FC/FB call's own instance argument can reuse the same
+  shape rather than needing a redesign.
 - A stateful instruction's own instance/instance-DB reference is its first positional argument
-  (`Conveyor1.RunEnableDelay` above) — inline at the point of use, matching the source
-  (`<Instance>` element), never a separate declaration elsewhere in the file.
-- A named intermediate result (`timer :=`) is available for later expressions in the same network
-  to reference — this is IR-level convenience, not a source concept; the sidecar maps it back to
-  the real wire UIds it stands for.
+  (`RunEnableDelay` above) — inline at the point of use, matching the source (`<Instance>`
+  element), never a separate declaration elsewhere in the file.
+- **Closed out, 2026-07-11: a TON's `Q` wired *directly* into a downstream part.** Grounded
+  against a purpose-built reference-project block (`FC TimerSample`, built by the project owner
+  specifically to prove this): `Q` feeding a plain `Coil` directly, with no ordinary Access in
+  between — the only prior example (`FB MotorDOL`) fed an out-of-scope `RCoil`, so this couldn't
+  be proven before. The IR text is unaffected (still a plain tag reference, e.g.
+  `GeneralDelayTimer1.Q`) — only the sidecar changes, gaining a `TimerOutputStep` case for this exact
+  wire shape, which is always chain-terminal and never touches Powerrail (that chain's
+  `RailWireUId` is `none`). Also confirmed at the same time: `Instance Scope="GlobalVariable"`
+  with a **two**-component path (`DB_Timers.SampleTimerN` — a named member inside a shared
+  standalone-timer DB), not just the single-component case (`FC ControlDelays`) grounded earlier
+  — both are real, `AccessNode` already handles either without change.
+- **Live-round-trip-proven, 2026-07-11:** `FC TimerSample` (3 networks, chained timers — one
+  network's `IN` reads back two other TONs' `Q` outputs) ran the full `export → to-ir → to-xml →
+  import → compile → re-export → Normalizer` cycle against the reference project and passed.
+  Surfaced a real, separate finding in the golden harness: TIA reassigns `Access` element UIds on
+  its own Import()/Compile()/Export() cycle too, exactly parallel to the already-documented Wire
+  UId volatility — `tests/golden/README.md` has the fix.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,
@@ -237,12 +268,22 @@ re-layout-on-import is good enough to skip storing it, or specific cases need it
 empirical question for the golden-file harness, not decided here (05-architecture.md's open
 question, left open on purpose rather than guessed).
 
-## Open items carried into converter work (S1 items 4–7)
+## Open items carried into converter work (S1 items 4–8)
 
-- Exact source attribute for negated contacts.
 - Exact `Part Name` for an AND-merge (only `O`/OR was directly observed; site convention C-114's
   chained-permissive style may mean AND-merges are rare in practice, similar to the non-reducible
   network case).
-- Instance-DB representation detail (FB reference attribute).
 - Sidecar addressing micro-syntax.
 - How often the explicit-form fallback actually triggers.
+- TON's `ET` wired directly into a downstream part (not via an ordinary Access) — no live example
+  exists; still a hard error. (`Q` wired directly is now modeled and live-proven — see above,
+  `FC TimerSample`.)
+- TONR, `RCoil`/`SCoil` — real, seen alongside TON in both `MotorDOL`/`ControlDelays` grounding
+  exports, still out of scope; not needed once a purpose-built block avoids them (`TimerSample`
+  did).
+- Full FC/FB parameter (Input/Output/InOut) modeling — still deferred, tied to general block-call
+  support. `TimerSample` was simplified in TIA to avoid needing it for TON's own live proof.
+- **Resolved, 2026-07-11:** a full live TIA round-trip for TON. `FC TimerSample`
+  (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
+  the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
+  passed — see `tests/golden/README.md`.

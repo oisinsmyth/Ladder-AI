@@ -10,6 +10,56 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-11
 
+**S1 item 8, closed out: TON live round trip, direct-`Q`-wiring support, a second Normalizer fix**
+
+- Project owner built `FC TimerSample`/`DB_Timers` directly in the reference project
+  specifically to close out TON — a TON-only block, free of the comparisons/Move/RCoil that
+  blocked every prior grounding example from a full live round trip. Confirmed a second real
+  `Instance Scope="GlobalVariable"` shape along the way: a two-component path
+  (`DB_Timers.SampleTimerN`), needing no code change.
+- Built `ChainStepSidecar.TimerOutputStep`: a TON's `Q` wired *directly* into a downstream `Coil`
+  (no ordinary Access in between) — the one shape left unmodeled after `FB MotorDOL`'s only
+  example fed an out-of-scope `RCoil`. Always chain-terminal, like an OR-merge, except it never
+  touches Powerrail — `RailWireUId` is now nullable (`none` in the IR sidecar) for this case.
+- Live round trip passed: `export → to-ir → to-xml → import → compile → re-export →
+  Normalizer.AreSemanticallyEquivalent` — **true**, first full live proof for TON (3 networks,
+  including chained timers — one network's `IN` reads back two other TONs' `Q`, exercised for
+  free). Surfaced and fixed a real, second golden-harness gap: TIA reassigns `Access` element
+  UIds on its own import/compile cycle too (parallel to the already-known Wire UId volatility) —
+  `Normalizer` now resolves Access/IdentCon references by content, scoped per network (a
+  document-wide map would silently collide entries across networks, since UId numbering restarts
+  per network — caught live by this exact 3-network test).
+- Net +3 converter tests versus the entry below (83 total: repurposed an obsolete hard-error test
+  into a positive one, added 4 new). `tests/golden`'s `NormalizerTests` unchanged (11, all still
+  pass) plus the live proof itself.
+- Committed `TimerSample`/`DB_Timers` to the reference corpus (6th/7th artifacts) — re-verified
+  against the exact committed files before committing, not assumed from the earlier scratchpad run.
+
+**S1 item 8: TON support, both instance scopes**
+
+- Added `Part Name="TON"` support, grounded against two real exports at the user's request to
+  confirm both instance scopes before building anything: `FB MotorDOL` (`Instance
+  Scope="LocalVariable"`, multi-instance in the calling FB's own iDB) and `FC ControlDelays`
+  (`Instance Scope="GlobalVariable"`, a standalone instance DB named directly). Both reuse the
+  existing `AccessNode` model rather than a new type, so a future FC/FB call's own instance
+  argument can reuse it too.
+- IR design, agreed with the user before coding: no bound name (`ir/SPEC.md`'s original `timer :=
+  TON(...)` sketch) — TIA has no timer-name concept to draw from, so a TON statement is
+  `TON(<instance path>, IN := <expr>, PT := <expr>)`, and later reads of its output reuse the
+  instance's own dotted path as a plain tag reference (e.g. `GeneralEnableDelay.Q`) — not a new
+  IR construct, since that's exactly how the source itself reads a standalone TON's output back.
+- New `Access Scope="TypedConstant"` for a literal-fed `PT` (`T#100MS`); `Q`/`ET` confirmed valid
+  both entirely unwired and `OpenCon`-wired — a `Q`/`ET` wired directly to a downstream part is a
+  real shape (`FB MotorDOL`, feeding an out-of-scope `RCoil`) but not modeled, since it can't be
+  proven end to end regardless of how much is built for it.
+- Fixed a real, pre-existing bug found while grounding PT-as-tag: `FlgNetBuilder` rebuilt every
+  ordinary tag Access as hardcoded `GlobalVariable`, ignoring the real source scope — harmless
+  until now (every tag seen before was GlobalVariable), now fixed to carry the real scope.
+- 12 new converter tests, 1 obsolete one removed; 80 converter / 68 openness-cli / 11
+  golden-harness tests all pass. Not yet live-round-trip-proven at the block level — both
+  grounding blocks also use comparisons/Move, a separate unbuilt capability, and `to-ir` requires
+  a whole block in scope at once.
+
 **S1 item 7 Phase A: OR-merge + negated contacts, live-proven in the reference project**
 
 - Added `Expr.Not` to the IR (`NOT <tag>` notation) and generalized `GraphReducer`'s backward

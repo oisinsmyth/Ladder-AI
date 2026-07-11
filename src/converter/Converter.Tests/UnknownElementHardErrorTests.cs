@@ -6,15 +6,8 @@ namespace Converter.Tests;
 
 public class UnknownElementHardErrorTests
 {
-    [Fact]
-    public void Parse_NetworkWithTon_ThrowsUnsupportedConstruct_NotSilentPartialResult()
-    {
-        var element = XElement.Load(Path.Combine("Fixtures", "WithTon.xml"));
-
-        var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
-
-        Assert.Contains("TON", ex.Message);
-    }
+    // TON support landed 2026-07-11 (S1 item 8) — see TonTests.cs for its coverage, which now
+    // uses this file's former WithTon.xml fixture as a positive round-trip case instead.
 
     [Fact]
     public void Parse_UnrecognizedAccessScope_ThrowsUnsupportedConstruct()
