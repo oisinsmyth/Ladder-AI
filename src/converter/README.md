@@ -16,10 +16,11 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 
 ## Current scope (walking skeleton)
 
-Deliberately narrow — **Contact/Coil and basic tag references, OR-merge and negated contacts,
-TON, comparisons (Eq/Ge), and MOVE** (S1 items 7–10, through 2026-07-11). No block calls yet.
-Anything outside scope is a hard error (`UnsupportedConstructException`), never a silent
-partial result — hitting that error on a real block is expected at this stage, not a bug.
+Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
+branches) and negated contacts, TON, comparisons (Eq/Ge), and MOVE** (S1 items 7–11, through
+2026-07-12). No block calls yet. Anything outside scope is a hard error
+(`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
+block is expected at this stage, not a bug.
 
 Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boundary approval in
 `docs/13-data-boundary.md`) and handled explicitly, not guessed at:
@@ -68,12 +69,11 @@ Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boun
 - **OR-merge (`Part Name="O"`) and negated contacts (`<Negated Name="operand" />`) are real** —
   grounded 2026-07-11 against `PerimeterSafetyAlarms` (3-way OR of negated contacts) and `GeneralAlarms`
   (33-way OR of plain contacts). An OR-merge is a `Cardinality` `TemplateValue` plus `N` `inK`
-  ports, each fed by exactly one Contact (optionally negated) wired directly to the rail — no
-  branch confirmed real is itself a multi-contact chain, and no OR-merge confirmed real sits
-  behind another element (it always terminates `GraphReducer`'s backward trace, the same way
-  Powerrail itself does). IR notation: `NOT <tag>`, `<a> OR <b> OR NOT <c>` etc., same style as
-  `AND`. A multi-contact branch or a nested OR-merge is refused (`NonReducibleNetworkException`),
-  not guessed at — real-but-unconfirmed shapes.
+  ports, each fed by a branch. IR notation: `NOT <tag>`, `<a> OR <b> OR NOT <c>` etc., same style
+  as `AND`. **Each branch is now resolved as an ordinary chain (S1 item 11, 2026-07-11/12)** —
+  see its own section below for the multi-contact-branch/nested-OR-merge/comparison-as-branch
+  generalization; this bullet's earlier framing (every branch a single rail-fed Contact) was the
+  starting point, not the current state.
 
 **Live-verified end-to-end, 2026-07-10 and 2026-07-11**: `export → to-ir → to-xml → import →
 compile` against a real 2-network, multi-assignment, slice-addressed block (`PerimeterSafetyAlarms`) —
@@ -177,12 +177,12 @@ rather than guessed at).
 confirming a fresh single instance): isolating the real network directly (`FlgNetParser` →
 `GraphReducer` → `FlgNetBuilder` → `FlgNetWriter`, a throwaway test against the live-exported
 XML) confirmed `Eq → Contact → TON.IN` reduces successfully against genuinely live, unmodified
-data, and the Coil's own chain (needing the OR-merge of two comparisons) throws exactly the
-predicted, already-tested error — `docs/notes/stage-gates.md` has the full story. Both grounded
-shapes are additionally proven by unit tests built directly from the real export — see
+data, and the Coil's own chain (needing the OR-merge of two comparisons) threw exactly the
+predicted, already-tested error at the time — `docs/notes/stage-gates.md` has the full story.
+**Closed out, 2026-07-12 (S1 item 11 below):** the same Coil chain now reduces cleanly too. Both
+grounded shapes are additionally proven by unit tests built directly from the real export — see
 `Converter.Tests/ComparisonTests.cs`. A whole-block `ControlDelays` round-trip still isn't
-reached (`Mul`/`Convert` in an unrelated network) — a purpose-built reference-project block
-(matching the `TimerSample` precedent) would close that out specifically.
+reached (`Mul`/`Convert` in an unrelated network, a separate deferred capability).
 
 ## MOVE support (S1 item 10, 2026-07-11)
 
@@ -235,9 +235,72 @@ consumers, not two — and parsing/fan-out-producer-identification handled it co
 comparisons' `O(41)` case) — but Part document order confirms 3 of the network's 5 real Moves
 (including one tapping the genuine 3-way fan-out) reduced successfully first. A fully
 self-contained real sub-network (`Contact47 → Move48`) round-tripped end to end cleanly. Full
-story: `docs/notes/stage-gates.md` ("S1 item 10 continued"). A whole-block round-trip for this
-network specifically still isn't reachable — same OR-merge-composition blocker as `ControlDelays`,
-a shared future phase across both capabilities, not MOVE-specific follow-up.
+story: `docs/notes/stage-gates.md` ("S1 item 10 continued"). **Closed out, 2026-07-12 (S1 item 11
+below):** the same real network now reduces all 5 Moves, including the one gated by the OR-merge.
+
+## OR-merge branches generalized to recursive chains (S1 item 11, 2026-07-11/12)
+
+Closes the exact gap items 9 and 10 each left open. `GraphReducer.ResolveOrMerge` originally
+required every branch to be a single `Contact` fed directly by Powerrail; real data hit this
+twice — `FC ControlDelays`' `O(41)` combines two comparisons, each fed by a further OR-merge
+rather than Powerrail; `FB MotorDOL`'s `O(45)` is fed by a shared, non-rail-fed Contact.
+
+- **Each branch (`inK` port) is now resolved via the exact same `TraceChain` mechanism as a
+  Coil's condition, a TON's `IN`, or a Move's `en` — recursion, not a new algorithm.** A branch
+  that's itself a multi-Contact chain, a comparison, or a nested OR-merge all just work, since
+  they're handled by `TraceChain`'s own existing per-part-kind dispatch, not bespoke branch-walk
+  logic. `ResolveOrMerge` shrank from a hand-rolled single-hop walker (Contact-only check, "fed
+  directly from Powerrail" check, "branches share one rail wire" check) to a thin loop calling
+  `TraceChain` once per branch.
+- **`ChainStepSidecar.OrStep.Branches` changed from a flat `ContactStep` list to `OrBranch`**
+  (`Steps` + nullable `RailWireUId`) — mirrors the `(Steps, RailWireUId)` shape every other
+  production (`CoilAssignmentSidecar`/`TimerBindingSidecar`/`MoveStatementSidecar`) already
+  carries, since a branch is now genuinely a first-class mini-chain, not a single Contact record.
+- **The outer chain's own `RailWireUId` is `null` whenever it terminates at an `OrStep`** — once
+  branches can diverge (one rail-fed, another terminating at a TON's `Q`), there's no single
+  shared value left to bubble up; each branch now carries its own. Mirrors the existing
+  `TimerOutputStep` precedent exactly (a chain terminating at a TON's `Q` was already `null`
+  here). The common real case — branches genuinely sharing one rail wire, confirmed real
+  2026-07-10 — still works with zero special-casing: two branches independently reporting the
+  same wire UId simply merge via the existing endpoint-accumulator dedup.
+- **`FlgNetBuilder` needed no new accumulation mechanism** — the MOVE-era shared,
+  de-duplicating `AddPart`/`AddEndpoint` accumulator already handles "the same upstream Contact
+  touched by multiple productions," so an OR-branch sharing a prefix with another branch, a Move
+  tap, or an unrelated chain elsewhere in the network all dedupe identically. `BuildStep`'s
+  `OrStep` case now builds each branch's own steps the same way any top-level chain builds its
+  own (recursing into `BuildStep` itself), terminating at that branch's own `inK` port.
+- **New AND/OR operator precedence grammar** (`ir/SPEC.md` has the full note) — needed once a
+  branch's own condition could be a compound expression, not just a bare tag. `AND` binds tighter
+  than `OR` (confirmed with the project owner), parens only where precedence alone would
+  misparse. `IrParser`'s old `ParseExpr` (a naive `.Contains(" AND ")`/`.Contains(" OR ")`
+  substring split — it never actually handled mixed AND+OR correctly, just never got exercised by
+  anything more complex until now) became a real precedence-climbing recursive descent
+  (`ParseOrExpr → ParseAndExpr → ParseUnaryExpr → ParsePrimaryExpr`, parenthesized-group-aware).
+
+Three fixtures already existed as hard-error tests for exactly these shapes (built during earlier
+OR-merge/comparisons work, precisely the project's established "repurpose an obsolete hard-error
+test into a positive one" pattern) and were repurposed rather than replaced: `NestedOrMerge.xml`,
+`OrMergeMultiContactBranch.xml`, `OrMergeOfComparisons.xml`. One new fixture
+(`OrMergeSharedPrefixBranches.xml`) covers the one real shape none of the three already had — a
+single upstream Contact's outgoing wire genuinely fanning out to become the shared prefix of two
+different OR-merge branches, mirroring `FB MotorDOL`'s real topology at a minimal scale — and
+**passed on its first run**. 14 new standalone grammar tests (`IrExprGrammarTests.cs`) cover
+mixed `AND`/`OR`/`NOT`/parens precedence independent of the reducer. All 130 converter tests pass
+(up from 106); `openness-cli`/golden-harness suites unaffected, confirmed still green (68/11).
+
+**Live-verified against real data, 2026-07-12:** isolated both real networks that motivated this
+item — `ControlDelays`' `O(41)`/`O(38)` network and `MotorDOL`'s telemetry network — via fresh
+exports and a throwaway test (real data deleted after use). **Both now reduce and round-trip
+completely**, where both were previously blocked at exactly this OR-merge limitation.
+`ControlDelays`' Coil condition turned out deeply nested — `(GeneralEnableDelay.Q OR
+PlantControl.GeneralEnable) AND PlantControl.Status >= 1 OR (GeneralEnableDelay.Q OR PlantControl.GeneralEnable)
+AND PlantControl.Status = -1` — an `Or` of two `And`s each containing a nested `Or`, richer than any
+fixture and a strong real-data proof of the precedence grammar; it also round-tripped
+byte-identically through `Serialize → Parse → Serialize`. `MotorDOL`'s telemetry network now
+reduces all 5 `Move` statements. Full story: `docs/notes/stage-gates.md` ("S1 item 11" live
+verification section). A whole-block `ControlDelays` round-trip still isn't reached (`Mul`/
+`Convert` in an unrelated network, a separate deferred capability) — this item's own scope is
+fully closed on both real networks that motivated it.
 
 ## DB support
 

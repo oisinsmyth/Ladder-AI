@@ -8,6 +8,46 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-12
+
+**S1 item 11: OR-merge branches generalized to recursive chains, live-verified**
+
+- Closed the gap items 9 and 10 both left open: `GraphReducer.ResolveOrMerge` required every
+  branch to be a single Contact fed directly by Powerrail — real data hit this twice
+  (`ControlDelays`' `O(41)` combining two comparisons fed by a further OR-merge; `MotorDOL`'s
+  `O(45)` fed by a shared, non-rail-fed Contact). Planned via `/plan`, approved before any code.
+- Design decision confirmed with the project owner first (`AskUserQuestion`): once a branch can
+  be a compound expression, the IR text needs real operator precedence — `AND` binds tighter than
+  `OR`, parens only where precedence alone would misparse.
+- The fix: a branch is resolved via the exact same `TraceChain` mechanism as a Coil's condition/a
+  TON's `IN`/a Move's `en` — recursion, not a new algorithm. `ResolveOrMerge` shrank from a
+  hand-rolled single-hop walker (three separate hard-error checks) to a thin per-branch loop.
+  `ChainStepSidecar.OrStep.Branches` changed from a flat `ContactStep` list to `OrBranch`
+  (Steps + nullable RailWireUId, mirroring every other production's own chain shape); the outer
+  chain's own `RailWireUId` is now `null` whenever it terminates at an `OrStep` (mirrors the
+  existing `TimerOutputStep` precedent). `FlgNetBuilder` needed no new accumulation mechanism —
+  the MOVE-era shared, de-duplicating endpoint accumulator already handles it.
+- `IrParser.ParseExpr` was a real, previously-unexercised bug (naive `.Contains(" AND ")` checked
+  before `.Contains(" OR ")` regardless of actual precedence) — rewritten as a proper
+  precedence-climbing recursive descent parser; `IrSerializer.SerializeExpr` became
+  precedence-aware to match.
+- Repurposed 3 existing hard-error fixtures/tests into positive ones (`NestedOrMerge.xml`,
+  `OrMergeMultiContactBranch.xml`, `OrMergeOfComparisons.xml`) rather than inventing new test
+  data — same pattern already used twice this project. One new fixture
+  (`OrMergeSharedPrefixBranches.xml`, the one real shape none of the three already covered) —
+  **passed on first run**. 14 new standalone grammar tests, also all passing on first run,
+  including a deeply-nested mixed-precedence case. All three suites green: 130 converter tests
+  (up from 106), 68 openness-cli, 11 golden-harness.
+- **Live-verified, same session:** isolated both real networks that were previously blocked
+  exactly at this OR-merge limitation (`ControlDelays`' `CompileUnit "8"`, `MotorDOL`'s "HMI Motor
+  Status Telemetry" network) via fresh exports and a throwaway test (real data deleted after use).
+  **Both now reduce and round-trip completely.** `ControlDelays`' Coil condition turned out
+  deeply nested (`Or` of two `And`s, each containing a nested `Or`) — confirms the precedence
+  grammar renders genuinely real, richer-than-any-fixture expressions correctly. `MotorDOL`'s
+  telemetry network now reduces all 5 Moves (previously only 3 of 5 got past `Reduce()` before
+  the OR-merge blocked the rest). Full story: `docs/notes/stage-gates.md` ("S1 item 11" + its live
+  verification section).
+
 ## 2026-07-11
 
 **S1 item 10: MOVE support, live-verified (uncommitted)**

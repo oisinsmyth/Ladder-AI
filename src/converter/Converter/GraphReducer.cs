@@ -462,11 +462,14 @@ public static class GraphReducer
 
             if (upstreamPart.Name == "O")
             {
-                var (orStep, orExpr, orRailWireUId) = ResolveOrMerge(
-                    network, wiresByPort, accessByUId, upstreamPart, outgoingWireUId, networkNumber, visitedWireUIds, accessEntries);
+                // An OR-merge's own branches may diverge (one rail-fed, another terminating at a
+                // TON's Q, ...), so there's no longer a single shared rail wire to bubble up here
+                // — the outer chain's own RailWireUId stays null, exactly like a TimerOutputStep
+                // above (each OrBranch carries its own, see ResolveOrMerge).
+                var (orStep, orExpr) = ResolveOrMerge(
+                    network, wiresByPort, accessByUId, constantsByUId, upstreamPart, outgoingWireUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
                 steps.Insert(0, orStep);
                 stepExprs.Insert(0, orExpr);
-                railWireUId = orRailWireUId;
                 break;
             }
 
@@ -484,97 +487,48 @@ public static class GraphReducer
         return (condition, steps, railWireUId);
     }
 
-    // An OR-merge is always rail-facing (confirmed real, 2026-07-10): every branch resolves to
-    // exactly one Contact fed directly by Powerrail. A branch that is itself a multi-element
-    // chain, or shares its OR-merge with a differently-wired rail, is real-but-unconfirmed —
-    // refused rather than guessed at.
-    private static (ChainStepSidecar.OrStep OrStep, Expr Expr, int RailWireUId) ResolveOrMerge(
+    // An OR-merge's branches are ordinary chains (S1 item 11, 2026-07-11): each `inK` port is
+    // resolved via the exact same TraceChain mechanism used for a Coil's `in`, a TON's `IN`, or a
+    // Move's `en` — recursion, not a bespoke branch walker. This replaces the original
+    // single-Contact-only, rail-required special case (S1 item 7) with the general mechanism,
+    // confirmed real 2026-07-11 against `FC ControlDelays` (`O(41)`'s branches are comparisons,
+    // each itself fed by a further OR-merge rather than Powerrail) and `FB MotorDOL` (`O(45)`'s
+    // branches are Contacts fed by a shared upstream Contact's own fan-out, not directly
+    // rail-fed — the same telescoping-shared-prefix shape MOVE's FlgNetBuilder dedup already
+    // handles for free, since it's the identical wire/UId-sharing mechanism, just reached from a
+    // branch instead of a Move tap). Whatever's genuinely upstream of a branch — Contact,
+    // comparison, nested OR-merge, even a TON's Q — is handled by TraceChain's own existing
+    // per-part-kind dispatch; nothing here special-cases any of it.
+    private static (ChainStepSidecar.OrStep OrStep, Expr Expr) ResolveOrMerge(
         FlgNetwork network,
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
         PartNode orPart,
         int outgoingWireUId,
         int networkNumber,
         HashSet<int> visitedWireUIds,
-        List<SidecarAccessEntry> accessEntries)
+        List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries)
     {
         if (orPart.Cardinality is not int cardinality || cardinality < 1)
         {
             throw new NonReducibleNetworkException($"Network {networkNumber}: OR-merge UId={orPart.UId} has no usable cardinality.");
         }
 
-        var branches = new List<ChainStepSidecar.ContactStep>();
+        var branches = new List<OrBranch>();
         var branchExprs = new List<Expr>();
-        var railWireUId = -1;
 
         for (var k = 1; k <= cardinality; k++)
         {
-            var inPort = (orPart.UId, $"in{k}");
-            var branchWire = RequireWireAt(wiresByPort, inPort, networkNumber);
-            var others = branchWire.Endpoints
-                .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == orPart.UId && e.PortName == $"in{k}"))
-                .ToList();
+            var (branchExpr, branchSteps, branchRailWireUId) = TraceChain(
+                network, (orPart.UId, $"in{k}"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-            if (others.Count != 1)
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} wire {branchWire.UId} has fan-out — not a single-contact branch.");
-            }
-
-            var other = others[0];
-            if (other.Kind != EndpointKind.NameCon || other.PortName != "out")
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} is fed from an unsupported endpoint ({other.Kind}).");
-            }
-
-            var branchPart = network.Parts.FirstOrDefault(p => p.UId == other.UId)
-                ?? throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} references unknown part UId={other.UId}.");
-
-            if (branchPart.Name != "Contact")
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} is a '{branchPart.Name}', not a Contact — " +
-                    "multi-element/non-contact OR branches are outside this slice.");
-            }
-
-            visitedWireUIds.Add(branchWire.UId);
-
-            var branchInWire = RequireWireAt(wiresByPort, (branchPart.UId, "in"), networkNumber);
-            if (!branchInWire.Endpoints.Any(e => e.Kind == EndpointKind.Powerrail))
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branch {k} contact UId={branchPart.UId} is not fed " +
-                    "directly from Powerrail — multi-contact OR branches are outside this slice.");
-            }
-
-            if (railWireUId == -1)
-            {
-                railWireUId = branchInWire.UId;
-            }
-            else if (railWireUId != branchInWire.UId)
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: OR-merge UId={orPart.UId} branches are fed from different rail wires " +
-                    $"({railWireUId} vs {branchInWire.UId}) — only a single shared rail wire has been observed.");
-            }
-
-            visitedWireUIds.Add(branchInWire.UId);
-
-            var (tag, operandWireUId) = ResolveOperand(wiresByPort, accessByUId, branchPart.UId, networkNumber);
-            visitedWireUIds.Add(operandWireUId);
-            if (!accessEntries.Any(e => e.TagPath == tag.TagPath && e.UId == tag.UId))
-            {
-                accessEntries.Add(tag);
-            }
-
-            Expr branchExpr = branchPart.Negated ? new Expr.Not(new Expr.TagRef(tag.TagPath)) : new Expr.TagRef(tag.TagPath);
-            branches.Add(new ChainStepSidecar.ContactStep(branchPart.UId, tag.UId, operandWireUId, branchPart.Negated, branchWire.UId));
+            branches.Add(new OrBranch(branchSteps, branchRailWireUId));
             branchExprs.Add(branchExpr);
         }
 
-        return (new ChainStepSidecar.OrStep(orPart.UId, branches, outgoingWireUId), new Expr.Or(branchExprs), railWireUId);
+        return (new ChainStepSidecar.OrStep(orPart.UId, branches, outgoingWireUId), new Expr.Or(branchExprs));
     }
 
     // Port defaults to "operand" (every Contact/Coil operand) — Move's write-side target uses

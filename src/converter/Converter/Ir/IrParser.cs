@@ -206,6 +206,9 @@ public static partial class IrParser
         return new IrNetwork(number, title, assignments, timers, moves);
     }
 
+    // Top-level entry point: OR is the loosest binder. "TRUE" is only meaningful here (the
+    // "wired directly to rail — always on" sentinel for an empty AND/OR — ir/SPEC.md), never as
+    // a general primary nested inside a compound expression.
     private static Expr ParseExpr(string text)
     {
         text = text.Trim();
@@ -214,19 +217,89 @@ public static partial class IrParser
             return new Expr.And(Array.Empty<Expr>());
         }
 
-        if (text.Contains(" AND "))
+        var pos = 0;
+        var expr = ParseOrExpr(text, ref pos);
+        if (pos != text.Length)
         {
-            var operands = text.Split(" AND ", StringSplitOptions.TrimEntries).Select(ParseExprTerm).ToList();
-            return new Expr.And(operands);
+            throw new IrFormatException($"Unexpected trailing content in expression '{text}' at position {pos}.");
         }
 
-        if (text.Contains(" OR "))
+        return expr;
+    }
+
+    // A single term — no AND/OR at this level — used for contexts that are never a boolean
+    // chain (a TON's PT, a Move's IN): still NOT/comparison/parens-aware for consistency, since
+    // nothing about those contexts rules it out, even though no real source has needed it yet.
+    private static Expr ParseExprTerm(string text)
+    {
+        text = text.Trim();
+        var pos = 0;
+        var expr = ParseUnaryExpr(text, ref pos);
+        if (pos != text.Length)
         {
-            var operands = text.Split(" OR ", StringSplitOptions.TrimEntries).Select(ParseExprTerm).ToList();
-            return new Expr.Or(operands);
+            throw new IrFormatException($"Unexpected trailing content in expression '{text}' at position {pos}.");
         }
 
-        return ParseExprTerm(text);
+        return expr;
+    }
+
+    // AND binds tighter than OR (standard precedence, confirmed with the project owner,
+    // 2026-07-11, S1 item 11 — mirrors IrSerializer.SerializeExpr's own precedence note). Real
+    // recursive descent, not the old naive substring split: that approach never correctly
+    // handled mixed AND+OR (it always matched " AND " first regardless of an OR's lower
+    // precedence) — it just never got exercised by anything more complex than a single flat
+    // AND-chain or OR-of-single-leaves until OR-merge branches became compound expressions.
+    private static Expr ParseOrExpr(string text, ref int pos)
+    {
+        var operands = new List<Expr> { ParseAndExpr(text, ref pos) };
+        while (TryConsumeToken(text, ref pos, " OR "))
+        {
+            operands.Add(ParseAndExpr(text, ref pos));
+        }
+
+        return operands.Count == 1 ? operands[0] : new Expr.Or(operands);
+    }
+
+    private static Expr ParseAndExpr(string text, ref int pos)
+    {
+        var operands = new List<Expr> { ParseUnaryExpr(text, ref pos) };
+        while (TryConsumeToken(text, ref pos, " AND "))
+        {
+            operands.Add(ParseUnaryExpr(text, ref pos));
+        }
+
+        return operands.Count == 1 ? operands[0] : new Expr.And(operands);
+    }
+
+    // NOT binds tighter than AND/OR — "NOT A AND B" is "(NOT A) AND B", not "NOT (A AND B)"
+    // (matches IrSerializer.SerializeExpr's own parenthesization rule for Not-wrapping-And/Or).
+    private static Expr ParseUnaryExpr(string text, ref int pos)
+    {
+        if (TryConsumeToken(text, ref pos, "NOT "))
+        {
+            return new Expr.Not(ParseUnaryExpr(text, ref pos));
+        }
+
+        return ParsePrimaryExpr(text, ref pos);
+    }
+
+    // A parenthesized group (recurses to the top of the grammar) or a comparison-or-leaf.
+    private static Expr ParsePrimaryExpr(string text, ref int pos)
+    {
+        if (pos < text.Length && text[pos] == '(')
+        {
+            pos++;
+            var inner = ParseOrExpr(text, ref pos);
+            if (pos >= text.Length || text[pos] != ')')
+            {
+                throw new IrFormatException($"Expected ')' in expression '{text}' at position {pos}.");
+            }
+
+            pos++;
+            return inner;
+        }
+
+        return ParseComparisonOrLeaf(text, ref pos);
     }
 
     // Longer operators first so e.g. ">=" is never mistaken for a "=" search hitting inside it —
@@ -242,24 +315,49 @@ public static partial class IrParser
         ("=", " = "), (">", " > "), ("<", " < "),
     };
 
-    private static Expr ParseExprTerm(string text)
+    // Consumes everything up to (but not including) the next top-level " AND "/" OR "/")" — a
+    // primary never contains a literal '(' or ')' itself (tag paths/literals don't), so a single
+    // forward scan is enough, no paren-depth tracking needed at this level (ParsePrimaryExpr
+    // already branched off actual parenthesized groups before reaching here). The comparison
+    // scan then runs on that raw span, exactly like the pre-S1-item-11 ParseExprTerm did.
+    private static Expr ParseComparisonOrLeaf(string text, ref int pos)
     {
-        text = text.Trim();
-        if (text.StartsWith("NOT ", StringComparison.Ordinal))
+        var start = pos;
+        while (pos < text.Length && text[pos] != ')' && !MatchesAt(text, pos, " AND ") && !MatchesAt(text, pos, " OR "))
         {
-            return new Expr.Not(ParseExprTerm(text["NOT ".Length..]));
+            pos++;
+        }
+
+        var raw = text[start..pos].Trim();
+        if (raw.Length == 0)
+        {
+            throw new IrFormatException($"Expected an expression in '{text}' at position {start}.");
         }
 
         foreach (var (op, token) in ComparisonTokens)
         {
-            var index = text.IndexOf(token, StringComparison.Ordinal);
+            var index = raw.IndexOf(token, StringComparison.Ordinal);
             if (index >= 0)
             {
-                return new Expr.Compare(op, ParseLeaf(text[..index]), ParseLeaf(text[(index + token.Length)..]));
+                return new Expr.Compare(op, ParseLeaf(raw[..index]), ParseLeaf(raw[(index + token.Length)..]));
             }
         }
 
-        return ParseLeaf(text);
+        return ParseLeaf(raw);
+    }
+
+    private static bool MatchesAt(string text, int pos, string token) =>
+        pos + token.Length <= text.Length && string.CompareOrdinal(text, pos, token, 0, token.Length) == 0;
+
+    private static bool TryConsumeToken(string text, ref int pos, string token)
+    {
+        if (!MatchesAt(text, pos, token))
+        {
+            return false;
+        }
+
+        pos += token.Length;
+        return true;
     }
 
     // A literal (e.g. "T#100MS" or a bare integer like "1"/"-1") is recognized by shape rather
@@ -548,17 +646,11 @@ public static partial class IrParser
     {
         var uid = int.Parse(RequirePrefixedLine(lines, ref i, indent + "uid = "));
 
-        var branches = new List<ChainStepSidecar.ContactStep>();
+        var branches = new List<OrBranch>();
         var b = 0;
-        while (i < lines.Length && IsStepHeader(lines[i], indent, $"branch {b}"))
+        while (i < lines.Length && lines[i] == indent + $"branch {b}")
         {
-            var branch = ParseStep(lines, ref i, indent, $"branch {b}");
-            if (branch is not ChainStepSidecar.ContactStep contactBranch)
-            {
-                throw new IrFormatException("OR-merge branch must be a single contact.");
-            }
-
-            branches.Add(contactBranch);
+            branches.Add(ParseOrBranch(lines, ref i, indent, $"branch {b}"));
             b++;
         }
 
@@ -569,6 +661,30 @@ public static partial class IrParser
 
         var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
         return new ChainStepSidecar.OrStep(uid, branches, outWire);
+    }
+
+    // The inverse of IrSerializer.SerializeOrBranch — a branch is an ordinary mini-chain (S1
+    // item 11), same rail/steps shape as ParseTimerSidecar/ParseMoveSidecar's own top-level
+    // pattern, just nested here instead of at the sidecar network's own top level.
+    private static OrBranch ParseOrBranch(string[] lines, ref int i, string indent, string label)
+    {
+        var header = RequireLine(lines, ref i);
+        if (header != indent + label)
+        {
+            throw new IrFormatException($"Expected '{indent}{label}', got: '{header}'");
+        }
+
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, indent + "  rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], indent + "  ", $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, indent + "  ", $"step {s}"));
+            s++;
+        }
+
+        return new OrBranch(steps, railWireUId);
     }
 
     private static string RequireLine(string[] lines, ref int i)

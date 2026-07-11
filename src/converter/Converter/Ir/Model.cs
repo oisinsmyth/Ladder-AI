@@ -136,16 +136,21 @@ public sealed record SidecarAccessEntry(string TagPath, int UId, string Scope);
 // mirrors ConstantAccessNode's own field, confirmed real 2026-07-11.
 public sealed record SidecarConstantEntry(string Value, int UId, string? ConstantType = null);
 
-// One position in a chain, rail-to-coil. Confirmed real, 2026-07-10: a position is either a
-// single contact, or an OR-merge of several single-contact branches (`Part Name="O"` with a
-// `Cardinality` TemplateValue — docs/notes/stage-gates.md, S1 item 7). No branch confirmed real
-// is itself a multi-contact chain, so branches are `ContactStep`, not `ChainStepSidecar` — a
-// multi-element branch is out of scope (GraphReducer hard-errors rather than guess).
+// One position in a chain, rail-to-coil. A position is either a single contact, a comparison, or
+// an OR-merge of several branches (`Part Name="O"` with a `Cardinality` TemplateValue —
+// docs/notes/stage-gates.md, S1 item 7). Each OR-merge branch is itself a full chain
+// (`OrBranch`, S1 item 11) — real, confirmed 2026-07-11 against both `FC ControlDelays` (`O(41)`
+// combining two comparisons, each fed by a further OR-merge rather than Powerrail directly) and
+// `FB MotorDOL` (`O(45)`'s branches fed by a shared upstream Contact's own fan-out, not directly
+// rail-fed). A branch is resolved exactly like any other chain — same `TraceChain` mechanism as
+// a Coil's condition/a TON's `IN`/a Move's `en` — rather than the single-Contact-only,
+// rail-required special case this was originally built as (S1 item 7).
 //
 // OutgoingWireUId carries one meaning throughout: the wire from *this* step's own "out" port to
 // whatever's next. At the top level that's the next chain step (or the coil, for the last step);
 // for a step used as an OR-merge branch, it's the wire into the OR's own "inK" port instead —
-// same field, same role, so a branch's contact is just a ContactStep like any other.
+// same field, same role, so a branch's own steps are ordinary ChainStepSidecar entries like any
+// other chain's.
 public abstract record ChainStepSidecar
 {
     private ChainStepSidecar()
@@ -154,7 +159,7 @@ public abstract record ChainStepSidecar
 
     public sealed record ContactStep(int ContactUId, int OperandAccessUId, int OperandWireUId, bool Negated, int OutgoingWireUId) : ChainStepSidecar;
 
-    public sealed record OrStep(int OrPartUId, IReadOnlyList<ContactStep> Branches, int OutgoingWireUId) : ChainStepSidecar;
+    public sealed record OrStep(int OrPartUId, IReadOnlyList<OrBranch> Branches, int OutgoingWireUId) : ChainStepSidecar;
 
     // A chain position whose boolean value comes directly from an already-defined TON's `Q`
     // output — the source wired `NameCon(tonUId, "Q")` straight into this chain, no Contact, no
@@ -177,11 +182,9 @@ public abstract record ChainStepSidecar
     // Name regenerates unambiguously — `Operator` is IR/Expr-facing, `PartName` is XML-facing,
     // kept as two fields rather than deriving one from the other.
     //
-    // Composing with an OR-merge (as a branch, or feeding one) is real (`FC ControlDelays`'
-    // `O(41)` combines two comparisons) but deliberately not modeled this phase — the *existing*
-    // OR-merge branch check (`branchPart.Name != "Contact"`) and the *existing* wire fan-out
-    // check already safely refuse this shape without any new code, so nothing guesses at it.
-    // Same deferred status as the already-known multi-contact-OR-branch/nested-OR-merge cases.
+    // Composing with an OR-merge (as a branch, or feeding one) is real — `FC ControlDelays`'
+    // `O(41)` combines two comparisons — and built, S1 item 11, 2026-07-11: an OR-merge branch is
+    // an ordinary chain (`OrBranch`), so a comparison appearing there needs no special case.
     public sealed record CompareStep(
         int ComparePartUId,
         string PartName,
@@ -190,6 +193,19 @@ public abstract record ChainStepSidecar
         OperandSidecar Right,
         int OutgoingWireUId) : ChainStepSidecar;
 }
+
+// One OR-merge branch's full chain — mirrors the (Steps, RailWireUId) shape every other
+// production (CoilAssignmentSidecar/TimerBindingSidecar/MoveStatementSidecar) already carries,
+// since a branch is resolved via the exact same TraceChain mechanism as any of those. RailWireUId
+// is nullable for the same reason theirs is: a branch whose own chain terminates at a TON's `Q`
+// (TimerOutputStep) never touches Powerrail — not yet seen live for a branch specifically, but
+// the same mechanism, handled identically rather than assumed impossible. Confirmed real,
+// 2026-07-11: `FC ControlDelays` (`O(41)`'s branches are comparisons, each fed by a further
+// OR-merge rather than Powerrail — Steps.Count > 0, RailWireUId null since the branch's own
+// chain terminates at another O, not the rail) and `FB MotorDOL` (`O(45)`'s branches are
+// Contacts fed by a shared upstream Contact's own fan-out, not directly rail-fed — Steps.Count
+// 1, RailWireUId pointing at the shared rail wire further upstream).
+public sealed record OrBranch(IReadOnlyList<ChainStepSidecar> Steps, int? RailWireUId);
 
 // A tag-or-literal operand — used by a TON's `PT` and, since 2026-07-11, a comparison's `in1`/
 // `in2` (`FC ControlDelays`). TagOperand resolves the same way a Contact operand does

@@ -113,18 +113,30 @@ public static class IrSerializer
         }
     }
 
+    // AND binds tighter than OR (standard precedence, confirmed with the project owner,
+    // 2026-07-11, S1 item 11 — needed once an OR-merge branch can be a compound expression, not
+    // just a single tag): "A AND B OR C" already reads unambiguously as "(A AND B) OR C" with no
+    // parens — the exact shape a shared-prefix OR-merge branch produces (`FB MotorDOL`'s
+    // `O(45)`). Parens are only emitted where precedence alone would misparse: an `Or` appearing
+    // as an `And`'s own operand, or as a `Not`'s own operand (both bind looser than their parent
+    // there). Every other nesting needs none — either the parent is already looser (And-in-Or),
+    // or the child is a single self-contained token (Compare, TagRef, Literal) or already the
+    // tightest binder (Not-in-anything).
     private static string SerializeExpr(Expr expr) => expr switch
     {
         Expr.TagRef tagRef => tagRef.Path,
         Expr.Literal literal => literal.Value,
-        Expr.Not not => $"NOT {SerializeExpr(not.Operand)}",
+        Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Operand is Expr.And or Expr.Or)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
-        Expr.And and => string.Join(" AND ", and.Operands.Select(SerializeExpr)),
+        Expr.And and => string.Join(" AND ", and.Operands.Select(op => Parenthesize(op, op is Expr.Or))),
         Expr.Or { Operands.Count: 0 } => "TRUE",
         Expr.Or or => string.Join(" OR ", or.Operands.Select(SerializeExpr)),
         Expr.Compare compare => $"{SerializeExpr(compare.Left)} {compare.Operator} {SerializeExpr(compare.Right)}",
         _ => throw new IrFormatException($"Unsupported expression node: {expr.GetType().Name}"),
     };
+
+    private static string Parenthesize(Expr expr, bool needsParens) =>
+        needsParens ? $"({SerializeExpr(expr)})" : SerializeExpr(expr);
 
     private static void SerializeSidecarNetwork(StringBuilder sb, NetworkSidecar sidecar)
     {
@@ -218,7 +230,7 @@ public static class IrSerializer
                 sb.Append(indent).Append("  uid = ").Append(orStep.OrPartUId).Append('\n');
                 for (var b = 0; b < orStep.Branches.Count; b++)
                 {
-                    SerializeStep(sb, indent + "  ", $"branch {b}", orStep.Branches[b]);
+                    SerializeOrBranch(sb, indent + "  ", $"branch {b}", orStep.Branches[b]);
                 }
 
                 sb.Append(indent).Append("  out = ").Append(orStep.OutgoingWireUId).Append('\n');
@@ -240,6 +252,19 @@ public static class IrSerializer
                 break;
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
+        }
+    }
+
+    // An OR-merge branch is an ordinary mini-chain (S1 item 11) — same rail/steps shape every
+    // other production (timer/assignment/move) already carries in its own top-level sidecar
+    // block, just nested here under the OR-merge's own step instead.
+    private static void SerializeOrBranch(StringBuilder sb, string indent, string label, OrBranch branch)
+    {
+        sb.Append(indent).Append(label).Append('\n');
+        sb.Append(indent).Append("  rail = ").Append(SerializeRail(branch.RailWireUId)).Append('\n');
+        for (var s = 0; s < branch.Steps.Count; s++)
+        {
+            SerializeStep(sb, indent + "  ", $"step {s}", branch.Steps[s]);
         }
     }
 

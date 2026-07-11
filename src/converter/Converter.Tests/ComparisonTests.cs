@@ -18,9 +18,10 @@ namespace Converter.Tests;
 /// `(ComparePartUId, "pre")` exactly as it would from a Contact's own `in`.
 ///
 /// Composing with an OR-merge (as a branch, or feeding one) is real (`ControlDelays`' own `O(41)`
-/// combines two comparisons) but deliberately not modeled this phase — the *existing* OR-merge
-/// branch check and the *existing* wire fan-out check already safely refuse this shape without
-/// any new code, proven by <see cref="Reduce_ComparisonAsOrMergeBranch_ThrowsNonReducible"/>.
+/// combines two comparisons) — closed out S1 item 11, 2026-07-11/12: an OR-merge branch is
+/// resolved as an ordinary chain via the same `TraceChain` mechanism, so a comparison appearing
+/// there needs no special case, proven by
+/// <see cref="Reduce_ComparisonAsOrMergeBranch_ProducesOrOfComparisons"/>.
 /// </summary>
 public class ComparisonTests
 {
@@ -173,18 +174,67 @@ public class ComparisonTests
         Assert.Equal(text, reserialized);
     }
 
-    // The real, grounded ControlDelays shape (O(41) combining Ge(39)/Eq(40)) — deliberately not
-    // supported this phase. Proves the *existing*, unmodified OR-merge branch check already
-    // refuses it correctly, without any new hard-error code.
+    // The real, grounded ControlDelays shape (O(41) combining Ge(39)/Eq(40)) — closed out S1
+    // item 11, 2026-07-11/12: an OR-merge branch is resolved as an ordinary chain (reusing
+    // TraceChain recursively), so a comparison appearing there needs no special case. Both
+    // comparisons here also share one rail wire directly (wire 30 has both "pre" ports as
+    // endpoints in the source) — the common real shape, still working with zero special-casing.
     [Fact]
-    public void Reduce_ComparisonAsOrMergeBranch_ThrowsNonReducible()
+    public void Reduce_ComparisonAsOrMergeBranch_ProducesOrOfComparisons()
     {
         var network = LoadFixture("OrMergeOfComparisons.xml");
 
-        var ex = Assert.Throws<NonReducibleNetworkException>(
-            () => GraphReducer.Reduce(network, networkNumber: 1, title: "OR of comparisons", compileUnitUId: "3"));
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "OR of comparisons", compileUnitUId: "3");
 
-        Assert.Contains("not a Contact", ex.Message);
+        var assignment = Assert.Single(reduced.Network.Assignments);
+        Assert.Equal("Output3", assignment.CoilTag);
+        var or = Assert.IsType<Expr.Or>(assignment.Condition);
+        Assert.Equal(2, or.Operands.Count);
+        var eq = Assert.IsType<Expr.Compare>(or.Operands[0]);
+        Assert.Equal("=", eq.Operator);
+        Assert.Equal("A", Assert.IsType<Expr.TagRef>(eq.Left).Path);
+        Assert.Equal("1", Assert.IsType<Expr.Literal>(eq.Right).Value);
+        var ge = Assert.IsType<Expr.Compare>(or.Operands[1]);
+        Assert.Equal(">=", ge.Operator);
+        Assert.Equal("B", Assert.IsType<Expr.TagRef>(ge.Left).Path);
+        Assert.Equal("2", Assert.IsType<Expr.Literal>(ge.Right).Value);
+
+        var orStep = Assert.IsType<ChainStepSidecar.OrStep>(Assert.Single(reduced.Sidecar.Assignments[0].Steps));
+        Assert.IsType<ChainStepSidecar.CompareStep>(Assert.Single(orStep.Branches[0].Steps));
+        Assert.IsType<ChainStepSidecar.CompareStep>(Assert.Single(orStep.Branches[1].Steps));
+        Assert.Equal(30, orStep.Branches[0].RailWireUId);
+        Assert.Equal(30, orStep.Branches[1].RailWireUId);
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_ComparisonAsOrMergeBranch_ProducesInfixOr()
+    {
+        var network = LoadFixture("OrMergeOfComparisons.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "OR of comparisons", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal("NETWORK 1 \"OR of comparisons\"\n  COIL Output3 := A = 1 OR B >= 2\n", text);
+    }
+
+    [Fact]
+    public void RoundTrip_ComparisonAsOrMergeBranch_RebuildsSharedRailWire()
+    {
+        var original = LoadFixture("OrMergeOfComparisons.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "OR of comparisons", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        Assert.Equal(original.Parts.Count, reparsed.Parts.Count);
+        Assert.Equal(original.Wires.Count, reparsed.Wires.Count);
+
+        var railWire = Assert.Single(reparsed.Wires, w => w.UId == 30);
+        Assert.Equal(3, railWire.Endpoints.Count);
+        Assert.Contains(railWire.Endpoints, e => e.Kind == EndpointKind.Powerrail);
+        Assert.Contains(railWire.Endpoints, e => e.Kind == EndpointKind.NameCon && e.UId == 26 && e.PortName == "pre");
+        Assert.Contains(railWire.Endpoints, e => e.Kind == EndpointKind.NameCon && e.UId == 27 && e.PortName == "pre");
     }
 
     [Fact]

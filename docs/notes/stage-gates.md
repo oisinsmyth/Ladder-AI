@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge, negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE (unit-tested, not yet live-round-trip-proven — see item 10), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 106 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 130 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -377,10 +377,10 @@ confirmed still green), 11 golden-harness tests. Phase B is functionally complet
 documented as such.
 
 Still deferred: reference-by-name for structured members (needs real UDT/`PlcType` export,
-`ir/SPEC.md`'s explicit "not now" — revisit only as its own deliberate phase); MOVE/comparisons/
-block calls as first-class LAD instructions (TON landed separately, see below; still Contact/
-Coil/OR-merge/TON scope on the network-body side otherwise); a multi-contact OR-merge branch or
-a nested OR-merge (real-but-unconfirmed, still hard errors).
+`ir/SPEC.md`'s explicit "not now" — revisit only as its own deliberate phase); MOVE/comparisons
+landed separately (items 9/10 below), block calls as first-class LAD instructions still not built.
+(A multi-contact OR-merge branch and a nested OR-merge were deferred at this point — both closed
+out later, S1 item 11, 2026-07-11/12.)
 
 ### S1 item 8 (TON support, both instance scopes), 2026-07-11
 
@@ -668,3 +668,121 @@ whole-block `import → compile → re-export → Normalizer` round-trip for the
 Telemetry" network itself still isn't reachable (needs the OR-merge composition gap closed, same
 blocker as comparisons' `ControlDelays` case) — closing that out is a future, shared phase across
 both capabilities, not MOVE-specific follow-up.
+
+### S1 item 11 (OR-merge branches generalized to recursive chains), 2026-07-11/12
+
+Closes the exact gap items 9 and 10 both left open. `GraphReducer.ResolveOrMerge` originally
+required every OR-merge branch to be a single `Contact` fed directly by Powerrail — real data hit
+this limitation twice, both already precisely characterized: `FC ControlDelays`' `O(41)` combines
+two comparisons (`Ge`/`Eq`), each fed by a further OR-merge (`O(38)`) rather than Powerrail
+directly; `FB MotorDOL`'s `O(45)` is fed by a shared, non-rail-fed Contact (`Contact41`'s own
+fan-out). Planned via `/plan` and approved before any code was written (plan file:
+`quirky-gathering-ripple.md`).
+
+**Design decision confirmed with the project owner before writing code, via AskUserQuestion:**
+once an OR-merge branch can be a compound expression rather than a bare tag, the IR text needs
+real operator precedence — `AND` binds tighter than `OR` (standard convention), parentheses only
+where precedence alone would misparse — not blanket-parenthesizing every compound branch.
+
+**The fix: an OR-merge branch is resolved via the exact same `TraceChain` mechanism already used
+for a Coil's condition, a TON's `IN`, or a Move's `en` — recursion, not a new algorithm.**
+`ResolveOrMerge` shrank from a hand-rolled single-hop branch walker (three separate hard-error
+checks: branch must be a Contact, must be fed directly from Powerrail, all branches must share
+one rail wire) to a thin loop calling `TraceChain` once per `inK` port. A branch that's itself a
+multi-Contact chain, a comparison, or a nested OR-merge all just work, handled by `TraceChain`'s
+own existing per-part-kind dispatch — no bespoke case added for any of them.
+
+Two structural consequences, both foreseen in the plan and confirmed correct by testing:
+- `ChainStepSidecar.OrStep.Branches` changed from a flat `ContactStep` list to a new `OrBranch`
+  (`Steps` + nullable `RailWireUId`) — the same `(Steps, RailWireUId)` shape every other
+  production already carries, since a branch is now a genuine first-class mini-chain.
+- The outer chain's own `RailWireUId` is `null` whenever it terminates at an `OrStep` — once
+  branches can diverge (one rail-fed, another terminating at a TON's `Q`), there's no single
+  shared value left to bubble up. Mirrors the existing `TimerOutputStep` precedent exactly. The
+  common real case (branches genuinely sharing one rail wire, confirmed real 2026-07-10) still
+  works with zero special-casing — two branches independently reporting the same wire UId simply
+  merge via the existing endpoint-accumulator dedup.
+
+`FlgNetBuilder` needed no new accumulation mechanism at all — the MOVE-era shared, de-duplicating
+`AddPart`/`AddEndpoint` accumulator already handles "the same upstream Contact touched by
+multiple productions," so an OR-branch sharing a prefix with another branch, a Move tap, or an
+unrelated chain elsewhere in the network all dedupe identically. `BuildStep`'s `OrStep` case now
+builds each branch's own steps the same way any top-level chain builds its own (recursing into
+`BuildStep` itself), terminating at that branch's own `inK` port.
+
+**`IrParser`'s old `ParseExpr` was a real, if previously-unexercised, bug — not just an
+enhancement.** It naively checked `.Contains(" AND ")` before `.Contains(" OR ")` regardless of
+which one actually had lower precedence, so it never actually handled mixed AND+OR correctly; it
+just never got exercised by anything more complex than a flat AND-chain or an OR of single leaves
+until an OR-merge branch could be compound. Rewritten as a real precedence-climbing recursive
+descent: `ParseOrExpr → ParseAndExpr → ParseUnaryExpr (NOT) → ParsePrimaryExpr` (parenthesized
+group, comparison, or leaf). `IrSerializer.SerializeExpr` became precedence-aware to match:
+`Parenthesize(expr, needsParens)` wraps an `Or` appearing as an `And`'s or `Not`'s own operand,
+nothing else.
+
+Three fixtures already existed as hard-error tests for exactly these shapes (built during earlier
+OR-merge/comparisons work, specifically as forward-looking coverage for real-but-unconfirmed
+shapes) — repurposed into positive tests rather than replaced, the same "obsolete hard-error test
+becomes a positive one" pattern already used twice this project (TON's direct-`Q`-wiring,
+`LiteralConstant` scope): `NestedOrMerge.xml`, `OrMergeMultiContactBranch.xml`,
+`OrMergeOfComparisons.xml`. One genuine test-authoring bug was caught converting these: an
+existing sidecar assertion (`Reduce_ThreeWayOrMerge_SidecarRecordsSharedRailAndBranches`) still
+expected the OLD outer `RailWireUId` value instead of the new expected `null` — caught immediately
+by the test failing, fixed as a test bug, not a code bug.
+
+One new fixture was needed — none of the three existing ones covered `FB MotorDOL`'s specific real
+shape (a single upstream Contact's outgoing wire genuinely fanning out to become the shared prefix
+of two different OR-merge branches): `OrMergeSharedPrefixBranches.xml`, built directly from that
+real topology at a minimal scale (no Move tap needed to exercise it) — **passed on its first
+run**, confirming OR-branch recursion and the MOVE-era dedup/fan-out mechanism compose correctly
+together, not just each in isolation. 14 new standalone grammar tests (`IrExprGrammarTests.cs`)
+cover mixed AND/OR/NOT/parens precedence independent of the reducer, including a deeply-nested
+mixed-precedence-with-parens case (`A AND (B OR C) OR D`) — all passed on first run too.
+
+All three suites green: 130 converter tests (up from 106), 68 openness-cli tests, 11
+golden-harness tests (`openness-cli`/golden-harness untouched by this diff, re-confirmed still
+green rather than assumed).
+
+#### Live verification against real data, 2026-07-12
+
+TIA Portal was already running (3 processes, the now-familiar normal baseline for this machine).
+First `export` attempt for `FC ControlDelays` timed out on attach (3-minute limit) exactly like
+one earlier session's first attempt — reproducing the same "transient, unconfirmed" pattern
+already on record; a plain manual retry (no process killing, no state changes) succeeded
+immediately. `FB MotorDOL` exported cleanly on the first try.
+
+Isolated `FC ControlDelays`' `CompileUnit ID="8"` (the network containing `O(41)`/`O(38)`, 10
+parts, 21 wires) and `FB MotorDOL`'s `CompileUnit ID="3F"` (the "HMI Motor Status Telemetry"
+network, 12 parts, 24 wires — same network as item 10's own grounding, re-extracted fresh rather
+than reused, confirmed byte-identical to the prior session's characterization) into standalone
+files, same technique as items 9/10's own live-re-verification. Ran each through `FlgNetParser →
+GraphReducer → FlgNetBuilder → FlgNetWriter → re-parse` directly via a temporary, throwaway test
+(deleted immediately after use, real data never committed).
+
+**Both real networks now reduce and round-trip completely — the exact result this whole item
+exists to produce.** `ControlDelays`' `Network 8` revealed a real shape richer than anything
+built from a genericized fixture: the Coil's condition is
+`(GeneralEnableDelay.Q OR PlantControl.GeneralEnable) AND PlantControl.Status >= 1 OR
+(GeneralEnableDelay.Q OR PlantControl.GeneralEnable) AND PlantControl.Status = -1` — an `Or` of two `And`s,
+each itself containing a nested `Or`, confirming the precedence grammar renders deeply-nested,
+genuinely real mixed AND/OR correctly with exactly the right parens (only around the nested `Or`
+inside each `And`, none elsewhere) — not just the smaller hand-built grammar-test cases. `IN`
+reduces to `PlantControl.Status = 1 AND PlantControl.MagEnable`, matching the TON support already proven in
+item 8. `FB MotorDOL`'s telemetry network now reduces **all five** `Move` statements (previously
+only 3 of 5 got past the `Reduce()` call before the OR-merge blocked the rest) — `Move46`'s own
+condition (the one gated by `O(45)`) came back as
+`NOT IO.FaultActive AND IO.Run AND IO.RunningFB AND IO.UPSEnable OR NOT IO.FaultActive AND
+IO.Run AND IO.RunningFB AND IO.InHand`, the OR-of-two-AND-chains shape predicted from the wire
+topology, rendered correctly with no parens needed (AND already binds tighter). Both networks:
+every original wire's endpoint set matched a rebuilt wire exactly (part/wire counts identical,
+`Parse → Reduce → Build → Write → Reparse` produced a structural match); `ControlDelays`'
+deeply-nested IR text additionally round-tripped byte-identically through `Serialize → Parse →
+Serialize`, proving grammar stability on the richest real expression seen yet, not just the
+reducer's own sidecar fidelity.
+
+**Bottom line:** this closes the loose end left open by both item 9 (`ControlDelays`) and item 10
+(`MotorDOL`) — both real networks that were blocked at exactly this OR-merge limitation now fully
+reduce and round-trip against genuinely live, unmodified production data. A full whole-block
+`import → compile → re-export → Normalizer` round-trip for `ControlDelays` itself still isn't
+reachable (Network 1's unrelated `Mul`/`Convert`, a separate deferred capability) — but the
+specific gap this item targeted is closed on both real blocks that motivated it.

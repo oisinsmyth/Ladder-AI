@@ -295,11 +295,36 @@ public static class FlgNetBuilder
                 for (var b = 0; b < orStep.Branches.Count; b++)
                 {
                     var branch = orStep.Branches[b];
-                    AddPart(parts, emittedPartUIds, new PartNode(branch.ContactUId, "Contact", branch.Negated));
-                    AddEndpoint(wireEndpointsByUId, branch.OperandWireUId, new WireEndpoint(EndpointKind.IdentCon, branch.OperandAccessUId, null));
-                    AddEndpoint(wireEndpointsByUId, branch.OperandWireUId, new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "operand"));
-                    AddEndpoint(wireEndpointsByUId, branch.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "out"));
-                    AddEndpoint(wireEndpointsByUId, branch.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, $"in{b + 1}"));
+                    var branchEntryTarget = new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, $"in{b + 1}");
+
+                    // A branch is an ordinary chain (S1 item 11) — build it the same way any
+                    // top-level chain builds its own steps, just terminating at this branch's
+                    // own "inK" port instead of a Coil's "in"/a TON's "IN". Recursing into
+                    // BuildStep means a branch that's itself a nested OR-merge, a comparison, or
+                    // a multi-Contact chain all just work, no special-casing needed here.
+                    for (var i = 0; i < branch.Steps.Count; i++)
+                    {
+                        var nextTarget = i + 1 < branch.Steps.Count
+                            ? EntryTarget(branch.Steps[i + 1])
+                            : branchEntryTarget;
+
+                        BuildStep(branch.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                    }
+
+                    // A branch's own rail wire (the common case — every branch fed directly by
+                    // Powerrail, confirmed real 2026-07-10) is nullable for the same reason a
+                    // top-level chain's is: a branch whose own chain terminates at a TON's Q
+                    // never touches Powerrail. Two branches genuinely sharing one rail wire (or
+                    // sharing it with an unrelated chain elsewhere in the network) need no
+                    // special handling — same wire UId, deduplicated by AddEndpoint like any
+                    // other shared wire.
+                    if (branch.RailWireUId is int branchRailWireUId)
+                    {
+                        var railFacingEndpoints = branch.Steps.Count > 0
+                            ? RailFacingEndpoints(branch.Steps[0])
+                            : new[] { (UId: orStep.OrPartUId, Port: $"in{b + 1}") };
+                        AddRailEndpoints(wireEndpointsByUId, branchRailWireUId, railFacingEndpoints);
+                    }
                 }
 
                 AddEndpoint(wireEndpointsByUId, orStep.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "out"));
@@ -342,15 +367,14 @@ public static class FlgNetBuilder
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 
-    // The rail-facing endpoint(s) of a chain's first step: the contact's own "in", the
-    // comparison's own "pre" (genuinely different port, not a typo), or every OR-merge branch's
-    // contact "in" (all fed by the same shared rail wire, confirmed real 2026-07-10; a branch is
-    // always a Contact, never itself a comparison — see OrMergeOfComparisons.xml/
-    // ComparisonTests.cs for why that's deliberately still refused, not guessed at).
+    // The rail-facing endpoint(s) of a chain's first step: the contact's own "in", or the
+    // comparison's own "pre" (genuinely different port, not a typo). No OrStep case — like
+    // TimerOutputStep, an OrStep-terminated chain's own outer RailWireUId is always null (S1
+    // item 11: each branch owns its own rail wiring internally, wired directly in BuildStep's own
+    // OrStep case, not bubbled up through here) — this is never actually invoked with one.
     private static IReadOnlyList<(int UId, string Port)> RailFacingEndpoints(ChainStepSidecar step) => step switch
     {
         ChainStepSidecar.ContactStep contact => new[] { (contact.ContactUId, "in") },
-        ChainStepSidecar.OrStep orStep => orStep.Branches.Select(b => (b.ContactUId, "in")).ToArray(),
         ChainStepSidecar.CompareStep compare => new[] { (compare.ComparePartUId, "pre") },
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
@@ -369,7 +393,7 @@ public static class FlgNetBuilder
     private static int CountStepLeaves(ChainStepSidecar step) => step switch
     {
         ChainStepSidecar.ContactStep => 1,
-        ChainStepSidecar.OrStep orStep => orStep.Branches.Count,
+        ChainStepSidecar.OrStep orStep => orStep.Branches.Sum(b => b.Steps.Sum(CountStepLeaves)),
         ChainStepSidecar.TimerOutputStep => 1,
         ChainStepSidecar.CompareStep => 1,
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),

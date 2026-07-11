@@ -67,8 +67,16 @@ lookup table entry:
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
 | `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne` / `Le` / `Gt` / `Lt` **[converter-verify part names]** — same status as AND-merge, not built | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
-| `O` (OR-merge) | `OR` |
+| `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
 | `A` (AND-merge) **[converter-verify part name]** | `AND` |
+
+**Operator precedence (confirmed with the project owner, 2026-07-11, S1 item 11):** `AND` binds
+tighter than `OR`, matching ordinary language convention — `A AND B OR C` reads unambiguously as
+`(A AND B) OR C` with no parentheses needed. Parentheses are emitted only where precedence alone
+would misparse: an `OR` appearing as an `AND`'s own operand (`(A OR B) AND C`), or as a `NOT`'s
+own operand (`NOT (A OR B)`). This only became reachable once an OR-merge branch could itself be
+a compound expression rather than a single tag (S1 item 11) — before that, `AND`/`OR` never
+nested inside each other in any real or built shape, so the distinction was moot.
 
 Stateful and boxed instructions (timers, MOVE, block calls — anything with named ports beyond a
 single boolean in/out) use call syntax, with a small maintained vendor↔neutral name table for the
@@ -137,9 +145,10 @@ NETWORK 8 "Run enable delay"
   already-known multi-contact-OR-branch/nested-OR-merge cases. **Live-verified against real data,
   2026-07-11:** isolating the real network directly confirmed `Eq → Contact → TON.IN` reduces
   successfully, and the OR-merge-of-comparisons throws exactly the predicted, already-tested
-  error — `docs/notes/stage-gates.md` has the full story. A whole-block `ControlDelays` round-trip
-  still isn't reached (`Mul`/`Convert` in an unrelated network), only the comparisons content
-  itself has been live-proven.
+  error — `docs/notes/stage-gates.md` has the full story. **Closed out, 2026-07-12 (S1 item 11
+  below):** with OR-merge branches generalized, this same real network's Coil condition (the one
+  gated by `O(41)`) now reduces cleanly too. A whole-block `ControlDelays` round-trip still isn't
+  reached (`Mul`/`Convert` in an unrelated network), only this network's own content is proven.
 - **MOVE (`Part Name="Move"`), built 2026-07-11 (S1 item 10).** Grounded against `FB MotorDOL`'s
   "HMI Motor Status Telemetry" network: a cascade of `Contact -> Move` taps writing a status code,
   no Coil at all in that real network. Key finding: a Move is neither a boolean chain position
@@ -168,8 +177,30 @@ NETWORK 8 "Run enable delay"
   fixture); 3 of the network's 5 real Moves reduced successfully before the whole-network
   `Reduce()` hit a pre-existing, already-deferred multi-contact-OR-merge-branch limitation
   unrelated to MOVE; a fully self-contained real sub-network round-tripped cleanly end to end —
-  `docs/notes/stage-gates.md` has the full story. A whole-block round-trip for this network still
-  isn't reached (same OR-merge-composition blocker as `ControlDelays`).
+  `docs/notes/stage-gates.md` has the full story. **Closed out, 2026-07-12 (S1 item 11 below):**
+  with OR-merge branches generalized, this same real network now reduces all 5 Moves, including
+  the one gated by the OR-merge.
+- **OR-merge branches generalized to ordinary chains, built 2026-07-11/12 (S1 item 11).** Closes
+  the exact gap left open by items 9 and 10: `GraphReducer.ResolveOrMerge` originally required
+  every branch to be a single Contact fed directly by Powerrail; real data hit this twice
+  (`ControlDelays`' `O(41)` combining two comparisons, each fed by a further OR-merge rather than
+  Powerrail; `MotorDOL`'s `O(45)` fed by a shared, non-rail-fed Contact). Fix: each branch (`inK`
+  port) is resolved via the exact same `TraceChain` mechanism as a Coil's condition/a TON's `IN`/a
+  Move's `en` — recursion, not a new algorithm, so a branch that's itself a multi-Contact chain, a
+  comparison, or a nested OR-merge all just work. The sidecar's `OrStep.Branches` changed from a
+  flat `ContactStep` list to `OrBranch` (Steps + nullable RailWireUId, mirroring every other
+  production's own chain shape) — the outer chain's own `RailWireUId` is now `null` whenever it
+  terminates at an OrStep (each branch owns its rail wiring individually), mirroring the existing
+  `TimerOutputStep` precedent. `FlgNetBuilder`'s already-existing de-duplicating endpoint
+  accumulator (built for MOVE) needed no new mechanism — a branch sharing an upstream prefix with
+  another branch, a Move tap, or an unrelated chain elsewhere in the network all dedupe identically.
+  This is what unlocked the AND/OR precedence grammar above: a branch's own condition can now be
+  a compound expression, not just a bare tag. **Live-verified against real data, 2026-07-12:**
+  both real networks that motivated this item now reduce and round-trip completely —
+  `ControlDelays`' Coil condition turned out to be an `Or` of two `And`s each containing a nested
+  `Or` (richer than any fixture, confirming the precedence grammar on genuinely real data), and
+  `MotorDOL`'s telemetry network now reduces all 5 Moves. `docs/notes/stage-gates.md` has the full
+  story.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,
@@ -334,10 +365,14 @@ question, left open on purpose rather than guessed).
   passed — see `tests/golden/README.md`.
 - `Ne`/`Le`/`Gt`/`Lt` Part Names — only `Eq`/`Ge` confirmed real (`FC ControlDelays`); same
   status as AND-merge.
-- A comparison composing with an OR-merge (as a branch, or feeding one) — real
-  (`ControlDelays`' `O(41)`) but deliberately not modeled; the existing OR-merge branch/fan-out
-  checks already safely refuse it.
-- A full live TIA round-trip for comparisons specifically — not yet reached. `ControlDelays` as a
-  whole also needs `Mul`/`Convert` elsewhere in the block regardless of comparison support; a
-  purpose-built reference-project block (matching the `TimerSample` precedent) would close this
-  out the same way it did for TON's direct-`Q` case.
+- **Resolved, 2026-07-12 (S1 item 11):** a comparison composing with an OR-merge (as a branch, or
+  feeding one) — real (`ControlDelays`' `O(41)`). OR-merge branches generalized to ordinary
+  chains (reusing `GraphReducer.TraceChain` recursively), so a comparison appearing there needs
+  no special case. Same generalization also closed out multi-Contact branches and nested
+  OR-merges (`FB MotorDOL`'s `O(45)`), both previously refused as unconfirmed shapes.
+- A full live TIA round-trip for comparisons specifically — the comparison content itself is now
+  live-round-tripped (`ControlDelays`' `CompileUnit "8"`, including its `O(41)`/`O(38)` content,
+  S1 item 11's live verification). A whole-*block* round-trip for `ControlDelays` still isn't
+  reached — it also needs `Mul`/`Convert` elsewhere in the block, an unrelated deferred capability;
+  a purpose-built reference-project block (matching the `TimerSample` precedent) would close that
+  out specifically.
