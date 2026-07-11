@@ -13,7 +13,7 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move" };
 
     // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
     // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
@@ -67,7 +67,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge only.");
+                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -82,6 +82,11 @@ public static class FlgNetParser
                 {
                     var srcType = ParseComparisonSrcType(child, name, uid);
                     parts.Add(new PartNode(uid, name, SrcType: srcType));
+                }
+                else if (name == "Move")
+                {
+                    ParseMoveFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name));
                 }
                 else
                 {
@@ -161,6 +166,35 @@ public static class FlgNetParser
         }
 
         return templateValue.Value;
+    }
+
+    // A Move's own shape is entirely fixed in every real instance seen (`FB MotorDOL`,
+    // 2026-07-11) — `DisabledENO="true"` and `<TemplateValue Name="Card" Type="Cardinality">1
+    // </TemplateValue>` — no variable data to carry on PartNode (unlike TON's time_type or a
+    // comparison's SrcType), so this only validates the fixed shape and hard-errors on anything
+    // else, rather than store a field whose value never varies (same "don't carry a confirmed
+    // constant" reasoning as TON's InstanceOfType). A Cardinality other than 1 would presumably
+    // be a MOVE_BLK_VARIANT-style multi-element copy — real but unconfirmed, refused.
+    private static void ParseMoveFixedShape(XElement movePart, int uid)
+    {
+        var disabledEno = movePart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Move\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var templateValue = movePart.Element(Ns + "TemplateValue")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"Move\" UId=\"{uid}\"> is missing its <TemplateValue> cardinality element.");
+        var name = RequireAttribute(templateValue, "Name");
+        var type = RequireAttribute(templateValue, "Type");
+        if (name != "Card" || type != "Cardinality" || templateValue.Value != "1")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Move\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\">{templateValue.Value}</TemplateValue> " +
+                "— only Name=\"Card\" Type=\"Cardinality\">1 has been observed (a different value would presumably be a " +
+                "MOVE_BLK_VARIANT-style multi-element copy — real but unconfirmed).");
+        }
     }
 
     // A TON's own Instance reference — same Scope values as an ordinary Access, but the

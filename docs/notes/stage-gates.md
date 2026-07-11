@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge, negated contacts (multi-assignment, slice- and array-addressed), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 5 committed corpus artifacts (4 FCs/DBs + `PerimeterSafetyAlarms`). All PC-side suites green: 68 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge, negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE (unit-tested, not yet live-round-trip-proven — see item 10), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 106 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -566,3 +566,105 @@ accident. A full whole-block `import → compile → re-export → Normalizer` r
 comparisons) — closing that out would need either MOVE/comparisons-adjacent arithmetic support
 landing too, or a purpose-built reference-project block (matching the `TimerSample` precedent)
 that avoids Network 1's content entirely.
+
+### S1 item 10 (MOVE support), 2026-07-11
+
+Grounded against a real export, `FB MotorDOL`'s "HMI Motor Status Telemetry" network: a cascade
+of `Contact -> Move` taps writing a status code, no `Coil` at all in that real network.
+
+Real finding that changed the original framing: a Move is neither a boolean chain position (like
+Eq/Ge) nor a self-contained production like TON — it's a side effect *tapped off* a chain
+position's own output via genuine wire fan-out. The same wire that feeds the next chain position
+also feeds the Move's `en`, so a wire can carry three endpoints (producer, Move.en tap,
+next-position.in) instead of the usual two. This required a core `GraphReducer.TraceChain`
+redesign: the fan-out check changed from "exactly one other endpoint on a wire, else throw" to
+"find the single endpoint whose (Part, Port) is a genuine producer, ignore every other endpoint
+as an uninspected consumer" — every prior capability's fan-out check assumed exactly two
+endpoints per wire, which a Move's tap genuinely breaks.
+
+Second consequence, in `FlgNetBuilder`: multiple Moves' own `en` chains commonly telescope
+through the same upstream Contacts a Coil's (or another Move's) chain already walked. The
+reducer deliberately re-derives the same `ChainStepSidecar` data once per production that traces
+through a shared Contact (correct — each production's own sidecar needs a complete, self-
+contained picture) rather than trying to share state across productions. Naively rebuilding from
+that duplicated sidecar data the old way (each chain-building call emitting its own `WireNode`
+directly) would emit duplicate `<Part>`/`<Wire>` elements. Rebuilt `FlgNetBuilder` around a
+shared, de-duplicating endpoint accumulator (`AddPart`/`AddEndpoint`, keyed by UId) — the old
+rail-only `railEndpointsByWireUId` special case generalized into the same mechanism used for
+every wire.
+
+`DisabledENO="true"` and the `Card=1` `TemplateValue` are fixed in every real instance seen —
+hard-validated on parse (`ParseMoveFixedShape`) and unconditionally regenerated on write, never
+carried as `PartNode` data (same "don't store a confirmed constant" reasoning as TON's
+`InstanceOfType`). A different `Card` value would presumably be a `MOVE_BLK_VARIANT`-style
+multi-element copy — real but unconfirmed, refused rather than guessed at.
+
+Readable-form syntax: `MOVE(EN := <expr>, IN := <expr>) => <dest>` — `EN` reduces via the same
+`TraceChain` mechanism as a Coil's condition/a TON's `IN`; `IN` is a tag-or-literal operand (same
+resolver as TON's `PT`); `<dest>` is always a bare tag (`out1` always wires straight to an
+ordinary Access in every real instance seen).
+
+12 new converter tests (`MoveTests.cs`): parse validation (including two hard-error fixtures for
+the DisabledENO/Cardinality checks), reduce/round-trip/serialize for the simple no-fan-out case,
+and — the load-bearing proof — a fixture built directly from the real telescoping/fan-out shape
+(genericized per `docs/13-data-boundary.md`: `Contact1 -> [Move tap, Contact2 continue] ->
+Contact2 -> [Move tap, Coil continue] -> Coil`) proving both halves of the redesign at once: the
+reducer's deliberate per-production duplication, and the builder's correct de-duplication on
+rebuild (exactly 5 Parts, 10 Wires — no duplicates — with both genuinely fanned-out wires ending
+up with all 3 real endpoints each, not 2). **This test passed on its first run** — the redesign
+holds up against the exact real-world shape it was built for, not just the simple case. All 106
+converter tests pass (up from 94); `openness-cli`/golden-harness suites untouched by this work.
+
+### S1 item 10 continued: live verification against real data, 2026-07-11
+
+TIA Portal was already running (3 processes — confirmed normal for this machine per the item 9
+footnote above, not a stale-session symptom). Fresh `export` of `FB MotorDOL`
+(`station_2/JOB9002_PLC/Motors`) succeeded immediately. Isolated `CompileUnit ID="3F"` (the "HMI
+Motor Status Telemetry" network itself — 12 parts, 24 wires, 11 access nodes, 5 constants) into a
+standalone file, same technique as item 9's Network 2 isolation, then ran it directly through
+`FlgNetParser.Parse → GraphReducer.Reduce → FlgNetBuilder.Build → FlgNetWriter.Write` → re-parse
+via a temporary, throwaway test (deleted immediately after use, real data never committed).
+
+**The real topology is richer than any fixture built for this phase:** `Contact37 →
+[Move38 tap, Contact39 continue] → Contact39 → [Move40 tap, Contact41 continue] → Contact41 →
+[Move42 tap, Contact43.in, Contact44.in]` — Contact41's own outgoing wire fans out to **three**
+consumers (Move42's tap plus two Contact continuations), not two. `Contact43`/`Contact44` feed an
+OR-merge (`O(45)`) whose own output feeds a fifth Move (`Move46`); a fully separate, independently
+rail-fed `Contact47` feeds a sixth production, `Move48`.
+
+Result, precise and better than expected:
+
+- **Parsing succeeded immediately** on the whole real network, including the genuine 3-consumer
+  fan-out at Contact41's wire — confirms `FlgNetParser`/the wire model handle arbitrary fan-out
+  width, not just the 2-consumer case every fixture happens to test.
+- **`Reduce()` failed**, but predictably and for a reason unrelated to MOVE:
+  `NonReducibleNetworkException: OR-merge UId=45 branch 1 contact UId=43 is not fed directly from
+  Powerrail — multi-contact OR branches are outside this slice.` `Contact43`/`Contact44` are
+  downstream of `Contact41`, not directly rail-fed — the *existing*, unmodified, already-deferred
+  multi-contact-OR-branch check (same class of gap already known from comparisons' `O(41)` case)
+  refused it correctly. **Not a new gap and not a MOVE-specific bug** — the same real network would
+  hit this identical error if `O(45)` fed a Coil or a TON instead of a Move.
+- **Confirmed via Part document order (`Reduce()` processes Moves in source order: 38, 40, 42, 46,
+  48, throwing on the first failure) that `Move38`, `Move40`, and `Move42` all reduced
+  successfully before the throw** — including `Move42`, whose own `en` taps directly off the
+  genuine 3-way fan-out wire. This is real, live, positive proof of the core mechanism (fan-out
+  tap identification, telescoping chain re-derivation) against unmodified production data, not
+  just the genericized `MoveTelescopingChain.xml` fixture.
+- **A fully clean, real, self-contained sub-network was isolated and round-tripped end to end
+  successfully:** `Contact47 → Move48` (both `Access`/`Wire` UIds byte-identical to the real
+  export, with exactly one necessary trim — the shared rail wire, UId 49, reduced from its real
+  2-consumer form, `Contact37` + `Contact47`, to just the `Contact47` endpoint, since `Contact37`
+  isn't part of this isolated subset; the same "rail wire is commonly shared" pattern this project
+  already tracks separately, not a fabrication). `Parse → Reduce → Build → Write → Reparse`
+  produced a wire-for-wire, part-for-part match against the original — genuine positive
+  full-pipeline proof.
+
+**Bottom line, matching item 9's own pattern exactly:** MOVE is now proven against genuinely live
+data for the part that's in scope (parsing, fan-out producer-identification, telescoping
+re-derivation, and a full clean round-trip on an isolated real sub-network), with the
+deliberately-deferred part (multi-contact OR-merge branches) confirmed to fail exactly as
+designed, on real data, for a pre-existing reason unrelated to this phase's work. A full
+whole-block `import → compile → re-export → Normalizer` round-trip for the "HMI Motor Status
+Telemetry" network itself still isn't reachable (needs the OR-merge composition gap closed, same
+blocker as comparisons' `ControlDelays` case) — closing that out is a future, shared phase across
+both capabilities, not MOVE-specific follow-up.

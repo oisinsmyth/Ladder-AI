@@ -16,8 +16,8 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 
 ## Current scope (walking skeleton)
 
-Deliberately narrow — **Contact/Coil and basic tag references, plus OR-merge and negated
-contacts** (S1 item 7 Phase A, 2026-07-11). No TON, MOVE, comparisons, or block calls yet.
+Deliberately narrow — **Contact/Coil and basic tag references, OR-merge and negated contacts,
+TON, comparisons (Eq/Ge), and MOVE** (S1 items 7–10, through 2026-07-11). No block calls yet.
 Anything outside scope is a hard error (`UnsupportedConstructException`), never a silent
 partial result — hitting that error on a real block is expected at this stage, not a bug.
 
@@ -183,6 +183,61 @@ shapes are additionally proven by unit tests built directly from the real export
 `Converter.Tests/ComparisonTests.cs`. A whole-block `ControlDelays` round-trip still isn't
 reached (`Mul`/`Convert` in an unrelated network) — a purpose-built reference-project block
 (matching the `TimerSample` precedent) would close that out specifically.
+
+## MOVE support (S1 item 10, 2026-07-11)
+
+`Part Name="Move"` — grounded against a real export, `FB MotorDOL`'s "HMI Motor Status
+Telemetry" network: a cascade of `Contact -> Move` taps writing a status code, no `Coil` at all
+in that real network.
+
+- **Key finding: a Move is neither a boolean chain position (unlike Eq/Ge) nor a self-contained
+  production like TON — it's a side effect *tapped off* a chain position's own output via genuine
+  wire fan-out.** The same wire that feeds the next chain position also feeds the Move's `en`, so
+  a wire can carry three endpoints (producer, Move.en tap, next-position.in) instead of the usual
+  two. `IN` is a single tag-or-literal operand (reuses `ResolveTagOrLiteralOperand`, same resolver
+  as TON's `PT`/a comparison's operands); `out1` writes to a plain tag (reuses `ResolveOperand`
+  with a new `port` parameter — the wire shape is identical to an ordinary Contact/Coil operand,
+  only the read/write direction differs semantically).
+- **Core `GraphReducer.TraceChain` redesign.** The fan-out check changed from "exactly one other
+  endpoint on a wire, else throw" to "find the single endpoint whose (Part, Port) is a genuine
+  producer (`OutPortFor`), ignore every other endpoint as an uninspected consumer." This is what
+  lets a Move's `en` tap coexist on the same wire as the chain's real continuation without
+  breaking series-chain reducibility for the chain that owns it.
+- **`FlgNetBuilder` rebuilt around a shared, de-duplicating endpoint accumulator.** Multiple
+  Moves' own `en` chains commonly telescope through the same upstream Contacts a Coil's (or
+  another Move's) chain already walked — `GraphReducer` deliberately re-derives the same
+  `ChainStepSidecar` data once per production that traces through a shared Contact (this is
+  correct, not a bug: each production's sidecar needs its own complete picture). Naively rebuilding
+  from that would emit duplicate `<Part>`/`<Wire>` elements. `AddPart`/`AddEndpoint` now key by
+  UId and de-duplicate, and the old rail-only `railEndpointsByWireUId` accumulator generalized
+  into the same mechanism used for every wire, not a rail special case.
+- `DisabledENO="true"` and the `Card=1` `TemplateValue` are fixed in every real instance seen —
+  hard-validated on parse and unconditionally regenerated on write, never carried as `PartNode`
+  data (same "don't store a confirmed constant" reasoning as TON's `InstanceOfType`). A different
+  `Card` value would presumably be a `MOVE_BLK_VARIANT`-style multi-element copy — real but
+  unconfirmed, refused rather than guessed at.
+- Readable-form syntax: `MOVE(EN := <expr>, IN := <expr>) => <dest>` (`ir/SPEC.md` has the full
+  grammar note).
+
+12 converter tests (`Converter.Tests/MoveTests.cs`), including a fixture
+(`MoveTelescopingChain.xml`) built directly from the real telescoping/fan-out shape (genericized
+per `docs/13-data-boundary.md`) — proves both that the reducer's duplication-by-design is correct
+and that the builder's de-duplication produces exactly the right topology back (no duplicate
+Parts/Wires, and the two genuinely fanned-out wires end up with all 3 real endpoints each). All
+106 converter tests pass.
+
+**Live-verified against real data, 2026-07-11:** isolating `FB MotorDOL`'s real "HMI Motor Status
+Telemetry" network (a throwaway test against a fresh export, deleted after use) showed the real
+topology is richer than any fixture — one Contact's outgoing wire genuinely fans out to **three**
+consumers, not two — and parsing/fan-out-producer-identification handled it correctly. Full
+`Reduce()` on the whole network hit a pre-existing, already-deferred limitation unrelated to MOVE
+(a multi-contact OR-merge branch not fed directly from Powerrail, same class of gap as
+comparisons' `O(41)` case) — but Part document order confirms 3 of the network's 5 real Moves
+(including one tapping the genuine 3-way fan-out) reduced successfully first. A fully
+self-contained real sub-network (`Contact47 → Move48`) round-tripped end to end cleanly. Full
+story: `docs/notes/stage-gates.md` ("S1 item 10 continued"). A whole-block round-trip for this
+network specifically still isn't reachable — same OR-merge-composition blocker as `ControlDelays`,
+a shared future phase across both capabilities, not MOVE-specific follow-up.
 
 ## DB support
 

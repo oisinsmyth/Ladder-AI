@@ -39,15 +39,18 @@ public static class GraphReducer
 
         var tonParts = network.Parts.Where(p => p.Name == "TON").ToList();
         var coils = network.Parts.Where(p => p.Name == "Coil").ToList();
-        if (coils.Count == 0 && tonParts.Count == 0)
+        var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
+        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil or TON found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, or Move found.");
         }
 
         var assignments = new List<CoilAssignment>();
         var assignmentSidecars = new List<CoilAssignmentSidecar>();
         var timerBindings = new List<TimerBinding>();
         var timerSidecars = new List<TimerBindingSidecar>();
+        var moveStatements = new List<MoveStatement>();
+        var moveSidecars = new List<MoveStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -90,6 +93,30 @@ public static class GraphReducer
             }
         }
 
+        // Moves are reduced last (order doesn't affect correctness, same reasoning as Timers-
+        // before-Coils above — a Move's own `en`/`in` never depend on another Move's result via
+        // wire-graph traversal). Telescoping Move chains (FB MotorDOL's cascade: each Move's `en`
+        // trace re-walks the same upstream Contacts a prior Move's trace already walked) produce
+        // duplicate ContactStep entries across sidecars by design — that's the reducer correctly
+        // reporting each Move's own full condition, not a bug; FlgNetBuilder (not this reducer) is
+        // where the resulting duplicate Part/Wire UIds get deduplicated on rebuild.
+        foreach (var move in moveParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceMove(network, move, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            moveStatements.Add(statement);
+            moveSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -97,8 +124,8 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings);
-        var networkSidecar = new NetworkSidecar(networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars);
+        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements);
+        var networkSidecar = new NetworkSidecar(networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -175,6 +202,41 @@ public static class GraphReducer
         return (binding, sidecar, accessEntries, constantEntries);
     }
 
+    // A Move's `en` is reduced exactly like a Coil's condition/TON's IN — same backward trace via
+    // TraceChain, terminating at the Move's own "en" port (the tap wire shared with the chain's
+    // real continuation — see TraceChain's producer-identification comment for the fan-out
+    // shape). `in` is a single tag-or-literal operand (ResolveTagOrLiteralOperand, same resolver
+    // as TON's PT / a comparison's operands). `out1` writes to a plain tag (ResolveOperand — same
+    // IdentCon-fed wire shape as an ordinary Contact/Coil operand, just port "out1" instead of
+    // "operand", and a write instead of a read).
+    private static (MoveStatement Statement, MoveStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceMove(
+        FlgNetwork network,
+        PartNode move,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (enExpr, enSteps, enRailWireUId) = TraceChain(
+            network, (move.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, move.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, move.UId, networkNumber, "out1");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath);
+        var sidecar = new MoveStatementSidecar(move.UId, enRailWireUId, enSteps, inSidecar, destTag.UId, destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
     // Resolves a single IdentCon-fed operand (no chain, unlike a boolean chain position) that's
     // either an ordinary tag (AccessNode) or a literal constant (ConstantAccessNode) — used for
     // a TON's `PT` (confirmed real 2026-07-11, FB MotorDOL / FC ControlDelays) and, since the
@@ -221,6 +283,18 @@ public static class GraphReducer
             entries.Add(entry);
         }
     }
+
+    // Each part kind's own "out"-equivalent port name — the port TraceChain looks for when
+    // identifying a wire's producer. Contact/O/Eq/Ge use "out"; a TON's only confirmed real
+    // upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused like any other
+    // unrecognized shape). Move never appears here — it's never a producer for a boolean chain,
+    // only a consumer (its "en" tap) — see TraceChain's producer-identification comment.
+    private static string? OutPortFor(string partName) => partName switch
+    {
+        "Contact" or "O" or "Eq" or "Ge" => "out",
+        "TON" => "Q",
+        _ => null,
+    };
 
     // IR-text infix operator per Part Name — only Eq/Ge confirmed real (ir/SPEC.md's readable-form
     // table already sketches the full IEC family, but Ne/Le/Gt/Lt Part Names are unconfirmed, so
@@ -316,39 +390,29 @@ public static class GraphReducer
                 .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == currentInPort.UId && e.PortName == currentInPort.Port))
                 .ToList();
 
-            if (others.Count != 1)
+            // A wire feeding this chain position has exactly one producer — Powerrail (handled
+            // above) or the single upstream Part whose "out"-equivalent port matches. Every other
+            // endpoint on the wire is a consumer we don't care about here: most commonly a Move's
+            // "en" tap sharing the wire with the chain's real continuation (confirmed real,
+            // FB MotorDOL — one wire, three endpoints: producer, Move.en tap, next-position.in).
+            // Those taps belong to their own Move production, not this trace, so they're simply
+            // ignored rather than treated as fan-out that breaks series-purity.
+            var producerCandidates = others
+                .Where(e => e.Kind == EndpointKind.NameCon)
+                .Select(e => (Endpoint: e, Part: network.Parts.FirstOrDefault(p => p.UId == e.UId)))
+                .Where(x => x.Part is not null && x.Endpoint.PortName == OutPortFor(x.Part.Name))
+                .ToList();
+
+            if (producerCandidates.Count != 1)
             {
                 throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: wire {wire.UId} has fan-out ({wire.Endpoints.Count} endpoints) — not a pure series chain.");
+                    $"Network {networkNumber}: wire {wire.UId} feeding ({currentInPort.UId}, {currentInPort.Port}) has " +
+                    $"{producerCandidates.Count} candidate producer endpoint(s) (expected exactly 1) among {others.Count} " +
+                    "other endpoint(s) — not a supported chain shape.");
             }
 
-            var other = others[0];
-            if (other.Kind != EndpointKind.NameCon)
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: wire {wire.UId} feeds ({currentInPort.UId}, {currentInPort.Port}) from an unsupported endpoint ({other.Kind}).");
-            }
-
-            var upstreamPart = network.Parts.FirstOrDefault(p => p.UId == other.UId)
-                ?? throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: wire {wire.UId} references unknown part UId={other.UId}.");
-
-            // Each upstream part kind has its own "out"-equivalent port name: Contact/O/Eq/Ge use
-            // "out"; a TON's only confirmed real upstream leaf is "Q" ("ET" has no live example
-            // as a consumed leaf, refused like any other unrecognized shape).
-            var expectedPort = upstreamPart.Name switch
-            {
-                "Contact" or "O" or "Eq" or "Ge" => "out",
-                "TON" => "Q",
-                _ => null,
-            };
-
-            if (expectedPort is null || other.PortName != expectedPort)
-            {
-                throw new NonReducibleNetworkException(
-                    $"Network {networkNumber}: wire {wire.UId} feeds ({currentInPort.UId}, {currentInPort.Port}) from " +
-                    $"'{upstreamPart.Name}' via port '{other.PortName}' — outside this slice.");
-            }
+            var other = producerCandidates[0].Endpoint;
+            var upstreamPart = producerCandidates[0].Part!;
 
             visitedWireUIds.Add(wire.UId);
             var outgoingWireUId = wire.UId;
@@ -513,16 +577,20 @@ public static class GraphReducer
         return (new ChainStepSidecar.OrStep(orPart.UId, branches, outgoingWireUId), new Expr.Or(branchExprs), railWireUId);
     }
 
+    // Port defaults to "operand" (every Contact/Coil operand) — Move's write-side target uses
+    // "out1" instead (see ReduceMove); the wire shape is otherwise identical, an IdentCon-fed
+    // Access, only the read/write direction differs semantically, not structurally.
     private static (SidecarAccessEntry Tag, int WireUId) ResolveOperand(
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,
         int partUId,
-        int networkNumber)
+        int networkNumber,
+        string port = "operand")
     {
-        var wire = RequireWireAt(wiresByPort, (partUId, "operand"), networkNumber);
+        var wire = RequireWireAt(wiresByPort, (partUId, port), networkNumber);
         var identCon = wire.Endpoints.FirstOrDefault(e => e.Kind == EndpointKind.IdentCon)
             ?? throw new NonReducibleNetworkException(
-                $"Network {networkNumber}: operand wire {wire.UId} for UId={partUId} has no IdentCon source.");
+                $"Network {networkNumber}: {port} wire {wire.UId} for UId={partUId} has no IdentCon source.");
 
         var access = accessByUId.TryGetValue(identCon.UId!.Value, out var found)
             ? found

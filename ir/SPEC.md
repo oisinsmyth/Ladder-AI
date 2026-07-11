@@ -140,6 +140,36 @@ NETWORK 8 "Run enable delay"
   error — `docs/notes/stage-gates.md` has the full story. A whole-block `ControlDelays` round-trip
   still isn't reached (`Mul`/`Convert` in an unrelated network), only the comparisons content
   itself has been live-proven.
+- **MOVE (`Part Name="Move"`), built 2026-07-11 (S1 item 10).** Grounded against `FB MotorDOL`'s
+  "HMI Motor Status Telemetry" network: a cascade of `Contact -> Move` taps writing a status code,
+  no Coil at all in that real network. Key finding: a Move is neither a boolean chain position
+  (unlike Eq/Ge) nor a self-contained production like TON — it's a side effect *tapped off* a
+  chain position's own output via genuine wire fan-out (the same wire that feeds the next chain
+  position also feeds the Move's `en`). Syntax: `MOVE(EN := <expr>, IN := <expr>) => <dest>` — `EN`
+  is reduced the same backward-trace way as a Coil's condition or a TON's `IN`; `IN` is a single
+  tag-or-literal operand (same resolver as a TON's `PT`/a comparison's operands); `<dest>` is a
+  bare tag (the `out1` write target, never a literal or expression in any real instance seen).
+  `DisabledENO="true"` and `Card=1` are fixed in every real instance and hard-validated rather than
+  carried as data (same "don't store a confirmed constant" reasoning as TON's `InstanceOfType`) —
+  a different `Card` value would presumably be a `MOVE_BLK_VARIANT`-style multi-element copy, real
+  but unconfirmed, refused rather than guessed at. Required a core `GraphReducer` change: the
+  backward trace's fan-out check changed from "exactly one other endpoint on a wire, else throw" to
+  "find the single genuine producer endpoint, ignore every other endpoint as an uninspected
+  consumer" — this is what lets a Move's `en` tap coexist on the same wire as the chain's real
+  continuation. A second consequence: multiple Moves' own `en` chains commonly telescope through
+  the same upstream Contacts a Coil's (or another Move's) chain already walked — the reducer
+  deliberately re-derives the same chain-step data once per production that traces through it, and
+  `FlgNetBuilder` (rebuilt around a shared, de-duplicating endpoint accumulator) is what prevents
+  that from becoming duplicate XML on rebuild, not the reducer. Covered by 12 converter tests
+  (`MoveTests.cs`), including a fixture built from the real telescoping/fan-out shape (genericized)
+  proving both the duplication-on-reduce and the de-duplication-on-rebuild. **Live-verified
+  against real data, 2026-07-11:** isolating `FB MotorDOL`'s real network directly confirmed
+  parsing/fan-out-producer-identification handle a genuine 3-way fan-out (richer than any
+  fixture); 3 of the network's 5 real Moves reduced successfully before the whole-network
+  `Reduce()` hit a pre-existing, already-deferred multi-contact-OR-merge-branch limitation
+  unrelated to MOVE; a fully self-contained real sub-network round-tripped cleanly end to end —
+  `docs/notes/stage-gates.md` has the full story. A whole-block round-trip for this network still
+  isn't reached (same OR-merge-composition blocker as `ControlDelays`).
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,

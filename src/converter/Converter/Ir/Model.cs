@@ -56,24 +56,42 @@ public sealed record TimerBinding(string InstancePath, Expr In, Expr Pt);
 
 public sealed record CoilAssignment(string CoilTag, Expr Condition);
 
+// A gated data assignment (`Part Name="Move"`) — confirmed real, 2026-07-11, `FB MotorDOL`
+// ("HMI Motor Status Telemetry": a cascade of Contact->Move taps writing a status code, no Coil
+// at all in that network). Structurally unlike everything else built so far: not a boolean chain
+// position (Eq/Ge) and not a self-contained production like TON — a Move is a *side effect
+// tapped off* a chain position's own output via genuine wire fan-out (the same wire that feeds
+// the next chain position also feeds this Move's `en`), while the boolean chain continues
+// independently. En is reduced via the exact same TraceChain mechanism as a Coil's condition or
+// a TON's IN — nothing new needed there beyond GraphReducer's own fan-out generalization (see
+// its doc comment). In is the value written (tag or literal, same tag-or-literal resolver as
+// TON's PT/a comparison's operands). DestTag is the plain dotted tag path being written — no
+// separate Expr wrapper needed since it's always a bare tag on the write side, never a literal
+// or expression (confirmed real: `out1` always wires straight to an ordinary Access).
+public sealed record MoveStatement(Expr En, Expr In, string DestTag);
+
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
 // wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
 // alarm-bit network). Assignments is empty for a genuinely empty network (source
 // `<NetworkSource />` with no FlgNet content at all, also confirmed real) — both are
 // unambiguous, not guesses, so both are modeled directly rather than hard-erroring.
-// Timers is a separate list from Assignments (not folded into one statement list) because a
-// TimerBinding isn't reduced from a Coil at all — it's its own kind of production, terminating in
-// a TON Part rather than a Coil (confirmed real, 2026-07-11: S1 item 7's TON grounding). A
-// network can have both, or either alone.
+// Timers/Moves are separate lists from Assignments (not folded into one statement list) because
+// neither is reduced from a Coil at all — each is its own kind of production, terminating in a
+// TON/Move Part rather than a Coil (confirmed real, 2026-07-11: S1 items 7/10's grounding). A
+// network can have any combination, or just one kind alone (a Move-only network with no Coil or
+// TON at all is real — the whole "HMI Motor Status Telemetry" network is exactly this shape).
 public sealed record IrNetwork(
     int Number,
     string Title,
     IReadOnlyList<CoilAssignment> Assignments,
-    IReadOnlyList<TimerBinding>? Timers = null)
+    IReadOnlyList<TimerBinding>? Timers = null,
+    IReadOnlyList<MoveStatement>? Moves = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
-    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0;
+    public IReadOnlyList<MoveStatement> Moves { get; init; } = Moves ?? Array.Empty<MoveStatement>();
+
+    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -238,17 +256,38 @@ public sealed record CoilAssignmentSidecar(
     int CoilOperandAccessUId,
     int CoilOperandWireUId);
 
+// One Move's full round-trip data. RailWireUId/Steps mirror CoilAssignmentSidecar/
+// TimerBindingSidecar's own chain shape exactly (same TraceChain mechanism produces all three) —
+// a Move's `en` is reduced the same way a Coil's condition or a TON's IN is, just terminating at
+// the Move's own `en` port. DestAccessUId/DestWireUId are the `out1` write target, resolved the
+// same way an operand is (ResolveOperand — the wire shape is identical, only the read/write
+// direction differs semantically, not structurally). DisabledENO/Cardinality aren't carried as
+// fields — every real instance seen has `DisabledENO="true"` and `Card="1"`, so the writer always
+// regenerates those constants and the parser hard-errors if a source ever disagrees (the same
+// "don't carry a field whose value is always the one confirmed constant" reasoning already used
+// for TON's `InstanceOfType`).
+public sealed record MoveStatementSidecar(
+    int MovePartUId,
+    int? RailWireUId,
+    IReadOnlyList<ChainStepSidecar> Steps,
+    OperandSidecar In,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
     IReadOnlyList<SidecarAccessEntry> AccessUIds,
     IReadOnlyList<CoilAssignmentSidecar> Assignments,
     IReadOnlyList<SidecarConstantEntry>? ConstantUIds = null,
-    IReadOnlyList<TimerBindingSidecar>? Timers = null)
+    IReadOnlyList<TimerBindingSidecar>? Timers = null,
+    IReadOnlyList<MoveStatementSidecar>? Moves = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
     public IReadOnlyList<TimerBindingSidecar> Timers { get; init; } = Timers ?? Array.Empty<TimerBindingSidecar>();
+
+    public IReadOnlyList<MoveStatementSidecar> Moves { get; init; } = Moves ?? Array.Empty<MoveStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

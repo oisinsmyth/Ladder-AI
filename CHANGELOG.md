@@ -10,6 +10,42 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-11
 
+**S1 item 10: MOVE support, live-verified (uncommitted)**
+
+- Added `Part Name="Move"` support, grounded against a real export (`FB MotorDOL`'s "HMI Motor
+  Status Telemetry" network) before building anything. Real finding: a Move is neither a boolean
+  chain position (like Eq/Ge) nor a self-contained production like TON — it's a side effect
+  *tapped off* a chain position's own output via genuine wire fan-out (the same wire feeds both
+  the Move's `en` and the chain's real continuation).
+- Core `GraphReducer.TraceChain` redesign: the fan-out check changed from "exactly one other
+  endpoint on a wire, else throw" to "find the single genuine producer endpoint, ignore every
+  other endpoint" — needed because every prior capability assumed exactly two endpoints per wire,
+  which a Move's tap genuinely breaks.
+- `FlgNetBuilder` rebuilt around a shared, de-duplicating endpoint accumulator (`AddPart`/
+  `AddEndpoint`, keyed by UId) — needed because multiple Moves' own `en` chains telescope through
+  the same upstream Contacts a Coil's (or another Move's) chain already walked, and the reducer
+  deliberately re-derives duplicate chain-step data per production (correct, not a bug); only the
+  builder's de-duplication prevents that from becoming duplicate XML on rebuild.
+- Readable-form syntax: `MOVE(EN := <expr>, IN := <expr>) => <dest>`.
+- 12 new converter tests (`MoveTests.cs`), including a fixture built from the real telescoping/
+  fan-out shape (genericized) — **passed on its first run**, proving the redesign against the
+  exact shape it was built for. 106 converter tests pass (up from 94); `openness-cli`/
+  golden-harness suites unaffected, not re-run this pass.
+- **Live-verified, same session:** isolated the real "HMI Motor Status Telemetry" network from a
+  fresh `FB MotorDOL` export (throwaway test, real data deleted after use). The real topology is
+  richer than any fixture — one Contact's outgoing wire fans out to **three** consumers, not two
+  — and parsing/fan-out-producer-identification handled it correctly. `Reduce()` failed on the
+  whole network, but for a pre-existing, already-deferred reason unrelated to MOVE (a
+  multi-contact OR-merge branch not fed directly from Powerrail — same class of gap already known
+  from comparisons); confirmed via Part document order that 3 of the network's 5 real Moves
+  (including one tapping the genuine 3-way fan-out) reduced successfully before the throw. A
+  fully self-contained real sub-network (`Contact47 → Move48`, one necessary rail-wire trim,
+  otherwise byte-identical to the export) round-tripped cleanly end to end.
+- Docs updated: `ir/SPEC.md` (readable-form entry), `src/converter/README.md` (new section, plus
+  fixed a stale scope line that hadn't been updated since before TON/comparisons landed),
+  `docs/notes/stage-gates.md` (S1 item 10 + live-verification sections, refreshed summary table
+  row).
+
 **S1 item 9: comparisons (Eq/Ge)**
 
 - Added `Part Name="Eq"`/`"Ge"` support, grounded against a real export (`FC ControlDelays`)

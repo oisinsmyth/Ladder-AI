@@ -68,6 +68,13 @@ public static class IrSerializer
         {
             sb.Append("  COIL ").Append(assignment.CoilTag).Append(" := ").Append(SerializeExpr(assignment.Condition)).Append('\n');
         }
+
+        foreach (var move in network.Moves)
+        {
+            sb.Append("  MOVE(EN := ").Append(SerializeExpr(move.En))
+              .Append(", IN := ").Append(SerializeExpr(move.In))
+              .Append(") => ").Append(move.DestTag).Append('\n');
+        }
     }
 
     // Only emitted when there's real content — matches every FC seen (StaticMembers null,
@@ -173,6 +180,24 @@ public static class IrSerializer
             sb.Append("    coil = ").Append(assignment.CoilUId).Append('\n');
             sb.Append("    coil operand = ").Append(assignment.CoilOperandAccessUId).Append('\n');
             sb.Append("    coil operandwire = ").Append(assignment.CoilOperandWireUId).Append('\n');
+        }
+
+        for (var m = 0; m < sidecar.Moves.Count; m++)
+        {
+            var move = sidecar.Moves[m];
+            sb.Append("  move ").Append(m).Append('\n');
+            sb.Append("    moveuid = ").Append(move.MovePartUId).Append('\n');
+            sb.Append("    rail = ").Append(SerializeRail(move.RailWireUId)).Append('\n');
+
+            for (var s = 0; s < move.Steps.Count; s++)
+            {
+                SerializeStep(sb, "    ", $"step {s}", move.Steps[s]);
+            }
+
+            SerializeOperand(sb, "    ", "in", move.In);
+
+            sb.Append("    dest = ").Append(move.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(move.DestWireUId).Append('\n');
         }
     }
 

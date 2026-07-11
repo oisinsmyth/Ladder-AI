@@ -181,12 +181,29 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0)
+        // Moves are always emitted last (IrSerializer, after Timers/Coils) — parsed in the same
+        // order for self-stability.
+        var moves = new List<MoveStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  MOVE(", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON statements and isn't marked [empty].");
+            var moveMatch = MoveLineRegex().Match(lines[i]);
+            if (!moveMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  MOVE(EN := <expr>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var enExpr = ParseExpr(moveMatch.Groups["en"].Value);
+            var inExpr = ParseExprTerm(moveMatch.Groups["in"].Value);
+            moves.Add(new MoveStatement(enExpr, inExpr, moveMatch.Groups["dest"].Value));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers);
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(number, title, assignments, timers, moves);
     }
 
     private static Expr ParseExpr(string text)
@@ -361,7 +378,38 @@ public static partial class IrParser
             assignments.Add(new CoilAssignmentSidecar(railWireUId, steps, coilUId, coilOperandAccessUId, coilOperandWireUId));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers);
+        var moves = new List<MoveStatementSidecar>();
+        while (i < lines.Length && MoveHeaderRegex().IsMatch(lines[i]))
+        {
+            moves.Add(ParseMoveSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves);
+    }
+
+    // A Move's own sidecar shape mirrors ParseTimerSidecar's exactly — same rail/steps mechanism,
+    // just terminating at `in`/`dest` (out1) instead of `preset`/(no destination).
+    private static MoveStatementSidecar ParseMoveSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  move <n>" header — index itself isn't needed, position in the list is enough.
+
+        var movePartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    moveuid = "));
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, "    ", $"step {s}"));
+            s++;
+        }
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new MoveStatementSidecar(movePartUId, railWireUId, steps, inOperand, destAccessUId, destWireUId);
     }
 
     private static TimerBindingSidecar ParseTimerSidecar(string[] lines, ref int i, int networkNumber)
@@ -569,6 +617,9 @@ public static partial class IrParser
     [GeneratedRegex(@"^  TON\((?<path>[^,]+), IN := (?<in>.+), PT := (?<pt>.+)\)$")]
     private static partial Regex TonLineRegex();
 
+    [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex MoveLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -586,4 +637,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  assignment (?<index>\d+)$")]
     private static partial Regex AssignmentHeaderRegex();
+
+    [GeneratedRegex(@"^  move (?<index>\d+)$")]
+    private static partial Regex MoveHeaderRegex();
 }

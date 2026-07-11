@@ -3,12 +3,24 @@ using Converter.Ir;
 namespace Converter.SimaticMl;
 
 /// <summary>
-/// Reconstructs a FlgNetwork from IR + its sidecar — the inverse of GraphReducer. Each
-/// assignment's own wires (operand wires, flow-between-contacts wires, coil operand wire) are
-/// rebuilt independently in <see cref="BuildOneChain"/>. The rail connection is handled
-/// separately and grouped by <see cref="CoilAssignmentSidecar.RailWireUId"/> across all
-/// assignments in the network, since the source frequently uses one shared rail wire (many
-/// endpoints) rather than one rail wire per chain — confirmed real, 2026-07-10.
+/// Reconstructs a FlgNetwork from IR + its sidecar — the inverse of GraphReducer. Every wire is
+/// built through one shared endpoint accumulator (<see cref="AddEndpoint"/>), keyed by wire UId,
+/// rather than each chain-building call emitting its own WireNode directly. Two things this
+/// unification exists for, both confirmed real, 2026-07-11 (FB MotorDOL):
+///   - A Contact/OR/comparison's own private wires (operand wire, outgoing wire) are frequently
+///     referenced by MORE THAN ONE production — a Move's `en` chain telescopes through the same
+///     upstream Contacts a Coil's own chain (or another Move's own chain) already walked, so the
+///     same step data (same UIds) is emitted once per production that traces through it. Each
+///     Part is added at most once (<see cref="AddPart"/>); each wire's endpoint list is built up
+///     across however many productions touch it, de-duplicating identical endpoints so private
+///     (non-fanned-out) wires still end up with exactly the two endpoints they've always had.
+///   - Genuine fan-out: a Move's `en` tap shares its actual source wire with the chain's real
+///     continuation (one wire, three endpoints — producer, Move.en, next-position.in). Neither
+///     production alone knows the wire's complete endpoint set; only accumulating across both
+///     (this Move's BuildMove call and the chain's own BuildOneChain/BuildTimer/BuildMove call)
+///     produces the correct topology. The Rail wire already needed this same accumulation (one
+///     wire, many chains' first elements, confirmed real 2026-07-10) — this generalizes that
+///     mechanism to every wire, rather than keeping Rail as a special case.
 /// </summary>
 public static class FlgNetBuilder
 {
@@ -32,14 +44,20 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Timers.Count} timer(s) but the sidecar records {sidecar.Timers.Count}.");
         }
 
+        if (network.Moves.Count != sidecar.Moves.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Moves.Count} move(s) but the sidecar records {sidecar.Moves.Count}.");
+        }
+
         var parts = new List<PartNode>();
-        var wires = new List<WireNode>();
-        var railEndpointsByWireUId = new Dictionary<int, List<WireEndpoint>>();
+        var emittedPartUIds = new HashSet<int>();
+        var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
 
         for (var t = 0; t < network.Timers.Count; t++)
         {
             var timerSidecar = sidecar.Timers[t];
-            BuildTimer(timerSidecar, parts, wires);
+            BuildTimer(timerSidecar, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when the chain's first step is a TimerOutputStep — the IN is
             // fed directly by another TON's Q, never touches Powerrail, so there's nothing to
@@ -54,14 +72,14 @@ public static class FlgNetBuilder
                 var railFacingEndpoints = timerSidecar.Steps.Count > 0
                     ? RailFacingEndpoints(timerSidecar.Steps[0])
                     : new[] { (UId: timerSidecar.TonPartUId, Port: "IN") };
-                AddRailEndpoints(railEndpointsByWireUId, timerRailWireUId, railFacingEndpoints);
+                AddRailEndpoints(wireEndpointsByUId, timerRailWireUId, railFacingEndpoints);
             }
         }
 
         for (var a = 0; a < network.Assignments.Count; a++)
         {
             var assignmentSidecar = sidecar.Assignments[a];
-            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, parts, wires);
+            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when the chain's first step is a TimerOutputStep — the coil is
             // fed directly by a TON's Q, never touches Powerrail (confirmed real, 2026-07-11,
@@ -76,16 +94,27 @@ public static class FlgNetBuilder
                 var railFacingEndpoints = assignmentSidecar.Steps.Count > 0
                     ? RailFacingEndpoints(assignmentSidecar.Steps[0])
                     : new[] { (UId: assignmentSidecar.CoilUId, Port: "in") };
-                AddRailEndpoints(railEndpointsByWireUId, coilRailWireUId, railFacingEndpoints);
+                AddRailEndpoints(wireEndpointsByUId, coilRailWireUId, railFacingEndpoints);
             }
         }
 
-        foreach (var (railWireUId, endpoints) in railEndpointsByWireUId)
+        for (var m = 0; m < network.Moves.Count; m++)
         {
-            var allEndpoints = new List<WireEndpoint> { new(EndpointKind.Powerrail, null, null) };
-            allEndpoints.AddRange(endpoints);
-            wires.Add(new WireNode(railWireUId, allEndpoints));
+            var moveSidecar = sidecar.Moves[m];
+            BuildMove(moveSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+
+            // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
+            // Timer/Coil above (not yet seen live, same mechanism, handled identically).
+            if (moveSidecar.RailWireUId is int moveRailWireUId)
+            {
+                var railFacingEndpoints = moveSidecar.Steps.Count > 0
+                    ? RailFacingEndpoints(moveSidecar.Steps[0])
+                    : new[] { (UId: moveSidecar.MovePartUId, Port: "en") };
+                AddRailEndpoints(wireEndpointsByUId, moveRailWireUId, railFacingEndpoints);
+            }
         }
+
+        var wires = wireEndpointsByUId.Select(kv => new WireNode(kv.Key, kv.Value)).ToList();
 
         // Scope is carried per-entry (not assumed) since 2026-07-11 — a plain tag Access can be
         // LocalVariable-scoped too (an FC/FB's own interface parameter, confirmed real grounding
@@ -100,18 +129,35 @@ public static class FlgNetBuilder
         return new FlgNetwork(accessNodes, parts, wires, constants);
     }
 
-    private static void AddRailEndpoints(
-        Dictionary<int, List<WireEndpoint>> railEndpointsByWireUId, int railWireUId, IEnumerable<(int UId, string Port)> railFacingEndpoints)
+    private static void AddPart(List<PartNode> parts, HashSet<int> emittedPartUIds, PartNode part)
     {
-        if (!railEndpointsByWireUId.TryGetValue(railWireUId, out var endpoints))
+        if (emittedPartUIds.Add(part.UId))
+        {
+            parts.Add(part);
+        }
+    }
+
+    private static void AddEndpoint(Dictionary<int, List<WireEndpoint>> wireEndpointsByUId, int wireUId, WireEndpoint endpoint)
+    {
+        if (!wireEndpointsByUId.TryGetValue(wireUId, out var endpoints))
         {
             endpoints = new List<WireEndpoint>();
-            railEndpointsByWireUId[railWireUId] = endpoints;
+            wireEndpointsByUId[wireUId] = endpoints;
         }
 
+        if (!endpoints.Any(e => e.Kind == endpoint.Kind && e.UId == endpoint.UId && e.PortName == endpoint.PortName))
+        {
+            endpoints.Add(endpoint);
+        }
+    }
+
+    private static void AddRailEndpoints(
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId, int railWireUId, IEnumerable<(int UId, string Port)> railFacingEndpoints)
+    {
+        AddEndpoint(wireEndpointsByUId, railWireUId, new WireEndpoint(EndpointKind.Powerrail, null, null));
         foreach (var (uid, port) in railFacingEndpoints)
         {
-            endpoints.Add(new WireEndpoint(EndpointKind.NameCon, uid, port));
+            AddEndpoint(wireEndpointsByUId, railWireUId, new WireEndpoint(EndpointKind.NameCon, uid, port));
         }
     }
 
@@ -119,7 +165,8 @@ public static class FlgNetBuilder
     // terminating at "IN" instead of a coil's "in" — and, like a Coil's chain, may have a null
     // RailWireUId if fed directly by another TON's Q), its PT wire (tag or literal preset), and
     // its ET wire if the sidecar recorded one (OpenCon only).
-    private static void BuildTimer(TimerBindingSidecar sidecar, List<PartNode> parts, List<WireNode> wires)
+    private static void BuildTimer(
+        TimerBindingSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
@@ -127,47 +174,77 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "IN");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, wires);
+            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
-        parts.Add(new PartNode(sidecar.TonPartUId, "TON", TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.TonPartUId, "TON", TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
 
-        wires.Add(BuildOperandWire(sidecar.Preset, sidecar.TonPartUId, "PT"));
+        AddOperandWire(wireEndpointsByUId, sidecar.Preset, sidecar.TonPartUId, "PT");
 
         if (sidecar.Et is { } et)
         {
-            wires.Add(new WireNode(et.WireUId, new[]
-            {
-                new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "ET"),
-                new WireEndpoint(EndpointKind.OpenCon, et.OpenConUId, null),
-            }));
+            AddEndpoint(wireEndpointsByUId, et.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "ET"));
+            AddEndpoint(wireEndpointsByUId, et.WireUId, new WireEndpoint(EndpointKind.OpenCon, et.OpenConUId, null));
         }
     }
 
-    // A tag-or-literal operand wire — used for a TON's PT and a comparison's in1/in2 alike (see
-    // OperandSidecar's own doc comment for why this is shared rather than TON-specific).
-    private static WireNode BuildOperandWire(OperandSidecar operand, int partUId, string port) => operand switch
+    // Builds a Move Part, its `en`-chain (identical mechanism to BuildOneChain/BuildTimer's own
+    // chain, terminating at the Move's own "en" port instead of a Coil's "in"/TON's "IN" — may
+    // have a null RailWireUId if `en` is fed directly by another TON's Q, same as any other
+    // chain), its `in` wire (tag or literal source, same AddOperandWire as a TON's PT), and its
+    // `out1` wire (the write target — same IdentCon-fed wire shape as an ordinary Contact/Coil
+    // operand, just port "out1" and the opposite read/write direction).
+    private static void BuildMove(
+        MoveStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
-        OperandSidecar.TagOperand tagOperand => new WireNode(tagOperand.WireUId, new[]
+        for (var i = 0; i < sidecar.Steps.Count; i++)
         {
-            new WireEndpoint(EndpointKind.IdentCon, tagOperand.AccessUId, null),
-            new WireEndpoint(EndpointKind.NameCon, partUId, port),
-        }),
-        OperandSidecar.LiteralOperand literalOperand => new WireNode(literalOperand.WireUId, new[]
+            var nextTarget = i + 1 < sidecar.Steps.Count
+                ? EntryTarget(sidecar.Steps[i + 1])
+                : new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "en");
+
+            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MovePartUId, "Move"));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.MovePartUId, "in");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "out1"));
+    }
+
+    // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's
+    // `in` alike (see OperandSidecar's own doc comment for why this is shared rather than
+    // TON-specific).
+    private static void AddOperandWire(
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId, OperandSidecar operand, int partUId, string port)
+    {
+        switch (operand)
         {
-            new WireEndpoint(EndpointKind.IdentCon, literalOperand.ConstantUId, null),
-            new WireEndpoint(EndpointKind.NameCon, partUId, port),
-        }),
-        _ => throw new IrFormatException($"Unsupported operand kind: {operand.GetType().Name}"),
-    };
+            case OperandSidecar.TagOperand tagOperand:
+                AddEndpoint(wireEndpointsByUId, tagOperand.WireUId, new WireEndpoint(EndpointKind.IdentCon, tagOperand.AccessUId, null));
+                AddEndpoint(wireEndpointsByUId, tagOperand.WireUId, new WireEndpoint(EndpointKind.NameCon, partUId, port));
+                break;
+
+            case OperandSidecar.LiteralOperand literalOperand:
+                AddEndpoint(wireEndpointsByUId, literalOperand.WireUId, new WireEndpoint(EndpointKind.IdentCon, literalOperand.ConstantUId, null));
+                AddEndpoint(wireEndpointsByUId, literalOperand.WireUId, new WireEndpoint(EndpointKind.NameCon, partUId, port));
+                break;
+
+            default:
+                throw new IrFormatException($"Unsupported operand kind: {operand.GetType().Name}");
+        }
+    }
 
     private static void BuildOneChain(
         CoilAssignment assignment,
         CoilAssignmentSidecar sidecar,
         int networkNumber,
         List<PartNode> parts,
-        List<WireNode> wires)
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         var exprLeafCount = CountExprLeaves(assignment.Condition);
         var stepLeafCount = sidecar.Steps.Sum(CountStepLeaves);
@@ -184,84 +261,65 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "in");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, wires);
+            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
-        parts.Add(new PartNode(sidecar.CoilUId, "Coil"));
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.CoilUId, "Coil"));
 
-        wires.Add(new WireNode(sidecar.CoilOperandWireUId, new[]
-        {
-            new WireEndpoint(EndpointKind.IdentCon, sidecar.CoilOperandAccessUId, null),
-            new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "operand"),
-        }));
+        AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.CoilOperandAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "operand"));
     }
 
     // A single position rail-to-coil: either one Contact (chain continues to `outgoingTarget`),
-    // or an OR-merge whose branches are wired to the shared rail elsewhere (Build's
-    // railEndpointsByWireUId) and whose own "out" feeds `outgoingTarget`.
-    private static void BuildStep(ChainStepSidecar step, WireEndpoint outgoingTarget, List<PartNode> parts, List<WireNode> wires)
+    // or an OR-merge whose branches are wired to the shared rail elsewhere (Build's own
+    // AddRailEndpoints calls) and whose own "out" feeds `outgoingTarget`.
+    private static void BuildStep(
+        ChainStepSidecar step,
+        WireEndpoint outgoingTarget,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         switch (step)
         {
             case ChainStepSidecar.ContactStep contact:
-                parts.Add(new PartNode(contact.ContactUId, "Contact", contact.Negated));
-                wires.Add(new WireNode(contact.OperandWireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.IdentCon, contact.OperandAccessUId, null),
-                    new WireEndpoint(EndpointKind.NameCon, contact.ContactUId, "operand"),
-                }));
-                wires.Add(new WireNode(contact.OutgoingWireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.NameCon, contact.ContactUId, "out"),
-                    outgoingTarget,
-                }));
+                AddPart(parts, emittedPartUIds, new PartNode(contact.ContactUId, "Contact", contact.Negated));
+                AddEndpoint(wireEndpointsByUId, contact.OperandWireUId, new WireEndpoint(EndpointKind.IdentCon, contact.OperandAccessUId, null));
+                AddEndpoint(wireEndpointsByUId, contact.OperandWireUId, new WireEndpoint(EndpointKind.NameCon, contact.ContactUId, "operand"));
+                AddEndpoint(wireEndpointsByUId, contact.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, contact.ContactUId, "out"));
+                AddEndpoint(wireEndpointsByUId, contact.OutgoingWireUId, outgoingTarget);
                 break;
 
             case ChainStepSidecar.OrStep orStep:
-                parts.Add(new PartNode(orStep.OrPartUId, "O", Cardinality: orStep.Branches.Count));
+                AddPart(parts, emittedPartUIds, new PartNode(orStep.OrPartUId, "O", Cardinality: orStep.Branches.Count));
                 for (var b = 0; b < orStep.Branches.Count; b++)
                 {
                     var branch = orStep.Branches[b];
-                    parts.Add(new PartNode(branch.ContactUId, "Contact", branch.Negated));
-                    wires.Add(new WireNode(branch.OperandWireUId, new[]
-                    {
-                        new WireEndpoint(EndpointKind.IdentCon, branch.OperandAccessUId, null),
-                        new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "operand"),
-                    }));
-                    wires.Add(new WireNode(branch.OutgoingWireUId, new[]
-                    {
-                        new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "out"),
-                        new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, $"in{b + 1}"),
-                    }));
+                    AddPart(parts, emittedPartUIds, new PartNode(branch.ContactUId, "Contact", branch.Negated));
+                    AddEndpoint(wireEndpointsByUId, branch.OperandWireUId, new WireEndpoint(EndpointKind.IdentCon, branch.OperandAccessUId, null));
+                    AddEndpoint(wireEndpointsByUId, branch.OperandWireUId, new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "operand"));
+                    AddEndpoint(wireEndpointsByUId, branch.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, branch.ContactUId, "out"));
+                    AddEndpoint(wireEndpointsByUId, branch.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, $"in{b + 1}"));
                 }
 
-                wires.Add(new WireNode(orStep.OutgoingWireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "out"),
-                    outgoingTarget,
-                }));
+                AddEndpoint(wireEndpointsByUId, orStep.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "out"));
+                AddEndpoint(wireEndpointsByUId, orStep.OutgoingWireUId, outgoingTarget);
                 break;
 
             case ChainStepSidecar.TimerOutputStep timerOutput:
                 // No Part/Access to build — the TON Part itself is built once by BuildTimer;
                 // this just rewires its already-emitted "Q" port to whatever's next. Confirmed
                 // real, 2026-07-11, FC TimerSample.
-                wires.Add(new WireNode(timerOutput.OutgoingWireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, timerOutput.Port),
-                    outgoingTarget,
-                }));
+                AddEndpoint(wireEndpointsByUId, timerOutput.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, timerOutput.Port));
+                AddEndpoint(wireEndpointsByUId, timerOutput.OutgoingWireUId, outgoingTarget);
                 break;
 
             case ChainStepSidecar.CompareStep compare:
-                parts.Add(new PartNode(compare.ComparePartUId, compare.PartName, SrcType: compare.SrcType));
-                wires.Add(BuildOperandWire(compare.Left, compare.ComparePartUId, "in1"));
-                wires.Add(BuildOperandWire(compare.Right, compare.ComparePartUId, "in2"));
-                wires.Add(new WireNode(compare.OutgoingWireUId, new[]
-                {
-                    new WireEndpoint(EndpointKind.NameCon, compare.ComparePartUId, "out"),
-                    outgoingTarget,
-                }));
+                AddPart(parts, emittedPartUIds, new PartNode(compare.ComparePartUId, compare.PartName, SrcType: compare.SrcType));
+                AddOperandWire(wireEndpointsByUId, compare.Left, compare.ComparePartUId, "in1");
+                AddOperandWire(wireEndpointsByUId, compare.Right, compare.ComparePartUId, "in2");
+                AddEndpoint(wireEndpointsByUId, compare.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, compare.ComparePartUId, "out"));
+                AddEndpoint(wireEndpointsByUId, compare.OutgoingWireUId, outgoingTarget);
                 break;
 
             default:

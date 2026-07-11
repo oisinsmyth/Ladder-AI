@@ -75,6 +75,15 @@ public static class FlgNetWriter
 
             partElement.Add(new XAttribute("UId", part.UId));
 
+            // Move's own shape is entirely fixed — DisabledENO="true" and Card=1 (below) — never
+            // carried as PartNode fields since neither ever varies in any real instance seen
+            // (same "don't store a confirmed constant" reasoning as TON's InstanceOfType).
+            // Attribute order matches the real source: Name, UId, DisabledENO.
+            if (part.Name == "Move")
+            {
+                partElement.Add(new XAttribute("DisabledENO", "true"));
+            }
+
             if (part.Negated)
             {
                 partElement.Add(new XElement(ns + "Negated", new XAttribute("Name", "operand")));
@@ -98,6 +107,14 @@ public static class FlgNetWriter
                     new XAttribute("Name", "Card"),
                     new XAttribute("Type", "Cardinality"),
                     part.Cardinality.Value));
+            }
+            else if (part.Name == "Move")
+            {
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", "Card"),
+                    new XAttribute("Type", "Cardinality"),
+                    1));
             }
 
             if (part.TimeType is not null)
