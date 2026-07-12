@@ -25,22 +25,30 @@ recursive chains — multi-Contact, nested, comparison-as-branch, all live-verif
 contacts, Instance DB + structured members, DB round-trip, TON (both instance scopes, live-proven
 via `FC TimerSample`), comparisons (Eq/Ge, live-verified against `FC ControlDelays`, including
 `O(41)`-of-comparisons composition), MOVE (fan-out taps + telescoping dedup, live-verified against
-`FB MotorDOL`, including the full telemetry network with its own OR-merge).
+`FB MotorDOL`, including the full telemetry network with its own OR-merge), WAND — bitwise word
+AND (live-verified against `FB VSDUpdateComs`; closes out the AND-merge open item as **confirmed
+non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep).
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
 ## Current task: none
 
-S1 item 11 (OR-merge branches generalized to recursive chains) fully done — code, tests (130/130
-converter, 68 openness-cli, 11 golden-harness), docs, and live verification all complete and
-consistent. This closed the exact loose end left open by both item 9 (`ControlDelays`) and item
-10 (`MotorDOL`) — both real networks now reduce and round-trip completely, where both were
-previously blocked at exactly this OR-merge limitation. Full story: `docs/notes/stage-gates.md`
-"S1 item 11" + its live-verification section. Ready to commit as one unit (not yet committed —
-commits are explicitly requested, not assumed).
+S1 item 12 (WAND) fully done — code, tests (138/138 converter, 68 openness-cli, 11
+golden-harness), docs, and live verification all complete and consistent. Grounding search found
+the boolean "AND-merge" originally envisioned doesn't exist in this codebase (reported to and
+confirmed by the project owner before building anything); the real `Part Name="And"` found
+instead is a bitwise/word-level box instruction, built as `WAND` (name deliberately avoids
+colliding with the boolean `AND` infix operator). Along the way, fixed a real
+previously-unexercised parser gap: Siemens' `<base>#<value>` numeric-literal notation (`16#89`)
+wasn't recognized by `IrParser.ParseLeaf`'s shape-based literal detection. Full story:
+`docs/notes/stage-gates.md` "S1 item 12" + its live-verification section. Ready to commit as one
+unit (not yet committed — commits are explicitly requested, not assumed).
 
 Next S1 item not yet chosen. Remaining known deferred items (`docs/notes/stage-gates.md`'s "Open
-items" sections, `ir/SPEC.md`'s "Open items"): AND-merge (`Part Name="A"`, unconfirmed), block
-calls, RCoil/SCoil, TONR, full FC/FB parameter modeling, reference-by-name for structured members,
-`Ne`/`Le`/`Gt`/`Lt` comparison operators (unconfirmed Part Names).
+items" sections, `ir/SPEC.md`'s "Open items"): block calls, RCoil/SCoil, TONR, full FC/FB
+parameter modeling, reference-by-name for structured members, `Ne`/`Le`/`Lt` comparison operators
+(confirmed real Part Names, 2026-07-12, not yet built — `Gt` still unconfirmed). Also noted but
+not investigated: a standalone `Not` Part (distinct from a negated Contact), `TOF`, and an
+arithmetic-instruction family (`Add`/`Sub`/`Mul`/`Div`/`Abs`/`Swap`/`Calc`/`Convert`) — all found
+real during the AND-merge sweep, none built.

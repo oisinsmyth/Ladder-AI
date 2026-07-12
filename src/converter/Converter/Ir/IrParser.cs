@@ -198,12 +198,50 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0)
+        // WordAnds are always emitted last (IrSerializer, after Timers/Coils/Moves) — parsed in
+        // the same order for self-stability. Variable input count (Cardinality-driven, S1 item
+        // 12), so the argument list is split on top-level commas rather than matched by a single
+        // fixed-arity regex the way TON/MOVE's own fixed argument shapes are — safe because no
+        // Expr ever renders a literal comma (AND/OR/NOT/parens/comparisons never use one).
+        var wordAnds = new List<WordAndStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  WAND(", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE statements and isn't marked [empty].");
+            var wandMatch = WordAndLineRegex().Match(lines[i]);
+            if (!wandMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  WAND(EN := <expr>, IN1 := <expr>, ...) => <dest>', got: '{lines[i]}'");
+            }
+
+            var args = wandMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected 'EN := <expr>' as WAND's first argument, got: '{lines[i]}'");
+            }
+
+            var wandEnExpr = ParseExpr(args[0]["EN := ".Length..]);
+
+            var inputs = new List<Expr>();
+            for (var k = 1; k < args.Length; k++)
+            {
+                var prefix = $"IN{k} := ";
+                if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected '{prefix}<expr>' as WAND argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                }
+
+                inputs.Add(ParseExprTerm(args[k][prefix.Length..]));
+            }
+
+            wordAnds.Add(new WordAndStatement(wandEnExpr, inputs, wandMatch.Groups["dest"].Value));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves);
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(number, title, assignments, timers, moves, wordAnds);
     }
 
     // Top-level entry point: OR is the loosest binder. "TRUE" is only meaningful here (the
@@ -360,16 +398,21 @@ public static partial class IrParser
         return true;
     }
 
-    // A literal (e.g. "T#100MS" or a bare integer like "1"/"-1") is recognized by shape rather
-    // than by consulting the sidecar, so the IR text alone stays unambiguous to a reader. "T#"
-    // is the existing time-literal convention (confirmed real, 2026-07-11, FB MotorDOL's TON PT);
-    // a bare (optionally negative) integer is a comparison operand (FC ControlDelays) — safe to
-    // recognize this way since a real tag path is never purely numeric (06-lad-conventions.md
-    // C-005: starts with a letter).
+    // A literal (e.g. "T#100MS", "16#89", or a bare integer like "1"/"-1") is recognized by shape
+    // rather than by consulting the sidecar, so the IR text alone stays unambiguous to a reader.
+    // "T#" is the existing time-literal convention (confirmed real, 2026-07-11, FB MotorDOL's TON
+    // PT); a bare (optionally negative) integer is a comparison operand (FC ControlDelays); "16#"
+    // is Siemens' own hex-literal notation (confirmed real, 2026-07-12, FB VSDUpdateComs's
+    // bitwise-And input, `16#89`) — a base-N numeric literal is recognized by the presence of "#"
+    // generally (only "16#" grounded so far; other bases like "2#"/"8#" are the same IEC 61131-3
+    // family but unconfirmed in this codebase, so not specifically claimed, just not excluded by
+    // this shape check either). Safe to recognize any of these by shape since a real tag path is
+    // never purely numeric and never contains "#" (06-lad-conventions.md C-005: starts with a
+    // letter).
     private static Expr ParseLeaf(string text)
     {
         text = text.Trim();
-        if (text.StartsWith("T#", StringComparison.Ordinal) || IntegerLiteralRegex().IsMatch(text))
+        if (text.StartsWith("T#", StringComparison.Ordinal) || IntegerLiteralRegex().IsMatch(text) || NumericBaseLiteralRegex().IsMatch(text))
         {
             return new Expr.Literal(text);
         }
@@ -482,7 +525,49 @@ public static partial class IrParser
             moves.Add(ParseMoveSidecar(lines, ref i, number));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves);
+        var wordAnds = new List<WordAndStatementSidecar>();
+        while (i < lines.Length && WordAndHeaderRegex().IsMatch(lines[i]))
+        {
+            wordAnds.Add(ParseWordAndSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds);
+    }
+
+    // A bitwise-And's own sidecar shape mirrors ParseMoveSidecar's closely — same rail/steps
+    // mechanism, N positional input operands (`input 0`, `input 1`, ... — Cardinality-driven, S1
+    // item 12) instead of Move's single `in`, and `srctype` (a comparison's own SrcType is
+    // carried the same way, on its ChainStepSidecar.CompareStep instead — here it lives on the
+    // production itself since there's exactly one per And, not one per operand).
+    private static WordAndStatementSidecar ParseWordAndSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  wand <n>" header — index itself isn't needed, position in the list is enough.
+
+        var andPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    anduid = "));
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, "    ", $"step {s}"));
+            s++;
+        }
+
+        var inputs = new List<OperandSidecar>();
+        var k = 0;
+        while (i < lines.Length && (lines[i].StartsWith($"    input {k} tag = ", StringComparison.Ordinal) || lines[i].StartsWith($"    input {k} literal = ", StringComparison.Ordinal)))
+        {
+            inputs.Add(ParseOperand(lines, ref i, "    ", $"input {k}"));
+            k++;
+        }
+
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new WordAndStatementSidecar(andPartUId, railWireUId, steps, inputs, srcType, destAccessUId, destWireUId);
     }
 
     // A Move's own sidecar shape mirrors ParseTimerSidecar's exactly — same rail/steps mechanism,
@@ -736,6 +821,12 @@ public static partial class IrParser
     [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
     private static partial Regex MoveLineRegex();
 
+    // Variable input count (Cardinality-driven, S1 item 12) — only the outer "WAND(...) => dest"
+    // shape is matched here; the argument list itself is split on top-level commas separately
+    // (ParseNetwork), not captured per-argument by this regex the way TON/MOVE's fixed arity is.
+    [GeneratedRegex(@"^  WAND\((?<args>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex WordAndLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -748,6 +839,13 @@ public static partial class IrParser
     [GeneratedRegex(@"^-?\d+$")]
     private static partial Regex IntegerLiteralRegex();
 
+    // Siemens' own <base>#<value> numeric-literal notation (e.g. "16#89") — only the "16#" (hex)
+    // form is confirmed real (2026-07-12, FB VSDUpdateComs); matched generically by base-number
+    // shape rather than hardcoded to "16" specifically, since nothing about the shape ties it to
+    // one particular base.
+    [GeneratedRegex(@"^-?\d+#[0-9A-Za-z]+$")]
+    private static partial Regex NumericBaseLiteralRegex();
+
     [GeneratedRegex(@"^  timer (?<index>\d+)$")]
     private static partial Regex TimerHeaderRegex();
 
@@ -756,4 +854,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  move (?<index>\d+)$")]
     private static partial Regex MoveHeaderRegex();
+
+    [GeneratedRegex(@"^  wand (?<index>\d+)$")]
+    private static partial Regex WordAndHeaderRegex();
 }

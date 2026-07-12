@@ -50,6 +50,12 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Moves.Count} move(s) but the sidecar records {sidecar.Moves.Count}.");
         }
 
+        if (network.WordAnds.Count != sidecar.WordAnds.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.WordAnds.Count} And(s) but the sidecar records {sidecar.WordAnds.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -111,6 +117,22 @@ public static class FlgNetBuilder
                     ? RailFacingEndpoints(moveSidecar.Steps[0])
                     : new[] { (UId: moveSidecar.MovePartUId, Port: "en") };
                 AddRailEndpoints(wireEndpointsByUId, moveRailWireUId, railFacingEndpoints);
+            }
+        }
+
+        for (var d = 0; d < network.WordAnds.Count; d++)
+        {
+            var wordAndSidecar = sidecar.WordAnds[d];
+            BuildWordAnd(wordAndSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+
+            // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
+            // Timer/Coil/Move above (not yet seen live, same mechanism, handled identically).
+            if (wordAndSidecar.RailWireUId is int wordAndRailWireUId)
+            {
+                var railFacingEndpoints = wordAndSidecar.Steps.Count > 0
+                    ? RailFacingEndpoints(wordAndSidecar.Steps[0])
+                    : new[] { (UId: wordAndSidecar.AndPartUId, Port: "en") };
+                AddRailEndpoints(wireEndpointsByUId, wordAndRailWireUId, railFacingEndpoints);
             }
         }
 
@@ -213,6 +235,35 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "out1"));
+    }
+
+    // Builds a bitwise-And Part, its `en`-chain (identical mechanism to BuildMove's own — may
+    // have a null RailWireUId if `en` is fed directly by another TON's Q, same as any other
+    // chain), its N input wires (`in1`..`inK`, `AddOperandWire` per input — positional, mirrors
+    // how the sidecar's own `Inputs` list is ordered), and its `out` wire (the write target —
+    // same IdentCon-fed wire shape as Move's own `out1`, just port "out" instead — confirmed
+    // real, 2026-07-12, FB VSDUpdateComs).
+    private static void BuildWordAnd(
+        WordAndStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        for (var i = 0; i < sidecar.Steps.Count; i++)
+        {
+            var nextTarget = i + 1 < sidecar.Steps.Count
+                ? EntryTarget(sidecar.Steps[i + 1])
+                : new WireEndpoint(EndpointKind.NameCon, sidecar.AndPartUId, "en");
+
+            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.AndPartUId, "And", Cardinality: sidecar.Inputs.Count, SrcType: sidecar.SrcType));
+
+        for (var k = 0; k < sidecar.Inputs.Count; k++)
+        {
+            AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.AndPartUId, $"in{k + 1}");
+        }
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.AndPartUId, "out"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

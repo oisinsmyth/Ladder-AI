@@ -13,7 +13,7 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And" };
 
     // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
     // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
@@ -67,12 +67,12 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move only.");
+                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
                 var negated = name == "Contact" && ParseNegated(child, uid);
-                var cardinality = name == "O" ? ParseOrCardinality(child, uid) : (int?)null;
+                var cardinality = name == "O" ? ParseCardinality(child, "O", uid) : (int?)null;
                 if (name == "TON")
                 {
                     var (version, timeType, instance) = ParseTon(child, uid);
@@ -80,13 +80,18 @@ public static class FlgNetParser
                 }
                 else if (SupportedComparisonPartNames.Contains(name))
                 {
-                    var srcType = ParseComparisonSrcType(child, name, uid);
+                    var srcType = ParseSrcType(child, name, uid);
                     parts.Add(new PartNode(uid, name, SrcType: srcType));
                 }
                 else if (name == "Move")
                 {
                     ParseMoveFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name));
+                }
+                else if (name == "And")
+                {
+                    var (andCardinality, andSrcType) = ParseAndFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: andCardinality, SrcType: andSrcType));
                 }
                 else
                 {
@@ -148,21 +153,22 @@ public static class FlgNetParser
         return new ConstantAccessNode(uid, value, constantType);
     }
 
-    // A comparison's (Eq/Ge) own <TemplateValue Name="SrcType" Type="Type"> — confirmed real,
-    // 2026-07-11, FC ControlDelays (`Int` in every instance seen; stored verbatim, not assumed
-    // fixed to that one value).
-    private static string ParseComparisonSrcType(XElement comparisonPart, string partName, int uid)
+    // A `SrcType` `<TemplateValue Name="SrcType" Type="Type">` — confirmed real, 2026-07-11, on a
+    // comparison (Eq/Ge, `FC ControlDelays`, `Int` in every instance seen) and, 2026-07-12, on a
+    // bitwise-And (`FB VSDUpdateComs`, `Word`) — the latter co-occurring with a Cardinality
+    // TemplateValue on the same Part, so this looks the value up by its own `Name` among all of
+    // the Part's `TemplateValue` children rather than assuming it's the only one present.
+    private static string ParseSrcType(XElement part, string partName, int uid)
     {
-        var templateValue = comparisonPart.Element(Ns + "TemplateValue")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue> SrcType element.");
+        var templateValue = part.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "SrcType")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"SrcType\"> element.");
 
-        var name = RequireAttribute(templateValue, "Name");
         var type = RequireAttribute(templateValue, "Type");
-        if (name != "SrcType" || type != "Type")
+        if (type != "Type")
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\"> — only " +
-                "Name=\"SrcType\" Type=\"Type\" has been observed.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"SrcType\" Type=\"{type}\"> — only " +
+                "Type=\"Type\" has been observed.");
         }
 
         return templateValue.Value;
@@ -195,6 +201,27 @@ public static class FlgNetParser
                 "— only Name=\"Card\" Type=\"Cardinality\">1 has been observed (a different value would presumably be a " +
                 "MOVE_BLK_VARIANT-style multi-element copy — real but unconfirmed).");
         }
+    }
+
+    // A bitwise/word AND box instruction (`Part Name="And"`) — confirmed real, 2026-07-12,
+    // `FB VSDUpdateComs`: `DisabledENO="true"` (same "don't store a confirmed constant" reasoning
+    // as Move's own DisabledENO — never seen to vary) plus a `Card` and a `SrcType`
+    // `TemplateValue` together on the same Part (`Card="2"`, `SrcType="Word"` in the one real
+    // example — unlike Move's `Card`, this value IS carried as data since only one cardinality
+    // has been observed, not enough to treat as a universal constant the way Move's `Card="1"`
+    // is, after being confirmed fixed across multiple real instances).
+    private static (int Cardinality, string SrcType) ParseAndFixedShape(XElement andPart, int uid)
+    {
+        var disabledEno = andPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"And\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var cardinality = ParseCardinality(andPart, "And", uid);
+        var srcType = ParseSrcType(andPart, "And", uid);
+        return (cardinality, srcType);
     }
 
     // A TON's own Instance reference — same Scope values as an ordinary Access, but the
@@ -358,25 +385,27 @@ public static class FlgNetParser
         return true;
     }
 
-    // Only `<TemplateValue Name="Card" Type="Cardinality">N</TemplateValue>` has been observed
-    // on an OR-merge (`Part Name="O"`) — confirmed against two real exports, 2026-07-10.
-    private static int ParseOrCardinality(XElement orPart, int uid)
+    // A `Card` `<TemplateValue Name="Card" Type="Cardinality">N</TemplateValue>` — confirmed real
+    // on an OR-merge (`Part Name="O"`, 2026-07-10) and, 2026-07-12, on a bitwise-And (`Part
+    // Name="And"`, `FB VSDUpdateComs`, `Card="2"`) — the latter co-occurring with a SrcType
+    // TemplateValue on the same Part, so this looks the value up by its own `Name` among all of
+    // the Part's `TemplateValue` children rather than assuming it's the only one present.
+    private static int ParseCardinality(XElement part, string partName, int uid)
     {
-        var templateValue = orPart.Element(Ns + "TemplateValue")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"O\" UId=\"{uid}\"> is missing its <TemplateValue> cardinality element.");
+        var templateValue = part.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "Card")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"Card\"> cardinality element.");
 
-        var name = RequireAttribute(templateValue, "Name");
         var type = RequireAttribute(templateValue, "Type");
-        if (name != "Card" || type != "Cardinality")
+        if (type != "Cardinality")
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"O\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\"> — only " +
-                "Name=\"Card\" Type=\"Cardinality\" has been observed.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"Card\" Type=\"{type}\"> — only " +
+                "Type=\"Cardinality\" has been observed.");
         }
 
         if (!int.TryParse(templateValue.Value, out var cardinality))
         {
-            throw new SimaticMlFormatException($"<Part Name=\"O\" UId=\"{uid}\">'s cardinality value is not an integer: '{templateValue.Value}'.");
+            throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\">'s cardinality value is not an integer: '{templateValue.Value}'.");
         }
 
         return cardinality;

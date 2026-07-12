@@ -17,8 +17,8 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 ## Current scope (walking skeleton)
 
 Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
-branches) and negated contacts, TON, comparisons (Eq/Ge), and MOVE** (S1 items 7–11, through
-2026-07-12). No block calls yet. Anything outside scope is a hard error
+branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, and WAND (bitwise word AND)**
+(S1 items 7–12, through 2026-07-12). No block calls yet. Anything outside scope is a hard error
 (`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
 block is expected at this stage, not a bug.
 
@@ -301,6 +301,49 @@ reduces all 5 `Move` statements. Full story: `docs/notes/stage-gates.md` ("S1 it
 verification section). A whole-block `ControlDelays` round-trip still isn't reached (`Mul`/
 `Convert` in an unrelated network, a separate deferred capability) — this item's own scope is
 fully closed on both real networks that motivated it.
+
+## WAND — bitwise word AND (S1 item 12, 2026-07-12)
+
+`Part Name="And"` — found while searching 28 real LAD blocks specifically for a boolean
+parallel-branch "AND-merge" (this doc's own scope line and `ir/SPEC.md`'s original table row both
+carried this as a speculative, unconfirmed shape since the project's earliest sketch). **That
+shape doesn't exist anywhere in the sweep** — architecturally expected in hindsight: boolean AND
+in ladder logic is always plain series Contacts, never needing an explicit merge Part the way OR
+genuinely does (parallel branches converging need a defined merge point; AND never does). What
+the sweep found real instead, `Part Name="And"`, is something different: a **bitwise/word-level
+box instruction** (`Word AND 16#89 -> ControlWord`, `FB VSDUpdateComs`), not a boolean chain
+position at all.
+
+- **Structurally closest to `Move`**: a side effect gated by `en` (the same `TraceChain`
+  fan-out-tap mechanism, confirmed real — the And's own `en` shares a rail wire with three
+  sibling Contacts elsewhere in the network), crossed with an OR-merge's own
+  `Cardinality`-driven multi-operand shape (here driving *input count* — `IN1`..`INn` — not
+  branch count; only `Card="2"` observed in the one real example) and a comparison's own
+  `SrcType` (`Word` — carried sidecar-only, not shown in the readable IR text, same precedent as
+  a comparison's own `SrcType`).
+- Readable-form syntax: `WAND(EN := <expr>, IN1 := <expr>, IN2 := <expr>, ...) => <dest>`.
+  **`WAND`, not `AND`** — deliberately avoiding a collision with the existing boolean `AND`
+  infix operator; a converter-owned vendor-neutral name mapping, same precedent as
+  `MOVE_BLK_VARIANT` → `MOVE`.
+- `DisabledENO="true"` is fixed in every real instance seen — hard-validated on parse and
+  unconditionally regenerated on write, never carried as `PartNode` data, same reasoning as
+  Move's own `DisabledENO`. Unlike Move's fixed `Card="1"`, this instruction's `Cardinality` *is*
+  carried as data (`PartNode.Cardinality`, already existing — reused, not a new field) since only
+  one real value has been observed, not enough to treat as a universal constant.
+- **A real, previously-unexercised parser gap surfaced by this grounding**: Siemens' own
+  `<base>#<value>` numeric-literal notation (`16#89`) wasn't recognized by `IrParser.ParseLeaf`'s
+  shape-based literal detection (only `T#`-prefixed time literals and bare integers were) — fixed
+  alongside this work, matched generically by base-number shape rather than hardcoded to base 16.
+
+8 converter tests (`Converter.Tests/WordAndTests.cs`), fixture built directly from the real
+`VSDUpdateComs` shape (genericized per `docs/13-data-boundary.md`, same UIds/structure). All 138
+converter tests pass (up from 130); `openness-cli`/golden-harness suites unaffected, confirmed
+still green (68/11).
+
+**Live-verified against real data, 2026-07-12:** isolated `FB VSDUpdateComs`'s real network
+directly (a throwaway test against a fresh export, deleted after use) — reduces and round-trips
+completely, including the `16#89` literal round-tripping cleanly through `Serialize → Parse →
+Serialize`.
 
 ## DB support
 

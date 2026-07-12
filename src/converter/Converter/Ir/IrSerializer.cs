@@ -75,6 +75,17 @@ public static class IrSerializer
               .Append(", IN := ").Append(SerializeExpr(move.In))
               .Append(") => ").Append(move.DestTag).Append('\n');
         }
+
+        foreach (var wordAnd in network.WordAnds)
+        {
+            sb.Append("  WAND(EN := ").Append(SerializeExpr(wordAnd.En));
+            for (var k = 0; k < wordAnd.Inputs.Count; k++)
+            {
+                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(wordAnd.Inputs[k]));
+            }
+
+            sb.Append(") => ").Append(wordAnd.DestTag).Append('\n');
+        }
     }
 
     // Only emitted when there's real content — matches every FC seen (StaticMembers null,
@@ -210,6 +221,28 @@ public static class IrSerializer
 
             sb.Append("    dest = ").Append(move.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(move.DestWireUId).Append('\n');
+        }
+
+        for (var d = 0; d < sidecar.WordAnds.Count; d++)
+        {
+            var wordAnd = sidecar.WordAnds[d];
+            sb.Append("  wand ").Append(d).Append('\n');
+            sb.Append("    anduid = ").Append(wordAnd.AndPartUId).Append('\n');
+            sb.Append("    rail = ").Append(SerializeRail(wordAnd.RailWireUId)).Append('\n');
+
+            for (var s = 0; s < wordAnd.Steps.Count; s++)
+            {
+                SerializeStep(sb, "    ", $"step {s}", wordAnd.Steps[s]);
+            }
+
+            for (var k = 0; k < wordAnd.Inputs.Count; k++)
+            {
+                SerializeOperand(sb, "    ", $"input {k}", wordAnd.Inputs[k]);
+            }
+
+            sb.Append("    srctype = ").Append(wordAnd.SrcType).Append('\n');
+            sb.Append("    dest = ").Append(wordAnd.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(wordAnd.DestWireUId).Append('\n');
         }
     }
 

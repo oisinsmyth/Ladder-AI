@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 130 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 138 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -786,3 +786,97 @@ reduce and round-trip against genuinely live, unmodified production data. A full
 `import → compile → re-export → Normalizer` round-trip for `ControlDelays` itself still isn't
 reachable (Network 1's unrelated `Mul`/`Convert`, a separate deferred capability) — but the
 specific gap this item targeted is closed on both real blocks that motivated it.
+
+### S1 item 12 (WAND — bitwise word AND, correcting the AND-merge premise), 2026-07-12
+
+Project owner picked "AND-merge" as the next S1 item, explicitly. Every prior mention in the docs
+(`ir/SPEC.md`'s readable-form table, this doc's own item 9 entry) flagged it as unconfirmed — only
+`O`/OR had ever been directly observed. CLAUDE.md hard rule 3/project discipline: never guess an
+XML shape, so grounding came first, before any code.
+
+**Systematic search: 28 real LAD blocks (Control/Alarms/Coms/Simulation/Motor groups, a broad
+representative sweep of the project — not exhaustive across all ~180 blocks) exported and grepped
+for a real AND-merge shape. Found none.** No boolean parallel-branch AND-merge (an `O`-sibling)
+exists anywhere in the sweep. This is architecturally expected in hindsight, not a dead end:
+boolean AND in ladder logic is always expressed as plain series Contacts — unlike OR, which
+genuinely needs an explicit merge Part because parallel paths converging require a defined merge
+point in the wire graph, AND never does. `ir/SPEC.md`'s original `"A"` table row was a speculative
+sketch, never confirmed, and this search is reasonably strong evidence it doesn't correspond to
+any real SimaticML construct in this codebase.
+
+**What the sweep did find real:** `Part Name="And"` (the full word, not `"A"`) — in `FB
+VSDUpdateComs`, `CompileUnit "17"`: `Word AND 16#89 -> ControlWord`. Structurally this is a
+**bitwise/word-level box instruction**, not a boolean chain position at all — `DisabledENO="true"`,
+`en`/`in1`/`in2`/`out` ports, `Card`+`SrcType` `TemplateValue`s, closest in shape to `Move`. The
+sweep also surfaced (not requested, noted for later, not investigated further this pass): `Ne`/
+`Le`/`Lt` comparisons real (`Gt` still unseen), a standalone `Not` Part (distinct from
+`<Negated Name="operand" />` on a Contact), `TOF` (timer off-delay), `RCoil`/`SCoil`,
+`Add`/`Sub`/`Mul`/`Div`/`Abs`/`Swap`/`Calc`/`Convert` (arithmetic family), `MOVE_BLK_VARIANT`,
+`Modbus_Comm_Load`/`Modbus_Master`, `FillBlockI`, `LIMIT`, `Jump`, `WAIT`.
+
+**Reported to the project owner before building anything** — this corrected the premise of the
+task itself, not just an implementation detail, per the project's "check before design deviation"
+discipline. Project owner chose: build the real bitwise `And` instead of the speculated boolean
+merge.
+
+**Design, mirroring `Move` closely (structurally the closest existing pattern) crossed with
+`O`'s own `Cardinality`-driven shape:** `en` is reduced via the exact same `TraceChain`
+fan-out-tap mechanism as Move's own `en` (confirmed real — the And's `en` shares a rail wire with
+three sibling Contacts elsewhere in the network, wire37 in the real export: `Powerrail` +
+3 Contact `in` endpoints + the And's own `en`, a 5-endpoint wire). Inputs are `Cardinality`-driven
+(`in1`..`inCard`, `Card="2"` in the one real example — `ResolveTagOrLiteralOperand` looped per
+port, mirroring how `ResolveOrMerge` already loops over an OR-merge's branches) rather than a
+fixed pair of fields, since only one real cardinality value has been seen — not enough to treat as
+a universal constant the way Move's own `Card="1"` was after multiple confirming instances.
+`SrcType` (`Word`) mirrors a comparison's own `SrcType` field exactly, including the same
+"sidecar-only, not shown in the readable IR text" precedent. `PartNode` needed zero new fields —
+`Cardinality` (from `O`) and `SrcType` (from `Eq`/`Ge`) were already there, just never
+co-occurring on one Part before; the parser's `ParseCardinality`/`ParseSrcType` (renamed from
+`ParseOrCardinality`/`ParseComparisonSrcType`) needed a real fix to look their own
+`<TemplateValue>` up by its `Name` attribute rather than assuming it's the only one present, since
+`And` carries both together on the same Part.
+
+**Naming: `WAND`, not `AND`.** Deliberately avoiding a collision with the existing boolean `AND`
+infix operator — a converter-owned vendor-neutral name mapping, the same precedent as
+`MOVE_BLK_VARIANT` → `MOVE`. Readable-form syntax:
+`WAND(EN := <expr>, IN1 := <expr>, IN2 := <expr>, ...) => <dest>`.
+
+**A real, previously-unexercised parser gap surfaced by this grounding:** Siemens' own
+`<base>#<value>` numeric-literal notation (`16#89`) wasn't recognized by `IrParser.ParseLeaf`'s
+shape-based literal detection (only `T#`-prefixed time literals and bare integers were, from
+TON's PT and comparisons' operands respectively) — without a fix, parsing the serialized text back
+would have silently misclassified `16#89` as a `TagRef` rather than a `Literal` (harmless for pure
+text-round-trip-stability specifically, since both render identically, but a real, misleading
+Expr-tree defect for anything else that might inspect it). Fixed by recognizing the base-number
+shape generically (not hardcoded to base 16), matching the existing "recognize a literal by shape,
+safe since a real tag path is never purely numeric and never contains `#`" discipline.
+
+8 new converter tests (`WordAndTests.cs`), fixture (`WordAndFedByContacts.xml`) built directly
+from the real `VSDUpdateComs` shape (genericized per `docs/13-data-boundary.md`, same UIds and
+structure) — **passed on first run**. All three suites green: 138 converter tests (up from 130),
+68 openness-cli, 11 golden-harness (`openness-cli`/golden-harness untouched by this diff,
+re-confirmed still green).
+
+#### Live verification against real data, 2026-07-12
+
+TIA Portal already running (3 processes, the familiar normal baseline). Fresh `export` of `FB
+VSDUpdateComs` succeeded on the first try. Isolated `CompileUnit "17"` (7 parts, 13 wires — same
+network already grounded above, re-extracted fresh rather than reused, confirmed byte-identical
+structure) into a standalone file, same technique as every prior live verification this session.
+Ran it through `FlgNetParser → GraphReducer → FlgNetBuilder → FlgNetWriter → re-parse`, plus a
+text-grammar round-trip (`Serialize → Parse → Serialize`), via a temporary, throwaway test
+(deleted immediately after use, real data never committed).
+
+**The real network reduces and round-trips completely.** Three independent Contact→Coil rungs
+(`Word.%X0 := IO.Run`, `Word.%X3 := IO.SystemHealthy`, `Word.%X7 := IO.FaultReset`) plus
+`WAND(EN := TRUE, IN1 := Word, IN2 := 16#89) => ControlWord` — the And's own `en` condition
+correctly reduces to the "wired directly to rail, always on" sentinel (`TRUE`) since it shares the
+rail wire directly, no Contact of its own in between, exactly matching the genericized fixture's
+own shape. Every original wire's endpoint set matched a rebuilt wire exactly; the IR text
+round-tripped byte-identically, including the `16#89` literal now correctly recognized as a
+literal (not a tag) on the way back in.
+
+**Bottom line:** this closes S1 item 12 with what's actually real, not what was speculated. The
+boolean AND-merge open item is resolved as **confirmed non-existent** in this codebase (not
+"still unconfirmed") — a definitive answer, not a deferral. The real `WAND` instruction is built,
+tested, and live-proven end to end.

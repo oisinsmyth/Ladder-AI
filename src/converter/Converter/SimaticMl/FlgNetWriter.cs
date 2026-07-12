@@ -78,8 +78,12 @@ public static class FlgNetWriter
             // Move's own shape is entirely fixed — DisabledENO="true" and Card=1 (below) — never
             // carried as PartNode fields since neither ever varies in any real instance seen
             // (same "don't store a confirmed constant" reasoning as TON's InstanceOfType).
-            // Attribute order matches the real source: Name, UId, DisabledENO.
-            if (part.Name == "Move")
+            // Attribute order matches the real source: Name, UId, DisabledENO. And (S1 item 12,
+            // 2026-07-12, a bitwise-And box instruction) shares the same fixed DisabledENO="true"
+            // — its own Cardinality/SrcType, unlike Move's, ARE carried as PartNode fields (only
+            // one real Cardinality value has been observed, not enough to treat as a universal
+            // constant) and already round-trip via the existing Cardinality/SrcType blocks below.
+            if (part.Name is "Move" or "And")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }

@@ -10,6 +10,36 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 12: WAND (bitwise word AND) — corrects the AND-merge premise, live-verified**
+
+- Project owner picked "AND-merge" as the next S1 item. Grounded first, per hard rule 3: searched
+  28 real LAD blocks specifically for a boolean parallel-branch AND-merge (an `O`-sibling) —
+  **found none anywhere.** Architecturally expected in hindsight: boolean AND in ladder logic is
+  always plain series Contacts, never needing an explicit merge Part the way OR genuinely does.
+- What the sweep found real instead: `Part Name="And"` (`FB VSDUpdateComs`,
+  `Word AND 16#89 -> ControlWord`) — an entirely different thing, a bitwise/word-level box
+  instruction, not a boolean chain position. Reported to the project owner before building
+  anything (corrects the task's own premise, not just an implementation detail) — chose to build
+  the real instruction instead of the speculated one.
+- Design mirrors `Move` closely (same `TraceChain` fan-out-tap mechanism for `en`) crossed with
+  `O`'s own `Cardinality`-driven shape (here driving input count, `IN1`..`INn`, not branch count)
+  and a comparison's own `SrcType`. `PartNode` needed zero new fields — `Cardinality`/`SrcType`
+  already existed, just never co-occurring on one Part before; `ParseCardinality`/`ParseSrcType`
+  (renamed from `ParseOrCardinality`/`ParseComparisonSrcType`) needed a real fix to look their
+  `TemplateValue` up by `Name` rather than assuming it's the only one present.
+- IR keyword is `WAND`, not `AND` — deliberately avoids colliding with the boolean `AND` infix
+  operator, a converter-owned vendor-neutral name mapping (same precedent as `MOVE_BLK_VARIANT` →
+  `MOVE`).
+- Real, previously-unexercised parser gap found along the way: Siemens' `<base>#<value>` numeric
+  literal notation (`16#89`) wasn't recognized by `ParseLeaf`'s shape-based literal detection —
+  fixed generically (not hardcoded to base 16).
+- 8 new converter tests, fixture built directly from the real `VSDUpdateComs` shape (genericized)
+  — passed on first run. All three suites green: 138 converter (up from 130), 68 openness-cli, 11
+  golden-harness.
+- **Live-verified, same session:** isolated `FB VSDUpdateComs`'s real network — reduces and
+  round-trips completely, including the `16#89` literal round-tripping cleanly through the text
+  grammar. Full story: `docs/notes/stage-gates.md` ("S1 item 12").
+
 **S1 item 11: OR-merge branches generalized to recursive chains, live-verified**
 
 - Closed the gap items 9 and 10 both left open: `GraphReducer.ResolveOrMerge` required every

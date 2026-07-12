@@ -40,9 +40,10 @@ public static class GraphReducer
         var tonParts = network.Parts.Where(p => p.Name == "TON").ToList();
         var coils = network.Parts.Where(p => p.Name == "Coil").ToList();
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
-        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0)
+        var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
+        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, or Move found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, Move, or And found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -51,6 +52,8 @@ public static class GraphReducer
         var timerSidecars = new List<TimerBindingSidecar>();
         var moveStatements = new List<MoveStatement>();
         var moveSidecars = new List<MoveStatementSidecar>();
+        var wordAndStatements = new List<WordAndStatement>();
+        var wordAndSidecars = new List<WordAndStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -117,6 +120,26 @@ public static class GraphReducer
             }
         }
 
+        // Word-ANDs are reduced last, same reasoning as Moves above (own `en`/`inK` never depend
+        // on another production via wire-graph traversal; telescoping shared prefixes, if any,
+        // are handled by the same dedup FlgNetBuilder already does for Move).
+        foreach (var wordAnd in wordAndParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceWordAnd(network, wordAnd, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            wordAndStatements.Add(statement);
+            wordAndSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -124,8 +147,9 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements);
-        var networkSidecar = new NetworkSidecar(networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars);
+        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements);
+        var networkSidecar = new NetworkSidecar(
+            networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -233,6 +257,61 @@ public static class GraphReducer
 
         var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath);
         var sidecar = new MoveStatementSidecar(move.UId, enRailWireUId, enSteps, inSidecar, destTag.UId, destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A bitwise-And's `en` is reduced exactly like a Move's — same TraceChain fan-out tap
+    // mechanism (confirmed real, 2026-07-12, FB VSDUpdateComs: the And's `en` shares the same
+    // rail wire as sibling Contacts elsewhere in the network, the same tap shape Move already
+    // proved). Inputs are N tag-or-literal operands (`in1`..`inCard`, ResolveTagOrLiteralOperand
+    // per port — same resolver as TON's PT/a comparison's operands/Move's own `in`), looped over
+    // the Part's own Cardinality exactly like ResolveOrMerge already loops over an OR-merge's
+    // branches. `out` writes to a plain tag (ResolveOperand, port "out" — confirmed real; not
+    // "out1" like Move's own write port).
+    private static (WordAndStatement Statement, WordAndStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceWordAnd(
+        FlgNetwork network,
+        PartNode wordAnd,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (enExpr, enSteps, enRailWireUId) = TraceChain(
+            network, (wordAnd.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        if (wordAnd.Cardinality is not int cardinality || cardinality < 1)
+        {
+            throw new NonReducibleNetworkException($"Network {networkNumber}: And UId={wordAnd.UId} has no usable cardinality.");
+        }
+
+        var inputExprs = new List<Expr>();
+        var inputSidecars = new List<OperandSidecar>();
+        for (var k = 1; k <= cardinality; k++)
+        {
+            var (inputExpr, inputSidecar) = ResolveTagOrLiteralOperand(
+                wiresByPort, accessByUId, constantsByUId, wordAnd.UId, $"in{k}", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+            inputExprs.Add(inputExpr);
+            inputSidecars.Add(inputSidecar);
+        }
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, wordAnd.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new WordAndStatement(enExpr, inputExprs, destTag.TagPath);
+        var sidecar = new WordAndStatementSidecar(
+            wordAnd.UId,
+            enRailWireUId,
+            enSteps,
+            inputSidecars,
+            wordAnd.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: And UId={wordAnd.UId} has no SrcType."),
+            destTag.UId,
+            destWireUId);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

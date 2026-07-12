@@ -70,28 +70,49 @@ public sealed record CoilAssignment(string CoilTag, Expr Condition);
 // or expression (confirmed real: `out1` always wires straight to an ordinary Access).
 public sealed record MoveStatement(Expr En, Expr In, string DestTag);
 
+// A bitwise/word-level AND box instruction (`Part Name="And"`) — confirmed real, 2026-07-12,
+// `FB VSDUpdateComs` (`Word AND 16#89 -> ControlWord`). Genuinely NOT the boolean parallel-branch
+// "AND-merge" `ir/SPEC.md` originally sketched (that shape was never found real — a systematic
+// sweep of 28 real LAD blocks turned up no boolean AND-merge Part at all; architecturally this
+// makes sense, since boolean AND in ladder logic is always plain series Contacts, never needing
+// an explicit merge Part the way OR genuinely does). Structurally this is closest to `Move`: a
+// side effect gated by `en` (fan-out-tapped off a chain, same `TraceChain` mechanism), reading N
+// input operands (`Cardinality`-driven — real example has `Card="2"`, mirroring `O`'s own
+// Cardinality-driven branch count — one shared resolver, `ResolveTagOrLiteralOperand`, called
+// once per `inK`) and writing one destination tag via `out`. `SrcType` (`Word`, confirmed real —
+// same `TemplateValue` shape as a comparison's own `SrcType`) is carried since, unlike Move, this
+// instruction is genuinely typed (a Word-width bitwise operation, not an untyped value copy). IR
+// keyword is `WAND` (Word AND), not `AND` — deliberately avoiding a collision with the existing
+// boolean `AND` infix operator; a converter-owned vendor-neutral name mapping, same precedent as
+// `MOVE_BLK_VARIANT` → `MOVE`.
+public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, string DestTag);
+
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
 // wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
 // alarm-bit network). Assignments is empty for a genuinely empty network (source
 // `<NetworkSource />` with no FlgNet content at all, also confirmed real) — both are
 // unambiguous, not guesses, so both are modeled directly rather than hard-erroring.
-// Timers/Moves are separate lists from Assignments (not folded into one statement list) because
-// neither is reduced from a Coil at all — each is its own kind of production, terminating in a
-// TON/Move Part rather than a Coil (confirmed real, 2026-07-11: S1 items 7/10's grounding). A
-// network can have any combination, or just one kind alone (a Move-only network with no Coil or
-// TON at all is real — the whole "HMI Motor Status Telemetry" network is exactly this shape).
+// Timers/Moves/WordAnds are separate lists from Assignments (not folded into one statement list)
+// because none is reduced from a Coil at all — each is its own kind of production, terminating in
+// a TON/Move/And Part rather than a Coil (confirmed real, 2026-07-11/12: S1 items 7/10/12's
+// grounding). A network can have any combination, or just one kind alone (a Move-only network
+// with no Coil or TON at all is real — the whole "HMI Motor Status Telemetry" network is exactly
+// this shape).
 public sealed record IrNetwork(
     int Number,
     string Title,
     IReadOnlyList<CoilAssignment> Assignments,
     IReadOnlyList<TimerBinding>? Timers = null,
-    IReadOnlyList<MoveStatement>? Moves = null)
+    IReadOnlyList<MoveStatement>? Moves = null,
+    IReadOnlyList<WordAndStatement>? WordAnds = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
     public IReadOnlyList<MoveStatement> Moves { get; init; } = Moves ?? Array.Empty<MoveStatement>();
 
-    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0;
+    public IReadOnlyList<WordAndStatement> WordAnds { get; init; } = WordAnds ?? Array.Empty<WordAndStatement>();
+
+    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -290,6 +311,24 @@ public sealed record MoveStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One bitwise-And's full round-trip data. RailWireUId/Steps mirror every other production's own
+// chain shape exactly (same TraceChain mechanism). Inputs is positional (Inputs[0] is `in1`,
+// Inputs[1] is `in2`, ...) — length equals the source Part's own Cardinality, validated at parse
+// time. SrcType/DestAccessUId/DestWireUId mirror a comparison's SrcType and Move's own
+// DestAccessUId/DestWireUId respectively. DisabledENO isn't carried as a field — every real
+// instance seen has `DisabledENO="true"`, same "don't carry a confirmed constant" reasoning as
+// Move's own DisabledENO/TON's InstanceOfType (Cardinality itself IS carried, via Inputs.Count,
+// since — unlike Move's fixed Card="1" — only one real example (Card="2") has been seen, not
+// enough to treat any particular value as a universal constant).
+public sealed record WordAndStatementSidecar(
+    int AndPartUId,
+    int? RailWireUId,
+    IReadOnlyList<ChainStepSidecar> Steps,
+    IReadOnlyList<OperandSidecar> Inputs,
+    string SrcType,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -297,13 +336,16 @@ public sealed record NetworkSidecar(
     IReadOnlyList<CoilAssignmentSidecar> Assignments,
     IReadOnlyList<SidecarConstantEntry>? ConstantUIds = null,
     IReadOnlyList<TimerBindingSidecar>? Timers = null,
-    IReadOnlyList<MoveStatementSidecar>? Moves = null)
+    IReadOnlyList<MoveStatementSidecar>? Moves = null,
+    IReadOnlyList<WordAndStatementSidecar>? WordAnds = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
     public IReadOnlyList<TimerBindingSidecar> Timers { get; init; } = Timers ?? Array.Empty<TimerBindingSidecar>();
 
     public IReadOnlyList<MoveStatementSidecar> Moves { get; init; } = Moves ?? Array.Empty<MoveStatementSidecar>();
+
+    public IReadOnlyList<WordAndStatementSidecar> WordAnds { get; init; } = WordAnds ?? Array.Empty<WordAndStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

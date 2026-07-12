@@ -66,9 +66,17 @@ lookup table entry:
 | `Contact` | bare tag reference, e.g. `Sensor1.Ok` |
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
-| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne` / `Le` / `Gt` / `Lt` **[converter-verify part names]** — same status as AND-merge, not built | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
+| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne`/`Le`/`Lt` — **confirmed real Part Names, 2026-07-12, not yet built**; `Gt` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
-| `A` (AND-merge) **[converter-verify part name]** | `AND` |
+
+**No boolean "AND-merge" Part exists (resolved, 2026-07-12, S1 item 12).** This table originally
+sketched a speculative `A`/AND-merge row, an `O`-sibling for parallel-branch AND — never
+confirmed. A systematic sweep of 28 real LAD blocks (specifically searching for this shape) found
+none anywhere. Architecturally this makes sense: boolean AND in ladder logic is always expressed
+as plain series Contacts (no explicit merge Part ever needed, unlike OR, which genuinely requires
+one because parallel converging branches need a defined merge point in the wire graph — AND never
+does). What the sweep *did* find real, `Part Name="And"`, is an entirely different thing — a
+bitwise/word-level box instruction, not a boolean chain position at all — see `WAND` below.
 
 **Operator precedence (confirmed with the project owner, 2026-07-11, S1 item 11):** `AND` binds
 tighter than `OR`, matching ordinary language convention — `A AND B OR C` reads unambiguously as
@@ -78,12 +86,12 @@ own operand (`NOT (A OR B)`). This only became reachable once an OR-merge branch
 a compound expression rather than a single tag (S1 item 11) — before that, `AND`/`OR` never
 nested inside each other in any real or built shape, so the distinction was moot.
 
-Stateful and boxed instructions (timers, MOVE, block calls — anything with named ports beyond a
-single boolean in/out) use call syntax, with a small maintained vendor↔neutral name table for the
-box name itself (e.g. `MOVE_BLK_VARIANT` → `MOVE`), owned by the converter, grown as new
-instruction types are met in the wild — not exhaustively listed here (05-architecture.md's
-portability strategy: the table is what makes a future non-Siemens converter possible without
-touching the IR or its readers):
+Stateful and boxed instructions (timers, MOVE, bitwise word instructions, block calls —
+anything with named ports beyond a single boolean in/out) use call syntax, with a small
+maintained vendor↔neutral name table for the box name itself (e.g. `MOVE_BLK_VARIANT` → `MOVE`,
+`And` → `WAND`), owned by the converter, grown as new instruction types are met in the wild — not
+exhaustively listed here (05-architecture.md's portability strategy: the table is what makes a
+future non-Siemens converter possible without touching the IR or its readers):
 
 ```
 NETWORK 8 "Run enable delay"
@@ -201,6 +209,28 @@ NETWORK 8 "Run enable delay"
   `Or` (richer than any fixture, confirming the precedence grammar on genuinely real data), and
   `MotorDOL`'s telemetry network now reduces all 5 Moves. `docs/notes/stage-gates.md` has the full
   story.
+- **`WAND` (bitwise/word AND, `Part Name="And"`), built 2026-07-12 (S1 item 12).** Grounded
+  against a real export, `FB VSDUpdateComs` (`Word AND 16#89 -> ControlWord`), found while
+  searching specifically for the boolean AND-merge sketched above (never found — see that entry).
+  Structurally closest to `MOVE`: a side effect gated by `en` (same `TraceChain` fan-out-tap
+  mechanism, confirmed real — the And's own `en` shares a rail wire with sibling Contacts
+  elsewhere in the network), crossed with an OR-merge's own `Cardinality`-driven multi-operand
+  shape (here driving input count — `IN1`..`INn` — not branch count; only `Card="2"` observed so
+  far) and a comparison's own `SrcType` (`Word`, sidecar-only, not shown in the readable text —
+  same precedent as a comparison's `SrcType`). Syntax:
+  `WAND(EN := <expr>, IN1 := <expr>, IN2 := <expr>, ...) => <dest>`. `WAND`, not `AND` —
+  deliberately avoiding a collision with the boolean `AND` infix operator above; a
+  converter-owned vendor-neutral name mapping, same precedent as `MOVE_BLK_VARIANT` → `MOVE`.
+  `DisabledENO="true"` is fixed in every real instance seen — same "don't store a confirmed
+  constant" reasoning as MOVE's own `DisabledENO`; `Cardinality`, unlike MOVE's fixed `Card="1"`,
+  *is* carried as data (only one real value observed, not enough to treat as universal). Also
+  surfaced by this grounding: Siemens' own `<base>#<value>` numeric-literal notation (`16#89`)
+  wasn't recognized by the IR parser's shape-based literal detection (only `T#`-prefixed and bare
+  integer shapes were) — a real, previously-unexercised gap, fixed alongside this work. Covered by
+  8 converter tests (`WordAndTests.cs`, fixture built directly from the real shape, genericized).
+  **Live-verified against real data, 2026-07-12:** isolating `FB VSDUpdateComs`'s real network
+  directly confirmed it reduces and round-trips completely, including the `16#89` literal
+  round-tripping cleanly through the text grammar.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,
@@ -346,9 +376,11 @@ question, left open on purpose rather than guessed).
 
 ## Open items carried into converter work (S1 items 4–8)
 
-- Exact `Part Name` for an AND-merge (only `O`/OR was directly observed; site convention C-114's
-  chained-permissive style may mean AND-merges are rare in practice, similar to the non-reducible
-  network case).
+- **Resolved, 2026-07-12 (S1 item 12): no boolean AND-merge Part exists.** A systematic sweep of
+  28 real LAD blocks found none — architecturally expected, since boolean AND is always plain
+  series Contacts, never needing an explicit merge Part the way OR genuinely does. `Part
+  Name="And"` does exist real, but it's an unrelated bitwise/word instruction (`WAND`, built —
+  see the readable-form section above), not this speculative shape.
 - Sidecar addressing micro-syntax.
 - How often the explicit-form fallback actually triggers.
 - TON's `ET` wired directly into a downstream part (not via an ordinary Access) — no live example
@@ -363,8 +395,8 @@ question, left open on purpose rather than guessed).
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
   passed — see `tests/golden/README.md`.
-- `Ne`/`Le`/`Gt`/`Lt` Part Names — only `Eq`/`Ge` confirmed real (`FC ControlDelays`); same
-  status as AND-merge.
+- `Ne`/`Le`/`Lt` Part Names confirmed real 2026-07-12 (found while sweeping for AND-merge —
+  see above), not yet built; `Gt` still unconfirmed.
 - **Resolved, 2026-07-12 (S1 item 11):** a comparison composing with an OR-merge (as a branch, or
   feeding one) — real (`ControlDelays`' `O(41)`). OR-merge branches generalized to ordinary
   chains (reusing `GraphReducer.TraceChain` recursively), so a comparison appearing there needs
