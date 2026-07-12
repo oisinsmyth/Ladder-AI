@@ -348,7 +348,11 @@ public static class FlgNetBuilder
             BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
-        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        // Instance is optional — confirmed real, 2026-07-12 (S1 item 24): an FC call carries no
+        // Instance at all, unlike every FB call, which always does.
+        var instance = sidecar.InstanceUId is int instanceUId
+            ? new AccessNode(instanceUId, sidecar.InstanceScope!, sidecar.InstanceComponentPath!)
+            : null;
         var callParameters = sidecar.Arguments.Select(argument => argument switch
         {
             CallArgumentSidecar.InputArgSidecar input => new CallParameterNode(input.ParamName, "Input", input.Type),

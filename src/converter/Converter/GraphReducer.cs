@@ -437,13 +437,14 @@ public static class GraphReducer
     // mechanism (confirmed real, 2026-07-12, FC PlantAutoControl: all 20 real en's are directly
     // rail-fed, reducing to the existing "wired directly to rail" TRUE sentinel — same as WAND's
     // own live-verified case; a Contact-gated en on a Call specifically remains unconfirmed).
-    // Instance is required (confirmed real: every Call carries one). Arguments are resolved per
-    // the source's own sparse, ordered <Parameter> list (confirmed real: only wired parameters
-    // appear at all, in source declaration order) — an Input parameter resolves via
-    // ResolveTagOrLiteralOperand (same resolver as everywhere else); an Output parameter is a
-    // bare destination tag (ResolveOperand — same IdentCon-fed wire shape as Move's own out1/
-    // WAND's dest, just named per-parameter via the source's own Parameter Name instead of a
-    // fixed port name).
+    // Instance is optional — confirmed real, 2026-07-12 (S1 item 24, FB MotorVSDSystem's own call to the
+    // stateless FC "Scale"): an FC call carries no Instance at all, unlike every FB call grounded
+    // so far (S1 item 14), which always does. Arguments are resolved per the source's own sparse,
+    // ordered <Parameter> list (confirmed real: only wired parameters appear at all, in source
+    // declaration order) — an Input parameter resolves via ResolveTagOrLiteralOperand (same
+    // resolver as everywhere else); an Output parameter is a bare destination tag (ResolveOperand
+    // — same IdentCon-fed wire shape as Move's own out1/WAND's dest, just named per-parameter via
+    // the source's own Parameter Name instead of a fixed port name).
     private static (CallStatement Statement, CallStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceCall(
         FlgNetwork network,
         PartNode call,
@@ -459,9 +460,8 @@ public static class GraphReducer
         var (enExpr, enSteps, enRailWireUId) = TraceChain(
             network, (call.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-        var instance = call.Instance
-            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no Instance reference.");
-        var instancePath = string.Join('.', instance.ComponentPath);
+        var instance = call.Instance;
+        var instancePath = instance is not null ? string.Join('.', instance.ComponentPath) : null;
 
         var arguments = new List<CallArgument>();
         var argumentSidecars = new List<CallArgumentSidecar>();
@@ -494,9 +494,9 @@ public static class GraphReducer
             blockType,
             enRailWireUId,
             enSteps,
-            instance.UId,
-            instance.Scope,
-            instance.ComponentPath,
+            instance?.UId,
+            instance?.Scope,
+            instance?.ComponentPath,
             argumentSidecars);
 
         return (statement, sidecar, accessEntries, constantEntries);

@@ -10,6 +10,29 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 24: `CALL` without `<Instance>` (a real FC call) — built, tested, live-verified; `MotorVSDSystem` fully round-trips**
+
+- Picked up per the project owner's own choice, to close `MotorVSDSystem`'s own hard error on `<Call
+  UId="52">` missing `<Instance>`. Every prior `<Call>` (S1 item 14, 20 real instances) called an
+  FB and carried one, so this was a genuinely new shape — formally planned, with mandatory Phase 0
+  grounding before any code.
+- Phase 0 confirmed the working hypothesis exactly: `<CallInfo Name="Scale" BlockType="FC">` — a
+  call to Siemens' own standard-library `Scale` function, stateless, genuinely no `<Instance>`
+  element at all (5 Input + 1 Output `Real` parameters, `en` rail-fed).
+- `CallStatement.InstancePath` and `CallStatementSidecar`'s three Instance fields all made
+  nullable (all-or-nothing group, not a discriminated union). `FlgNetParser.ParseCall` checks
+  `<Instance>`'s presence directly rather than gating on `BlockType`; `FlgNetWriter`/
+  `GraphReducer`/`FlgNetBuilder` all made null-safe symmetrically. Readable-form grammar omits the
+  instance argument entirely when absent (`CALL Scale(EN := ..., ...)`), disambiguated on parse by
+  checking whether the first argument itself starts with the reserved `EN := ` prefix.
+- 6 new tests, one new fixture. All three suites green: 236 converter (up from 230), 68
+  openness-cli, 11 golden-harness.
+- **Live-verified**: fresh `MotorVSDSystem` export (real `JOB9002_PLC` device) converted **completely, no
+  errors at all**, and round-trips `to-ir → to-xml → to-ir` **byte-identical**, confirmed
+  genuinely exercising the no-Instance `Scale` call via direct grep. `MotorVSDSystem` is now the
+  **seventh** of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip. Only `TomraControlSystem`
+  (`Swap`) remains blocked. Full story: `docs/notes/stage-gates.md` ("S1 item 24").
+
 **S1 item 23: `TOF` (off-delay timer) — built, tested, live-verified; `AirStar` fully round-trips**
 
 - Picked up per the project owner's own choice, asked directly what `TOF` was likely to be —

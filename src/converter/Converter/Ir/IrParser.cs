@@ -337,34 +337,51 @@ public static partial class IrParser
         }
 
         // Calls are always emitted last (IrSerializer, after Timers/Coils/Moves/WordAnds) —
-        // parsed in the same order for self-stability. Instance is the first positional argument
-        // (no label, same convention as TON's own instance path); EN is always second (every
-        // real Call has one, even when trivially TRUE — confirmed real, 2026-07-12,
-        // FC PlantAutoControl: all 20 real en's are directly rail-fed). The remaining arguments are a
-        // sparse, ordered mix of "<Param> := <expr>" (Input) and "<Param> => <tag>" (Output) —
-        // split on top-level commas same as WAND's own variable argument list (safe for the same
-        // reason: no Expr ever renders a literal comma).
+        // parsed in the same order for self-stability. Instance is an optional leading positional
+        // argument (no label, same convention as TON's own instance path) — omitted entirely when
+        // the call has no instance (confirmed real, 2026-07-12, S1 item 24: an FC call, unlike
+        // every FB call, carries no instance). EN is always present, even when trivially TRUE
+        // (confirmed real, 2026-07-12, FC PlantAutoControl: all 20 real en's are directly rail-fed).
+        // Disambiguated by checking whether the first argument itself starts with "EN := " — a
+        // reserved prefix no real instance path could ever collide with (instance paths are bare
+        // dotted tag-shaped text). The remaining arguments are a sparse, ordered mix of
+        // "<Param> := <expr>" (Input) and "<Param> => <tag>" (Output) — split on top-level commas
+        // same as WAND's own variable argument list (safe for the same reason: no Expr ever
+        // renders a literal comma).
         var calls = new List<CallStatement>();
         while (i < lines.Length && lines[i].StartsWith("  CALL ", StringComparison.Ordinal))
         {
             var callMatch = CallLineRegex().Match(lines[i]);
             if (!callMatch.Success)
             {
-                throw new IrFormatException($"Expected '  CALL <BlockName>(<instance>, EN := <expr>, ...)', got: '{lines[i]}'");
+                throw new IrFormatException($"Expected '  CALL <BlockName>([<instance>, ]EN := <expr>, ...)', got: '{lines[i]}'");
             }
 
             var blockName = callMatch.Groups["blockname"].Value;
             var args = callMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (args.Length < 2 || !args[1].StartsWith("EN := ", StringComparison.Ordinal))
+
+            string? instancePath;
+            Expr callEnExpr;
+            int enArgIndex;
+            if (args.Length >= 1 && args[0].StartsWith("EN := ", StringComparison.Ordinal))
             {
-                throw new IrFormatException($"Expected '<instance>, EN := <expr>' as CALL's first two arguments, got: '{lines[i]}'");
+                instancePath = null;
+                callEnExpr = ParseExpr(args[0]["EN := ".Length..]);
+                enArgIndex = 0;
+            }
+            else if (args.Length >= 2 && args[1].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                instancePath = args[0];
+                callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
+                enArgIndex = 1;
+            }
+            else
+            {
+                throw new IrFormatException($"Expected '[<instance>, ]EN := <expr>' as CALL's leading argument(s), got: '{lines[i]}'");
             }
 
-            var instancePath = args[0];
-            var callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
-
             var arguments = new List<CallArgument>();
-            for (var k = 2; k < args.Length; k++)
+            for (var k = enArgIndex + 1; k < args.Length; k++)
             {
                 var inputSep = args[k].IndexOf(" := ", StringComparison.Ordinal);
                 var outputSep = args[k].IndexOf(" => ", StringComparison.Ordinal);
@@ -888,9 +905,18 @@ public static partial class IrParser
             s++;
         }
 
-        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
-        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        // Omitted entirely when absent — confirmed real, 2026-07-12 (S1 item 24: an FC call has
+        // no instance) — same "absent lines mean no-instance" convention as the timer sidecar's
+        // own optional `reset` lines (S1 item 19) below.
+        int? instanceUId = null;
+        string? instanceScope = null;
+        IReadOnlyList<string>? instancePath = null;
+        if (i < lines.Length && lines[i].StartsWith("    instanceuid = ", StringComparison.Ordinal))
+        {
+            instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+            instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+            instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        }
 
         var arguments = new List<CallArgumentSidecar>();
         var a = 0;

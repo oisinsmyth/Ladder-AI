@@ -206,23 +206,28 @@ public abstract record CallArgument
     public sealed record OutputArg(string ParamName, string DestTag) : CallArgument;
 }
 
-// An FB/FC call (`<Call>`/`<CallInfo Name="<callee>" BlockType="FB">`) — confirmed real,
-// 2026-07-12, `FC PlantAutoControl` (20 real instances, 8 distinct callees). Genuinely different from
-// every other production built so far in one respect: `<Call>` isn't even a `<Part>` in the
-// source XML (see SimaticMl.PartNode's own doc comment) — but once adapted into an ordinary
-// PartNode(Name="Call") by the parser, it reduces as its own top-level production exactly like
-// TON/Move/WAND (not like Not, which is a chain-position discovered incidentally): a call is
-// invoked directly, not merely traced through. En is reduced via the exact same TraceChain
-// fan-out mechanism as Move/WAND's own en (confirmed real: all 20 real instances are directly
-// rail-fed, reducing to the existing "wired directly to rail" TRUE sentinel — Expr.And with zero
-// operands — same as WAND's own live-verified case; a Contact-gated en on a Call specifically
-// remains unconfirmed by this grounding pass, low-risk by analogy). InstancePath is the same
-// dotted-path text a plain tag reference or TON's own instance would use (mirrors
-// TimerBinding.InstancePath exactly — same AccessNode-shaped reference, confirmed identical
-// shape to TON's own <Instance>). BlockType is deliberately NOT carried here (sidecar-only, same
-// precedent as a comparison's/WAND's own SrcType — not shown in the readable IR text, since the
-// callee's own .ir file is ADR-0001's source of truth for its interface, not duplicated here).
-public sealed record CallStatement(string BlockName, string InstancePath, Expr En, IReadOnlyList<CallArgument> Arguments);
+// An FB/FC call (`<Call>`/`<CallInfo Name="<callee>" BlockType="FB"/"FC">`) — confirmed real,
+// 2026-07-12, `FC PlantAutoControl` (20 real FB-call instances, 8 distinct callees, S1 item 14) and
+// `FB MotorVSDSystem` (1 real FC-call instance, S1 item 24 — `Scale`, Siemens' own standard-library
+// function). Genuinely different from every other production built so far in one respect:
+// `<Call>` isn't even a `<Part>` in the source XML (see SimaticMl.PartNode's own doc comment) —
+// but once adapted into an ordinary PartNode(Name="Call") by the parser, it reduces as its own
+// top-level production exactly like TON/Move/WAND (not like Not, which is a chain-position
+// discovered incidentally): a call is invoked directly, not merely traced through. En is reduced
+// via the exact same TraceChain fan-out mechanism as Move/WAND's own en (confirmed real: all 21
+// real instances across both blocks are directly rail-fed, reducing to the existing "wired
+// directly to rail" TRUE sentinel — Expr.And with zero operands — same as WAND's own live-verified
+// case; a Contact-gated en on a Call specifically remains unconfirmed, low-risk by analogy).
+// InstancePath is the same dotted-path text a plain tag reference or TON's own instance would use
+// (mirrors TimerBinding.InstancePath exactly — same AccessNode-shaped reference, confirmed
+// identical shape to TON's own <Instance>) when present — **nullable**, confirmed real 2026-07-12
+// (S1 item 24): an FC call's own `<CallInfo>` genuinely has no `<Instance>` element at all (FCs
+// are stateless, no instance DB), unlike every FB call grounded so far. BlockType is deliberately
+// NOT carried here (sidecar-only, same precedent as a comparison's/WAND's own SrcType — not shown
+// in the readable IR text, since the callee's own .ir file is ADR-0001's source of truth for its
+// interface, not duplicated here) — so the readable form can't derive FB-vs-FC from BlockType
+// directly; instance presence/absence is the only signal it needs anyway.
+public sealed record CallStatement(string BlockName, string? InstancePath, Expr En, IReadOnlyList<CallArgument> Arguments);
 
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
 // wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
@@ -559,20 +564,31 @@ public abstract record CallArgumentSidecar
 // entirely off the sidecar, never cross-referencing the model — same discipline as every other
 // sidecar/model pairing in this codebase (see CallArgumentSidecar's own doc comment for the same
 // reasoning re: ParamName). BlockType mirrors a comparison's/WAND's own SrcType (sidecar-only,
-// carried verbatim rather than hard-validated to a constant — "FB" is the only value confirmed
-// real, but an unconfirmed "FC" shouldn't be assumed impossible). Instance fields mirror
-// TimerBindingSidecar's own (InstanceUId/InstanceScope/InstanceComponentPath) — same
-// AccessNode-shaped reference. Arguments is positional, in the source's own <Parameter>
-// declaration order (confirmed real: 8 inputs then 2 outputs, in the one real wired example).
+// carried verbatim rather than hard-validated to a constant) — "FB" and, confirmed real 2026-07-12
+// (S1 item 24), "FC" both seen now.
+//
+// Instance fields mirror TimerBindingSidecar's own (InstanceUId/InstanceScope/
+// InstanceComponentPath) — same AccessNode-shaped reference — **all three nullable together**
+// (confirmed real, S1 item 24: an FC call, `FB MotorVSDSystem`'s own `Scale` call, has no `<Instance>`
+// at all; every real FB call still carries one). A plain 3-nullable-fields group rather than a
+// discriminated union (unlike EnSource's own Condition/PrecedingEno split): there's no second
+// "kind" of instance to distinguish here, only presence-or-absence, so a union would be pure
+// ceremony over what's really one optional group. All three are null together or non-null
+// together — never partially populated, since they only ever come from parsing one real
+// `<Instance>` element as a whole.
+//
+// Arguments is positional, in the source's own <Parameter> declaration order (confirmed real: 8
+// inputs then 2 outputs in the one real FB-call wired example; 5 inputs then 1 output in the one
+// real FC-call example).
 public sealed record CallStatementSidecar(
     int CallPartUId,
     string BlockName,
     string BlockType,
     int? RailWireUId,
     IReadOnlyList<ChainStepSidecar> Steps,
-    int InstanceUId,
-    string InstanceScope,
-    IReadOnlyList<string> InstanceComponentPath,
+    int? InstanceUId,
+    string? InstanceScope,
+    IReadOnlyList<string>? InstanceComponentPath,
     IReadOnlyList<CallArgumentSidecar> Arguments);
 
 // The sidecar counterpart of EnSource (Model) — see its own doc comment for why this is a

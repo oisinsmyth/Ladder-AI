@@ -154,7 +154,7 @@ NETWORK 8 "Run enable delay"
   TON(RunEnableDelay, IN := Sensor1.Ok, PT := Settings.RunDelay)
   COIL Conveyor1.Permissive := RunEnableDelay.Q OR Override.Active
 
-  CALL FC_Scale(ScaleInstance, EN := TRUE, Input := RawValue, Result => ScaledValue)
+  CALL Scale(EN := TRUE, Input := RawValue, Result => ScaledValue)
 ```
 
 - **TON, confirmed real and built, 2026-07-11 (S1 item 8)** — grounded against `FB MotorDOL`
@@ -326,26 +326,47 @@ NETWORK 8 "Run enable delay"
   TON's own `<Instance>` — the reuse `ir/SPEC.md`'s own TON section anticipated. **Arguments are
   sparse, not a full interface snapshot**: 19 of the 20 real calls have zero wired parameters at
   all (no `<Parameter>` element present, not present-but-empty); the one real wired example has
-  10 (8 `Section="Input"`, 2 `Section="Output"`), in source declaration order. Only
-  `BlockType="FB"` observed (`"FC"` real in principle, unconfirmed on a Call specifically, stored
-  verbatim rather than hard-validated). Readable-form syntax:
-  `CALL <BlockName>(<InstancePath>, EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
-  — instance is the first positional argument (no label, same convention as TON's own instance
-  path); `EN` is always shown explicitly (matching MOVE/WAND's own convention, for full
-  losslessness even though every real instance seen so far is trivially `TRUE`); the remaining
-  arguments are whatever the source actually wired, `:=` for Input and `=>` for Output, mixed in
-  source order — this *is* ADR-0001's "reference only, no inline parameter-interface snapshot"
-  decision, realized structurally (the sparse source shape) as well as textually (no interface
-  echoed at the call site). The callee's own `.ir` file remains the source of truth for its
-  interface; a call site that doesn't match it is a converter/compile-time error, not something
-  re-derived from a snapshot. Covered by 14 converter tests (`CallTests.cs`, two fixtures
-  genericized from the two real shapes — bare and parameterized). **Live-verified against real
-  data, 2026-07-12:** isolating `FC PlantAutoControl`'s richest real network (`Not` wrapping an
-  OR-of-comparisons, itself gated by a negated contact, alongside 8 independent Contact→Coil
-  rungs and a fully-wired 10-parameter FB call) directly confirmed it reduces and round-trips
-  completely through the in-memory pipeline — the first real network combining `Not` and `Call`
-  together to do so. **Not yet verified through the true TIA `import → compile → re-export →
-  Normalizer` cycle** — see `docs/notes/stage-gates.md` ("S1 item 14") for why, and what's next.
+  10 (8 `Section="Input"`, 2 `Section="Output"`), in source declaration order. Readable-form
+  syntax: `CALL <BlockName>([<InstancePath>, ]EN := <expr>, Param1 := <expr>, ...,
+  OutParam => <tag>, ...)` — instance, when present, is the first positional argument (no label,
+  same convention as TON's own instance path); `EN` is always shown explicitly (matching MOVE/
+  WAND's own convention, for full losslessness even though every real instance seen so far is
+  trivially `TRUE`); the remaining arguments are whatever the source actually wired, `:=` for
+  Input and `=>` for Output, mixed in source order — this *is* ADR-0001's "reference only, no
+  inline parameter-interface snapshot" decision, realized structurally (the sparse source shape)
+  as well as textually (no interface echoed at the call site). The callee's own `.ir` file remains
+  the source of truth for its interface; a call site that doesn't match it is a converter/
+  compile-time error, not something re-derived from a snapshot. Covered by 14 converter tests
+  (`CallTests.cs`, two fixtures genericized from the two real shapes — bare and parameterized).
+  **Live-verified against real data, 2026-07-12:** isolating `FC PlantAutoControl`'s richest real
+  network (`Not` wrapping an OR-of-comparisons, itself gated by a negated contact, alongside 8
+  independent Contact→Coil rungs and a fully-wired 10-parameter FB call) directly confirmed it
+  reduces and round-trips completely through the in-memory pipeline — the first real network
+  combining `Not` and `Call` together to do so. **Not yet verified through the true TIA
+  `import → compile → re-export → Normalizer` cycle** — see `docs/notes/stage-gates.md`
+  ("S1 item 14") for why, and what's next.
+- **`CALL` without `<Instance>` (a real FC call), built 2026-07-12 (S1 item 24).** Every `<Call>`
+  grounded above (S1 item 14, 20 real instances) called an FB and carried an `<Instance>`. `FB
+  MotorVSDSystem` hard-errored on its own call to the Siemens standard-library `Scale` function:
+  `<CallInfo Name="Scale" BlockType="FC">` with 5 `Section="Input"` + 1 `Section="Output"`
+  `Real` parameters and genuinely **no `<Instance>` element at all** — not present-but-empty, not
+  a different shape, simply absent, because FCs are stateless and never need an instance DB.
+  `en` is rail-fed, same as every other real Call. `PartNode.Instance` was already nullable at
+  the `SimaticMl` layer; the change was making `CallStatement.InstancePath` and
+  `CallStatementSidecar`'s `InstanceUId`/`InstanceScope`/`InstanceComponentPath` nullable too (all
+  three together, presence/absence — not a discriminated union, since there's no second "kind" to
+  distinguish). `FlgNetParser.ParseCall` now checks the `<Instance>` element's presence directly
+  rather than gating on `BlockType`, matching `<CallInfo>`'s own literal shape rather than
+  asserting a not-yet-proven FB⇒Instance/FC⇒no-Instance rule; `FlgNetWriter.WriteCall` mirrors
+  this symmetrically, omitting `<Instance>` when absent. The readable-form grammar above already
+  reflects the confirmed shape — the instance argument is omitted entirely when absent
+  (`CALL Scale(EN := ..., Input := ..., ...)`, no leading positional argument), disambiguated on
+  parse by checking whether the first split argument itself starts with `EN := ` (a reserved
+  prefix no real instance path could ever collide with). Covered by 6 new converter tests
+  (`CallTests.cs`, one new fixture genericized from the real 5+1 `Scale` shape down to 2+1,
+  mirroring `CallWithParametersFedByRail`'s own genericization precedent). **Live-verified against
+  real data, 2026-07-12:** see `docs/notes/stage-gates.md` ("S1 item 24") for the full
+  `MotorVSDSystem` whole-block result.
 - **`SCOIL`/`RCOIL` (set/reset coils, `Part Name="SCoil"`/`"RCoil"`), built 2026-07-12 (S1 item
   15).** Picked up per the project owner's own explicit sequencing after `CALL`, since 3 of each
   are real in `FC PlantAutoControl` (also seen alongside TON in `FB MotorDOL`'s own earlier grounding
@@ -725,6 +746,9 @@ question, left open on purpose rather than guessed).
   declared parameter list, independent of what's wired at any one call site) is now separately
   resolved too — S1 item 20, see above. `InOut` parameters specifically remain unconfirmed on a
   real Call (only Input/Output seen), refused rather than guessed at.
+- **Resolved, 2026-07-12 (S1 item 24): `CALL` without `<Instance>` (a real FC call) built** — see
+  the dedicated bullet above. `MotorVSDSystem` fully round-trips as a whole block, the seventh of
+  `PlantAutoControl`'s 8 dependency FBs to do so. Only `TomraControlSystem` (`Swap`) remains.
 - **Resolved, 2026-07-11:** a full live TIA round-trip for TON. `FC TimerSample`
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and

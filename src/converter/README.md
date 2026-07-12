@@ -417,10 +417,11 @@ any code.
   `DisabledENO="true"`, a Call carries no `DisabledENO` (or any other) attribute at all; `eno`
   itself is never wired in any real instance seen, so nothing is validated or regenerated for it.
 - Readable-form syntax:
-  `CALL <BlockName>(<InstancePath>, EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
-  — instance first (no label, same convention as TON's own instance path), `EN` always shown
-  explicitly (matching MOVE/WAND's own convention for full losslessness, even though every real
-  instance seen is trivially `TRUE`), remaining arguments exactly whatever the source wired,
+  `CALL <BlockName>([<InstancePath>, ]EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
+  — instance, when present, comes first (no label, same convention as TON's own instance path;
+  omitted entirely for FC calls, which carry none — see the dedicated section below), `EN` always
+  shown explicitly (matching MOVE/WAND's own convention for full losslessness, even though every
+  real instance seen is trivially `TRUE`), remaining arguments exactly whatever the source wired,
   mixed `:=`/`=>` in source order. Matches ADR-0001's "reference only, no inline
   parameter-interface snapshot" decision — realized structurally (the source itself is sparse) as
   well as textually.
@@ -924,6 +925,76 @@ round-trips **byte-identical** — confirmed genuinely exercising both `TOF` (1 
 for this specific block, starting from S1 item 20's `Constant` Interface section through S1 items
 21 (`LocalConstant`), 22 (`Ne`), and this one. Only `TomraControlSystem` (`Swap`) and `MotorVSDSystem` (a
 `<Call>` missing its `<Instance>`) remain of the original 8.
+
+## `CALL` without `<Instance>` — a real FC call (S1 item 24, 2026-07-12) — `MotorVSDSystem` fully round-trips
+
+Picked up per the project owner's own explicit choice, to close `MotorVSDSystem`'s own hard error:
+`<Call UId="52"> is missing its <Instance> element.` Every `<Call>` grounded so far (S1 item 14,
+20 real instances) called an FB and carried an `<Instance>` — this was a genuinely new shape
+question, not just another "add a variant" pattern, so it went through a full formal plan
+(`EnterPlanMode`/`ExitPlanMode`) with mandatory Phase 0 grounding before any code.
+
+**Phase 0 finding, grounded against real `MotorVSDSystem` — the working hypothesis (a stateless FC call)
+confirmed exactly:**
+
+```xml
+<Call UId="52">
+  <CallInfo Name="Scale" BlockType="FC">
+    <Parameter Name="Input" Section="Input" Type="Real" />
+    <Parameter Name="Input_Min" Section="Input" Type="Real" />
+    <Parameter Name="Input_Max" Section="Input" Type="Real" />
+    <Parameter Name="Scaled_Min" Section="Input" Type="Real" />
+    <Parameter Name="Scaled_Max" Section="Input" Type="Real" />
+    <Parameter Name="Output" Section="Output" Type="Real" />
+  </CallInfo>
+</Call>
+```
+
+`BlockType="FC"` — a call to Siemens' own standard-library `Scale` function, stateless by design.
+**No `<Instance>` element at all** — not present-but-empty, genuinely absent: `<CallInfo>` goes
+straight into its `<Parameter>` children. Parameters (5 Input + 1 Output, all `Real`) fit the
+existing allowlist unchanged. `en` is rail-fed, same as every other real Call.
+
+- **A bigger change than recent items** — not just adding a fourth case to a switch, but making
+  already-shipped, non-nullable fields nullable: `CallStatement.InstancePath` (`string` →
+  `string?`) and `CallStatementSidecar`'s `InstanceUId`/`InstanceScope`/`InstanceComponentPath`
+  (all three → nullable, as one all-or-nothing group — not a discriminated union, since there's no
+  second "kind," just presence/absence). `SimaticMl.Model.PartNode.Instance` was already
+  `AccessNode?`, so no change needed at that layer.
+- **`FlgNetParser.ParseCall` now checks `<Instance>`'s presence directly** (`callInfo.Element(Ns +
+  "Instance") is not null`) rather than gating on `BlockType` — the two are expected to correlate,
+  but nothing rules out a real counter-example either way, so this doesn't assume one implies the
+  other. `FlgNetWriter.WriteCall` mirrors this symmetrically, omitting `<Instance>` when absent.
+- **`GraphReducer.ReduceCall`'s own doc comment** ("Instance is required... every Call carries
+  one") was factually corrected; the `call.Instance ?? throw` line became a plain nullable
+  assignment, and the sidecar construction passes `instance?.UId` etc. through.
+- **`FlgNetBuilder.BuildCall`'s own unconditional `new AccessNode(sidecar.InstanceUId, ...)`**
+  became conditional on `sidecar.InstanceUId is int instanceUId` — this was a real, expected
+  compile error in the interim state right after the sidecar fields went nullable, caught and
+  fixed as part of the same pass.
+- **Readable-form grammar**: the instance argument is omitted entirely when absent —
+  `CALL Scale(EN := TRUE, Input := ..., ...)` instead of `CALL Scale(<instance>, EN := TRUE, ...)`.
+  Disambiguation isn't actually ambiguous: `EN := ` is a reserved prefix no real instance path
+  could ever collide with, so the parser checks whether the *first* split argument itself starts
+  with `EN := ` (no instance) vs. requiring the *second* to (instance present) — same
+  self-disambiguating style as `EnSource`'s own `ENO` sentinel and `TimerBinding`'s optional 4th
+  `R :=` argument. The sidecar's `instanceuid =`/`instancescope =`/`instancepath =` lines are
+  omitted together when absent, mirroring the timer sidecar's own optional `reset` lines (S1
+  item 19).
+
+6 new tests (`CallTests.cs`, mirroring the existing with-Instance coverage exactly for the
+no-Instance case), one new fixture (`CallFcNoInstanceFedByRail.xml`, genericized down from the
+real 5 Input + 1 Output shape to 2 Input + 1 Output, mirroring `CallWithParametersFedByRail`'s own
+genericization precedent). All 236 converter tests pass (up from 230).
+
+**Live-verified against real data, 2026-07-12.** Fresh `MotorVSDSystem` export (from the real `JOB9002_PLC`
+device): **`converter to-ir` succeeded completely, no errors at all.** `to-ir → to-xml → to-ir`
+round-trips **byte-identical** — confirmed genuinely exercising this item's own work via direct
+grep of the converted `.ir` text: `CALL Scale(EN := TRUE, Input := IO.SpeedPerc, Input_Min := 0.0,
+Input_Max := 100.0, Scaled_Min := 0.0, Scaled_Max := IO.MaxRPM, Output => IO.SpeedOutput)` — no
+instance argument, exactly the confirmed shape. `MotorVSDSystem` is now the **seventh** of
+`PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to end. Only `TomraControlSystem` (`Swap`)
+remains.
 
 ## DB support
 

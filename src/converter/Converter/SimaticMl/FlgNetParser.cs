@@ -405,14 +405,16 @@ public static class FlgNetParser
         return new AccessNode(instanceUId, instanceScope, instancePath);
     }
 
-    // An FB/FC call — confirmed real, 2026-07-12, FC PlantAutoControl (20 real instances). Genuinely
-    // not a `<Part Name="Call">`: `<Call>` is its own sibling element under <Parts>, wrapping
-    // `<CallInfo Name="<callee>" BlockType="FB"><Instance .../><Parameter .../>...</CallInfo>` —
-    // adapted into an ordinary PartNode(Name="Call") here so the rest of the pipeline never needs
-    // a parallel type. Only BlockType="FB" observed; stored verbatim (not hard-validated to a
-    // constant) since an unconfirmed "FC" shouldn't be assumed impossible. <Parameter> children
-    // are sparse — confirmed real: only wired parameters appear at all (19 of 20 real instances
-    // have none), in source declaration order.
+    // An FB/FC call — confirmed real, 2026-07-12, FC PlantAutoControl (20 real FB-call instances) and
+    // FB MotorVSDSystem (1 real FC-call instance, S1 item 24). Genuinely not a `<Part Name="Call">`:
+    // `<Call>` is its own sibling element under <Parts>, wrapping `<CallInfo Name="<callee>"
+    // BlockType="FB"/"FC">[<Instance .../>]<Parameter .../>...</CallInfo>` — adapted into an
+    // ordinary PartNode(Name="Call") here so the rest of the pipeline never needs a parallel type.
+    // Both BlockType="FB" and "FC" now confirmed real; stored verbatim (not hard-validated to a
+    // constant). <Parameter> children are sparse — confirmed real: only wired parameters appear
+    // at all (19 of 20 real FB-call instances have none; the one real FC-call instance has 6:
+    // 5 Input + 1 Output, same Section shape as every FB-call parameter seen), in source
+    // declaration order.
     private static PartNode ParseCall(XElement callElement)
     {
         var uid = RequireIntAttribute(callElement, "UId");
@@ -421,7 +423,15 @@ public static class FlgNetParser
 
         var blockName = RequireAttribute(callInfo, "Name");
         var blockType = RequireAttribute(callInfo, "BlockType");
-        var instance = ParseInstanceReference(callInfo, "Call", uid);
+
+        // An FC call has no <Instance> element at all — confirmed real, 2026-07-12 (S1 item 24,
+        // FB MotorVSDSystem's own "Scale" call): FCs are stateless, no instance DB needed, unlike every
+        // FB call grounded so far (S1 item 14). Checked by direct presence rather than gated on
+        // BlockType — the two are expected to correlate, but nothing rules out a real
+        // counter-example either way, so this doesn't assume one implies the other.
+        var instance = callInfo.Element(Ns + "Instance") is not null
+            ? ParseInstanceReference(callInfo, "Call", uid)
+            : null;
 
         var parameters = callInfo.Elements(Ns + "Parameter").Select(p =>
         {

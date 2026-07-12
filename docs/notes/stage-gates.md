@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 3 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`/`AirStar`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 230 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **7 of its 8 dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`) now do too — only `TomraControlSystem` (`Swap`) remains blocked. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 236 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1873,3 +1873,97 @@ variants (no new fields at all) and the capstone of a four-item chain that start
 20's own Interface modeling work. Only **2 of `PlantAutoControl`'s 8 dependency FBs remain blocked**:
 `TomraControlSystem` (`Swap`) and `MotorVSDSystem` (a `<Call>` missing its own `<Instance>`) — both still
 open, unrelated to this item, not addressed here.
+
+### S1 item 24 (`CALL` without `<Instance>` — a real FC call), 2026-07-12 — `MotorVSDSystem` fully round-trips
+
+Picked up per the project owner's own explicit choice, to close `MotorVSDSystem`'s own hard error:
+`SimaticMlFormatException: <Call UId="52"> is missing its <Instance> element.` Every `<Call>`
+grounded so far (S1 item 14, 20 real instances in `FC PlantAutoControl`) called an FB and carried an
+`<Instance>` — this was a genuinely new shape question, not just another "add a variant" pattern.
+Formally planned (`EnterPlanMode`/`ExitPlanMode`, given the scope: changing already-shipped
+`CallStatement`/`CallStatementSidecar` record fields from non-nullable to nullable). Phase 0
+grounding was mandatory before any code, per the plan's own explicit gate.
+
+**Phase 0 finding, grounded against real `MotorVSDSystem` (deleted from scratch temp after use) — the
+working hypothesis confirmed exactly:**
+
+```xml
+<Call UId="52">
+  <CallInfo Name="Scale" BlockType="FC">
+    <Parameter Name="Input" Section="Input" Type="Real" />
+    <Parameter Name="Input_Min" Section="Input" Type="Real" />
+    <Parameter Name="Input_Max" Section="Input" Type="Real" />
+    <Parameter Name="Scaled_Min" Section="Input" Type="Real" />
+    <Parameter Name="Scaled_Max" Section="Input" Type="Real" />
+    <Parameter Name="Output" Section="Output" Type="Real" />
+  </CallInfo>
+</Call>
+```
+
+`BlockType="FC"`, confirmed — a call to Siemens' own standard-library `Scale` function (stateless,
+no instance DB needed by design). **No `<Instance>` element at all** — not present-but-empty, not
+a different shape, genuinely absent: `<CallInfo>` goes straight from its opening tag into its
+`<Parameter>` children. Parameters (5 Input + 1 Output, all `Real`) fit the existing `Input`/
+`Output` allowlist unchanged, no new `Section`/`Type` handling needed. `en` is rail-fed, same as
+all 20 of `PlantAutoControl`'s own real Calls. Only one `<Call>` in `MotorVSDSystem` — no mixed FB/FC scenario
+exercised by this specific real instance, though the design still supports both generically (a
+network could in principle mix them).
+
+**Design**: `SimaticMl.Model.PartNode.Instance` was already `AccessNode?` — no change needed at
+that layer. The actual required changes: `Ir.Model.CallStatement.InstancePath` (`string` →
+`string?`) and `CallStatementSidecar`'s `InstanceUId`/`InstanceScope`/`InstanceComponentPath`
+(all three → nullable, as one "all-null-together-or-all-non-null-together" group — not a
+discriminated union, since there's no second "kind" to distinguish, just presence/absence).
+`FlgNetParser.ParseCall` now checks `callInfo.Element(Ns + "Instance")` presence directly rather
+than gating on `BlockType` — checked by direct presence rather than assumed from `BlockType`,
+since nothing rules out a real counter-example either way (an FC that does carry an Instance, or
+an FB that doesn't) even though the two are expected to correlate. `FlgNetWriter.WriteCall` mirrors
+this symmetrically on the way out, wrapping `<Instance>`-writing in a null check.
+`GraphReducer.ReduceCall`'s own doc comment claim ("Instance is required... every Call carries
+one") was corrected; the `call.Instance ?? throw` line became a plain nullable assignment, and the
+final `CallStatement`/`CallStatementSidecar` construction passes `instance?.UId` etc. through.
+`FlgNetBuilder.BuildCall`'s own unconditional `new AccessNode(sidecar.InstanceUId, ...)`
+construction became conditional on `sidecar.InstanceUId is int instanceUId` (this was a genuine,
+expected compile error in the interim state between making the sidecar fields nullable and fixing
+this call site — caught and fixed as part of the same task, not treated as optional polish).
+
+**Readable-form grammar**: the instance argument is omitted entirely when absent —
+`CALL Scale(EN := TRUE, Input := ..., ...)` instead of `CALL Scale(<instance>, EN := TRUE, ...)`
+— favored over an empty-string sentinel (which would've been a first in this codebase and harder
+to read). Disambiguation isn't actually ambiguous: `EN := ` is a reserved prefix no real instance
+path could ever collide with (instance paths are bare dotted tag-shaped text), so the parser
+simply checks whether the *first* split argument itself starts with `EN := ` (no instance) vs.
+requiring the *second* to (instance present) — mirroring how `EnSource`'s own `ENO` sentinel and
+`TimerBinding`'s own optional 4th `R :=` argument already extend this project's variable-arity,
+self-disambiguating grammar style. The sidecar's own `instanceuid =`/`instancescope =`/
+`instancepath =` lines are omitted together when absent, mirroring the timer sidecar's own
+optional `reset` lines (S1 item 19).
+
+6 new tests (`Converter.Tests/CallTests.cs`, mirroring the existing with-Instance coverage exactly
+for the no-Instance case — parse/reduce/sidecar/round-trip/serialize/full-block), one new fixture
+(`CallFcNoInstanceFedByRail.xml`, genericized down from the real 5 Input + 1 Output `Real` shape to
+2 Input + 1 Output, same structure, mirroring `CallWithParametersFedByRail`'s own genericization
+precedent). All passed on first run. All three suites green: **236 converter tests** (up from
+230), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12 — `MotorVSDSystem` fully round-trips
+
+Exported `MotorVSDSystem` fresh from the real `JOB9002_PLC` device and ran `converter to-ir` — **succeeded
+completely, no errors at all.** Carried through a full `to-ir → to-xml → to-ir` cycle:
+**byte-identical**, confirmed via `diff` between the first-pass `.ir` and the round-tripped `.ir`.
+Confirmed this genuinely exercises today's own work, not a lucky no-op: grepped the converted `.ir`
+text directly for the `Scale` call —
+`CALL Scale(EN := TRUE, Input := IO.SpeedPerc, Input_Min := 0.0, Input_Max := 100.0, Scaled_Min :=
+0.0, Scaled_Max := IO.MaxRPM, Output => IO.SpeedOutput)` — no instance argument present, exactly
+the confirmed shape. All real exported data deleted from scratch temp immediately after use,
+confirmed via `git status --short`.
+
+**`MotorVSDSystem` is now the seventh of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to
+end.** Only `TomraControlSystem` (`Swap`) remains blocked — the last gap standing between here and all 8
+dependency FBs round-tripping, the natural next candidate once raised with the project owner.
+
+**Bottom line:** a real, previously-unconfirmed `<Call>` shape (an FC call with no `<Instance>`)
+is built, tested, and live-verified. Required touching more already-shipped code than the last
+several items (nullability changes across `Ir.Model`, `GraphReducer`, `FlgNetBuilder`,
+`IrSerializer`, `IrParser`), but no design surprises versus the pre-grounding research — the
+Phase 0 finding matched the working hypothesis exactly.

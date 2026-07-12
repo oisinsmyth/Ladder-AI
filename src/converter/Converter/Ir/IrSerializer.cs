@@ -111,8 +111,17 @@ public static class IrSerializer
 
         foreach (var call in network.Calls)
         {
-            sb.Append("  CALL ").Append(call.BlockName).Append('(').Append(call.InstancePath)
-              .Append(", EN := ").Append(SerializeExpr(call.En));
+            // InstancePath is omitted entirely when absent — confirmed real, 2026-07-12 (S1 item
+            // 24, FB MotorVSDSystem's own call to the stateless FC "Scale"): an FC call has no instance
+            // at all, unlike every FB call, which always does. `EN := ` is a reserved prefix no
+            // real instance path could ever collide with, so the parser disambiguates on it.
+            sb.Append("  CALL ").Append(call.BlockName).Append('(');
+            if (call.InstancePath is not null)
+            {
+                sb.Append(call.InstancePath).Append(", ");
+            }
+
+            sb.Append("EN := ").Append(SerializeExpr(call.En));
 
             foreach (var argument in call.Arguments)
             {
@@ -407,9 +416,15 @@ public static class IrSerializer
                 SerializeStep(sb, "    ", $"step {s}", call.Steps[s]);
             }
 
-            sb.Append("    instanceuid = ").Append(call.InstanceUId).Append('\n');
-            sb.Append("    instancescope = ").Append(call.InstanceScope).Append('\n');
-            sb.Append("    instancepath = ").Append(string.Join('.', call.InstanceComponentPath)).Append('\n');
+            // Omitted entirely when absent — confirmed real, 2026-07-12 (S1 item 24) — same
+            // "absent lines mean default/no-instance" convention as the timer sidecar's own
+            // optional `reset` lines (S1 item 19).
+            if (call.InstanceUId is not null)
+            {
+                sb.Append("    instanceuid = ").Append(call.InstanceUId).Append('\n');
+                sb.Append("    instancescope = ").Append(call.InstanceScope).Append('\n');
+                sb.Append("    instancepath = ").Append(string.Join('.', call.InstanceComponentPath!)).Append('\n');
+            }
 
             for (var a = 0; a < call.Arguments.Count; a++)
             {

@@ -202,11 +202,11 @@ public static class FlgNetWriter
     // A Call is its own sibling element under <Parts>, not a <Part Name="Call"> — mirrors
     // FlgNetParser.ParseCall's own adaptation on the way in, in reverse. Attribute order matches
     // the real source: CallInfo's Name then BlockType, Instance's Scope then UId, Parameter's
-    // Name then Section then Type — confirmed real, 2026-07-12, FC PlantAutoControl.
+    // Name then Section then Type — confirmed real, 2026-07-12, FC PlantAutoControl. Instance itself is
+    // omitted entirely when absent — confirmed real, 2026-07-12 (S1 item 24): an FC call's own
+    // <CallInfo> has no <Instance> at all (FB MotorVSDSystem's own "Scale" call).
     private static XElement WriteCall(XNamespace ns, PartNode part)
     {
-        var instance = part.Instance
-            ?? throw new SimaticMlFormatException($"Call UId=\"{part.UId}\" has no Instance to write.");
         var blockName = part.BlockName
             ?? throw new SimaticMlFormatException($"Call UId=\"{part.UId}\" has no BlockName to write.");
         var blockType = part.BlockType
@@ -214,12 +214,15 @@ public static class FlgNetWriter
 
         var callInfo = new XElement(ns + "CallInfo", new XAttribute("Name", blockName), new XAttribute("BlockType", blockType));
 
-        var instanceComponents = instance.ComponentPath.Select(c => new XElement(ns + "Component", new XAttribute("Name", c)));
-        callInfo.Add(new XElement(
-            ns + "Instance",
-            new XAttribute("Scope", instance.Scope),
-            new XAttribute("UId", instance.UId),
-            instanceComponents));
+        if (part.Instance is { } instance)
+        {
+            var instanceComponents = instance.ComponentPath.Select(c => new XElement(ns + "Component", new XAttribute("Name", c)));
+            callInfo.Add(new XElement(
+                ns + "Instance",
+                new XAttribute("Scope", instance.Scope),
+                new XAttribute("UId", instance.UId),
+                instanceComponents));
+        }
 
         foreach (var parameter in part.CallParameters ?? Array.Empty<CallParameterNode>())
         {

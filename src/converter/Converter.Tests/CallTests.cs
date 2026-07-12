@@ -252,6 +252,96 @@ public class CallTests
         Assert.Equal(text, reserialized);
     }
 
+    // FC calls carry no Instance at all — confirmed real, 2026-07-12 (S1 item 24, FB MotorVSDSystem's
+    // own call to the stateless standard-library FC "Scale"): unlike every FB call above, which
+    // always has one. Fixture genericized down from the real 5 Input + 1 Output Real shape to
+    // 2 Input + 1 Output, same structure, mirroring CallWithParametersFedByRail's own precedent.
+    [Fact]
+    public void Parse_CallFcNoInstanceFedByRail_ProducesCallPartWithNullInstance()
+    {
+        var network = LoadFixture("CallFcNoInstanceFedByRail.xml");
+
+        var call = Assert.Single(network.Parts, p => p.Name == "Call");
+        Assert.Equal("Scale", call.BlockName);
+        Assert.Equal("FC", call.BlockType);
+        Assert.Null(call.Instance);
+        Assert.Equal(3, call.CallParameters!.Count);
+    }
+
+    [Fact]
+    public void Reduce_CallFcNoInstanceFedByRail_ProducesNullInstancePath()
+    {
+        var network = LoadFixture("CallFcNoInstanceFedByRail.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Scale value", compileUnitUId: "35");
+
+        var call = Assert.Single(reduced.Network.Calls);
+        Assert.Equal("Scale", call.BlockName);
+        Assert.Null(call.InstancePath);
+        Assert.Equal(3, call.Arguments.Count);
+    }
+
+    [Fact]
+    public void Reduce_CallFcNoInstanceFedByRail_SidecarRecordsNullInstanceFields()
+    {
+        var network = LoadFixture("CallFcNoInstanceFedByRail.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Scale value", compileUnitUId: "35");
+
+        var sidecar = Assert.Single(reduced.Sidecar.Calls);
+        Assert.Equal("FC", sidecar.BlockType);
+        Assert.Null(sidecar.InstanceUId);
+        Assert.Null(sidecar.InstanceScope);
+        Assert.Null(sidecar.InstanceComponentPath);
+    }
+
+    [Fact]
+    public void RoundTrip_CallFcNoInstanceFedByRail_RebuildsIdenticalTopology()
+    {
+        var original = LoadFixture("CallFcNoInstanceFedByRail.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Scale value", compileUnitUId: "35");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        Assert.Equal(original.Parts.Count, reparsed.Parts.Count);
+        Assert.Equal(original.Wires.Count, reparsed.Wires.Count);
+
+        var call = Assert.Single(reparsed.Parts, p => p.Name == "Call");
+        Assert.Null(call.Instance);
+        Assert.Equal("Scale", call.BlockName);
+        Assert.Equal("FC", call.BlockType);
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_CallFcNoInstanceFedByRail_OmitsInstanceArgument()
+    {
+        var network = LoadFixture("CallFcNoInstanceFedByRail.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Scale value", compileUnitUId: "35");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Contains(
+            "  CALL Scale(EN := TRUE, Input := RawValue, Scaled_Max := ScaleMax, Output => ScaledValue)\n",
+            text);
+    }
+
+    [Fact]
+    public void FullBlock_CallFcNoInstance_ParseThenSerialize_IsByteIdentical()
+    {
+        var network = LoadFixture("CallFcNoInstanceFedByRail.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Scale value", compileUnitUId: "35");
+
+        var block = new IrBlock("0", "FC", "TestBlock", 1, "LAD", "A test block", new[] { reduced.Network });
+        var text = IrSerializer.SerializeBlock(block, new[] { reduced.Sidecar });
+
+        var (parsedBlock, parsedSidecars) = IrParser.ParseBlock(text);
+        var reserialized = IrSerializer.SerializeBlock(parsedBlock, parsedSidecars);
+
+        Assert.Equal(text, reserialized);
+    }
+
     [Fact]
     public void Parse_CallMissingCallInfo_ThrowsSimaticMlFormatException()
     {
