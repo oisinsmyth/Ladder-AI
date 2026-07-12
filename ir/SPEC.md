@@ -231,6 +231,31 @@ NETWORK 8 "Run enable delay"
   **Live-verified against real data, 2026-07-12:** isolating `FB VSDUpdateComs`'s real network
   directly confirmed it reduces and round-trips completely, including the `16#89` literal
   round-tripping cleanly through the text grammar.
+- **`Not` (standalone boolean inverter, `Part Name="Not"`), built 2026-07-12 (S1 item 13).**
+  Grounded against two independent real instances in `FC PlantAutoControl` (different networks,
+  different UIds, identical shape). Genuinely different from a Contact's own
+  `<Negated Name="operand" />` (which negates a *tag read*, not a chain position): `Not` is a
+  standalone Part with a single `in`/`out` port pair (same port names as `Contact`'s own), no
+  operand/Access at all — it inverts whatever boolean value arrives on `in`. No new IR-text
+  grammar was needed — `NOT <expr>`/`Expr.Not` already existed (S1 items 7/11) and already
+  rendered/parsed with correct precedence. Architecturally simpler than MOVE/WAND: `Not` is never
+  its own top-level production (no new `IrNetwork`/`NetworkSidecar` list) — purely a new
+  chain-position kind, discovered only when some other production's own backward trace hits one.
+  Resolved via a fully self-contained, recursive trace on the `Not`'s own `in` (exactly like an
+  OR-merge branch's own resolution) — the sidecar's `NotStep` mirrors `OrBranch`'s nested
+  `(Steps, RailWireUId)` shape, wrapping the result in `Expr.Not`. Both real instances grounded
+  tap a shared wire via genuine fan-out (an upstream Contact's output feeds both a
+  separately-continuing chain and the `Not`) — the same fan-out-tap mechanism already proven for
+  MOVE/OR-merge branches, here feeding back into a boolean chain instead of terminating in a
+  side-effect write. Covered by 6 converter tests (`NotTests.cs`, fixture genericized from the
+  real shape). **Not yet live-verified against the true gold standard (TIA
+  import → compile → re-export → Normalizer cycle).** A systematic sweep of `PlantAutoControl`'s 20
+  networks found every single one pairs `Not` with a `<Call>` block-call element (not yet built)
+  — there is currently no real network where `Not` occurs in isolation, so no real network can be
+  isolated to prove it through the full TIA cycle yet. What *is* proven: the in-memory pipeline
+  (parse → reduce → build → write → reparse) round-trips byte-identically against the real-shaped
+  fixture. Closing this gap is the reason block calls (`<Call>`) were picked as the next
+  capability — see `docs/notes/stage-gates.md`.
 - `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
   no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
   truth for its interface; a call site that doesn't match it is a converter/compile-time error,
@@ -408,3 +433,9 @@ question, left open on purpose rather than guessed).
   reached — it also needs `Mul`/`Convert` elsewhere in the block, an unrelated deferred capability;
   a purpose-built reference-project block (matching the `TimerSample` precedent) would close that
   out specifically.
+- **New, 2026-07-12 (S1 item 13): a full live TIA round-trip for `Not`.** Every one of
+  `PlantAutoControl`'s 20 real networks pairs `Not` with a `<Call>` block-call element, so no real
+  network can currently be isolated to prove `Not` alone through the full TIA cycle. Only the
+  in-memory pipeline is proven so far (see the readable-form entry above). Block calls were
+  picked as the next capability specifically to close this out — once built, `PlantAutoControl`'s
+  networks become provable end to end for both together.

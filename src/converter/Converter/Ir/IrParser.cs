@@ -636,7 +636,8 @@ public static partial class IrParser
 
     private static bool IsStepHeader(string line, string indent, string label) =>
         line == indent + label + " contact" || line == indent + label + " or"
-        || line == indent + label + " timeroutput" || line == indent + label + " compare";
+        || line == indent + label + " timeroutput" || line == indent + label + " compare"
+        || line == indent + label + " not";
 
     private static ChainStepSidecar ParseStep(string[] lines, ref int i, string indent, string label)
     {
@@ -645,6 +646,7 @@ public static partial class IrParser
         var orHeader = indent + label + " or";
         var timerOutputHeader = indent + label + " timeroutput";
         var compareHeader = indent + label + " compare";
+        var notHeader = indent + label + " not";
         if (header == contactHeader)
         {
             return ParseContactStepBody(lines, ref i, indent + "  ");
@@ -665,7 +667,13 @@ public static partial class IrParser
             return ParseCompareStepBody(lines, ref i, indent + "  ");
         }
 
-        throw new IrFormatException($"Expected '{contactHeader}', '{orHeader}', '{timerOutputHeader}', or '{compareHeader}', got: '{header}'");
+        if (header == notHeader)
+        {
+            return ParseNotStepBody(lines, ref i, indent + "  ");
+        }
+
+        throw new IrFormatException(
+            $"Expected '{contactHeader}', '{orHeader}', '{timerOutputHeader}', '{compareHeader}', or '{notHeader}', got: '{header}'");
     }
 
     private static ChainStepSidecar.TimerOutputStep ParseTimerOutputStepBody(string[] lines, ref int i, string indent)
@@ -685,6 +693,26 @@ public static partial class IrParser
         var right = ParseOperand(lines, ref i, indent, "right");
         var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
         return new ChainStepSidecar.CompareStep(uid, partName, srcType, left, right, outWire);
+    }
+
+    // The inverse of IrSerializer.SerializeStep's NotStep case — a Not's own upstream is an
+    // ordinary nested chain (S1 item 13), same rail/steps shape as ParseOrStepBody's own branch
+    // parsing, just a single chain instead of several.
+    private static ChainStepSidecar.NotStep ParseNotStepBody(string[] lines, ref int i, string indent)
+    {
+        var uid = int.Parse(RequirePrefixedLine(lines, ref i, indent + "uid = "));
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, indent + "rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], indent, $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, indent, $"step {s}"));
+            s++;
+        }
+
+        var outWire = int.Parse(RequirePrefixedLine(lines, ref i, indent + "out = "));
+        return new ChainStepSidecar.NotStep(uid, steps, railWireUId, outWire);
     }
 
     // Shared tag-or-literal operand parsing — the inverse of IrSerializer.SerializeOperand, used

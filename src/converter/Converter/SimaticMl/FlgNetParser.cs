@@ -13,7 +13,7 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And", "Not" };
 
     // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
     // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
@@ -67,7 +67,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And only.");
+                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And/Not only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");

@@ -10,6 +10,36 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 13: `Not` (standalone boolean inverter) — built, tested, gold-standard gap documented**
+
+- Investigated whether the converter as built could handle `FC PlantAutoControl` (a real, complex
+  orchestrator block); its very first network hits `Not` first. Grounded twice, independently,
+  against two different real instances in that block before writing any code — identical bare
+  shape both times (`in`/`out` only, no operand/Access, no TemplateValue).
+- Design: no new top-level production — `Not` is purely a new chain-position kind, discovered
+  only when some other production's own `TraceChain` walk hits one. Resolved via the same
+  "chain-terminal via recursive `TraceChain`" pattern OR-merge branches established (S1 item 11):
+  a fully self-contained recursive call on `Not`'s own `in`, wrapped in the already-existing
+  `Expr.Not`. `ChainStepSidecar.NotStep` mirrors `OrBranch`'s `(Steps, RailWireUId)` shape. Zero
+  new IR-text grammar needed; `PartNode`/`FlgNetParser`/`FlgNetWriter` needed zero new fields or
+  code — falls through to existing generic bare-part handling both ways.
+- Both real instances tap a shared wire via genuine fan-out (same mechanism proven for Move's
+  `en` tap, S1 item 10), here feeding back into a boolean chain instead of a side-effect write.
+- 6 new converter tests, fixture built directly from the real `PlantAutoControl` shape (genericized) —
+  passed on first run. All three suites green: 144 converter (up from 138), 68 openness-cli, 11
+  golden-harness.
+- **Mid-session course-correction from the project owner:** "the gold standard is a lossless full
+  cycle" — flagged that every prior "live-verified" claim (items 10–12) was only ever the
+  in-memory pipeline, never the true TIA `import → compile → re-export → Normalizer` cycle.
+  Investigated whether `Not` could reach that bar: no viable reference-project block to extend
+  without either overwriting committed content or requiring new-block authorship (the project
+  owner's own TIA-UI action, per the `TimerSample` precedent); a full sweep of all 20
+  `PlantAutoControl` networks found **every one pairs `Not` with a `<Call>`** (block calls, not yet
+  built) — no real network can be isolated to prove `Not` alone through the full cycle yet.
+  Reported honestly rather than settling silently; project owner chose to build block calls next
+  to close this out for both constructs together. Full story: `docs/notes/stage-gates.md`
+  ("S1 item 13").
+
 **S1 item 12: WAND (bitwise word AND) — corrects the AND-merge premise, live-verified**
 
 - Project owner picked "AND-merge" as the next S1 item. Grounded first, per hard rule 3: searched

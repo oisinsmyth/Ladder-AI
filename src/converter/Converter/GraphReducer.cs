@@ -364,13 +364,14 @@ public static class GraphReducer
     }
 
     // Each part kind's own "out"-equivalent port name — the port TraceChain looks for when
-    // identifying a wire's producer. Contact/O/Eq/Ge use "out"; a TON's only confirmed real
+    // identifying a wire's producer. Contact/O/Eq/Ge/Not use "out"; a TON's only confirmed real
     // upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused like any other
-    // unrecognized shape). Move never appears here — it's never a producer for a boolean chain,
-    // only a consumer (its "en" tap) — see TraceChain's producer-identification comment.
+    // unrecognized shape). Move/And never appear here — neither is ever a producer for a boolean
+    // chain, only a consumer (their own "en" tap) — see TraceChain's producer-identification
+    // comment.
     private static string? OutPortFor(string partName) => partName switch
     {
-        "Contact" or "O" or "Eq" or "Ge" => "out",
+        "Contact" or "O" or "Eq" or "Ge" or "Not" => "out",
         "TON" => "Q",
         _ => null,
     };
@@ -549,6 +550,20 @@ public static class GraphReducer
                     network, wiresByPort, accessByUId, constantsByUId, upstreamPart, outgoingWireUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
                 steps.Insert(0, orStep);
                 stepExprs.Insert(0, orExpr);
+                break;
+            }
+
+            if (upstreamPart.Name == "Not")
+            {
+                // A Not must wrap only its own upstream in Expr.Not, not the whole rest of this
+                // chain — resolved via a fully self-contained, recursive TraceChain call on the
+                // Not's own "in" (exactly like an OR-merge branch's own resolution), not by
+                // continuing the current loop. The recursive call already resolves everything
+                // upstream of the Not, so — like an OrStep — nothing further to trace here.
+                var (notExpr, notSteps, notRailWireUId) = TraceChain(
+                    network, (upstreamPart.UId, "in"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+                steps.Insert(0, new ChainStepSidecar.NotStep(upstreamPart.UId, notSteps, notRailWireUId, outgoingWireUId));
+                stepExprs.Insert(0, new Expr.Not(notExpr));
                 break;
             }
 

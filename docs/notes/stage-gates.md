@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 138 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not` (standalone boolean inverter) is built and tested but **not yet live-verified against the true TIA cycle** — see S1 item 13 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 144 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -880,3 +880,81 @@ literal (not a tag) on the way back in.
 boolean AND-merge open item is resolved as **confirmed non-existent** in this codebase (not
 "still unconfirmed") — a definitive answer, not a deferral. The real `WAND` instruction is built,
 tested, and live-proven end to end.
+
+### S1 item 13 (`Not` — standalone boolean inverter), 2026-07-12
+
+Project owner picked up `Not` next, one of the constructs the item-12 sweep surfaced but didn't
+investigate (`Ne`/`Le`/`Lt` still deferred). Immediately after, project owner asked whether the
+converter as built could handle `FC PlantAutoControl` — a real, complex orchestrator block. It cannot
+yet, but investigating exactly how far it gets is what grounded this item: `PlantAutoControl`'s very
+first network hits `Not` first.
+
+**Grounded twice, independently, before writing any code:** two different real instances in
+`PlantAutoControl` (different networks, different UIds) — same bare shape both times, a `Part
+Name="Not"` with only `in`/`out` ports, no operand/Access, no TemplateValue of any kind. Genuinely
+different from a Contact's own `<Negated Name="operand" />` (which negates a *tag read*): `Not`
+inverts whatever boolean value arrives on `in`, as a standalone chain position.
+
+**Design: no new top-level production, purely a new chain-position kind.** Unlike TON/Move/WAND
+(each its own `Reduce()` loop target with a dedicated `IrNetwork`/`NetworkSidecar` list), `Not` is
+discovered only incidentally when some other production's own `TraceChain` walk hits one — a
+Coil's condition, a TON's `IN`, an OR-merge branch, whatever happens to trace through it. Resolved
+via the same "chain-terminal via recursive `TraceChain`" pattern established by OR-merge branches
+(S1 item 11): a fully self-contained recursive call on the `Not`'s own `in` port produces its own
+`(Expr, Steps, RailWireUId?)` triple, wrapped in `Expr.Not` and inserted as one step, then the
+outer loop `break`s — mirrors `OrStep` exactly. `ChainStepSidecar.NotStep` mirrors `OrBranch`'s
+nested `(Steps, RailWireUId)` shape. Zero new IR-text grammar needed — `NOT <expr>`/`Expr.Not`
+already existed from S1 items 7/11 and already had correct precedence handling.
+
+**Both real instances tap a shared wire via genuine fan-out**: an upstream Contact's output feeds
+both a separately-continuing chain and the `Not` — the same fan-out-tap mechanism already proven
+for Move (S1 item 10), reused here feeding back into a boolean chain rather than terminating in a
+side-effect write. `PartNode` needed zero new fields; `FlgNetParser`/`FlgNetWriter` needed zero new
+code for `Not` at all — it falls through to the existing generic bare-part handling on both parse
+and write.
+
+6 new converter tests (`NotTests.cs`), fixture (`NotFedByContact.xml`) built directly from the real
+`PlantAutoControl` shape (genericized per `docs/13-data-boundary.md`) — **passed on first run**. All
+three suites green: 144 converter tests (up from 138), 68 openness-cli, 11 golden-harness
+(`openness-cli`/golden-harness untouched by this diff, re-confirmed still green).
+
+#### The "gold standard" course-correction
+
+Mid-session, the project owner interjected explicitly: "Remember the gold standard is a lossless
+full cycle." This was a necessary correction — every "live-verified against real data" claim in
+this doc for S1 items 10 (MOVE), 11 (OR-merge), and 12 (WAND) has, in fact, only ever exercised the
+**in-memory C# pipeline** (`FlgNetParser.Parse → GraphReducer.Reduce → FlgNetBuilder.Build →
+FlgNetWriter.Write → re-parse`, plus a text-grammar round-trip) against real exported XML via
+throwaway tests — never the actual TIA `import → compile → re-export →
+Normalizer.AreSemanticallyEquivalent` cycle that is this project's true bar (only `FC TimerSample`,
+S1 item 8's live-round-trip section above, has ever reached that full cycle for LAD content). This
+distinction wasn't previously called out sharply enough in this doc's own "Live-verified against
+real data" sections, which read more definitively than the underlying proof actually supports. It
+does not invalidate items 10–12's findings (the in-memory pipeline is real, useful evidence — wire
+graphs matched exactly, text round-tripped byte-identically), but it is a materially lower bar than
+"lossless full cycle," and this doc should stop implying otherwise.
+
+**Investigated whether `Not` specifically could reach the true full-cycle proof.** Checked the
+reference project's existing blocks (`OB Main`, `FC NodeStatusAlarms`, `FC PerimeterSafetyAlarms`,
+`FC TimerSample`, plus their DBs) for a viable extension target — none suitable without either
+overwriting committed reference content or requiring new-block authorship, which, per the
+`TimerSample` precedent (the project owner built that block directly in TIA specifically to close
+TON's own live-proof gap), is the project owner's own TIA-UI action, not something to do
+unilaterally. Then swept all 20 `CompileUnit`s of a fresh `PlantAutoControl` export for `Not`/`Call`
+co-occurrence per network: **every single network pairs `Not` with a `<Call>` block-call
+element** (CompileUnit IDs 3, 8, D, 12, 17, 1C, 21, 26, 2B, 30, 35, 3A, 3F, 44, 49, 4E, 53, 58, 5D,
+62 — all 20, `Not=1 Call=1` each). No real network in this block can currently be isolated to
+prove `Not` alone through the full TIA cycle.
+
+Reported this honestly to the project owner rather than settling for the lesser proof silently.
+Project owner's decision: **build block calls next**, since they co-occur with `Not` in every real
+`PlantAutoControl` network and would unlock a genuine full-cycle proof for both together, rather than
+requesting a purpose-built reference block (the `TimerSample` path) or accepting the current proof
+level as sufficient for now.
+
+**Bottom line:** `Not` is built, tested, and round-trips byte-identically through the in-memory
+pipeline against a real-shaped fixture — but is **not yet live-verified against the true TIA
+gold standard**, and this is recorded explicitly as open, not glossed over. Closing it is now tied
+to the next capability (block calls), which is expected to be substantially bigger than `Not` was
+(FB instance handling, multi-instance vs. global instance DB references, call-site argument
+binding) and will get its own grounding/planning pass before any code.

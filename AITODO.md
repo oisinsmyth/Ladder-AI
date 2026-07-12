@@ -27,28 +27,50 @@ via `FC TimerSample`), comparisons (Eq/Ge, live-verified against `FC ControlDela
 `O(41)`-of-comparisons composition), MOVE (fan-out taps + telescoping dedup, live-verified against
 `FB MotorDOL`, including the full telemetry network with its own OR-merge), WAND — bitwise word
 AND (live-verified against `FB VSDUpdateComs`; closes out the AND-merge open item as **confirmed
-non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep).
+non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep),
+`Not` — standalone boolean inverter (implemented/tested/documented, **not yet TIA-cycle
+live-verified** — see "Current task" below for why).
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: none
+## Current task: S1 item 13 — `Not` — implementation + docs done, NOT YET COMMITTED
 
-S1 item 12 (WAND) fully done — code, tests (138/138 converter, 68 openness-cli, 11
-golden-harness), docs, and live verification all complete and consistent. Grounding search found
-the boolean "AND-merge" originally envisioned doesn't exist in this codebase (reported to and
-confirmed by the project owner before building anything); the real `Part Name="And"` found
-instead is a bitwise/word-level box instruction, built as `WAND` (name deliberately avoids
-colliding with the boolean `AND` infix operator). Along the way, fixed a real
-previously-unexercised parser gap: Siemens' `<base>#<value>` numeric-literal notation (`16#89`)
-wasn't recognized by `IrParser.ParseLeaf`'s shape-based literal detection. Full story:
-`docs/notes/stage-gates.md` "S1 item 12" + its live-verification section. Ready to commit as one
-unit (not yet committed — commits are explicitly requested, not assumed).
+**Status as of 2026-07-12: fully implemented, tested (144/144 converter tests green), and now
+documented (`ir/SPEC.md`, `src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md`
+all updated this pass). Waiting on explicit "commit this" from the project owner before
+committing** — per this session's established discipline, never auto-commit.
 
-Next S1 item not yet chosen. Remaining known deferred items (`docs/notes/stage-gates.md`'s "Open
-items" sections, `ir/SPEC.md`'s "Open items"): block calls, RCoil/SCoil, TONR, full FC/FB
-parameter modeling, reference-by-name for structured members, `Ne`/`Le`/`Lt` comparison operators
-(confirmed real Part Names, 2026-07-12, not yet built — `Gt` still unconfirmed). Also noted but
-not investigated: a standalone `Not` Part (distinct from a negated Contact), `TOF`, and an
-arithmetic-instruction family (`Add`/`Sub`/`Mul`/`Div`/`Abs`/`Swap`/`Calc`/`Convert`) — all found
-real during the AND-merge sweep, none built.
+**Grounded twice, independently** against real `FC PlantAutoControl` instances (UId=52, UId=72,
+different networks, identical bare shape). Design: no new top-level production — `Not` is purely
+a new chain-position kind, resolved via a recursive `TraceChain` call on its own `in` (same
+pattern as an OR-merge branch), wrapped in the already-existing `Expr.Not`. Zero new IR-text
+grammar, zero new `PartNode` fields, zero new parser/writer code (falls through to existing
+generic bare-part handling both ways). Full design story: `docs/notes/stage-gates.md` ("S1 item
+13") and `NotTests.cs`'s own class-level doc comment.
+
+**Important, explicit gap — do not gloss over on resume:** `Not` is **not yet live-verified
+against the true TIA gold standard** (`import → compile → re-export → Normalizer` cycle). Only
+the in-memory pipeline (parse → reduce → build → write → reparse) is proven, against a
+real-shaped fixture. A full sweep of `PlantAutoControl`'s 20 networks found **every one pairs `Not`
+with a `<Call>`** (block calls, not yet built) — no real network can currently be isolated to
+prove `Not` alone through the full cycle. This was a mid-session, project-owner-flagged
+correction ("the gold standard is a lossless full cycle") — every prior "live-verified" claim in
+this project (items 10–12: MOVE/OR-merge/WAND) was, on inspection, also only ever the in-memory
+pipeline, not the true TIA cycle. This doc and `stage-gates.md` now say so explicitly rather than
+implying more than is proven.
+
+**Next task, explicitly decided by the project owner (`AskUserQuestion`): build block calls
+next.** Chosen specifically because `Not` + `<Call>` co-occur in every real `PlantAutoControl`
+network — building calls unlocks a genuine full-cycle proof for both together, closing the gap
+above. This is expected to be a substantially bigger capability than `Not` was (FB instance
+handling, multi-instance vs. global instance DB references, call-site argument binding — real
+call targets already spotted: `MotorDOL`, `MotorVSDSystem`, `EquipmentControlSystem`, `AirStar`, `FilterUnitSystem`,
+`ShredderControlSystem`, `TomraControlSystem`, `MotorFwdRevSystem`). **Not started at all yet** — no grounding, no
+plan, no code. Approach with proper plan-mode rigor before writing anything, matching this
+project's own established discipline for big new capabilities (see the OR-merge-generalization
+plan file precedent).
+
+Once `Not` is committed and block calls close (and later `SCoil`/`RCoil`, 3 each in
+`PlantAutoControl`, still a separate deferred item), retest `PlantAutoControl` as a whole to see how much
+further the real block progresses.

@@ -213,6 +213,26 @@ public abstract record ChainStepSidecar
         OperandSidecar Left,
         OperandSidecar Right,
         int OutgoingWireUId) : ChainStepSidecar;
+
+    // A standalone boolean inverter (`Part Name="Not"`) — confirmed real, 2026-07-12, `FC
+    // PlantAutoControl` (found while investigating whether that block round-trips; genuinely different
+    // from a Contact's own `<Negated Name="operand" />`, which negates a *tag read*, not a chain
+    // position). Structurally the simplest chain position possible: a single `in`/`out` port pair
+    // (same names as Contact's own), no operand/Access lookup at all — it just inverts whatever
+    // boolean value arrives on `in`. Unlike ContactStep/CompareStep (flat pass-through positions
+    // that extend the *same* AND-chain), a Not must wrap only its own upstream in `Expr.Not`, not
+    // the whole rest of the chain — so its own `in` is resolved via a fully self-contained,
+    // recursive `TraceChain` call (exactly like an OR-merge branch's own resolution), and `Steps`/
+    // `RailWireUId` here mirror `OrBranch`'s own nested `(Steps, RailWireUId)` shape for that
+    // reason. Always chain-terminal like `OrStep` — the recursive call already resolves everything
+    // upstream, so nothing further to trace at the position where the `Not` itself was found.
+    // Confirmed real (two independent instances, `FC PlantAutoControl`): a Not's own `in` is commonly
+    // fed via genuine wire fan-out (an upstream Part's output feeds both a separately-continuing
+    // chain *and* the Not) — the same fan-out-tap mechanism already proven for Move/OR-merge
+    // branches, here feeding back into a boolean chain instead of terminating in a side-effect
+    // write. No new IR-text grammar needed: `Expr.Not`/`NOT <expr>` already exist (S1 item 7,
+    // negated contacts) and already render/parse with correct precedence (S1 item 11).
+    public sealed record NotStep(int NotPartUId, IReadOnlyList<ChainStepSidecar> Steps, int? RailWireUId, int OutgoingWireUId) : ChainStepSidecar;
 }
 
 // One OR-merge branch's full chain — mirrors the (Steps, RailWireUId) shape every other

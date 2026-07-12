@@ -17,10 +17,10 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 ## Current scope (walking skeleton)
 
 Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
-branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, and WAND (bitwise word AND)**
-(S1 items 7–12, through 2026-07-12). No block calls yet. Anything outside scope is a hard error
-(`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
-block is expected at this stage, not a bug.
+branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), and Not
+(standalone boolean inverter)** (S1 items 7–13, through 2026-07-12). No block calls yet. Anything
+outside scope is a hard error (`UnsupportedConstructException`), never a silent partial result —
+hitting that error on a real block is expected at this stage, not a bug.
 
 Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boundary approval in
 `docs/13-data-boundary.md`) and handled explicitly, not guessed at:
@@ -344,6 +344,44 @@ still green (68/11).
 directly (a throwaway test against a fresh export, deleted after use) — reduces and round-trips
 completely, including the `16#89` literal round-tripping cleanly through `Serialize → Parse →
 Serialize`.
+
+## Not — standalone boolean inverter (S1 item 13, 2026-07-12)
+
+`Part Name="Not"` — found while investigating whether `FC PlantAutoControl` (a real, complex
+orchestrator block) round-trips; `Not` blocks its very first network. Grounded against two
+independent real instances in that same block (different networks, different UIds, identical
+shape) before writing any code.
+
+- **Genuinely different from a Contact's own `<Negated Name="operand" />`**, which negates a *tag
+  read*, not a chain position. `Not` is a standalone Part with a single `in`/`out` port pair (same
+  port names as `Contact`'s own), no operand/Access lookup at all — it inverts whatever boolean
+  value arrives on `in`.
+- **No new IR-text grammar needed.** `NOT <expr>`/`Expr.Not` already existed (S1 items 7/11) and
+  already rendered/parsed with correct precedence — this construct is entirely about recognizing
+  the new `Part Name="Not"` shape and resolving it, not about new syntax.
+- **Architecturally simpler than Move/WAND**: `Not` is never its own top-level production (no new
+  `IrNetwork`/`NetworkSidecar` list, no new `Reduce()` loop). It's purely a new chain-position
+  kind, discovered only when some other production's own backward trace (`TraceChain`) walks into
+  one. Resolved via a fully self-contained, recursive `TraceChain` call on the `Not`'s own `in`
+  port — exactly like an OR-merge branch's own resolution — wrapping the result in `Expr.Not`.
+  `ChainStepSidecar.NotStep` mirrors `OrBranch`'s nested `(Steps, RailWireUId)` shape.
+- **Both real instances grounded tap a shared wire via genuine fan-out**: an upstream Contact's
+  output feeds both a separately-continuing chain and the `Not` — the same fan-out-tap mechanism
+  already proven for Move taps and OR-merge branches, here feeding back into a boolean chain
+  instead of terminating in a side-effect write.
+
+6 converter tests (`Converter.Tests/NotTests.cs`), fixture built directly from the real
+`PlantAutoControl` shape (genericized per `docs/13-data-boundary.md`). All 144 converter tests pass (up
+from 138); `openness-cli`/golden-harness suites unaffected, confirmed still green (68/11).
+
+**Not yet live-verified against the true gold standard** (TIA `import → compile → re-export →
+Normalizer` cycle). A systematic sweep of all 20 `CompileUnit`s in a fresh `PlantAutoControl` export
+found every single network pairs `Not` with a `<Call>` block-call element (not yet built) — there
+is currently no real network where `Not` occurs in isolation, so no real network can be isolated
+to prove it through the full TIA cycle yet. What *is* proven: the in-memory pipeline (parse →
+reduce → build → write → reparse) round-trips byte-identically against the real-shaped fixture.
+Block calls were picked as the next capability specifically to close this gap — once built,
+`PlantAutoControl`'s networks (`Not` + `Call` together) become provable end to end for both at once.
 
 ## DB support
 

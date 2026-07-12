@@ -398,6 +398,33 @@ public static class FlgNetBuilder
                 AddEndpoint(wireEndpointsByUId, compare.OutgoingWireUId, outgoingTarget);
                 break;
 
+            case ChainStepSidecar.NotStep notStep:
+                var notEntryTarget = new WireEndpoint(EndpointKind.NameCon, notStep.NotPartUId, "in");
+
+                // A Not's own upstream is an ordinary nested chain (S1 item 13) — same recursive
+                // build as an OR-merge branch's own steps, just a single chain instead of several.
+                for (var i = 0; i < notStep.Steps.Count; i++)
+                {
+                    var nextTarget = i + 1 < notStep.Steps.Count
+                        ? EntryTarget(notStep.Steps[i + 1])
+                        : notEntryTarget;
+
+                    BuildStep(notStep.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                }
+
+                if (notStep.RailWireUId is int notRailWireUId)
+                {
+                    var railFacingEndpoints = notStep.Steps.Count > 0
+                        ? RailFacingEndpoints(notStep.Steps[0])
+                        : new[] { (UId: notStep.NotPartUId, Port: "in") };
+                    AddRailEndpoints(wireEndpointsByUId, notRailWireUId, railFacingEndpoints);
+                }
+
+                AddPart(parts, emittedPartUIds, new PartNode(notStep.NotPartUId, "Not"));
+                AddEndpoint(wireEndpointsByUId, notStep.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, notStep.NotPartUId, "out"));
+                AddEndpoint(wireEndpointsByUId, notStep.OutgoingWireUId, outgoingTarget);
+                break;
+
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
@@ -415,6 +442,7 @@ public static class FlgNetBuilder
         ChainStepSidecar.OrStep orStep => new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "in"),
         ChainStepSidecar.TimerOutputStep timerOutput => new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, "in"),
         ChainStepSidecar.CompareStep compare => new WireEndpoint(EndpointKind.NameCon, compare.ComparePartUId, "pre"),
+        ChainStepSidecar.NotStep notStep => new WireEndpoint(EndpointKind.NameCon, notStep.NotPartUId, "in"),
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 
@@ -447,6 +475,7 @@ public static class FlgNetBuilder
         ChainStepSidecar.OrStep orStep => orStep.Branches.Sum(b => b.Steps.Sum(CountStepLeaves)),
         ChainStepSidecar.TimerOutputStep => 1,
         ChainStepSidecar.CompareStep => 1,
+        ChainStepSidecar.NotStep notStep => notStep.Steps.Sum(CountStepLeaves),
         _ => throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}"),
     };
 }

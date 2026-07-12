@@ -283,6 +283,17 @@ public static class IrSerializer
                 SerializeOperand(sb, indent + "  ", "right", compare.Right);
                 sb.Append(indent).Append("  out = ").Append(compare.OutgoingWireUId).Append('\n');
                 break;
+            case ChainStepSidecar.NotStep notStep:
+                sb.Append(indent).Append(label).Append(" not\n");
+                sb.Append(indent).Append("  uid = ").Append(notStep.NotPartUId).Append('\n');
+                sb.Append(indent).Append("  rail = ").Append(SerializeRail(notStep.RailWireUId)).Append('\n');
+                for (var s = 0; s < notStep.Steps.Count; s++)
+                {
+                    SerializeStep(sb, indent + "  ", $"step {s}", notStep.Steps[s]);
+                }
+
+                sb.Append(indent).Append("  out = ").Append(notStep.OutgoingWireUId).Append('\n');
+                break;
             default:
                 throw new IrFormatException($"Unsupported chain step: {step.GetType().Name}");
         }
