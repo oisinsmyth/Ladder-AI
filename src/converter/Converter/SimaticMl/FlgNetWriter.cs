@@ -84,12 +84,13 @@ public static class FlgNetWriter
             // Move's own shape is entirely fixed — DisabledENO="true" and Card=1 (below) — never
             // carried as PartNode fields since neither ever varies in any real instance seen
             // (same "don't store a confirmed constant" reasoning as TON's InstanceOfType).
-            // Attribute order matches the real source: Name, UId, DisabledENO. And/Mul/Convert
-            // (S1 items 12/18) share the same fixed DisabledENO="true" — their own Cardinality/
+            // Attribute order matches the real source: Name, UId, DisabledENO. And/Mul/Add/Convert
+            // (S1 items 12/18/19) share the same fixed DisabledENO="true" — their own Cardinality/
             // SrcType/DestType, unlike Move's, ARE carried as PartNode fields (only one real
             // value has been observed for each, not enough to treat as a universal constant) and
-            // already round-trip via the existing Cardinality/SrcType/DestType blocks below.
-            if (part.Name is "Move" or "And" or "Mul" or "Convert")
+            // already round-trip via the existing Cardinality/SrcType/DestType blocks below. TON/
+            // TONR never carry DisabledENO at all (confirmed real, no EN/ENO on either).
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Convert")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }

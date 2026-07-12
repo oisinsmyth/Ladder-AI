@@ -227,10 +227,11 @@ public static class FlgNetBuilder
         }
     }
 
-    // Builds a TON Part, its IN-chain (identical shape/mechanism to BuildOneChain's chain, just
-    // terminating at "IN" instead of a coil's "in" — and, like a Coil's chain, may have a null
-    // RailWireUId if fed directly by another TON's Q), its PT wire (tag or literal preset), and
-    // its ET wire if the sidecar recorded one (OpenCon only).
+    // Builds a TON/TONR Part, its IN-chain (identical shape/mechanism to BuildOneChain's chain,
+    // just terminating at "IN" instead of a coil's "in" — and, like a Coil's chain, may have a
+    // null RailWireUId if fed directly by another TON's Q), its PT wire (tag or literal preset),
+    // its ET wire if the sidecar recorded one (OpenCon only), and — for TONR — its R (reset) wire
+    // (tag or literal, same AddOperandWire as PT — confirmed real, 2026-07-12, S1 item 19).
     private static void BuildTimer(
         TimerBindingSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
@@ -244,7 +245,8 @@ public static class FlgNetBuilder
         }
 
         var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
-        AddPart(parts, emittedPartUIds, new PartNode(sidecar.TonPartUId, "TON", TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.TonPartUId, TimerPartNameFor(sidecar.Kind), TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
 
         AddOperandWire(wireEndpointsByUId, sidecar.Preset, sidecar.TonPartUId, "PT");
 
@@ -253,7 +255,22 @@ public static class FlgNetBuilder
             AddEndpoint(wireEndpointsByUId, et.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "ET"));
             AddEndpoint(wireEndpointsByUId, et.WireUId, new WireEndpoint(EndpointKind.OpenCon, et.OpenConUId, null));
         }
+
+        if (sidecar.Reset is { } reset)
+        {
+            AddOperandWire(wireEndpointsByUId, reset, sidecar.TonPartUId, "R");
+        }
     }
+
+    // The inverse of GraphReducer.TimerKindFor — TimerBindingSidecar carries its own Kind
+    // (BuildTimer works entirely off the sidecar, never cross-referencing the model), mirroring
+    // CoilPartNameFor's own precedent.
+    private static string TimerPartNameFor(TimerKind kind) => kind switch
+    {
+        TimerKind.Ton => "TON",
+        TimerKind.Tonr => "TONR",
+        _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
+    };
 
     // Builds a Move Part, its `en`-chain (identical mechanism to BuildOneChain/BuildTimer's own
     // chain, terminating at the Move's own "en" port instead of a Coil's "in"/TON's "IN" — may
@@ -399,16 +416,18 @@ public static class FlgNetBuilder
         }
     }
 
-    // Builds a Mul Part, its `en` wiring (BuildEnSource), its N input wires (`in1`..`inK`,
+    // Builds a Mul/Add Part, its `en` wiring (BuildEnSource), its N input wires (`in1`..`inK`,
     // `AddOperandWire` per input — positional, mirrors WAND's own Inputs list), and its `out`
     // wire (same IdentCon-fed wire shape as WAND's own dest). `AutomaticSrcType: true` regenerates
-    // the confirmed-fixed `<AutomaticTyped Name="SrcType" />` shape unconditionally.
+    // the confirmed-fixed `<AutomaticTyped Name="SrcType" />` shape unconditionally (same for
+    // both Part Names — confirmed real, 2026-07-12, S1 item 19).
     private static void BuildMul(
         MulStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         BuildEnSource(sidecar.En, sidecar.MulPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
-        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MulPartUId, "Mul", Cardinality: sidecar.Inputs.Count, AutomaticSrcType: true));
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: sidecar.Inputs.Count, AutomaticSrcType: true));
 
         for (var k = 0; k < sidecar.Inputs.Count; k++)
         {
@@ -418,6 +437,16 @@ public static class FlgNetBuilder
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MulPartUId, "out"));
     }
+
+    // The inverse of GraphReducer.MulKindFor — MulStatementSidecar carries its own Kind (BuildMul
+    // works entirely off the sidecar, never cross-referencing the model), mirroring
+    // CoilPartNameFor's/TimerPartNameFor's own precedent.
+    private static string MulPartNameFor(MulKind kind) => kind switch
+    {
+        MulKind.Multiply => "Mul",
+        MulKind.Add => "Add",
+        _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
+    };
 
     // Builds a Convert Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal
     // source, same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire

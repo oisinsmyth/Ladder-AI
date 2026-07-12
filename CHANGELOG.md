@@ -10,6 +10,31 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 19: `TONR`/`Add`/`Lt` — built, tested, live-verified; closes every instruction-level
+gap in `PlantAutoControl`'s 5 previously-blocked dependency FBs**
+
+- Picked up per the project owner's choice (via `AskUserQuestion`) over the FC/FB
+  parameter-interface gap. Phase 0 grounding (`MotorDOL`/`FilterUnitSystem`) found `TONR`'s shape
+  identical to `TON` plus one genuine new port, `R` (reset) — tag-fed, no chain, same shape as
+  `PT`. `TimerKind` (`Ton`/`Tonr`) enum added, mirroring `CoilKind`.
+- **Scope expanded mid-grounding, confirmed via `AskUserQuestion`**: the same real networks also
+  needed `Add` (identical shape to `Mul`) and `Lt` (a third comparison operator alongside
+  `Eq`/`Ge`) to fully round-trip. Checked directly against the real wiring that `Add`'s own `en`
+  (fed by `Lt`'s `out`) is an ordinary condition, not ENO-chained — no speculative new branch
+  added to the `Mul`/`Convert` ENO-chain check.
+- `MulKind` (`Multiply`/`Add`) enum added, same pattern as `TimerKind`/`CoilKind`. `Lt` needed no
+  new model shape — `ChainStepSidecar.CompareStep` already carries `PartName` generically.
+- 16 new converter tests, three fixtures genericized from the real grounded shapes. All three
+  suites green: 207 converter (up from 191), 68 openness-cli, 11 golden-harness.
+- **Live-verified:** whole-block `to-ir` on all 5 previously-`TONR`-blocked dependency FBs
+  (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) all fully converted —
+  confirmed genuinely exercising the new code via grep counts, not a lucky no-op.
+  `MotorDOL`/`FilterUnitSystem` additionally round-trip `to-ir → to-xml → to-ir` byte-identical. All 5
+  of `PlantAutoControl`'s dependency FBs previously blocked by `Mul`/`Convert`/`TONR` now fully
+  round-trip as whole blocks — the remaining 3 (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`) are blocked
+  only by the separate, already-known FC/FB parameter-interface gap. Full story:
+  `docs/notes/stage-gates.md` ("S1 item 19").
+
 **S1 item 18: `MUL`/`CONVERT` (arithmetic) — built, tested, live-verified**
 
 - Picked up per the project owner's sequencing after Title ("scope arithmetic support next"),

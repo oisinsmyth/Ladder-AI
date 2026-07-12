@@ -37,7 +37,10 @@ public static class GraphReducer
         var constantsByUId = network.Constants.ToDictionary(c => c.UId);
         var wiresByPort = BuildPortIndex(network.Wires);
 
-        var tonParts = network.Parts.Where(p => p.Name == "TON").ToList();
+        // TON/TONR (S1 items 8/19) are reduced via the exact same code, tagging the result with
+        // TimerBinding.Kind (derived from the Part Name below) — identical Version/Instance/
+        // time_type shape, TONR just adds one extra `R` port, confirmed real 2026-07-12.
+        var tonParts = network.Parts.Where(p => p.Name is "TON" or "TONR").ToList();
         // SCoil/RCoil (S1 item 15) are structurally identical to Coil — same "in"/"operand"
         // ports, never a producer — confirmed real, 2026-07-12, FC PlantAutoControl (two independent
         // instances of each). ReduceOneChain resolves all three via the exact same code, tagging
@@ -46,12 +49,14 @@ public static class GraphReducer
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
         var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
-        var mulParts = network.Parts.Where(p => p.Name == "Mul").ToList();
+        // Mul/Add (S1 items 18/19) share the exact same shape and reduction — tagged with
+        // MulStatement.Kind (derived from the Part Name below).
+        var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add").ToList();
         var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON, Move, And, Call, Mul, or Convert found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR, Move, And, Call, Mul/Add, or Convert found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -263,15 +268,17 @@ public static class GraphReducer
         _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a coil-kind assignment."),
     };
 
-    // A TON's IN is reduced exactly like a Coil's condition — same backward trace, terminating
-    // at the TON's own "IN" port instead of a Coil's "in" (and, like a Coil's chain, may itself
-    // terminate at another TON's Q instead of the rail — see TraceChain). PT is fed by an
-    // IdentCon directly (no chain — it's a single operand, tag or literal), unlike Coil's own
-    // "operand" pattern only in that there's no intervening Contact-chain concept for it. `Q`
-    // itself is deliberately *not* validated here — whether/how it's consumed (an ordinary
-    // Access elsewhere, confirmed real FC ControlDelays; or a direct wire into another chain,
-    // confirmed real FC TimerSample) is entirely the consuming chain's concern via TraceChain;
-    // this reduction only owns IN/PT/ET.
+    // A TON/TONR's IN is reduced exactly like a Coil's condition — same backward trace,
+    // terminating at the TON/TONR's own "IN" port instead of a Coil's "in" (and, like a Coil's
+    // chain, may itself terminate at another TON's Q instead of the rail — see TraceChain). PT is
+    // fed by an IdentCon directly (no chain — it's a single operand, tag or literal), unlike
+    // Coil's own "operand" pattern only in that there's no intervening Contact-chain concept for
+    // it. `Q` itself is deliberately *not* validated here — whether/how it's consumed (an
+    // ordinary Access elsewhere, confirmed real FC ControlDelays; or a direct wire into another
+    // chain, confirmed real FC TimerSample) is entirely the consuming chain's concern via
+    // TraceChain; this reduction only owns IN/PT/ET/R. TONR's own `R` (reset) — confirmed real,
+    // 2026-07-12, S1 item 19 — is resolved the exact same way PT is (ResolveTagOrLiteralOperand,
+    // no chain), only when Kind is Tonr.
     private static (TimerBinding Binding, TimerBindingSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceTimer(
         FlgNetwork network,
         PartNode ton,
@@ -296,7 +303,17 @@ public static class GraphReducer
             ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Instance reference.");
         var instancePath = string.Join('.', instance.ComponentPath);
 
-        var binding = new TimerBinding(instancePath, inExpr, ptExpr);
+        var kind = TimerKindFor(ton.Name, networkNumber, ton.UId);
+
+        Expr? resetExpr = null;
+        OperandSidecar? resetSidecar = null;
+        if (kind == TimerKind.Tonr)
+        {
+            (resetExpr, resetSidecar) = ResolveTagOrLiteralOperand(
+                wiresByPort, accessByUId, constantsByUId, ton.UId, "R", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        }
+
+        var binding = new TimerBinding(instancePath, inExpr, ptExpr, kind, resetExpr);
         var sidecar = new TimerBindingSidecar(
             ton.UId,
             ton.TonVersion ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Version."),
@@ -307,10 +324,22 @@ public static class GraphReducer
             inRailWireUId,
             inSteps,
             presetSidecar,
-            et);
+            et,
+            kind,
+            resetSidecar);
 
         return (binding, sidecar, accessEntries, constantEntries);
     }
+
+    // TON/TONR (S1 item 19) map 1:1 to TimerKind — no other Part Name has ever mapped to one of
+    // these two kinds, so this is a straight lookup, not a guess (mirrors CoilKindFor's own
+    // pattern exactly).
+    private static TimerKind TimerKindFor(string partName, int networkNumber, int uid) => partName switch
+    {
+        "TON" => TimerKind.Ton,
+        "TONR" => TimerKind.Tonr,
+        _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a timer binding."),
+    };
 
     // A Move's `en` is reduced exactly like a Coil's condition/TON's IN — same backward trace via
     // TraceChain, terminating at the Move's own "en" port (the tap wire shared with the chain's
@@ -512,11 +541,14 @@ public static class GraphReducer
         return (new EnSource.Condition(expr), new EnSourceSidecar.ConditionSidecar(railWireUId, steps));
     }
 
-    // A Mul's `en` is resolved via ResolveEnSource (ordinary condition or ENO-chained — see its
-    // own doc comment). Inputs are Cardinality-driven tag-or-literal operands (`in1`..`inCard`,
-    // ResolveTagOrLiteralOperand per port — same resolver as everywhere else, same loop shape as
-    // ResolveOrMerge/ReduceWordAnd's own Cardinality loop). `out` writes to a plain tag
-    // (ResolveOperand, port "out" — confirmed real, same as WAND's own write port).
+    // A Mul/Add's `en` is resolved via ResolveEnSource (ordinary condition or ENO-chained — see
+    // its own doc comment; an Add's own `en` fed by a comparison's `out` is just the ordinary
+    // Condition case, confirmed real 2026-07-12, S1 item 19, FB MotorDOL/FilterUnitSystem — `Lt`'s own
+    // `out` feeds the following `Add`'s `en`). Inputs are Cardinality-driven tag-or-literal
+    // operands (`in1`..`inCard`, ResolveTagOrLiteralOperand per port — same resolver as
+    // everywhere else, same loop shape as ResolveOrMerge/ReduceWordAnd's own Cardinality loop).
+    // `out` writes to a plain tag (ResolveOperand, port "out" — confirmed real, same as WAND's own
+    // write port).
     private static (MulStatement Statement, MulStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceMul(
         FlgNetwork network,
         PartNode mul,
@@ -534,7 +566,7 @@ public static class GraphReducer
 
         if (mul.Cardinality is not int cardinality || cardinality < 1)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: Mul UId={mul.UId} has no usable cardinality.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: Mul/Add UId={mul.UId} has no usable cardinality.");
         }
 
         var inputExprs = new List<Expr>();
@@ -551,11 +583,22 @@ public static class GraphReducer
         visitedWireUIds.Add(destWireUId);
         AddAccessEntry(accessEntries, destTag);
 
-        var statement = new MulStatement(en, inputExprs, destTag.TagPath);
-        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId);
+        var kind = MulKindFor(mul.Name, networkNumber, mul.UId);
+        var statement = new MulStatement(en, inputExprs, destTag.TagPath, kind);
+        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId, kind);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }
+
+    // Mul/Add (S1 item 19) map 1:1 to MulKind — no other Part Name has ever mapped to one of
+    // these two kinds, so this is a straight lookup, not a guess (mirrors CoilKindFor's own
+    // pattern exactly).
+    private static MulKind MulKindFor(string partName, int networkNumber, int uid) => partName switch
+    {
+        "Mul" => MulKind.Multiply,
+        "Add" => MulKind.Add,
+        _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a Mul/Add statement."),
+    };
 
     // A Convert's `en` is resolved via ResolveEnSource (ordinary condition, confirmed real
     // standalone in FB ShredderControlSystem; or ENO-chained after a Mul, confirmed real in
@@ -644,25 +687,27 @@ public static class GraphReducer
     }
 
     // Each part kind's own "out"-equivalent port name — the port TraceChain looks for when
-    // identifying a wire's producer. Contact/O/Eq/Ge/Not use "out"; a TON's only confirmed real
-    // upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused like any other
-    // unrecognized shape). Move/And never appear here — neither is ever a producer for a boolean
-    // chain, only a consumer (their own "en" tap) — see TraceChain's producer-identification
-    // comment.
+    // identifying a wire's producer. Contact/O/Eq/Ge/Lt/Not use "out"; a TON/TONR's only
+    // confirmed real upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused
+    // like any other unrecognized shape). Move/And/Mul/Add/Convert never appear here — none is
+    // ever a producer for a boolean chain, only a consumer (their own "en" tap, or — for
+    // Mul/Convert — a separate ENO-chain mechanism, see ResolveEnSource) — see TraceChain's
+    // producer-identification comment.
     private static string? OutPortFor(string partName) => partName switch
     {
-        "Contact" or "O" or "Eq" or "Ge" or "Not" => "out",
-        "TON" => "Q",
+        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Not" => "out",
+        "TON" or "TONR" => "Q",
         _ => null,
     };
 
-    // IR-text infix operator per Part Name — only Eq/Ge confirmed real (ir/SPEC.md's readable-form
-    // table already sketches the full IEC family, but Ne/Le/Gt/Lt Part Names are unconfirmed, so
-    // only these two are reachable — SupportedComparisonPartNames gates this at parse time).
+    // IR-text infix operator per Part Name — Eq/Ge confirmed real 2026-07-11, Lt confirmed real
+    // 2026-07-12 (S1 item 19, FB MotorDOL/FilterUnitSystem). Ne/Le/Gt Part Names remain unconfirmed, so
+    // only these three are reachable — SupportedComparisonPartNames gates this at parse time.
     private static string ComparisonOperator(string partName) => partName switch
     {
         "Eq" => "=",
         "Ge" => ">=",
+        "Lt" => "<",
         _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
     };
 
@@ -777,7 +822,7 @@ public static class GraphReducer
             visitedWireUIds.Add(wire.UId);
             var outgoingWireUId = wire.UId;
 
-            if (upstreamPart.Name == "TON")
+            if (upstreamPart.Name is "TON" or "TONR")
             {
                 var instancePath = string.Join('.', upstreamPart.Instance!.ComponentPath);
                 steps.Insert(0, new ChainStepSidecar.TimerOutputStep(upstreamPart.UId, "Q", outgoingWireUId));
@@ -798,7 +843,7 @@ public static class GraphReducer
                 continue;
             }
 
-            if (upstreamPart.Name == "Eq" || upstreamPart.Name == "Ge")
+            if (upstreamPart.Name is "Eq" or "Ge" or "Lt")
             {
                 var (leftExpr, leftOperand) = ResolveTagOrLiteralOperand(
                     wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in1", networkNumber, visitedWireUIds, accessEntries, constantEntries);

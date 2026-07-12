@@ -72,10 +72,16 @@ public static class IrSerializer
 
         foreach (var timer in network.Timers)
         {
-            sb.Append("  TON(").Append(timer.InstancePath)
+            sb.Append("  ").Append(TimerKeywordFor(timer.Kind)).Append('(').Append(timer.InstancePath)
               .Append(", IN := ").Append(SerializeExpr(timer.In))
-              .Append(", PT := ").Append(SerializeExpr(timer.Pt))
-              .Append(")\n");
+              .Append(", PT := ").Append(SerializeExpr(timer.Pt));
+
+            if (timer.Reset is { } reset)
+            {
+                sb.Append(", R := ").Append(SerializeExpr(reset));
+            }
+
+            sb.Append(")\n");
         }
 
         foreach (var assignment in network.Assignments)
@@ -127,7 +133,7 @@ public static class IrSerializer
 
         foreach (var mul in network.Muls)
         {
-            sb.Append("  MUL(EN := ").Append(SerializeEnSource(mul.En));
+            sb.Append("  ").Append(MulKeywordFor(mul.Kind)).Append("(EN := ").Append(SerializeEnSource(mul.En));
             for (var k = 0; k < mul.Inputs.Count; k++)
             {
                 sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(mul.Inputs[k]));
@@ -227,6 +233,22 @@ public static class IrSerializer
         _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
     };
 
+    // TONR (S1 item 19) mirrors its own source Part Name, same convention as TON/COIL/MOVE/CALL.
+    private static string TimerKeywordFor(TimerKind kind) => kind switch
+    {
+        TimerKind.Ton => "TON",
+        TimerKind.Tonr => "TONR",
+        _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
+    };
+
+    // ADD (S1 item 19) mirrors its own source Part Name, same convention as MUL/CONVERT.
+    private static string MulKeywordFor(MulKind kind) => kind switch
+    {
+        MulKind.Multiply => "MUL",
+        MulKind.Add => "ADD",
+        _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
+    };
+
     private static void SerializeSidecarNetwork(StringBuilder sb, NetworkSidecar sidecar)
     {
         sb.Append("NETWORK ").Append(sidecar.NetworkNumber).Append('\n');
@@ -247,6 +269,7 @@ public static class IrSerializer
             var timer = sidecar.Timers[t];
             sb.Append("  timer ").Append(t).Append('\n');
             sb.Append("    tonpartuid = ").Append(timer.TonPartUId).Append('\n');
+            sb.Append("    kind = ").Append(TimerSidecarKind(timer.Kind)).Append('\n');
             sb.Append("    version = ").Append(timer.Version).Append('\n');
             sb.Append("    timetype = ").Append(timer.TimeType).Append('\n');
             sb.Append("    instanceuid = ").Append(timer.InstanceUId).Append('\n');
@@ -264,6 +287,11 @@ public static class IrSerializer
             if (timer.Et is { } et)
             {
                 sb.Append("    et = ").Append(et.WireUId).Append(' ').Append(et.OpenConUId).Append('\n');
+            }
+
+            if (timer.Reset is { } reset)
+            {
+                SerializeOperand(sb, "    ", "reset", reset);
             }
         }
 
@@ -352,6 +380,7 @@ public static class IrSerializer
             var mul = sidecar.Muls[m2];
             sb.Append("  mul ").Append(m2).Append('\n');
             sb.Append("    muluid = ").Append(mul.MulPartUId).Append('\n');
+            sb.Append("    kind = ").Append(MulSidecarKind(mul.Kind)).Append('\n');
             SerializeEnSourceSidecar(sb, "    ", mul.En);
 
             for (var k = 0; k < mul.Inputs.Count; k++)
@@ -514,6 +543,23 @@ public static class IrSerializer
     // that explicitly rather than a sentinel int, so a reader (or the parser) never mistakes it
     // for a real, if unusual, wire UId. Confirmed necessary real, 2026-07-11, FC TimerSample.
     private static string SerializeRail(int? railWireUId) => railWireUId?.ToString() ?? "none";
+
+    // Sidecar-only lowercase Kind tokens (distinct from the readable-form TIMER/MUL keywords
+    // above) — S1 item 19, mirrors the plain-text style every other sidecar field already uses
+    // (e.g. "condition"/"eno" in SerializeEnSourceSidecar).
+    private static string TimerSidecarKind(TimerKind kind) => kind switch
+    {
+        TimerKind.Ton => "ton",
+        TimerKind.Tonr => "tonr",
+        _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
+    };
+
+    private static string MulSidecarKind(MulKind kind) => kind switch
+    {
+        MulKind.Multiply => "mul",
+        MulKind.Add => "add",
+        _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
+    };
 
     private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

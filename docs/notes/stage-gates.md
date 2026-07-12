@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT (arithmetic, incl. ENO-chaining), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end. The true TIA-cycle proof for it specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 191 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 207 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1404,3 +1404,104 @@ design check-in rather than being forced into the plan's own original (Move/WAND
 Arithmetic beyond `Mul`/`Convert` remains out of scope — nothing observed needing it. The
 whole-block sweep confirms `TONR` as the next real gap for these 5 FBs specifically, alongside the
 already-known FC/FB parameter-interface gap for the remaining 3.
+
+### S1 item 19 (`TONR` — retentive on-delay timer — plus `Add`/`Lt`), 2026-07-12
+
+Picked up per the project owner's own explicit choice, via `AskUserQuestion`, between the two live
+candidates the S1 item 18 sweep left open: `TONR` (blocks 5 of 8 dependency FBs) over the FC/FB
+parameter-interface gap (blocks the remaining 3). Planned formally in plan mode
+(`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`).
+
+**Phase 0 grounding, mandatory before design per CLAUDE.md hard rule 3.** Fresh exports of
+`MotorDOL`/`FilterUnitSystem` (scratch temp, deleted after use) — the two networks turned out
+byte-for-byte identical in shape (same UIds, same wiring), a copy-pasted/templated pattern giving
+two independent confirmations for free:
+
+```xml
+<Part Name="TONR" Version="1.0" UId="40">
+  <Instance Scope="LocalVariable" UId="41">
+    <Component Name="HrTotaliserTimer" />
+  </Instance>
+  <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
+</Part>
+```
+```xml
+<Wire UId="55"><NameCon UId="39" Name="out" /><NameCon UId="40" Name="IN" /></Wire>
+<Wire UId="56"><IdentCon UId="23" /><NameCon UId="40" Name="R" /></Wire>
+<Wire UId="57"><IdentCon UId="24" /><NameCon UId="40" Name="PT" /></Wire>
+<Wire UId="58"><NameCon UId="40" Name="ET" /><OpenCon UId="50" /></Wire>
+```
+
+- `TONR`'s own `Version`/`Instance`/`time_type` shape is identical to `TON`'s — no `EN`/`ENO` on
+  either. The one genuine new element is port `R` (reset), fed directly by a plain tag `IdentCon`
+  in both instances — no chain, exactly the same shape as `PT`.
+- `PT`: both a tag-fed example (`MotorDOL`) and a literal example (`FilterUnitSystem`'s own sibling
+  network, `T#1H`) confirmed real. `ET`: `OpenCon` (unconnected) in both, same as `TON`'s own
+  precedent. `Q`: read back via an ordinary 2-component `Access` in both — no live example of `Q`
+  wired directly into a downstream part for `TONR` specifically (the existing `TimerOutputStep`
+  mechanism is already generic and should work unchanged if this occurs, but isn't live-proven for
+  `TONR` by this grounding pass).
+- DB side: `<Member Name="HrTotaliserTimer" Datatype="TONR_TIME" Version="1.0"
+  Remanence="Retain" .../>` confirmed exactly matching the shape `ir/SPEC.md` had already
+  anticipated as a generically-handled `TON_TIME` sibling — zero new DB-side work needed.
+
+**Real, material scope finding (a full `Part Name="..."` sweep of both grounded files, not
+assumed either way)**: `Add` and `Lt` appear alongside `TONR` in these same real networks —
+neither was in `FlgNetParser.SupportedPartNames`. `TONR` alone would not have gotten either FB to
+fully round-trip. **Flagged to the project owner via `AskUserQuestion` before implementing
+anything; approved: bundle `Add`/`Lt` into this item** rather than deferring them (per this
+project's "ask before design deviation" discipline — the same pattern used for S1 item 18's own
+mid-grounding surprise).
+
+- `Add`: `<Part Name="Add" UId="45" DisabledENO="true"><TemplateValue Name="Card"
+  Type="Cardinality">2</TemplateValue><AutomaticTyped Name="SrcType" /></Part>` — identical shape
+  to `Mul`. **Checked directly against the real wiring before writing any code**: `Add`'s own `en`
+  in the grounded network is fed by `Lt`'s own `out` port, not an `eno` — confirmed to be the
+  ordinary `TraceChain`-resolved `Condition` case, not the `Mul`/`Convert` ENO-chain shape. This
+  simplified the design: `ResolveEnSource`'s existing `precedingPart.Name is "Mul" or "Convert"`
+  whitelist was deliberately left untouched, no speculative `"Add"` branch added without live
+  evidence.
+- `Lt`: `<Part Name="Lt" UId="44"><TemplateValue Name="SrcType" Type="Type">UDInt</TemplateValue></Part>`,
+  wired via `pre`/`in1`/`in2` — structurally identical to `Eq`/`Ge`. Needed zero new model shape —
+  `ChainStepSidecar.CompareStep` already carries `PartName` generically.
+
+**Design**: `TimerKind` (`Ton`/`Tonr`) and `MulKind` (`Multiply`/`Add`) enums, mirroring the
+`CoilKind` (`Assign`/`Set`/`Reset`) precedent exactly. Both duplicated onto their own sidecar
+records (not left model-only) — confirmed necessary by reading `FlgNetBuilder.cs` in full before
+touching it: `BuildTimer`/`BuildMul` are sidecar-only and never take the model alongside (unlike
+`BuildOneChain`, which does, and is the one place `CoilAssignment.Kind` is *not* duplicated onto
+its own sidecar). Readable form: `TONR(<instance path>, IN := <expr>, PT := <expr>, R := <expr>)`
+— same as `TON` plus the confirmed-real `R` argument, parsed via a variable-arity
+split-on-top-level-commas approach (mirroring WAND/CALL/MUL's own precedent) since `TON`/`TONR`
+now genuinely differ in argument count, rather than a single fixed-arity regex. `ADD(EN :=
+<expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` mirrors `MUL` exactly, one shared
+parse/serialize path distinguished by keyword. `Lt` needed no new syntax — comparisons are already
+plain infix `Expr.Compare`, just gaining a new `<` operator symbol alongside `=`/`>=`.
+
+16 new converter tests (`Converter.Tests/TonrTests.cs`), three fixtures genericized from the real
+grounded shapes (`WithTonr.xml`, `LtFeedsCoil.xml`, `AddFedByComparison.xml` — real tag names like
+`HrTotaliserTimer` were not reused verbatim in committed fixtures; invented generic names used
+instead, per `docs/13-data-boundary.md`). All passed on first run after one assertion-shape fix
+(a Contact upstream of the comparison in both new fixtures ANDs with it, same as the existing
+`GeMidChainFeedsCoil.xml` precedent — initial test assertions wrongly expected the bare compare).
+All three suites green: **207 converter tests** (up from 191), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Exported all 5 previously-`TONR`-blocked dependency FBs fresh
+(`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) and ran `converter to-ir`
+on each. **All 5 fully converted** — confirmed each genuinely exercises the new code (not a lucky
+no-op) via a grep count: exactly one `TONR(`, one `  ADD(`, and one `<` comparison operator per
+block. `MotorDOL`/`FilterUnitSystem` (the two directly grounded) were additionally carried through a
+full `to-ir → to-xml → to-ir` cycle — **byte-identical both times**, proving real round-trip
+correctness, not just a one-way conversion. All real exported data deleted from scratch temp
+immediately after use, confirmed via `git status --short`.
+
+**Bottom line:** `TONR`/`Add`/`Lt` are built, tested, and live-verified against real data — a
+scope check-in mid-grounding (bundling `Add`/`Lt` in) was needed and explicitly approved, same
+discipline as every prior item's own design deviations. **All 5 of `PlantAutoControl`'s dependency FBs
+previously blocked by `Mul`/`Convert`/`TONR` now fully round-trip as whole blocks** — combined
+with S1 item 18, this closes every real *instruction-level* gap the original 8-FB grounding sweep
+found. The remaining 3 (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`) are blocked only by the separate,
+already-known, larger FC/FB parameter-interface modeling item — not addressed by either S1 item 18
+or 19, and not attempted here.

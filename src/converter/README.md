@@ -633,6 +633,69 @@ hit `TONR` instead (a retentive TON variant, out of scope, now confirmed real ra
 theoretical). Arithmetic beyond `Mul`/`Convert` remains out of scope, per the plan's own explicit
 scoping — nothing observed needing it.
 
+## TONR / ADD / Lt (S1 item 19, 2026-07-12)
+
+Picked up per the project owner's own choice (over the FC/FB parameter-interface gap) after S1
+item 18's own whole-block sweep confirmed `TONR` (a retentive on-delay timer) as the real, common
+blocker across all 5 remaining dependency FBs. Planned formally in plan mode.
+
+**Phase 0 grounding** (`MotorDOL`/`FilterUnitSystem`, two independent instances, byte-identical network
+shape):
+
+```xml
+<Part Name="TONR" Version="1.0" UId="40">
+  <Instance Scope="LocalVariable" UId="41">
+    <Component Name="HrTotaliserTimer" />
+  </Instance>
+  <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
+</Part>
+```
+
+- **`TONR`**: identical `Version`/`Instance`/`time_type` shape to `TON` — no `EN`/`ENO` on either
+  — plus one genuine new port, **`R` (reset)**, fed directly by a plain tag in both instances (no
+  chain, same shape as `PT`). Modeled via a new `TimerKind` enum (`Ton`/`Tonr`), mirroring the
+  `CoilKind` (`Assign`/`Set`/`Reset`) precedent exactly — duplicated onto the sidecar record too
+  (not model-only), since `FlgNetBuilder.BuildTimer` is sidecar-only and never cross-references
+  the model (unlike `BuildOneChain`, confirmed by reading `FlgNetBuilder.cs` in full first).
+- **Scope expanded mid-grounding, confirmed via `AskUserQuestion` ("Bundle Add + Lt into this
+  item")**: a full `Part Name="..."` sweep of both grounded files found `Add` and `Lt` alongside
+  the already-expected `TONR` — `TONR` alone would not have gotten either FB to fully round-trip.
+  - **`Add`**: `<Part Name="Add" UId="45" DisabledENO="true"><TemplateValue Name="Card"
+    Type="Cardinality">2</TemplateValue><AutomaticTyped Name="SrcType" /></Part>` — identical
+    shape to `Mul`. Modeled via a new `MulKind` enum (`Multiply`/`Add`) on the same
+    `MulStatement`/`MulStatementSidecar` records, same reasoning as `TimerKind`. Its own `en` in
+    the grounded network is fed by a comparison's (`Lt`'s) `out` — checked directly against the
+    real wiring before writing any code, confirmed to be an ordinary `TraceChain` `Condition`, not
+    ENO-chained — so `ResolveEnSource`'s `Mul`/`Convert` whitelist was deliberately left untouched.
+  - **`Lt`**: `<Part Name="Lt" UId="44"><TemplateValue Name="SrcType" Type="Type">UDInt</TemplateValue></Part>`,
+    wired via `pre`/`in1`/`in2` — structurally identical to `Eq`/`Ge`. Needed **zero new model
+    shape** — `ChainStepSidecar.CompareStep` already carries `PartName` generically — purely a
+    parser/reducer/writer dictionary extension (`SupportedComparisonPartNames`,
+    `ComparisonOperator`, `OutPortFor`, `TraceChain`'s upstream dispatch).
+- **Readable form**: `TONR(<instance path>, IN := <expr>, PT := <expr>, R := <expr>)` — same as
+  `TON` plus the confirmed-real `R` argument, parsed/serialized via a variable-arity
+  split-on-top-level-commas approach (mirroring WAND/CALL/MUL's own precedent) rather than a
+  single fixed-arity regex, since `TON`/`TONR` now genuinely differ in argument count. `ADD(EN :=
+  <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` mirrors `MUL` exactly, sharing one
+  parse/serialize path distinguished by keyword. `Lt` needs no new syntax — comparisons are
+  already plain infix `Expr.Compare`, just gaining a new `<` operator symbol.
+
+16 new converter tests (`Converter.Tests/TonrTests.cs`), three fixtures genericized from the real
+grounded shapes (`WithTonr.xml`, `LtFeedsCoil.xml`, `AddFedByComparison.xml` — real tag names like
+`HrTotaliserTimer` were not reused verbatim; invented generic names used instead, per the data
+boundary). All 207 converter tests pass (up from 191); `openness-cli`/golden-harness suites
+unaffected.
+
+**Live-verified against real data, 2026-07-12.** Whole-block `to-ir` on all 5 previously-`TONR`-
+blocked dependency FBs (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`)
+**all fully converted** — each genuinely exercising `TONR`/`ADD`/`Lt` (one of each per block,
+confirmed by grep, not a lucky no-op). `MotorDOL`/`FilterUnitSystem` (the two directly grounded) both
+round-trip `to-ir → to-xml → to-ir` byte-identical. All 8 of `PlantAutoControl`'s dependency FBs are now
+either fully instruction-level round-trippable (5, this item plus S1 item 18) or blocked only by
+the separate, already-known FC/FB parameter-interface gap (3: `TomraControlSystem`/`MotorVSDSystem`/
+`AirStar`). Compiling any of these in `SampleProject` remains out of scope, same missing-tag-
+table/FB-library reason already documented for `PlantAutoControl` itself.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

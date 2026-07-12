@@ -170,19 +170,44 @@ public static partial class IrParser
         }
 
         // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
-        // order for self-stability.
+        // order for self-stability. TON/TONR (S1 item 19) share one loop, distinguished by
+        // keyword — TONR's own 4th argument (R) is optional in the grammar's own arity check but
+        // always present in practice (GraphReducer.ReduceTimer requires it whenever Kind is
+        // Tonr), split on top-level commas like WAND/CALL/MUL's own variable-arity argument
+        // lists (safe for the same reason: no Expr ever renders a literal comma).
         var timers = new List<TimerBinding>();
-        while (i < lines.Length && lines[i].StartsWith("  TON(", StringComparison.Ordinal))
+        while (i < lines.Length && (lines[i].StartsWith("  TON(", StringComparison.Ordinal) || lines[i].StartsWith("  TONR(", StringComparison.Ordinal)))
         {
             var tonMatch = TonLineRegex().Match(lines[i]);
             if (!tonMatch.Success)
             {
-                throw new IrFormatException($"Expected '  TON(<path>, IN := <expr>, PT := <expr>)', got: '{lines[i]}'");
+                throw new IrFormatException(
+                    $"Expected '  TON(<path>, IN := <expr>, PT := <expr>)' or '  TONR(<path>, IN := <expr>, PT := <expr>, R := <expr>)', got: '{lines[i]}'");
             }
 
-            var inExpr = ParseExpr(tonMatch.Groups["in"].Value);
-            var ptExpr = ParseExprTerm(tonMatch.Groups["pt"].Value);
-            timers.Add(new TimerBinding(tonMatch.Groups["path"].Value, inExpr, ptExpr));
+            var timerKind = tonMatch.Groups["kind"].Value == "TONR" ? TimerKind.Tonr : TimerKind.Ton;
+            var timerArgs = tonMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (timerArgs.Length is not (3 or 4) || !timerArgs[1].StartsWith("IN := ", StringComparison.Ordinal) || !timerArgs[2].StartsWith("PT := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected '<path>, IN := <expr>, PT := <expr>[, R := <expr>]' inside TON/TONR(...), got: '{lines[i]}'");
+            }
+
+            var timerPath = timerArgs[0];
+            var inExpr = ParseExpr(timerArgs[1]["IN := ".Length..]);
+            var ptExpr = ParseExprTerm(timerArgs[2]["PT := ".Length..]);
+
+            Expr? resetExpr = null;
+            if (timerArgs.Length == 4)
+            {
+                if (!timerArgs[3].StartsWith("R := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected ', R := <expr>' as TONR's 4th argument, got: '{lines[i]}'");
+                }
+
+                resetExpr = ParseExprTerm(timerArgs[3]["R := ".Length..]);
+            }
+
+            timers.Add(new TimerBinding(timerPath, inExpr, ptExpr, timerKind, resetExpr));
             i++;
         }
 
@@ -320,22 +345,25 @@ public static partial class IrParser
         }
 
         // Muls are always emitted after Calls (IrSerializer) — parsed in the same order for
-        // self-stability. EN's own value is either an ordinary expression or the reserved word
-        // "ENO" (confirmed real, 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed
-        // via ParseEnSource rather than ParseExpr directly.
+        // self-stability. MUL/ADD (S1 item 19) share one loop, distinguished by keyword — same
+        // XML shape, different Part Name, mirroring TON/TONR's own treatment above. EN's own
+        // value is either an ordinary expression or the reserved word "ENO" (confirmed real,
+        // 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed via ParseEnSource
+        // rather than ParseExpr directly.
         var muls = new List<MulStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  MUL(", StringComparison.Ordinal))
+        while (i < lines.Length && (lines[i].StartsWith("  MUL(", StringComparison.Ordinal) || lines[i].StartsWith("  ADD(", StringComparison.Ordinal)))
         {
             var mulMatch = MulLineRegex().Match(lines[i]);
             if (!mulMatch.Success)
             {
-                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>', got: '{lines[i]}'");
+                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>' or '  ADD(...)', got: '{lines[i]}'");
             }
 
+            var mulKind = mulMatch.Groups["kind"].Value == "ADD" ? MulKind.Add : MulKind.Multiply;
             var args = mulMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
             if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
             {
-                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL's first argument, got: '{lines[i]}'");
+                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL/ADD's first argument, got: '{lines[i]}'");
             }
 
             var mulEn = ParseEnSource(args[0]["EN := ".Length..]);
@@ -346,13 +374,13 @@ public static partial class IrParser
                 var prefix = $"IN{k} := ";
                 if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
                 {
-                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL/ADD argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
                 }
 
                 mulInputs.Add(ParseExprTerm(args[k][prefix.Length..]));
             }
 
-            muls.Add(new MulStatement(mulEn, mulInputs, mulMatch.Groups["dest"].Value));
+            muls.Add(new MulStatement(mulEn, mulInputs, mulMatch.Groups["dest"].Value, mulKind));
             i++;
         }
 
@@ -377,7 +405,7 @@ public static partial class IrParser
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND/CALL/MUL/CONVERT statements and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT statements and isn't marked [empty].");
         }
 
         return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts);
@@ -740,6 +768,13 @@ public static partial class IrParser
         i++; // "  mul <n>" header — index itself isn't needed, position in the list is enough.
 
         var mulPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    muluid = "));
+        var mulKindText = RequirePrefixedLine(lines, ref i, "    kind = ").Trim();
+        var mulKind = mulKindText switch
+        {
+            "mul" => MulKind.Multiply,
+            "add" => MulKind.Add,
+            _ => throw new IrFormatException($"Unexpected Mul kind '{mulKindText}' in SIDECAR for network {networkNumber}."),
+        };
         var en = ParseEnSourceSidecar(lines, ref i, "    ");
 
         var inputs = new List<OperandSidecar>();
@@ -753,7 +788,7 @@ public static partial class IrParser
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
-        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId);
+        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId, mulKind);
     }
 
     // A Convert's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, except `en`
@@ -929,6 +964,13 @@ public static partial class IrParser
         i++; // "  timer <n>" header — index itself isn't needed, position in the list is enough.
 
         var tonPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    tonpartuid = "));
+        var timerKindText = RequirePrefixedLine(lines, ref i, "    kind = ").Trim();
+        var timerKind = timerKindText switch
+        {
+            "ton" => TimerKind.Ton,
+            "tonr" => TimerKind.Tonr,
+            _ => throw new IrFormatException($"Unexpected timer kind '{timerKindText}' in SIDECAR for network {networkNumber}."),
+        };
         var version = RequirePrefixedLine(lines, ref i, "    version = ");
         var timeType = RequirePrefixedLine(lines, ref i, "    timetype = ");
         var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
@@ -959,8 +1001,16 @@ public static partial class IrParser
             i++;
         }
 
+        // TONR's own R (reset) — confirmed real, 2026-07-12, S1 item 19 — same tag-or-literal
+        // operand shape as preset, emitted only when Kind is Tonr.
+        OperandSidecar? reset = null;
+        if (i < lines.Length && (lines[i].StartsWith("    reset tag = ", StringComparison.Ordinal) || lines[i].StartsWith("    reset literal = ", StringComparison.Ordinal)))
+        {
+            reset = ParseOperand(lines, ref i, "    ", "reset");
+        }
+
         return new TimerBindingSidecar(
-            tonPartUId, version, timeType, instanceUId, instanceScope, instancePath, railWireUId, steps, preset, et);
+            tonPartUId, version, timeType, instanceUId, instanceScope, instancePath, railWireUId, steps, preset, et, timerKind, reset);
     }
 
     private static bool IsStepHeader(string line, string indent, string label) =>
@@ -1172,7 +1222,10 @@ public static partial class IrParser
     [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL) (?<tag>\S+) := (?<expr>.+)$")]
     private static partial Regex CoilLineRegex();
 
-    [GeneratedRegex(@"^  TON\((?<path>[^,]+), IN := (?<in>.+), PT := (?<pt>.+)\)$")]
+    // Variable arity (3 args for TON, 4 for TONR — S1 item 19), same split-on-top-level-commas
+    // discipline as WAND/CALL/MUL's own variable-arity argument lists — only the outer
+    // "TON|TONR(...)" shape is matched here.
+    [GeneratedRegex(@"^  (?<kind>TONR|TON)\((?<args>.+)\)$")]
     private static partial Regex TonLineRegex();
 
     [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
@@ -1193,8 +1246,8 @@ public static partial class IrParser
 
     // Variable input count (Cardinality-driven, S1 item 18), same discipline as WAND's own
     // variable-arity argument list — the argument list itself is split on top-level commas
-    // separately (ParseNetwork).
-    [GeneratedRegex(@"^  MUL\((?<args>.+)\) => (?<dest>\S+)$")]
+    // separately (ParseNetwork). MUL/ADD (S1 item 19) share this regex, distinguished by keyword.
+    [GeneratedRegex(@"^  (?<kind>MUL|ADD)\((?<args>.+)\) => (?<dest>\S+)$")]
     private static partial Regex MulLineRegex();
 
     // Fixed arity (EN, IN) — same regex-based shape as MOVE's own line.

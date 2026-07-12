@@ -378,6 +378,33 @@ NETWORK 8 "Run enable delay"
   (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) confirmed `Mul`/
   `Convert` are no longer the blocker in any of them — all 5 now progress to a different,
   already-known deferred item (`TONR`, a retentive TON variant, `ir/SPEC.md`'s own open items).
+- **`TONR`/`ADD`/`LT` (`Part Name="TONR"`/`"Add"`/`"Lt"`), built 2026-07-12 (S1 item 19).** Picked
+  up per the project owner's own choice (over the FC/FB parameter-interface gap) after `TONR` was
+  confirmed real by S1 item 18's own live-verification sweep. Grounded first (two independent real
+  instances, `FB MotorDOL`/`FilterUnitSystem`, byte-identical network shape), before any design. `TONR`:
+  identical `Version`/`Instance`/`time_type` shape to `TON` — no `EN`/`ENO` on either — plus one
+  genuine new port, `R` (reset), fed directly by a plain tag in both instances (no chain, same
+  shape as `PT`). Modeled via a new `TimerKind` (`Ton`/`Tonr`), mirroring the `CoilKind`
+  (`Assign`/`Set`/`Reset`) precedent exactly. **Scope expanded mid-grounding**: the same real
+  networks also needed `Add` and `Lt` to fully round-trip — flagged and confirmed with the project
+  owner before implementing, rather than silently narrowed or expanded. `Add`: identical XML shape
+  to `Mul` (`DisabledENO="true"`/`Card="2"`/`AutomaticTyped SrcType`) — modeled via a new `MulKind`
+  (`Multiply`/`Add`). Its own `en` in the grounded network is fed by a comparison's (`Lt`'s) `out`
+  — confirmed to be an ordinary `TraceChain` condition, **not** ENO-chained (checked directly
+  against the real wiring before writing code) — so `Mul`/`Convert`'s existing ENO-chain check was
+  deliberately left untouched for `Add`. `Lt`: a third comparison operator alongside `Eq`/`Ge`,
+  identical shape — needed no new model at all, `ChainStepSidecar.CompareStep` already carries
+  `PartName` generically. Readable form: `TONR(<instance path>, IN := <expr>, PT := <expr>, R :=
+  <expr>)` (same as `TON` plus the confirmed-real `R` argument); `ADD(EN := <expr-or-ENO>, IN1 :=
+  <expr>, IN2 := <expr>) => <dest>` mirrors `MUL` exactly; `Lt` needs no new syntax, just a new `<`
+  operator symbol. 16 new converter tests (`TonrTests.cs`, three fixtures genericized from the
+  real grounded shapes). **Live-verified against real data, 2026-07-12:** whole-block `to-ir` on
+  all 5 previously-`TONR`-blocked FBs (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/
+  `MotorFwdRevSystem`) **all fully converted** — each genuinely exercising `TONR`/`ADD`/`Lt` (one of
+  each per block, confirmed by grep) — and `MotorDOL`/`FilterUnitSystem` (the two directly grounded)
+  both round-trip `to-ir → to-xml → to-ir` byte-identical. All 5 of `PlantAutoControl`'s dependency FBs
+  blocked by `Mul`/`Convert`/`TONR` at the start of S1 items 18/19 now fully round-trip as whole
+  blocks.
 
 ### Explicit form (fallback, per-network)
 
@@ -530,10 +557,8 @@ question, left open on purpose rather than guessed).
   exists; still a hard error. (`Q` wired directly is now modeled and live-proven — see above,
   `FC TimerSample`.)
 - **Resolved, 2026-07-12 (S1 item 15): `SCoil`/`RCoil` built** — see the readable-form section
-  above. TONR (a retentive TON variant) remains out of scope — **confirmed real, 2026-07-12**,
-  live verification for S1 item 18 found `TONR` blocking all 5 of the FBs `Mul`/`Convert` support
-  unblocked (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) — still not
-  the same construct as TON, not addressed by any item so far.
+  above. TONR (a retentive TON variant), confirmed real by S1 item 18's own live-verification
+  sweep, is itself now **resolved — see the S1 item 19 bullet below**.
 - **Resolved, 2026-07-12 (S1 items 16/17): network- and block-level `Title` built** — see the
   file-shape section above for the full story (a real design correction, not just a new field:
   the `NETWORK` line's own label was repurposed from `Comment` to `Title`). `PlantAutoControl` itself
@@ -560,6 +585,17 @@ question, left open on purpose rather than guessed).
   they now hit `TONR` instead (see the S1 item 15 bullet above, now confirmed real by this
   finding). Arithmetic beyond `Mul`/`Convert` (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) remains out
   of scope — none observed co-occurring with `Mul`/`Convert` in any grounded real network.
+- **Resolved, 2026-07-12 (S1 item 19): `TONR`/`Add`/`Lt` built** — see the readable-form section
+  above. Confirms `TONR`'s own real shape (identical to `TON`, plus a genuine new `R` reset port)
+  and, mid-grounding, that `Add`/`Lt` were also needed to fully round-trip the same real networks
+  — flagged and confirmed with the project owner before implementing rather than silently
+  expanding scope. 16 new tests, 207/207 total passing. **Whole-block `to-ir` on all 5 previously-
+  `TONR`-blocked dependency FBs now fully succeeds** — `MotorDOL`/`FilterUnitSystem` (the two directly
+  grounded) round-trip `to-ir → to-xml → to-ir` byte-identical. All 8 of `PlantAutoControl`'s dependency
+  FBs are now either fully instruction-level round-trippable (5, this item plus S1 item 18) or
+  blocked only by the separate, already-known FC/FB parameter-interface gap (3: `TomraControlSystem`/
+  `MotorVSDSystem`/`AirStar`). Arithmetic beyond `Mul`/`Convert`/`Add` and comparisons beyond
+  `Eq`/`Ge`/`Lt` remain out of scope — none observed needing them.
 - **New, 2026-07-12: real FC/FB `Interface` sections beyond `Input` are confirmed real too**
   (`Constant`, on two of `PlantAutoControl`'s dependency FBs) — same already-known, deferred
   "full parameter-interface modeling" item, not a new capability of its own.

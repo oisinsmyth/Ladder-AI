@@ -60,21 +60,37 @@ public abstract record EnSource
     public sealed record PrecedingEno : EnSource;
 }
 
-// A TON instance used in a network — confirmed real, 2026-07-11, both as a multi-instance
-// (`FB MotorDOL`, Scope="LocalVariable") and a standalone instance (`FC ControlDelays`,
-// Scope="GlobalVariable"). No bound IR-level name (project owner's call): TIA has no "timer
-// name" concept beyond the instance reference itself, so inventing one (`timer0`, `timer1`, ...)
-// would be exactly the kind of synthetic identifier this project avoids elsewhere. Later
-// references to Q/ET reuse the instance's own dotted path as a plain Expr.TagRef (e.g.
-// `GeneralEnableDelay.Q`) — deliberately not a separate Expr case: whether the source wired Q
-// directly (see ChainStepSidecar.TimerOutputStep) or read it back via an ordinary Access
-// elsewhere (FC ControlDelays' actual shape), a reader sees the same, correctly tag-shaped text
-// either way, and the sidecar (not the Expr tree) is what drives exact XML regeneration.
+// TON (non-retentive) vs TONR (retentive) — confirmed real, 2026-07-12 (S1 item 19), two
+// independent instances (`FB MotorDOL`/`FilterUnitSystem`, byte-identical network shape). Structurally
+// TONR is TON plus one extra port (`R`, reset) — same `Version`/`Instance`/`time_type` shape
+// otherwise, no EN/ENO either. Mirrors the CoilKind precedent (Coil/SCoil/RCoil, S1 item 15):
+// the IR doesn't compute retentive-vs-non-retentive runtime semantics, just records which Part
+// Name to regenerate.
+public enum TimerKind
+{
+    Ton,
+    Tonr,
+}
+
+// A TON/TONR instance used in a network — confirmed real, 2026-07-11 (TON) and 2026-07-12
+// (TONR), both as a multi-instance (`FB MotorDOL`, Scope="LocalVariable") and a standalone
+// instance (`FC ControlDelays`, Scope="GlobalVariable"). No bound IR-level name (project owner's
+// call): TIA has no "timer name" concept beyond the instance reference itself, so inventing one
+// (`timer0`, `timer1`, ...) would be exactly the kind of synthetic identifier this project avoids
+// elsewhere. Later references to Q/ET reuse the instance's own dotted path as a plain
+// Expr.TagRef (e.g. `GeneralEnableDelay.Q`) — deliberately not a separate Expr case: whether the
+// source wired Q directly (see ChainStepSidecar.TimerOutputStep) or read it back via an ordinary
+// Access elsewhere (FC ControlDelays' actual shape), a reader sees the same, correctly tag-shaped
+// text either way, and the sidecar (not the Expr tree) is what drives exact XML regeneration.
 //
 // InstancePath is the same dotted-path text a plain tag reference would use (AccessNode.DottedPath
 // on the sidecar's own Instance) — scope is a sidecar-only concern, never re-derived from the
 // text (same principle already applied to ordinary tag Access).
-public sealed record TimerBinding(string InstancePath, Expr In, Expr Pt);
+//
+// Reset is TONR's own `R` port — confirmed real, 2026-07-12: fed directly by a plain tag
+// IdentCon in both grounded instances, no chain (same shape as PT, not a TraceChain-based
+// condition). Null/absent for a plain TON; required for TONR.
+public sealed record TimerBinding(string InstancePath, Expr In, Expr Pt, TimerKind Kind = TimerKind.Ton, Expr? Reset = null);
 
 // Assign (`Part Name="Coil"`) writes the condition directly; Set/Reset (`Part Name="SCoil"`/
 // `"RCoil"`) only ever move the target one direction — true when the condition is true, left
@@ -131,17 +147,30 @@ public sealed record MoveStatement(Expr En, Expr In, string DestTag);
 // `MOVE_BLK_VARIANT` → `MOVE`.
 public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, string DestTag);
 
-// A multiply box instruction (`Part Name="Mul"`) — confirmed real, 2026-07-12 (S1 item 18),
-// `FB MotorDOL`/`FB EquipmentControlSystem` (both grounded independently, identical shape). Structurally
-// closest to WAND: `en`-gated (via EnSource, see its own doc comment — sometimes an ordinary
-// condition, sometimes chained from a preceding Mul/Convert's own `eno`), `Cardinality`-driven
-// input list (`Card="2"` in every real instance seen, carried as data rather than hard-validated
-// fixed — same "only one value observed, not enough to treat as universal" reasoning as WAND's
-// own Cardinality, not Move's fixed `Card="1"`), one destination tag via `out`. Genuinely
-// untyped in the source (`<AutomaticTyped Name="SrcType" />`, not a `TemplateValue` — TIA infers
-// the type from the connected operands rather than declaring it statically) — nothing to carry
-// for it beyond validating the shape is present, unlike WAND's own explicit `SrcType`.
-public sealed record MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, string DestTag);
+// Mul (multiply) vs Add — confirmed real, 2026-07-12 (S1 item 19), `FB MotorDOL`/`FilterUnitSystem`:
+// `Add`'s own XML shape is identical to `Mul`'s (`DisabledENO="true"`, `Card="2"`,
+// `<AutomaticTyped Name="SrcType" />`) — same "IR doesn't compute runtime semantics" reasoning as
+// CoilKind/TimerKind, just a different Part Name to regenerate.
+public enum MulKind
+{
+    Multiply,
+    Add,
+}
+
+// A multiply/add box instruction (`Part Name="Mul"`/`"Add"`) — confirmed real, 2026-07-12 (S1
+// items 18/19), `FB MotorDOL`/`FB EquipmentControlSystem`/`FilterUnitSystem` (all grounded independently, identical
+// shape for both Kinds). Structurally closest to WAND: `en`-gated (via EnSource, see its own doc
+// comment — sometimes an ordinary condition, sometimes chained from a preceding Mul/Convert's own
+// `eno`; an `Add`'s own `en` fed by a comparison's `out`, e.g. `Lt`, is just the ordinary
+// TraceChain-resolved Condition case, confirmed real, no new EnSource variant needed),
+// `Cardinality`-driven input list (`Card="2"` in every real instance seen, carried as data rather
+// than hard-validated fixed — same "only one value observed, not enough to treat as universal"
+// reasoning as WAND's own Cardinality, not Move's fixed `Card="1"`), one destination tag via
+// `out`. Genuinely untyped in the source (`<AutomaticTyped Name="SrcType" />`, not a
+// `TemplateValue` — TIA infers the type from the connected operands rather than declaring it
+// statically) — nothing to carry for it beyond validating the shape is present, unlike WAND's own
+// explicit `SrcType`.
+public sealed record MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, string DestTag, MulKind Kind = MulKind.Multiply);
 
 // A type-conversion box instruction (`Part Name="Convert"`) — confirmed real, 2026-07-12 (S1 item
 // 18). Structurally closest to Move: `en`-gated (via EnSource), a single tag-or-literal input,
@@ -407,6 +436,15 @@ public sealed record OpenConnectionSidecar(int WireUId, int OpenConUId);
 // RailWireUId is nullable — confirmed necessary real, 2026-07-11, `FC TimerSample`: when a
 // TON's IN is fed directly by another TON's Q (a TimerOutputStep as steps[0]), the chain never
 // touches Powerrail at all, so there's no rail wire to record. Non-null in every other case.
+//
+// Kind is duplicated here (also on TimerBinding, the model) rather than derived from it —
+// FlgNetBuilder.BuildTimer works entirely off the sidecar, never cross-referencing the model
+// (same discipline as CallStatementSidecar's own BlockName; unlike CoilAssignmentSidecar's one
+// documented exception, BuildTimer was never sidecar-only-adjacent to begin with). Reset is
+// TONR's own `R` port (OperandSidecar-shaped, same as Preset) — null for a plain TON, non-null
+// for TONR (confirmed real, 2026-07-12, S1 item 19: always tag-fed in both grounded instances,
+// but modeled as the same generic tag-or-literal OperandSidecar PT already uses, not narrowed to
+// tag-only).
 public sealed record TimerBindingSidecar(
     int TonPartUId,
     string Version,
@@ -417,7 +455,9 @@ public sealed record TimerBindingSidecar(
     int? RailWireUId,
     IReadOnlyList<ChainStepSidecar> Steps,
     OperandSidecar Preset,
-    OpenConnectionSidecar? Et);
+    OpenConnectionSidecar? Et,
+    TimerKind Kind = TimerKind.Ton,
+    OperandSidecar? Reset = null);
 
 // RailWireUId is separated from the per-step wires because the source wire connecting Powerrail
 // to a chain's first element(s) is often shared across MANY independent chains — and, since
@@ -542,20 +582,23 @@ public abstract record EnSourceSidecar
     public sealed record PrecedingEnoSidecar(int PrecedingPartUId, int WireUId) : EnSourceSidecar;
 }
 
-// One Mul's full round-trip data. En mirrors every other production's own EnSource (see its own
-// doc comment). Inputs is positional (Inputs[0] is `in1`, Inputs[1] is `in2`, ...) — length
+// One Mul/Add's full round-trip data. En mirrors every other production's own EnSource (see its
+// own doc comment). Inputs is positional (Inputs[0] is `in1`, Inputs[1] is `in2`, ...) — length
 // equals the source Part's own Cardinality (`Card="2"` in every real instance seen, carried as
 // data rather than hard-validated fixed, same reasoning as WordAndStatementSidecar's own
 // Inputs.Count). DisabledENO isn't carried — always `"true"`, same "don't carry a confirmed
-// constant" reasoning as Move/WAND's own. No SrcType field at all — `Mul`'s own type is
-// `<AutomaticTyped Name="SrcType" />` (confirmed real, no value to carry, only the shape to
-// validate on parse and regenerate unconditionally on write).
+// constant" reasoning as Move/WAND's own. No SrcType field at all — both `Mul`'s and `Add`'s own
+// type is `<AutomaticTyped Name="SrcType" />` (confirmed real, no value to carry, only the shape
+// to validate on parse and regenerate unconditionally on write). Kind is duplicated here (also on
+// MulStatement, the model) rather than derived from it — same "sidecar works entirely on its own"
+// discipline as TimerBindingSidecar's own Kind field, since BuildMul is sidecar-only.
 public sealed record MulStatementSidecar(
     int MulPartUId,
     EnSourceSidecar En,
     IReadOnlyList<OperandSidecar> Inputs,
     int DestAccessUId,
-    int DestWireUId);
+    int DestWireUId,
+    MulKind Kind = MulKind.Multiply);
 
 // One Convert's full round-trip data. En mirrors every other production's own EnSource.
 // SrcType/DestType mirror a comparison's own SrcType (sidecar-only, not shown in the readable IR

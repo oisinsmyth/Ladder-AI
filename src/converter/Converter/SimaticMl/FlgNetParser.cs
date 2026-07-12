@@ -13,12 +13,13 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Convert" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
+        { "Contact", "Coil", "O", "TON", "TONR", "Eq", "Ge", "Lt", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
 
-    // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
-    // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
+    // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
+    // FB MotorDOL/FilterUnitSystem). Ne/Le/Gt's real Part Names remain unconfirmed, refused rather than
     // guessed at even though the IEC family strongly suggests what they'd be named.
-    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge" };
+    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt" };
     private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
 
     // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
@@ -75,15 +76,15 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And/Not/SCoil/RCoil/Mul/Convert only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/Eq/Ge/Lt/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
                 var negated = name == "Contact" && ParseNegated(child, uid);
                 var cardinality = name == "O" ? ParseCardinality(child, "O", uid) : (int?)null;
-                if (name == "TON")
+                if (name is "TON" or "TONR")
                 {
-                    var (version, timeType, instance) = ParseTon(child, uid);
+                    var (version, timeType, instance) = ParseTon(child, name, uid);
                     parts.Add(new PartNode(uid, name, TonVersion: version, TimeType: timeType, Instance: instance));
                 }
                 else if (SupportedComparisonPartNames.Contains(name))
@@ -101,9 +102,9 @@ public static class FlgNetParser
                     var (andCardinality, andSrcType) = ParseAndFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, Cardinality: andCardinality, SrcType: andSrcType));
                 }
-                else if (name == "Mul")
+                else if (name is "Mul" or "Add")
                 {
-                    var mulCardinality = ParseMulFixedShape(child, uid);
+                    var mulCardinality = ParseMulFixedShape(child, name, uid);
                     parts.Add(new PartNode(uid, name, Cardinality: mulCardinality, AutomaticSrcType: true));
                 }
                 else if (name == "Convert")
@@ -246,33 +247,33 @@ public static class FlgNetParser
         return (cardinality, srcType);
     }
 
-    // A multiply box instruction (`Part Name="Mul"`) — confirmed real, 2026-07-12,
-    // `FB MotorDOL`/`FB EquipmentControlSystem` (two independent instances, identical shape):
-    // `DisabledENO="true"` (same reasoning as And/Move's own), a `Card` `TemplateValue`
-    // (`Card="2"` in both real instances, carried as data — same "only one value observed"
-    // reasoning as And's own Cardinality), and `<AutomaticTyped Name="SrcType" />` — a
+    // A multiply/add box instruction (`Part Name="Mul"`/`"Add"`) — confirmed real, 2026-07-12,
+    // `FB MotorDOL`/`FB EquipmentControlSystem`/`FilterUnitSystem` (independent instances, identical shape for both
+    // Part Names): `DisabledENO="true"` (same reasoning as And/Move's own), a `Card`
+    // `TemplateValue` (`Card="2"` in every real instance, carried as data — same "only one value
+    // observed" reasoning as And's own Cardinality), and `<AutomaticTyped Name="SrcType" />` — a
     // self-closing element with no value at all (TIA infers the type from the connected operands
     // rather than declaring it statically), genuinely different from every other typed
     // instruction's own `<TemplateValue Type="Type">X</TemplateValue>` shape. Only the shape
     // (element present, self-closing, Name="SrcType") is validated — there is no value to carry.
-    private static int ParseMulFixedShape(XElement mulPart, int uid)
+    private static int ParseMulFixedShape(XElement mulPart, string partName, int uid)
     {
         var disabledEno = mulPart.Attribute("DisabledENO")?.Value;
         if (disabledEno != "true")
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"Mul\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
         }
 
-        var cardinality = ParseCardinality(mulPart, "Mul", uid);
+        var cardinality = ParseCardinality(mulPart, partName, uid);
 
         var automaticTyped = mulPart.Element(Ns + "AutomaticTyped")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"Mul\" UId=\"{uid}\"> is missing its <AutomaticTyped> element.");
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <AutomaticTyped> element.");
         var automaticTypedName = RequireAttribute(automaticTyped, "Name");
         if (automaticTypedName != "SrcType" || automaticTyped.HasElements || !string.IsNullOrEmpty(automaticTyped.Value))
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"Mul\" UId=\"{uid}\">'s <AutomaticTyped Name=\"{automaticTypedName}\"> — only a bare, " +
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <AutomaticTyped Name=\"{automaticTypedName}\"> — only a bare, " +
                 "empty <AutomaticTyped Name=\"SrcType\" /> has been observed.");
         }
 
@@ -308,21 +309,24 @@ public static class FlgNetParser
         return (srcType, destTypeValue.Value);
     }
 
-    // A TON's own Instance reference — same Scope values as an ordinary Access, but the
-    // Component path is a direct child (no <Symbol> wrapper) — confirmed real, 2026-07-11.
-    private static (string Version, string TimeType, AccessNode Instance) ParseTon(XElement tonPart, int uid)
+    // A TON/TONR's own Instance reference — same Scope values as an ordinary Access, but the
+    // Component path is a direct child (no <Symbol> wrapper) — confirmed real, 2026-07-11 (TON)
+    // and 2026-07-12 (TONR, S1 item 19: identical Version/Instance/time_type shape to TON — the
+    // only difference is the extra `R` reset port, which is wired separately like PT, not part of
+    // this Part element at all).
+    private static (string Version, string TimeType, AccessNode Instance) ParseTon(XElement tonPart, string partName, int uid)
     {
         var version = RequireAttribute(tonPart, "Version");
-        var instance = ParseInstanceReference(tonPart, "TON", uid);
+        var instance = ParseInstanceReference(tonPart, partName, uid);
 
         var templateValue = tonPart.Element(Ns + "TemplateValue")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\"> is missing its <TemplateValue> time-type element.");
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue> time-type element.");
         var templateName = RequireAttribute(templateValue, "Name");
         var templateType = RequireAttribute(templateValue, "Type");
         if (templateName != "time_type" || templateType != "Type")
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"TON\" UId=\"{uid}\">'s <TemplateValue Name=\"{templateName}\" Type=\"{templateType}\"> — only " +
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"{templateName}\" Type=\"{templateType}\"> — only " +
                 "Name=\"time_type\" Type=\"Type\" has been observed.");
         }
 
