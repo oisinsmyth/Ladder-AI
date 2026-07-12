@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert", "Swap" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert/Swap only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -117,6 +117,11 @@ public static class FlgNetParser
                 {
                     var (convertSrcType, convertDestType) = ParseConvertFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, SrcType: convertSrcType, DestType: convertDestType));
+                }
+                else if (name == "Swap")
+                {
+                    var swapSrcType = ParseSwapFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, SrcType: swapSrcType));
                 }
                 else
                 {
@@ -345,6 +350,22 @@ public static class FlgNetParser
         }
 
         return (srcType, destTypeValue.Value);
+    }
+
+    // A byte-swap box instruction (`Part Name="Swap"`) — confirmed real, 2026-07-12 (S1 item 25,
+    // `FB TomraControlSystem`, 2 instances). Structurally identical to Convert's own shape
+    // (`DisabledENO="true"`, one `SrcType` `TemplateValue`) minus `DestType` — a byte-swap doesn't
+    // change the value's type. Both real instances: `Type="Type">Word</TemplateValue>`.
+    private static string ParseSwapFixedShape(XElement swapPart, int uid)
+    {
+        var disabledEno = swapPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Swap\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        return ParseSrcType(swapPart, "Swap", uid);
     }
 
     // A TON/TONR's own Instance reference — same Scope values as an ordinary Access, but the

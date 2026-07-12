@@ -54,10 +54,13 @@ public static class GraphReducer
         // MulStatement.Kind (derived from the Part Name below).
         var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add").ToList();
         var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
+        // Swap (S1 item 25) is structurally identical to Convert minus DestType — confirmed real,
+        // 2026-07-12, FB TomraControlSystem.
+        var swapParts = network.Parts.Where(p => p.Name == "Swap").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
-            && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0)
+            && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, or Convert found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, or Swap found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -74,6 +77,8 @@ public static class GraphReducer
         var mulSidecars = new List<MulStatementSidecar>();
         var convertStatements = new List<ConvertStatement>();
         var convertSidecars = new List<ConvertStatementSidecar>();
+        var swapStatements = new List<SwapStatement>();
+        var swapSidecars = new List<SwapStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -219,6 +224,23 @@ public static class GraphReducer
             }
         }
 
+        foreach (var swap in swapParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceSwap(network, swap, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            swapStatements.Add(statement);
+            swapSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -227,10 +249,11 @@ public static class GraphReducer
         }
 
         var irNetwork = new IrNetwork(
-            networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements);
+            networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
+            swapStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
-            callSidecars, mulSidecars, convertSidecars);
+            callSidecars, mulSidecars, convertSidecars, swapSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -641,6 +664,44 @@ public static class GraphReducer
             inSidecar,
             convert.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no SrcType."),
             convert.DestType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no DestType."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A Swap's `en`/`in`/`out` resolve exactly like Convert's own (ResolveEnSource/
+    // ResolveTagOrLiteralOperand/ResolveOperand) — the only difference from ReduceConvert is no
+    // DestType to carry, confirmed real, 2026-07-12, FB TomraControlSystem (2 instances, both
+    // independently rail-fed via a Contact chain, neither ENO-chained).
+    private static (SwapStatement Statement, SwapStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceSwap(
+        FlgNetwork network,
+        PartNode swap,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, swap.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, swap.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, swap.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new SwapStatement(en, inExpr, destTag.TagPath);
+        var sidecar = new SwapStatementSidecar(
+            swap.UId,
+            enSidecar,
+            inSidecar,
+            swap.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Swap UId={swap.UId} has no SrcType."),
             destTag.UId,
             destWireUId);
 

@@ -158,6 +158,13 @@ public static class IrSerializer
               .Append(", IN := ").Append(SerializeExpr(convert.In))
               .Append(") => ").Append(convert.DestTag).Append('\n');
         }
+
+        foreach (var swap in network.Swaps)
+        {
+            sb.Append("  SWAP(EN := ").Append(SerializeEnSource(swap.En))
+              .Append(", IN := ").Append(SerializeExpr(swap.In))
+              .Append(") => ").Append(swap.DestTag).Append('\n');
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -470,6 +477,20 @@ public static class IrSerializer
             sb.Append("    desttype = ").Append(convert.DestType).Append('\n');
             sb.Append("    dest = ").Append(convert.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(convert.DestWireUId).Append('\n');
+        }
+
+        for (var s = 0; s < sidecar.Swaps.Count; s++)
+        {
+            var swap = sidecar.Swaps[s];
+            sb.Append("  swap ").Append(s).Append('\n');
+            sb.Append("    swapuid = ").Append(swap.SwapPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", swap.En);
+
+            SerializeOperand(sb, "    ", "in", swap.In);
+
+            sb.Append("    srctype = ").Append(swap.SrcType).Append('\n');
+            sb.Append("    dest = ").Append(swap.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(swap.DestWireUId).Append('\n');
         }
     }
 

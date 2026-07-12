@@ -367,6 +367,22 @@ NETWORK 8 "Run enable delay"
   mirroring `CallWithParametersFedByRail`'s own genericization precedent). **Live-verified against
   real data, 2026-07-12:** see `docs/notes/stage-gates.md` ("S1 item 24") for the full
   `MotorVSDSystem` whole-block result.
+- **`SWAP` (byte-swap box instruction, `Part Name="Swap"`), built 2026-07-12 (S1 item 25) — the
+  last gap in `PlantAutoControl`'s own 8 dependency FBs.** Grounded against real `FB TomraControlSystem` (2
+  instances, identical shape): `<Part Name="Swap" UId="N" DisabledENO="true"><TemplateValue
+  Name="SrcType" Type="Type">Word</TemplateValue></Part>` — structurally identical to `Convert`
+  (`en`-gated, a single tag-or-literal `in`, one destination tag via `out`, `DisabledENO="true"`)
+  minus `DestType` — a byte-swap doesn't change the value's type. Readable-form syntax:
+  `SWAP(EN := <expr-or-ENO>, IN := <expr>) => <dest>`, identical to `CONVERT`'s own grammar minus
+  the `DestType` group. Modeled as its own `SwapStatement`/`SwapStatementSidecar` rather than
+  folding into `ConvertStatement` with a nullable `DestType` — project owner's own explicit call,
+  keeping each source Part Name mapped to its own IR construct (same precedent as `MulKind`/
+  `TimerKind` staying separate variants rather than merging unrelated Part Names into one type).
+  Covered by 8 new converter tests (`SwapTests.cs`, one new fixture genericized from the real
+  shape). **Live-verified against real data, 2026-07-12: `TomraControlSystem` now fully round-trips as a
+  whole block** (`to-ir → to-xml → to-ir` byte-identical, confirmed genuinely exercising both real
+  `Swap` occurrences via direct grep) — the **eighth and final** of `PlantAutoControl`'s own 8
+  dependency FBs to do so. See `docs/notes/stage-gates.md` ("S1 item 25") for the full story.
 - **`SCOIL`/`RCOIL` (set/reset coils, `Part Name="SCoil"`/`"RCoil"`), built 2026-07-12 (S1 item
   15).** Picked up per the project owner's own explicit sequencing after `CALL`, since 3 of each
   are real in `FC PlantAutoControl` (also seen alongside TON in `FB MotorDOL`'s own earlier grounding
@@ -749,6 +765,10 @@ question, left open on purpose rather than guessed).
 - **Resolved, 2026-07-12 (S1 item 24): `CALL` without `<Instance>` (a real FC call) built** — see
   the dedicated bullet above. `MotorVSDSystem` fully round-trips as a whole block, the seventh of
   `PlantAutoControl`'s 8 dependency FBs to do so. Only `TomraControlSystem` (`Swap`) remains.
+- **Resolved, 2026-07-12 (S1 item 25): `SWAP` built** — see the dedicated bullet above.
+  `TomraControlSystem` fully round-trips as a whole block — the **eighth and final** of `PlantAutoControl`'s
+  own 8 dependency FBs to do so. All of `PlantAutoControl`'s dependency FBs are now fully
+  instruction-level round-trippable end to end.
 - **Resolved, 2026-07-11:** a full live TIA round-trip for TON. `FC TimerSample`
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and

@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **7 of its 8 dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`) now do too — only `TomraControlSystem` (`Swap`) remains blocked. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 236 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **all 8 of its dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 244 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1967,3 +1967,83 @@ is built, tested, and live-verified. Required touching more already-shipped code
 several items (nullability changes across `Ir.Model`, `GraphReducer`, `FlgNetBuilder`,
 `IrSerializer`, `IrParser`), but no design surprises versus the pre-grounding research — the
 Phase 0 finding matched the working hypothesis exactly.
+
+### S1 item 25 (`SWAP` — byte-swap box instruction), 2026-07-12/13 — `TomraControlSystem` fully round-trips, all 8 `PlantAutoControl` dependency FBs closed
+
+Picked up per the project owner's own explicit choice: "let's ground Swap for TomraControlSystem." This
+was the last remaining gap in `PlantAutoControl`'s own 8 dependency FBs, after S1 item 24 closed
+`MotorVSDSystem`. Grounded first, deliberately scoped narrower than recent items ("ground" only, not
+"build") — the project owner wanted to review the real shape before committing to a design.
+
+**Grounding, real `TomraControlSystem` (deleted from scratch temp after use) — 2 independent instances,
+identical shape:**
+
+```xml
+<Part Name="Swap" UId="34" DisabledENO="true">
+  <TemplateValue Name="SrcType" Type="Type">Word</TemplateValue>
+</Part>
+```
+
+Full network context (isolated via `CompileUnit ID="62"`): `Contact(33) -> Swap(34) -> tag`, en
+gated by the Contact's own `out` (same `TraceChain` mechanism as every other en-gated production).
+`in` is a plain tag `IdentCon`, `out` writes to a plain tag `IdentCon` — no chaining beyond that in
+either direction, no ENO wired. `DisabledENO="true"`, one `SrcType` TemplateValue (`Word`, both
+instances) — **no `DestType`**. Structurally this is `Convert` minus `DestType`: a byte-swap
+doesn't change the value's type, so there's nothing to declare a destination type for.
+
+**Design fork surfaced and resolved via `AskUserQuestion` before any code**: model `Swap` as its
+own standalone `SwapStatement`/`SwapStatementSidecar` record (mirroring `ConvertStatement` minus
+`DestType`), or fold it into the existing `ConvertStatement` with a nullable `DestType`. Project
+owner chose the standalone type — keeps each source Part Name mapped to its own IR construct
+(same precedent as `MulKind`/`TimerKind` staying separate variants), rather than conflating two
+distinct source Part Names behind one construct that needs a null-check to know which one it
+represents. Project owner then explicitly confirmed proceeding straight to implementation in the
+same pass, rather than stopping after grounding+design as the initial request's own narrower
+scope might have implied.
+
+**Implementation mirrors `Convert`'s own exactly, minus the `DestType` field/line/group, at every
+touchpoint**: `Ir.Model` (`SwapStatement(EnSource En, Expr In, string DestTag)`,
+`SwapStatementSidecar` with `SrcType` but no `DestType`; `IrNetwork`/`NetworkSidecar` gain a
+`Swaps` list); `FlgNetParser` (`SupportedPartNames` gains `"Swap"`; `ParseSwapFixedShape` validates
+`DisabledENO="true"` + `SrcType`, identical to `ParseConvertFixedShape` minus the `DestType`
+block); `FlgNetWriter` (`DisabledENO` gate list gains `"Swap"` — the existing `SrcType`-writing
+block was already generic, no change needed there); `GraphReducer.ReduceSwap` (`en`/`in`/`out`
+resolve via the exact same `ResolveEnSource`/`ResolveTagOrLiteralOperand`/`ResolveOperand` calls as
+`ReduceConvert`); `FlgNetBuilder.BuildSwap`; readable-form grammar `SWAP(EN := <expr-or-ENO>,
+IN := <expr>) => <dest>` in both `IrSerializer`/`IrParser` (including the sidecar's own
+`swapuid =`/`srctype =` lines, minus `desttype =`).
+
+8 new tests (`Converter.Tests/SwapTests.cs`, mirroring `MulConvertTests.cs`'s own Convert coverage
+— parse/reduce/sidecar/round-trip/serialize/full-block, plus two negative tests for a missing
+`SrcType`/`DisabledENO`), one new fixture (`SwapFedByRail.xml`, genericized from the real
+`TomraControlSystem` topology — Contact-gated, not simplified to rail-fed-only, matching the real shape
+exactly). One test-assertion mistake self-corrected during the first `dotnet test` run: a
+single-Contact-gated `en` reduces to a bare `Expr.TagRef`, not `Expr.And` wrapping one operand
+(matching `MoveTests.cs`'s own precedent for a single-Contact `en` — only multi-Contact/OR-merge
+chains wrap in `Expr.And`) — fixed the assertion, not the code. All three suites green: **244
+converter tests** (up from 236), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-13 — all 8 `PlantAutoControl` dependency FBs now round-trip
+
+Exported `TomraControlSystem` fresh from the real `JOB9002_PLC` device and ran `converter to-ir` —
+**succeeded completely, no errors at all.** Carried through a full `to-ir → to-xml → to-ir` cycle
+(using distinct scratch filenames throughout to avoid a same-name-overwrite mistake made and
+caught on the first attempt): **byte-identical**, confirmed via `diff`. Confirmed this genuinely
+exercises today's own work, not a lucky no-op: grepped the converted `.ir` text directly for both
+real `Swap` occurrences — `SWAP(EN := PlantControl.Test[5], IN := ControlWord0) => OutputWord0` and
+`SWAP(EN := PlantControl.Test[5], IN := ControlWord1) => OutputWord1`. All real exported data deleted
+from scratch temp immediately after use, confirmed via `git status --short`.
+
+**`TomraControlSystem` is now the eighth and final of `PlantAutoControl`'s own 8 dependency FBs to fully
+round-trip end to end.** Combined with S1 items 18–24's own progressive closures
+(`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem` since S1 item 19,
+`AirStar` since S1 item 23, `MotorVSDSystem` since S1 item 24), **all 8 of `PlantAutoControl`'s dependency
+FBs are now fully instruction-level round-trippable.** The true TIA-cycle proof for `PlantAutoControl`
+itself remains separately open (S1 items 16/17's own finding: it depends on external tags/FBs no
+other TIA project has) — unrelated to this item, not addressed here.
+
+**Bottom line:** the last remaining real-data gap blocking any of `PlantAutoControl`'s own dependency
+FBs is closed. `Swap` turned out to be the smallest possible design fork of this session's several
+recent items — structurally a strict subset of `Convert`, resolved with one clarifying question
+rather than a full formal plan-mode cycle, since the only real ambiguity was "new type vs. extend
+an existing one," not the XML shape itself (which grounding settled immediately, unambiguously).

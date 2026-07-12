@@ -74,6 +74,12 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Converts.Count} Convert(s) but the sidecar records {sidecar.Converts.Count}.");
         }
 
+        if (network.Swaps.Count != sidecar.Swaps.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Swaps.Count} Swap(s) but the sidecar records {sidecar.Swaps.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -178,6 +184,11 @@ public static class FlgNetBuilder
         for (var c2 = 0; c2 < network.Converts.Count; c2++)
         {
             BuildConvert(sidecar.Converts[c2], parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var s = 0; s < network.Swaps.Count; s++)
+        {
+            BuildSwap(sidecar.Swaps[s], parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         var wires = wireEndpointsByUId.Select(kv => new WireNode(kv.Key, kv.Value)).ToList();
@@ -470,6 +481,23 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ConvertPartUId, "out"));
+    }
+
+    // Builds a Swap Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal source,
+    // same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire shape as
+    // Convert's own `out`). Mirrors BuildConvert exactly, minus DestType — a Swap Part carries
+    // only SrcType.
+    private static void BuildSwap(
+        SwapStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.SwapPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.SwapPartUId, "Swap", SrcType: sidecar.SrcType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.SwapPartUId, "in");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.SwapPartUId, "out"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

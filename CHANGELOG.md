@@ -8,6 +8,31 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-13
+
+**S1 item 25: `SWAP` (byte-swap box instruction) — built, tested, live-verified; `TomraControlSystem` fully round-trips, all 8 `PlantAutoControl` dependency FBs closed**
+
+- Picked up per the project owner's own choice ("let's ground Swap for TomraControlSystem"), the last
+  remaining gap in `PlantAutoControl`'s own 8 dependency FBs. Grounded against real `TomraControlSystem` (2
+  instances, identical shape): `<Part Name="Swap" UId="N" DisabledENO="true"><TemplateValue
+  Name="SrcType" Type="Type">Word</TemplateValue></Part>` — structurally identical to `Convert`
+  minus `DestType`.
+- A genuine design fork surfaced (standalone `SwapStatement` vs. folding into `ConvertStatement`
+  with a nullable `DestType`) — resolved via a clarifying question before any code; project owner
+  chose the standalone type, keeping each source Part Name mapped to its own IR construct.
+- Every touchpoint mirrors `Convert`'s own exactly, minus the `DestType` field/line/group:
+  `Ir.Model`, `FlgNetParser`/`FlgNetWriter`, `GraphReducer.ReduceSwap`/`FlgNetBuilder.BuildSwap`,
+  and the `SWAP(EN := ..., IN := ...) => <dest>` readable-form grammar in `IrSerializer`/
+  `IrParser`.
+- 8 new tests, one new fixture genericized from the real Contact-gated topology. All three suites
+  green: 244 converter (up from 236), 68 openness-cli, 11 golden-harness.
+- **Live-verified**: fresh `TomraControlSystem` export (real `JOB9002_PLC` device) converted **completely,
+  no errors at all**, and round-trips `to-ir → to-xml → to-ir` **byte-identical**, confirmed
+  genuinely exercising both real `Swap` occurrences via direct grep. `TomraControlSystem` is now the
+  **eighth and final** of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip — all 8 are now
+  fully instruction-level round-trippable end to end. Full story: `docs/notes/stage-gates.md`
+  ("S1 item 25").
+
 ## 2026-07-12
 
 **S1 item 24: `CALL` without `<Instance>` (a real FC call) — built, tested, live-verified; `MotorVSDSystem` fully round-trips**

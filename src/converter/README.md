@@ -996,6 +996,62 @@ instance argument, exactly the confirmed shape. `MotorVSDSystem` is now the **se
 `PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to end. Only `TomraControlSystem` (`Swap`)
 remains.
 
+## `SWAP` — byte-swap box instruction (S1 item 25, 2026-07-12) — `TomraControlSystem` fully round-trips, all 8 dependency FBs closed
+
+Picked up per the project owner's own explicit choice, first grounded (Phase 0, no formal plan
+mode — small, well-precedented once the design fork was resolved) then built in the same pass, to
+close the last remaining gap in `PlantAutoControl`'s own 8 dependency FBs: `FB TomraControlSystem` hard-errors
+on `Part Name="Swap"`, unsupported.
+
+**Grounded against real `TomraControlSystem`** (2 independent instances, identical shape):
+
+```xml
+<Part Name="Swap" UId="34" DisabledENO="true">
+  <TemplateValue Name="SrcType" Type="Type">Word</TemplateValue>
+</Part>
+```
+
+Ports: `en` (Contact-gated, same `TraceChain` mechanism as every other en-gated production), `in`
+(single tag-or-literal operand), `out` (single destination tag). Structurally identical to
+`Convert`'s own shape (`en`-gated via `EnSource`, a single tag-or-literal input, one destination
+tag via `out`, `DisabledENO="true"`) minus `DestType` — a byte-swap doesn't change the value's
+type, so there's nothing to declare a destination type for, only the one `SrcType` TemplateValue
+(`Word` in both real instances). Neither instance is ENO-chained; both are independently
+Contact-gated.
+
+**Design fork, resolved by the project owner before implementation**: model `Swap` as its own
+`SwapStatement`/`SwapStatementSidecar` (mirroring `ConvertStatement` minus `DestType`) versus
+folding it into `ConvertStatement` with a nullable `DestType`. Chose the standalone type — keeps
+each source Part Name mapped to its own IR construct, same precedent as `MulKind`/`TimerKind`
+staying separate variants rather than merging unrelated Part Names into one type under a
+discriminating null check.
+
+Every touchpoint mirrors `Convert`'s own exactly, minus the `DestType` field/line/group:
+`FlgNetParser.SupportedPartNames`/`ParseSwapFixedShape` (validates `DisabledENO="true"` +
+`SrcType`, same as `ParseConvertFixedShape` minus `DestType`); `FlgNetWriter`'s `DisabledENO` gate
+list gains `"Swap"` (the existing `SrcType`-writing block is already generic, no change needed);
+`GraphReducer.ReduceSwap` (`en`/`in`/`out` resolve via the exact same `ResolveEnSource`/
+`ResolveTagOrLiteralOperand`/`ResolveOperand` calls as `ReduceConvert`); `FlgNetBuilder.BuildSwap`;
+readable-form syntax `SWAP(EN := <expr-or-ENO>, IN := <expr>) => <dest>`, identical to `CONVERT`'s
+own grammar minus the `DestType` group, in both `IrSerializer` and `IrParser` (including the
+sidecar's own `swapuid =`/`srctype =` lines, minus `desttype =`).
+
+8 new tests (`SwapTests.cs`, mirroring `MulConvertTests.cs`'s own Convert coverage — parse/reduce/
+sidecar/round-trip/serialize/full-block, plus two negative tests for a missing `SrcType`/
+`DisabledENO`), one new fixture (`SwapFedByRail.xml`, genericized from the real `TomraControlSystem`
+shape — a single Contact-gated `Swap`, matching the real topology exactly rather than a simplified
+rail-fed-only shape). All 244 converter tests pass (up from 236).
+
+**Live-verified against real data, 2026-07-12 — closes all 8 of `PlantAutoControl`'s dependency FBs.**
+Fresh `TomraControlSystem` export (from the real `JOB9002_PLC` device): **`converter to-ir` succeeded
+completely, no errors at all.** `to-ir → to-xml → to-ir` round-trips **byte-identical** — confirmed
+genuinely exercising both real `Swap` occurrences via direct grep of the converted `.ir` text:
+`SWAP(EN := PlantControl.Test[5], IN := ControlWord0) => OutputWord0` and
+`SWAP(EN := PlantControl.Test[5], IN := ControlWord1) => OutputWord1`. `TomraControlSystem` is now the
+**eighth and final** of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to end — all
+8 are now fully instruction-level round-trippable. The true TIA-cycle proof for `PlantAutoControl`
+itself remains open (S1 items 16/17's own external-tags/FBs finding), unrelated to this item.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

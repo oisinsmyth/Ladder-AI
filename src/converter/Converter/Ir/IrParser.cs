@@ -463,13 +463,30 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
-            && calls.Count == 0 && muls.Count == 0 && converts.Count == 0)
+        // Swaps are always emitted after Converts (IrSerializer) — same fixed-arity (EN, IN)
+        // regex-based shape as CONVERT's own line, minus a DestType group.
+        var swaps = new List<SwapStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  SWAP(", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT statements and isn't marked [empty].");
+            var swapMatch = SwapLineRegex().Match(lines[i]);
+            if (!swapMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  SWAP(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var swapEn = ParseEnSource(swapMatch.Groups["en"].Value);
+            var swapIn = ParseExprTerm(swapMatch.Groups["in"].Value);
+            swaps.Add(new SwapStatement(swapEn, swapIn, swapMatch.Groups["dest"].Value));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts);
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
+            && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -787,7 +804,13 @@ public static partial class IrParser
             converts.Add(ParseConvertSidecar(lines, ref i, number));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts);
+        var swaps = new List<SwapStatementSidecar>();
+        while (i < lines.Length && SwapHeaderRegex().IsMatch(lines[i]))
+        {
+            swaps.Add(ParseSwapSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -881,6 +904,25 @@ public static partial class IrParser
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
         return new ConvertStatementSidecar(convertPartUId, en, inOperand, srcType, destType, destAccessUId, destWireUId);
+    }
+
+    // A Swap's own sidecar shape mirrors ParseConvertSidecar exactly, minus `desttype` — a
+    // byte-swap has only one type.
+    private static SwapStatementSidecar ParseSwapSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  swap <n>" header — index itself isn't needed, position in the list is enough.
+
+        var swapPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    swapuid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new SwapStatementSidecar(swapPartUId, en, inOperand, srcType, destAccessUId, destWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1335,6 +1377,10 @@ public static partial class IrParser
     [GeneratedRegex(@"^  CONVERT\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
     private static partial Regex ConvertLineRegex();
 
+    // Fixed arity (EN, IN) — same regex-based shape as CONVERT's own line, minus DestType.
+    [GeneratedRegex(@"^  SWAP\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex SwapLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1374,4 +1420,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  convert (?<index>\d+)$")]
     private static partial Regex ConvertHeaderRegex();
+
+    [GeneratedRegex(@"^  swap (?<index>\d+)$")]
+    private static partial Regex SwapHeaderRegex();
 }

@@ -187,6 +187,16 @@ public sealed record MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, strin
 // identically once `EnSource` is resolved, no special-casing needed beyond that one field.
 public sealed record ConvertStatement(EnSource En, Expr In, string DestTag);
 
+// A byte-swap box instruction (`Part Name="Swap"`) — confirmed real, 2026-07-12 (S1 item 25, `FB
+// TomraControlSystem`, 2 instances). Structurally identical to Convert (`en`-gated via EnSource, a
+// single tag-or-literal input, one destination tag via `out`, `DisabledENO="true"`) minus
+// DestType — a byte-swap doesn't change the value's type, so there's nothing to declare a
+// destination type for, only the one `SrcType` TemplateValue (`"Word"` in both real instances).
+// Modeled as its own record rather than folding into ConvertStatement with a nullable DestType —
+// keeps each source Part Name mapped to its own IR construct, same precedent as MulKind/TimerKind
+// staying separate variants rather than merging unrelated Part Names into one type.
+public sealed record SwapStatement(EnSource En, Expr In, string DestTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -257,7 +267,8 @@ public sealed record IrNetwork(
     IReadOnlyList<CallStatement>? Calls = null,
     string? Comment = null,
     IReadOnlyList<MulStatement>? Muls = null,
-    IReadOnlyList<ConvertStatement>? Converts = null)
+    IReadOnlyList<ConvertStatement>? Converts = null,
+    IReadOnlyList<SwapStatement>? Swaps = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -271,8 +282,10 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<ConvertStatement> Converts { get; init; } = Converts ?? Array.Empty<ConvertStatement>();
 
+    public IReadOnlyList<SwapStatement> Swaps { get; init; } = Swaps ?? Array.Empty<SwapStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
-        && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0;
+        && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -648,6 +661,16 @@ public sealed record ConvertStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One Swap's full round-trip data. Mirrors ConvertStatementSidecar exactly, minus DestType — a
+// byte-swap has only one type (`SrcType`, both real instances `"Word"`), never a second.
+public sealed record SwapStatementSidecar(
+    int SwapPartUId,
+    EnSourceSidecar En,
+    OperandSidecar In,
+    string SrcType,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -659,7 +682,8 @@ public sealed record NetworkSidecar(
     IReadOnlyList<WordAndStatementSidecar>? WordAnds = null,
     IReadOnlyList<CallStatementSidecar>? Calls = null,
     IReadOnlyList<MulStatementSidecar>? Muls = null,
-    IReadOnlyList<ConvertStatementSidecar>? Converts = null)
+    IReadOnlyList<ConvertStatementSidecar>? Converts = null,
+    IReadOnlyList<SwapStatementSidecar>? Swaps = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -674,6 +698,8 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<MulStatementSidecar> Muls { get; init; } = Muls ?? Array.Empty<MulStatementSidecar>();
 
     public IReadOnlyList<ConvertStatementSidecar> Converts { get; init; } = Converts ?? Array.Empty<ConvertStatementSidecar>();
+
+    public IReadOnlyList<SwapStatementSidecar> Swaps { get; init; } = Swaps ?? Array.Empty<SwapStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

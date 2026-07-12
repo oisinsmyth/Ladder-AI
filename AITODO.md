@@ -26,102 +26,99 @@ contacts, Instance DB + structured members, DB round-trip, TON/TONR/TOF (all ins
 live-proven), comparisons (Eq/Ge/Lt/Ne), MOVE (fan-out taps + telescoping dedup), WAND (bitwise
 word AND; closes out the AND-merge open item as **confirmed non-existent**), `Not` — standalone
 boolean inverter, `CALL` — FB/FC block calls (incl. FC calls with no `<Instance>`), `SCoil`/
-`RCoil` — set/reset coils, network/block-level `Title`, `MUL`/`CONVERT`/`ADD` (arithmetic incl.
-ENO-chaining), FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant`, committed
-`500dc68`), the `Mul`/`SrcType` fix (committed `eaf93b0`), `Access Scope="LocalConstant"`
-(committed `55b5cb2`), `Ne` (not-equal comparison, committed `70fbfbc`), `TOF` (off-delay timer,
-committed `3f66880`), `CALL` without `<Instance>` (a real FC call) — **implemented/tested/
-documented/live-verified, NOT YET COMMITTED, see "Current task" below**. `FC PlantAutoControl` now
-converts as a whole block (`to-ir → to-xml → to-ir` byte-identical) — first real production block
-this session to fully round-trip; **7 of its 8 dependency FBs** now do too (`MotorDOL`/
-`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem` since S1 item 19; `AirStar` since S1
-item 23; `MotorVSDSystem` since this item). Only `TomraControlSystem` (`Swap`) remains blocked. Full story for
-each closed item: `docs/notes/stage-gates.md`.
+`RCoil` — set/reset coils, network/block-level `Title`, `MUL`/`CONVERT`/`ADD`/`SWAP` (arithmetic
+incl. ENO-chaining), FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant`,
+committed `500dc68`), the `Mul`/`SrcType` fix (committed `eaf93b0`), `Access
+Scope="LocalConstant"` (committed `55b5cb2`), `Ne` (not-equal comparison, committed `70fbfbc`),
+`TOF` (off-delay timer, committed `3f66880`), `CALL` without `<Instance>` (a real FC call,
+committed `32e5228`), `SWAP` (byte-swap box instruction) — **implemented/tested/documented/
+live-verified, NOT YET COMMITTED, see "Current task" below**. `FC PlantAutoControl` now converts as a
+whole block (`to-ir → to-xml → to-ir` byte-identical) — first real production block this session to
+fully round-trip; **all 8 of its dependency FBs** now do too (`MotorDOL`/`EquipmentControlSystem`/
+`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem` since S1 item 19; `AirStar` since S1 item 23;
+`MotorVSDSystem` since S1 item 24; `TomraControlSystem` since this item) — **no known remaining gaps in
+`PlantAutoControl`'s dependency FBs.** Full story for each closed item: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S1 item 24 — `CALL` without `<Instance>` (a real FC call) — implementation + tests + docs + live verification DONE, NOT YET COMMITTED
+## Current task: S1 item 25 — `SWAP` (byte-swap box instruction) — implementation + tests + docs + live verification DONE, NOT YET COMMITTED
 
-**Status as of 2026-07-12: fully implemented, tested (236/236 converter tests green, up from 230),
-live-verified against real data (a genuine milestone — `MotorVSDSystem` now fully round-trips), and
-documented (`ir/SPEC.md`, `src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md`
-all updated this pass). Waiting on explicit "commit this" from the project owner before
-committing** — per this session's established discipline, never auto-commit.
+**Status as of 2026-07-13: fully implemented, tested (244/244 converter tests green, up from 236),
+live-verified against real data (a genuine milestone — `TomraControlSystem` now fully round-trips, the
+eighth and final of `PlantAutoControl`'s 8 dependency FBs), and documented (`ir/SPEC.md`,
+`src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md` all updated this pass).
+Waiting on explicit "commit this" from the project owner before committing** — per this session's
+established discipline, never auto-commit.
 
-**Picked up per the project owner's own explicit choice** ("Commit this, then let's do MotorVSDSystem's
-Call/Instance gap"), to close `MotorVSDSystem`'s own hard error:
-`SimaticMlFormatException: <Call UId="52"> is missing its <Instance> element.` Every `<Call>`
-grounded so far (S1 item 14, 20 real instances) called an FB and carried an `<Instance>` — a
-genuinely new shape question, not just another "add a variant" pattern. Went through a full formal
-plan (`EnterPlanMode`/`ExitPlanMode`, plan file
-`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`) with mandatory Phase 0 grounding before
-any code, given the bigger scope: changing already-shipped `CallStatement`/`CallStatementSidecar`
-record fields from non-nullable to nullable.
+**Picked up per the project owner's own explicit choice** ("Commit this, then let's ground Swap
+for TomraControlSystem") — deliberately scoped narrower than recent items (grounding only, not "build"),
+signaling the project owner wanted to review the real shape before committing to a design.
 
-**Phase 0 grounded against real `MotorVSDSystem`** (scratch temp, deleted after use) — the working
-hypothesis (a stateless FC call) confirmed exactly:
+**Grounded against real `TomraControlSystem`** (scratch temp, deleted after use) — 2 independent
+instances, identical shape:
 ```xml
-<Call UId="52">
-  <CallInfo Name="Scale" BlockType="FC">
-    <Parameter Name="Input" Section="Input" Type="Real" />
-    <Parameter Name="Input_Min" Section="Input" Type="Real" />
-    <Parameter Name="Input_Max" Section="Input" Type="Real" />
-    <Parameter Name="Scaled_Min" Section="Input" Type="Real" />
-    <Parameter Name="Scaled_Max" Section="Input" Type="Real" />
-    <Parameter Name="Output" Section="Output" Type="Real" />
-  </CallInfo>
-</Call>
+<Part Name="Swap" UId="34" DisabledENO="true">
+  <TemplateValue Name="SrcType" Type="Type">Word</TemplateValue>
+</Part>
 ```
-`BlockType="FC"` — a call to Siemens' own standard-library `Scale` function, stateless by design.
-**No `<Instance>` element at all**, genuinely absent. Parameters (5 Input + 1 Output, all `Real`)
-fit the existing allowlist unchanged. `en` rail-fed, same as every other real Call. Only one
-`<Call>` in `MotorVSDSystem` — no mixed FB/FC scenario exercised by this specific instance, though the
-design supports both generically.
+Full network context: `Contact -> Swap -> tag`, `en` Contact-gated (same `TraceChain` mechanism as
+every other en-gated production), `in`/`out` plain tag `IdentCon`s, no ENO chaining. Structurally
+`Convert` minus `DestType` — a byte-swap doesn't change the value's type.
 
-**Design**: `SimaticMl.Model.PartNode.Instance` was already `AccessNode?` (no change needed).
-`Ir.Model.CallStatement.InstancePath` (`string` → `string?`) and `CallStatementSidecar`'s
-`InstanceUId`/`InstanceScope`/`InstanceComponentPath` (all three → nullable, one all-or-nothing
-group, not a discriminated union — no second "kind" to distinguish, just presence/absence).
-`FlgNetParser.ParseCall` checks `<Instance>`'s presence directly (not gated on `BlockType`, since
-nothing rules out a real counter-example either way even though the two correlate).
-`FlgNetWriter.WriteCall` mirrors this symmetrically. `GraphReducer.ReduceCall`'s own doc comment
-("Instance is required... every Call carries one") was corrected; `FlgNetBuilder.BuildCall`'s own
-unconditional `AccessNode` construction became conditional (this was a real, expected compile
-error in the interim state, caught and fixed as part of the same pass). Readable-form grammar
-omits the instance argument entirely when absent (`CALL Scale(EN := ..., ...)`), disambiguated on
-parse by checking whether the first split argument itself starts with the reserved `EN := `
-prefix (no real instance path could ever collide with it) — mirrors `EnSource`'s own `ENO`
-sentinel and `TimerBinding`'s optional `R :=` argument. The sidecar's `instanceuid =`/
-`instancescope =`/`instancepath =` lines are omitted together when absent, mirroring the timer
-sidecar's own optional `reset` lines (S1 item 19).
+**Design fork surfaced and resolved via `AskUserQuestion` before any code**: standalone
+`SwapStatement`/`SwapStatementSidecar` (mirroring `ConvertStatement` minus `DestType`) vs. folding
+into `ConvertStatement` with a nullable `DestType`. Project owner chose the standalone type —
+keeps each source Part Name mapped to its own IR construct, same precedent as `MulKind`/
+`TimerKind` staying separate variants. Project owner then explicitly confirmed proceeding straight
+to implementation in the same pass via a second clarifying question.
 
-**Tests**: `CallTests.cs` — 6 new tests (parse/reduce/sidecar/round-trip/serialize/full-block,
-mirroring the existing with-Instance coverage exactly for the no-Instance case). New fixture
-`CallFcNoInstanceFedByRail.xml` (genericized down from the real 5+1 shape to 2+1, mirroring
-`CallWithParametersFedByRail`'s own genericization precedent). All 236 converter tests pass (up
-from 230). `openness-cli` (68) and golden-harness (11) suites unaffected, confirmed still green.
+**Implementation mirrors `Convert`'s own exactly, minus the `DestType` field/line/group, at every
+touchpoint**: `Ir.Model` (`SwapStatement`/`SwapStatementSidecar`, `IrNetwork`/`NetworkSidecar`
+gain a `Swaps` list), `FlgNetParser` (`SupportedPartNames` gains `"Swap"`, `ParseSwapFixedShape`),
+`FlgNetWriter` (`DisabledENO` gate list gains `"Swap"`), `GraphReducer.ReduceSwap`,
+`FlgNetBuilder.BuildSwap`, readable-form grammar `SWAP(EN := <expr-or-ENO>, IN := <expr>) =>
+<dest>` in both `IrSerializer`/`IrParser`.
 
-**Live-verified against real data, 2026-07-12** — fresh `MotorVSDSystem` export from the real
-`JOB9002_PLC` device (one retry needed on the export connect — the recurring TIA-Portal-slow-wake
-timeout, not a real error): `converter to-ir` **succeeded completely, no errors at all.**
-`to-ir → to-xml → to-ir` round-trips **byte-identical**, confirmed via `diff` between the
-first-pass and round-tripped `.ir`. Confirmed genuinely exercising this item's own work via direct
-grep of the converted `.ir` text: `CALL Scale(EN := TRUE, Input := IO.SpeedPerc, Input_Min := 0.0,
-Input_Max := 100.0, Scaled_Min := 0.0, Scaled_Max := IO.MaxRPM, Output => IO.SpeedOutput)` — no
-instance argument, exactly the confirmed shape. All real exported data deleted from scratch temp
-immediately after use, confirmed via `git status --short`.
+**Tests**: `SwapTests.cs` — 8 new tests (mirroring `MulConvertTests.cs`'s own Convert coverage:
+parse/reduce/sidecar/round-trip/serialize/full-block, plus two negative tests). New fixture
+`SwapFedByRail.xml` (genericized from the real Contact-gated topology). One test-assertion mistake
+self-corrected on first `dotnet test` run: a single-Contact-gated `en` reduces to a bare
+`Expr.TagRef`, not `Expr.And` wrapping one operand (matches `MoveTests.cs`'s own precedent) —
+fixed the assertion, not the code. All 244 converter tests pass (up from 236). `openness-cli` (68)
+and golden-harness (11) suites unaffected, confirmed still green.
 
-**`MotorVSDSystem` is now the seventh of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to
-end.** Only `TomraControlSystem` (`Swap`) remains blocked — the last gap standing between here and all 8
-dependency FBs round-tripping.
+**Live-verified against real data, 2026-07-13** — fresh `TomraControlSystem` export from the real
+`JOB9002_PLC` device: `converter to-ir` **succeeded completely, no errors at all.**
+`to-ir → to-xml → to-ir` round-trips **byte-identical**, confirmed via `diff` (redone carefully
+with distinct scratch filenames throughout after a same-name-overwrite mistake on the first
+attempt clobbered the file needed for comparison — caught before it affected any real conclusion).
+Confirmed genuinely exercising this item's own work via direct grep of the converted `.ir` text:
+both real `Swap` occurrences present (`SWAP(EN := PlantControl.Test[5], IN := ControlWord0) =>
+OutputWord0` and the `ControlWord1`/`OutputWord1` sibling). All real exported data deleted from
+scratch temp immediately after use, confirmed via `git status --short`.
 
-**Not yet raised with the project owner, pending this item's commit — one live candidate now**:
-`Swap` (blocks `TomraControlSystem`) — not grounded at the XML-shape level yet. Closing it would mean
-**all 8** of `PlantAutoControl`'s dependency FBs fully round-trip — worth flagging as the natural next
-milestone once this item is closed, not assumed.
+**`TomraControlSystem` is now the eighth and final of `PlantAutoControl`'s own 8 dependency FBs to fully
+round-trip end to end.** All 8 are now fully instruction-level round-trippable — no more known
+real-data gaps in this dependency chain. The true TIA-cycle proof for `PlantAutoControl` itself remains
+separately open (S1 items 16/17's own finding: it depends on external tags/FBs no other TIA
+project has) — unrelated to this item.
+
+**Not yet raised with the project owner**: nothing live remaining from the `PlantAutoControl` dependency
+chain specifically — worth flagging that this milestone is complete and asking what's next (the
+true TIA-cycle proof for `PlantAutoControl` itself, or a different block/area entirely) once this item
+is committed.
 
 **Final verification before presenting for commit — already done this pass**: all three test
-suites re-run and confirmed green (236 converter / 68 openness-cli / 11 golden-harness),
+suites re-run and confirmed green (244 converter / 68 openness-cli / 11 golden-harness),
 `git status --short` confirmed only expected files changed (no real restricted data). Ready to
 present for explicit commit approval.
+
+**Note — a mid-session tooling outage, unrelated to project state**: partway through this item's
+implementation, the Bash/PowerShell tools became temporarily unavailable due to an Anthropic
+auto-mode safety-classifier outage (not a session/context limit, not a code issue) — all code
+edits continued via read-only tools and manual review during the outage; `dotnet build`/`test`
+resumed working once the classifier recovered, confirming the manual review had been correct
+(clean build, no compile errors, only one test-assertion fix needed). No project-specific recovery
+action needed if this doc is being read after such a gap — just re-run the verification steps
+above.

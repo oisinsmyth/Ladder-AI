@@ -104,7 +104,7 @@ public static class FlgNetWriter
             // value has been observed for each, not enough to treat as a universal constant) and
             // already round-trip via the existing Cardinality/SrcType/DestType blocks below. TON/
             // TONR never carry DisabledENO at all (confirmed real, no EN/ENO on either).
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Convert")
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Convert" or "Swap")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }
