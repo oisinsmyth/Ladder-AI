@@ -236,12 +236,64 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0)
+        // Calls are always emitted last (IrSerializer, after Timers/Coils/Moves/WordAnds) —
+        // parsed in the same order for self-stability. Instance is the first positional argument
+        // (no label, same convention as TON's own instance path); EN is always second (every
+        // real Call has one, even when trivially TRUE — confirmed real, 2026-07-12,
+        // FC PlantAutoControl: all 20 real en's are directly rail-fed). The remaining arguments are a
+        // sparse, ordered mix of "<Param> := <expr>" (Input) and "<Param> => <tag>" (Output) —
+        // split on top-level commas same as WAND's own variable argument list (safe for the same
+        // reason: no Expr ever renders a literal comma).
+        var calls = new List<CallStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  CALL ", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND statements and isn't marked [empty].");
+            var callMatch = CallLineRegex().Match(lines[i]);
+            if (!callMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  CALL <BlockName>(<instance>, EN := <expr>, ...)', got: '{lines[i]}'");
+            }
+
+            var blockName = callMatch.Groups["blockname"].Value;
+            var args = callMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (args.Length < 2 || !args[1].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected '<instance>, EN := <expr>' as CALL's first two arguments, got: '{lines[i]}'");
+            }
+
+            var instancePath = args[0];
+            var callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
+
+            var arguments = new List<CallArgument>();
+            for (var k = 2; k < args.Length; k++)
+            {
+                var inputSep = args[k].IndexOf(" := ", StringComparison.Ordinal);
+                var outputSep = args[k].IndexOf(" => ", StringComparison.Ordinal);
+                if (inputSep >= 0 && (outputSep < 0 || inputSep < outputSep))
+                {
+                    var paramName = args[k][..inputSep];
+                    arguments.Add(new CallArgument.InputArg(paramName, ParseExprTerm(args[k][(inputSep + 4)..])));
+                }
+                else if (outputSep >= 0)
+                {
+                    var paramName = args[k][..outputSep];
+                    arguments.Add(new CallArgument.OutputArg(paramName, args[k][(outputSep + 4)..]));
+                }
+                else
+                {
+                    throw new IrFormatException($"Expected '<param> := <expr>' or '<param> => <tag>' as CALL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                }
+            }
+
+            calls.Add(new CallStatement(blockName, instancePath, callEnExpr, arguments));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves, wordAnds);
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0 && calls.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND/CALL statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls);
     }
 
     // Top-level entry point: OR is the loosest binder. "TRUE" is only meaningful here (the
@@ -531,7 +583,99 @@ public static partial class IrParser
             wordAnds.Add(ParseWordAndSidecar(lines, ref i, number));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds);
+        var calls = new List<CallStatementSidecar>();
+        while (i < lines.Length && CallHeaderRegex().IsMatch(lines[i]))
+        {
+            calls.Add(ParseCallSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls);
+    }
+
+    // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
+    // BlockName/BlockType and the same Instance fields ParseTimerSidecar carries, plus a sparse,
+    // ordered argument list (ParseCallArgument per entry — mirrors ParseWordAndSidecar's own
+    // "read positional entries until the header no longer matches" loop, just keyed by index
+    // rather than fixed "input K" naming since a Call argument carries its own Name already).
+    private static CallStatementSidecar ParseCallSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  call <n>" header — index itself isn't needed, position in the list is enough.
+
+        var callPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    calluid = "));
+        var blockName = RequirePrefixedLine(lines, ref i, "    blockname = ");
+        var blockType = RequirePrefixedLine(lines, ref i, "    blocktype = ");
+        var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
+
+        var steps = new List<ChainStepSidecar>();
+        var s = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
+        {
+            steps.Add(ParseStep(lines, ref i, "    ", $"step {s}"));
+            s++;
+        }
+
+        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+
+        var arguments = new List<CallArgumentSidecar>();
+        var a = 0;
+        while (i < lines.Length && (lines[i].StartsWith($"    argument {a} input ", StringComparison.Ordinal) || lines[i].StartsWith($"    argument {a} output ", StringComparison.Ordinal)))
+        {
+            arguments.Add(ParseCallArgument(lines, ref i, a));
+            a++;
+        }
+
+        return new CallStatementSidecar(callPartUId, blockName, blockType, railWireUId, steps, instanceUId, instanceScope, instancePath, arguments);
+    }
+
+    // The inverse of IrSerializer.SerializeCallArgument — "argument <n> input <name> <type>"
+    // followed by the same tag-or-literal operand line ParseOperand already handles, or
+    // "argument <n> output <name> <type>" followed by the same dest/destwire pair Move's own
+    // out1 uses. Header built from the exact expected index (same style as ParseWordAndSidecar's
+    // own "input K" lines) rather than a general regex, since a Call argument's own ParamName can
+    // itself contain characters a generic \S+ capture would need to be careful about.
+    private static CallArgumentSidecar ParseCallArgument(string[] lines, ref int i, int index)
+    {
+        var line = RequireLine(lines, ref i);
+        var inputPrefix = $"    argument {index} input ";
+        var outputPrefix = $"    argument {index} output ";
+
+        string kind;
+        string rest;
+        if (line.StartsWith(inputPrefix, StringComparison.Ordinal))
+        {
+            kind = "input";
+            rest = line[inputPrefix.Length..];
+        }
+        else if (line.StartsWith(outputPrefix, StringComparison.Ordinal))
+        {
+            kind = "output";
+            rest = line[outputPrefix.Length..];
+        }
+        else
+        {
+            throw new IrFormatException($"Expected '    argument {index} input|output <name> <type>', got: '{line}'");
+        }
+
+        var spaceIndex = rest.LastIndexOf(' ');
+        if (spaceIndex < 0)
+        {
+            throw new IrFormatException($"Expected '<name> <type>' in call argument header, got: '{rest}'");
+        }
+
+        var paramName = rest[..spaceIndex];
+        var type = rest[(spaceIndex + 1)..];
+
+        if (kind == "input")
+        {
+            var value = ParseOperand(lines, ref i, "      ", "value");
+            return new CallArgumentSidecar.InputArgSidecar(paramName, type, value);
+        }
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "      dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "      destwire = "));
+        return new CallArgumentSidecar.OutputArgSidecar(paramName, type, destAccessUId, destWireUId);
     }
 
     // A bitwise-And's own sidecar shape mirrors ParseMoveSidecar's closely — same rail/steps
@@ -855,6 +999,13 @@ public static partial class IrParser
     [GeneratedRegex(@"^  WAND\((?<args>.+)\) => (?<dest>\S+)$")]
     private static partial Regex WordAndLineRegex();
 
+    // Variable argument count and a mixed ":="/"=>" shape (Input/Output parameters interleaved,
+    // S1 item 14) — only the outer "CALL BlockName(...)" shape is matched here; the argument
+    // list itself is split on top-level commas separately (ParseNetwork), same discipline as
+    // WAND's own variable-arity argument list above.
+    [GeneratedRegex(@"^  CALL (?<blockname>\S+)\((?<args>.+)\)$")]
+    private static partial Regex CallLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -885,4 +1036,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  wand (?<index>\d+)$")]
     private static partial Regex WordAndHeaderRegex();
+
+    [GeneratedRegex(@"^  call (?<index>\d+)$")]
+    private static partial Regex CallHeaderRegex();
 }

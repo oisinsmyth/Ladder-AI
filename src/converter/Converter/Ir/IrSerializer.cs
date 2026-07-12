@@ -86,6 +86,29 @@ public static class IrSerializer
 
             sb.Append(") => ").Append(wordAnd.DestTag).Append('\n');
         }
+
+        foreach (var call in network.Calls)
+        {
+            sb.Append("  CALL ").Append(call.BlockName).Append('(').Append(call.InstancePath)
+              .Append(", EN := ").Append(SerializeExpr(call.En));
+
+            foreach (var argument in call.Arguments)
+            {
+                switch (argument)
+                {
+                    case CallArgument.InputArg input:
+                        sb.Append(", ").Append(input.ParamName).Append(" := ").Append(SerializeExpr(input.Value));
+                        break;
+                    case CallArgument.OutputArg output:
+                        sb.Append(", ").Append(output.ParamName).Append(" => ").Append(output.DestTag);
+                        break;
+                    default:
+                        throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
+                }
+            }
+
+            sb.Append(")\n");
+        }
     }
 
     // Only emitted when there's real content — matches every FC seen (StaticMembers null,
@@ -243,6 +266,53 @@ public static class IrSerializer
             sb.Append("    srctype = ").Append(wordAnd.SrcType).Append('\n');
             sb.Append("    dest = ").Append(wordAnd.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(wordAnd.DestWireUId).Append('\n');
+        }
+
+        for (var c = 0; c < sidecar.Calls.Count; c++)
+        {
+            var call = sidecar.Calls[c];
+            sb.Append("  call ").Append(c).Append('\n');
+            sb.Append("    calluid = ").Append(call.CallPartUId).Append('\n');
+            sb.Append("    blockname = ").Append(call.BlockName).Append('\n');
+            sb.Append("    blocktype = ").Append(call.BlockType).Append('\n');
+            sb.Append("    rail = ").Append(SerializeRail(call.RailWireUId)).Append('\n');
+
+            for (var s = 0; s < call.Steps.Count; s++)
+            {
+                SerializeStep(sb, "    ", $"step {s}", call.Steps[s]);
+            }
+
+            sb.Append("    instanceuid = ").Append(call.InstanceUId).Append('\n');
+            sb.Append("    instancescope = ").Append(call.InstanceScope).Append('\n');
+            sb.Append("    instancepath = ").Append(string.Join('.', call.InstanceComponentPath)).Append('\n');
+
+            for (var a = 0; a < call.Arguments.Count; a++)
+            {
+                SerializeCallArgument(sb, "    ", a, call.Arguments[a]);
+            }
+        }
+    }
+
+    // A Call argument's sidecar text — "argument <n> input <name> <type>" followed by the same
+    // tag-or-literal operand line SerializeOperand already produces (a wired Input parameter is
+    // identical in shape to a TON's PT/a comparison's operand); "argument <n> output <name>
+    // <type>" followed by the same dest/destwire pair Move's own out1 uses, just under this
+    // argument's own header instead of the production's own top-level "dest"/"destwire" lines.
+    private static void SerializeCallArgument(StringBuilder sb, string indent, int index, CallArgumentSidecar argument)
+    {
+        switch (argument)
+        {
+            case CallArgumentSidecar.InputArgSidecar input:
+                sb.Append(indent).Append("argument ").Append(index).Append(" input ").Append(input.ParamName).Append(' ').Append(input.Type).Append('\n');
+                SerializeOperand(sb, indent + "  ", "value", input.Value);
+                break;
+            case CallArgumentSidecar.OutputArgSidecar output:
+                sb.Append(indent).Append("argument ").Append(index).Append(" output ").Append(output.ParamName).Append(' ').Append(output.Type).Append('\n');
+                sb.Append(indent).Append("  dest = ").Append(output.DestAccessUId).Append('\n');
+                sb.Append(indent).Append("  destwire = ").Append(output.DestWireUId).Append('\n');
+                break;
+            default:
+                throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
         }
     }
 

@@ -17,10 +17,11 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 ## Current scope (walking skeleton)
 
 Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
-branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), and Not
-(standalone boolean inverter)** (S1 items 7–13, through 2026-07-12). No block calls yet. Anything
-outside scope is a hard error (`UnsupportedConstructException`), never a silent partial result —
-hitting that error on a real block is expected at this stage, not a bug.
+branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), Not
+(standalone boolean inverter), and CALL (FB/FC block calls)** (S1 items 7–14, through
+2026-07-12). No `SCoil`/`RCoil` yet. Anything outside scope is a hard error
+(`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
+block is expected at this stage, not a bug.
 
 Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boundary approval in
 `docs/13-data-boundary.md`) and handled explicitly, not guessed at:
@@ -374,14 +375,77 @@ shape) before writing any code.
 `PlantAutoControl` shape (genericized per `docs/13-data-boundary.md`). All 144 converter tests pass (up
 from 138); `openness-cli`/golden-harness suites unaffected, confirmed still green (68/11).
 
-**Not yet live-verified against the true gold standard** (TIA `import → compile → re-export →
-Normalizer` cycle). A systematic sweep of all 20 `CompileUnit`s in a fresh `PlantAutoControl` export
-found every single network pairs `Not` with a `<Call>` block-call element (not yet built) — there
-is currently no real network where `Not` occurs in isolation, so no real network can be isolated
-to prove it through the full TIA cycle yet. What *is* proven: the in-memory pipeline (parse →
-reduce → build → write → reparse) round-trips byte-identically against the real-shaped fixture.
-Block calls were picked as the next capability specifically to close this gap — once built,
-`PlantAutoControl`'s networks (`Not` + `Call` together) become provable end to end for both at once.
+**Updated 2026-07-12 (S1 item 14):** with `CALL` now built (below), the real network that
+motivated closing this gap — `Not` wrapping an OR-of-comparisons alongside a fully-wired
+10-parameter FB call — reduces and round-trips completely through the in-memory pipeline. Still
+not verified through the true TIA `import → compile → re-export → Normalizer` cycle — see the
+`CALL` section below for exactly why and what's next.
+
+## CALL — FB/FC block calls (S1 item 14, 2026-07-12)
+
+Picked up specifically to close the gap `Not` left open: every one of `FC PlantAutoControl`'s 20 real
+networks pairs `Not` with a `<Call>`, so `Not` alone could never reach the true TIA-cycle gold
+standard. Grounded first (a fresh `PlantAutoControl` export, scratch temp, deleted after use), before
+any code.
+
+- **`<Call>` isn't a `<Part Name="Call">`** — genuinely unlike every other construct built so
+  far, it's its own sibling element under `<Parts>`:
+  `<Call UId="N"><CallInfo Name="<callee>" BlockType="FB"><Instance .../><Parameter .../>...
+  </CallInfo></Call>`. `FlgNetParser` adapts this into an ordinary `PartNode(Name="Call")` on the
+  way in (and `FlgNetWriter` mirrors it back on the way out) so the rest of the pipeline
+  (`GraphReducer`, `FlgNetBuilder`) never needs a parallel type.
+- **Reduces as its own top-level production**, like TON/Move/WAND — not like `Not`, which is a
+  chain-position discovered incidentally. `en` is reduced via the same `TraceChain` fan-out
+  mechanism as Move/WAND's own `en` (confirmed real: all 20 real instances are directly rail-fed,
+  reducing to the existing "wired directly to rail" TRUE sentinel — no Contact-gated `en` on a
+  Call seen yet, low-risk by analogy).
+- **Instance reuses the exact same `AccessNode` shape as TON's own `<Instance>`** — confirmed
+  identical (this is the reuse `ir/SPEC.md`'s TON section deliberately anticipated: "a future
+  FC/FB call's own instance argument can reuse `AccessNode` rather than needing a redesign").
+  `FlgNetParser.ParseInstanceReference` was factored out of `ParseTon` once a second real caller
+  confirmed the shape is genuinely shared, not TON-specific.
+- **Arguments are sparse, not a full interface snapshot** — the single most surprising real
+  finding: 19 of the 20 real `<Call>` instances have **zero** `<Parameter>` children at all (not
+  present-but-empty — simply absent, just `Instance` + `en`). Only one real instance has any: 10
+  (8 `Section="Input"`, 2 `Section="Output"`, all `Type="Word"`), in source declaration order.
+  `GraphReducer.ReduceCall` iterates whatever `<Parameter>` elements are actually present — an
+  Input resolves via the same `ResolveTagOrLiteralOperand` used everywhere else; an Output is a
+  bare destination tag, same `NameCon`→`IdentCon` wire shape as Move's own `out1`, just named per
+  the source's own Parameter Name instead of a fixed port.
+- **No `EN`/`ENO` attribute-level fixed shape to validate** — unlike Move/WAND's own
+  `DisabledENO="true"`, a Call carries no `DisabledENO` (or any other) attribute at all; `eno`
+  itself is never wired in any real instance seen, so nothing is validated or regenerated for it.
+- Readable-form syntax:
+  `CALL <BlockName>(<InstancePath>, EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
+  — instance first (no label, same convention as TON's own instance path), `EN` always shown
+  explicitly (matching MOVE/WAND's own convention for full losslessness, even though every real
+  instance seen is trivially `TRUE`), remaining arguments exactly whatever the source wired,
+  mixed `:=`/`=>` in source order. Matches ADR-0001's "reference only, no inline
+  parameter-interface snapshot" decision — realized structurally (the source itself is sparse) as
+  well as textually.
+
+14 converter tests (`Converter.Tests/CallTests.cs`), two fixtures genericized from the two real
+shapes (`CallBareFedByRail.xml` — the common, unparameterized case; `CallWithParametersFedByRail.xml`
+— genericized down from the one real 10-parameter instance). All 158 converter tests pass (up
+from 144); `openness-cli`/golden-harness suites unaffected, confirmed still green (68/11).
+
+**Live-verified against real data, 2026-07-12:** isolated `FC PlantAutoControl`'s richest real network
+(the one with the wired 10-parameter call) — it also contains `Not` wrapping an OR-of-two-
+comparisons (itself gated by a negated contact), 8 independent Contact→Coil rungs, and further
+negated-contact/comparison content. **Reduces and round-trips completely through the in-memory
+pipeline** — the first real network combining `Not` and `Call` together to do so.
+
+**Not yet verified through the true TIA `import → compile → re-export → Normalizer` cycle.**
+`openness-cli import` only supports whole-block import (no per-network granularity), and
+`PlantAutoControl` as a whole still has `SCoil`/`RCoil` elsewhere (3 each) — so a whole-block
+`RoundTripRunner.RunFull` still fails at those, same as before. Reaching a *real* network's true
+TIA-cycle proof needs either: `SCoil`/`RCoil` built (the already-planned next item — this would
+let the whole `PlantAutoControl` block round-trip naturally, no special handling needed), or a
+purpose-built reference-project block (the `TimerSample` precedent). A third option — splicing
+our own regenerated network XML back into the real, unmodified rest of the `PlantAutoControl` export
+and re-importing the whole file — was considered but not attempted unilaterally, since it means
+writing regenerated content back into the real (scratch-copy) block; left for the project owner's
+own call rather than assumed authorization.
 
 ## DB support
 

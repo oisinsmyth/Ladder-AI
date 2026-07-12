@@ -41,9 +41,10 @@ public static class GraphReducer
         var coils = network.Parts.Where(p => p.Name == "Coil").ToList();
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
-        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0)
+        var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
+        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0 && callParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, Move, or And found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, Move, And, or Call found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -54,6 +55,8 @@ public static class GraphReducer
         var moveSidecars = new List<MoveStatementSidecar>();
         var wordAndStatements = new List<WordAndStatement>();
         var wordAndSidecars = new List<WordAndStatementSidecar>();
+        var callStatements = new List<CallStatement>();
+        var callSidecars = new List<CallStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -140,6 +143,26 @@ public static class GraphReducer
             }
         }
 
+        // Calls are reduced last, same reasoning as Moves/WordAnds above (own `en`/arguments
+        // never depend on another production via wire-graph traversal; a shared upstream prefix,
+        // if any, dedupes the same way FlgNetBuilder already handles for Move/WAND).
+        foreach (var call in callParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceCall(network, call, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            callStatements.Add(statement);
+            callSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -147,9 +170,9 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements);
+        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements);
         var networkSidecar = new NetworkSidecar(
-            networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars);
+            networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars, callSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -312,6 +335,75 @@ public static class GraphReducer
             wordAnd.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: And UId={wordAnd.UId} has no SrcType."),
             destTag.UId,
             destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A Call's `en` is reduced exactly like Move/WAND's own — same TraceChain fan-out tap
+    // mechanism (confirmed real, 2026-07-12, FC PlantAutoControl: all 20 real en's are directly
+    // rail-fed, reducing to the existing "wired directly to rail" TRUE sentinel — same as WAND's
+    // own live-verified case; a Contact-gated en on a Call specifically remains unconfirmed).
+    // Instance is required (confirmed real: every Call carries one). Arguments are resolved per
+    // the source's own sparse, ordered <Parameter> list (confirmed real: only wired parameters
+    // appear at all, in source declaration order) — an Input parameter resolves via
+    // ResolveTagOrLiteralOperand (same resolver as everywhere else); an Output parameter is a
+    // bare destination tag (ResolveOperand — same IdentCon-fed wire shape as Move's own out1/
+    // WAND's dest, just named per-parameter via the source's own Parameter Name instead of a
+    // fixed port name).
+    private static (CallStatement Statement, CallStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceCall(
+        FlgNetwork network,
+        PartNode call,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (enExpr, enSteps, enRailWireUId) = TraceChain(
+            network, (call.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var instance = call.Instance
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no Instance reference.");
+        var instancePath = string.Join('.', instance.ComponentPath);
+
+        var arguments = new List<CallArgument>();
+        var argumentSidecars = new List<CallArgumentSidecar>();
+        foreach (var parameter in call.CallParameters ?? Array.Empty<CallParameterNode>())
+        {
+            if (parameter.Section == "Input")
+            {
+                var (valueExpr, valueSidecar) = ResolveTagOrLiteralOperand(
+                    wiresByPort, accessByUId, constantsByUId, call.UId, parameter.Name, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+                arguments.Add(new CallArgument.InputArg(parameter.Name, valueExpr));
+                argumentSidecars.Add(new CallArgumentSidecar.InputArgSidecar(parameter.Name, parameter.Type, valueSidecar));
+            }
+            else
+            {
+                var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, call.UId, networkNumber, parameter.Name);
+                visitedWireUIds.Add(destWireUId);
+                AddAccessEntry(accessEntries, destTag);
+                arguments.Add(new CallArgument.OutputArg(parameter.Name, destTag.TagPath));
+                argumentSidecars.Add(new CallArgumentSidecar.OutputArgSidecar(parameter.Name, parameter.Type, destTag.UId, destWireUId));
+            }
+        }
+
+        var blockName = call.BlockName ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no BlockName.");
+        var blockType = call.BlockType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no BlockType.");
+
+        var statement = new CallStatement(blockName, instancePath, enExpr, arguments);
+        var sidecar = new CallStatementSidecar(
+            call.UId,
+            blockName,
+            blockType,
+            enRailWireUId,
+            enSteps,
+            instance.UId,
+            instance.Scope,
+            instance.ComponentPath,
+            argumentSidecars);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

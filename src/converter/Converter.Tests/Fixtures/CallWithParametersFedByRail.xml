@@ -1,0 +1,47 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="GlobalVariable" UId="21">
+      <Symbol>
+        <Component Name="SensorWordA" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="22">
+      <Symbol>
+        <Component Name="SensorWordB" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="23">
+      <Symbol>
+        <Component Name="ResultWord" />
+      </Symbol>
+    </Access>
+    <Call UId="24">
+      <CallInfo Name="PumpControl" BlockType="FB">
+        <Instance Scope="GlobalVariable" UId="25">
+          <Component Name="Pump1_DB" />
+        </Instance>
+        <Parameter Name="in0" Section="Input" Type="Word" />
+        <Parameter Name="in1" Section="Input" Type="Word" />
+        <Parameter Name="out0" Section="Output" Type="Word" />
+      </CallInfo>
+    </Call>
+  </Parts>
+  <Wires>
+    <Wire UId="30">
+      <Powerrail />
+      <NameCon UId="24" Name="en" />
+    </Wire>
+    <Wire UId="31">
+      <IdentCon UId="21" />
+      <NameCon UId="24" Name="in0" />
+    </Wire>
+    <Wire UId="32">
+      <IdentCon UId="22" />
+      <NameCon UId="24" Name="in1" />
+    </Wire>
+    <Wire UId="33">
+      <NameCon UId="24" Name="out0" />
+      <IdentCon UId="23" />
+    </Wire>
+  </Wires>
+</FlgNet>

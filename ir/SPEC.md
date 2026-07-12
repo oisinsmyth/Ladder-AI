@@ -98,7 +98,7 @@ NETWORK 8 "Run enable delay"
   TON(RunEnableDelay, IN := Sensor1.Ok, PT := Settings.RunDelay)
   COIL Conveyor1.Permissive := RunEnableDelay.Q OR Override.Active
 
-  CALL FC_Scale(Input := RawValue, Output_Min := 0.0, Output_Max := 100.0, Result => ScaledValue)
+  CALL FC_Scale(ScaleInstance, EN := TRUE, Input := RawValue, Result => ScaledValue)
 ```
 
 - **TON, confirmed real and built, 2026-07-11 (S1 item 8)** — grounded against `FB MotorDOL`
@@ -256,10 +256,40 @@ NETWORK 8 "Run enable delay"
   (parse → reduce → build → write → reparse) round-trips byte-identically against the real-shaped
   fixture. Closing this gap is the reason block calls (`<Call>`) were picked as the next
   capability — see `docs/notes/stage-gates.md`.
-- `CALL` sites list only the block name and wired arguments (`:=` for inputs, `=>` for outputs) —
-  no inline parameter-interface snapshot (ADR-0001). The callee's own `.ir` file is the source of
-  truth for its interface; a call site that doesn't match it is a converter/compile-time error,
-  not something re-derived from the snapshot.
+- **`CALL` (FB/FC block calls, `<Call>`/`<CallInfo>`), built 2026-07-12 (S1 item 14).** Picked up
+  specifically to close the gap `Not` (S1 item 13) left open: every one of `FC PlantAutoControl`'s 20
+  real networks pairs `Not` with a `<Call>`, so `Not` alone could never reach the true TIA cycle.
+  Grounded first (Phase 0, before any code): a fresh export found `<Call>` genuinely isn't a
+  `<Part Name="Call">` — it's its own sibling element under `<Parts>`
+  (`<Call UId="N"><CallInfo Name="<callee>" BlockType="FB"><Instance .../><Parameter .../>...
+  </CallInfo></Call>`), adapted into an ordinary `PartNode(Name="Call")` by the parser so the
+  rest of the pipeline never needs a parallel type. Reduces as its own top-level production (like
+  TON/Move/WAND, not like `Not`): `en` uses the same `TraceChain` fan-out mechanism as Move/WAND's
+  own `en` (confirmed real: all 20 real instances are directly rail-fed, reducing to the existing
+  "wired directly to rail" TRUE sentinel). `Instance` reuses the exact same `AccessNode` shape as
+  TON's own `<Instance>` — the reuse `ir/SPEC.md`'s own TON section anticipated. **Arguments are
+  sparse, not a full interface snapshot**: 19 of the 20 real calls have zero wired parameters at
+  all (no `<Parameter>` element present, not present-but-empty); the one real wired example has
+  10 (8 `Section="Input"`, 2 `Section="Output"`), in source declaration order. Only
+  `BlockType="FB"` observed (`"FC"` real in principle, unconfirmed on a Call specifically, stored
+  verbatim rather than hard-validated). Readable-form syntax:
+  `CALL <BlockName>(<InstancePath>, EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
+  — instance is the first positional argument (no label, same convention as TON's own instance
+  path); `EN` is always shown explicitly (matching MOVE/WAND's own convention, for full
+  losslessness even though every real instance seen so far is trivially `TRUE`); the remaining
+  arguments are whatever the source actually wired, `:=` for Input and `=>` for Output, mixed in
+  source order — this *is* ADR-0001's "reference only, no inline parameter-interface snapshot"
+  decision, realized structurally (the sparse source shape) as well as textually (no interface
+  echoed at the call site). The callee's own `.ir` file remains the source of truth for its
+  interface; a call site that doesn't match it is a converter/compile-time error, not something
+  re-derived from a snapshot. Covered by 14 converter tests (`CallTests.cs`, two fixtures
+  genericized from the two real shapes — bare and parameterized). **Live-verified against real
+  data, 2026-07-12:** isolating `FC PlantAutoControl`'s richest real network (`Not` wrapping an
+  OR-of-comparisons, itself gated by a negated contact, alongside 8 independent Contact→Coil
+  rungs and a fully-wired 10-parameter FB call) directly confirmed it reduces and round-trips
+  completely through the in-memory pipeline — the first real network combining `Not` and `Call`
+  together to do so. **Not yet verified through the true TIA `import → compile → re-export →
+  Normalizer` cycle** — see `docs/notes/stage-gates.md` ("S1 item 14") for why, and what's next.
 
 ### Explicit form (fallback, per-network)
 
@@ -414,8 +444,12 @@ question, left open on purpose rather than guessed).
 - TONR, `RCoil`/`SCoil` — real, seen alongside TON in both `MotorDOL`/`ControlDelays` grounding
   exports, still out of scope; not needed once a purpose-built block avoids them (`TimerSample`
   did).
-- Full FC/FB parameter (Input/Output/InOut) modeling — still deferred, tied to general block-call
-  support. `TimerSample` was simplified in TIA to avoid needing it for TON's own live proof.
+- **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
+  the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
+  declared parameter list, independent of what's wired at any one call site) remains deferred,
+  unrelated to this — ADR-0001 already decided against inline interface snapshots at call sites,
+  so this isn't blocking. `InOut` parameters specifically remain unconfirmed on a real Call
+  (only Input/Output seen), refused rather than guessed at.
 - **Resolved, 2026-07-11:** a full live TIA round-trip for TON. `FC TimerSample`
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
@@ -433,9 +467,15 @@ question, left open on purpose rather than guessed).
   reached — it also needs `Mul`/`Convert` elsewhere in the block, an unrelated deferred capability;
   a purpose-built reference-project block (matching the `TimerSample` precedent) would close that
   out specifically.
-- **New, 2026-07-12 (S1 item 13): a full live TIA round-trip for `Not`.** Every one of
-  `PlantAutoControl`'s 20 real networks pairs `Not` with a `<Call>` block-call element, so no real
-  network can currently be isolated to prove `Not` alone through the full TIA cycle. Only the
-  in-memory pipeline is proven so far (see the readable-form entry above). Block calls were
-  picked as the next capability specifically to close this out — once built, `PlantAutoControl`'s
-  networks become provable end to end for both together.
+- **Progressed, 2026-07-12 (S1 item 14): a full live TIA round-trip for `Not`+`Call` together.**
+  With `Call` now built, the real network that motivated it (`Not` wrapping an OR-of-comparisons,
+  alongside a fully-wired 10-parameter FB call) reduces and round-trips completely through the
+  in-memory pipeline — the first real network combining both to do so. **Still not verified
+  through the true TIA `import → compile → re-export → Normalizer` cycle**: `openness-cli import`
+  only supports whole-block import, and `PlantAutoControl` as a whole still has `SCoil`/`RCoil`
+  elsewhere (3 each), so a whole-block `RunFull` still fails at those. Two paths forward, not yet
+  chosen: build `SCoil`/`RCoil` (the already-planned next item) so the whole block round-trips
+  naturally; or a purpose-built reference-project block (the `TimerSample` precedent) isolating
+  just Contact/Coil/Eq/Ge/O/Not/Call content. Not attempted unilaterally this session since it
+  would mean writing regenerated content back into the real (scratch-copy) `PlantAutoControl` block —
+  flagged for the project owner's own call rather than assumed.

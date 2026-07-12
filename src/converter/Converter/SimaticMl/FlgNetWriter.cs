@@ -67,6 +67,12 @@ public static class FlgNetWriter
 
         foreach (var part in network.Parts)
         {
+            if (part.Name == "Call")
+            {
+                partsElement.Add(WriteCall(ns, part));
+                continue;
+            }
+
             var partElement = new XElement(ns + "Part", new XAttribute("Name", part.Name));
             if (part.TonVersion is not null)
             {
@@ -155,6 +161,40 @@ public static class FlgNetWriter
         }
 
         return new XElement(ns + "FlgNet", partsElement, wiresElement);
+    }
+
+    // A Call is its own sibling element under <Parts>, not a <Part Name="Call"> — mirrors
+    // FlgNetParser.ParseCall's own adaptation on the way in, in reverse. Attribute order matches
+    // the real source: CallInfo's Name then BlockType, Instance's Scope then UId, Parameter's
+    // Name then Section then Type — confirmed real, 2026-07-12, FC PlantAutoControl.
+    private static XElement WriteCall(XNamespace ns, PartNode part)
+    {
+        var instance = part.Instance
+            ?? throw new SimaticMlFormatException($"Call UId=\"{part.UId}\" has no Instance to write.");
+        var blockName = part.BlockName
+            ?? throw new SimaticMlFormatException($"Call UId=\"{part.UId}\" has no BlockName to write.");
+        var blockType = part.BlockType
+            ?? throw new SimaticMlFormatException($"Call UId=\"{part.UId}\" has no BlockType to write.");
+
+        var callInfo = new XElement(ns + "CallInfo", new XAttribute("Name", blockName), new XAttribute("BlockType", blockType));
+
+        var instanceComponents = instance.ComponentPath.Select(c => new XElement(ns + "Component", new XAttribute("Name", c)));
+        callInfo.Add(new XElement(
+            ns + "Instance",
+            new XAttribute("Scope", instance.Scope),
+            new XAttribute("UId", instance.UId),
+            instanceComponents));
+
+        foreach (var parameter in part.CallParameters ?? Array.Empty<CallParameterNode>())
+        {
+            callInfo.Add(new XElement(
+                ns + "Parameter",
+                new XAttribute("Name", parameter.Name),
+                new XAttribute("Section", parameter.Section),
+                new XAttribute("Type", parameter.Type)));
+        }
+
+        return new XElement(ns + "Call", new XAttribute("UId", part.UId), callInfo);
     }
 
     private static XElement WriteEndpoint(XNamespace ns, WireEndpoint endpoint) => endpoint.Kind switch

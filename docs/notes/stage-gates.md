@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not` (standalone boolean inverter) is built and tested but **not yet live-verified against the true TIA cycle** — see S1 item 13 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 144 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not`+`Call` together now reduce and round-trip in-memory against a real, rich `PlantAutoControl` network, but are **not yet live-verified against the true TIA cycle** — see S1 item 14 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 158 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -958,3 +958,118 @@ gold standard**, and this is recorded explicitly as open, not glossed over. Clos
 to the next capability (block calls), which is expected to be substantially bigger than `Not` was
 (FB instance handling, multi-instance vs. global instance DB references, call-site argument
 binding) and will get its own grounding/planning pass before any code.
+
+### S1 item 14 (`CALL` — FB/FC block calls), 2026-07-12
+
+Picked up per the project owner's own explicit decision at the close of S1 item 13: build block
+calls next, since `Not` and `<Call>` co-occur in every one of `FC PlantAutoControl`'s 20 real
+networks, and closing this gap unlocks a genuine full-cycle proof for both together. Planned with
+proper plan-mode rigor first (matching the project's own discipline for "substantially bigger"
+capabilities), including a mandatory Phase 0 grounding step before any design was finalized —
+per CLAUDE.md hard rule 3, no `<Call>` XML had actually been inspected before this item; only its
+*existence* and call targets were known from the earlier Part-Name inventory sweep.
+
+**Phase 0 grounding (fresh `PlantAutoControl` export, scratch temp, deleted after use):**
+
+```xml
+<Call UId="58">
+  <CallInfo Name="MotorVSDSystem" BlockType="FB">
+    <Instance Scope="GlobalVariable" UId="59">
+      <Component Name="MotorVSDInst2" />
+    </Instance>
+  </CallInfo>
+</Call>
+```
+
+- **`<Call>` genuinely isn't a `<Part Name="Call">`** — it's its own sibling element under
+  `<Parts>`. This was the plan's own first open question, and the actual biggest deviation from
+  every prior construct's shape (all of which were `<Part Name="...">` variants).
+- **`<CallInfo Name="<callee>" BlockType="FB">`** — both attributes present and uniform on all 20
+  real instances (`BlockType="FB"` every time; no FC call observed in this block, remains a
+  real-but-unconfirmed gap, same treatment as `Gt`/`TOF` elsewhere).
+- **`<Instance Scope="GlobalVariable" UId="N"><Component Name="..." /></Instance>`** — identical
+  shape to TON's own `<Instance>` (confirmed, not assumed — this is the reuse `ir/SPEC.md`'s TON
+  section deliberately anticipated). All 20 real instances are `GlobalVariable` scope (standalone
+  instance DBs); no `LocalVariable`/multi-instance call observed in this block specifically —
+  low-risk by analogy to TON's own dual-scope proof, not separately grounded.
+- **Parameters are sparse, not a full interface snapshot — the single most surprising finding.**
+  19 of the 20 real calls have **zero** `<Parameter>` children and zero parameter wires at all —
+  just `Instance` + a rail-fed `en`. Only one (in `CompileUnit "35"`) has any: 10
+  `<Parameter Name="..." Section="Input"|"Output" Type="Word" />` elements (8 Input, 2 Output),
+  each with a matching wire — Input via `<IdentCon/><NameCon Name="paramName"/>` (same shape as
+  every other operand wire in this codebase), Output via `<NameCon Name="paramName"/><IdentCon/>`
+  (same order as Move's own `out1` destination wire).
+- **`en` gating**: every one of the 20 real calls has its `en` wired directly onto the network's
+  single shared rail wire — none Contact-gated in this block. The existing `TraceChain` "always-on
+  TRUE sentinel" mechanism (proven for WAND) already handles this without any new code.
+- **No `eno` port wired anywhere, and `<Call>` carries no `DisabledENO` (or any) attribute** —
+  genuinely simpler than Move/WAND in this one respect: there's no fixed shape to validate at all,
+  just nothing there.
+- **Best real fixture candidate found: `CompileUnit "35"` ("Tomra Auto Control").** Its only Part
+  kinds are `Contact`/`Coil`/`Ge`/`Eq`/`O`/`Not`/`Call` — every one already supported by the
+  converter once `Call` landed. This became the live-verification target below.
+
+**Design, confirmed against grounding (matched precedent closely, one real deviation):**
+`Call` reduces as its own top-level production (like TON/Move/WAND, not like `Not`) —
+`GraphReducer.ReduceCall` mirrors `ReduceMove`/`ReduceWordAnd` closely: `en` via the same
+`TraceChain` mechanism, `Instance` required (factored `FlgNetParser.ParseInstanceReference` out
+of `ParseTon` once a second real caller confirmed the shape is genuinely shared), and arguments
+resolved by iterating the source's own sparse, ordered `<Parameter>` list — an Input via the same
+`ResolveTagOrLiteralOperand` used everywhere else, an Output via `ResolveOperand` with the
+source's own Parameter Name as the port (not a fixed port like Move's `out1`). New model types:
+`CallArgument`/`CallStatement` (IR-facing) and `CallArgumentSidecar`/`CallStatementSidecar`
+(round-trip-facing) — `BlockName` and each argument's `ParamName` are carried on *both* sides
+(not just derived by index), since `FlgNetBuilder` works entirely off the sidecar, never
+cross-referencing the model, matching this codebase's existing discipline. `FlgNetParser`/
+`FlgNetWriter` needed a genuinely new mechanism (not just a new `Name` value): the top-level
+`<Parts>` loop now branches on element name (`Part` vs `Call`), and `FlgNetWriter` emits/expects
+the sibling `<Call>`/`<CallInfo>` shape specifically for `PartNode(Name="Call")`. Readable-form
+syntax:
+`CALL <BlockName>(<InstancePath>, EN := <expr>, Param1 := <expr>, ..., OutParam => <tag>, ...)`
+— `EN` shown explicitly (a deliberate choice matching MOVE/WAND's own convention for full
+losslessness, even though every real instance seen is trivially `TRUE`; `ir/SPEC.md`'s original
+`CALL` sketch predates this convention and didn't show it — corrected there too).
+
+14 new converter tests (`CallTests.cs`), two fixtures genericized from the two real shapes found
+(`CallBareFedByRail.xml` for the common unparameterized case, `CallWithParametersFedByRail.xml`
+scaled down from the one real 10-parameter instance) — **passed on first run**. All three suites
+green: 158 converter tests (up from 144), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+TIA Portal already running. Fresh `export` of `FC PlantAutoControl` succeeded (first attempt hit the
+first-connect/attach timeout — not the approval-dialog case, just a slow wake, succeeded on
+retry with a longer `--timeout-connect`). Isolated `CompileUnit "35"` ("Tomra Auto Control") into
+a standalone file, same technique as every prior live verification this session, via a
+throwaway test (deleted immediately after use, real data never committed).
+
+**The real network reduces and round-trips completely** — the first real network combining `Not`
+and `Call` together to do so. Structurally, this one network alone exercises: 8 independent
+Contact→Coil rungs; an OR-merge of two comparisons (one gated by a negated contact) feeding a
+9th Coil; that same OR-merge wrapped in `Not`, combined with a further negated contact and a
+comparison, feeding a 10th Coil; and the fully-wired 10-parameter FB call (8 Input + 2 Output,
+all Word) sharing the network's rail wire with everything else. Every original wire's endpoint
+set matched a rebuilt wire exactly; the IR text round-tripped byte-identically end to end
+(`Serialize → Parse → Serialize`). Real tag/DB/equipment names are not reproduced here per
+`docs/13-data-boundary.md`'s genericization rule — described structurally only.
+
+**Not yet verified through the true TIA `import → compile → re-export → Normalizer` cycle.**
+`RoundTripRunner.RunFull` (the harness's own real-project orchestration, `tests/golden/
+GoldenHarness.Tests/RoundTripRunner.cs`) operates at whole-block granularity —
+`openness-cli import` has no per-network import — and `PlantAutoControl` as a whole still has
+`SCoil`/`RCoil` elsewhere (3 each), so a whole-block run would still fail at those, unrelated to
+`Call`. A fourth option beyond the three considered for `Not`'s own gap (build `SCoil`/`RCoil`;
+request a purpose-built reference block; accept the current proof level) was identified but not
+attempted: splice this network's own regenerated XML back into the real, otherwise-untouched rest
+of the `PlantAutoControl` export and re-import the whole file. Technically feasible (the scratch copy
+is precisely the sandboxed area this kind of import experimentation is meant for), but genuinely
+writes regenerated content back into a real production block's actual TIA-side state, even if
+scoped to one network — left for the project owner's own explicit call rather than assumed
+authorization, consistent with this session's discipline of never taking a more invasive action
+than what's been explicitly asked for.
+
+**Bottom line:** `Call` is built, tested, and live-round-trips in-memory against real data,
+including the richest real network found combining it with `Not`. The true TIA-cycle gold
+standard for this specific network remains open — recorded explicitly, not glossed over. Per the
+project owner's own sequencing, `SCoil`/`RCoil` is next; closing that out is the most natural
+path to finally reaching the true cycle for a whole real block, `PlantAutoControl` included.

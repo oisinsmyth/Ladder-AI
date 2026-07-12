@@ -79,6 +79,17 @@ public sealed record AccessNode(
 // confirmed real, 2026-07-11, `FC ControlDelays` (`Int` in every instance seen; stored verbatim,
 // not assumed fixed).
 //
+// BlockName/BlockType/CallParameters: an FB/FC call (`<Call>`/`<CallInfo Name="..."
+// BlockType="FB">`) — confirmed real, 2026-07-12, `FC PlantAutoControl` (20 real instances). Reuses
+// Instance (same AccessNode shape as TON's own, confirmed identical). Genuinely different from
+// every other Part kind: `<Call>` isn't a `<Part Name="Call">` in the source at all — it's its
+// own sibling element under `<Parts>` (`<Call UId="N"><CallInfo ...>...</CallInfo></Call>`) —
+// FlgNetParser adapts this into an ordinary PartNode(Name="Call") on the way in so the rest of
+// the pipeline (OutPortFor, wire endpoint UId matching) never needs a parallel type. Only "FB"
+// has been observed for BlockType — "FC" is real but unconfirmed on a Call specifically (same
+// status as Gt/TOF elsewhere), stored verbatim rather than hard-validated to a constant, so a
+// real FC call is at least represented faithfully rather than assumed impossible.
+//
 // All optional fields live on the one PartNode type rather than subtypes since every other Part
 // kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
 // on `Name` for anything Part-shape-specific.
@@ -90,7 +101,20 @@ public sealed record PartNode(
     string? TonVersion = null,
     string? TimeType = null,
     AccessNode? Instance = null,
-    string? SrcType = null);
+    string? SrcType = null,
+    string? BlockName = null,
+    string? BlockType = null,
+    IReadOnlyList<CallParameterNode>? CallParameters = null);
+
+// A wired parameter declared at a Call site — confirmed real, 2026-07-12, `FC PlantAutoControl`: only
+// parameters that are actually wired appear here at all (19 of 20 real Call instances have zero
+// — no <Parameter> element at all, not present-but-empty; the one real wired example,
+// `TomraControlSystem`, has 10: 8 Section="Input", 2 Section="Output", all Type="Word"). Section is
+// stored verbatim and validated to be exactly "Input" or "Output" at parse time — an "InOut"
+// section is real in principle (an FB's own interface can have InOut parameters) but unconfirmed
+// on a Call specifically, refused rather than guessed at. Name/Type mirror the source's own
+// `<Parameter Name="..." Type="..." />` attributes exactly.
+public sealed record CallParameterNode(string Name, string Section, string Type);
 
 // A literal operand — either a TON `PT` (`Access Scope="TypedConstant"`, `ConstantType` absent)
 // or a comparison operand (`Access Scope="LiteralConstant"` used at the *top level* — sibling to

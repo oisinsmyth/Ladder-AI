@@ -10,6 +10,37 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 14: `CALL` (FB/FC block calls) — built, tested, live-verified in-memory with `Not`**
+
+- Picked up per the project owner's own decision at the close of S1 item 13: build block calls
+  next, since `Not` and `<Call>` co-occur in every one of `FC PlantAutoControl`'s 20 real networks.
+  Planned with plan-mode rigor first, including a Phase 0 grounding pass before any design was
+  finalized (no `<Call>` XML had actually been inspected before this item).
+- Grounding found `<Call>` genuinely isn't a `<Part Name="Call">` — it's its own sibling element
+  under `<Parts>` (`<Call UId="N"><CallInfo Name="..." BlockType="FB"><Instance/><Parameter/>...
+  </CallInfo></Call>`). `FlgNetParser`/`FlgNetWriter` adapt this into/from an ordinary
+  `PartNode(Name="Call")` so the rest of the pipeline never needs a parallel type.
+- Also found: arguments are sparse, not a full interface snapshot — 19 of 20 real calls have
+  zero wired parameters at all (not present-but-empty, simply absent); the one wired example has
+  10 (8 Input, 2 Output). Instance reuses the exact same shape as TON's own `<Instance>`,
+  confirmed identical — the reuse `ir/SPEC.md`'s TON section had already anticipated.
+- Design mirrors Move/WAND (`en` via the same `TraceChain` fan-out mechanism, all 20 real
+  instances directly rail-fed) crossed with TON's own Instance reference (factored
+  `ParseInstanceReference` out of `ParseTon` for reuse). Readable-form syntax:
+  `CALL BlockName(Instance, EN := <expr>, Param := <expr>, ... => OutParam, ...)` — `EN` always
+  shown explicitly, matching MOVE/WAND's own convention.
+- 14 new converter tests, two fixtures genericized from the two real shapes found — passed on
+  first run. All three suites green: 158 converter (up from 144), 68 openness-cli, 11
+  golden-harness.
+- **Live-verified, same session:** isolated `FC PlantAutoControl`'s richest real network (`Not`
+  wrapping an OR-of-comparisons, 8 independent Contact→Coil rungs, and the fully-wired
+  10-parameter call, all sharing one rail wire) — reduces and round-trips completely through the
+  in-memory pipeline, the first real network combining `Not` and `Call` together to do so. Still
+  not verified through the true TIA `import → compile → re-export → Normalizer` cycle:
+  `openness-cli import` has no per-network granularity, and `PlantAutoControl` as a whole still has
+  `SCoil`/`RCoil` elsewhere. Per the project owner's own sequencing, `SCoil`/`RCoil` is next.
+  Full story: `docs/notes/stage-gates.md` ("S1 item 14").
+
 **S1 item 13: `Not` (standalone boolean inverter) — built, tested, gold-standard gap documented**
 
 - Investigated whether the converter as built could handle `FC PlantAutoControl` (a real, complex

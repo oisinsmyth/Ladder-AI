@@ -87,6 +87,43 @@ public sealed record MoveStatement(Expr En, Expr In, string DestTag);
 // `MOVE_BLK_VARIANT` → `MOVE`.
 public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, string DestTag);
 
+// One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
+// 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
+// TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
+// uses the same tag-or-literal resolver as everywhere else (ResolveTagOrLiteralOperand);
+// OutputArg's DestTag is a bare write target, same as Move's out1/WAND's dest — never a literal
+// or expression in the one real instance seen. Section (Input/Output) is encoded by which
+// subtype this is, not a separate field — mirrors how Contact's Negated regenerates
+// <Negated Name="operand"/> without storing the XML shape verbatim.
+public abstract record CallArgument
+{
+    private CallArgument()
+    {
+    }
+
+    public sealed record InputArg(string ParamName, Expr Value) : CallArgument;
+
+    public sealed record OutputArg(string ParamName, string DestTag) : CallArgument;
+}
+
+// An FB/FC call (`<Call>`/`<CallInfo Name="<callee>" BlockType="FB">`) — confirmed real,
+// 2026-07-12, `FC PlantAutoControl` (20 real instances, 8 distinct callees). Genuinely different from
+// every other production built so far in one respect: `<Call>` isn't even a `<Part>` in the
+// source XML (see SimaticMl.PartNode's own doc comment) — but once adapted into an ordinary
+// PartNode(Name="Call") by the parser, it reduces as its own top-level production exactly like
+// TON/Move/WAND (not like Not, which is a chain-position discovered incidentally): a call is
+// invoked directly, not merely traced through. En is reduced via the exact same TraceChain
+// fan-out mechanism as Move/WAND's own en (confirmed real: all 20 real instances are directly
+// rail-fed, reducing to the existing "wired directly to rail" TRUE sentinel — Expr.And with zero
+// operands — same as WAND's own live-verified case; a Contact-gated en on a Call specifically
+// remains unconfirmed by this grounding pass, low-risk by analogy). InstancePath is the same
+// dotted-path text a plain tag reference or TON's own instance would use (mirrors
+// TimerBinding.InstancePath exactly — same AccessNode-shaped reference, confirmed identical
+// shape to TON's own <Instance>). BlockType is deliberately NOT carried here (sidecar-only, same
+// precedent as a comparison's/WAND's own SrcType — not shown in the readable IR text, since the
+// callee's own .ir file is ADR-0001's source of truth for its interface, not duplicated here).
+public sealed record CallStatement(string BlockName, string InstancePath, Expr En, IReadOnlyList<CallArgument> Arguments);
+
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
 // wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
 // alarm-bit network). Assignments is empty for a genuinely empty network (source
@@ -104,7 +141,8 @@ public sealed record IrNetwork(
     IReadOnlyList<CoilAssignment> Assignments,
     IReadOnlyList<TimerBinding>? Timers = null,
     IReadOnlyList<MoveStatement>? Moves = null,
-    IReadOnlyList<WordAndStatement>? WordAnds = null)
+    IReadOnlyList<WordAndStatement>? WordAnds = null,
+    IReadOnlyList<CallStatement>? Calls = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -112,7 +150,9 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<WordAndStatement> WordAnds { get; init; } = WordAnds ?? Array.Empty<WordAndStatement>();
 
-    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0;
+    public IReadOnlyList<CallStatement> Calls { get; init; } = Calls ?? Array.Empty<CallStatement>();
+
+    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0 && Calls.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -349,6 +389,47 @@ public sealed record WordAndStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One Call argument's full round-trip data — parallels CallArgument (Model) 1:1, positionally
+// matched within CallStatementSidecar.Arguments, same pairing pattern as
+// WordAndStatement.Inputs/WordAndStatementSidecar.Inputs. Carries ParamName again (not just
+// derivable by index from the model side) because FlgNetBuilder works entirely off the sidecar,
+// never cross-referencing the model's own Arguments list (same discipline as every other
+// sidecar/model pairing in this codebase — see MoveStatementSidecar's own doc comment). Type
+// mirrors the source's own <Parameter Type="..."> attribute (sidecar-only, not shown in the
+// readable IR text, same precedent as WAND's SrcType).
+public abstract record CallArgumentSidecar
+{
+    private CallArgumentSidecar()
+    {
+    }
+
+    public sealed record InputArgSidecar(string ParamName, string Type, OperandSidecar Value) : CallArgumentSidecar;
+
+    public sealed record OutputArgSidecar(string ParamName, string Type, int DestAccessUId, int DestWireUId) : CallArgumentSidecar;
+}
+
+// One Call's full round-trip data. RailWireUId/Steps mirror every other production's own en/IN
+// chain shape exactly (same TraceChain mechanism). BlockName is repeated here (also on
+// CallStatement, the model) rather than only on the model side, because FlgNetBuilder works
+// entirely off the sidecar, never cross-referencing the model — same discipline as every other
+// sidecar/model pairing in this codebase (see CallArgumentSidecar's own doc comment for the same
+// reasoning re: ParamName). BlockType mirrors a comparison's/WAND's own SrcType (sidecar-only,
+// carried verbatim rather than hard-validated to a constant — "FB" is the only value confirmed
+// real, but an unconfirmed "FC" shouldn't be assumed impossible). Instance fields mirror
+// TimerBindingSidecar's own (InstanceUId/InstanceScope/InstanceComponentPath) — same
+// AccessNode-shaped reference. Arguments is positional, in the source's own <Parameter>
+// declaration order (confirmed real: 8 inputs then 2 outputs, in the one real wired example).
+public sealed record CallStatementSidecar(
+    int CallPartUId,
+    string BlockName,
+    string BlockType,
+    int? RailWireUId,
+    IReadOnlyList<ChainStepSidecar> Steps,
+    int InstanceUId,
+    string InstanceScope,
+    IReadOnlyList<string> InstanceComponentPath,
+    IReadOnlyList<CallArgumentSidecar> Arguments);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -357,7 +438,8 @@ public sealed record NetworkSidecar(
     IReadOnlyList<SidecarConstantEntry>? ConstantUIds = null,
     IReadOnlyList<TimerBindingSidecar>? Timers = null,
     IReadOnlyList<MoveStatementSidecar>? Moves = null,
-    IReadOnlyList<WordAndStatementSidecar>? WordAnds = null)
+    IReadOnlyList<WordAndStatementSidecar>? WordAnds = null,
+    IReadOnlyList<CallStatementSidecar>? Calls = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -366,6 +448,8 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<MoveStatementSidecar> Moves { get; init; } = Moves ?? Array.Empty<MoveStatementSidecar>();
 
     public IReadOnlyList<WordAndStatementSidecar> WordAnds { get; init; } = WordAnds ?? Array.Empty<WordAndStatementSidecar>();
+
+    public IReadOnlyList<CallStatementSidecar> Calls { get; init; } = Calls ?? Array.Empty<CallStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

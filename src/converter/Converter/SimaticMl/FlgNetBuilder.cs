@@ -56,6 +56,12 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.WordAnds.Count} And(s) but the sidecar records {sidecar.WordAnds.Count}.");
         }
 
+        if (network.Calls.Count != sidecar.Calls.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Calls.Count} Call(s) but the sidecar records {sidecar.Calls.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -133,6 +139,22 @@ public static class FlgNetBuilder
                     ? RailFacingEndpoints(wordAndSidecar.Steps[0])
                     : new[] { (UId: wordAndSidecar.AndPartUId, Port: "en") };
                 AddRailEndpoints(wireEndpointsByUId, wordAndRailWireUId, railFacingEndpoints);
+            }
+        }
+
+        for (var c = 0; c < network.Calls.Count; c++)
+        {
+            var callSidecar = sidecar.Calls[c];
+            BuildCall(callSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+
+            // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
+            // Timer/Coil/Move/WAND above (not yet seen live, same mechanism, handled identically).
+            if (callSidecar.RailWireUId is int callRailWireUId)
+            {
+                var railFacingEndpoints = callSidecar.Steps.Count > 0
+                    ? RailFacingEndpoints(callSidecar.Steps[0])
+                    : new[] { (UId: callSidecar.CallPartUId, Port: "en") };
+                AddRailEndpoints(wireEndpointsByUId, callRailWireUId, railFacingEndpoints);
             }
         }
 
@@ -264,6 +286,56 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.AndPartUId, "out"));
+    }
+
+    // Builds a Call Part (as its own sibling <Call>/<CallInfo> element, not a <Part Name="Call">
+    // — see PartNode's own doc comment), its `en`-chain (identical mechanism to BuildMove/
+    // BuildWordAnd's own — may have a null RailWireUId if `en` is fed directly by another TON's
+    // Q, same as any other chain), and its sparse, ordered argument list: each Input argument via
+    // AddOperandWire (same tag-or-literal wire shape as a TON's PT/a comparison's operand), each
+    // Output argument via the same IdentCon-fed wire shape as Move's own out1 — just named per
+    // the source's own Parameter Name (confirmed real, 2026-07-12, FC PlantAutoControl) instead of a
+    // fixed port.
+    private static void BuildCall(
+        CallStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        for (var i = 0; i < sidecar.Steps.Count; i++)
+        {
+            var nextTarget = i + 1 < sidecar.Steps.Count
+                ? EntryTarget(sidecar.Steps[i + 1])
+                : new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, "en");
+
+            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        var callParameters = sidecar.Arguments.Select(argument => argument switch
+        {
+            CallArgumentSidecar.InputArgSidecar input => new CallParameterNode(input.ParamName, "Input", input.Type),
+            CallArgumentSidecar.OutputArgSidecar output => new CallParameterNode(output.ParamName, "Output", output.Type),
+            _ => throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}"),
+        }).ToList();
+
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.CallPartUId, "Call", Instance: instance, BlockName: sidecar.BlockName, BlockType: sidecar.BlockType, CallParameters: callParameters));
+
+        foreach (var argument in sidecar.Arguments)
+        {
+            switch (argument)
+            {
+                case CallArgumentSidecar.InputArgSidecar input:
+                    AddOperandWire(wireEndpointsByUId, input.Value, sidecar.CallPartUId, input.ParamName);
+                    break;
+
+                case CallArgumentSidecar.OutputArgSidecar output:
+                    AddEndpoint(wireEndpointsByUId, output.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, output.DestAccessUId, null));
+                    AddEndpoint(wireEndpointsByUId, output.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, output.ParamName));
+                    break;
+
+                default:
+                    throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
+            }
+        }
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

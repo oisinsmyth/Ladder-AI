@@ -23,8 +23,16 @@ public static class FlgNetParser
 
     // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
     // confirmed real, 2026-07-11: LocalVariable (multi-instance, FB MotorDOL) and GlobalVariable
-    // (standalone instance DB, FC ControlDelays).
+    // (standalone instance DB, FC ControlDelays). Reused as-is by a Call's own <Instance>
+    // (confirmed identical shape, 2026-07-12, FC PlantAutoControl — all 20 real instances
+    // GlobalVariable; LocalVariable unconfirmed for a Call specifically, low-risk by analogy).
     private static readonly HashSet<string> SupportedInstanceScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
+
+    // A Call's own <Parameter Section="..."> — only Input/Output confirmed real, 2026-07-12,
+    // FC PlantAutoControl (TomraControlSystem: 8 Input, 2 Output). InOut is real in principle (an FB's own
+    // interface can declare InOut parameters) but unconfirmed on a Call specifically, refused
+    // rather than guessed at.
+    private static readonly HashSet<string> SupportedCallParameterSections = new(StringComparer.Ordinal) { "Input", "Output" };
 
     public static FlgNetwork Parse(XElement flgNet)
     {
@@ -97,6 +105,10 @@ public static class FlgNetParser
                 {
                     parts.Add(new PartNode(uid, name, negated, cardinality));
                 }
+            }
+            else if (child.Name == Ns + "Call")
+            {
+                parts.Add(ParseCall(child));
             }
             else
             {
@@ -229,31 +241,7 @@ public static class FlgNetParser
     private static (string Version, string TimeType, AccessNode Instance) ParseTon(XElement tonPart, int uid)
     {
         var version = RequireAttribute(tonPart, "Version");
-
-        var instanceElement = tonPart.Element(Ns + "Instance")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\"> is missing its <Instance> element.");
-        var instanceScope = RequireAttribute(instanceElement, "Scope");
-        if (!SupportedInstanceScopes.Contains(instanceScope))
-        {
-            throw new UnsupportedConstructException(
-                $"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance Scope=\"{instanceScope}\"> — only GlobalVariable/LocalVariable have been observed.");
-        }
-
-        var instanceUId = RequireIntAttribute(instanceElement, "UId");
-        var instanceComponents = instanceElement.Elements(Ns + "Component").ToList();
-        if (instanceComponents.Count == 0)
-        {
-            throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance> has no <Component> path elements.");
-        }
-
-        if (instanceComponents.Any(c => c.Attribute("SliceAccessModifier") is not null || c.Attribute("AccessModifier") is not null))
-        {
-            throw new UnsupportedConstructException(
-                $"<Part Name=\"TON\" UId=\"{uid}\">'s <Instance> has a slice/array-indexed Component — not observed on an Instance reference.");
-        }
-
-        var instancePath = instanceComponents.Select(c => RequireAttribute(c, "Name")).ToList();
-        var instance = new AccessNode(instanceUId, instanceScope, instancePath);
+        var instance = ParseInstanceReference(tonPart, "TON", uid);
 
         var templateValue = tonPart.Element(Ns + "TemplateValue")
             ?? throw new SimaticMlFormatException($"<Part Name=\"TON\" UId=\"{uid}\"> is missing its <TemplateValue> time-type element.");
@@ -267,6 +255,75 @@ public static class FlgNetParser
         }
 
         return (version, templateValue.Value, instance);
+    }
+
+    // An <Instance Scope="..." UId="..."><Component .../></Instance> reference — same shape used
+    // by a TON's own Instance and, confirmed real 2026-07-12 (FC PlantAutoControl), a Call's own
+    // Instance too (this is the reuse ir/SPEC.md's TON section deliberately anticipated: "a
+    // future FC/FB call's own instance argument can reuse AccessNode rather than needing a
+    // redesign"). Factored out once a second real caller (Call) confirmed the shape is genuinely
+    // shared, not just TON-specific. contextLabel/uid are only used to phrase error messages.
+    private static AccessNode ParseInstanceReference(XElement owner, string contextLabel, int uid)
+    {
+        var instanceElement = owner.Element(Ns + "Instance")
+            ?? throw new SimaticMlFormatException($"<{contextLabel} UId=\"{uid}\"> is missing its <Instance> element.");
+        var instanceScope = RequireAttribute(instanceElement, "Scope");
+        if (!SupportedInstanceScopes.Contains(instanceScope))
+        {
+            throw new UnsupportedConstructException(
+                $"<{contextLabel} UId=\"{uid}\">'s <Instance Scope=\"{instanceScope}\"> — only GlobalVariable/LocalVariable have been observed.");
+        }
+
+        var instanceUId = RequireIntAttribute(instanceElement, "UId");
+        var instanceComponents = instanceElement.Elements(Ns + "Component").ToList();
+        if (instanceComponents.Count == 0)
+        {
+            throw new SimaticMlFormatException($"<{contextLabel} UId=\"{uid}\">'s <Instance> has no <Component> path elements.");
+        }
+
+        if (instanceComponents.Any(c => c.Attribute("SliceAccessModifier") is not null || c.Attribute("AccessModifier") is not null))
+        {
+            throw new UnsupportedConstructException(
+                $"<{contextLabel} UId=\"{uid}\">'s <Instance> has a slice/array-indexed Component — not observed on an Instance reference.");
+        }
+
+        var instancePath = instanceComponents.Select(c => RequireAttribute(c, "Name")).ToList();
+        return new AccessNode(instanceUId, instanceScope, instancePath);
+    }
+
+    // An FB/FC call — confirmed real, 2026-07-12, FC PlantAutoControl (20 real instances). Genuinely
+    // not a `<Part Name="Call">`: `<Call>` is its own sibling element under <Parts>, wrapping
+    // `<CallInfo Name="<callee>" BlockType="FB"><Instance .../><Parameter .../>...</CallInfo>` —
+    // adapted into an ordinary PartNode(Name="Call") here so the rest of the pipeline never needs
+    // a parallel type. Only BlockType="FB" observed; stored verbatim (not hard-validated to a
+    // constant) since an unconfirmed "FC" shouldn't be assumed impossible. <Parameter> children
+    // are sparse — confirmed real: only wired parameters appear at all (19 of 20 real instances
+    // have none), in source declaration order.
+    private static PartNode ParseCall(XElement callElement)
+    {
+        var uid = RequireIntAttribute(callElement, "UId");
+        var callInfo = callElement.Element(Ns + "CallInfo")
+            ?? throw new SimaticMlFormatException($"<Call UId=\"{uid}\"> is missing its <CallInfo> element.");
+
+        var blockName = RequireAttribute(callInfo, "Name");
+        var blockType = RequireAttribute(callInfo, "BlockType");
+        var instance = ParseInstanceReference(callInfo, "Call", uid);
+
+        var parameters = callInfo.Elements(Ns + "Parameter").Select(p =>
+        {
+            var paramName = RequireAttribute(p, "Name");
+            var section = RequireAttribute(p, "Section");
+            if (!SupportedCallParameterSections.Contains(section))
+            {
+                throw new UnsupportedConstructException(
+                    $"<Call UId=\"{uid}\">'s <Parameter Name=\"{paramName}\" Section=\"{section}\"> — only Input/Output have been observed.");
+            }
+
+            var type = RequireAttribute(p, "Type");
+            return new CallParameterNode(paramName, section, type);
+        }).ToList();
+
+        return new PartNode(uid, "Call", Instance: instance, BlockName: blockName, BlockType: blockType, CallParameters: parameters);
     }
 
     private static AccessNode ParseAccess(XElement access)
