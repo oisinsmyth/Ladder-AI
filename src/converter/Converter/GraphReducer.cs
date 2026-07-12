@@ -693,7 +693,7 @@ public static class GraphReducer
     }
 
     // Each part kind's own "out"-equivalent port name — the port TraceChain looks for when
-    // identifying a wire's producer. Contact/O/Eq/Ge/Lt/Not use "out"; a TON/TONR's only
+    // identifying a wire's producer. Contact/O/Eq/Ge/Lt/Ne/Not use "out"; a TON/TONR's only
     // confirmed real upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused
     // like any other unrecognized shape). Move/And/Mul/Add/Convert never appear here — none is
     // ever a producer for a boolean chain, only a consumer (their own "en" tap, or — for
@@ -701,19 +701,21 @@ public static class GraphReducer
     // producer-identification comment.
     private static string? OutPortFor(string partName) => partName switch
     {
-        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Not" => "out",
+        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Not" => "out",
         "TON" or "TONR" => "Q",
         _ => null,
     };
 
     // IR-text infix operator per Part Name — Eq/Ge confirmed real 2026-07-11, Lt confirmed real
-    // 2026-07-12 (S1 item 19, FB MotorDOL/FilterUnitSystem). Ne/Le/Gt Part Names remain unconfirmed, so
-    // only these three are reachable — SupportedComparisonPartNames gates this at parse time.
+    // 2026-07-12 (S1 item 19, FB MotorDOL/FilterUnitSystem), Ne confirmed real 2026-07-12 (S1 item 22,
+    // FB AirStar — identical shape to Eq/Ge/Lt). Le/Gt Part Names remain unconfirmed, so only
+    // these four are reachable — SupportedComparisonPartNames gates this at parse time.
     private static string ComparisonOperator(string partName) => partName switch
     {
         "Eq" => "=",
         "Ge" => ">=",
         "Lt" => "<",
+        "Ne" => "<>",
         _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
     };
 
@@ -849,7 +851,7 @@ public static class GraphReducer
                 continue;
             }
 
-            if (upstreamPart.Name is "Eq" or "Ge" or "Lt")
+            if (upstreamPart.Name is "Eq" or "Ge" or "Lt" or "Ne")
             {
                 var (leftExpr, leftOperand) = ResolveTagOrLiteralOperand(
                     wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in1", networkNumber, visitedWireUIds, accessEntries, constantEntries);

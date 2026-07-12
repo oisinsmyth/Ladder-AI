@@ -240,10 +240,14 @@ public class ComparisonTests
     [Fact]
     public void Parse_UnconfirmedComparisonPartName_ThrowsUnsupportedConstruct()
     {
+        // "Ne" was this test's own example until S1 item 22 (2026-07-12) confirmed it real
+        // against FB AirStar — swapped to "Le" (still unconfirmed) to keep proving the same
+        // thing: an IEC-family Part Name that hasn't actually been grounded is still refused,
+        // not guessed at just because the family pattern is now well-established.
         var xml = """
             <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
               <Parts>
-                <Part Name="Ne" UId="1">
+                <Part Name="Le" UId="1">
                   <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
                 </Part>
                 <Part Name="Coil" UId="2" />
@@ -255,6 +259,61 @@ public class ComparisonTests
         var element = XElement.Parse(xml);
 
         var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
-        Assert.Contains("Ne", ex.Message);
+        Assert.Contains("Le", ex.Message);
+    }
+
+    // Ne (not-equal) — S1 item 22, 2026-07-12. Confirmed real against `FB AirStar` (found
+    // live-verifying S1 item 21's own LocalConstant fix) — identical shape to Eq/Ge/Lt (same
+    // SrcType TemplateValue, same pre/in1/in2/out ports), fourth member of the IEC comparison
+    // family this converter models. The readable-form `<>` operator token was already wired up in
+    // IrParser's own ComparisonTokens, unused until now.
+    [Fact]
+    public void Parse_NeFeedsCoil_ProducesNePartWithSrcType()
+    {
+        var network = LoadFixture("NeFeedsCoil.xml");
+
+        var ne = Assert.Single(network.Parts, p => p.Name == "Ne");
+        Assert.Equal("Int", ne.SrcType);
+    }
+
+    [Fact]
+    public void Reduce_NeFeedsCoil_ProducesNotEqualCompareExpr()
+    {
+        var network = LoadFixture("NeFeedsCoil.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level not-equal check", compileUnitUId: "3");
+
+        var assignment = Assert.Single(reduced.Network.Assignments);
+        var and = Assert.IsType<Expr.And>(assignment.Condition);
+        Assert.Equal("Enable", Assert.IsType<Expr.TagRef>(and.Operands[0]).Path);
+        var compare = Assert.IsType<Expr.Compare>(and.Operands[1]);
+        Assert.Equal("<>", compare.Operator);
+        Assert.Equal("Level", Assert.IsType<Expr.TagRef>(compare.Left).Path);
+        Assert.Equal("10", Assert.IsType<Expr.Literal>(compare.Right).Value);
+    }
+
+    [Fact]
+    public void RoundTrip_NeFeedsCoil_RebuildsIdenticalTopology()
+    {
+        var original = LoadFixture("NeFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Level not-equal check", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var nePart = Assert.Single(reparsed.Parts, p => p.Name == "Ne");
+        Assert.Equal("Int", nePart.SrcType);
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_NeFeedsCoil_ProducesNotEqualOperator()
+    {
+        var network = LoadFixture("NeFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level not-equal check", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal("NETWORK 1 \"Level not-equal check\"\n  COIL Output2 := Enable AND Level <> 10\n", text);
     }
 }

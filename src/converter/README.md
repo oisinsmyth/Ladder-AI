@@ -837,6 +837,46 @@ its own `<Instance>` element; `AirStar` hits `Ne` (not-equal), an unsupported co
 (the IEC family's own `Ne`/`Le`/`Gt` siblings of `Eq`/`Ge`/`Lt` — `Ne` is now the first of the
 three confirmed real). Neither addressed by this item.
 
+## `Ne` — not-equal comparison (S1 item 22, 2026-07-12)
+
+Picked up per the project owner's own choice, immediately after asking what `Ne` was likely to be
+— the IEC comparison family's own not-equal operator, alongside `Eq`(`=`)/`Ge`(`>=`)/`Lt`(`<`),
+already fully supported. Well-precedented before any grounding: `ir/SPEC.md`'s own readable-form
+table already had a row noting `Ne`/`Le`/`Lt` as "confirmed real Part Names... not yet built" (from
+an earlier 28-block sweep), and `IrParser`'s own `ComparisonTokens` array already carried the `<>`
+token, unused, waiting for exactly this.
+
+**Grounded directly** (real `FB AirStar`, the same block `Ne` was first spotted blocking during S1
+item 21's own live verification) rather than a fresh formal plan-mode cycle, given how small and
+well-precedented "add a fourth comparison operator" now is (the third time this session, after
+`Eq`/`Ge`'s original build and `Lt`'s own S1 item 19 addition):
+
+```xml
+<Part Name="Ne" UId="54">
+  <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+</Part>
+```
+
+Identical shape to `Eq`/`Ge`/`Lt` — same `SrcType` `TemplateValue`, same `pre`/`in1`/`in2`/`out`
+ports (confirmed by tracing the real wires: `pre`→Contact chain, `in1`/`in2`→operands, `out`→Coil).
+
+**Design**: `FlgNetParser.SupportedPartNames`/`SupportedComparisonPartNames` and `GraphReducer`'s
+`OutPortFor`/`ComparisonOperator`/`TraceChain` upstream-dispatch each gained a fourth case. Every
+other layer needed **zero changes** — `ChainStepSidecar.CompareStep.PartName` and
+`Expr.Compare.Operator` are both carried verbatim (never derived from a hardcoded switch), so
+`FlgNetBuilder`/`FlgNetWriter`/`IrSerializer`/`IrParser` already handle any confirmed comparison
+Part Name generically. Repurposed the one existing test that used `"Ne"` as its own placeholder for
+an unconfirmed Part Name (now genuinely real) — swapped to `"Le"` (still unconfirmed), preserving
+the test's own point rather than deleting it.
+
+4 new tests (`ComparisonTests.cs`), one new fixture (`NeFeedsCoil.xml`, genericized from the real
+`AirStar` shape). All 225 converter tests pass (up from 221).
+
+**Live-verified against real data, 2026-07-12.** Fresh `AirStar` export converted past the `Ne`
+error completely — confirmed gone. Doesn't fully round-trip as a whole block yet: progresses to
+`TOF` (an off-delay timer, spotted alongside `Ne` during this item's own grounding — a new,
+separate, unaddressed gap, not chased here).
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

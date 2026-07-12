@@ -14,12 +14,14 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "Eq", "Ge", "Lt", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
+        { "Contact", "Coil", "O", "TON", "TONR", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
-    // FB MotorDOL/FilterUnitSystem). Ne/Le/Gt's real Part Names remain unconfirmed, refused rather than
-    // guessed at even though the IEC family strongly suggests what they'd be named.
-    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt" };
+    // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
+    // to Eq/Ge/Lt, same SrcType TemplateValue, same pre/in1/in2/out ports). Le/Gt's real Part
+    // Names remain unconfirmed, refused rather than guessed at even though the IEC family
+    // strongly suggests what they'd be named.
+    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt", "Ne" };
 
     // LocalConstant confirmed real 2026-07-12 (S1 item 21, FB MotorVSDSystem/AirStar — 4 independent
     // instances) — a genuinely different shape from GlobalVariable/LocalVariable (see ParseAccess's
@@ -80,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/Eq/Ge/Lt/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");

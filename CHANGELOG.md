@@ -10,6 +10,24 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 22: `Ne` (not-equal comparison) — built, tested, live-verified**
+
+- Picked up per the project owner's own choice, asked directly what `Ne` was likely to be —
+  answered from prior evidence already in the repo (an existing `ir/SPEC.md` table row, an unused
+  `<>` token already wired up in `IrParser`) before any grounding: the not-equal sibling of
+  `Eq`/`Ge`/`Lt`, all three already fully supported.
+- Grounded directly against real `AirStar` (the block that first surfaced `Ne`, S1 item 21's own
+  live verification) rather than a fresh plan-mode cycle — small, well-precedented, third
+  comparison-family addition this session. Confirmed identical shape to `Eq`/`Ge`/`Lt`.
+- `FlgNetParser`/`GraphReducer` each gained a fourth comparison case. Everything downstream needed
+  **zero changes** — `CompareStep.PartName`/`Expr.Compare.Operator` are both carried verbatim, not
+  derived from a hardcoded switch.
+- 4 new tests, one new fixture. All three suites green: 225 converter (up from 221), 68
+  openness-cli, 11 golden-harness.
+- **Live-verified:** the `Ne` error is gone from `AirStar`. Doesn't fully round-trip yet —
+  progresses to `TOF` (an off-delay timer, spotted alongside `Ne` during grounding — a new,
+  separate, unaddressed gap). Full story: `docs/notes/stage-gates.md` ("S1 item 22").
+
 **S1 item 21: `Access Scope="LocalConstant"` — built, tested, live-verified**
 
 - Picked up per the project owner's own choice — the last of the two real gaps S1 item 20's live

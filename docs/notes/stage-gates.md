@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 221 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 225 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1746,3 +1746,61 @@ data — the last of the two real gaps S1 item 20's live verification surfaced i
 honest-reporting discipline (closing `LocalConstant` was never guaranteed to be either block's only
 remaining gap, and it wasn't) — each now blocked by a separate, unrelated, newly-found item
 (`<Call>` missing `<Instance>`; `Ne`), neither addressed here.
+
+### S1 item 22 (`Ne` — not-equal comparison), 2026-07-12
+
+Picked up per the project owner's own choice, immediately after asking what `Ne` was likely to be.
+Answered directly before any grounding, from prior evidence already in this repo: `ir/SPEC.md`'s
+own readable-form table already had a row noting `Ne`/`Le`/`Lt` as "confirmed real Part Names...
+not yet built" (from an earlier 28-block sweep during the AND-merge investigation), and
+`IrParser`'s own `ComparisonTokens` array already carried the `<>` token, unused, waiting for
+exactly this — the not-equal sibling of `Eq`(`=`)/`Ge`(`>=`)/`Lt`(`<`), all three already fully
+supported (`Eq`/`Ge` original build 2026-07-11; `Lt` S1 item 19).
+
+**Grounded directly against real data** (real `FB AirStar`, the same block `Ne` was first spotted
+blocking during S1 item 21's own live verification) rather than a fresh formal plan-mode cycle —
+given how small and well-precedented "add a fourth comparison operator" now is (the third time
+this session), CLAUDE.md hard rule 3's own grounding requirement was still honored, just without
+the heavier plan-mode ceremony:
+
+```xml
+<Part Name="Ne" UId="54">
+  <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+</Part>
+```
+
+Identical shape to `Eq`/`Ge`/`Lt` — same `SrcType` `TemplateValue`, same `pre`/`in1`/`in2`/`out`
+ports, confirmed by tracing the real wires within this specific network (`pre`→upstream Contact
+chain, `in1`/`in2`→operands, `out`→downstream Coil). Also noted in passing while grounding (not
+chased): a `Part Name="TOF"` (off-delay timer) instruction nearby — a new, separate, unaddressed
+gap.
+
+**Design**: `FlgNetParser.SupportedPartNames`/`SupportedComparisonPartNames` and `GraphReducer`'s
+`OutPortFor`/`ComparisonOperator`/`TraceChain` upstream-dispatch each gained a fourth case.
+Everything downstream of reduction needed **zero changes** — `ChainStepSidecar.CompareStep.
+PartName` and `Expr.Compare.Operator` are both carried verbatim rather than derived from a
+hardcoded switch, so `FlgNetBuilder`/`FlgNetWriter`/`IrSerializer`/`IrParser` already handle any
+confirmed comparison Part Name generically (the same design that made `Lt`'s own S1 item 19
+addition small is what made this one even smaller). Repurposed the one existing test that used
+`"Ne"` as its own placeholder for an unconfirmed Part Name — swapped to `"Le"` (still genuinely
+unconfirmed), preserving the test's own point (an ungrounded IEC-family name stays refused) rather
+than deleting it outright.
+
+4 new tests (`Converter.Tests/ComparisonTests.cs`), one new fixture (`NeFeedsCoil.xml`,
+genericized from the real `AirStar` shape, mirroring the existing `Lt`/`Ge` fixture pattern). All
+passed on first run. All three suites green: **225 converter tests** (up from 221), 68
+openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Exported `AirStar` fresh and ran `converter to-ir` — **the `Ne` error is gone**, confirming the fix
+against the real block it was found on. Doesn't fully round-trip as a whole block yet: progresses
+to `TOF` (spotted alongside `Ne` during this item's own grounding pass — a new, separate,
+unaddressed gap, not chased here). Real exported data deleted from scratch temp immediately after
+use, confirmed via `git status --short`.
+
+**Bottom line:** `Ne` is built, tested, and live-verified against real data — the third and
+smallest comparison-family addition this session, with zero changes needed anywhere downstream of
+`GraphReducer`'s own reduction dispatch. `AirStar` still doesn't fully round-trip (now blocked by
+`TOF`, not addressed here); `MotorVSDSystem`'s own remaining `<Call>`-missing-`<Instance>` gap is also
+still open, unrelated to this item.

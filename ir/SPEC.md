@@ -122,7 +122,7 @@ lookup table entry:
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
 | `SCoil`/`RCoil` (set/reset coils) — **confirmed real and built, 2026-07-12 (S1 item 15)**, structurally identical to `Coil` (same `in`/`operand` ports, never a producer) | `SCOIL <tag> := <expr>` / `RCOIL <tag> := <expr>` |
-| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne`/`Le`/`Lt` — **confirmed real Part Names, 2026-07-12, not yet built**; `Gt` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
+| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Le`/`Gt` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
 
 **No boolean "AND-merge" Part exists (resolved, 2026-07-12, S1 item 12).** This table originally
@@ -691,6 +691,19 @@ question, left open on purpose rather than guessed).
   `AirStar`; neither fully round-trips as a whole block yet — each hits a different, new,
   unrelated gap (`MotorVSDSystem`: a `<Call>` missing its `<Instance>` element; `AirStar`: `Ne`,
   not-equal, an unsupported comparison Part Name) — neither addressed by this item.
+- **Resolved, 2026-07-12 (S1 item 22): `Ne` (not-equal comparison) built.** Grounded against real
+  `AirStar` (found live-verifying S1 item 21's own fix) — identical shape to `Eq`/`Ge`/`Lt` (same
+  `SrcType` `TemplateValue`, same `pre`/`in1`/`in2`/`out` ports), the fourth member of the IEC
+  comparison family this converter models. `FlgNetBuilder`/`FlgNetWriter`/`IrSerializer`/
+  `IrParser` needed **zero changes** — `ChainStepSidecar.CompareStep.PartName` and
+  `Expr.Compare.Operator` are both already carried verbatim rather than derived from a hardcoded
+  switch, and the readable-form `<>` token was already present in `IrParser`'s own
+  `ComparisonTokens`, unused until now. Only `FlgNetParser.SupportedPartNames`/
+  `SupportedComparisonPartNames` and `GraphReducer`'s `OutPortFor`/`ComparisonOperator`/
+  `TraceChain` upstream-dispatch needed a fourth case each. 4 new tests, 225/225 total passing.
+  **Live-verified against real data:** the `Ne` error is gone from `AirStar`; it doesn't fully
+  round-trip yet — progresses to `TOF` (an off-delay timer, spotted alongside `Ne` during this
+  item's own grounding — a new, separate, unaddressed gap).
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
   declared parameter list, independent of what's wired at any one call site) is now separately
@@ -700,8 +713,9 @@ question, left open on purpose rather than guessed).
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
   passed — see `tests/golden/README.md`.
-- `Ne`/`Le`/`Lt` Part Names confirmed real 2026-07-12 (found while sweeping for AND-merge —
-  see above), not yet built; `Gt` still unconfirmed.
+- `Ne`/`Le`/`Lt` Part Names confirmed real 2026-07-12 (found while sweeping for AND-merge — see
+  above). `Lt` built S1 item 19; `Ne` built S1 item 22 (see its own "Resolved" bullet below);
+  `Le`/`Gt` still unconfirmed real, not built.
 - **Resolved, 2026-07-12 (S1 item 11):** a comparison composing with an OR-merge (as a branch, or
   feeding one) — real (`ControlDelays`' `O(41)`). OR-merge branches generalized to ordinary
   chains (reusing `GraphReducer.TraceChain` recursively), so a comparison appearing there needs
