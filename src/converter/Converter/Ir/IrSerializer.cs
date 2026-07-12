@@ -273,11 +273,13 @@ public static class IrSerializer
         _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
     };
 
-    // TONR (S1 item 19) mirrors its own source Part Name, same convention as TON/COIL/MOVE/CALL.
+    // TONR (S1 item 19)/TOF (S1 item 23) mirror their own source Part Names, same convention as
+    // TON/COIL/MOVE/CALL.
     private static string TimerKeywordFor(TimerKind kind) => kind switch
     {
         TimerKind.Ton => "TON",
         TimerKind.Tonr => "TONR",
+        TimerKind.Tof => "TOF",
         _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
     };
 
@@ -599,6 +601,7 @@ public static class IrSerializer
     {
         TimerKind.Ton => "ton",
         TimerKind.Tonr => "tonr",
+        TimerKind.Tof => "tof",
         _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
     };
 

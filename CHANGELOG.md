@@ -10,6 +10,25 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 23: `TOF` (off-delay timer) — built, tested, live-verified; `AirStar` fully round-trips**
+
+- Picked up per the project owner's own choice, asked directly what `TOF` was likely to be —
+  answered from prior knowledge before any grounding: an off-delay timer, IEC sibling of
+  `TON`/`TONR`. Grounded directly against real `AirStar` (the block that first surfaced it).
+  Confirmed structurally identical to `TON` — same `Version`/`Instance`/`time_type` shape, same
+  `IN`/`PT`/`ET` ports, no reset port (unlike `TONR`), no `EN`/`ENO`.
+- `TimerKind` gains a third variant, `Tof` — needing zero new fields, simpler than `TONR`'s own
+  addition. Every touchpoint `TONR` already generalized just needed a third case added.
+- 5 new tests, one new fixture. All three suites green: 230 converter (up from 225), 68
+  openness-cli, 11 golden-harness.
+- **Live-verified — a genuine milestone**: fresh `AirStar` export converted **completely, no
+  errors at all**, and round-trips `to-ir → to-xml → to-ir` **byte-identical**, confirmed
+  genuinely exercising both `TOF`/`Ne`. `AirStar` is now the **sixth** of `PlantAutoControl`'s own 8
+  dependency FBs to fully round-trip (S1 item 19 already got 5 there; this closes `AirStar`,
+  the last of the three the S1 item 20 Interface-modeling sweep found). Only `TomraControlSystem`
+  (`Swap`) and `MotorVSDSystem` (a `<Call>` missing its `<Instance>`) remain blocked. Full story:
+  `docs/notes/stage-gates.md` ("S1 item 23").
+
 **S1 item 22: `Ne` (not-equal comparison) — built, tested, live-verified**
 
 - Picked up per the project owner's own choice, asked directly what `Ne` was likely to be —

@@ -269,6 +269,7 @@ public static class FlgNetBuilder
     {
         TimerKind.Ton => "TON",
         TimerKind.Tonr => "TONR",
+        TimerKind.Tof => "TOF",
         _ => throw new IrFormatException($"Unsupported timer kind: {kind}"),
     };
 

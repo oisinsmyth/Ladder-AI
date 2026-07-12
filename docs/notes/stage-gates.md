@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 225 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 3 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`/`AirStar`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 230 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1804,3 +1804,72 @@ smallest comparison-family addition this session, with zero changes needed anywh
 `GraphReducer`'s own reduction dispatch. `AirStar` still doesn't fully round-trip (now blocked by
 `TOF`, not addressed here); `MotorVSDSystem`'s own remaining `<Call>`-missing-`<Instance>` gap is also
 still open, unrelated to this item.
+
+### S1 item 23 (`TOF` — off-delay timer), 2026-07-12 — `AirStar` fully round-trips
+
+Picked up per the project owner's own explicit choice, asked directly what `TOF` was likely to be
+— answered before any grounding: an off-delay timer, IEC sibling of `TON`/`TONR`, both already
+fully supported. Grounded directly against real `AirStar` (the same block `TOF` was first spotted
+blocking, S1 item 22's own live verification) rather than a fresh formal plan-mode cycle — small,
+well-precedented (third `TimerKind` variant, after `TON`'s own original build and `TONR`'s S1 item
+19 addition). One retry needed on export (`TIA Portal did not respond to attach/launch within 5
+minute(s)` — the same recurring slow-Portal-wake pattern seen throughout this session, not a real
+error; succeeded immediately on retry with a longer `--timeout-connect`).
+
+```xml
+<Part Name="TOF" Version="1.0" UId="55">
+  <Instance Scope="LocalVariable" UId="56">
+    <Component Name="PulseProgramTimer" />
+  </Instance>
+  <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
+</Part>
+```
+
+**Structurally identical to `TON`** — same `Version`/`Instance`/`time_type` shape. Wire tracing
+within this specific network confirmed `IN`/`PT`/`ET` ports exactly matching `TON`'s own (`IN` fed
+by an upstream `Ne`'s own `out`; `PT` fed by a plain tag `IdentCon`; `ET` unconnected, `OpenCon`).
+**No reset port** — unlike `TONR`, confirmed by checking for a `NameCon ... Name="R"` reference to
+this Part and finding none. No `EN`/`ENO`. No live example of `TOF`'s own `Q` being consumed
+anywhere in the grounded network (same "unconfirmed, not needed for this network to reduce" status
+`TON`'s own `ET`-consumed case already has). The only real difference from `TON` is semantic
+(off-delay vs on-delay timing behavior), which this converter doesn't compute — same "IR doesn't
+compute runtime semantics" reasoning already established for `CoilKind`/`TimerKind`'s own `Tonr`
+variant.
+
+**Design**: `TimerKind` gains a third variant, `Tof` — needing **zero new fields**, genuinely
+simpler than `TONR`'s own addition (which needed a real `Reset` field for its confirmed `R` port).
+Every touchpoint `TONR` already generalized just needed a third case added, no new mechanism
+anywhere: `FlgNetParser.SupportedPartNames`/the `Parse` dispatch (`TON`/`TONR`/`TOF` share one
+branch, `ParseTon` already takes `partName` generically), `GraphReducer`'s `tonParts` collection
+filter/`TimerKindFor`/`OutPortFor`/`TraceChain` upstream dispatch, `FlgNetBuilder.
+TimerPartNameFor`, `IrSerializer`'s `TimerKeywordFor`/`TimerSidecarKind`, `IrParser`'s
+readable-form loop condition/regex alternation/sidecar `kind` parsing (plus one small extra
+guard: a 4th, `R`-shaped argument on a `TOF`/`TON` line is now explicitly rejected, since only
+`TONR` may carry one). `ReduceTimer`'s own reset-resolution branch is already gated specifically
+on `Kind == TimerKind.Tonr`, so `TOF` naturally skips it with no extra logic needed there.
+
+5 new tests (`Converter.Tests/TonTests.cs`, mirroring the existing `WithTon.xml` coverage exactly
+— parse/reduce/round-trip/serialize/full-block), one new fixture (`WithTof.xml`, genericized,
+matching `WithTon.xml`'s own structure with `TOF` substituted for `TON`). All passed on first run.
+All three suites green: **230 converter tests** (up from 225), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12 — a genuine milestone
+
+Exported `AirStar` fresh and ran `converter to-ir` — **succeeded completely, no further errors at
+all.** Carried through a full `to-ir → to-xml → to-ir` cycle: **byte-identical**, confirmed via
+`diff`. Confirmed this genuinely exercises today's own work, not a lucky no-op: exactly 1 `TOF(`
+occurrence and 2 `<>` (`Ne`) occurrences in the converted `.ir` text, via direct grep.
+
+**`AirStar` is now the sixth of `PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to
+end** — S1 item 19 already got `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/
+`MotorFwdRevSystem` there via its own whole-block sweep; this item closes `AirStar` — the entire
+chain of gaps this session's own live-verification work progressively found for this specific
+block: S1 item 20's `Constant` Interface section → S1 item 21's `LocalConstant` → S1 item 22's
+`Ne` → this item's `TOF`. All real exported data deleted from scratch temp immediately after use,
+confirmed via `git status --short`.
+
+**Bottom line:** `TOF` is built, tested, and live-verified — the smallest of the three `TimerKind`
+variants (no new fields at all) and the capstone of a four-item chain that started with S1 item
+20's own Interface modeling work. Only **2 of `PlantAutoControl`'s 8 dependency FBs remain blocked**:
+`TomraControlSystem` (`Swap`) and `MotorVSDSystem` (a `<Call>` missing its own `<Instance>`) — both still
+open, unrelated to this item, not addressed here.

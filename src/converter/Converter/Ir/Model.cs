@@ -60,16 +60,21 @@ public abstract record EnSource
     public sealed record PrecedingEno : EnSource;
 }
 
-// TON (non-retentive) vs TONR (retentive) — confirmed real, 2026-07-12 (S1 item 19), two
-// independent instances (`FB MotorDOL`/`FilterUnitSystem`, byte-identical network shape). Structurally
-// TONR is TON plus one extra port (`R`, reset) — same `Version`/`Instance`/`time_type` shape
-// otherwise, no EN/ENO either. Mirrors the CoilKind precedent (Coil/SCoil/RCoil, S1 item 15):
-// the IR doesn't compute retentive-vs-non-retentive runtime semantics, just records which Part
-// Name to regenerate.
+// TON (on-delay) vs TONR (retentive on-delay) vs TOF (off-delay) — confirmed real, 2026-07-12
+// (TONR: S1 item 19, two independent instances, `FB MotorDOL`/`FilterUnitSystem`; TOF: S1 item 23,
+// `FB AirStar`). TONR is TON plus one extra port (`R`, reset). TOF is structurally identical to
+// TON — same `Version`/`Instance`/`time_type` shape, same `IN`/`PT`/`ET` ports, no reset port, no
+// EN/ENO on any of the three — confirmed real, no live example of TOF's own `Q` being consumed
+// (neither Access-based nor direct-wire) in the one grounded instance, same "unconfirmed, not
+// needed for this network to reduce" status TON's own `ET`-consumed case has. Mirrors the
+// CoilKind precedent (Coil/SCoil/RCoil, S1 item 15): the IR doesn't compute
+// on-delay-vs-retentive-vs-off-delay runtime semantics, just records which Part Name to
+// regenerate.
 public enum TimerKind
 {
     Ton,
     Tonr,
+    Tof,
 }
 
 // A TON/TONR instance used in a network — confirmed real, 2026-07-11 (TON) and 2026-07-12

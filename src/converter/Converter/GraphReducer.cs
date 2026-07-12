@@ -37,10 +37,11 @@ public static class GraphReducer
         var constantsByUId = network.Constants.ToDictionary(c => c.UId);
         var wiresByPort = BuildPortIndex(network.Wires);
 
-        // TON/TONR (S1 items 8/19) are reduced via the exact same code, tagging the result with
-        // TimerBinding.Kind (derived from the Part Name below) — identical Version/Instance/
-        // time_type shape, TONR just adds one extra `R` port, confirmed real 2026-07-12.
-        var tonParts = network.Parts.Where(p => p.Name is "TON" or "TONR").ToList();
+        // TON/TONR/TOF (S1 items 8/19/23) are reduced via the exact same code, tagging the result
+        // with TimerBinding.Kind (derived from the Part Name below) — identical Version/Instance/
+        // time_type shape for all three; TONR adds one extra `R` port; TOF is structurally
+        // identical to TON (no extra port), confirmed real 2026-07-12.
+        var tonParts = network.Parts.Where(p => p.Name is "TON" or "TONR" or "TOF").ToList();
         // SCoil/RCoil (S1 item 15) are structurally identical to Coil — same "in"/"operand"
         // ports, never a producer — confirmed real, 2026-07-12, FC PlantAutoControl (two independent
         // instances of each). ReduceOneChain resolves all three via the exact same code, tagging
@@ -56,7 +57,7 @@ public static class GraphReducer
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR, Move, And, Call, Mul/Add, or Convert found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, or Convert found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -331,13 +332,14 @@ public static class GraphReducer
         return (binding, sidecar, accessEntries, constantEntries);
     }
 
-    // TON/TONR (S1 item 19) map 1:1 to TimerKind — no other Part Name has ever mapped to one of
-    // these two kinds, so this is a straight lookup, not a guess (mirrors CoilKindFor's own
-    // pattern exactly).
+    // TON/TONR/TOF (S1 items 8/19/23) map 1:1 to TimerKind — no other Part Name has ever mapped
+    // to one of these three kinds, so this is a straight lookup, not a guess (mirrors
+    // CoilKindFor's own pattern exactly).
     private static TimerKind TimerKindFor(string partName, int networkNumber, int uid) => partName switch
     {
         "TON" => TimerKind.Ton,
         "TONR" => TimerKind.Tonr,
+        "TOF" => TimerKind.Tof,
         _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a timer binding."),
     };
 
@@ -693,7 +695,7 @@ public static class GraphReducer
     }
 
     // Each part kind's own "out"-equivalent port name — the port TraceChain looks for when
-    // identifying a wire's producer. Contact/O/Eq/Ge/Lt/Ne/Not use "out"; a TON/TONR's only
+    // identifying a wire's producer. Contact/O/Eq/Ge/Lt/Ne/Not use "out"; a TON/TONR/TOF's only
     // confirmed real upstream leaf is "Q" ("ET" has no live example as a consumed leaf, refused
     // like any other unrecognized shape). Move/And/Mul/Add/Convert never appear here — none is
     // ever a producer for a boolean chain, only a consumer (their own "en" tap, or — for
@@ -702,7 +704,7 @@ public static class GraphReducer
     private static string? OutPortFor(string partName) => partName switch
     {
         "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Not" => "out",
-        "TON" or "TONR" => "Q",
+        "TON" or "TONR" or "TOF" => "Q",
         _ => null,
     };
 
@@ -830,7 +832,7 @@ public static class GraphReducer
             visitedWireUIds.Add(wire.UId);
             var outgoingWireUId = wire.UId;
 
-            if (upstreamPart.Name is "TON" or "TONR")
+            if (upstreamPart.Name is "TON" or "TONR" or "TOF")
             {
                 var instancePath = string.Join('.', upstreamPart.Instance!.ComponentPath);
                 steps.Insert(0, new ChainStepSidecar.TimerOutputStep(upstreamPart.UId, "Q", outgoingWireUId));

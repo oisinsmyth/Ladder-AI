@@ -877,6 +877,54 @@ error completely — confirmed gone. Doesn't fully round-trip as a whole block y
 `TOF` (an off-delay timer, spotted alongside `Ne` during this item's own grounding — a new,
 separate, unaddressed gap, not chased here).
 
+## `TOF` — off-delay timer (S1 item 23, 2026-07-12) — `AirStar` fully round-trips
+
+Picked up per the project owner's own explicit choice, immediately after asking what `TOF` was
+likely to be. Answered directly: an off-delay timer, IEC sibling of `TON`/`TONR`, both already
+fully supported. Grounded directly against real `AirStar` (the block `TOF` was first spotted
+blocking, S1 item 22's own live verification) rather than a fresh plan-mode cycle:
+
+```xml
+<Part Name="TOF" Version="1.0" UId="55">
+  <Instance Scope="LocalVariable" UId="56">
+    <Component Name="PulseProgramTimer" />
+  </Instance>
+  <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
+</Part>
+```
+
+**Structurally identical to `TON`** — same `Version`/`Instance`/`time_type` shape, same
+`IN`/`PT`/`ET` ports (confirmed by tracing the real wires: `IN` fed by an upstream `Ne`'s own
+`out`, `PT` fed by a tag, `ET` unconnected — `OpenCon`). **No reset port** (unlike `TONR`), no
+`EN`/`ENO`. No live example of `TOF`'s own `Q` being consumed in the one grounded network. The
+only real difference from `TON` is semantic (off-delay vs on-delay timing behavior), which this
+converter doesn't compute anyway — same "IR doesn't compute runtime semantics" reasoning already
+established for `CoilKind`/`TimerKind`'s own `Tonr` variant.
+
+**Design**: `TimerKind` gains a third variant, `Tof` — needing **zero new fields**, unlike `TONR`'s
+own addition (which needed a real `Reset` field for its confirmed `R` port). Every touchpoint
+`TONR` already generalized (`FlgNetParser.SupportedPartNames`, the `TON`/`TONR`/`TOF` dispatch in
+`Parse`, `GraphReducer`'s `tonParts` collection filter/`TimerKindFor`/`OutPortFor`/`TraceChain`
+upstream dispatch, `FlgNetBuilder.TimerPartNameFor`, `IrSerializer`'s `TimerKeywordFor`/
+`TimerSidecarKind`, `IrParser`'s readable-form loop/regex/sidecar `kind` parsing) just needed a
+third case added — no new mechanism anywhere. `ReduceTimer`'s own reset-resolution branch is
+already gated specifically on `Kind == TimerKind.Tonr`, so `TOF` (like plain `TON`) naturally
+skips it with no extra logic.
+
+5 new tests (`TonTests.cs`, mirroring the existing `WithTon.xml` coverage exactly), one new fixture
+(`WithTof.xml`). All 230 converter tests pass (up from 225).
+
+**Live-verified against real data, 2026-07-12 — a genuine milestone.** Fresh `AirStar` export:
+**`converter to-ir` succeeded completely, with no further errors at all.** `to-ir → to-xml → to-ir`
+round-trips **byte-identical** — confirmed genuinely exercising both `TOF` (1 occurrence) and `Ne`
+(2 occurrences) via direct grep, not a lucky no-op. `AirStar` is now the **sixth** of
+`PlantAutoControl`'s own 8 dependency FBs to fully round-trip end to end — S1 item 19 already got
+`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem` there; this closes
+`AirStar` — the entire chain of gaps this session's own live-verification work progressively found
+for this specific block, starting from S1 item 20's `Constant` Interface section through S1 items
+21 (`LocalConstant`), 22 (`Ne`), and this one. Only `TomraControlSystem` (`Swap`) and `MotorVSDSystem` (a
+`<Call>` missing its `<Instance>`) remain of the original 8.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

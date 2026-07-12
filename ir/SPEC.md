@@ -704,6 +704,22 @@ question, left open on purpose rather than guessed).
   **Live-verified against real data:** the `Ne` error is gone from `AirStar`; it doesn't fully
   round-trip yet — progresses to `TOF` (an off-delay timer, spotted alongside `Ne` during this
   item's own grounding — a new, separate, unaddressed gap).
+- **Resolved, 2026-07-12 (S1 item 23): `TOF` (off-delay timer) built.** Grounded against real
+  `AirStar` (the same block `TOF` was first spotted blocking during S1 item 22's own live
+  verification) — structurally **identical to `TON`**: same `Version`/`Instance`/`time_type`
+  shape, same `IN`/`PT`/`ET` ports, no reset port (unlike `TONR`), no `EN`/`ENO`. The only
+  difference from `TON` is semantic (off-delay vs on-delay timing behavior), which this converter
+  doesn't compute anyway — modeled as a third `TimerKind` variant (`Ton`/`Tonr`/`Tof`) alongside
+  the existing two, needing **zero new fields**, unlike `TONR`'s own addition (which needed a real
+  `Reset` field for its confirmed `R` port). 5 new tests, 230/230 total passing. **Live-verified
+  against real data: `AirStar` now fully round-trips as a whole block**, `to-ir → to-xml → to-ir`
+  byte-identical — confirmed genuinely exercising `TOF`/`Ne` (1/2 real occurrences respectively,
+  not a lucky no-op). This is the **sixth** of `PlantAutoControl`'s own 8 dependency FBs to fully
+  round-trip end to end (S1 item 19 already got `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/
+  `FilterUnitSystem`/`MotorFwdRevSystem` there; this closes `AirStar`) — closing every gap this session's
+  own live-verification chain found for `AirStar` specifically, starting from S1 item 20
+  (`Constant` Interface section) through S1 items 21 (`LocalConstant`), 22 (`Ne`), and this one.
+  Only `TomraControlSystem` (`Swap`) and `MotorVSDSystem` (a `<Call>` missing its `<Instance>`) remain.
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
   declared parameter list, independent of what's wired at any one call site) is now separately

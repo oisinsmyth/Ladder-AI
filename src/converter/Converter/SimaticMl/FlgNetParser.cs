@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,13 +82,13 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
                 var negated = name == "Contact" && ParseNegated(child, uid);
                 var cardinality = name == "O" ? ParseCardinality(child, "O", uid) : (int?)null;
-                if (name is "TON" or "TONR")
+                if (name is "TON" or "TONR" or "TOF")
                 {
                     var (version, timeType, instance) = ParseTon(child, name, uid);
                     parts.Add(new PartNode(uid, name, TonVersion: version, TimeType: timeType, Instance: instance));

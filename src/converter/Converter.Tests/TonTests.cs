@@ -408,4 +408,88 @@ public class TonTests
         var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
         Assert.Contains("extra content", ex.Message);
     }
+
+    // TOF (off-delay timer) — S1 item 23, 2026-07-12. Confirmed real against `FB AirStar` (found
+    // live-verifying S1 item 22's own Ne fix): structurally identical to TON — same
+    // Version/Instance/time_type shape, same IN/PT/ET ports, no reset port (unlike TONR), no
+    // EN/ENO. The only difference from TON is semantic (off-delay vs on-delay timing), which this
+    // converter doesn't compute — modeled as a third TimerKind variant with zero new fields.
+    [Fact]
+    public void Parse_WithTof_ProducesTofPartWithGlobalInstance()
+    {
+        var network = LoadFixture("WithTof.xml");
+
+        var tof = Assert.Single(network.Parts, p => p.Name == "TOF");
+        Assert.Equal("1.0", tof.TonVersion);
+        Assert.Equal("Time", tof.TimeType);
+        Assert.NotNull(tof.Instance);
+        Assert.Equal("GlobalVariable", tof.Instance!.Scope);
+        Assert.Equal(new[] { "RunHoldDelay" }, tof.Instance.ComponentPath);
+    }
+
+    [Fact]
+    public void Reduce_WithTof_ProducesTimerBindingWithTofKind()
+    {
+        var network = LoadFixture("WithTof.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Run hold delay", compileUnitUId: "3");
+
+        var timer = Assert.Single(reduced.Network.Timers);
+        Assert.Equal(TimerKind.Tof, timer.Kind);
+        Assert.Equal("RunHoldDelay", timer.InstancePath);
+        Assert.Equal("Sensor1.Ok", Assert.IsType<Expr.TagRef>(timer.In).Path);
+        Assert.Equal("Settings.RunDelay", Assert.IsType<Expr.TagRef>(timer.Pt).Path);
+        Assert.Null(timer.Reset);
+
+        var timerSidecar = Assert.Single(reduced.Sidecar.Timers);
+        Assert.Equal(TimerKind.Tof, timerSidecar.Kind);
+        Assert.Null(timerSidecar.Reset);
+    }
+
+    [Fact]
+    public void RoundTrip_WithTof_RebuildsTofPartNameNoResetWire()
+    {
+        var original = LoadFixture("WithTof.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Run hold delay", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var tofPart = Assert.Single(reparsed.Parts, p => p.Name == "TOF");
+        Assert.Equal(32, tofPart.UId);
+        Assert.Equal("1.0", tofPart.TonVersion);
+
+        Assert.DoesNotContain(reparsed.Wires, w => w.Endpoints.Any(e => e.Kind == EndpointKind.NameCon && e.UId == 32 && e.PortName == "R"));
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_WithTof_ProducesReadableTofStatement()
+    {
+        var network = LoadFixture("WithTof.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Run hold delay", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal(
+            "NETWORK 1 \"Run hold delay\"\n  TOF(RunHoldDelay, IN := Sensor1.Ok, PT := Settings.RunDelay)\n",
+            text);
+    }
+
+    [Fact]
+    public void FullBlock_Tof_ParseThenSerialize_IsByteIdentical()
+    {
+        var network = LoadFixture("WithTof.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Run hold delay", compileUnitUId: "3");
+
+        var block = new IrBlock("0", "FC", "TestBlock", 1, "LAD", "A test block", new[] { reduced.Network });
+        var text = IrSerializer.SerializeBlock(block, new[] { reduced.Sidecar });
+
+        Assert.Contains("    kind = tof\n", text);
+
+        var (parsedBlock, parsedSidecars) = IrParser.ParseBlock(text);
+        var reserialized = IrSerializer.SerializeBlock(parsedBlock, parsedSidecars);
+
+        Assert.Equal(text, reserialized);
+    }
 }

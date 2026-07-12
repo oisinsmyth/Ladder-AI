@@ -201,26 +201,34 @@ public static partial class IrParser
         }
 
         // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
-        // order for self-stability. TON/TONR (S1 item 19) share one loop, distinguished by
-        // keyword — TONR's own 4th argument (R) is optional in the grammar's own arity check but
-        // always present in practice (GraphReducer.ReduceTimer requires it whenever Kind is
+        // order for self-stability. TON/TONR/TOF (S1 items 19/23) share one loop, distinguished
+        // by keyword — TONR's own 4th argument (R) is optional in the grammar's own arity check
+        // but always present in practice (GraphReducer.ReduceTimer requires it whenever Kind is
         // Tonr), split on top-level commas like WAND/CALL/MUL's own variable-arity argument
-        // lists (safe for the same reason: no Expr ever renders a literal comma).
+        // lists (safe for the same reason: no Expr ever renders a literal comma). TOF shares
+        // TON's own 3-argument arity exactly (no reset port, confirmed real).
         var timers = new List<TimerBinding>();
-        while (i < lines.Length && (lines[i].StartsWith("  TON(", StringComparison.Ordinal) || lines[i].StartsWith("  TONR(", StringComparison.Ordinal)))
+        while (i < lines.Length && (lines[i].StartsWith("  TON(", StringComparison.Ordinal)
+            || lines[i].StartsWith("  TONR(", StringComparison.Ordinal) || lines[i].StartsWith("  TOF(", StringComparison.Ordinal)))
         {
             var tonMatch = TonLineRegex().Match(lines[i]);
             if (!tonMatch.Success)
             {
                 throw new IrFormatException(
-                    $"Expected '  TON(<path>, IN := <expr>, PT := <expr>)' or '  TONR(<path>, IN := <expr>, PT := <expr>, R := <expr>)', got: '{lines[i]}'");
+                    $"Expected '  TON(<path>, IN := <expr>, PT := <expr>)', '  TONR(<path>, IN := <expr>, PT := <expr>, R := <expr>)', " +
+                    $"or '  TOF(<path>, IN := <expr>, PT := <expr>)', got: '{lines[i]}'");
             }
 
-            var timerKind = tonMatch.Groups["kind"].Value == "TONR" ? TimerKind.Tonr : TimerKind.Ton;
+            var timerKind = tonMatch.Groups["kind"].Value switch
+            {
+                "TONR" => TimerKind.Tonr,
+                "TOF" => TimerKind.Tof,
+                _ => TimerKind.Ton,
+            };
             var timerArgs = tonMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
             if (timerArgs.Length is not (3 or 4) || !timerArgs[1].StartsWith("IN := ", StringComparison.Ordinal) || !timerArgs[2].StartsWith("PT := ", StringComparison.Ordinal))
             {
-                throw new IrFormatException($"Expected '<path>, IN := <expr>, PT := <expr>[, R := <expr>]' inside TON/TONR(...), got: '{lines[i]}'");
+                throw new IrFormatException($"Expected '<path>, IN := <expr>, PT := <expr>[, R := <expr>]' inside TON/TONR/TOF(...), got: '{lines[i]}'");
             }
 
             var timerPath = timerArgs[0];
@@ -230,6 +238,11 @@ public static partial class IrParser
             Expr? resetExpr = null;
             if (timerArgs.Length == 4)
             {
+                if (timerKind != TimerKind.Tonr)
+                {
+                    throw new IrFormatException($"Only TONR takes a 4th (R) argument — '{lines[i]}' isn't TONR.");
+                }
+
                 if (!timerArgs[3].StartsWith("R := ", StringComparison.Ordinal))
                 {
                     throw new IrFormatException($"Expected ', R := <expr>' as TONR's 4th argument, got: '{lines[i]}'");
@@ -1010,6 +1023,7 @@ public static partial class IrParser
         {
             "ton" => TimerKind.Ton,
             "tonr" => TimerKind.Tonr,
+            "tof" => TimerKind.Tof,
             _ => throw new IrFormatException($"Unexpected timer kind '{timerKindText}' in SIDECAR for network {networkNumber}."),
         };
         var version = RequirePrefixedLine(lines, ref i, "    version = ");
@@ -1263,10 +1277,10 @@ public static partial class IrParser
     [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL) (?<tag>\S+) := (?<expr>.+)$")]
     private static partial Regex CoilLineRegex();
 
-    // Variable arity (3 args for TON, 4 for TONR — S1 item 19), same split-on-top-level-commas
-    // discipline as WAND/CALL/MUL's own variable-arity argument lists — only the outer
-    // "TON|TONR(...)" shape is matched here.
-    [GeneratedRegex(@"^  (?<kind>TONR|TON)\((?<args>.+)\)$")]
+    // Variable arity (3 args for TON/TOF, 4 for TONR — S1 items 19/23), same
+    // split-on-top-level-commas discipline as WAND/CALL/MUL's own variable-arity argument lists —
+    // only the outer "TON|TONR|TOF(...)" shape is matched here.
+    [GeneratedRegex(@"^  (?<kind>TONR|TOF|TON)\((?<args>.+)\)$")]
     private static partial Regex TonLineRegex();
 
     [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
