@@ -359,6 +359,53 @@ public sealed class OpennessGateway : IOpennessGateway
         return RunCompile(compilable);
     }
 
+    // Confirmed real via Siemens's own Siemens.Engineering.xml doc comments (2026-07-13):
+    // PlcBlock.Delete() — "Deletes this instance.", a plain no-argument instance method on the
+    // exact same PlcBlock type Export/CompileBlock already resolve. BlockInfo is captured before
+    // Delete() runs (nothing left to read from a deleted COM object afterward) and always
+    // returned, confirmed or not — this is the first irreversible operation this gateway exposes,
+    // so `confirm=false` deliberately resolves and reports without touching anything, mirroring
+    // the dry-run precedent this project already applies elsewhere to destructive actions.
+    public BlockInfo DeleteBlock(string blockName, string? deviceFilter, bool confirm)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(DeleteBlock)}.");
+        }
+
+        var matches = FindMatchingBlocks(_project, blockName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new BlockNotFoundException(blockName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousBlockException(blockName, matches.Select(m => m.Path));
+        }
+
+        var (block, path) = matches[0];
+        var language = block.ProgrammingLanguage.ToString();
+        if (SafetyClassifier.IsSafety(language))
+        {
+            throw new SafetyContentRefusedException(blockName, language);
+        }
+
+        var info = ToBlockInfo(block, path);
+
+        if (confirm)
+        {
+            block.Delete();
+        }
+
+        return info;
+    }
+
     private static CompileResult RunCompile(ICompilable compilable)
     {
         var result = compilable.Compile();

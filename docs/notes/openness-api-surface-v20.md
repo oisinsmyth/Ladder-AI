@@ -164,6 +164,60 @@ Note: `F_CALL` marks a *call site* to a safety block from standard code, not a s
 body per se — flagging it as safety anyway is the conservative (over-inclusive) choice, on
 the same "never under-flag" principle.
 
+## `SW.Blocks` survey — delete, import options, and other unused surface (2026-07-13)
+
+Prompted by the project owner's own ask: add block deletion, confirm import's overwrite
+behavior, and survey for other useful-but-unused API surface. This pass used the installed V20
+`Siemens.Engineering.xml` doc-comments file (same install directory as the DLL) rather than bare
+reflection — it ships real prose descriptions for most members, not just type shapes:
+
+```powershell
+Get-Content "C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20\Siemens.Engineering.xml" | Select-String '<member name="M:Siemens.Engineering.SW.Blocks...."'
+```
+
+Scoped to `Siemens.Engineering.SW.Blocks` (where this project's existing surface already lives) —
+not the whole 169k-line file (HMI, hardware config, technology objects, etc. are out of scope for
+this LAD/DB-only converter).
+
+- **`PlcBlock.Delete()`** — confirmed real: "Deletes this instance." No arguments. Now used
+  (`OpennessGateway.DeleteBlock`, `openness-cli delete`) — the exact fix for the gap flagged in
+  S1 items 16/17 ("no delete/remove-block command, so whatever lands in `SampleProject` can't be
+  cleaned up programmatically").
+- **`ImportOptions`** (already used: `ImportBlocks` always passes `.Override`) — full enum, now
+  documented precisely: `None` = "Throw if exists", `Override` = "Override existing",
+  `SkipInactiveCultures`/`ActivateInactiveCultures` (multi-language text handling, not relevant
+  here). Confirmed live, 2026-07-13, against `SampleProject`'s own `TimerSample`: re-importing a
+  modified version overwrote the existing block's content in place (verified via a changed
+  network `Title` surviving a re-export) — no error, no duplicate block. See `openness-quirks.md`
+  for the full test, including the `IsConsistent` gotcha that blocked the first re-export attempt.
+- **`PlcBlockComposition.Import(FileInfo, ImportOptions, SWImportOptions)`** — a second, unused
+  overload. `SWImportOptions`: `None`, `IgnoreStructuralChanges` ("Import is not aborted in case
+  of referenced object changed structurally"), `IgnoreMissingReferencedObjects` ("Import is not
+  aborted in case of referenced object is missing"), `IgnoreUnitAttributes`. Relevant-looking but
+  **does not fix** the cross-project compile blocker documented in S1 items 16/17 (502 "tag not
+  defined"/"referenced block no longer exists" errors) — these flags only relax the *import*
+  step's own tolerance for missing/changed references; a block imported this way still won't
+  *compile* until the referenced tags/blocks genuinely exist in the target project. Documented
+  here as unused surface, not built against.
+- **`PlcBlockComposition.Find(name)` / `Find(name, namespace)`** and
+  **`PlcBlockUserGroupComposition.Find(name)` / `.Create(name)`** — direct, non-recursive lookup
+  scoped to a single group, and group creation. Unused — `OpennessGateway` always recursively
+  walks (`FindBlocksInGroup`/`FindGroup`) instead. `Create` would let `import` create its own
+  target group rather than requiring one to pre-exist (currently `FindGroup` just throws if any
+  path segment is missing) — a real future convenience, not built now (out of this item's scope).
+- **`PlcBlockComposition.CreateFB(...)`/`CreateInstanceDB(...)`/`CreateFrom(MasterCopy)`/
+  `CreateFrom(CodeBlockLibraryTypeVersion)`** — block creation from scratch or from a library
+  master copy/type. Squarely S6+ (logic generation) territory — noted here for whenever that
+  stage gate opens, not usable now (`docs/notes/stage-gates.md`: S1 is lossless round-trip only).
+- **`PlcBlock.GetAttribute`/`SetAttribute`/`GetAttributes`/`SetAttributes`/`GetAttributeInfos`** —
+  generic property read/write (block header metadata: author, family, version, comment, etc.)
+  beyond the fixed `Name`/`Number`/`ProgrammingLanguage`/`IsConsistent` set `list` already reads.
+  Unused. Could enable reading/writing block header metadata without a full export/import round
+  trip, if a future need arises.
+- **`PlcBlockUserGroup.Delete()`** — whole block-group deletion also exists (same "Deletes this
+  instance" shape). Noted but not built — the project owner asked specifically about blocks, not
+  groups.
+
 ## What's still unverified
 
 Reflection proves the shape; the live run against "JOB9003 - K150" proves the happy path for a

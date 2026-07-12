@@ -189,6 +189,14 @@ had been compiled. Compile order matters for callers; retry a caller after its c
 gate now needs `openness-cli compile --block <name>` (or accept a caller retry if it depends on
 something just re-imported), not a TIA UI step.
 
+**Reconfirmed, 2026-07-13, on `SampleProject`'s own `TimerSample`** (live-verifying `import`'s own
+overwrite/"update" behavior — `docs/notes/openness-api-surface-v20.md`'s "SW.Blocks survey"): a
+re-import via `Override` hit the exact same symptom (`export` refused immediately afterward with
+"Inconsistent blocks... cannot be exported") — `openness-cli compile --block TimerSample` cleared
+it in one call, exactly as this section's own root-cause finding predicts. Nothing new here, just
+independent confirmation the pattern holds outside `JOB9002` too, on this project's own reference
+project.
+
 ## `openness-cli compile`'s diagnostic messages were silently incomplete
 
 Found 2026-07-10, while debugging a genuine compile failure on the seeded reference project (a

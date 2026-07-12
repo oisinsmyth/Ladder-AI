@@ -32,6 +32,18 @@ public interface IOpennessGateway : IDisposable
     CompileResult Compile(string? deviceFilter);
 
     /// <summary>
+    /// Resolves the named block exactly like <see cref="ExportBlock"/>/<see cref="CompileBlock"/>
+    /// (same <paramref name="deviceFilter"/> disambiguation, same safety refusal), then — only
+    /// when <paramref name="confirm"/> is <c>true</c> — deletes it via <c>PlcBlock.Delete()</c>.
+    /// Always returns the matched block's own info, confirmed or not, so a caller can show what
+    /// was (or would be) deleted either way. This is the first genuinely irreversible operation
+    /// this gateway exposes (no undo, and this tool has no way to recreate a deleted block) —
+    /// <paramref name="confirm"/><c>=false</c> is a dry-run preview, deliberately not deleting
+    /// anything, unlike every other command here.
+    /// </summary>
+    BlockInfo DeleteBlock(string blockName, string? deviceFilter, bool confirm);
+
+    /// <summary>
     /// Compiles a single named block via its own <c>ICompilable</c> service — distinct from,
     /// and NOT equivalent to, whole-device <see cref="Compile"/>. Confirmed live, 2026-07-10
     /// (docs/notes/openness-quirks.md): a block freshly re-imported via Openness's Import()

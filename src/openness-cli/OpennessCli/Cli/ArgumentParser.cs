@@ -36,6 +36,15 @@ public sealed record CompileCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+public sealed record DeleteCommandOptions(
+    string ProjectIdentifier,
+    string BlockName,
+    string? Device,
+    bool Confirm,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -49,6 +58,8 @@ public abstract record ParseResult
     public sealed record ImportSuccess(ImportCommandOptions Options) : ParseResult;
 
     public sealed record CompileSuccess(CompileCommandOptions Options) : ParseResult;
+
+    public sealed record DeleteSuccess(DeleteCommandOptions Options) : ParseResult;
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
 
@@ -66,6 +77,7 @@ public static class ArgumentParser
         "  openness-cli export        <project> --block <name> --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli import        <project> --group <device>/<path> <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli compile       <project> [--device <name>] [--block <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.";
 
@@ -82,9 +94,10 @@ public static class ArgumentParser
             "export" => ParseExport(args),
             "import" => ParseImport(args),
             "compile" => ParseCompile(args),
+            "delete" => ParseDelete(args),
             "sanity-check" => ParseSanityCheck(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, sanity-check.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, sanity-check.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -380,6 +393,81 @@ public static class ArgumentParser
         }
 
         return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseDelete(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? block = null;
+        string? device = null;
+        var confirm = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--block":
+                    if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
+                    {
+                        return new ParseResult.Failure(blockErr);
+                    }
+
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (block is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --block <name>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.DeleteSuccess(new DeleteCommandOptions(projectIdentifier, block, device, confirm, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

@@ -44,6 +44,8 @@ internal static class Program
                     return RunImport(gateway, import.Options, timeoutOpenSeconds);
                 case ParseResult.CompileSuccess compile:
                     return RunCompile(gateway, compile.Options, timeoutOpenSeconds);
+                case ParseResult.DeleteSuccess delete:
+                    return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
                 default:
@@ -122,6 +124,20 @@ internal static class Program
         return result.State == Model.CompileState.Success ? ExitCodes.Success : ExitCodes.CompileFailed;
     }
 
+    private static int RunDelete(IOpennessGateway gateway, DeleteCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var info = gateway.DeleteBlock(options.BlockName, options.Device, options.Confirm);
+        if (!options.Confirm)
+        {
+            Console.WriteLine($"Would delete '{info.Name}' ({info.Path}) — pass --yes to confirm.");
+            return ExitCodes.NotConfirmed;
+        }
+
+        Console.WriteLine($"Deleted '{info.Name}' ({info.Path}).");
+        return ExitCodes.Success;
+    }
+
     private static int RunSanityCheck(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -136,6 +152,7 @@ internal static class Program
         ParseResult.ExportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.ImportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
@@ -153,4 +170,5 @@ internal static class ExitCodes
     public const int CommandError = 7;
     public const int CompileFailed = 8;
     public const int SanityCheckFailed = 9;
+    public const int NotConfirmed = 10;
 }

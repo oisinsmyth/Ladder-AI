@@ -9,6 +9,7 @@ openness-cli list          <project>                                           #
 openness-cli export        <project> --block <name> [--device <name>] --out <path>   # block → SimaticML (refuses safety blocks)
 openness-cli import        <project> --group <device>/<path> <files...>        # SimaticML → TIA
 openness-cli compile       <project> [--device <name>]                         # diagnostics; non-zero exit on error
+openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
@@ -48,6 +49,8 @@ openness-cli import <project> --group <device>/<path> <file> [<file> ...] [commo
 
 `--group` matches the `Path` column `list` prints (e.g. `S7-1200 G2 station_2/JOB9002_PLC/Alarms`) — Import is a method on a specific block group, so there's no generic "wherever it goes" to infer. Same safety check applied to imported content as defense-in-depth.
 
+**This is also "update a block": importing to a group that already has a same-named block overwrites it in place** (`ImportOptions.Override`, always passed) rather than erroring or duplicating — confirmed live, 2026-07-13, against `SampleProject`'s own `TimerSample`: re-imported a version with one changed field, re-exported, and the change was present with no second block created (`docs/notes/openness-quirks.md` has the full story, including the `IsConsistent` gotcha below). There is no separate "update" subcommand — `import` already is one, once you point `--group` at wherever the existing block lives.
+
 ```
 openness-cli compile <project> [--device <device>] [--block <name>] [--json] [common flags]
 ```
@@ -55,6 +58,12 @@ openness-cli compile <project> [--device <device>] [--block <name>] [--json] [co
 Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — whole-program compile. With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-10 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`. Non-zero exit when `State != Success`.
 
 A block-level compile can fail with a real error (not just an `IsConsistent` artifact) if something it calls hasn't itself been recompiled yet — seen live on `ControlMain` (calls `PlantAutoControl`): failed first, then succeeded cleanly once `PlantAutoControl` had been compiled. Compile callees before callers, or just retry a caller after its callees are clean.
+
+```
+openness-cli delete <project> --block <name> [--device <device>] --yes [common flags]
+```
+
+Deletes a block via `PlcBlock.Delete()`. Same block resolution/`--device` disambiguation and safety refusal as `export`/`compile`. **`--yes` is required to actually delete** — without it, the command resolves the block and prints what it *would* delete, then exits `10` (`NotConfirmed`), touching nothing. This is deliberately stricter than every other subcommand here: it's the only genuinely irreversible operation this CLI exposes (no undo, and no way to recreate a deleted block), confirmed live, 2026-07-13, against `SampleProject`'s own leftover, uncompiled `PlantAutoControl` block (left over from an earlier cross-project import test — this both verified the new command and completed that outstanding manual cleanup).
 
 ```
 openness-cli sanity-check <project> [--json] [common flags]

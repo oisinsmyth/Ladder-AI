@@ -2047,3 +2047,79 @@ FBs is closed. `Swap` turned out to be the smallest possible design fork of this
 recent items — structurally a strict subset of `Convert`, resolved with one clarifying question
 rather than a full formal plan-mode cycle, since the only real ambiguity was "new type vs. extend
 an existing one," not the XML shape itself (which grounding settled immediately, unambiguously).
+
+### `openness-cli`: block deletion, import-overwrite confirmation, API surface survey — 2026-07-13
+
+Picked up per the project owner's own explicit ask, after all 8 of `PlantAutoControl`'s dependency FBs
+closed: `openness-cli` had no way to delete a block (flagged as a real gap when `PlantAutoControl` was
+left uncompiled in `SampleProject` after the earlier cross-project import test, S1 items 16/17 —
+"no delete/remove-block command... manual cleanup accepted"), whether re-importing to a
+pre-existing block name actually overwrites it needed live confirmation, and the project owner
+wanted a broader survey of unused Openness API surface. Went through a full formal plan
+(`EnterPlanMode`/`ExitPlanMode`) given the scope (new gateway method, new CLI subcommand, a new
+irreversible-action safety pattern for this codebase).
+
+**Research**: read the installed V20 `Siemens.Engineering.xml` doc-comments file directly
+(alongside the DLL already used for the original 2026-07-10 reflection pass) — it carries real
+prose descriptions, not just type shapes. Confirmed `PlcBlock.Delete()` exists ("Deletes this
+instance.", no arguments) and `ImportOptions.Override` is documented "Override existing" (`None`
+= "Throw if exists"). Broader survey (scoped to `SW.Blocks`, where this project's own surface
+already lives) turned up several other unused members — full list in
+`docs/notes/openness-api-surface-v20.md`'s own new "SW.Blocks survey" section: `SWImportOptions`
+(relevant-looking but doesn't fix the cross-project compile blocker), `Find`/`Create` (direct
+lookup/group creation, unused), `CreateFB`/`CreateInstanceDB`/`CreateFrom` (S6+ scope, not
+buildable now), `GetAttribute`/`SetAttribute` (generic block metadata, unused).
+
+**Design decision, resolved via `AskUserQuestion` in plan mode**: delete requires an explicit
+`--yes` flag before actually deleting — without it, the command resolves the block and prints
+what it *would* delete, exits a new `ExitCodes.NotConfirmed (10)`, touches nothing. This is a new
+safety pattern for this codebase (every other subcommand acts immediately) — delete is the first
+genuinely irreversible operation `openness-cli` exposes, and this tool has no undo.
+
+**Implementation**: `IOpennessGateway.DeleteBlock(blockName, deviceFilter, confirm)` mirrors
+`ExportBlock`/`CompileBlock` exactly for resolution (`FindMatchingBlocks`, `--device`
+disambiguation, `SafetyContentRefusedException` for safety-classified blocks — hard rule 2
+extends naturally to deletion). New `delete` subcommand end to end (`ArgumentParser`/`Program.cs`,
+mirroring `export`'s own parsing minus `--out`, plus `--yes`). 7 new argument-parser tests
+(mirroring `ExportImportCompileArgumentParserTests.cs`'s own `export` coverage) — `DeleteBlock`
+itself isn't unit-testable, same reason no `OpennessGateway` method is (Siemens.Engineering's
+COM-backed types can't be faked); verified live only.
+
+#### Live verification against real data, 2026-07-13 — both against `SampleProject` only, never `JOB9002`
+
+**Import-overwrite ("update") confirmation** — fully reversible, Green-tier only (used the
+already-committed reference-project corpus, `TimerSample`, not `JOB9002` content): exported
+`TimerSample` fresh, made one trivial edit (a network `Title` → `"OVERWRITE TEST MARKER"`),
+re-imported with `Override` — succeeded, `list` confirmed still exactly one `TimerSample` block
+(not duplicated). Re-export initially refused (`"Inconsistent blocks... cannot be exported"` —
+the already-documented `IsConsistent` quirk, `docs/notes/openness-quirks.md`); a block-level
+`compile --block TimerSample` cleared it in one call, exactly as that doc's own root-cause finding
+predicts. Re-exported: **the test marker was present** — confirmed genuine in-place overwrite, not
+a silent no-op. Restored the original unmodified content the same way (`Override` again, compile,
+re-export), diffed against the very first export: **byte-identical except the `<Created>`
+timestamp** — `SampleProject` left in its exact original state.
+
+**Delete** — real cleanup of already-known, already-agreed-to-be-removed cruft: the `PlantAutoControl`
+block left uncompiled in `SampleProject` since the S1 items 16/17 cross-project import test.
+`list` confirmed it was still there. `delete SampleProject --block PlantAutoControl` (no `--yes`) —
+correctly resolved and printed a dry-run preview, exit code 10, `PlantAutoControl` still present on a
+follow-up `list`. The confirmed delete itself was initially blocked by Claude Code's own auto-mode
+safety classifier ("Irreversible Deletion" — the plan had named `PlantAutoControl` as the target and
+the project owner had approved that plan, but the classifier's own bar requires the user to name
+the resource directly, not just approve a plan that names it) — stopped and asked directly rather
+than working around it; project owner confirmed explicitly ("Yes delete PlantAutoControl from the
+sample project"), then `delete SampleProject --block PlantAutoControl --yes` succeeded (exit 0),
+confirmed gone via a final `list` — `SampleProject` back to a clean 10-block state.
+
+All three suites green throughout: 73 openness-cli (up from 68), 244 converter, 11 golden-harness.
+`git status --short` after each live pass confirmed only the expected code/test files changed —
+no data-boundary concerns either way (`SampleProject` is this project's own Green-tier reference
+project, not `JOB9002`).
+
+**Bottom line:** `openness-cli` can now delete blocks (with a real confirmation gate, live-proven
+against genuine cleanup work), `import`'s own overwrite behavior is now live-confirmed rather than
+just trusted from Siemens's own docs, and the broader API survey found several other real
+capabilities worth knowing about even though none were built this pass. A genuinely new kind of
+finding for this session: an AI-safety-tooling gate (Claude Code's own classifier), not a TIA/
+Openness one, caught an under-specified irreversible action and required direct human
+confirmation — exactly the kind of check this project's own review discipline already expects.

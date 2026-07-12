@@ -10,6 +10,33 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-13
 
+**`openness-cli`: block deletion, import-overwrite confirmation, API surface survey**
+
+- Picked up per the project owner's own ask: add a way to delete blocks, confirm live whether
+  `import` actually overwrites a pre-existing block, and survey the Openness API for other unused
+  capabilities. Formally planned given the scope (new gateway method, new CLI subcommand, a new
+  irreversible-action safety pattern).
+- Research (installed `Siemens.Engineering.xml` doc comments, not just reflection): confirmed
+  `PlcBlock.Delete()` exists; `ImportOptions.Override` is documented "Override existing". Broader
+  survey found several other unused members (`SWImportOptions`, `Find`/`Create`, `CreateFB`/
+  `CreateInstanceDB` — S6+ scope, `GetAttribute`/`SetAttribute`) — full list in
+  `docs/notes/openness-api-surface-v20.md`.
+- New `IOpennessGateway.DeleteBlock`/`openness-cli delete <project> --block <name> [--device
+  <name>] --yes` — mirrors `export`/`compile`'s own resolution and safety refusal. `--yes` is
+  required to actually delete (a new safety pattern — this is the first irreversible operation
+  this CLI exposes); without it, prints a dry-run preview and exits a new `NotConfirmed` code.
+  7 new argument-parser tests. All three suites green: 73 openness-cli (up from 68), 244
+  converter, 11 golden-harness.
+- **Live-verified against `SampleProject` only** (never `JOB9002`): confirmed `import`'s `Override`
+  genuinely overwrites a block's content in place (via `TimerSample`, Green-tier, fully reversed
+  afterward — byte-identical to the original except the export's own timestamp). Confirmed
+  `delete`'s dry-run and confirmed paths both work correctly, then used it to remove the leftover,
+  uncompiled `PlantAutoControl` block left over from an earlier cross-project import test — completing
+  outstanding cleanup that had been waiting since S1 items 16/17. The confirmed delete itself was
+  first blocked by Claude Code's own safety classifier (the plan had named the target and been
+  approved, but the classifier required the user to name it directly) — stopped and asked, project
+  owner confirmed explicitly, then proceeded. Full story: `docs/notes/stage-gates.md`.
+
 **S1 item 25: `SWAP` (byte-swap box instruction) — built, tested, live-verified; `TomraControlSystem` fully round-trips, all 8 `PlantAutoControl` dependency FBs closed**
 
 - Picked up per the project owner's own choice ("let's ground Swap for TomraControlSystem"), the last

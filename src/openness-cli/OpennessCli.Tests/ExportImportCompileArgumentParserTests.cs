@@ -111,7 +111,51 @@ public class ExportImportCompileArgumentParserTests
     }
 
     [Fact]
-    public void Parse_UnknownSubcommand_ListsAllFive()
+    public void Parse_Delete_WithBlockAndYes_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "delete", "MyProject", "--block", "PlantAutoControl", "--yes" });
+
+        var success = Assert.IsType<ParseResult.DeleteSuccess>(result);
+        Assert.Equal("MyProject", success.Options.ProjectIdentifier);
+        Assert.Equal("PlantAutoControl", success.Options.BlockName);
+        Assert.True(success.Options.Confirm);
+        Assert.Null(success.Options.Device);
+    }
+
+    [Fact]
+    public void Parse_Delete_WithoutYes_ConfirmIsFalse()
+    {
+        var result = ArgumentParser.Parse(new[] { "delete", "MyProject", "--block", "PlantAutoControl" });
+
+        var success = Assert.IsType<ParseResult.DeleteSuccess>(result);
+        Assert.False(success.Options.Confirm);
+    }
+
+    [Fact]
+    public void Parse_Delete_WithDevice_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "delete", "MyProject", "--block", "PlantAutoControl", "--device", "station_2", "--yes" });
+
+        var success = Assert.IsType<ParseResult.DeleteSuccess>(result);
+        Assert.Equal("station_2", success.Options.Device);
+    }
+
+    [Fact]
+    public void Parse_Delete_MissingBlock_Fails()
+    {
+        var result = ArgumentParser.Parse(new[] { "delete", "MyProject", "--yes" });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_Delete_MissingProject_Fails()
+    {
+        var result = ArgumentParser.Parse(new[] { "delete", "--block", "PlantAutoControl", "--yes" });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_UnknownSubcommand_ListsAllSix()
     {
         var result = ArgumentParser.Parse(new[] { "bogus" });
         var failure = Assert.IsType<ParseResult.Failure>(result);
@@ -119,6 +163,7 @@ public class ExportImportCompileArgumentParserTests
         Assert.Contains("export", failure.Message);
         Assert.Contains("import", failure.Message);
         Assert.Contains("compile", failure.Message);
+        Assert.Contains("delete", failure.Message);
         Assert.Contains("sanity-check", failure.Message);
     }
 
