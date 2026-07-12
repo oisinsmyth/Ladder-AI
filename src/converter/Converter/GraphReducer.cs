@@ -38,13 +38,17 @@ public static class GraphReducer
         var wiresByPort = BuildPortIndex(network.Wires);
 
         var tonParts = network.Parts.Where(p => p.Name == "TON").ToList();
-        var coils = network.Parts.Where(p => p.Name == "Coil").ToList();
+        // SCoil/RCoil (S1 item 15) are structurally identical to Coil — same "in"/"operand"
+        // ports, never a producer — confirmed real, 2026-07-12, FC PlantAutoControl (two independent
+        // instances of each). ReduceOneChain resolves all three via the exact same code, tagging
+        // the result with CoilAssignment.Kind (derived from the Part Name below).
+        var coils = network.Parts.Where(p => p.Name is "Coil" or "SCoil" or "RCoil").ToList();
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
         var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0 && callParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil, TON, Move, And, or Call found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON, Move, And, or Call found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -194,11 +198,22 @@ public static class GraphReducer
         visitedWireUIds.Add(coilOperandWireUId);
         AddAccessEntry(accessEntries, coilTag);
 
-        var assignment = new CoilAssignment(coilTag.TagPath, condition);
+        var kind = CoilKindFor(coil.Name, networkNumber, coil.UId);
+        var assignment = new CoilAssignment(coilTag.TagPath, condition, kind);
         var sidecar = new CoilAssignmentSidecar(railWireUId, steps, coil.UId, coilTag.UId, coilOperandWireUId);
 
         return (assignment, sidecar, accessEntries, constantEntries);
     }
+
+    // Coil/SCoil/RCoil (S1 item 15) map 1:1 to CoilKind — no other Part Name has ever mapped to
+    // one of these three kinds, so this is a straight lookup, not a guess.
+    private static CoilKind CoilKindFor(string partName, int networkNumber, int uid) => partName switch
+    {
+        "Coil" => CoilKind.Assign,
+        "SCoil" => CoilKind.Set,
+        "RCoil" => CoilKind.Reset,
+        _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a coil-kind assignment."),
+    };
 
     // A TON's IN is reduced exactly like a Coil's condition — same backward trace, terminating
     // at the TON's own "IN" port instead of a Coil's "in" (and, like a Coil's chain, may itself

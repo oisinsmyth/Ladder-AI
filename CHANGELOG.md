@@ -10,6 +10,34 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 15: `SCoil`/`RCoil` (set/reset coils) — built, tested, surfaced a new whole-block gap**
+
+- Picked up per the project owner's own sequencing after `CALL`: 3 of each real in
+  `FC PlantAutoControl`, also seen alongside TON in `FB MotorDOL`'s own earlier grounding. Grounded
+  against two independent real instances of each before any code — both completely bare
+  (`<Part Name="SCoil"/"RCoil" UId="N" />`), exact same `in`/`operand` wire shape as a plain
+  `Coil`, never a producer. Structurally identical to `Coil` in every respect.
+- Smallest diff of any S1 item this session: `GraphReducer.ReduceOneChain`/
+  `FlgNetBuilder.BuildOneChain` reused verbatim for all three kinds. Only addition: a new
+  `CoilAssignment.Kind` field (`Assign`/`Set`/`Reset`), mirroring `CompareStep`'s own
+  `PartName`↔`Operator` split. `CoilAssignmentSidecar` needed no new field — `BuildOneChain`
+  already takes the model alongside its sidecar, so `Kind` is derived directly.
+- Readable-form keywords `SCOIL`/`RCOIL` chosen to match every other keyword's own
+  mirror-the-source-Part-Name convention (`WAND` is the one exception, for a collision that
+  doesn't apply here).
+- 6 new converter tests, one fixture interleaving all three kinds on a shared rail — passed on
+  first run. All three suites green: 164 converter (up from 158), 68 openness-cli, 11
+  golden-harness.
+- **Live-verified, same session:** isolated the real network already grounded for `CALL` (it also
+  has the block's own `SCoil`/`RCoil` pair) — reduces and round-trips completely.
+- **Then attempted a whole-block round-trip of `PlantAutoControl`**, since this should have closed its
+  last instruction-level gap. Hit a different, already-known wall instead: every one of its 20
+  real networks carries a non-empty `Title` (distinct from `Comment`), which `BlockSourceParser`
+  already hard-errors on (documented earlier, `tests/golden/README.md` — not a new discovery,
+  just newly encountered on this specific real block). `PlantAutoControl` has no remaining
+  instruction-level gap but still doesn't round-trip as a whole block. Full story:
+  `docs/notes/stage-gates.md` ("S1 item 15").
+
 **S1 item 14: `CALL` (FB/FC block calls) — built, tested, live-verified in-memory with `Not`**
 
 - Picked up per the project owner's own decision at the close of S1 item 13: build block calls

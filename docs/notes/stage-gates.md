@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not`+`Call` together now reduce and round-trip in-memory against a real, rich `PlantAutoControl` network, but are **not yet live-verified against the true TIA cycle** — see S1 item 14 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 158 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not`+`Call`+`SCoil`/`RCoil` all now reduce and round-trip in-memory against real `PlantAutoControl` networks, but a whole-block proof still isn't reached — a real network `Title` (distinct from `Comment`) is the last known gap, unrelated to any instruction type — see S1 item 15 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 164 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1073,3 +1073,93 @@ including the richest real network found combining it with `Not`. The true TIA-c
 standard for this specific network remains open — recorded explicitly, not glossed over. Per the
 project owner's own sequencing, `SCoil`/`RCoil` is next; closing that out is the most natural
 path to finally reaching the true cycle for a whole real block, `PlantAutoControl` included.
+
+### S1 item 15 (`SCoil`/`RCoil` — set/reset coils), 2026-07-12
+
+Picked up per the project owner's own explicit sequencing at the close of S1 item 14: 3 of each
+real in `FC PlantAutoControl`, also seen alongside TON in `FB MotorDOL`'s own earlier grounding (S1
+item 8 — the one real "TON's `Q` wired directly into a downstream part" example that couldn't be
+modeled at the time fed an `RCoil`, itself out of scope then). Lighter-weight than `CALL` —
+grounded directly rather than through a full plan-mode cycle, since the shape turned out to be
+the simplest of any construct built this session.
+
+**Grounded first (two independent real instances of each, different `CompileUnit`s), before any
+code, per CLAUDE.md hard rule 3:**
+
+```xml
+<Part Name="SCoil" UId="80" />
+...
+<Part Name="RCoil" UId="83" />
+```
+
+Both completely bare — no attributes or children beyond `Name`/`UId`. Their own wires (scoped
+precisely to one `CompileUnit`, not just grepped loosely across the whole file, to avoid
+cross-network UId collisions): `<NameCon UId="79" Name="out" /><NameCon UId="80" Name="in" />`
+(condition feeds `in`) and `<IdentCon UId="47" /><NameCon UId="80" Name="operand" />` (target tag
+via `operand`) for the `SCoil`; the exact same shape for the `RCoil`. No `out` port on either in
+either grounded instance — never a producer, exactly like a plain `Coil`. **Structurally
+identical to `Coil` in every respect this converter models** — the only difference is the Part
+Name itself and its runtime semantics (which the IR doesn't compute).
+
+**Design, directly from grounding (no design ambiguity beyond one free naming choice):**
+`GraphReducer.ReduceOneChain`/`FlgNetBuilder.BuildOneChain` are reused verbatim for all three
+kinds — genuinely the smallest diff of any item this session, since there's no new chain-position
+kind, no new top-level production, and no new wire shape to handle at all. The only addition is a
+new `CoilAssignment.Kind` field (`Assign`/`Set`/`Reset`, IR-facing), set from the source Part Name
+in a new `GraphReducer.CoilKindFor` helper and read back in a new `FlgNetBuilder.CoilPartNameFor`
+helper — mirroring `ChainStepSidecar.CompareStep`'s own `PartName`↔`Operator` split (one XML-facing
+concept, one IR-facing). `CoilAssignmentSidecar` gained **no new field**: `FlgNetBuilder.BuildOneChain`
+already takes the model `CoilAssignment` alongside its own sidecar (for a pre-existing leaf-count
+cross-check no other production's `Build*` method needs), so `Kind` is derived from the model
+directly rather than duplicated — the one place in this codebase where the "sidecar must be fully
+self-sufficient" rule (established for `CALL`'s own `BlockName`) doesn't apply, because this
+particular `Build*` method was never sidecar-only to begin with.
+
+**One free design choice, resolved by precedent rather than asked about:** readable-form keyword
+naming. Every IR keyword built so far mirrors its own source Part Name (`COIL`/`TON`/`MOVE`/
+`CALL`) except `WAND`, which deliberately diverges from `AND` to avoid a real naming collision
+with the boolean infix operator — a collision that doesn't apply here. Chose `SCOIL`/`RCOIL`
+(not `SET`/`RESET`) on this basis, consistent with the dominant convention rather than the
+IEC-idiomatic alternative.
+
+6 new converter tests (`SCoilRCoilTests.cs`), one fixture interleaving `Coil`/`SCoil`/`RCoil` on
+a shared rail wire (including a realistic touch grounded elsewhere in this project: the `SCoil`
+and `RCoil` targeting the *same* tag path via two separate `<Access>` UIds, a real, previously-
+confirmed pattern) — **passed on first run**. All three suites green: 164 converter tests (up
+from 158), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+TIA Portal already running (a fresh `export` hit the same slow-wake attach timeout seen earlier
+this session — not the approval-dialog case, succeeded on retry with a longer
+`--timeout-connect`, same as `CALL`'s own live verification). Isolated the same real `CompileUnit`
+already grounded for `CALL` (it also contains the block's own `SCoil`/`RCoil` pair) via a
+throwaway test, deleted immediately after use.
+
+**The real network reduces and round-trips completely**, correctly distinguishing `Set`/`Reset`
+kinds from the network's own plain `Coil` assignments and its `Call`.
+
+**Then attempted the natural next step: a whole-block round-trip of `PlantAutoControl` itself**, since
+`SCoil`/`RCoil` was believed to be its last remaining *instruction-level* gap. `converter to-ir`
+on a fresh whole-block export immediately hit a different wall:
+
+```
+UnsupportedConstructException: Network (CompileUnit ID=3) has a non-empty Title
+("...") - this converter doesn't model Title text yet, only Comment.
+```
+
+**This is a real, but already-known and already-documented gap** — `tests/golden/README.md`'s
+own "Real gaps found and fixed along the way" list already records it: `BlockSourceParser`
+hard-errors on "a non-empty `Title` (distinct from `Comment`)... design philosophy #10, applied
+retroactively once real data exposed the gap." It just hadn't previously blocked a *real site
+block's own whole-block round-trip* specifically — every network in `PlantAutoControl` (confirmed
+across all 20, not just the first one hit) carries a real per-network title, an entirely
+different kind of gap from anything instruction-level this session has been closing. Not
+addressed by this item — flagged honestly, not glossed over, and not something SCoil/RCoil's own
+scope should have stretched to cover.
+
+**Bottom line:** `SCoil`/`RCoil` is built, tested, and live-round-trips in-memory against real
+data — the smallest, cleanest diff of any S1 item this session, reusing existing machinery
+wholesale rather than adding anything new. `PlantAutoControl` has no remaining *instruction-level* gap,
+but still doesn't round-trip as a whole block, now blocked by network `Title` modeling instead —
+recorded as the next real gap, whichever direction the project owner wants to take it.

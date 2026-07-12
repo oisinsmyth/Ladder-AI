@@ -28,51 +28,43 @@ via `FC TimerSample`), comparisons (Eq/Ge, live-verified against `FC ControlDela
 `FB MotorDOL`, including the full telemetry network with its own OR-merge), WAND — bitwise word
 AND (live-verified against `FB VSDUpdateComs`; closes out the AND-merge open item as **confirmed
 non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep),
-`Not` — standalone boolean inverter (committed `f6f7fa8`), `CALL` — FB/FC block calls
-(implemented/tested/documented, **not yet TIA-cycle live-verified** — see "Current task" below).
+`Not` — standalone boolean inverter (committed `f6f7fa8`), `CALL` — FB/FC block calls (committed
+`681fda2`; live-verified in-memory with `Not`, not yet TIA-cycle live-verified), `SCoil`/`RCoil`
+— set/reset coils (implemented/tested/documented, **not yet committed** — see "Current task"
+below). Full story for each: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S1 item 14 — `CALL` — implementation + docs done, NOT YET COMMITTED
+## Current task: S1 item 15 — `SCoil`/`RCoil` — implementation + docs done, NOT YET COMMITTED
 
-**Status as of 2026-07-12: fully implemented, tested (158/158 converter tests green), and now
+**Status as of 2026-07-12: fully implemented, tested (164/164 converter tests green), and now
 documented (`ir/SPEC.md`, `src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md`
 all updated this pass). Waiting on explicit "commit this" from the project owner before
 committing** — per this session's established discipline, never auto-commit.
 
-**Grounded first (Phase 0), per plan-mode approval, before any code.** Real `<Call>` shape:
-genuinely not a `<Part Name="Call">` — its own sibling element under `<Parts>`
-(`<Call UId="N"><CallInfo Name="..." BlockType="FB"><Instance/><Parameter/>...</CallInfo></Call>`).
-19 of 20 real instances have zero wired parameters (not present-but-empty, simply absent); one
-real instance (`CompileUnit "35"`, "Tomra Auto Control") has 10 (8 Input, 2 Output). Instance
-reuses the exact same `AccessNode` shape as TON's own `<Instance>`. Design: new top-level
-production (like TON/Move/WAND) — `en` via the same `TraceChain` fan-out mechanism, arguments
-resolved by iterating the source's own sparse `<Parameter>` list. Full design story:
-`docs/notes/stage-gates.md` ("S1 item 14") and `CallTests.cs`'s own class-level doc comment.
+**Grounded first (two independent real instances of each), before any code.** Real shape:
+completely bare `<Part Name="SCoil"/"RCoil" UId="N" />`, exact same `in`/`operand` wire shape as
+a plain `Coil`, never a producer — structurally identical to `Coil` in every respect. Smallest
+diff of any S1 item this session: `GraphReducer.ReduceOneChain`/`FlgNetBuilder.BuildOneChain`
+reused verbatim for all three kinds, tagged with a new `CoilAssignment.Kind` field
+(`Assign`/`Set`/`Reset`) — no new sidecar field needed, since `BuildOneChain` already takes the
+model alongside its sidecar. Readable-form keywords `SCOIL`/`RCOIL` (matching every other
+keyword's mirror-the-source-Part-Name convention). Full design story: `docs/notes/stage-gates.md`
+("S1 item 15") and `SCoilRCoilTests.cs`'s own class-level doc comment.
 
-**Live-verified in-memory, 2026-07-12:** isolated `CompileUnit "35"` — the richest real network
-found, combining `Not` (wrapping an OR-of-comparisons) with the fully-wired 10-parameter `Call`,
-8 independent Contact→Coil rungs, and more. **Reduces and round-trips completely** — the first
-real network proving `Not`+`Call` together through the in-memory pipeline.
+**Live-verified in-memory, 2026-07-12:** isolated the real network already grounded for `CALL`
+(it also has the block's own `SCoil`/`RCoil` pair) — reduces and round-trips completely.
 
-**Important, explicit gap — do not gloss over on resume:** still **not verified through the true
-TIA `import → compile → re-export → Normalizer` cycle**. `openness-cli import` has no
-per-network granularity (whole-block only), and `PlantAutoControl` as a whole still has `SCoil`/
-`RCoil` elsewhere (3 each) — so a whole-block `RoundTripRunner.RunFull` would still fail there,
-unrelated to `Call` itself. A splice-and-reimport approach (regenerate just this one network's
-XML, splice it into the otherwise-untouched real export, reimport the whole file) was identified
-as technically feasible but **not attempted** — it means writing regenerated content back into
-the real (scratch-copy) `PlantAutoControl` block, even if scoped to one network, so it was left for
-the project owner's own explicit call rather than assumed.
+**Then attempted a whole-block round-trip of `PlantAutoControl`** — since `SCoil`/`RCoil` was believed
+to be its last instruction-level gap, this seemed like the moment to finally reach the true
+TIA-cycle proof. **Hit a different, already-known wall instead**: every one of `PlantAutoControl`'s 20
+real networks carries a non-empty network `Title` (distinct from `Comment`), which
+`BlockSourceParser` already hard-errors on (documented earlier during the reference-project
+corpus work, `tests/golden/README.md` — not a new discovery, just newly encountered on this real
+block). `PlantAutoControl` has no remaining *instruction-level* gap but still doesn't round-trip as a
+whole block, for a reason entirely unrelated to any instruction type.
 
-**Next task, per the project owner's own explicit sequencing: `SCoil`/`RCoil` (set/reset
-coils).** 3 each in `PlantAutoControl`, real, seen alongside TON/MOVE in earlier grounding, still out
-of scope. This is the most natural path to finally reaching the true TIA-cycle proof for a whole
-real block — once built, `PlantAutoControl` should have no remaining unsupported constructs and a
-whole-block `RunFull` becomes possible without any special splicing. **Not started at all yet** —
-no grounding, no plan, no code.
-
-Once `CALL` is committed and `SCoil`/`RCoil` close, retest `PlantAutoControl` as a whole — it should be
-the first real production block to fully round-trip, and the point to finally attempt the true
-TIA-cycle live verification.
+**Next steps, not yet decided — ask the project owner:** whether to build network `Title`
+modeling next (this would very plausibly be the thing that finally gets `PlantAutoControl` to a true
+whole-block TIA-cycle proof), or something else. **Not started at all** — no design, no code.

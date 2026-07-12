@@ -54,7 +54,29 @@ public abstract record Expr
 // text (same principle already applied to ordinary tag Access).
 public sealed record TimerBinding(string InstancePath, Expr In, Expr Pt);
 
-public sealed record CoilAssignment(string CoilTag, Expr Condition);
+// Assign (`Part Name="Coil"`) writes the condition directly; Set/Reset (`Part Name="SCoil"`/
+// `"RCoil"`) only ever move the target one direction — true when the condition is true, left
+// unchanged when it's false — confirmed real, 2026-07-12, `FC PlantAutoControl` (3 of each, two
+// independent instances of each grounded before any code). Structurally SCoil/RCoil are
+// IDENTICAL to a plain Coil: same bare `<Part Name="..." UId="N" />`, same "in"/"operand" ports,
+// never a producer (no "out") — GraphReducer/FlgNetBuilder reuse the exact same chain-resolution
+// code (ReduceOneChain/BuildOneChain) for all three, differing only in this one tag. Kind is
+// IR-facing (drives which keyword IrSerializer emits); the exact source Part Name for regen is
+// derived from Kind in FlgNetBuilder rather than duplicated on CoilAssignmentSidecar, since
+// BuildOneChain already takes the model CoilAssignment alongside its sidecar (for the existing
+// leaf-count cross-check) — no other production's Build* method needs this, so no new "sidecar
+// must be fully self-sufficient" violation. Keyword choice (`SCOIL`/`RCOIL`, not `SET`/`RESET`)
+// matches every other IR keyword built so far mirroring its own source Part Name (COIL/TON/
+// MOVE/CALL) — WAND is the one deliberate exception, for a naming collision that doesn't apply
+// here.
+public enum CoilKind
+{
+    Assign,
+    Set,
+    Reset,
+}
+
+public sealed record CoilAssignment(string CoilTag, Expr Condition, CoilKind Kind = CoilKind.Assign);
 
 // A gated data assignment (`Part Name="Move"`) — confirmed real, 2026-07-11, `FB MotorDOL`
 // ("HMI Motor Status Telemetry": a cascade of Contact->Move taps writing a status code, no Coil
@@ -346,6 +368,12 @@ public sealed record TimerBindingSidecar(
 // RailWireUId is nullable — confirmed necessary real, 2026-07-11, `FC TimerSample`: a Coil fed
 // directly by a TON's Q (a TimerOutputStep as steps[0]) never touches Powerrail, so there's no
 // rail wire to record for that assignment. Non-null in every other case.
+//
+// No CoilKind/PartName field here (S1 item 15, SCoil/RCoil) — deliberately not duplicated on the
+// sidecar the way BlockName is on CallStatementSidecar, since FlgNetBuilder.BuildOneChain already
+// takes the model CoilAssignment alongside this sidecar (for the pre-existing leaf-count
+// cross-check), so it derives the exact source Part Name ("Coil"/"SCoil"/"RCoil") from
+// CoilAssignment.Kind directly rather than re-storing it.
 public sealed record CoilAssignmentSidecar(
     int? RailWireUId,
     IReadOnlyList<ChainStepSidecar> Steps,

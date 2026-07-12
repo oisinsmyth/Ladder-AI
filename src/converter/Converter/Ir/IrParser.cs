@@ -168,16 +168,29 @@ public static partial class IrParser
             i++;
         }
 
+        // COIL/SCOIL/RCOIL (S1 item 15) are parsed in one interleaved loop, in whatever order
+        // they appear (matching how a real network naturally mixes assign/set/reset rungs) —
+        // not three separate sections.
         var assignments = new List<CoilAssignment>();
-        while (i < lines.Length && lines[i].StartsWith("  COIL ", StringComparison.Ordinal))
+        while (i < lines.Length && (lines[i].StartsWith("  COIL ", StringComparison.Ordinal)
+            || lines[i].StartsWith("  SCOIL ", StringComparison.Ordinal)
+            || lines[i].StartsWith("  RCOIL ", StringComparison.Ordinal)))
         {
             var coilMatch = CoilLineRegex().Match(lines[i]);
             if (!coilMatch.Success)
             {
-                throw new IrFormatException($"Expected '  COIL <tag> := <expr>', got: '{lines[i]}'");
+                throw new IrFormatException($"Expected '  COIL|SCOIL|RCOIL <tag> := <expr>', got: '{lines[i]}'");
             }
 
-            assignments.Add(new CoilAssignment(coilMatch.Groups["tag"].Value, ParseExpr(coilMatch.Groups["expr"].Value)));
+            var kind = coilMatch.Groups["kind"].Value switch
+            {
+                "COIL" => CoilKind.Assign,
+                "SCOIL" => CoilKind.Set,
+                "RCOIL" => CoilKind.Reset,
+                _ => throw new IrFormatException($"Unexpected coil keyword in '{lines[i]}'"),
+            };
+
+            assignments.Add(new CoilAssignment(coilMatch.Groups["tag"].Value, ParseExpr(coilMatch.Groups["expr"].Value), kind));
             i++;
         }
 
@@ -984,7 +997,7 @@ public static partial class IrParser
     [GeneratedRegex("^NETWORK (?<number>\\d+) \"(?<title>(?:[^\"\\\\]|\\\\.)*)\"(?<empty> \\[empty\\])?$")]
     private static partial Regex NetworkLineRegex();
 
-    [GeneratedRegex(@"^  COIL (?<tag>\S+) := (?<expr>.+)$")]
+    [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL) (?<tag>\S+) := (?<expr>.+)$")]
     private static partial Regex CoilLineRegex();
 
     [GeneratedRegex(@"^  TON\((?<path>[^,]+), IN := (?<in>.+), PT := (?<pt>.+)\)$")]

@@ -387,11 +387,22 @@ public static class FlgNetBuilder
             BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
-        AddPart(parts, emittedPartUIds, new PartNode(sidecar.CoilUId, "Coil"));
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.CoilUId, CoilPartNameFor(assignment.Kind)));
 
         AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.CoilOperandAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "operand"));
     }
+
+    // The inverse of GraphReducer.CoilKindFor — derived from the model's own CoilAssignment.Kind
+    // (BuildOneChain already takes the model alongside its sidecar, for the leaf-count check
+    // above) rather than a redundant sidecar field (see CoilAssignmentSidecar's own doc comment).
+    private static string CoilPartNameFor(CoilKind kind) => kind switch
+    {
+        CoilKind.Assign => "Coil",
+        CoilKind.Set => "SCoil",
+        CoilKind.Reset => "RCoil",
+        _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
+    };
 
     // A single position rail-to-coil: either one Contact (chain continues to `outgoingTarget`),
     // or an OR-merge whose branches are wired to the shared rail elsewhere (Build's own

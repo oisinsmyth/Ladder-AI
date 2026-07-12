@@ -18,8 +18,9 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 
 Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
 branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), Not
-(standalone boolean inverter), and CALL (FB/FC block calls)** (S1 items 7–14, through
-2026-07-12). No `SCoil`/`RCoil` yet. Anything outside scope is a hard error
+(standalone boolean inverter), CALL (FB/FC block calls), and SCoil/RCoil (set/reset coils)** (S1
+items 7–15, through 2026-07-12). No network `Title` text (distinct from `Comment`) or
+FC/FB parameter-interface modeling yet. Anything outside scope is a hard error
 (`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
 block is expected at this stage, not a bug.
 
@@ -435,17 +436,59 @@ comparisons (itself gated by a negated contact), 8 independent Contact→Coil ru
 negated-contact/comparison content. **Reduces and round-trips completely through the in-memory
 pipeline** — the first real network combining `Not` and `Call` together to do so.
 
-**Not yet verified through the true TIA `import → compile → re-export → Normalizer` cycle.**
-`openness-cli import` only supports whole-block import (no per-network granularity), and
-`PlantAutoControl` as a whole still has `SCoil`/`RCoil` elsewhere (3 each) — so a whole-block
-`RoundTripRunner.RunFull` still fails at those, same as before. Reaching a *real* network's true
-TIA-cycle proof needs either: `SCoil`/`RCoil` built (the already-planned next item — this would
-let the whole `PlantAutoControl` block round-trip naturally, no special handling needed), or a
-purpose-built reference-project block (the `TimerSample` precedent). A third option — splicing
-our own regenerated network XML back into the real, unmodified rest of the `PlantAutoControl` export
-and re-importing the whole file — was considered but not attempted unilaterally, since it means
-writing regenerated content back into the real (scratch-copy) block; left for the project owner's
-own call rather than assumed authorization.
+**Updated 2026-07-12 (S1 item 15):** with `SCoil`/`RCoil` now built (below), `PlantAutoControl` no
+longer has any *instruction-level* gap. Attempting a whole-block `to-ir` surfaced a genuinely
+different, already-known gap instead: every one of its 20 real networks carries a non-empty
+`Title` (distinct from `Comment`), which `BlockSourceParser` already hard-errors on (documented
+earlier during the reference-project corpus work, `tests/golden/README.md` — not a new
+discovery, just newly encountered on this specific real block). See the `SCoil`/`RCoil` section
+below for the full story.
+
+## SCoil/RCoil — set/reset coils (S1 item 15, 2026-07-12)
+
+Picked up per the project owner's own explicit sequencing after `CALL` — 3 of each real in
+`FC PlantAutoControl`, also seen alongside TON in `FB MotorDOL`'s own earlier grounding (S1 item 8:
+the one real "TON's `Q` wired directly into a downstream part" example that couldn't be modeled
+at the time fed an `RCoil`, itself out of scope then).
+
+- **Grounded against two independent real instances of each before any code.** Both are
+  completely bare — `<Part Name="SCoil" UId="N" />` / `<Part Name="RCoil" UId="N" />`, no
+  attributes or children beyond `Name`/`UId` — with the *exact same* `in`/`operand` wire shape as
+  a plain `Coil`, and never a producer (no `out` port). Structurally identical to `Coil` in every
+  respect this converter cares about.
+- **`GraphReducer`/`FlgNetBuilder` reuse `ReduceOneChain`/`BuildOneChain` verbatim** for all three
+  kinds — no new reducer/builder method, no new chain-position kind. The only addition is a new
+  `CoilAssignment.Kind` field (`Assign`/`Set`/`Reset`), set from the source Part Name in
+  `GraphReducer.CoilKindFor` and read back in `FlgNetBuilder.CoilPartNameFor`. `CoilAssignmentSidecar`
+  gained **no new field** — `BuildOneChain` already takes the model `CoilAssignment` alongside its
+  sidecar (for its pre-existing leaf-count cross-check), so it derives the exact Part Name from
+  `Kind` directly rather than duplicating it.
+- **The semantic difference is inherent in the keyword, not computed by the IR**: `SCoil` only
+  ever sets the target true when the condition is true (leaving it unchanged when false); `RCoil`
+  only ever clears it the same way — genuinely different from `Coil`'s own direct assignment, but
+  the condition itself is resolved via the identical `TraceChain` mechanism regardless of kind.
+- Readable-form keywords `SCOIL`/`RCOIL` mirror their own source Part Names, matching every IR
+  keyword built so far except `WAND` (which deliberately diverges from `AND` for a naming
+  collision that doesn't apply here). `COIL`/`SCOIL`/`RCOIL` assignments are parsed/serialized in
+  one interleaved section, in whatever order they appear — not three separate ones — matching how
+  a real network naturally mixes assign/set/reset rungs.
+
+6 converter tests (`Converter.Tests/SCoilRCoilTests.cs`), one fixture interleaving all three
+kinds on a shared rail wire, genericized from the real shape. All 164 converter tests pass (up
+from 158); `openness-cli`/golden-harness suites unaffected, confirmed still green (68/11).
+
+**Live-verified against real data, 2026-07-12:** isolated the same real network already grounded
+for `CALL` (it also contains the block's `SCoil`/`RCoil` pair) — reduces and round-trips
+completely, correctly distinguishing `Set`/`Reset` kinds from a plain `Coil` assignment.
+
+**Attempted a whole-block round-trip of `PlantAutoControl`, since this should have closed its last
+known instruction-level gap.** `converter to-ir` on a fresh whole-block export immediately hit a
+different, already-known gap: every one of `PlantAutoControl`'s 20 real networks carries a non-empty
+`Title` (distinct from `Comment`) — `BlockSourceParser` already hard-errors on this shape
+(confirmed and documented during the reference-project corpus work, `tests/golden/README.md`,
+not a new discovery). So `PlantAutoControl` still doesn't round-trip as a whole block — for a reason
+entirely unrelated to any instruction type this converter slice models. Not addressed by this
+item; flagged honestly as the next real gap, not glossed over.
 
 ## DB support
 

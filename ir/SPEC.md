@@ -66,6 +66,7 @@ lookup table entry:
 | `Contact` | bare tag reference, e.g. `Sensor1.Ok` |
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
+| `SCoil`/`RCoil` (set/reset coils) — **confirmed real and built, 2026-07-12 (S1 item 15)**, structurally identical to `Coil` (same `in`/`operand` ports, never a producer) | `SCOIL <tag> := <expr>` / `RCOIL <tag> := <expr>` |
 | `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Ne`/`Le`/`Lt` — **confirmed real Part Names, 2026-07-12, not yet built**; `Gt` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
 
@@ -290,6 +291,34 @@ NETWORK 8 "Run enable delay"
   completely through the in-memory pipeline — the first real network combining `Not` and `Call`
   together to do so. **Not yet verified through the true TIA `import → compile → re-export →
   Normalizer` cycle** — see `docs/notes/stage-gates.md` ("S1 item 14") for why, and what's next.
+- **`SCOIL`/`RCOIL` (set/reset coils, `Part Name="SCoil"`/`"RCoil"`), built 2026-07-12 (S1 item
+  15).** Picked up per the project owner's own explicit sequencing after `CALL`, since 3 of each
+  are real in `FC PlantAutoControl` (also seen alongside TON in `FB MotorDOL`'s own earlier grounding
+  — the one real "TON's `Q` wired directly into a downstream part" example that couldn't be
+  modeled at the time fed an `RCoil`). Grounded against two independent real instances of each
+  before any code: both are completely bare (`<Part Name="SCoil" UId="N" />`, no attributes or
+  children beyond `Name`/`UId`) with the *exact same* `in`/`operand` wire shape as a plain `Coil`
+  and never a producer (no `out` port) — structurally identical to `Coil` in every respect.
+  `GraphReducer`/`FlgNetBuilder` reuse the existing chain-resolution code (`ReduceOneChain`/
+  `BuildOneChain`) verbatim for all three kinds, tagging the result with a new
+  `CoilAssignment.Kind` field (`Assign`/`Set`/`Reset`) rather than duplicating any logic — the
+  semantic difference (`SCoil` only ever sets the target true when the condition is true, `RCoil`
+  only ever clears it, both leaving the target unchanged when the condition is false, unlike
+  `Coil`'s direct assignment) is inherent in the keyword itself, not something the IR computes.
+  `SCOIL`/`RCOIL` mirror their own source Part Names, same convention as `COIL`/`TON`/`MOVE`/
+  `CALL` (`WAND` is the one deliberate exception, for a naming collision that doesn't apply here).
+  Covered by 6 converter tests (`SCoilRCoilTests.cs`, one fixture interleaving all three kinds on
+  a shared rail, genericized from the real shape). **Live-verified against real data,
+  2026-07-12:** isolating the real network that motivated this item (the same one containing the
+  earlier-grounded `Call`) directly confirmed it reduces and round-trips completely, correctly
+  distinguishing `Set`/`Reset` kinds.
+  - **A genuinely separate gap surfaced while attempting a whole-block round-trip of
+    `PlantAutoControl` with `SCoil`/`RCoil` now built**: every one of its 20 real networks carries a
+    non-empty `Title` (distinct from `Comment`) — `converter to-ir` already hard-errors on this
+    (`BlockSourceParser`, confirmed and documented during the reference-project corpus work,
+    `tests/golden/README.md`), so `PlantAutoControl` still doesn't round-trip as a *whole block*, for
+    a reason entirely unrelated to any instruction type. Not addressed here — flagged honestly as
+    the next real gap for a whole-block proof, not glossed over.
 
 ### Explicit form (fallback, per-network)
 
@@ -441,9 +470,16 @@ question, left open on purpose rather than guessed).
 - TON's `ET` wired directly into a downstream part (not via an ordinary Access) — no live example
   exists; still a hard error. (`Q` wired directly is now modeled and live-proven — see above,
   `FC TimerSample`.)
-- TONR, `RCoil`/`SCoil` — real, seen alongside TON in both `MotorDOL`/`ControlDelays` grounding
-  exports, still out of scope; not needed once a purpose-built block avoids them (`TimerSample`
-  did).
+- **Resolved, 2026-07-12 (S1 item 15): `SCoil`/`RCoil` built** — see the readable-form section
+  above. TONR (a retentive TON variant) remains out of scope, still unconfirmed against any real
+  data — not the same construct, not addressed by this item.
+- **New, 2026-07-12: a network `Title` (distinct from `Comment`) is a real, systematic gap.**
+  Found attempting a whole-block round-trip of `PlantAutoControl` once `SCoil`/`RCoil` closed its last
+  known instruction-level gap — every one of its 20 networks carries a non-empty `Title`, which
+  `BlockSourceParser` already hard-errors on (this was found and documented earlier, during the
+  reference-project corpus work, `tests/golden/README.md` — not a new discovery, but the first
+  time it's actually blocked a real production block's own whole-block proof). Not addressed by
+  this item; the next real gap standing between `PlantAutoControl` and a true whole-block round-trip.
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
   declared parameter list, independent of what's wired at any one call site) remains deferred,

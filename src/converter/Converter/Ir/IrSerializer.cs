@@ -66,7 +66,8 @@ public static class IrSerializer
 
         foreach (var assignment in network.Assignments)
         {
-            sb.Append("  COIL ").Append(assignment.CoilTag).Append(" := ").Append(SerializeExpr(assignment.Condition)).Append('\n');
+            sb.Append("  ").Append(CoilKeywordFor(assignment.Kind)).Append(' ').Append(assignment.CoilTag)
+              .Append(" := ").Append(SerializeExpr(assignment.Condition)).Append('\n');
         }
 
         foreach (var move in network.Moves)
@@ -171,6 +172,17 @@ public static class IrSerializer
 
     private static string Parenthesize(Expr expr, bool needsParens) =>
         needsParens ? $"({SerializeExpr(expr)})" : SerializeExpr(expr);
+
+    // SCOIL/RCOIL (S1 item 15) mirror their own source Part Names ("SCoil"/"RCoil"), same
+    // convention as COIL/TON/MOVE/CALL — WAND is the one deliberate exception, for a naming
+    // collision that doesn't apply here.
+    private static string CoilKeywordFor(CoilKind kind) => kind switch
+    {
+        CoilKind.Assign => "COIL",
+        CoilKind.Set => "SCOIL",
+        CoilKind.Reset => "RCOIL",
+        _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
+    };
 
     private static void SerializeSidecarNetwork(StringBuilder sb, NetworkSidecar sidecar)
     {
