@@ -583,9 +583,15 @@ public static class GraphReducer
         visitedWireUIds.Add(destWireUId);
         AddAccessEntry(accessEntries, destTag);
 
+        if (mul.AutomaticSrcType == (mul.SrcType is not null))
+        {
+            throw new NonReducibleNetworkException(
+                $"Network {networkNumber}: Mul/Add UId={mul.UId} must have exactly one of AutomaticTyped SrcType or an explicit SrcType TemplateValue.");
+        }
+
         var kind = MulKindFor(mul.Name, networkNumber, mul.UId);
         var statement = new MulStatement(en, inputExprs, destTag.TagPath, kind);
-        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId, kind);
+        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId, kind, mul.SrcType);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

@@ -593,18 +593,26 @@ public abstract record EnSourceSidecar
 // equals the source Part's own Cardinality (`Card="2"` in every real instance seen, carried as
 // data rather than hard-validated fixed, same reasoning as WordAndStatementSidecar's own
 // Inputs.Count). DisabledENO isn't carried — always `"true"`, same "don't carry a confirmed
-// constant" reasoning as Move/WAND's own. No SrcType field at all — both `Mul`'s and `Add`'s own
-// type is `<AutomaticTyped Name="SrcType" />` (confirmed real, no value to carry, only the shape
-// to validate on parse and regenerate unconditionally on write). Kind is duplicated here (also on
-// MulStatement, the model) rather than derived from it — same "sidecar works entirely on its own"
-// discipline as TimerBindingSidecar's own Kind field, since BuildMul is sidecar-only.
+// constant" reasoning as Move/WAND's own. Kind is duplicated here (also on MulStatement, the
+// model) rather than derived from it — same "sidecar works entirely on its own" discipline as
+// TimerBindingSidecar's own Kind field, since BuildMul is sidecar-only.
+//
+// SrcType is nullable — confirmed real, 2026-07-12 (S1 item 20 live verification, `FB AirStar`,
+// `Mul UId=43`): a genuine second real shape for this Part's own type, contradicting S1 item 18's
+// own original "always AutomaticTyped" assumption (`MotorDOL`/`EquipmentControlSystem`). Null means
+// `<AutomaticTyped Name="SrcType" />` (no value, TIA infers the type from the connected
+// operands — the original, still-real shape); non-null means an ordinary `<TemplateValue
+// Name="SrcType" Type="Type">X</TemplateValue>` (e.g. `"Real"`), the same explicit shape
+// `Convert`'s own SrcType/DestType already use. Exactly one of the two shapes is present in any
+// real instance seen — never both, never neither.
 public sealed record MulStatementSidecar(
     int MulPartUId,
     EnSourceSidecar En,
     IReadOnlyList<OperandSidecar> Inputs,
     int DestAccessUId,
     int DestWireUId,
-    MulKind Kind = MulKind.Multiply);
+    MulKind Kind = MulKind.Multiply,
+    string? SrcType = null);
 
 // One Convert's full round-trip data. En mirrors every other production's own EnSource.
 // SrcType/DestType mirror a comparison's own SrcType (sidecar-only, not shown in the readable IR

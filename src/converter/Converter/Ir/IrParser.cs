@@ -816,10 +816,20 @@ public static partial class IrParser
             k++;
         }
 
+        // Optional — confirmed real, 2026-07-12 (S1 item 20 live verification, FB AirStar): a
+        // Mul/Add's own explicit SrcType shape, alongside the original AutomaticTyped shape
+        // (absent line).
+        string? srcType = null;
+        if (i < lines.Length && lines[i].StartsWith("    srctype = ", StringComparison.Ordinal))
+        {
+            srcType = lines[i]["    srctype = ".Length..];
+            i++;
+        }
+
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
-        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId, mulKind);
+        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId, mulKind, srcType);
     }
 
     // A Convert's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, except `en`

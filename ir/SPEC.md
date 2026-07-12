@@ -380,12 +380,15 @@ NETWORK 8 "Run enable delay"
   Grounded first (two independent real instances, `FB MotorDOL`/`FB EquipmentControlSystem`), confirmed
   identical in both, before any design. `Mul`: `DisabledENO="true"`, `Card="2"` (matches WAND's
   own Cardinality-driven shape, carried as data not hard-validated fixed), ports `en`/`in1`/`in2`/
-  `eno`/`out`. **Genuinely untyped in the source**: `<AutomaticTyped Name="SrcType" />`, a
-  self-closing element with no value at all (TIA infers the type from the connected operands
-  rather than declaring it statically) — nothing to carry, only the shape to validate, unlike
-  every other typed instruction built so far. `Convert`: `DisabledENO="true"`, typed *between*
-  two types (`SrcType`/`DestType`, e.g. `Real`→`DInt`, both carried sidecar-only), ports `en`/
-  `in`/`out`.
+  `eno`/`out`. Its own type is either `<AutomaticTyped Name="SrcType" />` — a self-closing element
+  with no value at all (TIA infers the type from the connected operands rather than declaring it
+  statically), the shape originally confirmed real from `MotorDOL`/`EquipmentControlSystem` — **or**, confirmed
+  real 2026-07-12 (`FB AirStar`, found live-verifying S1 item 20, fixed same day — see Open
+  Items), an ordinary `<TemplateValue Name="SrcType" Type="Type">X</TemplateValue>`, the same
+  explicit shape `Convert`/comparisons already use. `FlgNetParser` accepts either, hard-erroring
+  only if a real instance ever carries both or neither. `Convert`: `DisabledENO="true"`, typed
+  *between* two types (`SrcType`/`DestType`, e.g. `Real`→`DInt`, both carried sidecar-only), ports
+  `en`/`in`/`out`.
   **The real surprise, confirmed in both independent instances**: despite `DisabledENO="true"` on
   both (matching Move/WAND's own "never wired" precedent), each network has three `Mul`→`Convert`
   pairs where **the `Mul`'s own `eno` output wires directly into the following `Convert`'s own
@@ -650,16 +653,19 @@ question, left open on purpose rather than guessed).
   `TomraControlSystem` hits `Swap` (an unsupported instruction), `MotorVSDSystem` hits `Access
   Scope="LocalConstant"` (an unconfirmed Access scope), and `AirStar` hits a **real correction
   needed to S1 item 18's own `Mul` design**: see the new bullet immediately below.
-- **New, 2026-07-12: `Mul`'s own `SrcType` is NOT always `<AutomaticTyped />`** — found live-
-  verifying S1 item 20 against `FB AirStar`. S1 item 18 confirmed (from `MotorDOL`/`EquipmentControlSystem`)
-  that `Mul`'s own type is always the self-closing, valueless `<AutomaticTyped Name="SrcType" />`
-  shape — `AirStar`'s own `Mul` (`UId=43`) instead carries an ordinary `<TemplateValue
-  Name="SrcType" Type="Type">Real</TemplateValue>`, the same explicit shape `Convert`/comparisons
-  already use. `FlgNetParser` currently hard-errors on this (`<Part Name="Mul"> is missing its
-  <AutomaticTyped> element`) rather than silently guessing — a real, confirmed counter-example to
-  already-committed code, flagged here rather than fixed speculatively; needs its own grounding
-  pass (is `AutomaticTyped` vs. explicit `SrcType` a real choice TIA exposes, or does it depend on
-  something else about how the operands are wired?) before `Mul`'s own model is extended.
+- **Resolved, 2026-07-12: `Mul`'s own `SrcType` is not always `<AutomaticTyped />`** — found live-
+  verifying S1 item 20 against `FB AirStar`; fixed immediately after (same day). S1 item 18
+  confirmed (from `MotorDOL`/`EquipmentControlSystem`) that `Mul`'s own type is always the self-closing,
+  valueless `<AutomaticTyped Name="SrcType" />` shape — `AirStar`'s own `Mul` (`UId=43`) instead
+  carries an ordinary `<TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>`, the same
+  explicit shape `Convert`/comparisons already use. `FlgNetParser.ParseMulFixedShape` now accepts
+  either shape (hard-erroring only if both or neither is present, never guessing); `Mul`'s own
+  model gained no new field — the *existing* `PartNode.AutomaticSrcType`/`SrcType` fields (already
+  used independently by other Part kinds) cover both cases, since they were designed generically
+  enough already. `MulStatementSidecar` gained a nullable `SrcType` field (sidecar-only, mirroring
+  `Convert`'s own — not shown in the readable IR text). Live re-verified against the real
+  `AirStar` export: the `Mul`-specific error is gone; the block now progresses to the same
+  `LocalConstant` gap `MotorVSDSystem` also hits (unrelated, still open — see below).
 - **New, 2026-07-12: `Swap` (word byte-swap, presumably) and `Access Scope="LocalConstant"`
   confirmed real** — found live-verifying S1 item 20 against `TomraControlSystem`/`MotorVSDSystem`
   respectively. Neither Part Name/scope has been grounded at the XML-shape level yet — both are

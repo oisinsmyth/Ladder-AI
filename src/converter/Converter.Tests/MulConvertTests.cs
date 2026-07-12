@@ -296,4 +296,89 @@ public class MulConvertTests
         var ex = Assert.Throws<SimaticMlFormatException>(() => FlgNetParser.Parse(element));
         Assert.Contains("DestType", ex.Message);
     }
+
+    // A genuine second real shape for Mul's own type — found live-verifying S1 item 20 against
+    // FB AirStar (Mul UId=43): an ordinary <TemplateValue Name="SrcType" Type="Type">Real
+    // </TemplateValue>, the same explicit shape Convert/comparisons already use, instead of the
+    // self-closing <AutomaticTyped /> this class's own earlier tests (above) confirmed universal
+    // from MotorDOL/EquipmentControlSystem. Neither shape is assumed to be "the real one" — both are modeled.
+    [Fact]
+    public void Parse_MulWithExplicitSrcType_ProducesMulPartWithSrcTypeNotAutomatic()
+    {
+        var network = LoadFixture("MulWithExplicitSrcType.xml");
+
+        var mul = Assert.Single(network.Parts, p => p.Name == "Mul");
+        Assert.False(mul.AutomaticSrcType);
+        Assert.Equal("Real", mul.SrcType);
+    }
+
+    [Fact]
+    public void Reduce_MulWithExplicitSrcType_SidecarRecordsSrcType()
+    {
+        var network = LoadFixture("MulWithExplicitSrcType.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Explicit-type multiply", compileUnitUId: "3");
+
+        var mul = Assert.Single(reduced.Network.Muls);
+        Assert.Equal("FactorA", Assert.IsType<Expr.TagRef>(mul.Inputs[0]).Path);
+        Assert.Equal("FactorB", Assert.IsType<Expr.TagRef>(mul.Inputs[1]).Path);
+
+        var mulSidecar = Assert.Single(reduced.Sidecar.Muls);
+        Assert.Equal("Real", mulSidecar.SrcType);
+    }
+
+    [Fact]
+    public void RoundTrip_MulWithExplicitSrcType_RebuildsTemplateValueNotAutomaticTyped()
+    {
+        var original = LoadFixture("MulWithExplicitSrcType.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Explicit-type multiply", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var mulPart = Assert.Single(reparsed.Parts, p => p.Name == "Mul");
+        Assert.False(mulPart.AutomaticSrcType);
+        Assert.Equal("Real", mulPart.SrcType);
+    }
+
+    [Fact]
+    public void FullBlock_MulWithExplicitSrcType_ParseThenSerialize_IsByteIdentical()
+    {
+        var network = LoadFixture("MulWithExplicitSrcType.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Explicit-type multiply", compileUnitUId: "3");
+
+        var block = new IrBlock("0", "FC", "TestBlock", 1, "LAD", "A test block", new[] { reduced.Network });
+        var text = IrSerializer.SerializeBlock(block, new[] { reduced.Sidecar });
+
+        Assert.Contains("    srctype = Real\n", text);
+
+        var (parsedBlock, parsedSidecars) = IrParser.ParseBlock(text);
+        var reserialized = IrSerializer.SerializeBlock(parsedBlock, parsedSidecars);
+
+        Assert.Equal(text, reserialized);
+    }
+
+    [Fact]
+    public void Parse_MulWithBothAutomaticTypedAndSrcType_ThrowsUnsupportedConstruct()
+    {
+        var xml = """
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Part Name="Mul" UId="1" DisabledENO="true">
+                  <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+                  <AutomaticTyped Name="SrcType" />
+                  <TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>
+                </Part>
+                <Part Name="Coil" UId="2" />
+              </Parts>
+              <Wires />
+            </FlgNet>
+            """;
+
+        var element = XElement.Parse(xml);
+
+        var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
+        Assert.Contains("both", ex.Message);
+    }
 }

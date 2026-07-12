@@ -104,8 +104,8 @@ public static class FlgNetParser
                 }
                 else if (name is "Mul" or "Add")
                 {
-                    var mulCardinality = ParseMulFixedShape(child, name, uid);
-                    parts.Add(new PartNode(uid, name, Cardinality: mulCardinality, AutomaticSrcType: true));
+                    var (mulCardinality, mulAutomaticSrcType, mulSrcType) = ParseMulFixedShape(child, name, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: mulCardinality, AutomaticSrcType: mulAutomaticSrcType, SrcType: mulSrcType));
                 }
                 else if (name == "Convert")
                 {
@@ -251,12 +251,17 @@ public static class FlgNetParser
     // `FB MotorDOL`/`FB EquipmentControlSystem`/`FilterUnitSystem` (independent instances, identical shape for both
     // Part Names): `DisabledENO="true"` (same reasoning as And/Move's own), a `Card`
     // `TemplateValue` (`Card="2"` in every real instance, carried as data — same "only one value
-    // observed" reasoning as And's own Cardinality), and `<AutomaticTyped Name="SrcType" />` — a
-    // self-closing element with no value at all (TIA infers the type from the connected operands
-    // rather than declaring it statically), genuinely different from every other typed
-    // instruction's own `<TemplateValue Type="Type">X</TemplateValue>` shape. Only the shape
-    // (element present, self-closing, Name="SrcType") is validated — there is no value to carry.
-    private static int ParseMulFixedShape(XElement mulPart, string partName, int uid)
+    // observed" reasoning as And's own Cardinality). Its own type is EITHER
+    // `<AutomaticTyped Name="SrcType" />` — a self-closing element with no value at all (TIA
+    // infers the type from the connected operands rather than declaring it statically) — OR an
+    // ordinary `<TemplateValue Name="SrcType" Type="Type">X</TemplateValue>`, the same explicit
+    // shape `Convert`/comparisons already use. Both confirmed real, 2026-07-12: `AutomaticTyped`
+    // from `MotorDOL`/`EquipmentControlSystem` (S1 item 18's own original grounding); the explicit
+    // `TemplateValue` shape from `FB AirStar` (`Mul UId=43`, `SrcType="Real"`), found live-
+    // verifying S1 item 20 — a genuine counter-example to S1 item 18's own "always
+    // AutomaticTyped" assumption, not guessed at or silently unified. Exactly one of the two must
+    // be present; both or neither is refused.
+    private static (int Cardinality, bool AutomaticSrcType, string? SrcType) ParseMulFixedShape(XElement mulPart, string partName, int uid)
     {
         var disabledEno = mulPart.Attribute("DisabledENO")?.Value;
         if (disabledEno != "true")
@@ -267,17 +272,44 @@ public static class FlgNetParser
 
         var cardinality = ParseCardinality(mulPart, partName, uid);
 
-        var automaticTyped = mulPart.Element(Ns + "AutomaticTyped")
-            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <AutomaticTyped> element.");
-        var automaticTypedName = RequireAttribute(automaticTyped, "Name");
-        if (automaticTypedName != "SrcType" || automaticTyped.HasElements || !string.IsNullOrEmpty(automaticTyped.Value))
+        var automaticTyped = mulPart.Element(Ns + "AutomaticTyped");
+        var srcTypeTemplateValue = mulPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "SrcType");
+
+        if (automaticTyped is not null && srcTypeTemplateValue is not null)
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <AutomaticTyped Name=\"{automaticTypedName}\"> — only a bare, " +
-                "empty <AutomaticTyped Name=\"SrcType\" /> has been observed.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has both an <AutomaticTyped> element and a <TemplateValue " +
+                "Name=\"SrcType\"> — only one or the other has been observed, never both.");
         }
 
-        return cardinality;
+        if (automaticTyped is not null)
+        {
+            var automaticTypedName = RequireAttribute(automaticTyped, "Name");
+            if (automaticTypedName != "SrcType" || automaticTyped.HasElements || !string.IsNullOrEmpty(automaticTyped.Value))
+            {
+                throw new UnsupportedConstructException(
+                    $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <AutomaticTyped Name=\"{automaticTypedName}\"> — only a bare, " +
+                    "empty <AutomaticTyped Name=\"SrcType\" /> has been observed.");
+            }
+
+            return (cardinality, true, null);
+        }
+
+        if (srcTypeTemplateValue is not null)
+        {
+            var type = RequireAttribute(srcTypeTemplateValue, "Type");
+            if (type != "Type")
+            {
+                throw new UnsupportedConstructException(
+                    $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"SrcType\" Type=\"{type}\"> — only " +
+                    "Type=\"Type\" has been observed.");
+            }
+
+            return (cardinality, false, srcTypeTemplateValue.Value);
+        }
+
+        throw new SimaticMlFormatException(
+            $"<Part Name=\"{partName}\" UId=\"{uid}\"> has neither an <AutomaticTyped> element nor a <TemplateValue Name=\"SrcType\"> — one of the two is required.");
     }
 
     // A type-conversion box instruction (`Part Name="Convert"`) — confirmed real, 2026-07-12,

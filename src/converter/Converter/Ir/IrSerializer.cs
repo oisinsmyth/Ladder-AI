@@ -428,6 +428,14 @@ public static class IrSerializer
                 SerializeOperand(sb, "    ", $"input {k}", mul.Inputs[k]);
             }
 
+            // Confirmed real, 2026-07-12 (S1 item 20 live verification, FB AirStar) — omitted
+            // when null (AutomaticTyped, the original shape), same "absent line means default"
+            // convention as the timer sidecar's own optional `et` line.
+            if (mul.SrcType is not null)
+            {
+                sb.Append("    srctype = ").Append(mul.SrcType).Append('\n');
+            }
+
             sb.Append("    dest = ").Append(mul.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(mul.DestWireUId).Append('\n');
         }

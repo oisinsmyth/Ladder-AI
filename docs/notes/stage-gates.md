@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 211 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 216 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1625,3 +1625,46 @@ this session's own honest-reporting discipline (report what's actually true, not
 like a bigger win). The `Mul`/`SrcType` finding is the most consequential of the three: a real
 counter-example to already-shipped, already-committed code (S1 items 18/19), not a new capability
 gap — worth the project owner's attention before any further arithmetic work.
+
+### Follow-up, same day, 2026-07-12: `Mul`'s own `SrcType` fixed
+
+Picked up immediately per the project owner's own explicit instruction ("let's fix the Mul/SrcType
+issue") after S1 item 20's own live verification surfaced it. A correction to already-committed
+code (S1 item 18), not a new capability — already grounded (one confirmed real instance,
+`AirStar`'s own `Mul UId=43`, captured directly during S1 item 20's live verification and already
+recorded in this file's own S1 item 20 section above), so implemented directly without a fresh
+formal plan-mode cycle.
+
+**Design**: `FlgNetParser.ParseMulFixedShape` now checks for either shape — the original
+self-closing `<AutomaticTyped Name="SrcType" />` (`MotorDOL`/`EquipmentControlSystem`, S1 item 18's own
+grounding) or an ordinary `<TemplateValue Name="SrcType" Type="Type">X</TemplateValue>` (`AirStar`,
+confirmed real) — hard-erroring only if a real instance ever carries both or neither (never
+silently guessing which is "the real one"). No new `PartNode` field needed: the *existing*
+`AutomaticSrcType: bool`/`SrcType: string?` fields already coexist generically on that record (used
+independently by other Part kinds already), so this was a pure parser/reducer/builder extension,
+not a model redesign. `MulStatementSidecar` gained a nullable `SrcType` field (sidecar-only,
+mirroring `Convert`'s own precedent — the readable IR text is unaffected either way, since `Mul`'s
+own type was never shown there). `FlgNetWriter` needed **zero changes** — its existing
+`AutomaticSrcType`/`SrcType` writing branches were already generic enough (mutually exclusive,
+correct relative ordering) to regenerate either shape correctly once the right data reaches them.
+
+5 new tests (`Converter.Tests/MulConvertTests.cs`) — parse/reduce/round-trip/full-block for the
+new explicit-`SrcType` shape, plus a new negative test (`Parse_MulWithBothAutomaticTypedAndSrcType_
+ThrowsUnsupportedConstruct`). One new fixture, `MulWithExplicitSrcType.xml` (a standalone
+rail-fed `Mul`, genericized from `AirStar`'s real shape — exact real wiring wasn't captured during
+the brief live-verification grep that first found this, so the fixture's own wiring mirrors the
+already-proven standalone-rail-fed pattern, not a claim about `AirStar`'s own exact wire UIds).
+All three suites green: **216 converter tests** (up from 211), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Exported `AirStar` fresh and ran `converter to-ir` — **the `Mul`-specific error is gone**,
+confirming the fix works against the real block it was found on. The block now progresses to a
+different, already-known, unrelated gap: `Access Scope="LocalConstant"`, the same one `MotorVSDSystem`
+(the same FB family, both titled "VSD Motor") already hits — not addressed by this fix. Real
+exported data deleted from scratch temp immediately after use, confirmed via `git status --short`.
+
+**Bottom line:** the `Mul`/`SrcType` counter-example found during S1 item 20's own live
+verification is now fixed and live-proven against the real block that surfaced it. Two further,
+unrelated open items remain from that same live-verification pass — `Swap` (blocks `TomraControlSystem`)
+and `Access Scope="LocalConstant"` (blocks `MotorVSDSystem`/`AirStar` both) — neither addressed here.

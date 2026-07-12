@@ -773,6 +773,23 @@ same explicit shape `Convert` already uses. `FlgNetParser` currently hard-errors
 than guessing; flagged as a new open item rather than fixed speculatively — needs its own
 grounding pass. None of these three new gaps are addressed by this item.
 
+### Follow-up, same day: `Mul`'s own `SrcType` fixed
+
+Picked up immediately after this item's own live verification surfaced it — a real, confirmed
+correction to already-committed S1 item 18 code, not a new capability. `FlgNetParser.
+ParseMulFixedShape` now accepts either the original `<AutomaticTyped Name="SrcType" />` shape
+(`MotorDOL`/`EquipmentControlSystem`) or an ordinary `<TemplateValue Name="SrcType" Type="Type">X</TemplateValue>`
+(`AirStar`, `Mul UId=43`, `SrcType="Real"`) — hard-erroring only if a real instance ever carries
+both or neither. No new model field needed: the existing `PartNode.AutomaticSrcType`/`SrcType`
+fields already coexist generically. `MulStatementSidecar` gained a nullable `SrcType` field
+(sidecar-only, mirroring `Convert`'s own — the readable IR text is unaffected either way).
+
+5 new tests (`MulConvertTests.cs`), one new fixture (`MulWithExplicitSrcType.xml`, a standalone
+rail-fed `Mul` genericized from the real `AirStar` shape). All 216 converter tests pass (up from
+211). **Live re-verified against the real `AirStar` export**: the `Mul`-specific error is gone —
+the block now progresses to the same `Access Scope="LocalConstant"` gap `MotorVSDSystem` also hits
+(unrelated, still open, not addressed here).
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

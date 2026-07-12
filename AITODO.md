@@ -26,93 +26,70 @@ contacts, Instance DB + structured members, DB round-trip, TON/TONR (both instan
 live-proven), comparisons (Eq/Ge/Lt), MOVE (fan-out taps + telescoping dedup), WAND (bitwise word
 AND; closes out the AND-merge open item as **confirmed non-existent**), `Not` — standalone
 boolean inverter, `CALL` — FB/FC block calls, `SCoil`/`RCoil` — set/reset coils, network/block-level
-`Title`, `MUL`/`CONVERT`/`ADD` (arithmetic incl. ENO-chaining, committed `ce0be15`/`77f0207`), FC/FB
-parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant`) — **implemented/tested/
-documented, NOT YET COMMITTED, see "Current task" below**. `FC PlantAutoControl` now converts as a
+`Title`, `MUL`/`CONVERT`/`ADD` (arithmetic incl. ENO-chaining), FC/FB parameter-interface modeling
+(`Input`/`Output`/`InOut`/`Constant`, committed `500dc68`). `FC PlantAutoControl` now converts as a
 whole block (`to-ir → to-xml → to-ir` byte-identical) — first real production block this session to
-fully round-trip; `MotorDOL`/`FilterUnitSystem` (2 of its 8 dependency FBs) now do too. Full story for
-each closed item: `docs/notes/stage-gates.md`.
+fully round-trip; `MotorDOL`/`FilterUnitSystem` (2 of its 8 dependency FBs) now do too. `Mul`'s own
+`SrcType` fix is **implemented/tested, NOT YET COMMITTED — see "Current task" below**. Full story
+for each closed item: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S1 item 20 — FC/FB parameter-interface modeling — implementation + docs + live verification DONE, NOT YET COMMITTED
+## Current task: `Mul`'s own `SrcType` fix — implementation + tests + docs DONE, NOT YET COMMITTED
 
-**Status as of 2026-07-12: fully implemented, tested (211/211 converter tests green), live-verified
+**Status as of 2026-07-12: fully implemented, tested (216/216 converter tests green), live-verified
 against real data, and documented (`ir/SPEC.md`, `src/converter/README.md`,
 `docs/notes/stage-gates.md`, `CHANGELOG.md` all updated this pass). Waiting on explicit "commit
 this" from the project owner before committing** — per this session's established discipline,
 never auto-commit.
 
-**Picked up per the project owner's own explicit request** ("let's approach the interface side of
-the FC/FBs") — the last real gap left from the original 8-FB `PlantAutoControl` dependency sweep.
-Planned formally in plan mode (`C:\Users\User\.claude\plans\quirky-gathering-ripple.md` — full
-authoritative design record, not duplicated in full here).
+**Picked up per the project owner's own explicit instruction** ("Commit this, then let's fix the
+Mul/SrcType issue") — a correction to already-committed S1 item 18 code, found during S1 item 20's
+own live verification (`FB AirStar`'s own `Mul UId=43` carries an ordinary `<TemplateValue
+Name="SrcType" Type="Type">Real</TemplateValue>` instead of the self-closing `<AutomaticTyped
+Name="SrcType" />` shape S1 item 18 confirmed universal from `MotorDOL`/`EquipmentControlSystem`). Already
+grounded (one confirmed real instance, captured directly during S1 item 20's live verification and
+already recorded in `docs/notes/stage-gates.md`'s own S1 item 20 section) — implemented directly
+without a fresh formal plan-mode cycle, since the shape was small, contained, and already real-data
+confirmed.
 
-**Phase 0 grounding carried the strongest mandate of any item this session**: zero real
-`Input`/`Output`/`InOut`/`Constant` member XML had ever been captured anywhere in the codebase
-before this item. Exported `TomraControlSystem`/`MotorVSDSystem`/`AirStar` fresh (scratch temp, deleted
-immediately after use, twice — confirmed via `git status --short`). Found:
-- `Input`/`Output`: same shape as `Static`'s own full member shape, but genuinely missing the
-  `SetPoint` `BooleanAttribute` `Static` always carries — `DbInterfaceMembers.ParseMember`/
-  `WriteMember` gained a `requireSetPoint`/`includeSetPoint` parameter (default `true`, `Static`'s
-  own proven behavior unchanged) rather than a parallel type.
-- `Constant`: a genuinely distinct third shape (`Name`/`Datatype`/`Accessibility="Public"` +
-  required `StartValue`, no `AttributeList`/`Remanence` at all) — new
-  `ParseConstantMember`/`WriteConstantMember`.
-- `InOut`: present-but-always-empty in all 3 grounded FBs — no populated example anywhere.
-- `Return`: absent entirely on all 3 FBs (confirmed FC-specific) — found and fixed a related bug:
-  `BlockSourceWriter` was emitting the `Ret_Val` boilerplate unconditionally for every block;
-  fixed to only emit it for non-FB blocks.
+**Design**: `FlgNetParser.ParseMulFixedShape` now accepts either shape (hard-errors only if both
+or neither present, never guesses which is "the real one"). No new `PartNode` field needed — the
+*existing* `AutomaticSrcType: bool`/`SrcType: string?` fields already coexist generically on that
+record (used independently by other Part kinds). `MulStatementSidecar` gained a nullable `SrcType`
+field (sidecar-only, mirroring `Convert`'s own precedent — readable IR text unaffected).
+`FlgNetWriter` needed **zero changes** — its existing writing branches were already generic enough.
 
-**Design**: `BlockSource`/`IrBlock` gained `InputMembers`/`OutputMembers`/`ConstantMembers`
-(nullable, mirrors `StaticMembers`) and `InOutMembers` (never null, mirrors `TempMembers`).
-Deliberately a block-level concept only, per ADR-0001 (`CALL`'s own call-site wiring, S1 item 14,
-untouched). Sanitization extended: `Input`/`Output`/`InOut`/`Constant` member names sanitized the
-same way `Static`/`Temp`'s already are (freely block-owner-chosen, not structurally exempted).
-Also corrected `ir/SPEC.md`'s own stale `INTERFACE` grammar sketch, which had never listed
-`STATIC` despite it being the one section actually implemented since S1 item 7 Phase B.
+**File-by-file status (all done)**: `SimaticMl/FlgNetParser.cs` (`ParseMulFixedShape` returns
+`(Cardinality, AutomaticSrcType, SrcType)`, dispatch updated), `Ir/Model.cs`
+(`MulStatementSidecar.SrcType`), `GraphReducer.cs` (`ReduceMul` captures/validates the shape),
+`SimaticMl/FlgNetBuilder.cs` (`BuildMul` reconstructs whichever shape), `Ir/IrSerializer.cs`/
+`IrParser.cs` (sidecar `srctype = ...` line, optional).
 
-**File-by-file status (all done)**: `SimaticMl/DbInterfaceMembers.cs` (SetPoint-optional
-Input/Output + new Constant shape), `SimaticMl/Model.cs` + `Ir/Model.cs` (new fields on
-`BlockSource`/`IrBlock`), `SimaticMl/BlockSourceParser.cs`/`BlockSourceWriter.cs` (parse/write all
-4 sections + the Return fix), `Ir/IrSerializer.cs`/`IrParser.cs` (readable-form `INPUT`/`OUTPUT`/
-`INOUT`/`CONSTANT` subsections), `Program.cs` (threaded new fields through `ConvertToIr`/
-`ConvertToXml`), `Sanitize/Sanitizer.cs` (sanitizes the 4 new member lists).
+**Tests**: `MulConvertTests.cs` — 5 new tests (parse/reduce/round-trip/full-block for the
+explicit-`SrcType` shape, plus a negative "both present" test). New fixture
+`MulWithExplicitSrcType.xml` (standalone rail-fed `Mul`, genericized — real `AirStar` wiring
+wasn't captured in detail during the brief live-verification grep that found this, so the
+fixture's own wiring mirrors the already-proven standalone-rail-fed pattern, not a literal claim
+about `AirStar`'s exact wire UIds). All 216 converter tests pass (up from 211).
 
-**Tests**: `BlockInterfaceTests.cs` — 5 new tests plus `Parse_FbWithNonEmptyInput_HardErrors`
-repurposed into a positive test (`Parse_FbWithInputOutput_ReadsBothAsMemberLists`) — its own old
-fixture was synthetic, never sourced from a real export, corrected to the real grounded shape at
-the same time. New fixture `FbWithConstant.xml`. All 211 converter tests pass (up from 207).
+**Live-verified against real data, 2026-07-12**: exported `AirStar` fresh and ran `converter
+to-ir` — **the `Mul`-specific error is gone**. The block now progresses to a different,
+already-known, unrelated gap: `Access Scope="LocalConstant"` (the same one `MotorVSDSystem` — same FB
+family, both titled "VSD Motor" — already hits). All real exported data deleted from scratch temp
+immediately after use, confirmed via `git status --short`.
 
-**Live-verified against real data, 2026-07-12**: exported all 3 previously-Interface-blocked FBs
-fresh (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`) and ran `converter to-ir` on each — **the Interface
-gap is genuinely closed for all three**, confirmed via distinct error messages showing each now
-fails for an unrelated reason:
-- `TomraControlSystem` hits `Swap` (unsupported instruction, not grounded).
-- `MotorVSDSystem` hits `Access Scope="LocalConstant"` (unconfirmed Access scope, not grounded).
-- `AirStar` hits a **real, confirmed correction needed to already-committed S1 item 18 code**:
-  `Mul UId=43` carries an ordinary `<TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>`
-  instead of the self-closing `<AutomaticTyped Name="SrcType" />` shape S1 item 18 confirmed
-  universal from `MotorDOL`/`EquipmentControlSystem`. `FlgNetParser` hard-errors on this today rather than
-  silently guessing — flagged as a new open item, **not fixed as part of this item** (would need
-  its own grounding pass: is `AutomaticTyped` vs. explicit `SrcType` a real TIA-exposed choice, or
-  does it correlate with something about how the operands are wired?).
+**Bottom line**: the `Mul`/`SrcType` counter-example is fixed and live-proven against the real
+block that surfaced it. Two further, unrelated open items remain from S1 item 20's own
+live-verification pass — `Swap` (blocks `TomraControlSystem`) and `Access Scope="LocalConstant"` (blocks
+`MotorVSDSystem`/`AirStar` both) — neither addressed here.
 
-All real exported data deleted from scratch temp immediately after use, confirmed via
-`git status --short`.
-
-**Bottom line**: the Interface modeling gap itself is fully closed and live-proven. None of the 3
-target FBs fully round-trips as a whole block yet — each hits one further, unrelated, newly-found
-gap. The most consequential of the three: **the `Mul`/`SrcType` finding directly affects
-already-shipped code from S1 items 18/19**, worth the project owner's attention before any further
-arithmetic work, independent of whatever gets scoped next.
-
-**Not yet raised with the project owner, pending this item's commit — three live candidates now**:
-1. The `Mul`/`SrcType` correction (touches already-committed code — arguably the most urgent).
-2. `Swap` (blocks `TomraControlSystem`'s own full round-trip).
-3. `Access Scope="LocalConstant"` (blocks `MotorVSDSystem`'s own full round-trip).
-No decision made; should be asked once this item is closed, not assumed.
+**Not yet raised with the project owner, pending this fix's commit — two live candidates now**:
+1. `Swap` (blocks `TomraControlSystem`'s own full round-trip) — not grounded at the XML-shape level yet.
+2. `Access Scope="LocalConstant"` (blocks `MotorVSDSystem`'s AND `AirStar`'s own full round-trip, larger
+   impact by block count) — not grounded at the XML-shape level yet.
+No decision made; should be asked once this fix is closed, not assumed.
 
 **Final verification before presenting for commit — still to do on resume if not already done**:
 re-run all three test suites (`src/converter`/`src/openness-cli`/`tests/golden`) one final time to

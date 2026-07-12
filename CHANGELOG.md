@@ -10,6 +10,22 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**Follow-up: `Mul`'s own `SrcType` fixed — correction to already-committed S1 item 18 code**
+
+- Picked up immediately after S1 item 20's own live verification found it (`FB AirStar`'s own
+  `Mul` carries an ordinary `<TemplateValue Name="SrcType">` instead of the self-closing
+  `<AutomaticTyped />` shape S1 item 18 confirmed universal from `MotorDOL`/`EquipmentControlSystem`).
+- `FlgNetParser.ParseMulFixedShape` now accepts either shape, hard-erroring only if both or
+  neither is present. No new `PartNode` field needed — the existing `AutomaticSrcType`/`SrcType`
+  fields already coexist generically. `MulStatementSidecar` gained a nullable `SrcType` field
+  (sidecar-only). `FlgNetWriter` needed zero changes.
+- 5 new tests, one new fixture. All three suites green: 216 converter (up from 211), 68
+  openness-cli, 11 golden-harness.
+- **Live re-verified against the real `AirStar` export**: the `Mul`-specific error is gone — the
+  block now progresses to the same `Access Scope="LocalConstant"` gap `MotorVSDSystem` also hits
+  (unrelated, still open). Full story: `docs/notes/stage-gates.md` ("Follow-up... `Mul`'s own
+  `SrcType` fixed").
+
 **S1 item 20: FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant`) — built,
 tested, live-verified; closes the last real gap from the original 8-FB dependency sweep**
 

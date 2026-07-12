@@ -418,16 +418,19 @@ public static class FlgNetBuilder
 
     // Builds a Mul/Add Part, its `en` wiring (BuildEnSource), its N input wires (`in1`..`inK`,
     // `AddOperandWire` per input — positional, mirrors WAND's own Inputs list), and its `out`
-    // wire (same IdentCon-fed wire shape as WAND's own dest). `AutomaticSrcType: true` regenerates
-    // the confirmed-fixed `<AutomaticTyped Name="SrcType" />` shape unconditionally (same for
-    // both Part Names — confirmed real, 2026-07-12, S1 item 19).
+    // wire (same IdentCon-fed wire shape as WAND's own dest). Its own type regenerates whichever
+    // real shape the sidecar recorded — `sidecar.SrcType is null` means `<AutomaticTyped
+    // Name="SrcType" />` (the original shape, confirmed real S1 item 19); non-null means an
+    // ordinary `<TemplateValue Name="SrcType">` (confirmed real, 2026-07-12, S1 item 20 live
+    // verification, `FB AirStar` — a genuine second real shape, not assumed universal either way).
     private static void BuildMul(
         MulStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         BuildEnSource(sidecar.En, sidecar.MulPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
         AddPart(parts, emittedPartUIds, new PartNode(
-            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: sidecar.Inputs.Count, AutomaticSrcType: true));
+            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: sidecar.Inputs.Count,
+            AutomaticSrcType: sidecar.SrcType is null, SrcType: sidecar.SrcType));
 
         for (var k = 0; k < sidecar.Inputs.Count; k++)
         {
