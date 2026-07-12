@@ -288,9 +288,15 @@ public sealed record IrBlock(
     IReadOnlyList<IrNetwork> Networks,
     IReadOnlyList<DbMember>? StaticMembers = null,
     IReadOnlyList<DbMember>? TempMembers = null,
-    string? Title = null)
+    string? Title = null,
+    IReadOnlyList<DbMember>? InputMembers = null,
+    IReadOnlyList<DbMember>? OutputMembers = null,
+    IReadOnlyList<DbMember>? InOutMembers = null,
+    IReadOnlyList<DbMember>? ConstantMembers = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
+
+    public IReadOnlyList<DbMember> InOutMembers { get; init; } = InOutMembers ?? Array.Empty<DbMember>();
 }
 
 /// <summary>

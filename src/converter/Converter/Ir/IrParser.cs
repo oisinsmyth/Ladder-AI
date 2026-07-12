@@ -40,7 +40,7 @@ public static partial class IrParser
             i++;
         }
 
-        var (staticMembers, tempMembers) = ParseInterface(lines, ref i);
+        var (staticMembers, tempMembers, inputMembers, outputMembers, inOutMembers, constantMembers) = ParseInterface(lines, ref i);
 
         var networks = new List<IrNetwork>();
         while (i < lines.Length && lines[i] != "SIDECAR")
@@ -73,14 +73,26 @@ public static partial class IrParser
             sidecars.Add(ParseSidecarNetwork(lines, ref i));
         }
 
-        return (new IrBlock(rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title), sidecars);
+        return (
+            new IrBlock(
+                rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title,
+                inputMembers, outputMembers, inOutMembers, constantMembers),
+            sidecars);
     }
 
-    // Optional — only present when the source had real Static/Temp content (S1 item 7 Phase B,
-    // 2026-07-11). A single blank-line separator precedes "INTERFACE", same convention as the
-    // one preceding each NETWORK — skipped here rather than left for the caller, since this is
-    // the one place that separator has a specific fixed follower to check for.
-    private static (IReadOnlyList<DbMember>? StaticMembers, IReadOnlyList<DbMember> TempMembers) ParseInterface(string[] lines, ref int i)
+    // Optional — only present when the source had real Interface content (Static/Temp since S1
+    // item 7 Phase B, 2026-07-11; Input/Output/InOut/Constant since S1 item 20, 2026-07-12). A
+    // single blank-line separator precedes "INTERFACE", same convention as the one preceding
+    // each NETWORK — skipped here rather than left for the caller, since this is the one place
+    // that separator has a specific fixed follower to check for. Section order matches
+    // IrSerializer.SerializeInterface's own (Input, Output, InOut, Static, Temp, Constant).
+    private static (
+        IReadOnlyList<DbMember>? StaticMembers,
+        IReadOnlyList<DbMember> TempMembers,
+        IReadOnlyList<DbMember>? InputMembers,
+        IReadOnlyList<DbMember>? OutputMembers,
+        IReadOnlyList<DbMember> InOutMembers,
+        IReadOnlyList<DbMember>? ConstantMembers) ParseInterface(string[] lines, ref int i)
     {
         var lookahead = i;
         if (lookahead < lines.Length && string.IsNullOrWhiteSpace(lines[lookahead]))
@@ -90,10 +102,14 @@ public static partial class IrParser
 
         if (lookahead >= lines.Length || lines[lookahead] != "INTERFACE")
         {
-            return (null, Array.Empty<DbMember>());
+            return (null, Array.Empty<DbMember>(), null, null, Array.Empty<DbMember>(), null);
         }
 
         i = lookahead + 1;
+
+        var inputMembers = ParseOptionalMemberSection(lines, ref i, "  INPUT");
+        var outputMembers = ParseOptionalMemberSection(lines, ref i, "  OUTPUT");
+        var inOutMembers = ParseOptionalMemberSection(lines, ref i, "  INOUT") ?? Array.Empty<DbMember>();
 
         IReadOnlyList<DbMember>? staticMembers = null;
         if (i < lines.Length && lines[i] == "  STATIC")
@@ -118,18 +134,33 @@ public static partial class IrParser
             staticMembers = parsed;
         }
 
-        var tempMembers = new List<DbMember>();
-        if (i < lines.Length && lines[i] == "  TEMP")
+        var tempMembers = ParseOptionalMemberSection(lines, ref i, "  TEMP") ?? Array.Empty<DbMember>();
+        var constantMembers = ParseOptionalMemberSection(lines, ref i, "  CONSTANT");
+
+        return (staticMembers, tempMembers, inputMembers, outputMembers, inOutMembers, constantMembers);
+    }
+
+    // Shared flat member-section parser for Input/Output/InOut/Constant — none of these ever
+    // carries nested content in any grounded example (S1 item 20), unlike Static, so no
+    // nested-member look-ahead is needed here (contrast the Static-specific loop above). Returns
+    // null when the section header itself is absent, preserving the null-vs-present-but-empty
+    // distinction IrSerializer.SerializeOptionalMemberSection relies on.
+    private static IReadOnlyList<DbMember>? ParseOptionalMemberSection(string[] lines, ref int i, string header)
+    {
+        if (i >= lines.Length || lines[i] != header)
         {
-            i++;
-            while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
-            {
-                tempMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "    "));
-                i++;
-            }
+            return null;
         }
 
-        return (staticMembers, tempMembers);
+        i++;
+        var parsed = new List<DbMember>();
+        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
+        {
+            parsed.Add(DbMemberLineFormat.ParseLine(lines[i], "    "));
+            i++;
+        }
+
+        return parsed;
     }
 
     public static IrNetwork ParseNetworkOnly(string text)

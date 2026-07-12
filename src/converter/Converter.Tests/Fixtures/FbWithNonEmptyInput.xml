@@ -4,15 +4,33 @@
     <AttributeList>
       <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
   <Section Name="Input">
-    <Member Name="Enable" Datatype="Bool" Accessibility="Public" />
+    <Member Name="controlWord0" Datatype="Word" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="controlWord1" Datatype="Word" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
   </Section>
-  <Section Name="Output" />
+  <Section Name="Output">
+    <Member Name="statusWord0" Datatype="Word" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+  </Section>
   <Section Name="InOut" />
   <Section Name="Temp" />
   <Section Name="Constant" />
-  <Section Name="Return">
-    <Member Name="Ret_Val" Datatype="Void" Accessibility="Public" />
-  </Section>
 </Sections></Interface>
       <Name>RealFbName</Name>
       <Namespace />

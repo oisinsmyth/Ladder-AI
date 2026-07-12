@@ -198,8 +198,32 @@ public sealed record CompileUnitSource(string UId, string? Comment, string? Titl
 // Retain/Version/SetPoint/NestedMembers (DbSourceParser hard-errors if a real Temp member ever
 // shows more than that bare shape).
 //
-// Input/Output/InOut/Constant remain hard-error-if-non-empty, unconfirmed — not modeled, not
-// silently accepted.
+// InputMembers/OutputMembers: confirmed real, 2026-07-12 (S1 item 20, `FB TomraControlSystem` — 8
+// Input, 2 Output, all Word-typed). Same shape as StaticMembers (Name/Datatype/Remanence/
+// Accessibility + AttributeList), EXCEPT the AttributeList never carries a SetPoint
+// BooleanAttribute the way Static's own does (confirmed: Static members in the same file carry
+// 4 BooleanAttributes, Input/Output members carry only 3) — DbInterfaceMembers.ParseMember's
+// `requireSetPoint` parameter handles this, not a separate DbMember shape. Nullable like
+// StaticMembers (absent section vs. present-but-empty is a real distinction — every FC/most FB
+// seen has these present-but-empty).
+//
+// InOutMembers: the section is always present (confirmed real in all 3 grounded FBs — an empty,
+// self-closing `<Section Name="InOut" />`) but never populated in any real example seen — no
+// content shape confirmed. Modeled the same as TempMembers (never null, empty is the only case
+// observed) rather than StaticMembers' nullable convention, since section-absence was never
+// actually observed for InOut.
+//
+// ConstantMembers: confirmed real, 2026-07-12 (S1 item 20, two independent instances — `FB
+// MotorVSDSystem`/`AirStar`). A genuinely distinct third member shape — Name/Datatype/
+// Accessibility="Public" plus a required StartValue, no AttributeList/Remanence at all — neither
+// StaticMembers' full shape nor TempMembers' bare shape fits, hence
+// DbInterfaceMembers.ParseConstantMember/WriteConstantMember rather than reusing ParseMember/
+// ParseBareMember. Nullable like StaticMembers (TomraControlSystem has an empty Constant section;
+// MotorVSDSystem/AirStar's are populated).
+//
+// Return remains out of scope — confirmed FC-specific (absent entirely, not even an empty
+// element, on all 3 FBs grounded for this item) — the existing fixed-Void-Ret_Val handling
+// already only applies when a Return section is actually present.
 // Title: a real, distinct block-level MultilingualText[CompositionName="Title"] — confirmed real,
 // 2026-07-12 (S1 item 17), on two of PlantAutoControl's own dependency FBs (`MotorVSDSystem`, `AirStar`,
 // both titled "VSD Motor" — a shared, templated title across that FB family). Previously assumed
@@ -219,9 +243,15 @@ public sealed record BlockSource(
     IReadOnlyList<CompileUnitSource> CompileUnits,
     IReadOnlyList<DbMember>? StaticMembers = null,
     IReadOnlyList<DbMember>? TempMembers = null,
-    string? Title = null)
+    string? Title = null,
+    IReadOnlyList<DbMember>? InputMembers = null,
+    IReadOnlyList<DbMember>? OutputMembers = null,
+    IReadOnlyList<DbMember>? InOutMembers = null,
+    IReadOnlyList<DbMember>? ConstantMembers = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
+
+    public IReadOnlyList<DbMember> InOutMembers { get; init; } = InOutMembers ?? Array.Empty<DbMember>();
 }
 
 public sealed class SimaticMlFormatException : Exception

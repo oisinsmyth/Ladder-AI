@@ -22,10 +22,11 @@ public static class IrSerializer
             sb.Append("COMMENT \"").Append(EscapeString(block.Comment)).Append("\"\n");
         }
 
-        if (block.StaticMembers is not null || block.TempMembers.Count > 0)
+        if (block.StaticMembers is not null || block.TempMembers.Count > 0 || block.InputMembers is not null
+            || block.OutputMembers is not null || block.InOutMembers.Count > 0 || block.ConstantMembers is not null)
         {
             sb.Append('\n');
-            SerializeInterface(sb, block.StaticMembers, block.TempMembers);
+            SerializeInterface(sb, block);
         }
 
         foreach (var network in block.Networks)
@@ -161,20 +162,30 @@ public static class IrSerializer
         _ => throw new IrFormatException($"Unsupported EnSource kind: {en.GetType().Name}"),
     };
 
-    // Only emitted when there's real content — matches every FC seen (StaticMembers null,
-    // TempMembers empty), where the whole INTERFACE section is omitted per the "absence means
-    // default" convention used throughout this format. STATIC is its own optional subsection
-    // (null distinguishes "no Static section in source at all" — an FC — from "an FB with an
-    // empty one"); TEMP always shows when non-empty. Member-line grammar (VERSION/RETAIN/
-    // SETPOINT/nested indentation) is identical to a DB's own MEMBERS section — DbMemberLineFormat
-    // is shared between the two, confirmed real 2026-07-11 (S1 item 7 Phase B).
-    private static void SerializeInterface(StringBuilder sb, IReadOnlyList<DbMember>? staticMembers, IReadOnlyList<DbMember> tempMembers)
+    // Only emitted when there's real content — matches every FC seen (all six member lists
+    // null/empty), where the whole INTERFACE section is omitted per the "absence means default"
+    // convention used throughout this format. INPUT/OUTPUT/STATIC/CONSTANT are each their own
+    // optional subsection (null distinguishes "no such section in source at all" from "present
+    // but empty" — confirmed a real distinction for Static since S1 item 7 Phase B, and now for
+    // Input/Output/Constant too, S1 item 20); INOUT/TEMP always show when non-empty (no real
+    // example of either being entirely absent has been seen). Section order matches the real
+    // source's own (Input, Output, InOut, Static, Temp, Constant — BlockSourceWriter.WriteInterface).
+    // Member-line grammar (VERSION/RETAIN/SETPOINT/nested indentation) is identical to a DB's own
+    // MEMBERS section — DbMemberLineFormat is shared, confirmed real 2026-07-11 (S1 item 7 Phase
+    // B); Input/Output/InOut/Constant members never carry nested content in any grounded example
+    // (S1 item 20), so they reuse the same flat per-member line with no nested-member loop.
+    private static void SerializeInterface(StringBuilder sb, IrBlock block)
     {
         sb.Append("INTERFACE\n");
-        if (staticMembers is not null)
+
+        SerializeOptionalMemberSection(sb, "INPUT", block.InputMembers);
+        SerializeOptionalMemberSection(sb, "OUTPUT", block.OutputMembers);
+        SerializeMemberSection(sb, "INOUT", block.InOutMembers);
+
+        if (block.StaticMembers is not null)
         {
             sb.Append("  STATIC\n");
-            foreach (var member in staticMembers)
+            foreach (var member in block.StaticMembers)
             {
                 DbMemberLineFormat.SerializeLine(sb, "    ", member);
                 if (member.NestedMembers is not null)
@@ -187,13 +198,42 @@ public static class IrSerializer
             }
         }
 
-        if (tempMembers.Count > 0)
+        SerializeMemberSection(sb, "TEMP", block.TempMembers);
+        SerializeOptionalMemberSection(sb, "CONSTANT", block.ConstantMembers);
+    }
+
+    // Null vs. present-but-empty is a real, must-preserve distinction (same as StaticMembers'
+    // own null check above) — a section header with zero member lines still gets emitted when
+    // the source had the section present-but-empty (e.g. TomraControlSystem's own empty Constant
+    // section), distinct from the section being entirely absent from the source (null).
+    private static void SerializeOptionalMemberSection(StringBuilder sb, string keyword, IReadOnlyList<DbMember>? members)
+    {
+        if (members is null)
         {
-            sb.Append("  TEMP\n");
-            foreach (var member in tempMembers)
-            {
-                DbMemberLineFormat.SerializeLine(sb, "    ", member);
-            }
+            return;
+        }
+
+        sb.Append("  ").Append(keyword).Append('\n');
+        foreach (var member in members)
+        {
+            DbMemberLineFormat.SerializeLine(sb, "    ", member);
+        }
+    }
+
+    // InOut/Temp are never null (no real example of either section being entirely absent has
+    // been seen) — an empty list is the only "nothing to say" case, so the header itself is
+    // simply omitted when empty, unlike the nullable sections above.
+    private static void SerializeMemberSection(StringBuilder sb, string keyword, IReadOnlyList<DbMember> members)
+    {
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        sb.Append("  ").Append(keyword).Append('\n');
+        foreach (var member in members)
+        {
+            DbMemberLineFormat.SerializeLine(sb, "    ", member);
         }
     }
 

@@ -696,6 +696,83 @@ the separate, already-known FC/FB parameter-interface gap (3: `TomraControlSyste
 `AirStar`). Compiling any of these in `SampleProject` remains out of scope, same missing-tag-
 table/FB-library reason already documented for `PlantAutoControl` itself.
 
+## FC/FB parameter-interface modeling — Input/Output/InOut/Constant (S1 item 20, 2026-07-12)
+
+Picked up per the project owner's own explicit request ("let's approach the interface side of the
+FC/FBs") — the last real gap from the original 8-FB `PlantAutoControl` dependency sweep:
+`TomraControlSystem`/`MotorVSDSystem`/`AirStar` all hard-error on a non-empty `Input`/`Constant` Interface
+section. Planned formally in plan mode, with an unusually strong Phase 0 mandate: unlike every
+prior item this session, **zero real `Input`/`Output`/`InOut`/`Constant` member XML had ever been
+captured anywhere** in the codebase before this item — only that the sections existed and blocked
+whole-block conversion.
+
+**This is a block-level concept, not a call-site one.** ADR-0001 already decided `CALL` sites are
+reference-only (wired arguments, no inline interface snapshot) — "the callee's own IR file is the
+single source of truth for its interface." So this item extends `BlockSource`/`IrBlock` alongside
+the existing `StaticMembers`/`TempMembers` (S1 item 7 Phase B); `CallStatement`/`CallArgument`/
+`CallParameterNode` (S1 item 14) are untouched.
+
+**Phase 0 grounding** (`TomraControlSystem`, `MotorVSDSystem`, `AirStar`):
+
+```xml
+<Section Name="Input">
+  <Member Name="inputWord0" Datatype="Word" Remanence="NonRetain" Accessibility="Public">
+    <AttributeList>
+      <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+      <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+      <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+    </AttributeList>
+  </Member>
+</Section>
+```
+```xml
+<Section Name="Constant">
+  <Member Name="PosSpeedError" Datatype="Int" Accessibility="Public">
+    <StartValue>50</StartValue>
+  </Member>
+</Section>
+```
+
+- **`Input`/`Output`**: real, populated on `TomraControlSystem` — same attributes as `Static`'s own
+  full shape, **but genuinely missing the `SetPoint` `BooleanAttribute`** `Static` members always
+  carry (confirmed: `Static` members in the same file have 4 `BooleanAttribute`s including
+  `SetPoint`; `Input`/`Output` members have only 3). `DbInterfaceMembers.ParseMember`/
+  `WriteMember` gained a `requireSetPoint`/`includeSetPoint` parameter (default `true`,
+  `Static`'s own proven behavior unchanged) rather than a parallel type or a rewrite.
+- **`Constant`**: real, populated on both `MotorVSDSystem` and `AirStar` (2 independent instances,
+  identical shape) — a genuinely distinct **third** member shape: no `AttributeList` at all, no
+  `Remanence`, a required `StartValue`. Neither `ParseMember` (requires `AttributeList`) nor
+  `ParseBareMember` (rejects the `Accessibility` attribute) fits — new
+  `ParseConstantMember`/`WriteConstantMember`.
+- **`InOut`**: confirmed real as an always-present, always-empty section in all 3 grounded FBs —
+  no populated example seen anywhere (neither declared nor call-site-wired).
+- **A related fix found in the same path**: `Return`'s standard `Ret_Val` boilerplate was
+  previously written *unconditionally* for every block. Grounding confirmed real FBs never have a
+  `Return` section at all (not even an empty element) — only FCs do. `BlockSourceWriter` now only
+  emits it for non-FB blocks; this was never actually exercised against a real FB's own
+  Interface-section content before this item, so the asymmetry had gone unnoticed.
+- **Sanitization**: `Input`/`Output`/`InOut`/`Constant` member names are freely block-owner-chosen
+  identifiers, the same category as `Static`/`Temp`'s own — not given the structural exemption,
+  sanitized via the same `SanitizeMember` helper.
+
+10 new/changed converter tests (`BlockInterfaceTests.cs`) — 5 new, plus
+`Parse_FbWithNonEmptyInput_HardErrors` repurposed into a positive test (its own fixture was a
+hand-built synthetic shape, never sourced from a real export — corrected to the real grounded
+shape at the same time, same "repurpose once the real shape is known" pattern already used twice
+this session). New fixture `FbWithConstant.xml`. All 211 converter tests pass (up from 207).
+
+**Live-verified against real data, 2026-07-12.** Whole-block `to-ir` on all 3 previously-blocked
+FBs confirms **the Interface gap is genuinely closed for all three** — none hit an
+Interface-section error anymore. None fully round-trips as a whole block yet, though: each now
+hits one further, different, previously-unknown gap — `TomraControlSystem` hits `Swap` (unsupported
+instruction), `MotorVSDSystem` hits `Access Scope="LocalConstant"` (unconfirmed scope), and `AirStar`
+hits a real, confirmed **correction needed to S1 item 18's own `Mul` design**: `Mul`'s own
+`SrcType` is not always the self-closing `<AutomaticTyped />` shape — `AirStar`'s own `Mul`
+carries an ordinary `<TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>` instead, the
+same explicit shape `Convert` already uses. `FlgNetParser` currently hard-errors on this rather
+than guessing; flagged as a new open item rather than fixed speculatively — needs its own
+grounding pass. None of these three new gaps are addressed by this item.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

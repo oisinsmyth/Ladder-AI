@@ -28,12 +28,24 @@ BLOCK <FB|FC|OB> <Name>
   TITLE "<block title>"             # omitted entirely if empty — confirmed real, 2026-07-12 (S1 item 17)
   COMMENT "<block header comment>"  # omitted entirely if empty
 
-  INTERFACE
-    INPUT   <name> : <Type>
-    OUTPUT  <name> : <Type>
-    INOUT   <name> : <Type>
-    TEMP    <name> : <Type>
-    RETURN  <name> : <Type>         # matches the source's own Section names (Input/Output/InOut/Temp/Return)
+  INTERFACE                         # omitted entirely if every section below is absent/empty
+    INPUT                           # omitted if absent from source; shown (with zero members) if present-but-empty
+      <name> : <Type>[ RETAIN]      # confirmed real 2026-07-12 (S1 item 20) — same shape as STATIC, minus SETPOINT
+    OUTPUT
+      <name> : <Type>[ RETAIN]
+    INOUT                           # always shown when non-empty; never seen absent or populated in any real block
+      <name> : <Type>[ RETAIN]
+    STATIC                          # FB only — absent entirely for an FC, not just empty (S1 item 7 Phase B)
+      <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ = <start value>]
+        <nested member>             # one level deeper — UDT-typed or SFB-instance-typed members only
+    TEMP                            # always shown when non-empty
+      <name> : <Type>
+    CONSTANT                        # confirmed real 2026-07-12 (S1 item 20) — genuinely distinct shape, StartValue required
+      <name> : <Type> = <start value>
+                                     # RETURN has no IR representation — always the standard parameterless-FC
+                                     # boilerplate when present (FC only; absent entirely for FB, S1 item 20),
+                                     # so nothing to carry — matches the source's own Section names
+                                     # (Input/Output/InOut/Static/Temp/Constant/Return)
 
   NETWORK <n> "<title>"             # sourced from the network's own Title (S1 item 16), not Comment — see below
     COMMENT "<network comment>"     # omitted entirely if empty — a separate, rarely-populated field
@@ -63,6 +75,31 @@ assumed always-empty (S1 item 16's own grounding only found it populated at netw
 confirmed real too, 2026-07-12 (S1 item 17, two of `PlantAutoControl`'s own dependency FBs, both
 sharing one templated title across that FB family) — given its own `TITLE "..."` line at the top
 of the file, alongside the pre-existing block-level `COMMENT` line.
+
+**`INPUT`/`OUTPUT`/`INOUT`/`CONSTANT` (S1 item 20, 2026-07-12)** — the grammar sketch above was
+itself stale before this item: it listed `INPUT`/`OUTPUT`/`INOUT`/`TEMP`/`RETURN` but omitted
+`STATIC` entirely, even though `STATIC` was the one section actually implemented (S1 item 7 Phase
+B) — an early, unconfirmed draft never reconciled against the real implementation until now.
+Grounded against real `FB TomraControlSystem` (`Input`/`Output`) and `FB MotorVSDSystem`/`AirStar` (two
+independent instances, `Constant`): `Input`/`Output` members are structurally identical to
+`Static`'s own full shape (`Name`/`Datatype`/`Remanence`/`Accessibility` +
+`AttributeList`/`BooleanAttribute`s) **except they never carry the `SetPoint` BooleanAttribute
+`Static` members always do** (confirmed: `Static` members in the same file carry 4
+`BooleanAttribute`s including `SetPoint`; `Input`/`Output` members carry only the other 3) —
+`DbInterfaceMembers.ParseMember`/`WriteMember` gained a `requireSetPoint`/`includeSetPoint`
+parameter (default `true`, preserving `Static`'s own proven behavior unchanged) rather than a
+parallel type. `Constant` is a genuinely distinct third shape — `Name`/`Datatype`/
+`Accessibility="Public"` plus a required `StartValue`, **no `AttributeList` at all, no
+`Remanence`** — neither `ParseMember` (requires `AttributeList`) nor the bare/`Temp` shape
+(`ParseBareMember`, which rejects `Accessibility` as unexpected) fits, hence a new
+`ParseConstantMember`/`WriteConstantMember`. `InOut` is confirmed real as an always-present,
+always-empty section in every grounded instance — no populated example has ever been seen. A
+related, adjacent finding fixed at the same time: `RETURN`'s standard boilerplate was previously
+written unconditionally for every block; grounding confirmed it's **absent entirely (not even an
+empty `Section` element) on every real FB** — `BlockSourceWriter` now only emits it for non-FB
+blocks. `Input`/`Output`/`InOut`/`Constant` member names are sanitized the same way `Static`/
+`Temp`'s already are (freely block-owner-chosen, not given the structural exemption —
+`docs/13-data-boundary.md`).
 
 ## Network body
 
@@ -596,15 +633,42 @@ question, left open on purpose rather than guessed).
   blocked only by the separate, already-known FC/FB parameter-interface gap (3: `TomraControlSystem`/
   `MotorVSDSystem`/`AirStar`). Arithmetic beyond `Mul`/`Convert`/`Add` and comparisons beyond
   `Eq`/`Ge`/`Lt` remain out of scope — none observed needing them.
-- **New, 2026-07-12: real FC/FB `Interface` sections beyond `Input` are confirmed real too**
-  (`Constant`, on two of `PlantAutoControl`'s dependency FBs) — same already-known, deferred
-  "full parameter-interface modeling" item, not a new capability of its own.
+- **Resolved, 2026-07-12 (S1 item 20): FC/FB parameter-interface modeling
+  (`Input`/`Output`/`InOut`/`Constant`) built** — see the file-shape section above for the full
+  story (a genuinely new third member shape for `Constant`, and a `SetPoint`-optional variant of
+  `Static`'s own shape for `Input`/`Output`). Grounded against real `TomraControlSystem`
+  (`Input`/`Output`) and `MotorVSDSystem`/`AirStar` (two independent `Constant` instances) — the last
+  real gap from the original 8-FB `PlantAutoControl` dependency sweep. This is a block-level concept
+  only, deliberately not touching `CALL`'s own call-site wiring (ADR-0001's own boundary — the
+  callee's `.ir` file remains the sole source of truth for its interface). 10 new tests (5 new,
+  1 repurposed from an obsolete hard-error test whose own fixture was never sourced from a real
+  export — same "repurpose once the real shape is known" pattern already used twice this
+  session), 211/211 total passing. **Whole-block `to-ir` on all 3 previously-Interface-blocked
+  FBs confirms the Interface gap is genuinely closed for all three** — none hit an
+  Interface-section error anymore. None of the three fully round-trip as whole blocks yet,
+  though: each now progresses to one further, different, previously-unknown gap —
+  `TomraControlSystem` hits `Swap` (an unsupported instruction), `MotorVSDSystem` hits `Access
+  Scope="LocalConstant"` (an unconfirmed Access scope), and `AirStar` hits a **real correction
+  needed to S1 item 18's own `Mul` design**: see the new bullet immediately below.
+- **New, 2026-07-12: `Mul`'s own `SrcType` is NOT always `<AutomaticTyped />`** — found live-
+  verifying S1 item 20 against `FB AirStar`. S1 item 18 confirmed (from `MotorDOL`/`EquipmentControlSystem`)
+  that `Mul`'s own type is always the self-closing, valueless `<AutomaticTyped Name="SrcType" />`
+  shape — `AirStar`'s own `Mul` (`UId=43`) instead carries an ordinary `<TemplateValue
+  Name="SrcType" Type="Type">Real</TemplateValue>`, the same explicit shape `Convert`/comparisons
+  already use. `FlgNetParser` currently hard-errors on this (`<Part Name="Mul"> is missing its
+  <AutomaticTyped> element`) rather than silently guessing — a real, confirmed counter-example to
+  already-committed code, flagged here rather than fixed speculatively; needs its own grounding
+  pass (is `AutomaticTyped` vs. explicit `SrcType` a real choice TIA exposes, or does it depend on
+  something else about how the operands are wired?) before `Mul`'s own model is extended.
+- **New, 2026-07-12: `Swap` (word byte-swap, presumably) and `Access Scope="LocalConstant"`
+  confirmed real** — found live-verifying S1 item 20 against `TomraControlSystem`/`MotorVSDSystem`
+  respectively. Neither Part Name/scope has been grounded at the XML-shape level yet — both are
+  new, real, currently-unaddressed gaps, not yet scoped into any item.
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
-  declared parameter list, independent of what's wired at any one call site) remains deferred,
-  unrelated to this — ADR-0001 already decided against inline interface snapshots at call sites,
-  so this isn't blocking. `InOut` parameters specifically remain unconfirmed on a real Call
-  (only Input/Output seen), refused rather than guessed at.
+  declared parameter list, independent of what's wired at any one call site) is now separately
+  resolved too — S1 item 20, see above. `InOut` parameters specifically remain unconfirmed on a
+  real Call (only Input/Output seen), refused rather than guessed at.
 - **Resolved, 2026-07-11:** a full live TIA round-trip for TON. `FC TimerSample`
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and

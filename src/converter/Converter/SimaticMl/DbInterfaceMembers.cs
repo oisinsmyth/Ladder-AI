@@ -28,8 +28,13 @@ internal static class DbInterfaceMembers
     // and an optional StartValue child, no Remanence/Accessibility/AttributeList/further nesting.
     private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype" };
 
-    /// <summary>Parses a full member (Static-section shape): Name/Datatype/Remanence/Version, BooleanAttributes, and either a StartValue or nested structured content.</summary>
-    public static DbMember ParseMember(XElement member, string context)
+    /// <summary>
+    /// Parses a full member (Static-section shape): Name/Datatype/Remanence/Version, BooleanAttributes, and either a StartValue or nested structured content.
+    /// <paramref name="requireSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, which are missing the
+    /// SetPoint BooleanAttribute entirely — confirmed real, 2026-07-12, S1 item 20 (`FB TomraControlSystem`: Static members carry 4 BooleanAttributes
+    /// including SetPoint, Input/Output members carry only the other 3).
+    /// </summary>
+    public static DbMember ParseMember(XElement member, string context, bool requireSetPoint = true)
     {
         var name = RequireAttribute(member, "Name");
         var datatype = RequireAttribute(member, "Datatype");
@@ -46,7 +51,7 @@ internal static class DbInterfaceMembers
             _ => throw new SimaticMlFormatException($"{context} member '{name}' has unrecognized Remanence '{remanence}'."),
         };
 
-        var setPoint = RequireDefaultBooleanAttributes(member, context, name);
+        var setPoint = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint);
 
         // Member/AttributeList/StartValue inherit the Interface namespace declared on the
         // ancestor <Sections xmlns="..."> — Element("StartValue")/Element("AttributeList")
@@ -130,8 +135,77 @@ internal static class DbInterfaceMembers
         return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue);
     }
 
-    /// <summary>Validates ExternalAccessible/Visible/Writable are all true (no exception seen), and returns the member's own SetPoint value verbatim.</summary>
-    private static bool RequireDefaultBooleanAttributes(XElement member, string context, string memberName)
+    // Only Name/Datatype/StartValue are ever real on this shape — Accessibility is validated
+    // separately below (always "Public" in both grounded instances) since it's a genuinely new
+    // attribute this shape carries that ParseBareMember's own shape doesn't.
+    private static readonly IReadOnlyCollection<string> AllowedConstantMemberAttributes =
+        new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype", "Accessibility" };
+
+    /// <summary>
+    /// Parses a Constant-section member — confirmed real, 2026-07-12, S1 item 20, two independent
+    /// instances (`FB MotorVSDSystem`/`AirStar`): `Name`/`Datatype`/`Accessibility="Public"` plus a
+    /// required `&lt;StartValue&gt;` — genuinely distinct from both <see cref="ParseMember"/>
+    /// (requires an `AttributeList`, absent here entirely) and <see cref="ParseBareMember"/>
+    /// (rejects `Accessibility` as unexpected). `StartValue` is required, not optional, since
+    /// every real Constant member seen carries one — unsurprising given the section's own name.
+    /// </summary>
+    public static DbMember ParseConstantMember(XElement member, string context)
+    {
+        var name = (string?)member.Attribute("Name") ?? "<unnamed>";
+
+        var unexpectedAttributes = member.Attributes()
+            .Select(a => a.Name.LocalName)
+            .Where(n => !AllowedConstantMemberAttributes.Contains(n))
+            .ToList();
+        if (unexpectedAttributes.Count > 0)
+        {
+            throw new UnsupportedConstructException(
+                $"{context} Constant member '{name}' has unexpected attribute(s) " +
+                $"[{string.Join(", ", unexpectedAttributes)}] — only Name/Datatype/Accessibility have been observed on this shape.");
+        }
+
+        var unexpectedChildren = member.Elements().Select(e => e.Name.LocalName).Where(n => n != "StartValue").ToList();
+        if (unexpectedChildren.Count > 0)
+        {
+            throw new UnsupportedConstructException(
+                $"{context} Constant member '{name}' has unexpected content [{string.Join(", ", unexpectedChildren)}] — " +
+                "only a bare Name/Datatype/Accessibility/StartValue member has been observed on this shape.");
+        }
+
+        var accessibility = (string?)member.Attribute("Accessibility");
+        if (accessibility != "Public")
+        {
+            throw new UnsupportedConstructException(
+                $"{context} Constant member '{name}' has Accessibility=\"{accessibility ?? "(absent)"}\" — only \"Public\" has been observed.");
+        }
+
+        var datatype = RequireAttribute(member, "Datatype");
+        var startValue = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value
+            ?? throw new SimaticMlFormatException($"{context} Constant member '{name}' is missing its <StartValue> — every real Constant member seen has one.");
+
+        return new DbMember(name, datatype, Retain: false, startValue);
+    }
+
+    public static XElement WriteConstantMember(DbMember member)
+    {
+        var startValue = member.StartValue
+            ?? throw new SimaticMlFormatException($"Constant member '{member.Name}' has no StartValue to write — every real Constant member requires one.");
+
+        return new XElement(
+            Ns + "Member",
+            new XAttribute("Name", member.Name),
+            new XAttribute("Datatype", member.Datatype),
+            new XAttribute("Accessibility", "Public"),
+            new XElement(Ns + "StartValue", startValue));
+    }
+
+    /// <summary>
+    /// Validates ExternalAccessible/Visible/Writable are all true (no exception seen), and returns the member's own SetPoint value verbatim.
+    /// When <paramref name="requireSetPoint"/> is false (Input/Output members — confirmed real, 2026-07-12, S1 item 20), a missing SetPoint
+    /// attribute is not an error; the returned value is simply `false` in that case (nothing to carry, mirrors the "don't store a confirmed
+    /// constant" reasoning already used for Move's own DisabledENO).
+    /// </summary>
+    private static bool RequireDefaultBooleanAttributes(XElement member, string context, string memberName, bool requireSetPoint)
     {
         var memberAttributeList = member.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
         var actual = memberAttributeList?
@@ -153,13 +227,22 @@ internal static class DbInterfaceMembers
 
         if (!actual.TryGetValue("SetPoint", out var setPoint))
         {
+            if (!requireSetPoint)
+            {
+                return false;
+            }
+
             throw new UnsupportedConstructException($"{context} member '{memberName}' is missing the 'SetPoint' BooleanAttribute.");
         }
 
         return setPoint;
     }
 
-    public static XElement WriteMember(DbMember member)
+    /// <summary>
+    /// <paramref name="includeSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, whose
+    /// AttributeList never carries a SetPoint BooleanAttribute at all — confirmed real, 2026-07-12, S1 item 20.
+    /// </summary>
+    public static XElement WriteMember(DbMember member, bool includeSetPoint = true)
     {
         var isStructured = member.NestedMembers is not null;
 
@@ -170,12 +253,19 @@ internal static class DbInterfaceMembers
         // parsing this writer's own output, every BooleanAttribute read back as "absent").
         // SetPoint is written back verbatim from what was captured on parse — not inferred from
         // isStructured, which a real counterexample disproved (DbModel.cs has the story).
-        var attributeList = new XElement(
-            Ns + "AttributeList",
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "SetPoint"), new XAttribute("SystemDefined", "true"), member.SetPoint ? "true" : "false"));
+        var attributeListChildren = new List<XElement>
+        {
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
+        };
+        if (includeSetPoint)
+        {
+            attributeListChildren.Add(new XElement(
+                Ns + "BooleanAttribute", new XAttribute("Name", "SetPoint"), new XAttribute("SystemDefined", "true"), member.SetPoint ? "true" : "false"));
+        }
+
+        var attributeList = new XElement(Ns + "AttributeList", attributeListChildren);
 
         var memberElement = new XElement(
             Ns + "Member",

@@ -10,6 +10,35 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 20: FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant`) — built,
+tested, live-verified; closes the last real gap from the original 8-FB dependency sweep**
+
+- Picked up per the project owner's own request. Zero real Input/Output/InOut/Constant member XML
+  had ever been captured anywhere before this item — the strongest Phase 0 mandate of any item
+  this session. Grounded against `TomraControlSystem` (Input/Output) and `MotorVSDSystem`/`AirStar`
+  (Constant, two independent instances).
+- `Input`/`Output`: same shape as `Static`'s own full member shape, but missing the `SetPoint`
+  BooleanAttribute `Static` always carries — `DbInterfaceMembers.ParseMember`/`WriteMember`
+  gained a `requireSetPoint`/`includeSetPoint` parameter rather than a parallel type.
+- `Constant`: a genuinely distinct third shape (no `AttributeList`, required `StartValue`) — new
+  `ParseConstantMember`/`WriteConstantMember`.
+- Deliberately a block-level concept only, per ADR-0001 — `CALL`'s own call-site wiring untouched.
+- Found and fixed a related bug in the same path: `Return`'s boilerplate was written
+  unconditionally for every block; real FBs never have a `Return` section at all — now emitted
+  only for non-FB blocks.
+- Also corrected `ir/SPEC.md`'s own stale `INTERFACE` grammar sketch, which had never listed
+  `STATIC` despite it being the one section actually implemented since S1 item 7 Phase B.
+- 10 new/changed converter tests, one hard-error test repurposed into a positive test (its old
+  fixture was synthetic, never sourced from a real export). All three suites green: 211 converter
+  (up from 207), 68 openness-cli, 11 golden-harness.
+- **Live-verified:** whole-block `to-ir` on all 3 previously-blocked FBs confirms the Interface
+  gap is genuinely closed for all three — none hit an Interface-section error anymore. None fully
+  round-trips yet: each hits a different, new, unrelated gap (`TomraControlSystem`: `Swap`; `MotorVSDSystem`:
+  `Access Scope="LocalConstant"`; `AirStar`: a **real correction needed to already-committed S1
+  item 18 code** — `Mul`'s own `SrcType` isn't always the self-closing `AutomaticTyped` shape,
+  contradicting what S1 item 18 confirmed universal). Flagged as new open items, not fixed
+  speculatively. Full story: `docs/notes/stage-gates.md` ("S1 item 20").
+
 **S1 item 19: `TONR`/`Add`/`Lt` — built, tested, live-verified; closes every instruction-level
 gap in `PlantAutoControl`'s 5 previously-blocked dependency FBs**
 

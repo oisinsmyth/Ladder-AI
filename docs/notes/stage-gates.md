@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 207 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 211 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1505,3 +1505,123 @@ with S1 item 18, this closes every real *instruction-level* gap the original 8-F
 found. The remaining 3 (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`) are blocked only by the separate,
 already-known, larger FC/FB parameter-interface modeling item — not addressed by either S1 item 18
 or 19, and not attempted here.
+
+### S1 item 20 (FC/FB parameter-interface modeling — `Input`/`Output`/`InOut`/`Constant`), 2026-07-12
+
+Picked up per the project owner's own explicit request ("let's approach the interface side of the
+FC/FBs") — the last real gap left from the original 8-FB `PlantAutoControl` dependency sweep.
+`TomraControlSystem` (non-empty `Input`), `MotorVSDSystem`/`AirStar` (non-empty `Constant`) all hard-error in
+`BlockSourceParser.ParseInterface`'s `default:` case. Planned formally in plan mode.
+
+**Phase 0 grounding carried an unusually strong mandate**: unlike every prior item this session,
+a full-codebase search confirmed **zero real `Input`/`Output`/`InOut`/`Constant` member XML had
+ever been captured anywhere** — not in `ir/SPEC.md`, not in `docs/notes/stage-gates.md`, not in
+any fixture. The one existing fixture touching this (`FbWithNonEmptyInput.xml`) was a hand-built
+synthetic shape built only to exercise the hard-error path, explicitly not sourced from a real
+export.
+
+**This is a block-level concept, not a call-site one — already decided, not revisited.** ADR-0001
+(Decision item 2) chose "reference only... no inline parameter-interface snapshot" for `CALL`
+sites: "the callee's own IR file is the single source of truth for its interface." So this item
+extends `BlockSource`/`IrBlock` alongside `StaticMembers`/`TempMembers` (S1 item 7 Phase B);
+`CallStatement`/`CallArgument`/`CallParameterNode` (S1 item 14) are untouched.
+
+Fresh exports of `TomraControlSystem`/`MotorVSDSystem`/`AirStar` (scratch temp, deleted after use):
+
+```xml
+<Section Name="Input">
+  <Member Name="inputWord0" Datatype="Word" Remanence="NonRetain" Accessibility="Public">
+    <AttributeList>
+      <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+      <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+      <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+    </AttributeList>
+  </Member>
+</Section>
+```
+```xml
+<Section Name="Constant">
+  <Member Name="PosSpeedError" Datatype="Int" Accessibility="Public">
+    <StartValue>50</StartValue>
+  </Member>
+</Section>
+```
+
+- `Input`/`Output`: real, populated on `TomraControlSystem` (8 `Input`, 2 `Output`, all `Word`-typed, no
+  nested members). Same attributes as `Static`'s own full shape — **but genuinely missing the
+  `SetPoint` `BooleanAttribute`** `Static` members always carry, confirmed by directly comparing
+  both shapes in the same file (`Static` members there have 4 `BooleanAttribute`s including
+  `SetPoint`; `Input`/`Output` members have only 3). `DbInterfaceMembers.ParseMember`/
+  `WriteMember` could not be reused verbatim as a result — gained a `requireSetPoint`/
+  `includeSetPoint` parameter (default `true`, so `Static`'s own already-proven behavior is
+  unchanged) rather than a parallel type or rewrite.
+- `Constant`: real, populated on both `MotorVSDSystem` and `AirStar` (2 independent instances,
+  identical shape) — genuinely distinct from both `ParseMember` (requires an `AttributeList`,
+  absent here entirely) and `ParseBareMember` (rejects the `Accessibility` attribute as
+  unexpected): `Name`/`Datatype`/`Accessibility="Public"` plus a required `StartValue`, no
+  `AttributeList`/`Remanence` at all. New `ParseConstantMember`/`WriteConstantMember`.
+- `InOut`: present as an empty, self-closing `<Section Name="InOut" />` in all 3 grounded FBs —
+  still zero real populated examples anywhere (neither declared nor call-site-wired).
+- `Return`: absent entirely (not even an empty element) on all 3 grounded FBs — confirmed
+  FC-specific, consistent with IEC/Siemens semantics (FBs return via output parameters).
+- **A related, adjacent bug found and fixed in the same path**: `BlockSourceWriter.WriteInterface`
+  previously emitted the standard `Ret_Val` boilerplate *unconditionally* for every block,
+  regardless of `Kind`. This asymmetry had never actually been exercised against a real FB's own
+  populated Interface-section content before this item — grounding confirms it's wrong for every
+  FB (which never has a `Return` section at all). Fixed: emitted only for non-FB blocks, directly
+  in the path of what this item was already extending.
+
+**Design**: `BlockSource`/`IrBlock` gain `InputMembers`/`OutputMembers`/`ConstantMembers`
+(nullable, mirroring `StaticMembers`' own null-means-absent-section convention) and `InOutMembers`
+(never null, mirroring `TempMembers`' own convention — no real example of `InOut` being entirely
+absent has been seen). Readable form extends the existing `INTERFACE` section (`STATIC`/`TEMP`
+machinery, S1 item 7 Phase B) with `INPUT`/`OUTPUT`/`INOUT`/`CONSTANT` subsections, same
+`DbMemberLineFormat` line grammar, same null-vs-present-but-empty distinction preserved in the
+text (a present-but-empty section still shows its own header with zero member lines).
+Sanitization: `Input`/`Output`/`InOut`/`Constant` member names are the same freely block-owner-
+chosen category as `Static`/`Temp`'s own — not given the structural exemption, same
+`SanitizeMember` helper.
+
+**Also corrected the same file's own stale grammar sketch** (`ir/SPEC.md`'s `INTERFACE` block) —
+it had never listed `STATIC` at all despite `STATIC` being the one section actually implemented
+since S1 item 7 Phase B, an early draft never reconciled against the real implementation.
+
+10 new/changed converter tests (`BlockInterfaceTests.cs`) — 5 new (`Parse`/`RoundTrip`/`IrRoundTrip`
+for both the `Input`/`Output` and `Constant` shapes), plus `Parse_FbWithNonEmptyInput_HardErrors`
+repurposed into a positive test (`Parse_FbWithInputOutput_ReadsBothAsMemberLists`) — same
+"repurpose an obsolete hard-error test once the real shape is known" pattern already used for
+TON's direct-Q-wiring and block-level Title. The old fixture's own synthetic content was corrected
+to the real grounded shape at the same time. New fixture `FbWithConstant.xml`. All three suites
+green: **211 converter tests** (up from 207), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Exported all 3 previously-Interface-blocked FBs fresh (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`) and
+ran `converter to-ir` on each. **The Interface gap is genuinely closed for all three** — none hit
+an Interface-section error anymore. None fully round-trips as a whole block yet, though: each now
+progresses to one further, different, previously-unknown gap:
+
+- `TomraControlSystem` hits `Swap` (`Part Name="Swap"`, presumably a word byte-swap instruction) — not
+  yet supported, not grounded at the XML-shape level.
+- `MotorVSDSystem` hits `Access Scope="LocalConstant"` — a new, unconfirmed Access scope, distinct from
+  the four already handled (`GlobalVariable`/`LocalVariable`/`TypedConstant`/`LiteralConstant`).
+- `AirStar` hits a **real, confirmed correction needed to already-committed S1 item 18 code**:
+  `Mul UId=43` carries an ordinary `<TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>`
+  instead of the self-closing `<AutomaticTyped Name="SrcType" />` shape S1 item 18 confirmed
+  universal from `MotorDOL`/`EquipmentControlSystem`. `FlgNetParser` hard-errors on this shape today
+  (`<Part Name="Mul"> is missing its <AutomaticTyped> element`) rather than silently accepting
+  it — flagged as a new open item, not fixed speculatively; needs its own grounding pass (is
+  `AutomaticTyped` vs. explicit `SrcType` a real choice TIA exposes, or does it correlate with
+  something else about how the operands are wired?) before `Mul`'s own model changes.
+
+All real exported data deleted from scratch temp immediately after use, confirmed via
+`git status --short`.
+
+**Bottom line:** `Input`/`Output`/`InOut`/`Constant` are built, tested, and live-verified against
+real data — the Interface gap that blocked `TomraControlSystem`/`MotorVSDSystem`/`AirStar` since the original
+8-FB dependency sweep is genuinely closed. None of the three fully round-trips as a whole block
+yet, but each now fails for a *different*, newly-discovered, unrelated reason — consistent with
+this session's own honest-reporting discipline (report what's actually true, not what would sound
+like a bigger win). The `Mul`/`SrcType` finding is the most consequential of the three: a real
+counter-example to already-shipped, already-committed code (S1 items 18/19), not a new capability
+gap — worth the project owner's attention before any further arithmetic work.

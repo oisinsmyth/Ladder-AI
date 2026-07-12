@@ -49,7 +49,7 @@ public static class BlockSourceParser
         // PlantAutoControl's own dependency FBs, `MotorVSDSystem`/`AirStar`, both titled "VSD Motor"), read
         // the same way network-level Title is (no longer hard-errored via RequireEmptyTitle).
         var blockTitle = MultilingualTextHelper.ReadMultilingualText(objectList, "Title");
-        var (staticMembers, tempMembers) = ParseInterface(attributeList, $"Block '{name}'");
+        var (staticMembers, tempMembers, inputMembers, outputMembers, inOutMembers, constantMembers) = ParseInterface(attributeList, $"Block '{name}'");
 
         var compileUnits = objectList.Elements()
             .Where(e => e.Name.LocalName == "SW.Blocks.CompileUnit")
@@ -61,7 +61,9 @@ public static class BlockSourceParser
             throw new SimaticMlFormatException($"Block '{name}' has no CompileUnit (network) content.");
         }
 
-        return new BlockSource(rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers, blockTitle);
+        return new BlockSource(
+            rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers, blockTitle,
+            inputMembers, outputMembers, inOutMembers, constantMembers);
     }
 
     private static CompileUnitSource ParseCompileUnit(XElement compileUnit)
@@ -97,30 +99,45 @@ public static class BlockSourceParser
     /// <summary>Reads a MultilingualText[CompositionName=Comment]'s en-US Text, or null if empty/absent.</summary>
     private static string? ReadComment(XElement objectList) => MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
 
-    // FC/FB parameters (Input/Output/InOut/Constant/Return) live here — genuinely semantic
-    // content (a block's own contract), unlike Title/block-config flags. Not modeled/round-tripped
-    // by this converter slice yet, so a block with real parameters must hard-error, not silently
-    // lose them. Every non-Return/Static/Temp section must be empty, and Return must hold exactly
-    // the standard parameterless-FC boilerplate (one Void "Ret_Val" member) — confirmed real,
-    // 2026-07-10, on every block seen so far in this slice.
+    // FC/FB parameters live here — genuinely semantic content (a block's own contract), unlike
+    // Title/block-config flags. Return must hold exactly the standard parameterless-FC boilerplate
+    // (one Void "Ret_Val" member) when present — confirmed real, 2026-07-10; and confirmed
+    // FC-specific, 2026-07-12 (S1 item 20) — absent entirely (not even an empty Section element)
+    // on every FB grounded for this item.
     //
-    // Static/Temp are real, confirmed 2026-07-11 (S1 item 7 Phase B, MotorDOL): an FB's own
+    // Static/Temp: real, confirmed 2026-07-11 (S1 item 7 Phase B, MotorDOL) — an FB's own
     // instance-data declaration (Static, same shape as a DB's own Static section — reused via
     // DbInterfaceMembers) and its scan-local working variables (Temp, the bare Name/Datatype
     // shape). Static is absent entirely (not just empty) on every FC seen — no Section element
     // for it at all — distinct from an FB with one, hence the nullable return.
+    //
+    // Input/Output/InOut/Constant: real, confirmed 2026-07-12 (S1 item 20, `FB TomraControlSystem`'s
+    // own Input/Output; `FB MotorVSDSystem`/`AirStar`'s own Constant). Input/Output reuse
+    // DbInterfaceMembers.ParseMember with `requireSetPoint: false` (same shape as Static, minus
+    // the SetPoint BooleanAttribute Static's own AttributeList always carries). Constant is a
+    // genuinely distinct third shape (no AttributeList at all, always a required StartValue) —
+    // DbInterfaceMembers.ParseConstantMember. InOut is present but empty in every real instance
+    // seen (never populated) — parsed the same way as Static/Input/Output would be, so a real
+    // populated example (if one ever surfaces) round-trips without further changes, but nothing
+    // in this converter has proven that shape live yet.
     //
     // Direct children of the <Sections> wrapper only — NOT .Descendants(), which would also pick
     // up a Static member's own nested <Sections><Section Name="None">...</Section> (a
     // timer/UDT-typed member's own sub-members) and wrongly require it to be empty before
     // DbInterfaceMembers.ParseMember's own, more specific structured-member handling ever runs —
     // same trap DbSourceParser.ParseMembers was fixed for earlier, real recurrence.
-    private static (IReadOnlyList<DbMember>? StaticMembers, IReadOnlyList<DbMember> TempMembers) ParseInterface(XElement attributeList, string context)
+    private static (
+        IReadOnlyList<DbMember>? StaticMembers,
+        IReadOnlyList<DbMember> TempMembers,
+        IReadOnlyList<DbMember>? InputMembers,
+        IReadOnlyList<DbMember>? OutputMembers,
+        IReadOnlyList<DbMember> InOutMembers,
+        IReadOnlyList<DbMember>? ConstantMembers) ParseInterface(XElement attributeList, string context)
     {
         var interfaceElement = attributeList.Element("Interface");
         if (interfaceElement is null)
         {
-            return (null, Array.Empty<DbMember>());
+            return (null, Array.Empty<DbMember>(), null, null, Array.Empty<DbMember>(), null);
         }
 
         var sectionsWrapper = interfaceElement.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections")
@@ -129,6 +146,10 @@ public static class BlockSourceParser
 
         IReadOnlyList<DbMember>? staticMembers = null;
         var tempMembers = Array.Empty<DbMember>() as IReadOnlyList<DbMember>;
+        IReadOnlyList<DbMember>? inputMembers = null;
+        IReadOnlyList<DbMember>? outputMembers = null;
+        var inOutMembers = Array.Empty<DbMember>() as IReadOnlyList<DbMember>;
+        IReadOnlyList<DbMember>? constantMembers = null;
 
         foreach (var section in sections)
         {
@@ -143,6 +164,22 @@ public static class BlockSourceParser
 
                 case "Temp":
                     tempMembers = memberElements.Select(m => DbInterfaceMembers.ParseBareMember(m, context, "Temp")).ToList();
+                    break;
+
+                case "Input":
+                    inputMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                case "Output":
+                    outputMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                case "InOut":
+                    inOutMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                case "Constant":
+                    constantMembers = memberElements.Select(m => DbInterfaceMembers.ParseConstantMember(m, context)).ToList();
                     break;
 
                 case "Return":
@@ -162,15 +199,15 @@ public static class BlockSourceParser
                     if (memberElements.Count > 0)
                     {
                         throw new UnsupportedConstructException(
-                            $"{context} has a non-empty Interface section '{sectionName}' — this converter doesn't model block " +
-                            "parameters yet (only Contact/Coil network content, plus Static/Temp — S1 item 7 Phase B).");
+                            $"{context} has a non-empty Interface section '{sectionName}' — this converter doesn't model this " +
+                            "section yet (Static/Temp/Input/Output/InOut/Constant/Return only).");
                     }
 
                     break;
             }
         }
 
-        return (staticMembers, tempMembers);
+        return (staticMembers, tempMembers, inputMembers, outputMembers, inOutMembers, constantMembers);
     }
 
     private static string RequireChildValue(XElement parent, string localName)

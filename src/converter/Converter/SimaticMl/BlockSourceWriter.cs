@@ -35,7 +35,7 @@ public static class BlockSourceWriter
         // export inspected so far (`<Namespace />`), until a project with a non-empty one
         // is seen and this needs to actually round-trip a value.
         var attributeListChildren = new List<XElement>();
-        var interfaceElement = WriteInterface(block.StaticMembers, block.TempMembers);
+        var interfaceElement = WriteInterface(block);
         if (interfaceElement is not null)
         {
             attributeListChildren.Add(interfaceElement);
@@ -98,24 +98,44 @@ public static class BlockSourceWriter
             objectList);
     }
 
-    // Confirmed real, 2026-07-11 (S1 item 7 Phase B, MotorDOL): Input/Output/InOut/Constant
-    // always empty, Return always the standard parameterless-FC boilerplate, Static (FB only —
-    // absent entirely for an FC, not just empty) and Temp carrying the real member content this
-    // slice now models. Returns null (no <Interface> element at all) when there's nothing to
-    // say — matches every FC seen and this writer's own proven history: Import() has never
-    // complained about its absence.
-    private static XElement? WriteInterface(IReadOnlyList<DbMember>? staticMembers, IReadOnlyList<DbMember> tempMembers)
+    // Static/Temp: confirmed real, 2026-07-11 (S1 item 7 Phase B, MotorDOL) — Static (FB only,
+    // absent entirely for an FC) and Temp carrying real member content. Input/Output/InOut/
+    // Constant: confirmed real, 2026-07-12 (S1 item 20, TomraControlSystem/MotorVSDSystem/AirStar) —
+    // Input/Output reuse DbInterfaceMembers.WriteMember with `includeSetPoint: false` (mirrors
+    // ParseMember's own `requireSetPoint` parameter); Constant uses the genuinely distinct
+    // WriteConstantMember shape; InOut only ever regenerates empty (no real populated example
+    // seen). Returns null (no <Interface> element at all) only when every one of these is
+    // absent/empty — matches every FC seen and this writer's own proven history.
+    //
+    // Return: confirmed real 2026-07-10 on FCs (the standard parameterless "Ret_Val" boilerplate)
+    // and confirmed absent entirely — not even an empty Section element — on every real FB
+    // grounded for this item (2026-07-12, TomraControlSystem/MotorVSDSystem/AirStar, 3 independent
+    // instances). Emitted only for non-FB blocks (`block.Kind != "FB"`) rather than
+    // unconditionally as before this item — the prior unconditional emission was never actually
+    // exercised against a real FB's own Interface-section content before now, so this asymmetry
+    // went unnoticed; fixed here since it's directly in the path of what this item already
+    // extends and would otherwise regenerate an incorrect shape for every FB.
+    private static XElement? WriteInterface(BlockSource block)
     {
-        if (staticMembers is null && tempMembers.Count == 0)
+        var staticMembers = block.StaticMembers;
+        var tempMembers = block.TempMembers;
+        var inputMembers = block.InputMembers;
+        var outputMembers = block.OutputMembers;
+        var inOutMembers = block.InOutMembers;
+        var constantMembers = block.ConstantMembers;
+        var writeReturn = block.Kind != "FB";
+
+        if (staticMembers is null && tempMembers.Count == 0 && inputMembers is null && outputMembers is null
+            && inOutMembers.Count == 0 && constantMembers is null && !writeReturn)
         {
             return null;
         }
 
         var sectionsChildren = new List<XElement>
         {
-            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Input")),
-            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Output")),
-            new(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "InOut")),
+            WriteMemberSection("Input", inputMembers),
+            WriteMemberSection("Output", outputMembers),
+            WriteMemberSection("InOut", inOutMembers),
         };
 
         if (staticMembers is not null)
@@ -136,16 +156,41 @@ public static class BlockSourceWriter
         }
 
         sectionsChildren.Add(tempSection);
-        sectionsChildren.Add(new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Constant")));
-        sectionsChildren.Add(new XElement(
-            DbInterfaceMembers.Ns + "Section",
-            new XAttribute("Name", "Return"),
-            new XElement(
-                DbInterfaceMembers.Ns + "Member",
-                new XAttribute("Name", "Ret_Val"),
-                new XAttribute("Datatype", "Void"),
-                new XAttribute("Accessibility", "Public"))));
+
+        var constantSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Constant"));
+        foreach (var member in constantMembers ?? Array.Empty<DbMember>())
+        {
+            constantSection.Add(DbInterfaceMembers.WriteConstantMember(member));
+        }
+
+        sectionsChildren.Add(constantSection);
+
+        if (writeReturn)
+        {
+            sectionsChildren.Add(new XElement(
+                DbInterfaceMembers.Ns + "Section",
+                new XAttribute("Name", "Return"),
+                new XElement(
+                    DbInterfaceMembers.Ns + "Member",
+                    new XAttribute("Name", "Ret_Val"),
+                    new XAttribute("Datatype", "Void"),
+                    new XAttribute("Accessibility", "Public"))));
+        }
 
         return new XElement("Interface", new XElement(DbInterfaceMembers.Ns + "Sections", sectionsChildren));
+    }
+
+    // Input/Output/InOut all share the same member shape (Static's own full shape minus the
+    // SetPoint BooleanAttribute — confirmed real, 2026-07-12, S1 item 20) and the same
+    // present-but-possibly-empty regeneration pattern, so one helper covers all three.
+    private static XElement WriteMemberSection(string name, IReadOnlyList<DbMember>? members)
+    {
+        var section = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", name));
+        foreach (var member in members ?? Array.Empty<DbMember>())
+        {
+            section.Add(DbInterfaceMembers.WriteMember(member, includeSetPoint: false));
+        }
+
+        return section;
     }
 }

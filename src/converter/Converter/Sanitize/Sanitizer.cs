@@ -71,6 +71,14 @@ public static class Sanitizer
         var sanitizedStaticMembers = block.StaticMembers?.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
         var sanitizedTempMembers = block.TempMembers.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
 
+        // Input/Output/InOut/Constant (S1 item 20, 2026-07-12) are the same freely-named,
+        // owner-chosen category as Static/Temp — not given the structural exemption, same
+        // reasoning and same SanitizeMember helper.
+        var sanitizedInputMembers = block.InputMembers?.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+        var sanitizedOutputMembers = block.OutputMembers?.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+        var sanitizedInOutMembers = block.InOutMembers.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+        var sanitizedConstantMembers = block.ConstantMembers?.Select(m => SanitizeMember(block.Name, m, map, missing)).ToList();
+
         if (missing.Count > 0)
         {
             throw new SanitizationMapException(
@@ -86,6 +94,10 @@ public static class Sanitizer
             CompileUnits = sanitizedUnits,
             StaticMembers = sanitizedStaticMembers,
             TempMembers = sanitizedTempMembers,
+            InputMembers = sanitizedInputMembers,
+            OutputMembers = sanitizedOutputMembers,
+            InOutMembers = sanitizedInOutMembers,
+            ConstantMembers = sanitizedConstantMembers,
         };
     }
 
