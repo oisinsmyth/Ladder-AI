@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. `Not`+`Call`+`SCoil`/`RCoil` all now reduce and round-trip in-memory against real `PlantAutoControl` networks, but a whole-block proof still isn't reached — a real network `Title` (distinct from `Comment`) is the last known gap, unrelated to any instruction type — see S1 item 15 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 164 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end. The true TIA-cycle proof for it specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 177 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1163,3 +1163,130 @@ data — the smallest, cleanest diff of any S1 item this session, reusing existi
 wholesale rather than adding anything new. `PlantAutoControl` has no remaining *instruction-level* gap,
 but still doesn't round-trip as a whole block, now blocked by network `Title` modeling instead —
 recorded as the next real gap, whichever direction the project owner wants to take it.
+
+### S1 items 16/17 (network- and block-level `Title`) — `PlantAutoControl` fully round-trips, 2026-07-12
+
+Picked up immediately after `SCoil`/`RCoil` surfaced the gap: `converter to-ir` on a whole-block
+`PlantAutoControl` export hard-errored on the very first network's non-empty `Title`.
+
+**A real design correction was needed first, not just a new field.** Before writing any code,
+inspection of `Program.cs`'s existing wiring found that the IR's own `NETWORK <n> "<title>"`
+line — despite `ir/SPEC.md`'s original sketch already calling it "title" — was actually sourced
+from the network's `Comment` field (`compileUnit.Comment ?? string.Empty`), not `Title`. This had
+never surfaced before: every real network grounded this entire session (`ControlDelays`,
+`MotorDOL`, `VSDUpdateComs`, and every `PlantAutoControl` network before this point) had an *empty*
+Comment, so the mismatch was invisible. `PlantAutoControl` broke that pattern — real, populated Title
+text on every network, Comment empty everywhere — the exact opposite emphasis, which is what
+finally exposed the gap.
+
+**Flagged to the project owner before changing anything** (per this project's own "check before
+design deviation" discipline) — two options presented via `AskUserQuestion`: (a) leave the
+existing Comment-as-title wiring untouched and add a new, separate `TITLE` line for the real
+field (zero regression risk, but permanently confusing naming), or (b) repurpose the `NETWORK`
+line to actually carry `Title` (matching its own name and how engineers actually use it in the
+TIA LAD editor) and give `Comment` its own new, separate `COMMENT` line. **Chose (b)** — the
+recommended option, since Comment has never been populated in any real data seen, while Title
+demonstrably is what's actually used.
+
+**S1 item 16 (network-level), design and implementation:**
+
+- `SimaticMl.CompileUnitSource` gained a `Title` field, read via the exact same
+  `MultilingualTextHelper.ReadMultilingualText` helper Comment already used — no new XML-reading
+  code, just a new caller of an existing, already-generic method (`RequireEmptyTitle`'s own hard
+  error was simply removed for the network-level call site).
+  `MultilingualTextHelper`/`BlockSourceWriter`'s own `DbSourceWriter.WriteComment` was generalized
+  to `WriteMultilingualText(text, compositionName, ref nextAuxId)` once a second real
+  `CompositionName` ("Title") confirmed the shape is genuinely shared, not Comment-specific —
+  `WriteComment` itself kept as a one-line wrapper for every existing call site.
+- `Ir.IrNetwork` gained a `Comment` field (mirroring `Title`, which already existed as the
+  `NETWORK` line's own label). `IrSerializer.SerializeNetwork`/`IrParser.ParseNetwork` gained a
+  new, optional `COMMENT "..."` line, deliberately placed so it survives an `[empty]`-marked
+  network too (mirrors Title's own pre-existing behavior — both fields live on a source
+  `ObjectList` sibling of `NetworkSource`, independent of whether `NetworkSource` itself has
+  content — confirmed architecturally, not just assumed, by tracing through the existing
+  `IsEmpty`-then-return code path).
+- `Program.cs`: `ConvertToIr` now reduces using `compileUnit.Title` for the network's own label,
+  threading `compileUnit.Comment` through afterward via a `with` expression (kept
+  `GraphReducer.Reduce`'s own signature untouched — Comment isn't consumed by reduction at all,
+  just carried through to the output). `ConvertToXml` threads both lists into
+  `BlockSourceWriter.Write`'s now-5-argument signature.
+- Sanitization: Title is genuinely identifying free text in real data (equipment/process names),
+  so it gets the exact same hard-error-if-unmapped treatment as Comment — a new
+  `SanitizationMap.NetworkTitles` dictionary, `Sanitizer.Apply` sanitizing `unit.Title` via the
+  same (already fully generic despite its name) `SanitizeComment` helper Comment uses.
+
+7 new converter tests (`NetworkTitleCommentTests.cs`) plus one existing shared fixture
+(`SanitizeSource.xml`) extended with a real-shaped network Title — passed on first run.
+
+**S1 item 17 (block-level), grounded while checking `PlantAutoControl`'s own dependency FBs:**
+`MotorVSDSystem`/`AirStar` (2 of the 8 real FBs `PlantAutoControl` calls) both carry a real, populated
+**block**-level Title — "VSD Motor", identical on both, a shared/templated title across that FB
+family. This was genuinely unexpected: S1 item 16's own grounding found only network-level Title
+populated, and `RequireEmptyTitle` had never seen a real counter-example at block level before.
+Same treatment as item 16: `SimaticMl.BlockSource`/`Ir.IrBlock` gained a `Title` field; a new
+`TITLE "..."` line at the top of the IR file (alongside the pre-existing block-level `COMMENT`
+line — genuinely a *new* line here, unlike the network case, since the `BLOCK` line's own quoted
+text is the block's real Name, not available to repurpose the way a `NETWORK` line's label was);
+a new `SanitizationMap.Titles` dictionary, same hard-error-if-unmapped treatment. DB-level Title
+remains unconfirmed real, still hard-errored via the now-narrower `RequireEmptyTitle`.
+
+6 more converter tests (repurposing what was originally a hard-error test — `Parse_
+BlockLevelNonEmptyTitle_...` — into a positive one, same pattern already used for TON's
+direct-Q-wiring and OR-merge's nested-branch cases, plus new Sanitizer coverage). All three
+suites green: **177 converter tests** (up from 164), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+**Network-level, whole-block:** fresh `PlantAutoControl` export (first attempt hit the same
+slow-Portal-wake attach timeout seen repeatedly this session — not the approval-dialog case,
+succeeded on retry with a longer `--timeout-connect`). `converter to-ir` on the entire 20-network
+block **succeeded completely** — the first real production block this whole session to fully
+convert as a whole block, not just an isolated network. `to-ir → to-xml → to-ir` on the result
+produced a byte-identical `.ir` file both times (`diff` confirmed), proving IR self-stability at
+full-block scale.
+
+**Block-level:** isolated `MotorVSDSystem`/`AirStar` directly — both now progress past the block-Title
+check to a different, already-known gap (a non-empty `Interface` section `Constant` — the same
+deferred parameter-interface item `TomraControlSystem` hit via its own `Input` section during the
+earlier FB dependency sweep, not a new capability).
+
+#### Attempting the true TIA cycle: cross-project import, per the project owner's explicit instruction
+
+The project owner explicitly directed this *not* be attempted against `JOB9002` itself (to keep the
+scratch copy clean) — instead: export from `JOB9002`, import into `SampleProject`, run the full
+cycle there. Before executing, flagged that `openness-cli` has no delete/remove-block command, so
+whatever lands in `SampleProject` can't be cleaned up programmatically afterward — project owner
+confirmed proceeding anyway, manual cleanup accepted.
+
+**Import succeeded** — TIA's own `Import()` accepted the regenerated XML as structurally valid
+into a completely unrelated project (real evidence of XML correctness beyond just this
+converter's own read-back). **Compile failed: 502 errors**, entirely "tag not defined" (of 323
+distinct tag/DB-member paths `PlantAutoControl` references, 462 total references across its 20
+networks, ~36 distinct top-level tag-table/DB roots) or "referenced block no longer exists" (its
+8 dependency FBs, 20 call instances total) — `SampleProject` has neither `PlantAutoControl`'s own tag
+table nor its FB library. **Not a converter defect** — a block doesn't carry its project
+dependencies with it; this is inherent to relocating a block cross-project, not a round-trip
+fidelity issue. The imported-but-uncompiled `PlantAutoControl` block was left in `SampleProject` for
+the project owner's own manual cleanup, as agreed.
+
+**Grounded the 8 dependency FBs directly afterward** (project owner's own follow-up ask): **0 of
+8 convert cleanly today.** Three distinct, differently-sized gaps:
+- `Mul`/`Convert` (arithmetic) — blocks `MotorDOL`, `EquipmentControlSystem`, `FilterUnitSystem`, `MotorFwdRevSystem`
+  (4, all on `Mul`) and `ShredderControlSystem` (1, on `Convert`). 5 of 8 total.
+- Block-level Title — blocked `MotorVSDSystem`/`AirStar` before this item; now cleared, both progress
+  to the `Interface` gap below instead.
+- FC/FB parameter `Interface` sections (`Input` on `TomraControlSystem`; `Constant` on `MotorVSDSystem`/
+  `AirStar`) — the same already-known, deferred "full parameter-interface modeling" item, not
+  newly scoped by this finding.
+
+Project owner's decision: scope arithmetic support next (the larger of the two remaining real
+gaps by block count).
+
+**Bottom line:** `Title` (both levels) is built, tested, and live-verified against real data —
+`PlantAutoControl` itself now fully round-trips as a whole block through the in-memory/CLI pipeline,
+a first for this session. The true TIA-cycle gold standard for `PlantAutoControl` specifically remains
+open, but is now understood precisely: it's blocked by project-external dependencies (tag table +
+FB library), not by anything this converter itself gets wrong. Reaching it would mean replicating
+a meaningful slice of `JOB9002`'s own tag/block library into `SampleProject` (sanitized) — assessed
+as disproportionate to this item's own goal and not attempted; arithmetic support (needed for 5
+of the 8 dependency FBs regardless) is the next, more proportionate step.

@@ -18,8 +18,24 @@ public sealed class SanitizationMap
     /// <summary>Keyed by real block or DB name -> invented comment text. Only needs an entry when the source comment is non-empty.</summary>
     public Dictionary<string, string> Comments { get; set; } = new();
 
+    /// <summary>
+    /// Keyed by real block name -> invented block-level Title text (S1 item 17, 2026-07-12) —
+    /// confirmed real (FB MotorVSDSystem/AirStar, both "VSD Motor") after being assumed always-empty
+    /// at block level during S1 item 16's own grounding. Only needs an entry when the source
+    /// Title is non-empty.
+    /// </summary>
+    public Dictionary<string, string> Titles { get; set; } = new();
+
     /// <summary>Keyed by "&lt;real block name&gt;#&lt;network number&gt;" -> invented network comment text.</summary>
     public Dictionary<string, string> NetworkComments { get; set; } = new();
+
+    /// <summary>
+    /// Keyed by "&lt;real block name&gt;#&lt;network number&gt;" -> invented network Title text
+    /// (S1 item 16, 2026-07-12) — the network's own human-visible label, genuinely distinct from
+    /// NetworkComments (Title has been the one actually populated in real data seen so far;
+    /// Comment has been empty everywhere). Only needs an entry when the source Title is non-empty.
+    /// </summary>
+    public Dictionary<string, string> NetworkTitles { get; set; } = new();
 
     /// <summary>
     /// Keyed by the real dotted component path with no slice/array suffix (e.g.

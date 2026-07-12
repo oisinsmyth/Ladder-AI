@@ -30,41 +30,58 @@ AND (live-verified against `FB VSDUpdateComs`; closes out the AND-merge open ite
 non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep),
 `Not` — standalone boolean inverter (committed `f6f7fa8`), `CALL` — FB/FC block calls (committed
 `681fda2`; live-verified in-memory with `Not`, not yet TIA-cycle live-verified), `SCoil`/`RCoil`
-— set/reset coils (implemented/tested/documented, **not yet committed** — see "Current task"
-below). Full story for each: `docs/notes/stage-gates.md`.
+— set/reset coils (committed `bf49afd`), network/block-level `Title` (implemented/tested/
+documented, **not yet committed** — see "Current task" below). `FC PlantAutoControl` now converts as a
+whole block (`to-ir → to-xml → to-ir` byte-identical) — first real production block this session to
+fully round-trip. Full story for each: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S1 item 15 — `SCoil`/`RCoil` — implementation + docs done, NOT YET COMMITTED
+## Current task: S1 items 16/17 — network/block `Title` — implementation + docs done, NOT YET COMMITTED
 
-**Status as of 2026-07-12: fully implemented, tested (164/164 converter tests green), and now
+**Status as of 2026-07-12: fully implemented, tested (177/177 converter tests green), and now
 documented (`ir/SPEC.md`, `src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md`
 all updated this pass). Waiting on explicit "commit this" from the project owner before
 committing** — per this session's established discipline, never auto-commit.
 
-**Grounded first (two independent real instances of each), before any code.** Real shape:
-completely bare `<Part Name="SCoil"/"RCoil" UId="N" />`, exact same `in`/`operand` wire shape as
-a plain `Coil`, never a producer — structurally identical to `Coil` in every respect. Smallest
-diff of any S1 item this session: `GraphReducer.ReduceOneChain`/`FlgNetBuilder.BuildOneChain`
-reused verbatim for all three kinds, tagged with a new `CoilAssignment.Kind` field
-(`Assign`/`Set`/`Reset`) — no new sidecar field needed, since `BuildOneChain` already takes the
-model alongside its sidecar. Readable-form keywords `SCOIL`/`RCOIL` (matching every other
-keyword's mirror-the-source-Part-Name convention). Full design story: `docs/notes/stage-gates.md`
-("S1 item 15") and `SCoilRCoilTests.cs`'s own class-level doc comment.
+**A real design correction, not just a new field**: the IR's own `NETWORK <n> "<title>"` line
+was actually sourced from `Comment`, not `Title` — invisible until `PlantAutoControl` (Title
+populated, Comment empty everywhere, the opposite of every network grounded before it). Confirmed
+the fix with the project owner first (`AskUserQuestion`): `NETWORK`'s own label now carries
+`Title`; `Comment` gets its own new `COMMENT "..."` line. Block-level Title was a second,
+unexpected finding — grounded while checking `PlantAutoControl`'s 8 dependency FBs (`MotorVSDSystem`/
+`AirStar` both carry a real block-level Title, "VSD Motor") — same treatment, new `TITLE "..."`
+line at the top of the file. Full design story: `docs/notes/stage-gates.md` ("S1 items 16/17")
+and `NetworkTitleCommentTests.cs`'s own class-level doc comment.
 
-**Live-verified in-memory, 2026-07-12:** isolated the real network already grounded for `CALL`
-(it also has the block's own `SCoil`/`RCoil` pair) — reduces and round-trips completely.
+**Live-verified against real data, 2026-07-12**: whole-block `PlantAutoControl` now converts
+completely via `converter to-ir` — **the first real production block this whole session to fully
+round-trip as a whole block** — `to-ir → to-xml → to-ir` byte-identical. Block-level Title
+confirmed via `MotorVSDSystem`/`AirStar` (both now progress past Title to a different, already-known
+gap — FC/FB parameter `Interface` sections).
 
-**Then attempted a whole-block round-trip of `PlantAutoControl`** — since `SCoil`/`RCoil` was believed
-to be its last instruction-level gap, this seemed like the moment to finally reach the true
-TIA-cycle proof. **Hit a different, already-known wall instead**: every one of `PlantAutoControl`'s 20
-real networks carries a non-empty network `Title` (distinct from `Comment`), which
-`BlockSourceParser` already hard-errors on (documented earlier during the reference-project
-corpus work, `tests/golden/README.md` — not a new discovery, just newly encountered on this real
-block). `PlantAutoControl` has no remaining *instruction-level* gap but still doesn't round-trip as a
-whole block, for a reason entirely unrelated to any instruction type.
+**Attempted the true TIA cycle per the project owner's explicit instruction: export from
+`JOB9002`, import into `SampleProject` (not `JOB9002`), run the cycle there.** Import succeeded
+(TIA accepted the regenerated XML into an unrelated project); **compile failed with 502 errors**
+— entirely missing tags (323 distinct paths) and missing FB library blocks (8 dependency FBs) —
+`SampleProject` has neither `PlantAutoControl`'s tag table nor its FB library. **Not a converter
+defect** — environmental/dependency limitation, a block doesn't carry its project context with
+it. Left the imported-but-uncompiled `PlantAutoControl` block in `SampleProject` — project owner will
+clean it up manually (confirmed in advance; `openness-cli` has no delete/remove-block command).
 
-**Next steps, not yet decided — ask the project owner:** whether to build network `Title`
-modeling next (this would very plausibly be the thing that finally gets `PlantAutoControl` to a true
-whole-block TIA-cycle proof), or something else. **Not started at all** — no design, no code.
+**Grounded the 8 dependency FBs directly** (project owner's own follow-up): **0 of 8 convert
+cleanly today.** `Mul`/`Convert` (arithmetic) blocks 5; FC/FB parameter `Interface` sections
+(`Input`/`Constant`) block the other 3 (`TomraControlSystem`, and now `MotorVSDSystem`/`AirStar` too, having
+cleared the Title check).
+
+**Next task, per the project owner's own explicit decision: scope arithmetic support
+(`Add`/`Sub`/`Mul`/`Div`/`Convert`/etc.) next** — the larger of the two remaining real gaps by
+block count (5 of 8 dependency FBs). **Not started at all** — no grounding, no design, no code.
+Given the size (same "boxed instruction family" shape as WAND, but a whole family rather than one
+instruction), likely warrants proper plan-mode rigor, matching this project's own discipline for
+"substantially bigger" capabilities (the `CALL` precedent).
+
+Full FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant` sections) remains a
+separate, larger, already-known deferred item — not in scope for the arithmetic work, blocks
+`TomraControlSystem`/`MotorVSDSystem`/`AirStar` regardless of arithmetic support landing.

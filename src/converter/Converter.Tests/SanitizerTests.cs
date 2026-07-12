@@ -18,6 +18,7 @@ public class SanitizerTests
         Names = new Dictionary<string, string> { ["RealBlockName"] = "SanitizedBlockName" },
         Comments = new Dictionary<string, string> { ["RealBlockName"] = "Sanitized block comment." },
         NetworkComments = new Dictionary<string, string> { ["RealBlockName#1"] = "Sanitized network comment." },
+        NetworkTitles = new Dictionary<string, string> { ["RealBlockName#1"] = "Sanitized network title." },
         Tags = new Dictionary<string, string>
         {
             ["RealProcess.RealTag"] = "SanitizedProcess.SanitizedTag",
@@ -35,6 +36,7 @@ public class SanitizerTests
         Assert.Equal("SanitizedBlockName", sanitized.Name);
         Assert.Equal("Sanitized block comment.", sanitized.Comment);
         Assert.Equal("Sanitized network comment.", sanitized.CompileUnits[0].Comment);
+        Assert.Equal("Sanitized network title.", sanitized.CompileUnits[0].Title);
 
         var accessPaths = sanitized.CompileUnits[0].Network.AccessNodes.Select(a => a.DottedPath).ToList();
         Assert.Contains("SanitizedProcess.SanitizedTag", accessPaths);
@@ -86,6 +88,50 @@ public class SanitizerTests
 
         var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.Apply(block, map));
         Assert.Contains("NetworkComments", ex.Message);
+    }
+
+    [Fact]
+    public void Apply_MissingNetworkTitle_HardErrors()
+    {
+        var block = LoadFixture("SanitizeSource.xml");
+        var map = FullMap();
+        map.NetworkTitles.Clear();
+
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.Apply(block, map));
+        Assert.Contains("NetworkTitles", ex.Message);
+    }
+
+    // Block-level Title (S1 item 17, 2026-07-12) — confirmed real after being assumed
+    // always-empty at block level (S1 item 16's own grounding only found network-level Title
+    // populated). SanitizeSource.xml has no block-level Title element (matches every block seen
+    // before PlantAutoControl's own dependency FBs), so these use a small standalone BlockSource
+    // rather than the shared fixture.
+    [Fact]
+    public void Apply_WithMappedBlockTitle_SanitizesIt()
+    {
+        var block = new BlockSource("0", "FB", "RealBlockName", 1, "LAD", null, new[]
+        {
+            new CompileUnitSource("3", null, null, new FlgNetwork(Array.Empty<AccessNode>(), Array.Empty<PartNode>(), Array.Empty<WireNode>())),
+        }, Title: "Real block title mentioning RealSite.");
+        var map = FullMap();
+        map.Titles["RealBlockName"] = "Sanitized block title.";
+
+        var sanitized = Sanitizer.Apply(block, map);
+
+        Assert.Equal("Sanitized block title.", sanitized.Title);
+    }
+
+    [Fact]
+    public void Apply_MissingBlockTitle_HardErrors()
+    {
+        var block = new BlockSource("0", "FB", "RealBlockName", 1, "LAD", null, new[]
+        {
+            new CompileUnitSource("3", null, null, new FlgNetwork(Array.Empty<AccessNode>(), Array.Empty<PartNode>(), Array.Empty<WireNode>())),
+        }, Title: "Real block title mentioning RealSite.");
+        var map = FullMap();
+
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.Apply(block, map));
+        Assert.Contains("Titles[\"RealBlockName\"]", ex.Message);
     }
 
     [Fact]

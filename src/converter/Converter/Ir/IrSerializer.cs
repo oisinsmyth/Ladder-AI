@@ -12,6 +12,11 @@ public static class IrSerializer
         sb.Append("ROOTID ").Append(block.RootUId).Append('\n');
         sb.Append("NUMBER ").Append(block.Number).Append('\n');
         sb.Append("LANGUAGE ").Append(block.Language).Append('\n');
+        if (!string.IsNullOrEmpty(block.Title))
+        {
+            sb.Append("TITLE \"").Append(EscapeString(block.Title)).Append("\"\n");
+        }
+
         if (!string.IsNullOrEmpty(block.Comment))
         {
             sb.Append("COMMENT \"").Append(EscapeString(block.Comment)).Append("\"\n");
@@ -49,13 +54,22 @@ public static class IrSerializer
     private static void SerializeNetwork(StringBuilder sb, IrNetwork network)
     {
         sb.Append("NETWORK ").Append(network.Number).Append(" \"").Append(EscapeString(network.Title)).Append('"');
+        sb.Append(network.IsEmpty ? " [empty]\n" : "\n");
+
+        // Comment (S1 item 16) — a network-level COMMENT line, mirroring the block-level one,
+        // shown regardless of [empty] (same reasoning as Title itself, which already carries
+        // through an empty network — Comment/Title both live on a source ObjectList sibling of
+        // NetworkSource, independent of whether NetworkSource itself has content).
+        if (!string.IsNullOrEmpty(network.Comment))
+        {
+            sb.Append("  COMMENT \"").Append(EscapeString(network.Comment)).Append("\"\n");
+        }
+
         if (network.IsEmpty)
         {
-            sb.Append(" [empty]\n");
             return;
         }
 
-        sb.Append('\n');
         foreach (var timer in network.Timers)
         {
             sb.Append("  TON(").Append(timer.InstancePath)

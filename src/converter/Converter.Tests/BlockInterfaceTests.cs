@@ -125,9 +125,10 @@ public class BlockInterfaceTests
         var original = BlockSourceParser.Parse(LoadFixture("FbWithStaticAndTemp.xml"));
         var networks = original.CompileUnits.Select(u => u.Network).ToList();
         var compileUnitUIds = original.CompileUnits.Select(u => u.UId).ToList();
+        var networkTitles = original.CompileUnits.Select(u => u.Title).ToList();
         var networkComments = original.CompileUnits.Select(u => u.Comment).ToList();
 
-        var written = BlockSourceWriter.Write(original, networks, compileUnitUIds, networkComments);
+        var written = BlockSourceWriter.Write(original, networks, compileUnitUIds, networkTitles, networkComments);
         var reparsed = BlockSourceParser.Parse(written);
 
         Assert.Equal(original.StaticMembers!.Count, reparsed.StaticMembers!.Count);

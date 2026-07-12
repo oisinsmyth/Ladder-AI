@@ -56,15 +56,22 @@ public static class DbSourceWriter
         return new XDocument(document);
     }
 
-    internal static XElement WriteComment(string? comment, ref int nextAuxId)
+    internal static XElement WriteComment(string? comment, ref int nextAuxId) =>
+        WriteMultilingualText(comment, "Comment", ref nextAuxId);
+
+    // Generalized once a second real CompositionName (S1 item 16, network Title, 2026-07-12)
+    // confirmed the shape is identical to Comment's own, differing only in CompositionName and
+    // text content — same synthetic-ID reasoning as Comment's own (not round-tripped from the
+    // source, not believed to carry semantic meaning beyond must-exist-and-be-unique).
+    internal static XElement WriteMultilingualText(string? text, string compositionName, ref int nextAuxId)
     {
         var textId = nextAuxId++;
         var itemId = nextAuxId++;
 
         var textElement = new XElement("Text");
-        if (!string.IsNullOrEmpty(comment))
+        if (!string.IsNullOrEmpty(text))
         {
-            textElement.Value = comment;
+            textElement.Value = text;
         }
 
         var item = new XElement(
@@ -76,7 +83,7 @@ public static class DbSourceWriter
         return new XElement(
             "MultilingualText",
             new XAttribute("ID", textId),
-            new XAttribute("CompositionName", "Comment"),
+            new XAttribute("CompositionName", compositionName),
             new XElement("ObjectList", item));
     }
 }

@@ -28,6 +28,15 @@ public static class Sanitizer
             $"Comments[\"{block.Name}\"]",
             missing);
 
+        // Block-level Title (S1 item 17, 2026-07-12) — confirmed real (FB MotorVSDSystem/AirStar, both
+        // "VSD Motor") after being assumed always-empty during S1 item 16's own grounding. Same
+        // sanitization treatment as the block's own Comment.
+        var sanitizedBlockTitle = SanitizeComment(
+            block.Title,
+            map.Titles.TryGetValue(block.Name, out var mappedBlockTitle) ? mappedBlockTitle : null,
+            $"Titles[\"{block.Name}\"]",
+            missing);
+
         var sanitizedUnits = new List<CompileUnitSource>();
         for (var i = 0; i < block.CompileUnits.Count; i++)
         {
@@ -40,8 +49,17 @@ public static class Sanitizer
                 $"NetworkComments[\"{networkKey}\"]",
                 missing);
 
+            // Title (S1 item 16, 2026-07-12) — genuinely identifying free text in real data
+            // (e.g. equipment/process names), same sanitization treatment as Comment: hard-error
+            // if a non-empty real Title isn't covered by the map, never pass it through verbatim.
+            var sanitizedTitle = SanitizeComment(
+                unit.Title,
+                map.NetworkTitles.TryGetValue(networkKey, out var mappedTitle) ? mappedTitle : null,
+                $"NetworkTitles[\"{networkKey}\"]",
+                missing);
+
             var sanitizedNetwork = SanitizeNetwork(unit.Network, map, missing);
-            sanitizedUnits.Add(unit with { Comment = sanitizedComment, Network = sanitizedNetwork });
+            sanitizedUnits.Add(unit with { Comment = sanitizedComment, Title = sanitizedTitle, Network = sanitizedNetwork });
         }
 
         // Static/Temp (an FB's own instance-data/working-variable declarations, S1 item 7 Phase
@@ -64,6 +82,7 @@ public static class Sanitizer
         {
             Name = sanitizedName!,
             Comment = sanitizedBlockComment,
+            Title = sanitizedBlockTitle,
             CompileUnits = sanitizedUnits,
             StaticMembers = sanitizedStaticMembers,
             TempMembers = sanitizedTempMembers,

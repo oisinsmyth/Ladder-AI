@@ -15,7 +15,12 @@ namespace Converter.SimaticMl;
 /// </summary>
 public static class BlockSourceWriter
 {
-    public static XDocument Write(BlockSource block, IReadOnlyList<FlgNetwork> networks, IReadOnlyList<string> compileUnitUIds, IReadOnlyList<string?> networkComments)
+    public static XDocument Write(
+        BlockSource block,
+        IReadOnlyList<FlgNetwork> networks,
+        IReadOnlyList<string> compileUnitUIds,
+        IReadOnlyList<string?> networkTitles,
+        IReadOnlyList<string?> networkComments)
     {
         // Comment-wrapper IDs are synthetic (not round-tripped from the source — not captured
         // during parsing, and not believed to carry semantic meaning beyond "must exist and be
@@ -43,12 +48,15 @@ public static class BlockSourceWriter
 
         var attributeList = new XElement("AttributeList", attributeListChildren);
 
+        // Comment then Title — matches the real source's own element order (same order confirmed
+        // real at network level; assumed consistent at block level, S1 item 17, 2026-07-12).
         var objectList = new XElement("ObjectList");
         objectList.Add(DbSourceWriter.WriteComment(block.Comment, ref nextAuxId));
+        objectList.Add(DbSourceWriter.WriteMultilingualText(block.Title, "Title", ref nextAuxId));
 
         for (var i = 0; i < networks.Count; i++)
         {
-            objectList.Add(WriteCompileUnit(compileUnitUIds[i], networks[i], networkComments[i], block.Language, ref nextAuxId));
+            objectList.Add(WriteCompileUnit(compileUnitUIds[i], networks[i], networkTitles[i], networkComments[i], block.Language, ref nextAuxId));
         }
 
         var root = new XElement(
@@ -65,7 +73,7 @@ public static class BlockSourceWriter
         return new XDocument(document);
     }
 
-    private static XElement WriteCompileUnit(string uid, FlgNetwork network, string? comment, string language, ref int nextAuxId)
+    private static XElement WriteCompileUnit(string uid, FlgNetwork network, string? title, string? comment, string language, ref int nextAuxId)
     {
         var isEmpty = network.AccessNodes.Count == 0 && network.Parts.Count == 0 && network.Wires.Count == 0;
         var networkSource = isEmpty ? new XElement("NetworkSource") : new XElement("NetworkSource", FlgNetWriter.Write(network));
@@ -75,7 +83,12 @@ public static class BlockSourceWriter
             networkSource,
             new XElement("ProgrammingLanguage", language));
 
-        var objectList = new XElement("ObjectList", DbSourceWriter.WriteComment(comment, ref nextAuxId));
+        // Comment then Title — matches the real source's own element order (confirmed real,
+        // 2026-07-12, FC PlantAutoControl).
+        var objectList = new XElement(
+            "ObjectList",
+            DbSourceWriter.WriteMultilingualText(comment, "Comment", ref nextAuxId),
+            DbSourceWriter.WriteMultilingualText(title, "Title", ref nextAuxId));
 
         return new XElement(
             "SW.Blocks.CompileUnit",

@@ -44,11 +44,14 @@ internal static class MultilingualTextHelper
         return string.IsNullOrEmpty(text) ? null : text;
     }
 
-    // A separate "Title" MultilingualText (distinct from "Comment") exists at both block/DB and
-    // network level in real exports — confirmed real, 2026-07-10, always empty on every block/DB
-    // seen so far. Not currently modeled/round-tripped, so a non-empty one would be silently
-    // dropped — hard error instead (design philosophy #10) rather than let real content vanish
-    // quietly. Safe to proceed when empty, which is the only case observed.
+    // A separate "Title" MultilingualText (distinct from "Comment") exists at block/DB and
+    // network level in real exports. Network-level Title (S1 item 16) and block-level Title (S1
+    // item 17, 2026-07-12 — confirmed real on two of FC PlantAutoControl's own dependency FBs,
+    // `MotorVSDSystem`/`AirStar`, both titled "VSD Motor") are now modeled, read directly via
+    // ReadMultilingualText (BlockSourceParser.ParseCompileUnit / BlockSourceParser.Parse
+    // respectively). DB-level Title remains unconfirmed real (always empty on every DB seen so
+    // far) — still guarded here so a non-empty one hard-errors (design philosophy #10) rather
+    // than silently vanishing, until a real one is actually grounded.
     public static void RequireEmptyTitle(XElement objectList, string context)
     {
         var title = ReadMultilingualText(objectList, "Title");

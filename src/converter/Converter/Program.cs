@@ -98,9 +98,10 @@ internal static class Program
 
             var flgNetworks = sanitized.CompileUnits.Select(u => u.Network).ToList();
             var compileUnitUIds = sanitized.CompileUnits.Select(u => u.UId).ToList();
+            var networkTitles = sanitized.CompileUnits.Select(u => u.Title).ToList();
             var networkComments = sanitized.CompileUnits.Select(u => u.Comment).ToList();
 
-            var xml = BlockSourceWriter.Write(sanitized, flgNetworks, compileUnitUIds, networkComments);
+            var xml = BlockSourceWriter.Write(sanitized, flgNetworks, compileUnitUIds, networkTitles, networkComments);
             xml.Save(outPath);
             Console.WriteLine($"{file} -> {outPath}");
             return 0;
@@ -145,13 +146,17 @@ internal static class Program
 
         foreach (var compileUnit in block.CompileUnits)
         {
-            var title = compileUnit.Comment ?? string.Empty;
+            // Title drives the NETWORK line's own quoted label (S1 item 16, 2026-07-12) —
+            // Comment is a genuinely separate field, carried through via `with` since
+            // GraphReducer.Reduce doesn't need to know about it (it isn't consumed by reduction,
+            // just threaded through to the output).
+            var title = compileUnit.Title ?? string.Empty;
             var reduced = GraphReducer.Reduce(compileUnit.Network, networks.Count + 1, title, compileUnit.UId);
-            networks.Add(reduced.Network);
+            networks.Add(reduced.Network with { Comment = compileUnit.Comment });
             sidecars.Add(reduced.Sidecar);
         }
 
-        var irBlock = new IrBlock(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers);
+        var irBlock = new IrBlock(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers, block.Title);
         var irText = IrSerializer.SerializeBlock(irBlock, sidecars);
 
         var outPath = Path.ChangeExtension(sourcePath, ".ir");
@@ -177,6 +182,7 @@ internal static class Program
 
         var flgNetworks = new List<FlgNetwork>();
         var compileUnitUIds = new List<string>();
+        var networkTitles = new List<string?>();
         var networkComments = new List<string?>();
 
         for (var i = 0; i < block.Networks.Count; i++)
@@ -184,11 +190,12 @@ internal static class Program
             var sidecar = sidecars[i];
             flgNetworks.Add(FlgNetBuilder.Build(block.Networks[i], sidecar));
             compileUnitUIds.Add(sidecar.CompileUnitUId);
-            networkComments.Add(string.IsNullOrEmpty(block.Networks[i].Title) ? null : block.Networks[i].Title);
+            networkTitles.Add(string.IsNullOrEmpty(block.Networks[i].Title) ? null : block.Networks[i].Title);
+            networkComments.Add(block.Networks[i].Comment);
         }
 
-        var blockSource = new BlockSource(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers);
-        var xml = BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkComments);
+        var blockSource = new BlockSource(block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers, block.Title);
+        var xml = BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkTitles, networkComments);
 
         var outPath = Path.ChangeExtension(sourcePath, ".xml");
         xml.Save(outPath);

@@ -157,6 +157,13 @@ public sealed record CallStatement(string BlockName, string InstancePath, Expr E
 // grounding). A network can have any combination, or just one kind alone (a Move-only network
 // with no Coil or TON at all is real — the whole "HMI Motor Status Telemetry" network is exactly
 // this shape).
+// Title is the network's own real, human-visible label (source `MultilingualText
+// [CompositionName="Title"]`) — confirmed real and populated on every network of a real block
+// (S1 item 16, 2026-07-12, `FC PlantAutoControl`), unlike Comment (below), which has been empty on
+// every real network seen all session. Comment is a separate, optional field (its own
+// `COMMENT "..."` line in the readable form, mirroring the block-level COMMENT line) — genuinely
+// distinct source content, not folded into Title the way this converter's earlier build
+// accidentally did.
 public sealed record IrNetwork(
     int Number,
     string Title,
@@ -164,7 +171,8 @@ public sealed record IrNetwork(
     IReadOnlyList<TimerBinding>? Timers = null,
     IReadOnlyList<MoveStatement>? Moves = null,
     IReadOnlyList<WordAndStatement>? WordAnds = null,
-    IReadOnlyList<CallStatement>? Calls = null)
+    IReadOnlyList<CallStatement>? Calls = null,
+    string? Comment = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -184,6 +192,12 @@ public sealed record IrNetwork(
 // StaticMembers/TempMembers: an FB's own Static/Temp Interface sections — see
 // SimaticMl.BlockSource's own doc comment (S1 item 7 Phase B, 2026-07-11) for the full story;
 // this is the same data, just living on the IR-facing model instead of the SimaticML-facing one.
+// Title: a block-level MultilingualText[CompositionName="Title"] — confirmed real, 2026-07-12
+// (S1 item 17, two of FC PlantAutoControl's own dependency FBs, `MotorVSDSystem`/`AirStar`, both titled
+// "VSD Motor" — a shared, templated title across that FB family). Its own optional `TITLE "..."`
+// line in the readable form (mirroring the existing `COMMENT "..."` line) — genuinely a new
+// line, not a repurposed one, since the BLOCK line's own quoted text is the block's real Name,
+// unlike a NETWORK line's label which Title could repurpose (S1 item 16).
 public sealed record IrBlock(
     string RootUId,
     string Kind,
@@ -193,7 +207,8 @@ public sealed record IrBlock(
     string? Comment,
     IReadOnlyList<IrNetwork> Networks,
     IReadOnlyList<DbMember>? StaticMembers = null,
-    IReadOnlyList<DbMember>? TempMembers = null)
+    IReadOnlyList<DbMember>? TempMembers = null,
+    string? Title = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 }

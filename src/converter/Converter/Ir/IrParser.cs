@@ -24,6 +24,15 @@ public static partial class IrParser
         var number = int.Parse(RequirePrefixedLine(lines, ref i, "NUMBER "));
         var language = RequirePrefixedLine(lines, ref i, "LANGUAGE ");
 
+        // Block-level Title (S1 item 17, 2026-07-12) — mirrors Comment's own optional-line
+        // handling, parsed first to match IrSerializer's own TITLE-then-COMMENT ordering.
+        string? title = null;
+        if (i < lines.Length && lines[i].StartsWith("TITLE \"", StringComparison.Ordinal))
+        {
+            title = ParseQuotedString(lines[i]["TITLE ".Length..]);
+            i++;
+        }
+
         string? comment = null;
         if (i < lines.Length && lines[i].StartsWith("COMMENT \"", StringComparison.Ordinal))
         {
@@ -64,7 +73,7 @@ public static partial class IrParser
             sidecars.Add(ParseSidecarNetwork(lines, ref i));
         }
 
-        return (new IrBlock(rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers), sidecars);
+        return (new IrBlock(rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title), sidecars);
     }
 
     // Optional — only present when the source had real Static/Temp content (S1 item 7 Phase B,
@@ -146,9 +155,18 @@ public static partial class IrParser
         var number = int.Parse(headerMatch.Groups["number"].Value);
         var title = UnescapeString(headerMatch.Groups["title"].Value);
 
+        // Comment (S1 item 16) — an optional network-level COMMENT line, shown regardless of
+        // [empty] (mirrors IrSerializer.SerializeNetwork's own placement).
+        string? comment = null;
+        if (i < lines.Length && lines[i].StartsWith("  COMMENT \"", StringComparison.Ordinal))
+        {
+            comment = ParseQuotedString(lines[i]["  COMMENT ".Length..]);
+            i++;
+        }
+
         if (headerMatch.Groups["empty"].Success)
         {
-            return new IrNetwork(number, title, Array.Empty<CoilAssignment>());
+            return new IrNetwork(number, title, Array.Empty<CoilAssignment>(), Comment: comment);
         }
 
         // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
@@ -306,7 +324,7 @@ public static partial class IrParser
             throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND/CALL statements and isn't marked [empty].");
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls);
+        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment);
     }
 
     // Top-level entry point: OR is the loosest binder. "TRUE" is only meaningful here (the

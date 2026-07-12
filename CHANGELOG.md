@@ -10,6 +10,42 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 items 16/17: network- and block-level `Title` — `PlantAutoControl` now fully round-trips**
+
+- Picked up immediately after `SCoil`/`RCoil` surfaced the gap. Found a real design correction
+  needed first, not just a new field: the IR's own `NETWORK <n> "<title>"` line was actually
+  sourced from the network's `Comment` field, not `Title` — invisible until now since every real
+  network grounded this session had empty Comment; `PlantAutoControl` has the opposite (Title
+  populated, Comment empty everywhere). Confirmed the fix with the project owner first
+  (`AskUserQuestion`, not assumed): `NETWORK`'s own label now carries `Title`; `Comment` gets its
+  own new, separate `COMMENT "..."` line.
+- `SimaticMl.CompileUnitSource`/`BlockSource` and `Ir.IrNetwork`/`IrBlock` all gained `Title`/
+  `Comment` fields as appropriate. `DbSourceWriter.WriteComment` generalized to
+  `WriteMultilingualText(text, compositionName, ...)` once a second real `CompositionName`
+  confirmed the shape is shared. New optional `TITLE "..."`/`COMMENT "..."` IR lines at both
+  block and network level, surviving an `[empty]`-marked network too.
+- Block-level Title was unexpected: initially assumed always-empty (network-level grounding only
+  found it populated), confirmed real while grounding `PlantAutoControl`'s own 8 dependency FBs —
+  `MotorVSDSystem`/`AirStar` both carry a real, identical block-level Title ("VSD Motor").
+- Sanitization: both Titles are identifying free text (equipment/process names) — same
+  hard-error-if-unmapped treatment as Comment, via two new `SanitizationMap` dictionaries
+  (`NetworkTitles`, `Titles`).
+- 13 new converter tests. All three suites green: 177 converter (up from 164), 68 openness-cli,
+  11 golden-harness.
+- **Live-verified, same session:** `converter to-ir` on a fresh whole-block `PlantAutoControl` export
+  now succeeds completely — the first real production block this whole session to fully convert as
+  a whole block — and `to-ir → to-xml → to-ir` round-trips byte-identical.
+- **Attempted the true TIA cycle, per the project owner's explicit instruction to route through
+  `SampleProject` rather than `JOB9002`.** Import succeeded (TIA accepted the regenerated XML into
+  a completely unrelated project); compile failed with 502 errors, entirely missing tags (323
+  distinct paths) and missing FB library blocks (8 dependency FBs) — `SampleProject` has neither.
+  Not a converter defect — a block doesn't carry its project dependencies with it. Left the
+  imported-but-uncompiled block in `SampleProject` for manual cleanup, as agreed.
+- Grounded the 8 dependency FBs directly afterward: 0 of 8 convert cleanly today — 5 blocked by
+  arithmetic (`Mul`/`Convert`), the rest by the same already-known FC/FB parameter-interface gap.
+  Project owner's decision: scope arithmetic support next. Full story: `docs/notes/stage-gates.md`
+  ("S1 items 16/17").
+
 **S1 item 15: `SCoil`/`RCoil` (set/reset coils) — built, tested, surfaced a new whole-block gap**
 
 - Picked up per the project owner's own sequencing after `CALL`: 3 of each real in

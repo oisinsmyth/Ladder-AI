@@ -70,6 +70,16 @@
               </MultilingualTextItem>
             </ObjectList>
           </MultilingualText>
+          <MultilingualText ID="6" CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem ID="7" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>Real network title mentioning RealSite.</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
         </ObjectList>
       </SW.Blocks.CompileUnit>
     </ObjectList>

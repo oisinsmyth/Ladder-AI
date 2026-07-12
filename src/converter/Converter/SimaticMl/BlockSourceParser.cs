@@ -45,7 +45,10 @@ public static class BlockSourceParser
             ?? throw new SimaticMlFormatException("Block element is missing its <ObjectList>.");
 
         var blockComment = ReadComment(objectList);
-        MultilingualTextHelper.RequireEmptyTitle(objectList, $"Block '{name}'");
+        // Title (S1 item 17, 2026-07-12) — confirmed real at block level after all (two of
+        // PlantAutoControl's own dependency FBs, `MotorVSDSystem`/`AirStar`, both titled "VSD Motor"), read
+        // the same way network-level Title is (no longer hard-errored via RequireEmptyTitle).
+        var blockTitle = MultilingualTextHelper.ReadMultilingualText(objectList, "Title");
         var (staticMembers, tempMembers) = ParseInterface(attributeList, $"Block '{name}'");
 
         var compileUnits = objectList.Elements()
@@ -58,7 +61,7 @@ public static class BlockSourceParser
             throw new SimaticMlFormatException($"Block '{name}' has no CompileUnit (network) content.");
         }
 
-        return new BlockSource(rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers);
+        return new BlockSource(rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers, blockTitle);
     }
 
     private static CompileUnitSource ParseCompileUnit(XElement compileUnit)
@@ -81,12 +84,14 @@ public static class BlockSourceParser
 
         var objectList = compileUnit.Element("ObjectList");
         var comment = objectList is null ? null : ReadComment(objectList);
-        if (objectList is not null)
-        {
-            MultilingualTextHelper.RequireEmptyTitle(objectList, $"Network (CompileUnit ID={uid})");
-        }
+        // Title (S1 item 16, 2026-07-12) — the network's own human-visible label, genuinely
+        // distinct from Comment; confirmed real and populated on every network of a real block
+        // (FC PlantAutoControl), unlike Comment which has been empty on every real network seen all
+        // session. Read the same way Comment is (MultilingualTextHelper.ReadMultilingualText),
+        // no longer hard-errored via RequireEmptyTitle.
+        var title = objectList is null ? null : MultilingualTextHelper.ReadMultilingualText(objectList, "Title");
 
-        return new CompileUnitSource(uid, comment, network);
+        return new CompileUnitSource(uid, comment, title, network);
     }
 
     /// <summary>Reads a MultilingualText[CompositionName=Comment]'s en-US Text, or null if empty/absent.</summary>

@@ -156,7 +156,16 @@ public sealed record FlgNetwork(
 // CompileUnit "ID" is opaque — confirmed against a real export (2026-07-10) not to follow the
 // same simple sequential-int scheme as FlgNet's own UIds (a real one came back as "D"). Treated
 // as a string throughout, unlike Part/Wire/Access UId which are FlgNet-internal and stayed int.
-public sealed record CompileUnitSource(string UId, string? Comment, FlgNetwork Network);
+//
+// Title: a real, distinct MultilingualText[CompositionName="Title"] — confirmed real,
+// 2026-07-12 (S1 item 16, `FC PlantAutoControl`, all 20 networks), the human-visible per-network
+// label shown in the TIA LAD editor above each network, genuinely different from Comment (which
+// has been empty on every real network seen all session — Title is what engineers actually use).
+// This is why the IR's own `NETWORK <n> "<title>"` line was repurposed to carry this field
+// rather than Comment (S1 item 16) — matching the field's own name and ir/SPEC.md's original
+// sketch, which the converter's earlier build had accidentally wired to Comment instead, unnoticed
+// until real data finally had non-trivial content in both fields at once.
+public sealed record CompileUnitSource(string UId, string? Comment, string? Title, FlgNetwork Network);
 
 // RootUId is the block element's own "ID" attribute (e.g. `<SW.Blocks.FC ID="0">`), separate
 // from its CompileUnits' own IDs — confirmed real and required, 2026-07-10: Import() rejects a
@@ -180,6 +189,15 @@ public sealed record CompileUnitSource(string UId, string? Comment, FlgNetwork N
 //
 // Input/Output/InOut/Constant remain hard-error-if-non-empty, unconfirmed — not modeled, not
 // silently accepted.
+// Title: a real, distinct block-level MultilingualText[CompositionName="Title"] — confirmed real,
+// 2026-07-12 (S1 item 17), on two of PlantAutoControl's own dependency FBs (`MotorVSDSystem`, `AirStar`,
+// both titled "VSD Motor" — a shared, templated title across that FB family). Previously assumed
+// always-empty (S1 item 16's own grounding only found network-level Title populated) and
+// hard-errored on; this is the first real counter-example. Same treatment as network-level
+// Title: read via MultilingualTextHelper.ReadMultilingualText, its own optional `TITLE "..."`
+// line in the IR (mirroring the existing `COMMENT "..."` line — genuinely a new line, not a
+// repurposed one, since the BLOCK line's own quoted text is the block's real Name, not available
+// to repurpose the way a NETWORK line's label was).
 public sealed record BlockSource(
     string RootUId,
     string Kind,
@@ -189,7 +207,8 @@ public sealed record BlockSource(
     string? Comment,
     IReadOnlyList<CompileUnitSource> CompileUnits,
     IReadOnlyList<DbMember>? StaticMembers = null,
-    IReadOnlyList<DbMember>? TempMembers = null)
+    IReadOnlyList<DbMember>? TempMembers = null,
+    string? Title = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 }

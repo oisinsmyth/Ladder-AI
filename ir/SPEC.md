@@ -25,6 +25,7 @@ plan items 4–7) — anything marked **[converter-verify]** below is a contract
 BLOCK <FB|FC|OB> <Name>
   NUMBER <n>
   LANGUAGE <LAD>                    # LAD only ever appears here — converter refuses anything else (CLAUDE.md hard rule 1)
+  TITLE "<block title>"             # omitted entirely if empty — confirmed real, 2026-07-12 (S1 item 17)
   COMMENT "<block header comment>"  # omitted entirely if empty
 
   INTERFACE
@@ -34,7 +35,8 @@ BLOCK <FB|FC|OB> <Name>
     TEMP    <name> : <Type>
     RETURN  <name> : <Type>         # matches the source's own Section names (Input/Output/InOut/Temp/Return)
 
-  NETWORK <n> "<title>"
+  NETWORK <n> "<title>"             # sourced from the network's own Title (S1 item 16), not Comment — see below
+    COMMENT "<network comment>"     # omitted entirely if empty — a separate, rarely-populated field
     <body — see Network body below>
 
   NETWORK <n+1> "<title>"
@@ -45,6 +47,22 @@ SIDECAR
 ```
 
 DBs and UDTs use a different, simpler top-level shape — see Tag tables/UDTs/DBs below.
+
+**`TITLE`/`COMMENT` at both block and network level (S1 items 16/17, 2026-07-12) — a real design
+correction, not just a new field.** Before this, the `NETWORK <n> "<title>"` line's own quoted
+text was actually sourced from the network's `Comment` field, despite the format's own name for
+it — an unnoticed mismatch, since every network grounded earlier this session had an empty
+Comment. Once a real block (`FC PlantAutoControl`) turned out to have a populated `Title` and an empty
+Comment on every network — the opposite emphasis — the mismatch became visible. Corrected,
+confirmed with the project owner first (`AskUserQuestion`, not assumed): the `NETWORK` line's own
+label now carries `Title` (matching its own name and how engineers actually see it in the TIA LAD
+editor); `Comment` gets its own separate, optional `COMMENT "..."` line. Both `Title`/`Comment`
+survive an `[empty]`-marked network (they live on a source `ObjectList` sibling of `NetworkSource`,
+independent of whether `NetworkSource` itself has content). Block-level `Title` was initially
+assumed always-empty (S1 item 16's own grounding only found it populated at network level) —
+confirmed real too, 2026-07-12 (S1 item 17, two of `PlantAutoControl`'s own dependency FBs, both
+sharing one templated title across that FB family) — given its own `TITLE "..."` line at the top
+of the file, alongside the pre-existing block-level `COMMENT` line.
 
 ## Network body
 
@@ -473,13 +491,18 @@ question, left open on purpose rather than guessed).
 - **Resolved, 2026-07-12 (S1 item 15): `SCoil`/`RCoil` built** — see the readable-form section
   above. TONR (a retentive TON variant) remains out of scope, still unconfirmed against any real
   data — not the same construct, not addressed by this item.
-- **New, 2026-07-12: a network `Title` (distinct from `Comment`) is a real, systematic gap.**
-  Found attempting a whole-block round-trip of `PlantAutoControl` once `SCoil`/`RCoil` closed its last
-  known instruction-level gap — every one of its 20 networks carries a non-empty `Title`, which
-  `BlockSourceParser` already hard-errors on (this was found and documented earlier, during the
-  reference-project corpus work, `tests/golden/README.md` — not a new discovery, but the first
-  time it's actually blocked a real production block's own whole-block proof). Not addressed by
-  this item; the next real gap standing between `PlantAutoControl` and a true whole-block round-trip.
+- **Resolved, 2026-07-12 (S1 items 16/17): network- and block-level `Title` built** — see the
+  file-shape section above for the full story (a real design correction, not just a new field:
+  the `NETWORK` line's own label was repurposed from `Comment` to `Title`). `PlantAutoControl` itself
+  now converts as a whole block, `to-ir → to-xml → to-ir` byte-identical — the first real site
+  block this whole session to do so. A true TIA-cycle proof (import/compile/re-export/Normalizer)
+  for `PlantAutoControl` specifically is still open: it depends on external tags/FBs not present in any
+  other TIA project (confirmed live, 2026-07-12 — cross-project import into `SampleProject`
+  succeeded structurally but compile failed with 502 dependency errors, entirely tag/FB-library
+  related, not a converter defect). DB-level `Title` remains unconfirmed real, still hard-errored.
+- **New, 2026-07-12: real FC/FB `Interface` sections beyond `Input` are confirmed real too**
+  (`Constant`, on two of `PlantAutoControl`'s dependency FBs) — same already-known, deferred
+  "full parameter-interface modeling" item, not a new capability of its own.
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
   declared parameter list, independent of what's wired at any one call site) remains deferred,

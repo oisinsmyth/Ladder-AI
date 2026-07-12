@@ -18,11 +18,11 @@ input, first line for IR/text input) and route accordingly — no separate flag 
 
 Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
 branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), Not
-(standalone boolean inverter), CALL (FB/FC block calls), and SCoil/RCoil (set/reset coils)** (S1
-items 7–15, through 2026-07-12). No network `Title` text (distinct from `Comment`) or
-FC/FB parameter-interface modeling yet. Anything outside scope is a hard error
-(`UnsupportedConstructException`), never a silent partial result — hitting that error on a real
-block is expected at this stage, not a bug.
+(standalone boolean inverter), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), and
+network/block-level Title** (S1 items 7–17, through 2026-07-12). No arithmetic
+(`Add`/`Sub`/`Mul`/`Div`/`Convert`/etc.) or FC/FB parameter-interface modeling yet. Anything
+outside scope is a hard error (`UnsupportedConstructException`), never a silent partial result —
+hitting that error on a real block is expected at this stage, not a bug.
 
 Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boundary approval in
 `docs/13-data-boundary.md`) and handled explicitly, not guessed at:
@@ -487,8 +487,64 @@ different, already-known gap: every one of `PlantAutoControl`'s 20 real networks
 `Title` (distinct from `Comment`) — `BlockSourceParser` already hard-errors on this shape
 (confirmed and documented during the reference-project corpus work, `tests/golden/README.md`,
 not a new discovery). So `PlantAutoControl` still doesn't round-trip as a whole block — for a reason
-entirely unrelated to any instruction type this converter slice models. Not addressed by this
-item; flagged honestly as the next real gap, not glossed over.
+entirely unrelated to any instruction type this converter slice models. **Resolved next, same
+session — see the Title section below.**
+
+## Title — network- and block-level (S1 items 16/17, 2026-07-12)
+
+Picked up immediately after `SCoil`/`RCoil` surfaced the gap above. A real design correction, not
+just a new field — see `ir/SPEC.md`'s own file-shape section for the full story: the `NETWORK
+<n> "<title>"` line's own quoted text was, before this, actually sourced from the network's
+`Comment` field, an unnoticed mismatch since every network grounded earlier this session had an
+empty Comment. Confirmed with the project owner before changing (`AskUserQuestion`, not assumed):
+the `NETWORK` line's label now carries the real `Title`; `Comment` gets its own new, separate,
+optional `COMMENT "..."` line, mirroring the pre-existing block-level one.
+
+- **Network-level Title (S1 item 16)**: confirmed real and populated on every one of
+  `PlantAutoControl`'s 20 networks (Comment empty everywhere, the opposite emphasis of every network
+  grounded before this block). `BlockSourceParser`/`BlockSourceWriter` read/write it the same way
+  Comment already was (`MultilingualTextHelper.ReadMultilingualText`/
+  `DbSourceWriter.WriteMultilingualText`, generalized from a Comment-only helper once a second
+  real `CompositionName` confirmed the shape is genuinely shared). `IrNetwork` gained a `Comment`
+  field (mirroring `Title`, which already existed); `CoilAssignmentSidecar` needed no changes —
+  synthetic, regenerated `MultilingualText` IDs on write, same precedent as Comment's own.
+- **Block-level Title (S1 item 17)**: initially assumed always-empty — `RequireEmptyTitle` had
+  never seen a real counter-example before. Confirmed real while grounding the 8 FBs `PlantAutoControl`
+  depends on: `MotorVSDSystem` and `AirStar` both carry a real, identical block-level Title ("VSD
+  Motor" — a shared, templated title across that FB family). Same treatment as network-level:
+  `BlockSource`/`IrBlock` gained a `Title` field, a new `TITLE "..."` line (block-level, alongside
+  the pre-existing `COMMENT` line — genuinely new, since the `BLOCK` line's own quoted text is the
+  block's real Name, unlike a `NETWORK` line's label which Title could repurpose). DB-level Title
+  remains unconfirmed real, still hard-errored.
+- Sanitization (S1 items 16/17): both Titles are genuinely identifying free text in real data
+  (e.g. equipment/process names) — same hard-error-if-unmapped treatment as Comment, via two new
+  `SanitizationMap` dictionaries (`NetworkTitles`, `Titles`).
+
+13 new converter tests across both items, plus regenericized fixtures. All 177 converter tests
+pass (up from 164); `openness-cli`/golden-harness suites unaffected, confirmed still green
+(68/11).
+
+**Live-verified against real data, 2026-07-12.** Network-level: `converter to-ir` on a fresh
+whole-block `PlantAutoControl` export now succeeds completely — **the first real production block this
+whole session to fully convert as a whole block** — and `to-ir → to-xml → to-ir` round-trips
+byte-identical (IR self-stability at full-block scale, not just per-network). Block-level:
+isolated `MotorVSDSystem`/`AirStar` — both now progress past the block-Title check to a different,
+already-known gap (a non-empty `Interface` section `Constant` — the same deferred
+parameter-interface item `TomraControlSystem` hit via its own `Input` section, not a new capability).
+
+**Then attempted the true TIA cycle, per the project owner's explicit instruction to route
+through `SampleProject` rather than modifying `JOB9002`.** Exported `PlantAutoControl` from `JOB9002`,
+converted it, and imported the regenerated XML into `SampleProject` — **the import itself
+succeeded** (TIA accepted the regenerated XML as structurally valid into a completely unrelated
+project). **Compiling it there failed with 502 errors**, every one either a "tag not defined" (of
+323 distinct tag/DB-member paths `PlantAutoControl` references) or a "referenced block no longer
+exists" (its 8 dependency FBs, called 20 times total) — entirely because `SampleProject` has
+neither `PlantAutoControl`'s own tag table nor its FB library. This is an environmental/dependency
+limitation, not a converter defect: a block doesn't carry its project context with it. Grounded
+those 8 dependency FBs directly afterward: **0 of 8 convert cleanly today**, blocked by arithmetic
+(`Mul`/`Convert` — 5 of 8) or the same parameter-interface gap noted above (1 of 8; the other 2,
+`MotorVSDSystem`/`AirStar`, are now blocked by that same Interface gap too, having cleared the Title
+check). Arithmetic support is scoped as the next capability.
 
 ## DB support
 
