@@ -30,58 +30,55 @@ AND (live-verified against `FB VSDUpdateComs`; closes out the AND-merge open ite
 non-existent** — no boolean parallel-branch AND-merge was found real anywhere in a 28-block sweep),
 `Not` — standalone boolean inverter (committed `f6f7fa8`), `CALL` — FB/FC block calls (committed
 `681fda2`; live-verified in-memory with `Not`, not yet TIA-cycle live-verified), `SCoil`/`RCoil`
-— set/reset coils (committed `bf49afd`), network/block-level `Title` (implemented/tested/
-documented, **not yet committed** — see "Current task" below). `FC PlantAutoControl` now converts as a
-whole block (`to-ir → to-xml → to-ir` byte-identical) — first real production block this session to
-fully round-trip. Full story for each: `docs/notes/stage-gates.md`.
+— set/reset coils (committed `bf49afd`), network/block-level `Title` (committed `c41e891`),
+`MUL`/`CONVERT` — arithmetic incl. ENO-chaining (implemented/tested/documented, **not yet
+committed** — see "Current task" below). `FC PlantAutoControl` now converts as a whole block
+(`to-ir → to-xml → to-ir` byte-identical) — first real production block this session to fully
+round-trip. Full story for each: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S1 items 16/17 — network/block `Title` — implementation + docs done, NOT YET COMMITTED
+## Current task: S1 item 18 — `MUL`/`CONVERT` (arithmetic) — implementation + docs done, NOT YET COMMITTED
 
-**Status as of 2026-07-12: fully implemented, tested (177/177 converter tests green), and now
+**Status as of 2026-07-12: fully implemented, tested (191/191 converter tests green), and now
 documented (`ir/SPEC.md`, `src/converter/README.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md`
 all updated this pass). Waiting on explicit "commit this" from the project owner before
 committing** — per this session's established discipline, never auto-commit.
 
-**A real design correction, not just a new field**: the IR's own `NETWORK <n> "<title>"` line
-was actually sourced from `Comment`, not `Title` — invisible until `PlantAutoControl` (Title
-populated, Comment empty everywhere, the opposite of every network grounded before it). Confirmed
-the fix with the project owner first (`AskUserQuestion`): `NETWORK`'s own label now carries
-`Title`; `Comment` gets its own new `COMMENT "..."` line. Block-level Title was a second,
-unexpected finding — grounded while checking `PlantAutoControl`'s 8 dependency FBs (`MotorVSDSystem`/
-`AirStar` both carry a real block-level Title, "VSD Motor") — same treatment, new `TITLE "..."`
-line at the top of the file. Full design story: `docs/notes/stage-gates.md` ("S1 items 16/17")
-and `NetworkTitleCommentTests.cs`'s own class-level doc comment.
+**Picked up per the project owner's own explicit sequencing** at the close of S1 items 16/17
+("Let's do block-level Title now, then scope arithmetic support" → "Commit this, then scope
+arithmetic support. Plan mode please.") — the larger of the two remaining real gaps blocking
+`PlantAutoControl`'s 8 dependency FBs (5 of 8 on `Mul`/`Convert`). Planned formally in plan mode
+(`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`).
 
-**Live-verified against real data, 2026-07-12**: whole-block `PlantAutoControl` now converts
-completely via `converter to-ir` — **the first real production block this whole session to fully
-round-trip as a whole block** — `to-ir → to-xml → to-ir` byte-identical. Block-level Title
-confirmed via `MotorVSDSystem`/`AirStar` (both now progress past Title to a different, already-known
-gap — FC/FB parameter `Interface` sections).
+**Phase 0 grounding found a genuine surprise, flagged before implementation, not forced to fit**:
+real exports of `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem` showed that despite
+`DisabledENO="true"` on both `Mul` and `Convert` (matching the Move/WAND precedent that `eno` is
+never wired), real networks chain `Mul`'s own `eno` output directly into the following
+`Convert`'s own `en` input — a genuine control-flow dependency ("only run `Convert` if `Mul`
+succeeded"), contradicting the plan's own inherited assumption. Flagged to the project owner via
+a recommended design; approved: **"Go with that design."**
 
-**Attempted the true TIA cycle per the project owner's explicit instruction: export from
-`JOB9002`, import into `SampleProject` (not `JOB9002`), run the cycle there.** Import succeeded
-(TIA accepted the regenerated XML into an unrelated project); **compile failed with 502 errors**
-— entirely missing tags (323 distinct paths) and missing FB library blocks (8 dependency FBs) —
-`SampleProject` has neither `PlantAutoControl`'s tag table nor its FB library. **Not a converter
-defect** — environmental/dependency limitation, a block doesn't carry its project context with
-it. Left the imported-but-uncompiled `PlantAutoControl` block in `SampleProject` — project owner will
-clean it up manually (confirmed in advance; `openness-cli` has no delete/remove-block command).
+**Design**: new `EnSource` discriminated union (`Condition(Expr)` | `PrecedingEno`) rather than
+folding the chain into `Expr` — there's no tag to reference "the preceding instruction's own
+success" by. New reserved readable-form sentinel `EN := ENO`, mirroring the existing `TRUE`
+sentinel precedent. `Mul`'s own type is `<AutomaticTyped Name="SrcType" />` (self-closing, no
+value — TIA infers the type from the connected operands), modeled as `PartNode.AutomaticSrcType`.
+`Convert` carries an ordinary `SrcType`/`DestType` `TemplateValue` pair. Full design story:
+`docs/notes/stage-gates.md` ("S1 item 18") and `MulConvertTests.cs`'s own class-level doc comment.
 
-**Grounded the 8 dependency FBs directly** (project owner's own follow-up): **0 of 8 convert
-cleanly today.** `Mul`/`Convert` (arithmetic) blocks 5; FC/FB parameter `Interface` sections
-(`Input`/`Constant`) block the other 3 (`TomraControlSystem`, and now `MotorVSDSystem`/`AirStar` too, having
-cleared the Title check).
+**Live-verified against real data, 2026-07-12**: both the ENO-chained case (`MotorDOL`) and the
+standalone rail-fed case (`ShredderControlSystem`) reduce and round-trip correctly. **Whole-block
+`to-ir` sweep of all 5 previously-blocked dependency FBs**
+(`MotorDOL`/`EquipmentControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`ShredderControlSystem`) confirmed none hit a
+`Mul`/`Convert` error anymore — all five now hit `TONR` instead, confirming it as **real** (was
+"unconfirmed against any real data" as of the S1 item 15 docs).
 
-**Next task, per the project owner's own explicit decision: scope arithmetic support
-(`Add`/`Sub`/`Mul`/`Div`/`Convert`/etc.) next** — the larger of the two remaining real gaps by
-block count (5 of 8 dependency FBs). **Not started at all** — no grounding, no design, no code.
-Given the size (same "boxed instruction family" shape as WAND, but a whole family rather than one
-instruction), likely warrants proper plan-mode rigor, matching this project's own discipline for
-"substantially bigger" capabilities (the `CALL` precedent).
+Arithmetic beyond `Mul`/`Convert` (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) stays out of scope per
+the plan's own explicit scoping — nothing observed needing it in any grounded network.
 
-Full FC/FB parameter-interface modeling (`Input`/`Output`/`InOut`/`Constant` sections) remains a
-separate, larger, already-known deferred item — not in scope for the arithmetic work, blocks
-`TomraControlSystem`/`MotorVSDSystem`/`AirStar` regardless of arithmetic support landing.
+**Not yet raised with the project owner, pending this item's commit**: what to scope next —
+`TONR` (now confirmed real, blocks all 5 of these dependency FBs) or the FC/FB parameter-interface
+gap (`TomraControlSystem`/`MotorVSDSystem`/`AirStar`, 3 of 8) are the two live candidates. No decision made;
+should be asked once this item is closed, not assumed.

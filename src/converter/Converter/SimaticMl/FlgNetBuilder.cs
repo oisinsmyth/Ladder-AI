@@ -62,6 +62,18 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Calls.Count} Call(s) but the sidecar records {sidecar.Calls.Count}.");
         }
 
+        if (network.Muls.Count != sidecar.Muls.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Muls.Count} Mul(s) but the sidecar records {sidecar.Muls.Count}.");
+        }
+
+        if (network.Converts.Count != sidecar.Converts.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Converts.Count} Convert(s) but the sidecar records {sidecar.Converts.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -156,6 +168,16 @@ public static class FlgNetBuilder
                     : new[] { (UId: callSidecar.CallPartUId, Port: "en") };
                 AddRailEndpoints(wireEndpointsByUId, callRailWireUId, railFacingEndpoints);
             }
+        }
+
+        for (var m = 0; m < network.Muls.Count; m++)
+        {
+            BuildMul(sidecar.Muls[m], parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var c2 = 0; c2 < network.Converts.Count; c2++)
+        {
+            BuildConvert(sidecar.Converts[c2], parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         var wires = wireEndpointsByUId.Select(kv => new WireNode(kv.Key, kv.Value)).ToList();
@@ -336,6 +358,81 @@ public static class FlgNetBuilder
                     throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
             }
         }
+    }
+
+    // Builds an en-gated production's own `en` wiring — either the ordinary chain mechanism
+    // (steps + rail, identical to every other production's own en/IN chain) or, confirmed real
+    // 2026-07-12 (S1 item 18), a direct wire from the immediately preceding Mul/Convert's own
+    // `eno` port. See EnSourceSidecar's own doc comment.
+    private static void BuildEnSource(
+        EnSourceSidecar en, int partUId, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        switch (en)
+        {
+            case EnSourceSidecar.ConditionSidecar condition:
+                for (var i = 0; i < condition.Steps.Count; i++)
+                {
+                    var nextTarget = i + 1 < condition.Steps.Count
+                        ? EntryTarget(condition.Steps[i + 1])
+                        : new WireEndpoint(EndpointKind.NameCon, partUId, "en");
+
+                    BuildStep(condition.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                }
+
+                if (condition.RailWireUId is int railWireUId)
+                {
+                    var railFacingEndpoints = condition.Steps.Count > 0
+                        ? RailFacingEndpoints(condition.Steps[0])
+                        : new[] { (UId: partUId, Port: "en") };
+                    AddRailEndpoints(wireEndpointsByUId, railWireUId, railFacingEndpoints);
+                }
+
+                break;
+
+            case EnSourceSidecar.PrecedingEnoSidecar precedingEno:
+                AddEndpoint(wireEndpointsByUId, precedingEno.WireUId, new WireEndpoint(EndpointKind.NameCon, precedingEno.PrecedingPartUId, "eno"));
+                AddEndpoint(wireEndpointsByUId, precedingEno.WireUId, new WireEndpoint(EndpointKind.NameCon, partUId, "en"));
+                break;
+
+            default:
+                throw new IrFormatException($"Unsupported EnSource sidecar kind: {en.GetType().Name}");
+        }
+    }
+
+    // Builds a Mul Part, its `en` wiring (BuildEnSource), its N input wires (`in1`..`inK`,
+    // `AddOperandWire` per input — positional, mirrors WAND's own Inputs list), and its `out`
+    // wire (same IdentCon-fed wire shape as WAND's own dest). `AutomaticSrcType: true` regenerates
+    // the confirmed-fixed `<AutomaticTyped Name="SrcType" />` shape unconditionally.
+    private static void BuildMul(
+        MulStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.MulPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MulPartUId, "Mul", Cardinality: sidecar.Inputs.Count, AutomaticSrcType: true));
+
+        for (var k = 0; k < sidecar.Inputs.Count; k++)
+        {
+            AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.MulPartUId, $"in{k + 1}");
+        }
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MulPartUId, "out"));
+    }
+
+    // Builds a Convert Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal
+    // source, same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire
+    // shape as Move's own out1).
+    private static void BuildConvert(
+        ConvertStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.ConvertPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.ConvertPartUId, "Convert", SrcType: sidecar.SrcType, DestType: sidecar.DestType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.ConvertPartUId, "in");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ConvertPartUId, "out"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

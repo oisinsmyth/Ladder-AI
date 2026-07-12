@@ -90,6 +90,15 @@ public sealed record AccessNode(
 // status as Gt/TOF elsewhere), stored verbatim rather than hard-validated to a constant, so a
 // real FC call is at least represented faithfully rather than assumed impossible.
 //
+// AutomaticSrcType/DestType: `Mul`/`Convert` (S1 item 18, 2026-07-12, `FB MotorDOL`/`EquipmentControlSystem`/
+// `ShredderControlSystem`). `Mul`'s own type is `<AutomaticTyped Name="SrcType" />` — a self-closing
+// element with no value at all (TIA infers the type from the connected operands rather than
+// declaring it statically), genuinely different from every other typed instruction's own
+// `<TemplateValue Type="Type">X</TemplateValue>` shape — `AutomaticSrcType` is a bare bool
+// (confirmed shape present, nothing to carry) rather than reusing `SrcType` (which would imply a
+// value that doesn't exist in the source). `Convert` is typed *between* two types — `SrcType`
+// (reused, already existing) and the new `DestType` — both ordinary `TemplateValue`s.
+//
 // All optional fields live on the one PartNode type rather than subtypes since every other Part
 // kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
 // on `Name` for anything Part-shape-specific.
@@ -104,7 +113,9 @@ public sealed record PartNode(
     string? SrcType = null,
     string? BlockName = null,
     string? BlockType = null,
-    IReadOnlyList<CallParameterNode>? CallParameters = null);
+    IReadOnlyList<CallParameterNode>? CallParameters = null,
+    bool AutomaticSrcType = false,
+    string? DestType = null);
 
 // A wired parameter declared at a Call site — confirmed real, 2026-07-12, `FC PlantAutoControl`: only
 // parameters that are actually wired appear here at all (19 of 20 real Call instances have zero

@@ -13,7 +13,7 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And", "Not", "SCoil", "RCoil" };
+    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal) { "Contact", "Coil", "O", "TON", "Eq", "Ge", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Convert" };
 
     // Only Eq/Ge directly observed (FC ControlDelays, 2026-07-11) — Ne/Le/Gt/Lt's real Part
     // Names are unconfirmed (same status as the AND-merge Part Name), refused rather than
@@ -75,7 +75,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And/Not/SCoil/RCoil only.");
+                        "This converter slice supports Contact/Coil/O/TON/Eq/Ge/Move/And/Not/SCoil/RCoil/Mul/Convert only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -100,6 +100,16 @@ public static class FlgNetParser
                 {
                     var (andCardinality, andSrcType) = ParseAndFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, Cardinality: andCardinality, SrcType: andSrcType));
+                }
+                else if (name == "Mul")
+                {
+                    var mulCardinality = ParseMulFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: mulCardinality, AutomaticSrcType: true));
+                }
+                else if (name == "Convert")
+                {
+                    var (convertSrcType, convertDestType) = ParseConvertFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, SrcType: convertSrcType, DestType: convertDestType));
                 }
                 else
                 {
@@ -234,6 +244,68 @@ public static class FlgNetParser
         var cardinality = ParseCardinality(andPart, "And", uid);
         var srcType = ParseSrcType(andPart, "And", uid);
         return (cardinality, srcType);
+    }
+
+    // A multiply box instruction (`Part Name="Mul"`) — confirmed real, 2026-07-12,
+    // `FB MotorDOL`/`FB EquipmentControlSystem` (two independent instances, identical shape):
+    // `DisabledENO="true"` (same reasoning as And/Move's own), a `Card` `TemplateValue`
+    // (`Card="2"` in both real instances, carried as data — same "only one value observed"
+    // reasoning as And's own Cardinality), and `<AutomaticTyped Name="SrcType" />` — a
+    // self-closing element with no value at all (TIA infers the type from the connected operands
+    // rather than declaring it statically), genuinely different from every other typed
+    // instruction's own `<TemplateValue Type="Type">X</TemplateValue>` shape. Only the shape
+    // (element present, self-closing, Name="SrcType") is validated — there is no value to carry.
+    private static int ParseMulFixedShape(XElement mulPart, int uid)
+    {
+        var disabledEno = mulPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Mul\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var cardinality = ParseCardinality(mulPart, "Mul", uid);
+
+        var automaticTyped = mulPart.Element(Ns + "AutomaticTyped")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"Mul\" UId=\"{uid}\"> is missing its <AutomaticTyped> element.");
+        var automaticTypedName = RequireAttribute(automaticTyped, "Name");
+        if (automaticTypedName != "SrcType" || automaticTyped.HasElements || !string.IsNullOrEmpty(automaticTyped.Value))
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Mul\" UId=\"{uid}\">'s <AutomaticTyped Name=\"{automaticTypedName}\"> — only a bare, " +
+                "empty <AutomaticTyped Name=\"SrcType\" /> has been observed.");
+        }
+
+        return cardinality;
+    }
+
+    // A type-conversion box instruction (`Part Name="Convert"`) — confirmed real, 2026-07-12,
+    // `FB MotorDOL`/`EquipmentControlSystem` (ENO-chained after a `Mul`) and `FB ShredderControlSystem` (standalone,
+    // independently rail-fed): `DisabledENO="true"` (same reasoning as above) plus two ordinary
+    // `TemplateValue`s — `SrcType`/`DestType` (e.g. `Real`->`DInt`, `Int`->`Int`) — genuinely
+    // typed *between* two types, unlike every other typed instruction's single `SrcType`.
+    private static (string SrcType, string DestType) ParseConvertFixedShape(XElement convertPart, int uid)
+    {
+        var disabledEno = convertPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Convert\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var srcType = ParseSrcType(convertPart, "Convert", uid);
+
+        var destTypeValue = convertPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "DestType")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"Convert\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"DestType\"> element.");
+        var destTypeType = RequireAttribute(destTypeValue, "Type");
+        if (destTypeType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Convert\" UId=\"{uid}\">'s <TemplateValue Name=\"DestType\" Type=\"{destTypeType}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        return (srcType, destTypeValue.Value);
     }
 
     // A TON's own Instance reference — same Scope values as an ordinary Access, but the

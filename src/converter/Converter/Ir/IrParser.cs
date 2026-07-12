@@ -319,12 +319,78 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0 && calls.Count == 0)
+        // Muls are always emitted after Calls (IrSerializer) — parsed in the same order for
+        // self-stability. EN's own value is either an ordinary expression or the reserved word
+        // "ENO" (confirmed real, 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed
+        // via ParseEnSource rather than ParseExpr directly.
+        var muls = new List<MulStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  MUL(", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND/CALL statements and isn't marked [empty].");
+            var mulMatch = MulLineRegex().Match(lines[i]);
+            if (!mulMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>', got: '{lines[i]}'");
+            }
+
+            var args = mulMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL's first argument, got: '{lines[i]}'");
+            }
+
+            var mulEn = ParseEnSource(args[0]["EN := ".Length..]);
+
+            var mulInputs = new List<Expr>();
+            for (var k = 1; k < args.Length; k++)
+            {
+                var prefix = $"IN{k} := ";
+                if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                }
+
+                mulInputs.Add(ParseExprTerm(args[k][prefix.Length..]));
+            }
+
+            muls.Add(new MulStatement(mulEn, mulInputs, mulMatch.Groups["dest"].Value));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment);
+        // Converts are always emitted after Muls (IrSerializer) — fixed arity (EN, IN), same
+        // regex-based shape as MOVE's own line, not the split-on-commas approach MUL/WAND/CALL
+        // need for their own variable-arity argument lists.
+        var converts = new List<ConvertStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  CONVERT(", StringComparison.Ordinal))
+        {
+            var convertMatch = ConvertLineRegex().Match(lines[i]);
+            if (!convertMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var convertEn = ParseEnSource(convertMatch.Groups["en"].Value);
+            var convertIn = ParseExprTerm(convertMatch.Groups["in"].Value);
+            converts.Add(new ConvertStatement(convertEn, convertIn, convertMatch.Groups["dest"].Value));
+            i++;
+        }
+
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
+            && calls.Count == 0 && muls.Count == 0 && converts.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/MOVE/WAND/CALL/MUL/CONVERT statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts);
+    }
+
+    // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
+    // ENO-chained case (confirmed real, 2026-07-12, S1 item 18); anything else is an ordinary
+    // expression, parsed via ParseExpr (not ParseExprTerm) since the ordinary case can itself be
+    // a compound AND/OR condition, same as every other production's own EN field.
+    private static EnSource ParseEnSource(string text)
+    {
+        text = text.Trim();
+        return text == "ENO" ? new EnSource.PrecedingEno() : new EnSource.Condition(ParseExpr(text));
     }
 
     // Top-level entry point: OR is the loosest binder. "TRUE" is only meaningful here (the
@@ -620,7 +686,95 @@ public static partial class IrParser
             calls.Add(ParseCallSidecar(lines, ref i, number));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls);
+        var muls = new List<MulStatementSidecar>();
+        while (i < lines.Length && MulHeaderRegex().IsMatch(lines[i]))
+        {
+            muls.Add(ParseMulSidecar(lines, ref i, number));
+        }
+
+        var converts = new List<ConvertStatementSidecar>();
+        while (i < lines.Length && ConvertHeaderRegex().IsMatch(lines[i]))
+        {
+            converts.Add(ParseConvertSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts);
+    }
+
+    // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
+    // same rail/steps shape every other production's own en/IN chain already uses, or
+    // "en = eno <precedingUid> <wireUid>" for the ENO-chained case (S1 item 18).
+    private static EnSourceSidecar ParseEnSourceSidecar(string[] lines, ref int i, string indent)
+    {
+        var line = RequireLine(lines, ref i);
+        if (line == indent + "en = condition")
+        {
+            var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, indent + "  rail = "));
+            var steps = new List<ChainStepSidecar>();
+            var s = 0;
+            while (i < lines.Length && IsStepHeader(lines[i], indent + "  ", $"step {s}"))
+            {
+                steps.Add(ParseStep(lines, ref i, indent + "  ", $"step {s}"));
+                s++;
+            }
+
+            return new EnSourceSidecar.ConditionSidecar(railWireUId, steps);
+        }
+
+        var enoPrefix = indent + "en = eno ";
+        if (line.StartsWith(enoPrefix, StringComparison.Ordinal))
+        {
+            var parts = line[enoPrefix.Length..].Split(' ');
+            return new EnSourceSidecar.PrecedingEnoSidecar(int.Parse(parts[0]), int.Parse(parts[1]));
+        }
+
+        throw new IrFormatException($"Expected '{indent}en = condition' or '{indent}en = eno <uid> <wire>', got: '{line}'");
+    }
+
+    // A Mul's own sidecar shape mirrors ParseWordAndSidecar's closely — same positional input
+    // operands (`input 0`, `input 1`, ... — Cardinality-driven) — except `en` is an EnSourceSidecar
+    // (S1 item 18), not a flat rail/steps pair, and there's no `srctype` (Mul is untyped in the
+    // source, see PartNode's own AutomaticSrcType field).
+    private static MulStatementSidecar ParseMulSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  mul <n>" header — index itself isn't needed, position in the list is enough.
+
+        var mulPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    muluid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inputs = new List<OperandSidecar>();
+        var k = 0;
+        while (i < lines.Length && (lines[i].StartsWith($"    input {k} tag = ", StringComparison.Ordinal) || lines[i].StartsWith($"    input {k} literal = ", StringComparison.Ordinal)))
+        {
+            inputs.Add(ParseOperand(lines, ref i, "    ", $"input {k}"));
+            k++;
+        }
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId);
+    }
+
+    // A Convert's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, except `en`
+    // is an EnSourceSidecar (S1 item 18), plus `desttype` alongside the existing `srctype`
+    // (Convert is typed *between* two types, unlike every other typed instruction's single type).
+    private static ConvertStatementSidecar ParseConvertSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  convert <n>" header — index itself isn't needed, position in the list is enough.
+
+        var convertPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    convertuid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+        var destType = RequirePrefixedLine(lines, ref i, "    desttype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new ConvertStatementSidecar(convertPartUId, en, inOperand, srcType, destType, destAccessUId, destWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1037,6 +1191,16 @@ public static partial class IrParser
     [GeneratedRegex(@"^  CALL (?<blockname>\S+)\((?<args>.+)\)$")]
     private static partial Regex CallLineRegex();
 
+    // Variable input count (Cardinality-driven, S1 item 18), same discipline as WAND's own
+    // variable-arity argument list — the argument list itself is split on top-level commas
+    // separately (ParseNetwork).
+    [GeneratedRegex(@"^  MUL\((?<args>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex MulLineRegex();
+
+    // Fixed arity (EN, IN) — same regex-based shape as MOVE's own line.
+    [GeneratedRegex(@"^  CONVERT\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex ConvertLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1070,4 +1234,10 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  call (?<index>\d+)$")]
     private static partial Regex CallHeaderRegex();
+
+    [GeneratedRegex(@"^  mul (?<index>\d+)$")]
+    private static partial Regex MulHeaderRegex();
+
+    [GeneratedRegex(@"^  convert (?<index>\d+)$")]
+    private static partial Regex ConvertHeaderRegex();
 }

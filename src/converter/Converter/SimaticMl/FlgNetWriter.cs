@@ -84,12 +84,12 @@ public static class FlgNetWriter
             // Move's own shape is entirely fixed — DisabledENO="true" and Card=1 (below) — never
             // carried as PartNode fields since neither ever varies in any real instance seen
             // (same "don't store a confirmed constant" reasoning as TON's InstanceOfType).
-            // Attribute order matches the real source: Name, UId, DisabledENO. And (S1 item 12,
-            // 2026-07-12, a bitwise-And box instruction) shares the same fixed DisabledENO="true"
-            // — its own Cardinality/SrcType, unlike Move's, ARE carried as PartNode fields (only
-            // one real Cardinality value has been observed, not enough to treat as a universal
-            // constant) and already round-trip via the existing Cardinality/SrcType blocks below.
-            if (part.Name is "Move" or "And")
+            // Attribute order matches the real source: Name, UId, DisabledENO. And/Mul/Convert
+            // (S1 items 12/18) share the same fixed DisabledENO="true" — their own Cardinality/
+            // SrcType/DestType, unlike Move's, ARE carried as PartNode fields (only one real
+            // value has been observed for each, not enough to treat as a universal constant) and
+            // already round-trip via the existing Cardinality/SrcType/DestType blocks below.
+            if (part.Name is "Move" or "And" or "Mul" or "Convert")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }
@@ -127,6 +127,15 @@ public static class FlgNetWriter
                     1));
             }
 
+            // Mul's own type — a self-closing <AutomaticTyped Name="SrcType" /> with no value at
+            // all (confirmed real, 2026-07-12, S1 item 18), never a <TemplateValue> like every
+            // other typed instruction. Emitted right after Cardinality, matching the real
+            // source's own element order.
+            if (part.AutomaticSrcType)
+            {
+                partElement.Add(new XElement(ns + "AutomaticTyped", new XAttribute("Name", "SrcType")));
+            }
+
             if (part.TimeType is not null)
             {
                 partElement.Add(new XElement(
@@ -143,6 +152,18 @@ public static class FlgNetWriter
                     new XAttribute("Name", "SrcType"),
                     new XAttribute("Type", "Type"),
                     part.SrcType));
+            }
+
+            // Convert's own DestType — confirmed real, 2026-07-12, S1 item 18, always paired
+            // with SrcType above, matching the real source's own element order (SrcType then
+            // DestType).
+            if (part.DestType is not null)
+            {
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", "DestType"),
+                    new XAttribute("Type", "Type"),
+                    part.DestType));
             }
 
             partsElement.Add(partElement);

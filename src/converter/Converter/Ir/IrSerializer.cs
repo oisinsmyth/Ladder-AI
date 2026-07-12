@@ -124,7 +124,36 @@ public static class IrSerializer
 
             sb.Append(")\n");
         }
+
+        foreach (var mul in network.Muls)
+        {
+            sb.Append("  MUL(EN := ").Append(SerializeEnSource(mul.En));
+            for (var k = 0; k < mul.Inputs.Count; k++)
+            {
+                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(mul.Inputs[k]));
+            }
+
+            sb.Append(") => ").Append(mul.DestTag).Append('\n');
+        }
+
+        foreach (var convert in network.Converts)
+        {
+            sb.Append("  CONVERT(EN := ").Append(SerializeEnSource(convert.En))
+              .Append(", IN := ").Append(SerializeExpr(convert.In))
+              .Append(") => ").Append(convert.DestTag).Append('\n');
+        }
     }
+
+    // The EN slot's own value — either an ordinary boolean expression (including the existing
+    // "TRUE" sentinel) or, confirmed real 2026-07-12 (S1 item 18), the reserved word "ENO",
+    // meaning "gated by the immediately preceding statement's own ENO" (see EnSource's own doc
+    // comment for why this isn't a generic Expr).
+    private static string SerializeEnSource(EnSource en) => en switch
+    {
+        EnSource.Condition condition => SerializeExpr(condition.Value),
+        EnSource.PrecedingEno => "ENO",
+        _ => throw new IrFormatException($"Unsupported EnSource kind: {en.GetType().Name}"),
+    };
 
     // Only emitted when there's real content — matches every FC seen (StaticMembers null,
     // TempMembers empty), where the whole INTERFACE section is omitted per the "absence means
@@ -316,6 +345,62 @@ public static class IrSerializer
             {
                 SerializeCallArgument(sb, "    ", a, call.Arguments[a]);
             }
+        }
+
+        for (var m2 = 0; m2 < sidecar.Muls.Count; m2++)
+        {
+            var mul = sidecar.Muls[m2];
+            sb.Append("  mul ").Append(m2).Append('\n');
+            sb.Append("    muluid = ").Append(mul.MulPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", mul.En);
+
+            for (var k = 0; k < mul.Inputs.Count; k++)
+            {
+                SerializeOperand(sb, "    ", $"input {k}", mul.Inputs[k]);
+            }
+
+            sb.Append("    dest = ").Append(mul.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(mul.DestWireUId).Append('\n');
+        }
+
+        for (var c2 = 0; c2 < sidecar.Converts.Count; c2++)
+        {
+            var convert = sidecar.Converts[c2];
+            sb.Append("  convert ").Append(c2).Append('\n');
+            sb.Append("    convertuid = ").Append(convert.ConvertPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", convert.En);
+
+            SerializeOperand(sb, "    ", "in", convert.In);
+
+            sb.Append("    srctype = ").Append(convert.SrcType).Append('\n');
+            sb.Append("    desttype = ").Append(convert.DestType).Append('\n');
+            sb.Append("    dest = ").Append(convert.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(convert.DestWireUId).Append('\n');
+        }
+    }
+
+    // EnSourceSidecar's own text — "en = condition" followed by the same rail/steps shape every
+    // other production's own en/IN chain already uses, or "en = eno <precedingUid> <wireUid>"
+    // for the ENO-chained case (confirmed real, 2026-07-12, S1 item 18) — no steps/rail at all,
+    // just the two UIds needed for exact regeneration.
+    private static void SerializeEnSourceSidecar(StringBuilder sb, string indent, EnSourceSidecar en)
+    {
+        switch (en)
+        {
+            case EnSourceSidecar.ConditionSidecar condition:
+                sb.Append(indent).Append("en = condition\n");
+                sb.Append(indent).Append("  rail = ").Append(SerializeRail(condition.RailWireUId)).Append('\n');
+                for (var s = 0; s < condition.Steps.Count; s++)
+                {
+                    SerializeStep(sb, indent + "  ", $"step {s}", condition.Steps[s]);
+                }
+
+                break;
+            case EnSourceSidecar.PrecedingEnoSidecar precedingEno:
+                sb.Append(indent).Append("en = eno ").Append(precedingEno.PrecedingPartUId).Append(' ').Append(precedingEno.WireUId).Append('\n');
+                break;
+            default:
+                throw new IrFormatException($"Unsupported EnSource sidecar kind: {en.GetType().Name}");
         }
     }
 

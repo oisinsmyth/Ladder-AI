@@ -337,6 +337,47 @@ NETWORK 8 "Run enable delay"
     `tests/golden/README.md`), so `PlantAutoControl` still doesn't round-trip as a *whole block*, for
     a reason entirely unrelated to any instruction type. Not addressed here — flagged honestly as
     the next real gap for a whole-block proof, not glossed over.
+- **`MUL`/`CONVERT` (arithmetic, `Part Name="Mul"`/`"Convert"`), built 2026-07-12 (S1 item 18).**
+  Picked up per the project owner's own decision after `Title`: 5 of `PlantAutoControl`'s 8 dependency
+  FBs were blocked by `Mul`/`Convert` — the larger of the two remaining real gaps by block count.
+  Grounded first (two independent real instances, `FB MotorDOL`/`FB EquipmentControlSystem`), confirmed
+  identical in both, before any design. `Mul`: `DisabledENO="true"`, `Card="2"` (matches WAND's
+  own Cardinality-driven shape, carried as data not hard-validated fixed), ports `en`/`in1`/`in2`/
+  `eno`/`out`. **Genuinely untyped in the source**: `<AutomaticTyped Name="SrcType" />`, a
+  self-closing element with no value at all (TIA infers the type from the connected operands
+  rather than declaring it statically) — nothing to carry, only the shape to validate, unlike
+  every other typed instruction built so far. `Convert`: `DisabledENO="true"`, typed *between*
+  two types (`SrcType`/`DestType`, e.g. `Real`→`DInt`, both carried sidecar-only), ports `en`/
+  `in`/`out`.
+  **The real surprise, confirmed in both independent instances**: despite `DisabledENO="true"` on
+  both (matching Move/WAND's own "never wired" precedent), each network has three `Mul`→`Convert`
+  pairs where **the `Mul`'s own `eno` output wires directly into the following `Convert`'s own
+  `en`** — a genuine control-flow chain ("only run `Convert` if `Mul` succeeded"), unlike anything
+  built earlier this session (every `en`/`IN` before this was independently rail-fed or
+  contact-gated, never fed by a *preceding box instruction's own output port*). Not universal:
+  `FB ShredderControlSystem` has a standalone `Convert` with a plain, independently rail-fed `en` — the
+  ordinary case, already fully covered by the existing `TraceChain` mechanism with zero changes.
+  **Modeled via a new `EnSource` concept** (`Condition` | `PrecedingEno`) rather than folding the
+  ENO-chained case into `Expr` — there's no tag to reference "the preceding instruction's own
+  success" by (`Mul`/`Convert` have no `Instance` element, unlike `TON`/`CALL`'s own named
+  instance path); confirmed with the project owner before implementation, since this materially
+  changed the item's own expected shape once grounding surfaced it. Readable-form syntax:
+  `MUL(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` /
+  `CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>` — `EN`'s own value is either an ordinary
+  boolean expression (including the existing `TRUE` sentinel) or the new reserved word `ENO`,
+  meaning "gated by the immediately preceding statement's own ENO" — mirrors the `TRUE` sentinel
+  precedent (a reserved value in the `EN` slot) rather than inventing a new mechanism. `MUL`/
+  `CONVERT` mirror their own source Part Names, same convention as `COIL`/`TON`/`MOVE`/`CALL`/
+  `SCOIL`/`RCOIL` (`WAND` is the one exception, for a collision that doesn't apply here). Covered
+  by 14 converter tests (`MulConvertTests.cs`, two fixtures — a standalone rail-fed `Convert` and
+  an ENO-chained `Mul`→`Convert` pair — both genericized from the two real shapes). **Live-verified
+  against real data, 2026-07-12:** isolating the real `MotorDOL` network directly confirmed all
+  three `Mul`→`Convert` pairs reduce and round-trip completely, correctly distinguishing
+  `PrecedingEno` from an ordinary rail-fed condition; isolating `ShredderControlSystem`'s own standalone
+  `Convert` confirmed the ordinary case too. Whole-block `to-ir` on all 5 previously-blocked FBs
+  (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) confirmed `Mul`/
+  `Convert` are no longer the blocker in any of them — all 5 now progress to a different,
+  already-known deferred item (`TONR`, a retentive TON variant, `ir/SPEC.md`'s own open items).
 
 ### Explicit form (fallback, per-network)
 
@@ -489,8 +530,10 @@ question, left open on purpose rather than guessed).
   exists; still a hard error. (`Q` wired directly is now modeled and live-proven — see above,
   `FC TimerSample`.)
 - **Resolved, 2026-07-12 (S1 item 15): `SCoil`/`RCoil` built** — see the readable-form section
-  above. TONR (a retentive TON variant) remains out of scope, still unconfirmed against any real
-  data — not the same construct, not addressed by this item.
+  above. TONR (a retentive TON variant) remains out of scope — **confirmed real, 2026-07-12**,
+  live verification for S1 item 18 found `TONR` blocking all 5 of the FBs `Mul`/`Convert` support
+  unblocked (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) — still not
+  the same construct as TON, not addressed by any item so far.
 - **Resolved, 2026-07-12 (S1 items 16/17): network- and block-level `Title` built** — see the
   file-shape section above for the full story (a real design correction, not just a new field:
   the `NETWORK` line's own label was repurposed from `Comment` to `Title`). `PlantAutoControl` itself
@@ -500,6 +543,23 @@ question, left open on purpose rather than guessed).
   other TIA project (confirmed live, 2026-07-12 — cross-project import into `SampleProject`
   succeeded structurally but compile failed with 502 dependency errors, entirely tag/FB-library
   related, not a converter defect). DB-level `Title` remains unconfirmed real, still hard-errored.
+- **Resolved, 2026-07-12 (S1 item 18): `Mul`/`Convert` built** — see the readable-form section
+  above. Phase 0 grounding (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`) found a genuine surprise:
+  despite `DisabledENO="true"` on both (matching the Move/WAND precedent that `eno` is never
+  wired), real networks chain `Mul`'s own `eno` directly into the following `Convert`'s own `en`
+  — a control-flow dependency, not a boolean condition. Modeled via a new `EnSource` concept
+  (`Condition` | `PrecedingEno`) rather than folding it into `Expr`, with a reserved `EN := ENO`
+  readable-form sentinel; confirmed with the project owner before implementation (a real design
+  deviation from the plan's own inherited assumption, flagged rather than forced to fit). `Mul`'s
+  own type is `<AutomaticTyped Name="SrcType" />` (self-closing, no value — TIA infers the type
+  from the connected operands), genuinely different from every other typed instruction's own
+  `TemplateValue` shape; `Convert` carries an ordinary `SrcType`/`DestType` `TemplateValue` pair.
+  14 new tests, 191/191 total passing. Live-verified against both the ENO-chained case
+  (`MotorDOL`) and the standalone rail-fed case (`ShredderControlSystem`); a whole-block `to-ir` sweep
+  of all 5 previously-blocked dependency FBs confirmed none hit `Mul`/`Convert` errors anymore —
+  they now hit `TONR` instead (see the S1 item 15 bullet above, now confirmed real by this
+  finding). Arithmetic beyond `Mul`/`Convert` (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) remains out
+  of scope — none observed co-occurring with `Mul`/`Convert` in any grounded real network.
 - **New, 2026-07-12: real FC/FB `Interface` sections beyond `Input` are confirmed real too**
   (`Constant`, on two of `PlantAutoControl`'s dependency FBs) — same already-known, deferred
   "full parameter-interface modeling" item, not a new capability of its own.

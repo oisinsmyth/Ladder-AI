@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end. The true TIA-cycle proof for it specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 177 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON (both instance scopes), comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT (arithmetic, incl. ENO-chaining), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end. The true TIA-cycle proof for it specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 191 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1290,3 +1290,117 @@ FB library), not by anything this converter itself gets wrong. Reaching it would
 a meaningful slice of `JOB9002`'s own tag/block library into `SampleProject` (sanitized) — assessed
 as disproportionate to this item's own goal and not attempted; arithmetic support (needed for 5
 of the 8 dependency FBs regardless) is the next, more proportionate step.
+
+### S1 item 18 (`MUL`/`CONVERT` — arithmetic, incl. ENO-chaining), 2026-07-12
+
+Picked up per the project owner's own explicit sequencing at the close of S1 items 16/17 ("Let's
+do block-level Title now, then scope arithmetic support" → "Commit this, then scope arithmetic
+support. Plan mode please.") — the larger of the two remaining real gaps blocking `PlantAutoControl`'s
+8 dependency FBs (5 of 8 on `Mul`/`Convert`, vs. 1 of 8 on the already-known, separately-deferred
+FC/FB parameter-interface gap). Planned formally in plan mode per explicit request
+(`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`).
+
+**Phase 0 grounding, mandatory before design per CLAUDE.md hard rule 3.** Fresh exports of
+`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem` (scratch temp, deleted after use) — the plan itself
+explicitly refused to finalize a design until the real XML shape was seen, since only Part Names
+were confirmed by the earlier fast sweep, not actual shapes:
+
+```xml
+<Part Name="Mul" UId="36" DisabledENO="true">
+  <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+  <AutomaticTyped Name="SrcType" />
+</Part>
+<Part Name="Convert" UId="37" DisabledENO="true">
+  <TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>
+  <TemplateValue Name="DestType" Type="Type">DInt</TemplateValue>
+</Part>
+```
+
+- `Mul`: `DisabledENO="true"`, `Card="2"` (`in1`/`in2`/`out`, same Cardinality-driven shape as
+  WAND). Its own type is `<AutomaticTyped Name="SrcType" />` — self-closing, no value at all (TIA
+  infers the type from the connected operands). Genuinely different from every other typed
+  instruction built this session, which always carries an explicit `TemplateValue Type="Type">X<`.
+- `Convert`: `DisabledENO="true"`, an ordinary `SrcType`/`DestType` `TemplateValue` pair —
+  converts *between* two types, unlike anything else built so far.
+- **The real surprise, confirmed in two independent instances (`MotorDOL`, `EquipmentControlSystem`)**:
+  despite `DisabledENO="true"` on both — matching the Move/WAND precedent that `eno` is never
+  wired — real networks have three `Mul`→`Convert` pairs where `Mul`'s own `eno` output wires
+  directly into the following `Convert`'s own `en` input: a genuine control-flow chain ("only run
+  `Convert` if `Mul` succeeded"), fed by a *preceding box instruction's own output port* rather
+  than independently rail-fed or contact-gated like every other `en`/`IN` seen this session. This
+  directly contradicted the plan's own inherited Move/WAND-based assumption.
+- **Not universal**: `ShredderControlSystem` has a standalone `Convert` (`SrcType`/`DestType` both
+  `Int`) with a plain, independently rail-fed `en` — the ordinary case is real too, fully covered
+  by the existing `TraceChain` mechanism with zero changes.
+- No other arithmetic-family instruction (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) observed
+  co-occurring in any of the three grounded networks — scope stayed `Mul`/`Convert` only.
+
+**Flagged to the project owner before implementing anything** (per this project's "ask before
+design deviation" discipline — the plan's own design section explicitly could not be finalized
+until this ground truth was in hand) — presented the finding and a recommended design. Project
+owner: **"Go with that design."**
+
+**Confirmed design:**
+
+- New `EnSource` discriminated union (`Ir/Model.cs`) — `Condition(Expr Value)` for the ordinary
+  boolean-condition case (everything built before this item), `PrecedingEno` for the newly-found
+  chained case. Deliberately *not* folded into `Expr` — there's no tag `Mul` could be referenced
+  by (no `Instance` element, unlike `TON`/`CALL`), so "the preceding instruction's own success"
+  isn't a boolean-tag-condition concept at all.
+- New readable-form reserved sentinel `EN := ENO`, mirroring the existing `TRUE` sentinel
+  precedent (a reserved value in the `EN` slot, not a generic expression) — meaning "gated by the
+  immediately preceding statement's own ENO." Statement declaration order keeps a chained pair
+  textually adjacent for readability, but the sidecar always carries the exact source Part UId
+  and wire UId being chained from — parsing never actually depends on adjacency for correctness.
+- `GraphReducer.ResolveEnSource` — new shared resolver called by both `ReduceMul`/`ReduceConvert`:
+  checks whether a chain step's own `en` wire's only non-self endpoint is `NameCon(<uid>, "eno")`
+  on a `Mul`/`Convert` Part; if so, records `EnSource.PrecedingEno` (with
+  `EnSourceSidecar.PrecedingEnoSidecar` carrying the source Part UId + wire UId) without calling
+  `TraceChain` at all; otherwise falls back to the existing `TraceChain` mechanism unchanged,
+  wrapped in `EnSource.Condition`.
+- `FlgNetBuilder.BuildEnSource` — the write-side mirror: `ConditionSidecar` reuses the existing
+  steps+rail chain-building machinery verbatim; `PrecedingEnoSidecar` directly adds both endpoints
+  of the `eno`→`en` wire (`NameCon(precedingPartUId, "eno")` / `NameCon(partUId, "en")`).
+- `PartNode` gained `AutomaticSrcType: bool` (shape-only flag, nothing to carry — `Mul`'s own
+  type) and `DestType: string?` (reusing the existing `SrcType` field for `Convert`'s source
+  half).
+- `Card` validated fixed at 2 for `Mul` — the only value observed in either grounded instance;
+  hard-errors on anything else, same "don't guess an unconfirmed cardinality" discipline as WAND.
+- Readable form: `MUL(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` /
+  `CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>`. Keywords mirror source Part Names,
+  matching the dominant convention (`WAND` remains the one deliberate exception, for a naming
+  collision that doesn't apply here).
+
+14 new converter tests (`Converter.Tests/MulConvertTests.cs`), two fixtures genericized from the
+real grounded shapes: `ConvertStandaloneFedByRail.xml` (from `ShredderControlSystem` — `Move`+`Convert`
+sharing a rail wire, `Convert` reading its input via a separate `Access` UId from the one `Move`
+wrote, preserving a real "same tag via two different Access UIds" pattern already seen
+elsewhere) and `MulConvertEnoChainedPair.xml` (from `MotorDOL`/`EquipmentControlSystem` — `Mul`→`Convert` with
+the `eno`→`en` wire carrying no `Powerrail`, exactly 2 endpoints). All passed on first run. All
+three suites green: **191 converter tests** (up from 177), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Isolated both real cases directly: the ENO-chained pair (`MotorDOL`) and the standalone rail-fed
+`Convert` (`ShredderControlSystem`) — both reduce and round-trip completely, the sidecar correctly
+preserving the exact `eno`→`en` wire (no `Powerrail`, no rail) in the chained case and the
+ordinary rail/chain-step shape in the standalone case.
+
+**Whole-block `to-ir` sweep of all 5 previously-blocked dependency FBs**
+(`MotorDOL`/`EquipmentControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`ShredderControlSystem`) — none hit a
+`Mul`/`Convert` error anymore. All five now hit `TONR` instead (a retentive TON variant, distinct
+from `TON` and out of scope for any item so far) — confirming `TONR` as **real**, not merely a
+name noticed during an earlier sweep, and updating its own status in `ir/SPEC.md`'s Open Items
+section accordingly (previously listed under the S1 item 15/`SCoil`/`RCoil` bullet as
+"unconfirmed against any real data").
+
+Getting these 5 FBs to actually *compile* in `SampleProject` remains blocked by the same
+missing-tag-table/FB-library issue already documented for `PlantAutoControl` itself (S1 items 16/17,
+"not attempted, disproportionate to scope") — not attempted again here for the same reason.
+
+**Bottom line:** `Mul`/`Convert` is built, tested, and live-verified against real data, including
+a genuine, previously-unknown ENO-chaining control-flow pattern that required a mid-implementation
+design check-in rather than being forced into the plan's own original (Move/WAND-based) shape.
+Arithmetic beyond `Mul`/`Convert` remains out of scope — nothing observed needing it. The
+whole-block sweep confirms `TONR` as the next real gap for these 5 FBs specifically, alongside the
+already-known FC/FB parameter-interface gap for the remaining 3.

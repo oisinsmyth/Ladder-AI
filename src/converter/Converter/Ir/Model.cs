@@ -38,6 +38,28 @@ public abstract record Expr
     public sealed record Compare(string Operator, Expr Left, Expr Right) : Expr;
 }
 
+// The EN source for an en-gated production — deliberately NOT folded into Expr. Every production
+// built before S1 item 18 (TON/Move/WAND/CALL) has its own `en`/`IN` resolved as an ordinary
+// boolean condition tree (TraceChain, terminating at Powerrail or a Contact/comparison chain).
+// Confirmed real, 2026-07-12 (S1 item 18, `Mul`->`Convert` pairs in `MotorDOL`/`EquipmentControlSystem`): a
+// second, genuinely different source exists — the *immediately preceding* Mul/Convert's own
+// `eno` output wired straight into this one's `en`, despite both carrying `DisabledENO="true"`.
+// There's no tag to reference "the preceding instruction's own success" by (Mul/Convert have no
+// `Instance` element, unlike TON/CALL's own named instance path) — so this is modeled as a
+// second EnSource case, not a new Expr leaf, keeping Expr a pure boolean-tag-condition tree.
+// Mirrors the existing "TRUE" sentinel precedent (a reserved value in the EN slot) rather than
+// inventing a full expression node: readable-form renders `EN := ENO` for the chained case.
+public abstract record EnSource
+{
+    private EnSource()
+    {
+    }
+
+    public sealed record Condition(Expr Value) : EnSource;
+
+    public sealed record PrecedingEno : EnSource;
+}
+
 // A TON instance used in a network — confirmed real, 2026-07-11, both as a multi-instance
 // (`FB MotorDOL`, Scope="LocalVariable") and a standalone instance (`FC ControlDelays`,
 // Scope="GlobalVariable"). No bound IR-level name (project owner's call): TIA has no "timer
@@ -109,6 +131,28 @@ public sealed record MoveStatement(Expr En, Expr In, string DestTag);
 // `MOVE_BLK_VARIANT` → `MOVE`.
 public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, string DestTag);
 
+// A multiply box instruction (`Part Name="Mul"`) — confirmed real, 2026-07-12 (S1 item 18),
+// `FB MotorDOL`/`FB EquipmentControlSystem` (both grounded independently, identical shape). Structurally
+// closest to WAND: `en`-gated (via EnSource, see its own doc comment — sometimes an ordinary
+// condition, sometimes chained from a preceding Mul/Convert's own `eno`), `Cardinality`-driven
+// input list (`Card="2"` in every real instance seen, carried as data rather than hard-validated
+// fixed — same "only one value observed, not enough to treat as universal" reasoning as WAND's
+// own Cardinality, not Move's fixed `Card="1"`), one destination tag via `out`. Genuinely
+// untyped in the source (`<AutomaticTyped Name="SrcType" />`, not a `TemplateValue` — TIA infers
+// the type from the connected operands rather than declaring it statically) — nothing to carry
+// for it beyond validating the shape is present, unlike WAND's own explicit `SrcType`.
+public sealed record MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, string DestTag);
+
+// A type-conversion box instruction (`Part Name="Convert"`) — confirmed real, 2026-07-12 (S1 item
+// 18). Structurally closest to Move: `en`-gated (via EnSource), a single tag-or-literal input,
+// one destination tag via `out`. Genuinely typed *between* two types (`SrcType`/`DestType`, e.g.
+// `Real`->`DInt` — confirmed real, both `TemplateValue`s present, unlike `Mul`'s own untyped
+// shape) — both carried sidecar-only, same precedent as a comparison's own `SrcType`. Confirmed
+// real both standalone (independently rail-fed `en`, `FB ShredderControlSystem`) and as the second half
+// of a `Mul`->`Convert` ENO-chained pair (`FB MotorDOL`/`EquipmentControlSystem`) — both cases reduce
+// identically once `EnSource` is resolved, no special-casing needed beyond that one field.
+public sealed record ConvertStatement(EnSource En, Expr In, string DestTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -172,7 +216,9 @@ public sealed record IrNetwork(
     IReadOnlyList<MoveStatement>? Moves = null,
     IReadOnlyList<WordAndStatement>? WordAnds = null,
     IReadOnlyList<CallStatement>? Calls = null,
-    string? Comment = null)
+    string? Comment = null,
+    IReadOnlyList<MulStatement>? Muls = null,
+    IReadOnlyList<ConvertStatement>? Converts = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -182,7 +228,12 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<CallStatement> Calls { get; init; } = Calls ?? Array.Empty<CallStatement>();
 
-    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0 && Calls.Count == 0;
+    public IReadOnlyList<MulStatement> Muls { get; init; } = Muls ?? Array.Empty<MulStatement>();
+
+    public IReadOnlyList<ConvertStatement> Converts { get; init; } = Converts ?? Array.Empty<ConvertStatement>();
+
+    public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
+        && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -473,6 +524,52 @@ public sealed record CallStatementSidecar(
     IReadOnlyList<string> InstanceComponentPath,
     IReadOnlyList<CallArgumentSidecar> Arguments);
 
+// The sidecar counterpart of EnSource (Model) — see its own doc comment for why this is a
+// separate concept from an ordinary chain's RailWireUId/Steps. ConditionSidecar carries exactly
+// what every other production's own en/IN chain does (RailWireUId/Steps, same TraceChain
+// mechanism). PrecedingEnoSidecar carries the exact source UId being chained from (confirmed
+// real, 2026-07-12, S1 item 18: a Mul/Convert's own `eno` wired straight into the next one's
+// `en`) plus the wire UId connecting them, both needed for exact regeneration — FlgNetBuilder
+// works entirely off the sidecar, never cross-referencing the model.
+public abstract record EnSourceSidecar
+{
+    private EnSourceSidecar()
+    {
+    }
+
+    public sealed record ConditionSidecar(int? RailWireUId, IReadOnlyList<ChainStepSidecar> Steps) : EnSourceSidecar;
+
+    public sealed record PrecedingEnoSidecar(int PrecedingPartUId, int WireUId) : EnSourceSidecar;
+}
+
+// One Mul's full round-trip data. En mirrors every other production's own EnSource (see its own
+// doc comment). Inputs is positional (Inputs[0] is `in1`, Inputs[1] is `in2`, ...) — length
+// equals the source Part's own Cardinality (`Card="2"` in every real instance seen, carried as
+// data rather than hard-validated fixed, same reasoning as WordAndStatementSidecar's own
+// Inputs.Count). DisabledENO isn't carried — always `"true"`, same "don't carry a confirmed
+// constant" reasoning as Move/WAND's own. No SrcType field at all — `Mul`'s own type is
+// `<AutomaticTyped Name="SrcType" />` (confirmed real, no value to carry, only the shape to
+// validate on parse and regenerate unconditionally on write).
+public sealed record MulStatementSidecar(
+    int MulPartUId,
+    EnSourceSidecar En,
+    IReadOnlyList<OperandSidecar> Inputs,
+    int DestAccessUId,
+    int DestWireUId);
+
+// One Convert's full round-trip data. En mirrors every other production's own EnSource.
+// SrcType/DestType mirror a comparison's own SrcType (sidecar-only, not shown in the readable IR
+// text) — confirmed real, both present as ordinary TemplateValues (unlike Mul's own untyped
+// shape), e.g. `Real`->`DInt`.
+public sealed record ConvertStatementSidecar(
+    int ConvertPartUId,
+    EnSourceSidecar En,
+    OperandSidecar In,
+    string SrcType,
+    string DestType,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -482,7 +579,9 @@ public sealed record NetworkSidecar(
     IReadOnlyList<TimerBindingSidecar>? Timers = null,
     IReadOnlyList<MoveStatementSidecar>? Moves = null,
     IReadOnlyList<WordAndStatementSidecar>? WordAnds = null,
-    IReadOnlyList<CallStatementSidecar>? Calls = null)
+    IReadOnlyList<CallStatementSidecar>? Calls = null,
+    IReadOnlyList<MulStatementSidecar>? Muls = null,
+    IReadOnlyList<ConvertStatementSidecar>? Converts = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -493,6 +592,10 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<WordAndStatementSidecar> WordAnds { get; init; } = WordAnds ?? Array.Empty<WordAndStatementSidecar>();
 
     public IReadOnlyList<CallStatementSidecar> Calls { get; init; } = Calls ?? Array.Empty<CallStatementSidecar>();
+
+    public IReadOnlyList<MulStatementSidecar> Muls { get; init; } = Muls ?? Array.Empty<MulStatementSidecar>();
+
+    public IReadOnlyList<ConvertStatementSidecar> Converts { get; init; } = Converts ?? Array.Empty<ConvertStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

@@ -46,9 +46,12 @@ public static class GraphReducer
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
         var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
-        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0 && callParts.Count == 0)
+        var mulParts = network.Parts.Where(p => p.Name == "Mul").ToList();
+        var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
+        if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
+            && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON, Move, And, or Call found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON, Move, And, Call, Mul, or Convert found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -61,6 +64,10 @@ public static class GraphReducer
         var wordAndSidecars = new List<WordAndStatementSidecar>();
         var callStatements = new List<CallStatement>();
         var callSidecars = new List<CallStatementSidecar>();
+        var mulStatements = new List<MulStatement>();
+        var mulSidecars = new List<MulStatementSidecar>();
+        var convertStatements = new List<ConvertStatement>();
+        var convertSidecars = new List<ConvertStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -167,6 +174,45 @@ public static class GraphReducer
             }
         }
 
+        // Muls/Converts are reduced last, same reasoning as every other production above (own
+        // `en`/inputs never depend on another production's own *reduction* completing first —
+        // ResolveEnSource inspects the raw network.Parts/wiring directly for the ENO-chain shape,
+        // not any already-reduced Model output — so Mul-before-Convert vs. Convert-before-Mul
+        // ordering doesn't affect correctness, only which list a given statement ends up in).
+        foreach (var mul in mulParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceMul(network, mul, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            mulStatements.Add(statement);
+            mulSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        foreach (var convert in convertParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceConvert(network, convert, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            convertStatements.Add(statement);
+            convertSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -174,9 +220,11 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        var irNetwork = new IrNetwork(networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements);
+        var irNetwork = new IrNetwork(
+            networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements);
         var networkSidecar = new NetworkSidecar(
-            networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars, callSidecars);
+            networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
+            callSidecars, mulSidecars, convertSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -419,6 +467,131 @@ public static class GraphReducer
             instance.Scope,
             instance.ComponentPath,
             argumentSidecars);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // Resolves an en-gated production's own `en` source — either an ordinary boolean condition
+    // (TraceChain, same mechanism as every other production) or, confirmed real 2026-07-12 (S1
+    // item 18, Mul->Convert pairs in FB MotorDOL/EquipmentControlSystem), the immediately preceding
+    // Mul/Convert's own `eno` output wired directly in. Checked first, by inspecting the `en`
+    // wire's own producer shape, rather than assumed either way — a wire whose only other
+    // endpoint is a Mul/Convert Part's own "eno" port is the ENO-chained case; everything else
+    // (Powerrail, a Contact chain, ...) falls through to the ordinary TraceChain path unchanged.
+    // See EnSource's own doc comment for why this isn't folded into TraceChain's own
+    // Expr-producing recursion — there's no tag to represent "the preceding instruction's own
+    // success" as a boolean value.
+    private static (EnSource En, EnSourceSidecar Sidecar) ResolveEnSource(
+        FlgNetwork network,
+        int partUId,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds,
+        List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries)
+    {
+        var wire = RequireWireAt(wiresByPort, (partUId, "en"), networkNumber);
+        var others = wire.Endpoints
+            .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == partUId && e.PortName == "en"))
+            .ToList();
+
+        if (others.Count == 1
+            && others[0].Kind == EndpointKind.NameCon
+            && others[0].PortName == "eno"
+            && network.Parts.FirstOrDefault(p => p.UId == others[0].UId!.Value) is { } precedingPart
+            && precedingPart.Name is "Mul" or "Convert")
+        {
+            visitedWireUIds.Add(wire.UId);
+            return (new EnSource.PrecedingEno(), new EnSourceSidecar.PrecedingEnoSidecar(precedingPart.UId, wire.UId));
+        }
+
+        var (expr, steps, railWireUId) = TraceChain(
+            network, (partUId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        return (new EnSource.Condition(expr), new EnSourceSidecar.ConditionSidecar(railWireUId, steps));
+    }
+
+    // A Mul's `en` is resolved via ResolveEnSource (ordinary condition or ENO-chained — see its
+    // own doc comment). Inputs are Cardinality-driven tag-or-literal operands (`in1`..`inCard`,
+    // ResolveTagOrLiteralOperand per port — same resolver as everywhere else, same loop shape as
+    // ResolveOrMerge/ReduceWordAnd's own Cardinality loop). `out` writes to a plain tag
+    // (ResolveOperand, port "out" — confirmed real, same as WAND's own write port).
+    private static (MulStatement Statement, MulStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceMul(
+        FlgNetwork network,
+        PartNode mul,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, mul.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        if (mul.Cardinality is not int cardinality || cardinality < 1)
+        {
+            throw new NonReducibleNetworkException($"Network {networkNumber}: Mul UId={mul.UId} has no usable cardinality.");
+        }
+
+        var inputExprs = new List<Expr>();
+        var inputSidecars = new List<OperandSidecar>();
+        for (var k = 1; k <= cardinality; k++)
+        {
+            var (inputExpr, inputSidecar) = ResolveTagOrLiteralOperand(
+                wiresByPort, accessByUId, constantsByUId, mul.UId, $"in{k}", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+            inputExprs.Add(inputExpr);
+            inputSidecars.Add(inputSidecar);
+        }
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, mul.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new MulStatement(en, inputExprs, destTag.TagPath);
+        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A Convert's `en` is resolved via ResolveEnSource (ordinary condition, confirmed real
+    // standalone in FB ShredderControlSystem; or ENO-chained after a Mul, confirmed real in
+    // MotorDOL/EquipmentControlSystem). `in` is a single tag-or-literal operand (ResolveTagOrLiteralOperand).
+    // `out` writes to a plain tag (ResolveOperand, same shape as Move's own out1).
+    private static (ConvertStatement Statement, ConvertStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceConvert(
+        FlgNetwork network,
+        PartNode convert,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, convert.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, convert.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, convert.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new ConvertStatement(en, inExpr, destTag.TagPath);
+        var sidecar = new ConvertStatementSidecar(
+            convert.UId,
+            enSidecar,
+            inSidecar,
+            convert.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no SrcType."),
+            convert.DestType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no DestType."),
+            destTag.UId,
+            destWireUId);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

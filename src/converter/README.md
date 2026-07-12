@@ -546,6 +546,93 @@ those 8 dependency FBs directly afterward: **0 of 8 convert cleanly today**, blo
 `MotorVSDSystem`/`AirStar`, are now blocked by that same Interface gap too, having cleared the Title
 check). Arithmetic support is scoped as the next capability.
 
+## MUL/CONVERT — arithmetic (S1 item 18, 2026-07-12)
+
+Picked up immediately after Title, per the project owner's own explicit sequencing ("Let's do
+block-level Title now, then scope arithmetic support") — the larger of the two remaining real
+gaps blocking `PlantAutoControl`'s 8 dependency FBs (5 of 8, vs. 1 of 8 for the already-known,
+separately-deferred FC/FB parameter-interface gap). Planned via formal plan mode per explicit
+request.
+
+**Phase 0 grounding (mandatory before design, per CLAUDE.md hard rule 3) found a genuine
+surprise the plan's own inherited assumption got wrong.** Real exports of `MotorDOL`/
+`EquipmentControlSystem`/`ShredderControlSystem` (scratch temp, deleted after use) show:
+
+```xml
+<Part Name="Mul" UId="36" DisabledENO="true">
+  <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+  <AutomaticTyped Name="SrcType" />
+</Part>
+<Part Name="Convert" UId="37" DisabledENO="true">
+  <TemplateValue Name="SrcType" Type="Type">Real</TemplateValue>
+  <TemplateValue Name="DestType" Type="Type">DInt</TemplateValue>
+</Part>
+```
+
+- **`Mul`**: `DisabledENO="true"`, `Card="2"` (two inputs, `in1`/`in2`, `out` — same
+  Cardinality-driven shape as WAND). Its own type is `<AutomaticTyped Name="SrcType" />` — a
+  self-closing element with no value at all, since TIA infers the type from the connected
+  operands rather than declaring it statically. Genuinely different from every other typed
+  instruction built this session (WAND/comparisons always carry an explicit
+  `TemplateValue Type="Type">X<`). Modeled as `PartNode.AutomaticSrcType: bool` (shape-only,
+  nothing to carry) rather than reusing `SrcType`.
+- **`Convert`**: `DisabledENO="true"`, an ordinary `SrcType`/`DestType` `TemplateValue` pair
+  (e.g. `Real`→`DInt`) — converts *between* two types, unlike anything else built so far.
+  `PartNode` gained a new `DestType: string?` field alongside the existing `SrcType`.
+- **The real surprise, confirmed in two independent instances (`MotorDOL`, `EquipmentControlSystem`)**:
+  despite `DisabledENO="true"` on both — matching the Move/WAND precedent that `eno` is never
+  wired — real networks have three `Mul`→`Convert` pairs where **`Mul`'s own `eno` output wires
+  directly into the following `Convert`'s own `en` input**: a genuine control-flow chain ("only
+  run `Convert` if `Mul` succeeded"), structurally unlike every prior `en`/`IN` in this project
+  (always independently rail-fed or contact-gated, never fed by a *preceding box instruction's
+  own output port*). This directly contradicted the plan's own inherited assumption — flagged to
+  the project owner before implementing anything, per this project's "ask before design
+  deviation" discipline, rather than picking a design and hoping it fit.
+- **Not universal**: `ShredderControlSystem` has a standalone `Convert` (`SrcType`/`DestType` both
+  `Int`) with a plain, independently rail-fed `en` — the ordinary case is real too, fully covered
+  by the existing `TraceChain` mechanism with zero changes.
+- No other arithmetic-family instruction (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) observed
+  co-occurring in any of the three grounded networks — scope stayed `Mul`/`Convert` only.
+
+**Confirmed design** (project owner approved: "Go with that design."): ENO-chaining is **not**
+folded into `Expr` — there's no tag `Mul` could be referenced by (no `Instance` element, unlike
+`TON`/`CALL`). New `EnSource` discriminated union (`Ir/Model.cs`) — `Condition(Expr Value)` for
+the ordinary boolean-condition case, `PrecedingEno` for the chained case — with a new reserved
+readable-form sentinel `EN := ENO` (mirroring the existing `TRUE` sentinel precedent for a
+zero-step rail-fed chain), meaning "gated by the immediately preceding statement's own ENO."
+Statement order keeps a chained pair textually adjacent for readability, but the sidecar always
+carries the exact source UId being chained from — parsing never actually depends on adjacency for
+correctness.
+
+- `MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, string DestTag)` /
+  `ConvertStatement(EnSource En, Expr In, string DestTag)` — new top-level productions, same
+  shape family as `TON`/`Move`/`WAND`/`CALL`. `Card` validated fixed at 2 for `Mul` (only value
+  observed — hard-errors on anything else).
+- `GraphReducer.ResolveEnSource` — new shared resolver: checks whether a chain step's own `en`
+  wire's only non-self endpoint is `NameCon(<uid>, "eno")` on a `Mul`/`Convert` Part; if so,
+  records `PrecedingEno` (source Part UId + wire UId) without calling `TraceChain` at all; else
+  falls back to the existing `TraceChain` mechanism unchanged, wrapped in `Condition`.
+- `FlgNetBuilder.BuildEnSource` — mirror on the write side: `ConditionSidecar` reuses the
+  existing steps+rail chain-building; `PrecedingEnoSidecar` directly adds both endpoints of the
+  `eno`→`en` wire.
+- Readable form: `MUL(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` /
+  `CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>`. Keywords mirror source Part Names,
+  matching the dominant convention (`WAND` remains the one deliberate exception).
+
+14 new converter tests (`Converter.Tests/MulConvertTests.cs`), two fixtures genericized from the
+real grounded shapes (`ConvertStandaloneFedByRail.xml`, `MulConvertEnoChainedPair.xml`). All 191
+converter tests pass (up from 177); `openness-cli`/golden-harness suites unaffected, confirmed
+still green (68/11).
+
+**Live-verified against real data, 2026-07-12.** Isolated both the ENO-chained case (`MotorDOL`)
+and the standalone rail-fed case (`ShredderControlSystem`) — both reduce and round-trip correctly,
+sidecar-preserving the exact `eno`→`en` wire in the chained case. **Whole-block `to-ir` sweep of
+all 5 previously-blocked dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`FilterUnitSystem`/
+`MotorFwdRevSystem`/`ShredderControlSystem`) confirmed none hit a `Mul`/`Convert` error anymore — they now
+hit `TONR` instead (a retentive TON variant, out of scope, now confirmed real rather than
+theoretical). Arithmetic beyond `Mul`/`Convert` remains out of scope, per the plan's own explicit
+scoping — nothing observed needing it.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

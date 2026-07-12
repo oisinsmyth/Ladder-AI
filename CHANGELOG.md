@@ -10,6 +10,30 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 18: `MUL`/`CONVERT` (arithmetic) — built, tested, live-verified**
+
+- Picked up per the project owner's sequencing after Title ("scope arithmetic support next"),
+  planned formally in plan mode. Phase 0 grounding (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`)
+  found a real surprise contradicting the plan's own inherited Move/WAND-based assumption:
+  despite `DisabledENO="true"` on both `Mul` and `Convert`, real networks chain `Mul`'s own `eno`
+  directly into the following `Convert`'s own `en` — a genuine control-flow dependency, not a
+  boolean condition. Flagged to the project owner before implementing; approved design: "Go with
+  that design."
+- New `EnSource` discriminated union (`Condition` | `PrecedingEno`) rather than folding the chain
+  into `Expr` — there's no tag to reference "the preceding instruction's own success" by. New
+  reserved readable-form sentinel `EN := ENO`, mirroring the existing `TRUE` sentinel precedent.
+- `Mul`'s own type is `<AutomaticTyped Name="SrcType" />` — self-closing, no value (TIA infers the
+  type from the connected operands), modeled as `PartNode.AutomaticSrcType: bool`. `Convert`
+  carries an ordinary `SrcType`/`DestType` `TemplateValue` pair, converting *between* two types.
+- 14 new converter tests, two fixtures genericized from the real grounded shapes. All three
+  suites green: 191 converter (up from 177), 68 openness-cli, 11 golden-harness.
+- **Live-verified:** both the ENO-chained case (`MotorDOL`) and the standalone rail-fed case
+  (`ShredderControlSystem`) reduce and round-trip correctly. Whole-block `to-ir` sweep of all 5
+  previously-`Mul`/`Convert`-blocked dependency FBs confirmed none hit that error anymore — all
+  five now hit `TONR` instead, confirming it as real (previously only a name noticed during an
+  earlier sweep). Arithmetic beyond `Mul`/`Convert` stays out of scope; nothing observed needing
+  it. Full story: `docs/notes/stage-gates.md` ("S1 item 18").
+
 **S1 items 16/17: network- and block-level `Title` — `PlantAutoControl` now fully round-trips**
 
 - Picked up immediately after `SCoil`/`RCoil` surfaced the gap. Found a real design correction
