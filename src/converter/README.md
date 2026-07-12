@@ -790,6 +790,53 @@ rail-fed `Mul` genericized from the real `AirStar` shape). All 216 converter tes
 the block now progresses to the same `Access Scope="LocalConstant"` gap `MotorVSDSystem` also hits
 (unrelated, still open, not addressed here).
 
+## `Access Scope="LocalConstant"` (S1 item 21, 2026-07-12)
+
+Picked up per the project owner's own explicit choice — the last of the two real gaps S1 item 20's
+own live verification found (`Swap` stays deferred). Planned formally in plan mode.
+
+**Phase 0 grounding** (`MotorVSDSystem`, `AirStar`, 4 independent instances):
+
+```xml
+<Access Scope="LocalConstant" UId="22">
+  <Constant Name="MinSpd" />
+</Access>
+```
+
+A genuine fourth Access shape — neither `AccessNode`'s own `<Symbol>`/`<Component>` shape nor
+`ConstantAccessNode`'s `<ConstantType>`/`<ConstantValue>` shape. A bare, self-closing reference by
+name, **no value at all present at the reference site**. `MinSpd`/`PulseTimerMS` are exactly the
+real member names S1 item 20's own grounding already confirmed as populated `Constant`-section
+members on these same two blocks — this is how a network reads back a reference to the block's own
+declared Interface `Constant` member. Always single-component (never nested/dotted), always at a
+`ResolveTagOrLiteralOperand`-style operand position (TON `PT` in `AirStar`; comparison operands and
+`Move`'s own `in` in `MotorVSDSystem`) — never a plain Contact/Coil operand (`GraphReducer.ResolveOperand`
+has no constant-lookup fallback at all, so this mattered for the design fork, even though it
+didn't end up forcing the outcome either way).
+
+**Design**: modeled as an `AccessNode` with a one-element `ComponentPath`, reusing
+`DottedPath`/`FromDottedPath` completely unchanged — a single-component path already round-trips
+through both with zero modification. The IR's own tag-ref text (e.g. `PulseTimerMS`) then reads
+identically to the member's own declared name in that same block's `INTERFACE`/`CONSTANT` section
+— a real, meaningful correlation for a reader, not just a convenient encoding choice. The one
+unavoidable cost: `FlgNetParser.ParseAccess` and `FlgNetWriter`'s `AccessNode`-writing loop both
+needed a scope-conditional branch, since `LocalConstant` skips the `<Symbol>`/`<Component>` shape
+entirely in favor of `<Constant Name="..." />`. `GraphReducer.cs` needed **zero changes** —
+`ResolveTagOrLiteralOperand` already dispatches by UId lookup, not by scope, and a
+`LocalConstant`-scoped `AccessNode` flows into the same `accessByUId` dictionary as every other
+scope via the existing, unmodified top-level `Parts` dispatch.
+
+5 new tests (`TonTests.cs` — a TON `PT` fed by `LocalConstant`, matching `AirStar`'s own real
+structural position), one new fixture (`WithTonPtFedByLocalConstant.xml`). All 221 converter tests
+pass (up from 216).
+
+**Live-verified against real data, 2026-07-12.** Fresh `MotorVSDSystem`/`AirStar` exports both converted
+past the `LocalConstant` error completely — confirmed gone from both. Neither fully round-trips as
+a whole block yet: each hits a different, new, unrelated gap — `MotorVSDSystem` hits a `<Call>` missing
+its own `<Instance>` element; `AirStar` hits `Ne` (not-equal), an unsupported comparison Part Name
+(the IEC family's own `Ne`/`Le`/`Gt` siblings of `Eq`/`Ge`/`Lt` — `Ne` is now the first of the
+three confirmed real). Neither addressed by this item.
+
 ## DB support
 
 Deliberately narrow, same discipline as the LAD side — **`Static` section only**, both

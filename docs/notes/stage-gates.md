@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 216 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR (both instance scopes), comparisons (Eq/Ge/Lt), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; 2 of its 8 dependency FBs (`MotorDOL`/`FilterUnitSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 221 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -1668,3 +1668,81 @@ exported data deleted from scratch temp immediately after use, confirmed via `gi
 verification is now fixed and live-proven against the real block that surfaced it. Two further,
 unrelated open items remain from that same live-verification pass — `Swap` (blocks `TomraControlSystem`)
 and `Access Scope="LocalConstant"` (blocks `MotorVSDSystem`/`AirStar` both) — neither addressed here.
+
+### S1 item 21 (`Access Scope="LocalConstant"`), 2026-07-12
+
+Picked up per the project owner's own explicit choice — the last of the two real gaps S1 item 20's
+own live verification found (`Swap`, blocking only `TomraControlSystem`, stays deferred; `LocalConstant`
+blocks both `MotorVSDSystem` and `AirStar`). Planned formally in plan mode.
+
+**Phase 0 grounding, mandatory per CLAUDE.md hard rule 3** — confirmed by full-text search of
+`ir/SPEC.md`/`docs/notes/stage-gates.md` that every prior `LocalConstant` mention was purely "the
+scope string was seen and blocked the whole-block round-trip," never the actual XML shape. Fresh
+exports of `MotorVSDSystem`/`AirStar` (scratch temp, deleted after use) found the shape identical across
+4 independent instances (`MotorVSDSystem`: `MinSpd` ×2; `AirStar`: `PulseTimerMS` ×2):
+
+```xml
+<Access Scope="LocalConstant" UId="22">
+  <Constant Name="MinSpd" />
+</Access>
+```
+
+- **A genuine fourth Access shape** — neither `AccessNode`'s own `<Symbol>`/`<Component>` shape
+  (`GlobalVariable`/`LocalVariable`) nor `ConstantAccessNode`'s `<ConstantType>`/`<ConstantValue>`
+  shape (`TypedConstant`/`LiteralConstant`). A bare, self-closing reference by name — **no value
+  at all present at the reference site**, genuinely unlike every scope already modeled.
+  `MinSpd`/`PulseTimerMS` are exactly the real member names S1 item 20's own grounding already
+  confirmed as populated `Constant`-section members on these same two blocks — this is how a
+  network reads back a reference to the block's own declared Interface `Constant` member, not a
+  literal value inlined at the wiring level.
+- **Always single-component** (no multi-part path seen in any instance) and **always at a
+  `ResolveTagOrLiteralOperand`-style operand position** — TON `PT` in `AirStar` (feeding a
+  `Part Name="TON" UId="30"`'s own `PT` port), comparison `in1`/`in2` and `Move`'s own `in` in
+  `MotorVSDSystem`. Never seen at a plain Contact/Coil `operand` position —
+  `GraphReducer.ResolveOperand` has no constant-lookup fallback at all, so this mattered for the
+  design fork even though it didn't end up forcing the outcome either way.
+
+**Design fork, resolved by grounding, not guessed at beforehand**: neither of the two originally-
+anticipated routes (extend `AccessNode`'s `SupportedAccessScopes` allowlist verbatim, or add a
+third `ConstantAccessNode` variant) fit the real shape without *some* change. Chosen: model as an
+`AccessNode` with a **one-element `ComponentPath`**, reusing `DottedPath`/`FromDottedPath`
+completely unmodified — confirmed by inspection that a single-component path already round-trips
+through both with zero changes to `AccessNode` itself (`string.Join('.', ["MinSpd"])` = `"MinSpd"`;
+`"MinSpd".Split('.')` = `["MinSpd"]`). This means the IR's own tag-ref text (e.g. `PulseTimerMS`)
+reads identically to the member's own declared name in that same block's `INTERFACE`/`CONSTANT`
+section (S1 item 20) — a real, meaningful correlation for a reader, not just a convenient encoding.
+The one unavoidable cost: `FlgNetParser.ParseAccess`/`FlgNetWriter`'s `AccessNode`-writing loop
+both needed a scope-conditional branch (`LocalConstant` skips the `<Symbol>`/`<Component>` shape
+entirely in favor of `<Constant Name="..." />`) — small, confined to those two functions.
+`GraphReducer.cs` needed **zero changes**: `ResolveTagOrLiteralOperand` dispatches by UId lookup,
+not by scope, and a `LocalConstant`-scoped `AccessNode` flows into the same `accessByUId`
+dictionary as every other scope via the existing, unmodified top-level `Parts` dispatch (no new
+`if`/`else if` branch needed there either — only `ParseAccess`'s own internals changed).
+
+5 new tests (`Converter.Tests/TonTests.cs` — a TON `PT` fed by `LocalConstant`, matching
+`AirStar`'s own real structural position, plus a negative test for unexpected `<Constant>`
+content), one new fixture (`WithTonPtFedByLocalConstant.xml`). All passed on first run. All three
+suites green: **221 converter tests** (up from 216), 68 openness-cli, 11 golden-harness.
+
+#### Live verification against real data, 2026-07-12
+
+Exported `MotorVSDSystem`/`AirStar` fresh and ran `converter to-ir` on each. **The `LocalConstant` error
+is gone from both** — confirmed genuinely fixed, not a lucky coincidence. Neither fully round-trips
+as a whole block yet, though: each now hits a different, new, unrelated gap —
+
+- `MotorVSDSystem` hits `<Call UId="52">` missing its own `<Instance>` element (a genuine
+  `SimaticMlFormatException`, not yet grounded — every `<Call>` seen so far, S1 item 14, has
+  carried one).
+- `AirStar` hits `Ne` (not-equal) — an unsupported comparison Part Name, the first of the IEC
+  family's own `Ne`/`Le`/`Gt` siblings of `Eq`/`Ge`/`Lt` confirmed real (the others remain
+  unconfirmed, per `ir/SPEC.md`'s own comparison-family note).
+
+All real exported data deleted from scratch temp immediately after use, confirmed via
+`git status --short`.
+
+**Bottom line:** `Access Scope="LocalConstant"` is built, tested, and live-verified against real
+data — the last of the two real gaps S1 item 20's live verification surfaced is now closed. Neither
+`MotorVSDSystem` nor `AirStar` fully round-trips as a whole block yet, consistent with this session's own
+honest-reporting discipline (closing `LocalConstant` was never guaranteed to be either block's only
+remaining gap, and it wasn't) — each now blocked by a separate, unrelated, newly-found item
+(`<Call>` missing `<Instance>`; `Ne`), neither addressed here.

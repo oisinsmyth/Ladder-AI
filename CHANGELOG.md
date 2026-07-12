@@ -10,6 +10,26 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-12
 
+**S1 item 21: `Access Scope="LocalConstant"` — built, tested, live-verified**
+
+- Picked up per the project owner's own choice — the last of the two real gaps S1 item 20's live
+  verification found. Grounded against `MotorVSDSystem`/`AirStar` (4 independent instances): a genuine
+  fourth Access shape, `<Access Scope="LocalConstant"><Constant Name="X" /></Access>` — a bare
+  reference by name to the block's own declared `Constant`-section member (S1 item 20), no value
+  at the reference site at all, neither `AccessNode`'s `<Symbol>` shape nor `ConstantAccessNode`'s
+  `<ConstantType>`/`<ConstantValue>` shape.
+- Modeled as an `AccessNode` with a one-element `ComponentPath` — `DottedPath`/`FromDottedPath`
+  needed zero changes. `FlgNetParser.ParseAccess`/`FlgNetWriter`'s `AccessNode`-writing loop both
+  gained a scope-conditional branch. `GraphReducer.cs` needed zero changes (UId-lookup-based
+  dispatch, not scope-based).
+- 5 new tests, one new fixture. All three suites green: 221 converter (up from 216), 68
+  openness-cli, 11 golden-harness.
+- **Live-verified:** the `LocalConstant` error is gone from both `MotorVSDSystem` and `AirStar`. Neither
+  fully round-trips yet — each hits a different, new, unrelated gap (`MotorVSDSystem`: a `<Call>`
+  missing its own `<Instance>`; `AirStar`: `Ne`, not-equal, an unsupported comparison Part Name —
+  the first confirmed-real sibling of `Eq`/`Ge`/`Lt`). Neither addressed by this item. Full story:
+  `docs/notes/stage-gates.md` ("S1 item 21").
+
 **Follow-up: `Mul`'s own `SrcType` fixed — correction to already-committed S1 item 18 code**
 
 - Picked up immediately after S1 item 20's own live verification found it (`FB AirStar`'s own

@@ -314,4 +314,98 @@ public class TonTests
 
         Assert.Contains("LiteralConstant", ex.Message);
     }
+
+    // Access Scope="LocalConstant" — S1 item 21, 2026-07-12. Confirmed real, 4 independent
+    // instances (`FB MotorVSDSystem`: `MinSpd` ×2; `FB AirStar`: `PulseTimerMS` ×2 — genericized here as
+    // a TON's own PT, matching AirStar's own structural position): a bare `<Constant Name="X" />`
+    // reference by name to the block's own declared Interface `Constant` member (S1 item 20) — no
+    // `<Symbol>` wrapper, no literal value at the reference site at all, genuinely different from
+    // both `TypedConstant`/`LiteralConstant` (which carry a value inline). Modeled as an
+    // `AccessNode` with a single-element `ComponentPath`, reusing `DottedPath`/`FromDottedPath`
+    // unchanged — the IR's own tag-ref text (`PulseTimerMS`) reads identically to the member's own
+    // declared name in that block's own `INTERFACE`/`CONSTANT` section.
+    [Fact]
+    public void Parse_WithTonPtFedByLocalConstant_ProducesAccessNodeWithLocalConstantScope()
+    {
+        var network = LoadFixture("WithTonPtFedByLocalConstant.xml");
+
+        var access = Assert.Single(network.AccessNodes, a => a.Scope == "LocalConstant");
+        Assert.Equal(new[] { "PulseTimerMS" }, access.ComponentPath);
+        Assert.Equal("PulseTimerMS", access.DottedPath);
+    }
+
+    [Fact]
+    public void Reduce_WithTonPtFedByLocalConstant_PtResolvesToTagRef()
+    {
+        var network = LoadFixture("WithTonPtFedByLocalConstant.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Pulse reset timer", compileUnitUId: "3");
+
+        var timer = Assert.Single(reduced.Network.Timers);
+        Assert.Equal("PulseTimerMS", Assert.IsType<Expr.TagRef>(timer.Pt).Path);
+
+        var timerSidecar = Assert.Single(reduced.Sidecar.Timers);
+        var presetTag = Assert.IsType<OperandSidecar.TagOperand>(timerSidecar.Preset);
+        Assert.Equal(22, presetTag.AccessUId);
+    }
+
+    [Fact]
+    public void RoundTrip_WithTonPtFedByLocalConstant_RebuildsBareConstantElementNoSymbol()
+    {
+        var original = LoadFixture("WithTonPtFedByLocalConstant.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Pulse reset timer", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var access = Assert.Single(reparsed.AccessNodes, a => a.Scope == "LocalConstant");
+        Assert.Equal(new[] { "PulseTimerMS" }, access.ComponentPath);
+
+        // The regenerated XML must use the real <Constant Name="..." /> shape, not a <Symbol>
+        // wrapper — checked directly on the written XElement, not just the reparsed model, since
+        // the model alone can't distinguish "wrote it right" from "wrote something else that
+        // happens to reparse the same way."
+        var accessElement = xml.Element(FlgNetParser.Ns + "Parts")!.Elements(FlgNetParser.Ns + "Access")
+            .Single(e => (string?)e.Attribute("Scope") == "LocalConstant");
+        Assert.NotNull(accessElement.Element(FlgNetParser.Ns + "Constant"));
+        Assert.Null(accessElement.Element(FlgNetParser.Ns + "Symbol"));
+        Assert.Equal("PulseTimerMS", (string?)accessElement.Element(FlgNetParser.Ns + "Constant")!.Attribute("Name"));
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_WithTonPtFedByLocalConstant_ProducesPlainTagRefText()
+    {
+        var network = LoadFixture("WithTonPtFedByLocalConstant.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Pulse reset timer", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal(
+            "NETWORK 1 \"Pulse reset timer\"\n  TON(PulseResetTimer, IN := ResetPulse, PT := PulseTimerMS)\n",
+            text);
+    }
+
+    [Fact]
+    public void Parse_LocalConstantWithUnexpectedContent_ThrowsUnsupportedConstruct()
+    {
+        var xml = """
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Access Scope="LocalConstant" UId="1">
+                  <Constant Name="Bad">
+                    <ConstantValue>1</ConstantValue>
+                  </Constant>
+                </Access>
+                <Part Name="Coil" UId="2" />
+              </Parts>
+              <Wires />
+            </FlgNet>
+            """;
+
+        var element = XElement.Parse(xml);
+
+        var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
+        Assert.Contains("extra content", ex.Message);
+    }
 }

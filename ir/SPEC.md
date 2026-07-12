@@ -666,10 +666,31 @@ question, left open on purpose rather than guessed).
   `Convert`'s own — not shown in the readable IR text). Live re-verified against the real
   `AirStar` export: the `Mul`-specific error is gone; the block now progresses to the same
   `LocalConstant` gap `MotorVSDSystem` also hits (unrelated, still open — see below).
-- **New, 2026-07-12: `Swap` (word byte-swap, presumably) and `Access Scope="LocalConstant"`
-  confirmed real** — found live-verifying S1 item 20 against `TomraControlSystem`/`MotorVSDSystem`
-  respectively. Neither Part Name/scope has been grounded at the XML-shape level yet — both are
-  new, real, currently-unaddressed gaps, not yet scoped into any item.
+- **New, 2026-07-12: `Swap` (word byte-swap, presumably) confirmed real** — found live-verifying
+  S1 item 20 against `TomraControlSystem`. Not grounded at the XML-shape level yet — a new, real,
+  currently-unaddressed gap, not yet scoped into any item.
+- **Resolved, 2026-07-12 (S1 item 21): `Access Scope="LocalConstant"` built.** Grounded against
+  real `MotorVSDSystem`/`AirStar` (4 independent instances: `MinSpd` ×2, `PulseTimerMS` ×2) — a genuine
+  fourth Access shape, neither `AccessNode`'s own `<Symbol>` shape nor `ConstantAccessNode`'s
+  `<ConstantType>`/`<ConstantValue>` shape: `<Access Scope="LocalConstant" UId="N"><Constant
+  Name="X" /></Access>` — a bare, self-closing reference by name, no value at all present at the
+  reference site. `MinSpd`/`PulseTimerMS` are exactly the real member names S1 item 20's own
+  grounding confirmed as populated `Constant`-section members on these same two blocks — this is
+  how a network reads back a reference to the block's own declared Interface `Constant` member.
+  Always single-component (never nested/dotted), always at a `ResolveTagOrLiteralOperand`-style
+  operand position (TON `PT`, comparison operands, `Move`'s own `in`) — never a plain Contact/Coil
+  operand, though nothing in the design depends on that. Modeled as an `AccessNode` with a
+  one-element `ComponentPath`, reusing `DottedPath`/`FromDottedPath` unchanged (a single-component
+  path already round-trips through both with no modification) — the IR's own tag-ref text (e.g.
+  `PulseTimerMS`) reads identically to the member's own declared name in that block's own
+  `INTERFACE`/`CONSTANT` section, a real correlation, not just a convenient encoding. The one
+  necessary cost: `FlgNetParser.ParseAccess`/`FlgNetWriter`'s `AccessNode`-writing loop both
+  needed a scope-conditional branch (`LocalConstant` skips the `<Symbol>`/`<Component>` shape
+  entirely) — `GraphReducer.cs` needed zero changes. 5 new tests, 221/221 total passing.
+  **Live-verified against real data:** the `LocalConstant` error is gone from both `MotorVSDSystem` and
+  `AirStar`; neither fully round-trips as a whole block yet — each hits a different, new,
+  unrelated gap (`MotorVSDSystem`: a `<Call>` missing its `<Instance>` element; `AirStar`: `Ne`,
+  not-equal, an unsupported comparison Part Name) — neither addressed by this item.
 - **Resolved, 2026-07-12 (S1 item 14): block calls (`CALL`, `<Call>`/`<CallInfo>`) built** — see
   the readable-form section above. Full FC/FB Input/Output *interface* modeling (the callee's own
   declared parameter list, independent of what's wired at any one call site) is now separately

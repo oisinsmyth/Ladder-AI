@@ -11,6 +11,20 @@ public static class FlgNetWriter
         var partsElement = new XElement(ns + "Parts");
         foreach (var access in network.AccessNodes)
         {
+            // LocalConstant — confirmed real, 2026-07-12 (S1 item 21): a bare reference by name,
+            // `<Constant Name="X" />`, no `<Symbol>` wrapper at all (genuinely different shape
+            // from every other Access scope this converter writes) — always single-component, so
+            // `access.ComponentPath[0]` is the whole reference.
+            if (access.Scope == "LocalConstant")
+            {
+                partsElement.Add(new XElement(
+                    ns + "Access",
+                    new XAttribute("Scope", "LocalConstant"),
+                    new XAttribute("UId", access.UId),
+                    new XElement(ns + "Constant", new XAttribute("Name", access.ComponentPath[0]))));
+                continue;
+            }
+
             var componentElements = access.ComponentPath
                 .Select((component, index) =>
                 {

@@ -20,7 +20,11 @@ public static class FlgNetParser
     // FB MotorDOL/FilterUnitSystem). Ne/Le/Gt's real Part Names remain unconfirmed, refused rather than
     // guessed at even though the IEC family strongly suggests what they'd be named.
     private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt" };
-    private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable" };
+
+    // LocalConstant confirmed real 2026-07-12 (S1 item 21, FB MotorVSDSystem/AirStar — 4 independent
+    // instances) — a genuinely different shape from GlobalVariable/LocalVariable (see ParseAccess's
+    // own LocalConstant branch), but the same allowlist gates all three.
+    private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable", "LocalConstant" };
 
     // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
     // confirmed real, 2026-07-11: LocalVariable (multi-instance, FB MotorDOL) and GlobalVariable
@@ -440,7 +444,12 @@ public static class FlgNetParser
         if (!SupportedAccessScopes.Contains(scope))
         {
             throw new UnsupportedConstructException(
-                $"Unsupported Access scope '{scope}'. This converter slice supports GlobalVariable/LocalVariable only.");
+                $"Unsupported Access scope '{scope}'. This converter slice supports GlobalVariable/LocalVariable/LocalConstant only.");
+        }
+
+        if (scope == "LocalConstant")
+        {
+            return ParseLocalConstantAccess(access);
         }
 
         var symbol = access.Element(Ns + "Symbol")
@@ -471,6 +480,38 @@ public static class FlgNetParser
         }
 
         return new AccessNode(RequireIntAttribute(access, "UId"), scope, path, sliceModifier, arrayIndex);
+    }
+
+    // A LocalConstant Access — confirmed real, 2026-07-12 (S1 item 21), 4 independent instances
+    // (`FB MotorVSDSystem`: `MinSpd` ×2; `FB AirStar`: `PulseTimerMS` ×2): `<Constant Name="X" />`, a
+    // bare, self-closing reference by name — no `<Symbol>` wrapper, no `<ConstantType>`/
+    // `<ConstantValue>`, no value at all present at the reference site. `MinSpd`/`PulseTimerMS`
+    // are exactly the real member names S1 item 20's own grounding confirmed as populated
+    // `Constant`-section members on these same two blocks — this is how a network reads back a
+    // reference to the block's own declared Interface `Constant` member, genuinely different from
+    // both `TypedConstant`/`LiteralConstant` (which carry a literal value inline) and an ordinary
+    // `Symbol`-based Access. Always single-component in every instance seen (never nested/dotted)
+    // — modeled as an `AccessNode` with a one-element `ComponentPath` so the IR's own tag-ref text
+    // (e.g. `MinSpd`) reads identically to the member's own declared name in that block's own
+    // `INTERFACE`/`CONSTANT` section — `DottedPath`/`FromDottedPath` need no changes for a
+    // single-component path. Always seen at a `ResolveTagOrLiteralOperand`-style operand position
+    // (TON `PT`, comparison `in1`/`in2`, `Move`'s own `in`) — never a plain Contact/Coil operand,
+    // though nothing here depends on that.
+    private static AccessNode ParseLocalConstantAccess(XElement access)
+    {
+        var uid = RequireIntAttribute(access, "UId");
+        var constant = access.Element(Ns + "Constant")
+            ?? throw new SimaticMlFormatException($"<Access Scope=\"LocalConstant\" UId=\"{uid}\"> is missing its <Constant> element.");
+
+        var name = RequireAttribute(constant, "Name");
+        if (constant.HasElements || !string.IsNullOrEmpty(constant.Value))
+        {
+            throw new UnsupportedConstructException(
+                $"<Access Scope=\"LocalConstant\" UId=\"{uid}\">'s <Constant Name=\"{name}\"> has extra content — only a " +
+                "bare, childless <Constant Name=\"...\" /> has been observed.");
+        }
+
+        return new AccessNode(uid, "LocalConstant", new[] { name });
     }
 
     // Array subscript access (e.g. `CommsProcessData.Node_Error[1]`) — confirmed real 2026-07-10:
