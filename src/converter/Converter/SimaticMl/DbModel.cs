@@ -40,6 +40,13 @@ public sealed record DbSource(
 // DbMember since a nested member is structurally the same shape, just narrower in practice (no
 // Retain/Version/further nesting has ever been observed on one — DbSourceParser hard-errors
 // rather than silently accept an unconfirmed nested shape). Null for a plain scalar/array member.
+//
+// IsBareParameter: confirmed real 2026-07-14 (`FC Scale`'s own Input/Output params, a small
+// project utility FC) — a genuinely minimal Input/Output/InOut member shape with no `Remanence`
+// attribute and no `<AttributeList>` at all (distinct from the ordinary Input/Output shape,
+// `FB TomraControlSystem`, which has both, just missing `SetPoint`). Needed only to round-trip the
+// writer's own shape choice — Retain/SetPoint alone can't distinguish "genuinely bare" from "an
+// ordinary member that happens to have Retain=false, SetPoint=false".
 public sealed record DbMember(
     string Name,
     string Datatype,
@@ -47,4 +54,5 @@ public sealed record DbMember(
     string? StartValue,
     string? Version = null,
     bool SetPoint = false,
-    IReadOnlyList<DbMember>? NestedMembers = null);
+    IReadOnlyList<DbMember>? NestedMembers = null,
+    bool IsBareParameter = false);

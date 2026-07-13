@@ -14,14 +14,15 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert", "Swap" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert", "Swap" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
-    // to Eq/Ge/Lt, same SrcType TemplateValue, same pre/in1/in2/out ports). Le/Gt's real Part
-    // Names remain unconfirmed, refused rather than guessed at even though the IEC family
-    // strongly suggests what they'd be named.
-    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt", "Ne" };
+    // to Eq/Ge/Lt, same SrcType TemplateValue, same pre/in1/in2/out ports); Gt confirmed 2026-07-14
+    // (`FC Scale`, grounding `FB MotorVSDSystem`'s own dependency closure — identical shape again). Le's
+    // real Part Name remains unconfirmed, refused rather than guessed at even though the IEC
+    // family strongly suggests what it'd be named.
+    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt", "Ne", "Gt" };
 
     // LocalConstant confirmed real 2026-07-12 (S1 item 21, FB MotorVSDSystem/AirStar — 4 independent
     // instances) — a genuinely different shape from GlobalVariable/LocalVariable (see ParseAccess's

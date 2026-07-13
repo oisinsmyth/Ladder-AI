@@ -83,6 +83,39 @@ public class BlockInterfaceTests
         Assert.Equal("Flag1", deepFlag.Name);
     }
 
+    // A fourth, genuinely minimal Input/Output member shape, confirmed real 2026-07-14 (`FC
+    // Scale`'s own Input/Output params, a small project utility FC grounding `FB MotorVSDSystem`'s own
+    // dependency closure): no `Remanence` attribute at all (not merely an unrecognized value) and
+    // no `<AttributeList>` — just `Name`/`Datatype`[/`Accessibility="Public"`]. Previously a hard
+    // error (`"has unrecognized Remanence ''"` — a missing attribute reads back as null, printed
+    // as an empty string). Distinct from `FB TomraControlSystem`'s own Input/Output shape (has both
+    // `Remanence` and `AttributeList`, just missing `SetPoint`).
+    [Fact]
+    public void Parse_FcWithBareParameterMembers_ReadsWithoutRemanenceOrAttributeList()
+    {
+        var doc = LoadFixture("FcWithBareParameterMembers.xml");
+        var block = BlockSourceParser.Parse(doc);
+
+        var input = Assert.Single(block.InputMembers!);
+        Assert.Equal("Input", input.Name);
+        Assert.Equal("Real", input.Datatype);
+        Assert.False(input.Retain);
+        Assert.Null(input.StartValue);
+
+        var output = Assert.Single(block.OutputMembers!);
+        Assert.Equal("Output", output.Name);
+
+        var networks = block.CompileUnits.Select(u => u.Network).ToList();
+        var compileUnitUIds = block.CompileUnits.Select(u => u.UId).ToList();
+        var networkTitles = block.CompileUnits.Select(u => u.Title).ToList();
+        var networkComments = block.CompileUnits.Select(u => u.Comment).ToList();
+
+        var written = BlockSourceWriter.Write(block, networks, compileUnitUIds, networkTitles, networkComments);
+        var reparsed = BlockSourceParser.Parse(written);
+        Assert.Equal("Input", Assert.Single(reparsed.InputMembers!).Name);
+        Assert.Equal("Real", Assert.Single(reparsed.InputMembers!).Datatype);
+    }
+
     // Repurposed from a hard-error test (S1 item 20, 2026-07-12) — same "an obsolete hard-error
     // test becomes a positive one once the real shape is modeled" pattern already used for TON's
     // direct-Q-wiring and block-level Title. The fixture's own content was also corrected to the

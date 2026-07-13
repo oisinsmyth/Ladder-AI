@@ -8,8 +8,11 @@ namespace Converter.Tests;
 
 /// <summary>
 /// Comparisons (`Part Name="Eq"`/`"Ge"`) — S1's next converter capability after TON, 2026-07-11.
-/// Grounded against a real export, `FC ControlDelays`: only `Eq`/`Ge` are directly observed
-/// (`Ne`/`Le`/`Gt`/`Lt`'s Part Names are unconfirmed, same status as AND-merge — not built).
+/// Grounded against a real export, `FC ControlDelays`: only `Eq`/`Ge` were directly observed at
+/// first (`Ne`/`Le`/`Gt`/`Lt`'s Part Names were unconfirmed then, same status as AND-merge — not
+/// built). Since confirmed real and added: `Lt` (2026-07-12, `FB MotorDOL`/`FilterUnitSystem`), `Ne`
+/// (2026-07-12, `FB AirStar`), `Gt` (2026-07-14, `FC Scale`). Only `Le`'s Part Name remains
+/// unconfirmed.
 ///
 /// The key finding: a comparison behaves like a <b>Contact</b>, not like an OR-merge or TON — it's
 /// a pass-through chain position, not a terminal leaf. Its own rail-facing/continuation port is
@@ -315,5 +318,60 @@ public class ComparisonTests
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
         Assert.Equal("NETWORK 1 \"Level not-equal check\"\n  COIL Output2 := Enable AND Level <> 10\n", text);
+    }
+
+    // Gt (greater-than) — 2026-07-14, confirmed real against `FC Scale` (grounding `FB MotorVSDSystem`'s
+    // own dependency closure, PlantAutoControl round-trip plan Phase 1). Identical shape to Eq/Ge/Lt/Ne
+    // (same SrcType TemplateValue, same pre/in1/in2/out ports), fifth member of the IEC comparison
+    // family this converter models. The readable-form `>` operator token was already wired up in
+    // IrParser's own ComparisonTokens, unused until now.
+    [Fact]
+    public void Parse_GtFeedsCoil_ProducesGtPartWithSrcType()
+    {
+        var network = LoadFixture("GtFeedsCoil.xml");
+
+        var gt = Assert.Single(network.Parts, p => p.Name == "Gt");
+        Assert.Equal("Int", gt.SrcType);
+    }
+
+    [Fact]
+    public void Reduce_GtFeedsCoil_ProducesGreaterThanCompareExpr()
+    {
+        var network = LoadFixture("GtFeedsCoil.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level greater-than check", compileUnitUId: "3");
+
+        var assignment = Assert.Single(reduced.Network.Assignments);
+        var and = Assert.IsType<Expr.And>(assignment.Condition);
+        Assert.Equal("Enable", Assert.IsType<Expr.TagRef>(and.Operands[0]).Path);
+        var compare = Assert.IsType<Expr.Compare>(and.Operands[1]);
+        Assert.Equal(">", compare.Operator);
+        Assert.Equal("Level", Assert.IsType<Expr.TagRef>(compare.Left).Path);
+        Assert.Equal("10", Assert.IsType<Expr.Literal>(compare.Right).Value);
+    }
+
+    [Fact]
+    public void RoundTrip_GtFeedsCoil_RebuildsIdenticalTopology()
+    {
+        var original = LoadFixture("GtFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Level greater-than check", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var gtPart = Assert.Single(reparsed.Parts, p => p.Name == "Gt");
+        Assert.Equal("Int", gtPart.SrcType);
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_GtFeedsCoil_ProducesGreaterThanOperator()
+    {
+        var network = LoadFixture("GtFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level greater-than check", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal("NETWORK 1 \"Level greater-than check\"\n  COIL Output2 := Enable AND Level > 10\n", text);
     }
 }

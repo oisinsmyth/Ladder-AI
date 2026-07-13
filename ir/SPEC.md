@@ -101,6 +101,17 @@ blocks. `Input`/`Output`/`InOut`/`Constant` member names are sanitized the same 
 `Temp`'s already are (freely block-owner-chosen, not given the structural exemption —
 `docs/13-data-boundary.md`).
 
+**A fourth, genuinely minimal Input/Output/InOut shape, confirmed real 2026-07-14** (`FC Scale`'s
+own `Input`/`Output` params — a small project utility FC, grounding `FB MotorVSDSystem`'s own dependency
+closure): no `Remanence` attribute at all (not merely an unrecognized value) and no
+`<AttributeList>` — just `Name`/`Datatype`[/`Accessibility="Public"`]. Genuinely distinct from every
+shape above: not `TomraControlSystem`'s ordinary Input/Output shape (has both `Remanence` and
+`AttributeList`, just missing `SetPoint`), not `ParseBareMember`'s own shape (which forbids
+`Accessibility`), not `ParseConstantMember`'s shape (which requires a `StartValue`). Modeled via a
+new `DbMember.IsBareParameter` flag (needed only to round-trip the writer's own shape choice —
+`Retain`/`SetPoint` alone can't distinguish "genuinely bare" from "an ordinary member that happens
+to have both false").
+
 ## Network body
 
 Two forms. The converter always attempts the readable form first; it falls back to the explicit
@@ -122,7 +133,7 @@ lookup table entry:
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
 | `SCoil`/`RCoil` (set/reset coils) — **confirmed real and built, 2026-07-12 (S1 item 15)**, structurally identical to `Coil` (same `in`/`operand` ports, never a producer) | `SCOIL <tag> := <expr>` / `RCOIL <tag> := <expr>` |
-| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Le`/`Gt` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
+| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Gt` — **confirmed real and built, 2026-07-14** (`FC Scale`, grounding `FB MotorVSDSystem`'s dependency closure); `Le` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
 
 **No boolean "AND-merge" Part exists (resolved, 2026-07-12, S1 item 12).** This table originally

@@ -764,21 +764,23 @@ public static class GraphReducer
     // producer-identification comment.
     private static string? OutPortFor(string partName) => partName switch
     {
-        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Not" => "out",
+        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Gt" or "Not" => "out",
         "TON" or "TONR" or "TOF" => "Q",
         _ => null,
     };
 
     // IR-text infix operator per Part Name — Eq/Ge confirmed real 2026-07-11, Lt confirmed real
     // 2026-07-12 (S1 item 19, FB MotorDOL/FilterUnitSystem), Ne confirmed real 2026-07-12 (S1 item 22,
-    // FB AirStar — identical shape to Eq/Ge/Lt). Le/Gt Part Names remain unconfirmed, so only
-    // these four are reachable — SupportedComparisonPartNames gates this at parse time.
+    // FB AirStar — identical shape to Eq/Ge/Lt), Gt confirmed real 2026-07-14 (FC Scale). Le's
+    // Part Name remains unconfirmed, so only these five are reachable —
+    // SupportedComparisonPartNames gates this at parse time.
     private static string ComparisonOperator(string partName) => partName switch
     {
         "Eq" => "=",
         "Ge" => ">=",
         "Lt" => "<",
         "Ne" => "<>",
+        "Gt" => ">",
         _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
     };
 
@@ -914,7 +916,7 @@ public static class GraphReducer
                 continue;
             }
 
-            if (upstreamPart.Name is "Eq" or "Ge" or "Lt" or "Ne")
+            if (upstreamPart.Name is "Eq" or "Ge" or "Lt" or "Ne" or "Gt")
             {
                 var (leftExpr, leftOperand) = ResolveTagOrLiteralOperand(
                     wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in1", networkNumber, visitedWireUIds, accessEntries, constantEntries);

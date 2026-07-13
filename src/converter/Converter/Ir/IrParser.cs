@@ -588,10 +588,11 @@ public static partial class IrParser
     // Longer operators first so e.g. ">=" is never mistaken for a "=" search hitting inside it —
     // in practice the exact character sequences never actually overlap (see ComparisonTokens'
     // own note), but ordering longest-first is the safer, more obviously-correct habit anyway.
-    // Only "=" and ">=" (Eq/Ge) are ever emitted by this converter today; the rest are recognized
-    // here because they're already part of the documented IR grammar (`ir/SPEC.md`'s
-    // readable-form table), not because the converter builds networks that use them — Ne/Le/Gt/Lt
-    // remain hard errors at the SimaticML level (FlgNetParser's SupportedComparisonPartNames).
+    // "=" / ">=" / "<" / "<>" / ">" (Eq/Ge/Lt/Ne/Gt) are all confirmed real and emitted by this
+    // converter — "<=" (Le) remains recognized here only because it's part of the documented IR
+    // grammar (`ir/SPEC.md`'s readable-form table), not because the converter builds networks
+    // that use it — Le's own Part Name is still unconfirmed, a hard error at the SimaticML level
+    // (FlgNetParser's SupportedComparisonPartNames).
     private static readonly (string Operator, string Token)[] ComparisonTokens =
     {
         (">=", " >= "), ("<=", " <= "), ("<>", " <> "),

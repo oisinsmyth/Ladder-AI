@@ -2755,3 +2755,71 @@ independently-broken duplicate of the same bug) — both fixed at the shared-hel
 can't recur independently again. Third of `PlantAutoControl`'s 8 dependency FBs attempted this session,
 and the first to surface a genuine, deliberately-deferred hardware-configuration boundary rather
 than a pure data/converter gap.
+
+### Phase 1 continued: `FilterUnitSystem`/`AirStar` compile clean, `Gt` + a fourth Input/Output shape added, two FBs blocked on real gaps — 2026-07-14
+
+Continued Phase 1 at an explicitly usage-limit-conscious pace, per the project owner's own
+instruction. `FilterUnitSystem` (as `FilterUnitSystem`) compiled clean on the first attempt — fully
+self-contained, reusing the already-imported `TypeDOL`/`MotorIOSet` UDT, no new converter gap.
+
+`AirStar` (as `AirStarSystem`) needed 5 more tag-table entries (`AirStarWord0IN`/`2IN`/`0OUT`/
+`2OUT`, `FirstScan` — all real `GlobalVariable`-scoped tags from the "Default tag table", added to
+the combined minimal table) and reused the already-imported `PlantControl.Test` reference (no new
+DB needed) — compiled clean once those were added. First real block-level `TITLE` seen since
+`MotorVSDSystem` ("VSD Motor") — `Sanitizer`'s existing `Titles` map field (distinct from
+`NetworkTitles`) handled it with no code change needed.
+
+**Two more real converter gaps found and fixed, both small and mechanical**, grounding `MotorVSDSystem`'s
+own dependency closure (`FC Scale`, a small project utility FC wrapping a scale/rescale
+calculation):
+- **`Gt` (greater-than) comparison** — confirmed real, identical shape to the already-supported
+  `Eq`/`Ge`/`Lt`/`Ne` family (same `SrcType` TemplateValue, same `pre`/`in1`/`in2`/`out` ports).
+  Added to `FlgNetParser.SupportedPartNames`/`SupportedComparisonPartNames` and `GraphReducer`'s
+  `OutPortFor`/`ComparisonOperator`/comparison-chain check. 4 new tests
+  (`Parse_GtFeedsCoil_ProducesGtPartWithSrcType` and siblings, mirroring the existing `Ne` tests
+  exactly), new fixture `GtFeedsCoil.xml`.
+- **A fourth, genuinely minimal Input/Output/InOut member shape** — `FC Scale`'s own `Input`/
+  `Output` params have **no `Remanence` attribute at all** (not merely an unrecognized value) and
+  **no `<AttributeList>`** — just `Name`/`Datatype`[/`Accessibility="Public"`]. Previously a hard
+  error (`"has unrecognized Remanence ''"` — a missing attribute reads back as `null`, printed as
+  an empty string via string interpolation). Genuinely distinct from every shape already modeled:
+  not `TomraControlSystem`'s ordinary Input/Output shape (has both `Remanence` and `AttributeList`, just
+  missing `SetPoint`), not `ParseBareMember`'s shape (forbids `Accessibility`), not
+  `ParseConstantMember`'s shape (requires a `StartValue`). Fixed via a new `DbMember.IsBareParameter`
+  flag — needed only so the writer can regenerate the same bare shape on write, since
+  `Retain`/`SetPoint` alone can't distinguish "genuinely bare" from "an ordinary member that
+  happens to have both false". 1 new test (fixture `FcWithBareParameterMembers.xml`).
+  **272/272 converter tests pass** (up from 267).
+
+**Two FBs blocked on real, clearly-scoped, deliberately-deferred gaps — flagged rather than chased,
+per the project owner's own explicit usage-limit-conscious pace:**
+
+- **`MotorFwdRevSystem`** (as `MotorFwdRevSystem`): needed a new UDT (`MotorFwdRevIOSet1` →
+  `MotorFwdRevIOSet`, built and imported successfully, same pattern as `TypeDOL`). Compile still
+  fails: Network 1 ("Reverse Pause and Control") uses `CycleDelayReset`, a **standalone named `TON`
+  instance** (`GlobalVariable`-scoped, `instancepath = CycleDelayReset` in the IR) — genuinely
+  distinct from the FB's own multi-instance Static timers (which `create-instance-db
+  --instance-of MotorFwdRevSystem` already resolved fine, `DB3`). Tried `create-instance-db --name
+  CycleDelayReset --instance-of TON` — fails: `"Block 'TON' does not exist at the object with UID
+  ''"` — `PlcBlockComposition.Create` only resolves user-created FBs by name, not built-in system
+  instructions (TIA normally creates this kind of instance DB automatically when a "Single
+  Instance" `TON` box is placed in the UI, not via this API). Not the same case as `PlantAutoControl`'s
+  own named instance DBs either (those instantiate real user FBs like `MotorDOL`, not raw system
+  timers) — genuinely new, needs either a different Openness API or a different approach entirely.
+- **`MotorVSDSystem`** (as `MotorVSDSystem`): needed a new UDT (`TypeVSD` → `MotorVSDIOSet`, built and
+  imported successfully) and calls `FC Scale` (grounded above, both real gaps it surfaced now
+  fixed). Compile still fails: `Scale`'s own internal logic also uses `Sub` (subtraction) — a
+  genuinely unsupported arithmetic instruction, not yet built (`Add`/`Mul` support was itself a
+  non-trivial addition, S1 item 18 — `Sub` would need the same scope: `SrcType` handling, ENO-chain
+  support). Bigger than what remaining session budget allowed; flagged rather than started.
+  `create-instance-db --instance-of MotorVSDSystem` was already confirmed working for this FB's own
+  multi-instance timers (`DB4`) — that half of the compile is not the blocker.
+
+**Bottom line**: 6 of `PlantAutoControl`'s 8 dependency FBs now proven to round-trip *and* compile
+(`MotorStarter`, `EquipmentControlSystem`, `ShredderControlSystem` bar one hardware-config tag,
+`FilterUnitSystem`, `AirStarSystem`) — plus 2 new UDTs (`MotorFwdRevIOSet1`, `TypeVSD`) and 2 new
+converter capabilities (`Gt`, bare-parameter members) landed along the way. 2 FBs
+(`MotorFwdRevSystem`/`MotorVSDSystem`) remain blocked on real, well-understood, narrowly-scoped gaps —
+documented precisely enough here to resume directly without re-deriving anything. Sanitization maps
+for every attempted FB (`FilterUnitSystem`/`AirStar`/`MotorFwdRevSystem`/`MotorFwdRevIOSet1`/`MotorVSDSystem`/
+`TypeVSD`) are built and kept in `sanitization/` (gitignored) for that resume.

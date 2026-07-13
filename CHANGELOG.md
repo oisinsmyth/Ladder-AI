@@ -10,6 +10,36 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Phase 1 continued: `FilterUnitSystem`/`AirStarSystem` compile clean; `Gt` comparison + a fourth Input/Output member shape added; `MotorVSDSystem`/`MotorFwdRevSystem` blocked on two new, real, deliberately-deferred gaps**
+
+- `FilterUnitSystem` (`FilterUnitSystem`) compiled clean first try — fully self-contained, reuses the
+  already-imported `TypeDOL`/`MotorIOSet` UDT.
+- `AirStarSystem` (`AirStar`) compiled clean after adding 5 more tag-table entries
+  (`AirStarWord0IN`/`2IN`/`0OUT`/`2OUT`, `FirstScan`) and reusing the already-imported
+  `PlantControl.Test` reference — no new DB needed. First real block-level `TITLE` seen since
+  `MotorVSDSystem` (new map field `Titles`, distinct from `NetworkTitles`).
+- **`Gt` (greater-than) comparison added** — a real, previously-unconfirmed member of the
+  `Eq`/`Ge`/`Lt`/`Ne` comparison family, confirmed real via `FC Scale` (a dependency of `MotorVSDSystem`).
+  Identical shape to the other four; mechanical addition across `FlgNetParser`/`GraphReducer`. 4
+  new tests.
+- **A fourth, genuinely minimal Input/Output/InOut member shape added** — `FC Scale`'s own params
+  have no `Remanence` attribute and no `<AttributeList>` at all (distinct from every shape already
+  modeled). New `DbMember.IsBareParameter` flag to round-trip the writer's own shape choice. 1 new
+  test. **272/272 converter tests** (up from 267).
+- **`MotorFwdRevSystem` blocked**: needs a new UDT (`MotorFwdRevIOSet1`, built/imported successfully), but
+  one network uses `CycleDelayReset`, a standalone named `TON` instance (`GlobalVariable`-scoped) —
+  distinct from the FB's own multi-instance Static timers. `create-instance-db --instance-of TON`
+  fails (`PlcBlockComposition.Create` only resolves user FBs, not built-in system instructions).
+  Flagged, not chased — a genuinely different case from anything solved so far.
+- **`MotorVSDSystem` blocked**: needs a new UDT (`TypeVSD`, built/imported successfully) and calls `FC
+  Scale` (grounded above), but `Scale`'s own internal logic also uses `Sub` (subtraction) — an
+  unsupported arithmetic instruction, a bigger addition (like `Add`/`Mul` were) than time/usage
+  budget allowed this session. Flagged, not chased.
+- 6 of `PlantAutoControl`'s 8 dependency FBs now proven (`MotorStarter`/`EquipmentControlSystem`/
+  `ShredderControlSystem`(bar one tag)/`FilterUnitSystem`/`AirStarSystem`), 2 blocked on real,
+  clearly-scoped, deliberately-deferred gaps (`MotorFwdRevSystem`/`MotorVSDSystem`). Full story:
+  `docs/notes/stage-gates.md`.
+
 **Converter: fix two more real data-loss bugs (arbitrary-depth anonymous-struct nesting; a duplicated, independently-broken IR-text serializer) — `ShredderControlSystem` imports and compiles clean bar one flagged hardware-config dependency**
 
 - Phase 1, third dependency FB: `ShredderControlSystem` needed a much larger external footprint than

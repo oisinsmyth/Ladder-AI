@@ -57,6 +57,22 @@ internal static class DbInterfaceMembers
         var directNestedMembers = member.Elements().Where(e => e.Name.LocalName == "Member").ToList();
         var isAnonymousStruct = directNestedMembers.Count > 0;
 
+        // A fourth, genuinely minimal member shape, confirmed real 2026-07-14 (`FC Scale`'s own
+        // Input/Output parameters — a small project utility FC, grounding `FB MotorVSDSystem`'s own
+        // dependency closure): no `Remanence` attribute at all (not merely an unrecognized value)
+        // and no `<AttributeList>` — just `Name`/`Datatype`[/`Accessibility="Public"`]. Distinct
+        // from `ParseBareMember`'s own shape (which forbids `Accessibility`) and from the ordinary
+        // Input/Output shape confirmed for `FB TomraControlSystem` (which has `Remanence`+`AttributeList`,
+        // just missing `SetPoint`) — this FC's own interface carries neither. Checked before the
+        // `Remanence` switch below would otherwise hard-error on its absence.
+        var hasAttributeList = member.Elements().Any(e => e.Name.LocalName == "AttributeList");
+        if (member.Attribute("Remanence") is null && !hasAttributeList)
+        {
+            var bareStartValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
+            var bareStartValue = bareStartValueElement?.Value;
+            return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(bareStartValue) ? null : bareStartValue, Version: version, SetPoint: false, NestedMembers: null, IsBareParameter: true);
+        }
+
         var remanence = (string?)member.Attribute("Remanence");
         var retain = remanence switch
         {
@@ -368,6 +384,22 @@ internal static class DbInterfaceMembers
     /// </summary>
     public static XElement WriteMember(DbMember member, bool includeSetPoint = true)
     {
+        if (member.IsBareParameter)
+        {
+            var bareElement = new XElement(
+                Ns + "Member",
+                new XAttribute("Name", member.Name),
+                new XAttribute("Datatype", member.Datatype),
+                new XAttribute("Accessibility", "Public"));
+
+            if (member.StartValue is not null)
+            {
+                bareElement.Add(new XElement(Ns + "StartValue", member.StartValue));
+            }
+
+            return bareElement;
+        }
+
         var isStructured = member.NestedMembers is not null;
 
         // Every element here must stay in Ns (inherited in the real source from the single

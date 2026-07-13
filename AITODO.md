@@ -19,92 +19,68 @@ documented/committed, delete it from this file rather than letting it accumulate
 
 ## Project stage
 
-**S1 — Lossless round-trip, ACTIVE.** See `docs/notes/stage-gates.md` for full gate history. All
-8 of `PlantAutoControl`'s dependency FBs are IR-complete (`to-ir → to-xml → to-ir` byte-identical).
-UDT/PLC-data-type support (S1 item 26) is committed (`557d35c`). `openness-cli`'s concurrent-Portal
-stability audit (two real bugs found and fixed) is committed (`2829ec1`). `FlgNetBuilder`'s
-Part-ordering bug (blocking `MotorDOL`'s own import) is fixed and live-verified — see below, not
-yet committed. Full story for each closed item: `docs/notes/stage-gates.md`.
+**S1 — Lossless round-trip, ACTIVE.** See `docs/notes/stage-gates.md` for full gate history.
+Working through the approved `PlantAutoControl` round-trip plan (Phase 0 grounding done, Phase 1
+in progress: get `PlantAutoControl`'s 8 dependency FBs importing+compiling standalone in
+`SampleProject`). Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md
+hard rule, gated by `docs/notes/stage-gates.md`.
 
-Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
-`docs/notes/stage-gates.md`.
+## Recently closed (all committed)
 
-## Current task: `FlgNetBuilder` Part-ordering fix — DONE, TESTED, LIVE-VERIFIED, NOT YET COMMITTED
+- PLC tag table support (`TAGTABLE`) — task #127, `b2fe156`.
+- `create-instance-db` command + `MotorStarter` compiles — task #122, `ef2ff1d`. 1st dependency FB.
+- Anonymous-struct converter fix + `EquipmentControlSystem` compiles — `9ec648f`. 2nd FB.
+- Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
+  `e0fd86a`. 3rd FB.
 
-**Status as of 2026-07-14.** Resumed from `RESUME-FlgNetBuilder-Timer-Ordering.md` (now deleted,
-folded into `docs/notes/stage-gates.md` "S1 item 26 continued"). Two real bugs in `FlgNetBuilder`,
-both fixed:
+## Current task: Phase 1 — `PlantAutoControl`'s 8 dependency FBs (task #124, in_progress)
 
-1. `OrStep`'s own Part was emitted before its branches — fixed (mirrors `NotStep`'s own
-   children-then-self order).
-2. Timer builds were phase-hoisted (all built in one global phase ahead of everything else) rather
-   than inline with the production that needs them — real TIA export order is fully contiguous per
-   rung, not grouped by construct type. Fixed with a new `EnsureTimerBuilt` helper that builds a
-   Timer the first time a `TimerOutputStep` reaches it, contiguous with that production; a
-   catch-all pass still handles Timers never referenced this way.
+**Status as of 2026-07-14, working at an explicitly usage-limit-conscious pace (project owner's
+own instruction).** 5 of 8 FBs proven; 2 blocked on real, well-scoped gaps; 1 not yet attempted.
+**Not yet committed** — the work below (`FilterUnitSystem`/`AirStar` success, `Gt` comparison,
+bare-parameter member shape, `MotorFwdRevSystem`/`MotorVSDSystem` UDTs) needs a commit before anything else.
 
-**Live-verified**: regenerated `MotorDOL`'s sanitized XML fresh, confirmed Parts order now matches
-the real TIA export exactly, and **the import into `SampleProject` succeeded** —
-`MotorStarter` (sanitized `MotorDOL`) is now FB2 there, the blocker this whole sub-investigation
-existed to resolve. 254/254 converter tests, 11/11 golden-harness, all pass.
+| FB | Status |
+|---|---|
+| `MotorStarter` (`MotorDOL`) | ✅ compiles clean (committed) |
+| `EquipmentControlSystem` (`EquipmentControlSystem`) | ✅ compiles clean (committed) |
+| `ShredderControlSystem` (`ShredderControlSystem`) | ✅ compiles clean bar `Clock_0.5Hz` (committed; hardware-config tag, deliberately left open) |
+| `FilterUnitSystem` (`FilterUnitSystem`) | ✅ compiles clean, first try — self-contained, reuses `TypeDOL`/`MotorIOSet` |
+| `AirStarSystem` (`AirStar`) | ✅ compiles clean — needed 5 more tag-table entries + reused `PlantControl.Test` |
+| `MotorFwdRevSystem` (`MotorFwdRevSystem`) | ❌ blocked: `CycleDelayReset`, a standalone named `TON` instance (not a user-FB instance) — `create-instance-db --instance-of TON` fails (`"Block 'TON' does not exist"`, only resolves user FBs). Needs a different approach, not investigated further. |
+| `MotorVSDSystem` (`MotorVSDSystem`) | ❌ blocked: calls `FC Scale`, which itself uses `Sub` (subtraction) — unsupported arithmetic instruction, comparable scope to the `Add`/`Mul` addition (S1 item 18). Not started. |
+| `TomraControlSystem` (`TomraControlSystem`) | ⬜ not yet attempted |
 
-**A new, separate, expected finding on compile, not a regression**: `compile --block MotorStarter`
-fails with `"Missing instance DB"` (Networks 3/8) — the same category of gap already documented for
-`PlantAutoControl` itself (S1 items 16/17): an isolated FB's own `LocalVariable`-scoped timer instances
-need a calling context (an instance DB, or a calling FC) to resolve, which `SampleProject` doesn't
-have for `MotorDOL`. Not a converter bug, not investigated further.
+**Two new converter capabilities landed getting `MotorVSDSystem` this far** (both real, both tested,
+both needed regardless of the `Sub` blocker — not wasted work):
+- **`Gt` (greater-than) comparison** — confirmed real via `FC Scale`, identical shape to the
+  already-supported `Eq`/`Ge`/`Lt`/`Ne` family. `FlgNetParser`/`GraphReducer` updated, 4 new tests.
+- **A fourth, minimal Input/Output/InOut member shape** — `FC Scale`'s own params have no
+  `Remanence` and no `<AttributeList>` at all (previously a hard error). New `DbMember.
+  IsBareParameter` flag. 1 new test.
+- **272/272 converter tests pass** (up from 267 at the last commit). `openness-cli` unchanged
+  (101/101, not re-run this round but no `openness-cli` code touched).
 
-**Not committed** — waiting for the project owner's own explicit "commit this."
+Full story for everything above: `docs/notes/stage-gates.md`, "Phase 1 continued: `FilterUnitSystem`/
+`AirStar` compile clean, `Gt` + a fourth Input/Output shape added, two FBs blocked on real gaps".
 
-## Full import+compile cycle test for `PlantAutoControl`'s dependency FBs — Part-ordering blocker resolved; blocked on missing-instance-DB now
+**Sanitization maps built and kept** (`sanitization/`, gitignored): `FilterUnitSystem`, `AirStar`,
+`Control` (real DB, → `PlantControl`), `MotorFwdRevSystem`, `MotorFwdRevIOSet1`, `MotorVSDSystem`, `TypeVSD`.
+Reusable directly if/when `MotorFwdRevSystem`/`MotorVSDSystem` are picked back up.
 
-The `Data type "MotorIOSet" is unknown` blocker (S1 item 26) and the Part-ordering blocker
-(above) are both resolved. `MotorDOL` now imports cleanly into `SampleProject`. The remaining
-blocker for a full compile is the "missing instance DB" gap above — same category as `PlantAutoControl`
-itself's own known dependency gaps (S1 items 16/17). Not resuming further per-FB testing unless the
-project owner wants to pursue building out a calling context for this.
+**Scratch state**: `$CLAUDE_JOB_DIR/tmp/phase1_fbs/` holds sanitized/non-identifying artifacts only
+— raw `JOB9002` exports (`*.fresh.xml`/`.fresh.ir` for each FB/UDT/DB, `Scale.fresh.xml`) should be
+deleted once each item is fully closed out; `.sanitized.*` siblings and the combined
+`MinimalTagTable54.raw.*` are safe to keep.
 
-**Scratch state**: `sanitization/MotorDOL.map.json` and `sanitization/TypeDOL.map.json` are real,
-reusable artifacts (gitignored, not committed) — kept.
-`$CLAUDE_JOB_DIR/tmp/autocontrol_fullcycle/MotorDOL.fresh.xml` is real, unsanitized `JOB9002`-derived
-content (the ground-truth export used to fix the Part-ordering bug) — should be deleted once this
-item is fully closed out. The `.sanitized.xml`/`.sanitized.ir` siblings are sanitized, non-identifying,
-safe to keep. `$CLAUDE_JOB_DIR/tmp/udt_grounding/` holds only sanitized content, safe to keep.
-
-## Recently closed
-
-- **PLC tag table support (`TAGTABLE`)** — task #127, committed (`b2fe156`).
-- **`create-instance-db` + `MotorStarter` now compiles** — task #122, committed (`ef2ff1d`). First
-  of `PlantAutoControl`'s 8 dependency FBs proven to round-trip *and* compile.
-- **Anonymous-struct converter fix + `EquipmentControlSystem` (`EquipmentControlSystem`) compiles** —
-  committed (`9ec648f`). Second dependency FB proven.
-
-## Current task: Phase 1 — remaining 7 dependency FBs (`EquipmentControlSystem`/`ShredderControlSystem` done, 5 to go) — NOT YET COMMITTED
-
-**Status as of 2026-07-14.** Task #124. `ShredderControlSystem` (as `ShredderControlSystem`) needed a
-much bigger external footprint than `MotorDOL`/`EquipmentControlSystem` — the real `Control` DB (→
-`PlantControl`) and 44 more tag-table entries (combined into one 54-tag minimal table). Two more
-real converter bugs found and fixed: arbitrary-depth anonymous-struct nesting (`ParseTypeMember`/
-`WriteTypeMember` made recursive) and a second, independently-broken duplicate of the same
-two-level-only bug in the IR *text* serializer (`IrSerializer.cs`, separate from `DbIrSerializer.cs`
-— now consolidated into shared `DbMemberLineFormat` helpers used by both). 267/267 converter tests
-(up from 265). Full story: `docs/notes/stage-gates.md` ("Phase 1: `FB ShredderControlSystem`").
-
-**One gap deliberately left open**: `ShredderControlSystem` compiles clean except for one tag,
-`Clock_0.5Hz` — Siemens's own auto-generated "Clock memory byte" system tag, which needs a CPU
-hardware-config change to resolve properly (not a data/tag import gap). Flagged via
-`AskUserQuestion`; project owner chose to stop here rather than build hardware-config capability.
-
-**Not committed** — waiting for the project owner's own explicit "commit this."
-
-**Scratch state**: `sanitization/EquipmentControlSystem.map.json`/`ShredderControlSystem.map.json`/`Control.map.json`
-real, reusable, gitignored — kept. `$CLAUDE_JOB_DIR/tmp/phase1_fbs/*.fresh.xml` (ShredderControlSystem,
-Control, DefaultTagTable) are real, unsanitized `JOB9002` content — delete once this item is fully
-closed out. `.sanitized.xml`/`MinimalTagTable54.raw.*` are either sanitized or non-identifying
-(bare tag names/addresses, same reasoning as the earlier 10-tag table) — safe to keep.
-
-**Next**: continue Phase 1 with the remaining 5 dependency FBs — `FilterUnitSystem`/`MotorFwdRevSystem`/
-`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — same pattern each time (export, sanitize, import, compile,
-`create-instance-db` if actually needed, fix and test any new gap found). Don't assume any of them
-are as self-contained as `MotorDOL`/`EquipmentControlSystem` — ground each one. Then Phase 2 (bulk DB/tag-table
-closure for `PlantAutoControl`'s other ~26 roots), Phase 3 (`PlantAutoControl` itself).
+**Next steps, in order**:
+1. Commit the current uncommitted work (see `git status` — converter fixes for `Gt`/bare-parameter,
+   plus docs).
+2. Either resume `MotorFwdRevSystem`/`MotorVSDSystem` (both need genuinely new capability — a
+   system-instruction single-instance-DB creation path, and `Sub` arithmetic support respectively)
+   or move to `TomraControlSystem` (not yet attempted, unknown scope) — project owner's call given
+   remaining budget.
+3. Once all 8 FBs (or as many as feasible) are proven: Phase 2 (bulk DB/tag-table closure for
+   `PlantAutoControl`'s other ~26 dependency roots), Phase 3 (`PlantAutoControl` itself — its own 20
+   call-site instance DBs, re-import, compile, re-export, `Normalizer` equivalence proof — the
+   actual Layer 1 assertion this whole effort exists to establish).
