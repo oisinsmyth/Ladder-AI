@@ -57,7 +57,7 @@ Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perf
 
 - TIA Portal V20, Openness API, S7-1200 G2 target. Windows engineering PC.
 - Openness requires membership of the "Siemens TIA Openness" Windows group; first connect per Portal binary triggers a manual approval dialog inside TIA Portal — if a connect hangs, tell the engineer to check for that dialog.
-- Only one Portal instance/session assumption: don't launch parallel Openness sessions.
+- Concurrent Portal sessions on *different* projects are safe (fixed 2026-07-13): `openness-cli` never closes a project it didn't open itself — if the Portal process it attaches to already has an unrelated project open, it launches its own dedicated Portal instance instead of touching that one. A human can run Portal manually on their own project while `openness-cli` works a different one, at the same time, with no risk to either session. One residual caveat: the very first attach to an already-running process may still trigger the first-connect approval dialog above, even if that process turns out to be someone else's session — a one-time visual interruption only, no data risk (`Attach()` alone never opens/closes/saves anything). Two Openness sessions on the *same* project concurrently is still unsupported — that's a genuine single-writer-file constraint, not a policy choice.
 - PC-side code referencing `Siemens.Engineering.dll` must target `net48` — modern .NET (e.g. `net8.0-windows`) builds fine but fails at runtime. See `docs/notes/openness-quirks.md`.
 - Block-consistency (`IsConsistent`) issues on the TIA side are real and can make `export`/`compile` behave confusingly without it being a tooling bug — run `openness-cli sanity-check <project>` before assuming otherwise.
 

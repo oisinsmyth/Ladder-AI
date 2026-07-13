@@ -68,14 +68,30 @@ public sealed class OpennessGateway : IOpennessGateway
                     return;
                 }
 
-                // Openness only allows one project open at a time (confirmed real,
-                // 2026-07-10: Projects.Open() throws "Another project is already open"
-                // otherwise) — save and close whatever else is open first, rather than requiring
-                // a human to do it before every command. Close() is scoped to the project, not
-                // TiaPortal itself (confirmed by reflecting on the installed DLL) — Portal stays
-                // running, ready for the Open() call right after.
-                CloseAnyOtherOpenProject(_tiaPortal.Projects);
-                _project = _tiaPortal.Projects.Open(new FileInfo(projectIdentifier));
+                // The attached process may have a DIFFERENT project open already — confirmed
+                // real, 2026-07-13: this is expected once a human can be running Portal manually,
+                // on their own project, at the same time as this tool (the project owner's own
+                // "you control one instance, I control another" ask). Never touch it — no
+                // Save()/Close() on a project this tool didn't open itself, unlike the earlier
+                // behavior this replaces. Openness only allows one project open per TiaPortal
+                // session (confirmed real, 2026-07-10: Projects.Open() throws "Another project is
+                // already open" otherwise), so a process with something else already open is
+                // simply unusable for us, not an error to work around by closing what's there —
+                // get a dedicated fresh Portal instance instead.
+                var portal = _tiaPortal;
+                if (portal.Projects.Cast<Project>().Any())
+                {
+                    // Attach() alone never opens/closes/saves anything, so disposing an attached
+                    // (not self-created) handle just releases this tool's own reference — doesn't
+                    // touch the process or whatever's open in it. Confirmed safe by this
+                    // project's own established pattern of attaching to an already-running human
+                    // session across many live tests without ever closing it.
+                    portal.Dispose();
+                    portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                    _tiaPortal = portal;
+                }
+
+                _project = portal.Projects.Open(new FileInfo(projectIdentifier));
             },
             timeout,
             () => new ProjectOpenTimeoutException(timeout));
@@ -97,20 +113,6 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         return null;
-    }
-
-    private static void CloseAnyOtherOpenProject(ProjectComposition projects)
-    {
-        // Snapshot first — Close() mutates the live ProjectComposition, which would otherwise
-        // invalidate enumeration mid-loop. At most one entry in practice (the
-        // single-project-at-a-time constraint this exists to work around) — loop just in case,
-        // not because multiples are expected.
-        var open = projects.Cast<Project>().ToList();
-        foreach (var project in open)
-        {
-            project.Save();
-            project.Close();
-        }
     }
 
     public IReadOnlyList<BlockInfo> EnumerateBlocks()

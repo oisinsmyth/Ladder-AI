@@ -2123,3 +2123,69 @@ capabilities worth knowing about even though none were built this pass. A genuin
 finding for this session: an AI-safety-tooling gate (Claude Code's own classifier), not a TIA/
 Openness one, caught an under-specified irreversible action and required direct human
 confirmation — exactly the kind of check this project's own review discipline already expects.
+
+### `openness-cli`: safe concurrent Portal sessions on different projects — 2026-07-13
+
+Picked up per the project owner's own explicit ask, immediately after the delete/update/survey
+item: they need to do their own manual PLC engineering in TIA Portal tomorrow, on a **different**
+project than whatever this tool is working on, and wanted work here to continue at the same time.
+CLAUDE.md's own environment notes previously said "Only one Portal instance/session assumption:
+don't launch parallel Openness sessions" — investigating turned that from a policy note into a
+real, fixable code issue.
+
+**The real gap, independent of tomorrow's specific need**: `OpennessGateway.Connect()` attaches to
+whichever TIA Portal process it finds first (or launches one if none are running).
+`OpenProject()` then checked whether the *target* project was already open in that attached
+process; if not, it called `Save()` + `Close()` on **whatever else was open** before opening the
+target (built 2026-07-10, "`openness-cli` now switches projects automatically" — safe at the time,
+since nothing else was ever running Portal concurrently). The moment a human runs Portal manually,
+for a different project, at the same time, this tool could attach to *their* process and silently
+save-and-close *their* live project to make room for whatever it was asked to open next — a real
+risk to a live engineering session, not a hypothetical one.
+
+**Fix, went through a full formal plan given the stakes (foundational, safety-relevant code every
+subcommand depends on)**: `OpenProject()` no longer force-closes anything it didn't open itself.
+Target already open in the attached process → reuse (unchanged). Nothing open there → open
+directly (unchanged). A **different** project open → leave it alone entirely, launch a dedicated
+`new TiaPortal(TiaPortalMode.WithUserInterface)`, open the target there instead. No new CLI flag —
+the decision is derived from what's actually open where, not from guessing whose process is
+whose, so it's a strict safety improvement with no downside for existing solo use.
+`CloseAnyOtherOpenProject` (the old force-close helper) deleted as dead code.
+
+**Live-verified, 2026-07-13 — the real thing, not a simulation**: launched TIA Portal directly
+(`Siemens.Automation.Portal.exe`, bypassing Openness entirely) with `SampleProject` open, to
+genuinely simulate an independent human session rather than one opened via `openness-cli` itself
+(whose own exit-time `Dispose()` behavior was exactly one of the ambiguities this fix depends on).
+Left it running, then ran `openness-cli list` against `JOB9002` (a different project) while that
+session stayed up. `JOB9002` listed successfully (176 blocks across both stations) via its own
+freshly-launched Portal instance — confirmed via `tasklist`: three new process IDs appeared, the
+original three (`SampleProject`'s session) were untouched throughout. Re-queried `SampleProject`
+immediately after: identical 10-block content, instant reconnect (proving it was never closed,
+not just "still running by luck" — a closed-then-reopened project wouldn't reconnect instantly).
+Six TIA Portal processes coexisted with zero interference between them. Cleaned up all
+test-launched processes via `taskkill` afterward; `git status --short` confirmed only the expected
+code files changed. All three suites green throughout: 73 openness-cli, 244 converter, 11
+golden-harness.
+
+**Residual, non-fixable caveat, documented rather than built around**: `Connect()`'s very first
+`Attach()` call, if it reaches a human's manually-launched process before `OpenProject()`
+discovers it's occupied, can still trigger TIA's own one-time first-connect approval dialog on
+their screen. `Attach()` alone never opens/closes/saves anything, so there's no data risk — purely
+a one-time visual interruption, and the Openness API offers no way to inspect what's open in a
+running process without attaching to it first. Didn't occur in this live test (this V20 install
+was already trusted machine-wide from earlier sessions) — worth confirming that stays true
+tomorrow, but not something further code changes could avoid.
+
+**Still correctly unsupported**: two Openness sessions holding the exact *same* project open at
+once — a genuine TIA-side single-writer-file constraint, not a design choice this tool could
+relax.
+
+**Docs**: `CLAUDE.md`'s own environment note rewritten to describe the new behavior and its
+residual caveat; `docs/notes/openness-quirks.md` gets a dedicated new section plus a "superseded"
+note on the 2026-07-10 entry this replaces; `src/openness-cli/README.md` gets a usage-level note.
+
+**Bottom line:** the project owner can now run TIA Portal manually on their own project tomorrow
+while this tool keeps working a separate one, with no risk to either session — verified for real,
+not just reasoned through. This also closes a genuine, previously-undetected safety gap in
+already-shipped code that had simply never been exercised before (nothing had ever run Portal
+concurrently with this tool until now).

@@ -10,6 +10,28 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-13
 
+**`openness-cli`: safe concurrent Portal sessions on different projects**
+
+- Picked up per the project owner's own ask: they need to do manual PLC engineering in TIA Portal
+  tomorrow, on a different project, while this tool keeps working a separate one at the same time.
+- Investigating surfaced a real, pre-existing safety gap: `OpenProject()` used to save-and-close
+  *whatever* project was open in the attached Portal process before opening its own target — safe
+  under the single-operator assumption CLAUDE.md documented, unsafe the moment a human runs Portal
+  manually alongside this tool. Fixed: never force-close a project this tool didn't open itself —
+  launch a dedicated fresh Portal instance instead when the attached one is occupied by something
+  else. No new flag; strictly safer, no downside for existing solo use.
+- **Live-verified for real**, not simulated: launched TIA Portal directly with `SampleProject`
+  open (bypassing Openness, to genuinely mimic an independent human session), then ran
+  `openness-cli` against `JOB9002` while that session stayed up. Confirmed via `tasklist` and a
+  before/after content diff: `SampleProject`'s session was never touched, `JOB9002` opened and
+  listed successfully via its own separate Portal instance — six Portal processes coexisted with
+  zero interference. All three suites green: 73 openness-cli, 244 converter, 11 golden-harness.
+- Updated `CLAUDE.md`'s own environment note (no longer "single Portal instance/session
+  assumption"). One residual, non-fixable caveat documented: the very first attach to an
+  already-running process can still trigger TIA's own one-time approval dialog, even if that
+  process turns out to be someone else's — no data risk, just a one-time visual interruption.
+  Full story: `docs/notes/stage-gates.md`.
+
 **`openness-cli`: block deletion, import-overwrite confirmation, API surface survey**
 
 - Picked up per the project owner's own ask: add a way to delete blocks, confirm live whether

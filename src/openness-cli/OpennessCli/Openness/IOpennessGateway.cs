@@ -68,7 +68,8 @@ public sealed class ConnectTimeoutException : Exception
         : base(
             $"TIA Portal did not respond to attach/launch within {timeout.TotalMinutes:0} minute(s). " +
             "This is usually the first-connect approval dialog waiting inside TIA Portal — check Portal, " +
-            "accept the dialog if it's there, then re-run. Not retrying automatically (single-session rule).")
+            "accept the dialog if it's there, then re-run. Not retrying automatically, to avoid piling up " +
+            "redundant Portal processes while the state is unclear.")
     {
     }
 }

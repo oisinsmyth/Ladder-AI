@@ -27,7 +27,9 @@ already-open project name) requires an absolute path — a relative one throws
 
 ## Known constraints
 - User must be in the "Siemens TIA Openness" Windows group (log off/on to take effect).
-- One Portal instance/session — no parallel Openness sessions.
+- Concurrent Portal instances on *different* projects are safe (fixed 2026-07-13 — see the
+  dedicated section below); two Openness sessions on the *same* project concurrently is still not
+  supported (a genuine single-writer-file constraint, not a policy choice).
 - Project open is slow; don't kill and retry.
 - `PlcBlock.Export()` can return without producing a file, no exception thrown — observed once
   during the ADR-0001 grounding spike (2026-07-10), first of three sequential exports in one
@@ -249,3 +251,52 @@ same reflection pass: `Close()` is scoped to the project, not `TiaPortal` — Po
 running throughout, matching File → Close Project in the UI, not File → Exit. Live-verified both
 directions (JOB9002 → reference project → JOB9002) — Portal process confirmed still running
 throughout via `tasklist`, no data lost (`Save()` runs first).
+
+**Superseded, 2026-07-13 — see the dedicated section below.** This auto-switch-by-closing
+behavior was safe under the single-operator assumption active at the time (nothing else was ever
+running Portal concurrently), but became a real risk once a human could be running Portal
+manually, on a different project, at the same time — `OpenProject` would have silently saved and
+closed *their* live project to make room for whatever this tool was asked to open next. Replaced
+with "never touch a project this tool didn't open — launch a dedicated fresh Portal instance
+instead" (still auto-switches, just never by force-closing something unrelated).
+
+## Safe concurrent Portal sessions on different projects
+
+Prompted by the project owner's own need: manual PLC engineering in TIA Portal on one project
+while `openness-cli`/Claude Code keeps working on a different one, at the same time. Investigating
+surfaced the real gap this fixes, described above — `OpenProject`'s own force-close-whatever's-open
+behavior was written for a single-operator world and became unsafe the moment that stopped being
+true.
+
+**Fix**: `OpennessGateway.OpenProject` no longer calls `Save()`/`Close()` on any project it didn't
+open itself. If the attached process has the target project already open, reuse it (unchanged —
+the common "engineer already has it open" convenience). If it has nothing open, open the target
+there directly (unchanged). If it has a **different** project open, leave it alone entirely and
+launch `new TiaPortal(TiaPortalMode.WithUserInterface)` — a dedicated fresh instance — and open
+the target there instead. No new CLI flag; this is strictly safer than the old behavior with no
+functional downside for existing solo use.
+
+**Live-verified, 2026-07-13**: launched TIA Portal directly (`Siemens.Automation.Portal.exe`, not
+through Openness) with `SampleProject` open, simulating a human's independent manual session, and
+left it running. Ran `openness-cli list` against `JOB9002` (a different project) while that session
+stayed up. Result: `JOB9002` listed successfully via its own newly-launched Portal instance
+(confirmed via `tasklist` — three new process IDs appeared, the original three from the manual
+session were untouched throughout). Re-queried `SampleProject` immediately after: same 10 blocks,
+identical content, instant reconnect (proving it had never been closed, not just "still running
+by luck"). Six TIA Portal processes coexisted with zero interference. Cleaned up all
+test-launched processes afterward via `taskkill`.
+
+**Residual, non-fixable caveat**: `Connect()`'s very first `Attach()` call, if it happens to reach
+the human's manually-launched process before `OpenProject` discovers it's occupied, can still
+trigger TIA's own one-time first-connect approval dialog on their screen — `Attach()` alone never
+opens/closes/saves anything, so there's no data risk, purely a one-time visual interruption. Not
+avoidable with the current Openness API surface — there's no way to inspect what's open in a
+running process without attaching to it first. In this live test, no such dialog was needed
+(this exact V20 install had already been trusted machine-wide from earlier sessions) — worth
+confirming this stays true tomorrow, but not something to build around.
+
+**Still unsupported, and correctly so**: two Openness sessions holding the *same* project open at
+once. That's a genuine TIA-side single-writer-file constraint (`Projects.Open()` throws "Another
+project is already open" within one session, and a second local instance opening the same
+`.apXX` file directly would risk file-lock/corruption issues), not a design choice this tool could
+relax.

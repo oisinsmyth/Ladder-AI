@@ -34,88 +34,70 @@ Scope="LocalConstant"` (committed `55b5cb2`), `Ne` (not-equal comparison, commit
 committed `32e5228`), `SWAP` (byte-swap box instruction, committed `2c61b0b`). `FC PlantAutoControl`
 now converts as a whole block (`to-ir → to-xml → to-ir` byte-identical) — first real site
 block this session to fully round-trip; **all 8 of its dependency FBs** now do too — **no known
-remaining gaps in `PlantAutoControl`'s dependency FBs.** Full story for each closed item:
-`docs/notes/stage-gates.md`.
+remaining gaps in `PlantAutoControl`'s dependency FBs.** `openness-cli` gained block deletion,
+confirmed `import`-overwrite behavior, and an Openness API surface survey (committed `b20cb37`).
+Full story for each closed item: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: `openness-cli` — block deletion, import-overwrite confirmation, API surface survey — implementation + live verification DONE, NOT YET COMMITTED
+## Current task: `openness-cli` — safe concurrent Portal sessions on different projects — implementation + live verification DONE, NOT YET COMMITTED
 
-**Status as of 2026-07-13: fully implemented, tested (73/73 openness-cli tests green, up from
-68; converter/golden-harness unaffected at 244/11), live-verified against real data (both
-`import`'s overwrite behavior and the new `delete` command, against `SampleProject` only), and
-documented (`src/openness-cli/README.md`, `docs/notes/openness-api-surface-v20.md`,
-`docs/notes/openness-quirks.md`, `docs/notes/stage-gates.md`, `CHANGELOG.md` all updated this
-pass). Waiting on explicit "commit this" from the project owner before committing** — per this
-session's established discipline, never auto-commit.
+**Status as of 2026-07-13: fully implemented, tested (73/73 openness-cli tests green; converter/
+golden-harness unaffected at 244/11), live-verified for real (two genuinely independent TIA
+Portal processes running concurrently, not simulated), and documented (`CLAUDE.md`,
+`src/openness-cli/README.md`, `docs/notes/openness-quirks.md`, `docs/notes/stage-gates.md`,
+`CHANGELOG.md` all updated this pass). Waiting on explicit "commit this" from the project owner
+before committing** — per this session's established discipline, never auto-commit.
 
-**Picked up per the project owner's own explicit ask**, after all 8 of `PlantAutoControl`'s dependency
-FBs closed: `openness-cli` had no way to delete a block (flagged as a real gap back in S1 items
-16/17 — an uncompiled `PlantAutoControl` block was left in `SampleProject` after a cross-project import
-test with no way to clean it up programmatically), whether `import` actually overwrites a
-pre-existing block needed live confirmation (an implicit "update" capability), and the project
-owner wanted a broader survey of unused Openness API surface. Went through a full formal plan
-(`EnterPlanMode`/`ExitPlanMode`) given the scope.
+**Picked up per the project owner's own explicit ask**, immediately after the delete/update/
+survey item: they need to do their own manual PLC engineering in TIA Portal tomorrow, on a
+**different** project than whatever `openness-cli` is working on, and want work here to continue
+concurrently. CLAUDE.md's own environment notes previously said "Only one Portal instance/session
+assumption: don't launch parallel Openness sessions" — investigating turned that from a policy
+note into a real, fixable code issue. Went through a full formal plan given the stakes
+(foundational connection code every subcommand depends on).
 
-**Research** (read the installed V20 `Siemens.Engineering.xml` doc-comments file directly, real
-prose descriptions not just reflected type shapes): confirmed `PlcBlock.Delete()` exists
-("Deletes this instance.", no arguments) and `ImportOptions.Override` is documented "Override
-existing" (`None` = "Throw if exists"). Broader survey (scoped to `SW.Blocks`) found several other
-unused members — full list in `docs/notes/openness-api-surface-v20.md`'s new "SW.Blocks survey"
-section: `SWImportOptions` (relevant-looking but doesn't fix the cross-project compile blocker
-from S1 items 16/17), `Find`/`Create` (direct group lookup/creation, unused), `CreateFB`/
-`CreateInstanceDB`/`CreateFrom` (S6+ logic-generation scope, not buildable now), `GetAttribute`/
-`SetAttribute` (generic block metadata read/write, unused).
+**The real gap found, independent of tomorrow's specific need**: `OpennessGateway.OpenProject()`
+used to call `Save()` + `Close()` on **whatever project was already open** in the attached Portal
+process before opening its own target (built 2026-07-10 — safe at the time, since nothing else
+was ever running Portal concurrently with this tool). The moment a human runs Portal manually, on
+a different project, at the same time, this tool could attach to *their* process and silently
+close *their* live project to make room for its own — a real risk to a live engineering session.
 
-**Design decision, resolved via `AskUserQuestion` in plan mode**: `delete` requires an explicit
-`--yes` flag before actually deleting. Without it, resolves the block and prints what it *would*
-delete, exits a new `ExitCodes.NotConfirmed (10)`, touches nothing — a new safety pattern for this
-codebase (every other subcommand acts immediately), since delete is the first genuinely
-irreversible operation this CLI exposes and has no undo.
+**Fix**: `OpenProject()` no longer force-closes anything it didn't open itself. Target already
+open in the attached process → reuse (unchanged, the common solo-operator convenience). Nothing
+open there → open directly (unchanged). A **different** project open → leave it alone entirely,
+launch a dedicated `new TiaPortal(TiaPortalMode.WithUserInterface)`, open the target there
+instead. No new CLI flag — derived structurally from what's actually open where, not from
+guessing whose process is whose. `CloseAnyOtherOpenProject` (the old force-close helper) deleted
+as dead code, its only caller gone.
 
-**Implementation**: `IOpennessGateway.DeleteBlock(blockName, deviceFilter, confirm)` mirrors
-`ExportBlock`/`CompileBlock` exactly (`FindMatchingBlocks`, `--device` disambiguation,
-`SafetyContentRefusedException` for safety-classified blocks). New `delete` subcommand end to end
-(`ArgumentParser.cs`: `DeleteCommandOptions`, `ParseResult.DeleteSuccess`, `ParseDelete`;
-`Program.cs`: `RunDelete`, new `ExitCodes.NotConfirmed`). 7 new argument-parser tests
-(`ExportImportCompileArgumentParserTests.cs`, mirroring the existing `export` coverage) — the
-gateway method itself isn't unit-testable (same reason no `OpennessGateway` method is —
-Siemens.Engineering's COM-backed types can't be faked), verified live only.
+**Live-verified, 2026-07-13 — the real thing, not simulated**: launched TIA Portal directly
+(`Siemens.Automation.Portal.exe`, bypassing Openness entirely) with `SampleProject` open, to
+genuinely mimic an independent human session (deliberately not opened via `openness-cli` itself,
+since its own exit-time `Dispose()` behavior was one of the ambiguities this fix depends on). Left
+it running, then ran `openness-cli list` against `JOB9002` (a different project) while that session
+stayed up. Result: `JOB9002` listed successfully (176 blocks) via its own freshly-launched Portal
+instance — `tasklist` confirmed three new process IDs, the original three (`SampleProject`'s
+session) untouched throughout. Re-queried `SampleProject` immediately after: identical 10-block
+content, instant reconnect (proving it was never closed — a closed-then-reopened project wouldn't
+reconnect instantly). Six Portal processes coexisted with zero interference. Cleaned up all
+test-launched processes via `taskkill`; `git status --short` confirmed only expected code files
+changed. All three suites green: 73 openness-cli, 244 converter, 11 golden-harness.
 
-**Live-verified against real data, 2026-07-13 — both against `SampleProject` only, never
-`JOB9002`**:
-- **Import-overwrite ("update") confirmation** — fully reversible, Green-tier only (used the
-  already-committed `TimerSample` reference-corpus block, not `JOB9002` content): exported fresh,
-  made one trivial edit (a network `Title` → `"OVERWRITE TEST MARKER"`), re-imported with
-  `Override` — succeeded, `list` confirmed still exactly one `TimerSample` block. Re-export
-  initially refused (`"Inconsistent blocks... cannot be exported"` — the already-documented
-  `IsConsistent` quirk); `compile --block TimerSample` cleared it in one call. Re-exported: **the
-  test marker was present** — confirmed genuine in-place overwrite. Restored the original content
-  the same way; diffed against the very first export: byte-identical except the export's own
-  `<Created>` timestamp — `SampleProject` left in its exact original state.
-- **Delete** — real cleanup of already-known cruft: the `PlantAutoControl` block left uncompiled in
-  `SampleProject` since S1 items 16/17. `list` confirmed present. `delete --block PlantAutoControl` (no
-  `--yes`) correctly dry-ran (exit 10, still present after). The confirmed delete was initially
-  blocked by Claude Code's own auto-mode safety classifier ("Irreversible Deletion" — the
-  *approved plan* had named `PlantAutoControl`, but the classifier requires the user to name the
-  resource directly) — stopped and asked rather than working around it; project owner confirmed
-  explicitly ("Yes delete PlantAutoControl from the sample project"), then `delete --block PlantAutoControl
-  --yes` succeeded, confirmed gone via a final `list` — `SampleProject` back to a clean 10-block
-  state.
+**Residual, non-fixable caveat, documented rather than built around**: `Connect()`'s very first
+`Attach()` call, if it reaches a human's manually-launched process before `OpenProject()`
+discovers it's occupied, can still trigger TIA's own one-time first-connect approval dialog on
+their screen — `Attach()` alone never opens/closes/saves anything, so no data risk, purely a
+one-time visual interruption; not avoidable with the current Openness API surface (no way to
+inspect what's open in a process without attaching first). Didn't occur in this live test (V20
+already trusted machine-wide from earlier sessions) — worth confirming stays true tomorrow.
 
-All three suites green throughout: 73 openness-cli (up from 68), 244 converter, 11 golden-harness.
-`git status --short` after each live pass confirmed only expected code/test files changed.
-
-**Not yet raised with the project owner**: with the delete/update tooling now in place, the
-natural next real-data step (the project owner's own earlier follow-up question) is attempting a
-live TIA import+compile cycle for one or more of `PlantAutoControl`'s individual dependency FBs into
-`SampleProject`, now that IR-completeness is confirmed for all 8 — genuinely unconfirmed whether
-any of them (especially the smaller ones, e.g. `TomraControlSystem`) would actually compile there
-without the full `JOB9002` tag table/FB library, unlike `PlantAutoControl` itself. Worth asking once this
-item is committed, not assumed.
+**Still correctly unsupported**: two Openness sessions holding the exact *same* project open at
+once — a genuine TIA-side single-writer-file constraint, not something this tool could relax.
 
 **Final verification before presenting for commit — already done this pass**: all three test
 suites re-run and confirmed green, `git status --short` confirmed only expected files changed (no
-real restricted data, no data-boundary concerns — `SampleProject` is this project's own Green-tier
-reference project). Ready to present for explicit commit approval.
+real restricted data touched at any point — the live test used `SampleProject`, Green-tier, and
+`JOB9002` read-only via `list`). Ready to present for explicit commit approval.
