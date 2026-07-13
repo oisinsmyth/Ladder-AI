@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`/`compile --type`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members, and now UDT/PLC data type support (S1 item 26 — `SW.Types.PlcStruct`, live-verified). **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **all 8 of its dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. UDT support (item 26) resolved `MotorDOL`'s own `TypeDOL` dependency blocker but surfaced a new, separate, unaddressed `FlgNetWriter` Part-ordering bug blocking `MotorDOL`'s own import — open item, not yet fixed. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 254 converter, 79 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`/`compile --type`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members, and now UDT/PLC data type support (S1 item 26 — `SW.Types.PlcStruct`, live-verified). **`FC PlantAutoControl` now round-trips through the true TIA cycle, completely** (export → sanitize → import → block-level compile clean, 0 errors → re-export → `Normalizer.AreSemanticallyEquivalent` = true, 2026-07-14) — the actual Layer 1 assertion this project's S1 stage exists to prove, demonstrated end-to-end against the real site master-control block and its complete real dependency closure (all 8 dependency FBs — `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — plus all 26 real DB/tag-table roots it references, 20 Instance DBs + 6 GlobalDBs/tag tables). What earlier looked like a permanent blocker (external tags/FBs no other TIA project has, S1 items 16/17) turned out to be exactly what the reference-project DB pipeline (S1 item 1 Phase 2) was already built to close — bulk export/sanitize/import of the real dependencies, same pattern, larger scale. Full detail below ("Phase 1/2/3" sections). UDT support (item 26) resolved `MotorDOL`'s own `TypeDOL` dependency blocker; the `FlgNetWriter` Part-ordering bug it surfaced was fixed the same session (see "Phase 1" detail below). Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`) — `PlantAutoControl`'s own round trip is Amber-tier scratch work, not part of this committed Green-tier corpus. All PC-side suites green: 287 converter, 101 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -2871,3 +2871,112 @@ With both fixes applied, re-sanitized and re-imported `MotorVSDSystem` → `Moto
 (`STATE: Warning, ERRORS: 0`, the same expected hardware-config warning every other FB shows). **7
 of `PlantAutoControl`'s 8 dependency FBs now proven.** Only `MotorFwdRevSystem`'s `CycleDelayReset`
 (standalone named `TON` instance, no Openness API path found yet) remains blocked.
+
+### Phase 1 closed: `MotorFwdRevSystem` fixed at the source, all 8 dependency FBs compile clean — 2026-07-13
+
+The `CycleDelayReset` blocker (a standalone single-instance `TON`, invisible to the whole
+`SW.Blocks` object model — no `create-instance-db` path, not listed, not exportable by name; see
+above) was confirmed exhausted from the Openness side. The project owner then fixed the actual
+root cause directly in `JOB9002`: converted `CycleDelayReset` from a standalone `GlobalVariable`-scope
+`TON` into a proper multi-instance `Static`-section timer within `MotorFwdRevSystem` itself — the same
+shape every other working timer in this FB already uses. Re-exporting confirmed the fix: `TON`
+`UId=85`'s own `Instance` is now `Scope="LocalVariable"`, naming an ordinary top-level `TON_TIME`
+Static member, structurally identical to `InHandReqPreStart`/`HrTotaliserTimer`.
+
+One small map gap surfaced and fixed: `MotorFwdRevSystem.map.json` was missing the owner-prefixed
+`MotorFwdRevSystem.CycleDelayReset` → `MotorFwdRevSystem.CycleDelayReset` Tags entry (present for
+every sibling timer, missed for this one since it didn't exist as a normal Static member until the
+fix). Re-sanitized, re-imported, compiled: **`MotorFwdRevSystem` — `STATE: Warning, ERRORS: 0`.**
+
+**All 8 of `PlantAutoControl`'s dependency FBs now compile clean.** Phase 1 is complete.
+
+### Phase 2: `PlantAutoControl`'s own tag/DB dependency closure — 2026-07-14
+
+Built the exact, current dependency list via `Sanitizer.Apply` against an empty map (collects every
+missing entry in one pass, per its own design) rather than trusting the earlier "~323 paths / 36
+roots" estimate: **523 missing entries, 36 distinct roots (26 real DB/tag-table roots + 10 bare
+`Tag_45`-`Tag_54` default-tag-table entries), 343 unique tag paths.** Cross-referencing the 26
+DB/tag-table roots against `PlantAutoControl`'s own real device (`--device JOB9002_PLC`) confirmed all of
+them concrete, exportable blocks: **20 are Instance DBs of the 8 already-proven dependency FBs**
+(9× `MotorDOL`, 3× `MotorVSDSystem`, 3× `FilterUnitSystem`, 1× each `AirStar`/`EquipmentControlSystem`/`ShredderControlSystem`/
+`TomraControlSystem`/`MotorFwdRevSystem` — exactly `PlantAutoControl`'s own 20 call sites, fully accounted for),
+**6 are ordinary GlobalDBs/tag tables** (`Control`, `HMIControlSignals`, `Input`, `Output`, `PLC`,
+`Timings`).
+
+Bulk-exported all 26 from `JOB9002` (one hit the known `IsConsistent`-blocks-export quirk —
+`MotorFwdRevInst1` — cleared with a block-level compile in `JOB9002` itself, same established fix). Built
+sanitization maps for all 26 programmatically (a PowerShell generator reusing each of the 8 FBs'
+own already-established top-level-field → invented-suffix tables, re-keyed per real instance name)
+rather than hand-authoring hundreds of near-duplicate entries — 19 of 20 instance DBs sanitized
+clean on the first pass.
+
+**One genuinely new converter gap found: `TomraControlInst1` has a non-empty `Input`/`Output`
+Interface section.** Every Instance DB grounded before this one happened to have only `Static`
+content; `TomraControlSystem` itself has real Input/Output formal parameters (`inputWord0`-`7`,
+`OutputWord0`-`1` — S1 item 20 already grounded these on the *block* side, but never on the
+*Instance DB* side). `DbSourceParser` hard-errored exactly as designed rather than silently
+dropping them. Fixed properly, not worked around: extended `DbSource` with
+`InputMembers`/`OutputMembers`/`InOutMembers` (mirroring `BlockSource`'s own fields exactly),
+`DbSourceParser`/`DbSourceWriter` to parse/write them (reusing
+`DbInterfaceMembers.ParseMember`/`WriteMember` with `requireSetPoint: false`, same as
+`BlockSourceParser`'s own Input/Output/InOut handling), `Sanitizer.ApplyToDb` to sanitize them, and
+`DbIrSerializer`/`DbIrParser` (`INPUT`/`OUTPUT`/`INOUT` IR sections, same null-vs-empty convention
+as `BlockSource`'s own) — closing the loop so `to-ir`/`to-xml` doesn't silently drop this content
+either. New fixture + 4 new tests (parse, round-trip, IR round-trip, sanitize). All 26 DBs then
+sanitized clean; 287/287 converter tests pass (up from 283).
+
+Batch-imported all 26 sanitized DBs into `SampleProject`, then block-level compiled all 26 —
+**every one: `STATE: Warning, ERRORS: 0`** (only the same expected hardware-config warning every
+other block shows). `PlantAutoControl`'s complete tag/DB dependency closure is now proven.
+
+### Phase 3: `PlantAutoControl` itself — full round trip proven, 2026-07-14
+
+Built `PlantAutoControl`'s own sanitization map (343 Tags entries, 35 Names entries covering itself + 8
+FB names + 26 DB names, 20 NetworkTitles) programmatically, driving it directly off the same
+missing-entries list Phase 2 used as its own source of truth — guarantees complete coverage rather
+than risking a hand-built map missing something. Every one of `PlantAutoControl`'s 20 real call-site
+instance DB names and 8 FB call-site names reuses the exact invented names already established in
+Phase 1/2's own per-block maps, so `Sanitizer`'s `BlockName`/`Instance` rename (the same fix that
+unblocked `MotorVSDSystem` earlier) resolves every one of `PlantAutoControl`'s own 20 `<Call>` sites
+correctly. Sanitize succeeded with zero missing-entry warnings on the first attempt.
+
+**Import → block-level compile → `STATE: Warning, ERRORS: 0` on the first attempt** — no new gaps,
+confirming Phases 1/2's dependency closure was genuinely complete. Re-exported and ran
+`Normalizer.AreSemanticallyEquivalent` (a throwaway test, deleted immediately after use, same
+discipline as every prior live verification) against the sanitized-then-imported XML vs. the fresh
+re-export: **true.**
+
+**This is the actual Layer 1 assertion (`docs/08-testing-strategy.md`) this entire multi-session
+effort existed to prove, now demonstrated end-to-end for `PlantAutoControl` itself** — the real site
+master-control block, its complete real dependency closure (8 FBs + 26 DBs/tag-tables), imported
+into an independent TIA project, compiling clean, and round-tripping losslessly. All three PC-side
+suites green throughout: 287 converter, 101 openness-cli, 11 golden-harness tests.
+
+**`MotorFwdRevSystem`'s blocker was a real gap in the source data, not the tooling — confirmed
+exhausted, then resolved by the project owner directly, same day.** Before hearing back from the
+project owner, the Openness-side investigation was pushed to its actual limit: `create-instance-db
+--instance-of TON`/`TON_TIME` both refuse (`PlcBlockComposition.Create` only resolves user-created
+FBs by name); reflection on `PlcBlockComposition` shows no alternate overload accepting a system
+block reference; and the real standalone instance in `JOB9002` (`FC ControlDelays`'s own
+`GeneralEnableDelay`) doesn't even appear in `list`'s output or resolve via `export --block` by
+name — a standalone single-instance system-function-block instance (as opposed to an FB's own
+multi-instance Static-section timer, which works fine everywhere else) is invisible to the whole
+`SW.Blocks` object model, not merely uncreatable. Confirmed via a fresh `list`/`export` against
+`JOB9002` that this data-boundary-safe finding holds (no committed content changed). Also confirmed,
+via a fresh `PlantAutoControl` export, that `MotorFwdRevSystem` genuinely is one of `PlantAutoControl`'s own 20
+call sites (not an optional/skippable dependency) — ruling out simply deferring it.
+
+**Resolved same day: the project owner fixed the root cause directly in `JOB9002`** — the real
+`CycleDelayReset` was a standalone single-instance `TON` at `GlobalVariable` scope (exactly the
+invisible-to-Openness shape above); converting it to a proper multi-instance `Static`-section timer
+in the FB itself (the same working pattern as `MotorDOL`'s own timers) sidesteps the gap entirely,
+since multi-instance Static timers already round-trip and compile cleanly. Re-exporting after the
+fix confirmed `CycleDelayReset` now declares as an ordinary top-level `TON_TIME` Static member with
+a `LocalVariable`-scope `Instance` — structurally identical to every other working timer in this FB
+(`InHandReqPreStart`, `HrTotaliserTimer`, etc.). One small map gap surfaced and fixed along the way:
+`MotorFwdRevSystem.map.json` was missing the `MotorFwdRevSystem.CycleDelayReset` →
+`MotorFwdRevSystem.CycleDelayReset` owner-prefixed Tags entry (present for every sibling timer,
+missed for this one since it didn't exist as a normal Static member until the fix). Re-sanitized,
+re-imported, compiled: **`MotorFwdRevSystem` — `STATE: Warning, ERRORS: 0`.**
+
+**All 8 of `PlantAutoControl`'s dependency FBs now compile clean.** Phase 1 is complete.

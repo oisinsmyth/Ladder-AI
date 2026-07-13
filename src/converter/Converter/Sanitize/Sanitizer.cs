@@ -136,6 +136,13 @@ public static class Sanitizer
 
         var sanitizedMembers = db.Members.Select(member => SanitizeMember(db.Name, member, map, missing)).ToList();
 
+        // Input/Output/InOut (confirmed real 2026-07-13, `TomraControlInst1` — DbModel.cs's own doc
+        // comment) are the same freely-named, owner-chosen category as Static, sanitized via the
+        // same SanitizeMember helper and the same "<Owner>.<Member>" Tags convention.
+        var sanitizedInputMembers = db.InputMembers?.Select(m => SanitizeMember(db.Name, m, map, missing)).ToList();
+        var sanitizedOutputMembers = db.OutputMembers?.Select(m => SanitizeMember(db.Name, m, map, missing)).ToList();
+        var sanitizedInOutMembers = db.InOutMembers.Select(m => SanitizeMember(db.Name, m, map, missing)).ToList();
+
         if (missing.Count > 0)
         {
             throw new SanitizationMapException(
@@ -143,7 +150,16 @@ public static class Sanitizer
                 string.Join("\n  ", missing));
         }
 
-        return db with { Name = sanitizedName!, InstanceOfName = sanitizedInstanceOfName, Comment = sanitizedComment, Members = sanitizedMembers };
+        return db with
+        {
+            Name = sanitizedName!,
+            InstanceOfName = sanitizedInstanceOfName,
+            Comment = sanitizedComment,
+            Members = sanitizedMembers,
+            InputMembers = sanitizedInputMembers,
+            OutputMembers = sanitizedOutputMembers,
+            InOutMembers = sanitizedInOutMembers,
+        };
     }
 
     /// <summary>

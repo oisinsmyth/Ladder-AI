@@ -93,6 +93,79 @@ public class DbConverterTests
         Assert.Null(flag.NestedMembers);
     }
 
+    // Input/Output/InOut on an Instance DB — confirmed real 2026-07-13, `TomraControlInst1` (an
+    // Instance DB of `FB TomraControlSystem`, which has real Input/Output formal parameters, S1 item
+    // 20) — every Instance DB grounded before this one happened to have none. Same section shape
+    // as BlockSource's own Input/Output/InOut, reusing DbInterfaceMembers.ParseMember with
+    // requireSetPoint: false.
+    [Fact]
+    public void Parse_InstanceDbWithInputOutput_ReadsInputAndOutputMembers()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("InstanceDbWithInputOutput.xml"));
+
+        var input = Assert.Single(db.InputMembers!);
+        Assert.Equal("InWord0", input.Name);
+        Assert.Equal("Word", input.Datatype);
+
+        var output = Assert.Single(db.OutputMembers!);
+        Assert.Equal("OutWord0", output.Name);
+
+        Assert.Empty(db.InOutMembers);
+
+        var flag = Assert.Single(db.Members);
+        Assert.Equal("Flag", flag.Name);
+    }
+
+    [Fact]
+    public void RoundTrip_InstanceDbWithInputOutput_ParseWriteParse_IsStable()
+    {
+        var original = DbSourceParser.Parse(LoadFixture("InstanceDbWithInputOutput.xml"));
+
+        var xml = DbSourceWriter.Write(original);
+        var reparsed = DbSourceParser.Parse(xml);
+
+        Assert.Equal(original.InputMembers!.Select(m => m.Name), reparsed.InputMembers!.Select(m => m.Name));
+        Assert.Equal(original.OutputMembers!.Select(m => m.Name), reparsed.OutputMembers!.Select(m => m.Name));
+        Assert.Equal(original.Members.Select(m => m.Name), reparsed.Members.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void IrRoundTrip_InstanceDbWithInputOutput_SerializeParse_IsStable()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("InstanceDbWithInputOutput.xml"));
+
+        var ir = DbIrSerializer.Serialize(db);
+        var reparsed = DbIrParser.ParseDb(ir);
+
+        Assert.Equal(db.InputMembers!.Select(m => m.Name), reparsed.InputMembers!.Select(m => m.Name));
+        Assert.Equal(db.OutputMembers!.Select(m => m.Name), reparsed.OutputMembers!.Select(m => m.Name));
+        Assert.Contains("  INPUT\n", ir);
+        Assert.Contains("  OUTPUT\n", ir);
+        Assert.DoesNotContain("  INOUT\n", ir);
+    }
+
+    [Fact]
+    public void ApplyToDb_InstanceDbWithInputOutput_SanitizesInputAndOutputMembers()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("InstanceDbWithInputOutput.xml"));
+        var map = new Converter.Sanitize.SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["SomeInstance"] = "SanitizedInstance", ["SomeFB"] = "SanitizedFB" },
+            Tags = new Dictionary<string, string>
+            {
+                ["SomeInstance.InWord0"] = "SanitizedInstance.SanitizedInWord",
+                ["SomeInstance.OutWord0"] = "SanitizedInstance.SanitizedOutWord",
+                ["SomeInstance.Flag"] = "SanitizedInstance.SanitizedFlag",
+            },
+        };
+
+        var sanitized = Converter.Sanitize.Sanitizer.ApplyToDb(db, map);
+
+        Assert.Equal("SanitizedInWord", Assert.Single(sanitized.InputMembers!).Name);
+        Assert.Equal("SanitizedOutWord", Assert.Single(sanitized.OutputMembers!).Name);
+        Assert.Equal("SanitizedFlag", Assert.Single(sanitized.Members).Name);
+    }
+
     [Fact]
     public void Parse_TimerStructuredMember_ReadsNestedMembersAndVersion()
     {

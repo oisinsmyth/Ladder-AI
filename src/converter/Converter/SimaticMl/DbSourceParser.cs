@@ -65,7 +65,7 @@ public static class DbSourceParser
             throw new SimaticMlFormatException($"DB '{name}' has unexpected ProgrammingLanguage '{language}' (expected 'DB').");
         }
 
-        var members = ParseMembers(attributeList, name);
+        var (members, inputMembers, outputMembers, inOutMembers) = ParseMembers(attributeList, name);
 
         var objectList = dbElement.Element("ObjectList")
             ?? throw new SimaticMlFormatException("DB element is missing its <ObjectList>.");
@@ -73,10 +73,21 @@ public static class DbSourceParser
         var comment = MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
         MultilingualTextHelper.RequireEmptyTitle(objectList, $"DB '{name}'");
 
-        return new DbSource(rootUId, name, number, instanceOfName, comment, members);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers);
     }
 
-    private static IReadOnlyList<DbMember> ParseMembers(XElement attributeList, string dbName)
+    // Input/Output/InOut: confirmed real 2026-07-13, `TomraControlInst1` (an Instance DB of
+    // `FB TomraControlSystem`, which has real Input/Output formal parameters, S1 item 20) — an Instance
+    // DB persists its own FB's Input/Output storage alongside Static, every other Instance DB
+    // grounded before this one just happened to have none. Same section shape/parsing as
+    // BlockSourceParser's own Input/Output/InOut (`DbInterfaceMembers.ParseMember` with
+    // `requireSetPoint: false`) — a DB's own Interface has the identical shape an FB's does,
+    // minus Temp/Constant/Return (never seen non-empty on a DB, so still hard-errored below).
+    private static (
+        IReadOnlyList<DbMember> Members,
+        IReadOnlyList<DbMember>? InputMembers,
+        IReadOnlyList<DbMember>? OutputMembers,
+        IReadOnlyList<DbMember>? InOutMembers) ParseMembers(XElement attributeList, string dbName)
     {
         var interfaceElement = attributeList.Element("Interface");
         if (interfaceElement is null)
@@ -95,25 +106,50 @@ public static class DbSourceParser
         var staticSection = sections.FirstOrDefault(s => (string?)s.Attribute("Name") == "Static")
             ?? throw new SimaticMlFormatException($"DB '{dbName}' has no 'Static' Interface section.");
 
+        var context = $"DB '{dbName}'";
+        IReadOnlyList<DbMember>? inputMembers = null;
+        IReadOnlyList<DbMember>? outputMembers = null;
+        IReadOnlyList<DbMember>? inOutMembers = null;
+
         foreach (var section in sections)
         {
             var sectionName = (string?)section.Attribute("Name");
-            if (sectionName == "Static")
-            {
-                continue;
-            }
+            var memberElements = section.Elements().Where(e => e.Name.LocalName == "Member").ToList();
 
-            if (section.Elements().Any(e => e.Name.LocalName == "Member"))
+            switch (sectionName)
             {
-                throw new UnsupportedConstructException(
-                    $"DB '{dbName}' has a non-empty Interface section '{sectionName}' — this converter only models the Static section for DBs.");
+                case "Static":
+                    break;
+
+                case "Input":
+                    inputMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                case "Output":
+                    outputMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                case "InOut":
+                    inOutMembers = memberElements.Select(m => DbInterfaceMembers.ParseMember(m, context, requireSetPoint: false)).ToList();
+                    break;
+
+                default:
+                    if (memberElements.Count > 0)
+                    {
+                        throw new UnsupportedConstructException(
+                            $"DB '{dbName}' has a non-empty Interface section '{sectionName}' — this converter only models the Static/Input/Output/InOut sections for DBs.");
+                    }
+
+                    break;
             }
         }
 
-        return staticSection.Elements()
+        var members = staticSection.Elements()
             .Where(e => e.Name.LocalName == "Member")
-            .Select(m => DbInterfaceMembers.ParseMember(m, $"DB '{dbName}'"))
+            .Select(m => DbInterfaceMembers.ParseMember(m, context))
             .ToList();
+
+        return (members, inputMembers, outputMembers, inOutMembers);
     }
 
     private static string RequireChildValue(XElement parent, string localName)

@@ -16,6 +16,12 @@ namespace Converter.Ir;
 ///   NUMBER &lt;n&gt;
 ///   INSTANCEOF &lt;FBName&gt;              # only present for Instance DBs
 ///   COMMENT "&lt;text&gt;"                       # omitted if empty
+///   INPUT                                    # only present when the source has one (2026-07-13)
+///     &lt;member&gt; : &lt;Datatype&gt;
+///   OUTPUT                                   # only present when the source has one
+///     &lt;member&gt; : &lt;Datatype&gt;
+///   INOUT                                    # only shown when non-empty (never seen populated)
+///     &lt;member&gt; : &lt;Datatype&gt;
 ///   MEMBERS
 ///     &lt;member&gt; : &lt;Datatype&gt;
 ///     &lt;member&gt; : &lt;Datatype&gt; RETAIN
@@ -56,6 +62,10 @@ public static class DbIrSerializer
             sb.Append("  COMMENT \"").Append(EscapeString(db.Comment)).Append("\"\n");
         }
 
+        SerializeOptionalMemberSection(sb, "INPUT", db.InputMembers);
+        SerializeOptionalMemberSection(sb, "OUTPUT", db.OutputMembers);
+        SerializeMemberSection(sb, "INOUT", db.InOutMembers);
+
         sb.Append("  MEMBERS\n");
         foreach (var member in db.Members)
         {
@@ -66,6 +76,40 @@ public static class DbIrSerializer
     }
 
     private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    // Null vs. present-but-empty is a real, must-preserve distinction (mirrors IrSerializer's own
+    // InputMembers/OutputMembers handling for BlockSource) — a section header with zero member
+    // lines still gets emitted when the source had the section present-but-empty, distinct from
+    // the section being entirely absent (null).
+    private static void SerializeOptionalMemberSection(StringBuilder sb, string keyword, IReadOnlyList<DbMember>? members)
+    {
+        if (members is null)
+        {
+            return;
+        }
+
+        sb.Append("  ").Append(keyword).Append('\n');
+        foreach (var member in members)
+        {
+            DbMemberLineFormat.SerializeLine(sb, "    ", member);
+        }
+    }
+
+    // InOut is never null (no real example of it being entirely absent has been seen) — an empty
+    // list is the only "nothing to say" case, so the header itself is simply omitted when empty.
+    private static void SerializeMemberSection(StringBuilder sb, string keyword, IReadOnlyList<DbMember> members)
+    {
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        sb.Append("  ").Append(keyword).Append('\n');
+        foreach (var member in members)
+        {
+            DbMemberLineFormat.SerializeLine(sb, "    ", member);
+        }
+    }
 }
 
 public static class DbIrParser
@@ -100,6 +144,10 @@ public static class DbIrParser
             i++;
         }
 
+        var inputMembers = ParseOptionalMemberSection(lines, ref i, "  INPUT");
+        var outputMembers = ParseOptionalMemberSection(lines, ref i, "  OUTPUT");
+        var inOutMembers = ParseOptionalMemberSection(lines, ref i, "  INOUT") ?? Array.Empty<DbMember>();
+
         if (i >= lines.Length || lines[i] != "  MEMBERS")
         {
             throw new IrFormatException("Expected 'MEMBERS' section.");
@@ -113,7 +161,31 @@ public static class DbIrParser
             members.Add(DbMemberLineFormat.ParseMemberRecursive(lines, ref i, "    "));
         }
 
-        return new DbSource(rootUId, name, number, instanceOfName, comment, members);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers);
+    }
+
+    // Shared flat member-section parser for Input/Output/InOut — mirrors IrParser's own private
+    // helper of the same name/behavior for BlockSource (not reusable directly — different
+    // partial class). None of these ever carries nested content in any grounded example (S1 item
+    // 20), so no nested-member look-ahead is needed here (contrast the MEMBERS loop above, which
+    // does support nesting for Static). Returns null when the section header itself is absent,
+    // preserving the null-vs-present-but-empty distinction DbIrSerializer relies on.
+    private static IReadOnlyList<DbMember>? ParseOptionalMemberSection(string[] lines, ref int i, string header)
+    {
+        if (i >= lines.Length || lines[i] != header)
+        {
+            return null;
+        }
+
+        i++;
+        var parsed = new List<DbMember>();
+        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
+        {
+            parsed.Add(DbMemberLineFormat.ParseLine(lines[i], "    "));
+            i++;
+        }
+
+        return parsed;
     }
 
     private static string RequireLine(string[] lines, ref int i)

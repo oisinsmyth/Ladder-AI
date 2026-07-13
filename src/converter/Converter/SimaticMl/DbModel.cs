@@ -10,13 +10,30 @@ namespace Converter.SimaticMl;
 // field, same reasoning as DB kind itself (ir/SPEC.md): which one it is is fully implied by
 // whether this is set. InstanceOfType is not carried — every real instance DB seen has Type="FB",
 // so the writer always regenerates that constant and the parser hard-errors if a source disagrees.
+//
+// InputMembers/OutputMembers/InOutMembers: confirmed real 2026-07-13, `TomraControlInst1` (an
+// Instance DB of `FB TomraControlSystem`, which itself has real Input/Output formal parameters,
+// S1 item 20) — an Instance DB persists its own FB's Input/Output parameter storage alongside
+// Static, not just Static alone as every Instance DB grounded before this one happened to have
+// (every other `PlantAutoControl` dependency FB has no Input/Output params at all). Same shape,
+// same nullable/non-null convention, and same shared `DbInterfaceMembers.ParseMember`/
+// `WriteMember` helpers as `BlockSource`'s own Input/Output/InOut fields — a DB's own Interface
+// has the identical Input/Output/InOut/Static section shape an FB's does, just without
+// Temp/Constant/Return (never seen non-empty on a DB). InOut confirmed present-but-always-empty
+// on every DB seen (matching BlockSource's own InOut), hence non-nullable empty-default.
 public sealed record DbSource(
     string RootUId,
     string Name,
     int Number,
     string? InstanceOfName,
     string? Comment,
-    IReadOnlyList<DbMember> Members);
+    IReadOnlyList<DbMember> Members,
+    IReadOnlyList<DbMember>? InputMembers = null,
+    IReadOnlyList<DbMember>? OutputMembers = null,
+    IReadOnlyList<DbMember>? InOutMembers = null)
+{
+    public IReadOnlyList<DbMember> InOutMembers { get; init; } = InOutMembers ?? Array.Empty<DbMember>();
+}
 
 // Datatype is carried verbatim as the source XML shows it (e.g. "Word", "Array[0..14] of Bool")
 // — not re-parsed into a separate array/type grammar. Confirmed real, 2026-07-10: every scalar

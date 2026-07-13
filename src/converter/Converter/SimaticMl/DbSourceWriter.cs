@@ -20,9 +20,31 @@ public static class DbSourceWriter
             staticSection.Add(DbInterfaceMembers.WriteMember(member));
         }
 
+        // Input/Output/InOut: confirmed real 2026-07-13, `TomraControlInst1` — see DbModel.cs's own
+        // doc comment. Only emitted when present (mirrors BlockSourceWriter's own
+        // WriteMemberSection); every Instance/Global DB grounded before this one has none, so
+        // this stays a no-op for them.
+        var sectionsChildren = new List<XElement>();
+        if (db.InputMembers is not null)
+        {
+            sectionsChildren.Add(WriteMemberSection("Input", db.InputMembers));
+        }
+
+        if (db.OutputMembers is not null)
+        {
+            sectionsChildren.Add(WriteMemberSection("Output", db.OutputMembers));
+        }
+
+        if (db.InOutMembers.Count > 0)
+        {
+            sectionsChildren.Add(WriteMemberSection("InOut", db.InOutMembers));
+        }
+
+        sectionsChildren.Add(staticSection);
+
         var sectionsElement = new XElement(
             DbInterfaceMembers.Ns + "Sections",
-            staticSection);
+            sectionsChildren);
 
         var attributeListChildren = new List<XElement>();
         if (db.InstanceOfName is not null)
@@ -54,6 +76,20 @@ public static class DbSourceWriter
             root);
 
         return new XDocument(document);
+    }
+
+    // Input/Output/InOut all share the same member shape (Static's own full shape minus the
+    // SetPoint BooleanAttribute) — same helper BlockSourceWriter uses for its own Input/Output/
+    // InOut sections.
+    private static XElement WriteMemberSection(string name, IReadOnlyList<DbMember> members)
+    {
+        var section = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", name));
+        foreach (var member in members)
+        {
+            section.Add(DbInterfaceMembers.WriteMember(member, includeSetPoint: false));
+        }
+
+        return section;
     }
 
     internal static XElement WriteComment(string? comment, ref int nextAuxId) =>
