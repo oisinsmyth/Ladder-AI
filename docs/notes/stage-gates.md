@@ -2189,3 +2189,26 @@ while this tool keeps working a separate one, with no risk to either session —
 not just reasoned through. This also closes a genuine, previously-undetected safety gap in
 already-shipped code that had simply never been exercised before (nothing had ever run Portal
 concurrently with this tool until now).
+
+### `openness-cli`: fixing a real instance-pileup bug in the fix above — 2026-07-14
+
+The fix above traded "force-close whatever's open" for "always launch a fresh instance if
+occupied" — correct for the concurrent-session case, but it caused a real Portal-instance pileup
+during actual use: a Bash-tool-level timeout killed a mid-import `openness-cli.exe` process
+(twice), likely leaving Portal itself stuck server-side, and each retry's `Connect()` only ever
+inspected one arbitrary process, found it unusable, and launched yet another rather than checking
+whether any *other* already-running process was fine. Process count grew 3 → 4 → 5.
+
+Fixed properly in two rounds, both live-verified against the genuinely messy state this produced
+(not a clean simulation): `OpenProject()` now does two full passes across every running process —
+first for an exact already-open match anywhere, only then considering an empty process fair game
+to open into, only falling back to a fresh instance if neither exists. A separate bug found along
+the way (a forward-slash vs. backslash path-comparison mismatch causing a spurious extra Portal
+launch) was also fixed. Full story, including the exact TIA lock error that exposed the deeper
+bug: `docs/notes/openness-quirks.md` ("Follow-up, 2026-07-14"). All 73 openness-cli tests +
+converter/golden-harness suites green throughout. Cleaned up confirmed-idle stray processes with
+the project owner's explicit go-ahead before committing.
+
+**Bottom line:** the concurrent-session safety property (never force-close a project this tool
+didn't open) is preserved; the resource-pileup side effect that safety property introduced is
+fixed by preferring reuse of any already-usable running process over always creating a new one.

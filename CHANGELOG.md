@@ -8,6 +8,25 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-14
+
+**`openness-cli`: fix a real Portal-instance-pileup bug in the concurrent-session fix**
+
+- The concurrent-session fix (2026-07-13) traded "force-close whatever's open" for "always launch
+  a fresh instance if occupied" — safe, but caused a real instance pileup during actual use: a
+  Bash-tool-level timeout killed a mid-import CLI process (twice), likely leaving Portal stuck
+  server-side, and each retry's `Connect()` only ever checked one arbitrary process before
+  launching yet another rather than looking for any other already-usable one. Process count grew
+  3 → 4 → 5.
+- Fixed in two rounds, both live-verified against the real messy state this produced:
+  `OpenProject()` now does two full passes over every running process — an exact already-open
+  match anywhere wins first, only then is an empty process considered fair game, only then does
+  it fall back to launching fresh. A separate bug (forward-slash vs. backslash path comparison
+  causing a spurious extra launch) was also found and fixed.
+- All 73 openness-cli tests + converter/golden-harness suites green throughout. Cleaned up
+  confirmed-idle stray Portal processes with explicit go-ahead. Full story:
+  `docs/notes/openness-quirks.md` ("Follow-up, 2026-07-14").
+
 ## 2026-07-13
 
 **`openness-cli`: safe concurrent Portal sessions on different projects**

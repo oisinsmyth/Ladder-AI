@@ -300,3 +300,85 @@ once. That's a genuine TIA-side single-writer-file constraint (`Projects.Open()`
 project is already open" within one session, and a second local instance opening the same
 `.apXX` file directly would risk file-lock/corruption issues), not a design choice this tool could
 relax.
+
+### Follow-up, 2026-07-14 — the fix above caused a real instance pileup, now fixed properly
+
+Hit live while attempting a full import+compile cycle test: two `MotorDOL` import attempts each
+timed out (Bash tool's own outer timeout, 6 and 10 minutes respectively — not `openness-cli`'s own
+graceful internal timeout, which never got the chance to fire because the *combined*
+`--timeout-connect` + `--timeout-open` budget I'd set exceeded the outer Bash timeout, a mistake on
+the invoking side, not the tool's). Killing a client process (`openness-cli.exe`) mid-COM-call can
+leave the *server* process (Portal, a separate process) stuck waiting on a response that will
+never come. `Connect()` only ever inspects a single process (`GetProcesses()[0]`); the original
+concurrent-sessions fix's own `OpenProject()` only checked *that one* attached process before
+deciding "occupied → launch fresh." Each retry attached to an arbitrary process, found it
+unusable, and launched *another* full instance rather than checking whether any of the *other*
+already-running processes (including ones from earlier retries) were actually fine. Process count
+grew 3 → 4 → 5 across repeated retries, each new instance competing for resources with the others.
+
+**First fix attempt — search all running processes, not just one — surfaced a second, sharper
+bug.** Restructured `OpenProject()` to loop over every `TiaPortal.GetProcesses()` result before
+falling back to a fresh instance. This reduced pileup but a live retry still failed outright:
+
+```
+Unable to open the project under path '...\SampleProject\SampleProject.ap20'.
+The project/library ...\SampleProject.ap20 cannot be accessed. It has already been opened by
+user User on computer AWCS-VPC10. Note: If the application was not correctly closed, the open
+projects and libraries can only be opened again after a 2 minute delay.
+```
+
+Root cause: the search treated "this particular process has nothing open" as immediately safe to
+open into, without first confirming that *no other* already-running process already held the
+target project's own exclusive file lock. If `Connect()`'s primary attached process happened to be
+empty while a *different* sibling process genuinely had the target open, the empty one would try
+`Projects.Open()` anyway and TIA's own file lock correctly refused it.
+
+**Second, corrected fix — two full passes, not one interleaved check.** Pass 1 searches *every*
+running process for the target already open (exact name/path match) before pass 2 is ever allowed
+to consider an empty process fair game to open into. Only if neither pass finds anything usable
+does it launch a dedicated fresh instance. Each non-matching candidate handle is disposed once the
+winner is chosen (same "`Attach()` alone never touches anything, `Dispose()` on an attached handle
+just releases the reference" reasoning as before).
+
+**A separate, unrelated bug found and fixed along the way**: `FindAlreadyOpenProject`'s own path
+comparison used plain `string.Equals`, which doesn't tolerate forward-slash vs. backslash
+differences (`C:/foo/bar.ap20` vs. `C:\foo\bar.ap20`, `Project.Path.FullName`'s own native
+format). A forward-slash identifier (from a Bash `pwd -W` invocation) failed to match an
+already-open project's own path, spuriously concluding it wasn't open anywhere and triggering an
+unnecessary extra Portal launch — confirmed live, caught immediately when the project owner
+noticed an unexpected new Portal window and asked about it directly. Fixed via
+`Path.GetFullPath()` canonicalization on both sides before comparing.
+
+**Live-verified, 2026-07-14**: from a genuinely messy starting state (3 stray Portal processes
+from the earlier pileup, one of which held `SampleProject`'s real file lock), a `list SampleProject`
+call — first with the same forward-slash path that triggered the bug, confirming the path fix —
+correctly found the process holding the real lock and reused it, with **no new process spawned**
+(confirmed via `tasklist` before/after). All 73 openness-cli tests still green throughout both
+fix iterations. Cleaned up the 2 now-confirmed-idle stray processes afterward, with the project
+owner's explicit go-ahead (killing Portal processes is exactly the kind of action Claude Code's
+own safety classifier rightly wants explicit confirmation for, given the earlier concurrent-
+session work — see the `openness-cli` block-deletion entry in `docs/notes/stage-gates.md` for the
+same pattern on a different action).
+
+**Practical lesson for future invocations**: `openness-cli`'s own `--timeout-connect` and
+`--timeout-open` are sequential, not parallel — their *sum* must stay comfortably under whatever
+outer timeout wraps the whole call, or the outer kill will fire first and risk leaving Portal
+stuck, defeating the whole point of having a graceful internal timeout in the first place.
+
+**TODO, deferred — additional testing for the multi-instance feature**, per the project owner's
+own request (2026-07-14). Everything proven so far was live-verified opportunistically, either
+via a deliberate simulation (2026-07-13, `SampleProject` + `JOB9002` open at once) or by observing
+real failures as they happened during the `MotorDOL` full-cycle work (2026-07-14). Not yet
+covered, worth a dedicated pass later:
+- A genuine two-*person* concurrent session (the project owner actually running Portal manually
+  on their own project tomorrow, per the original ask) — everything so far has been one operator
+  (Claude) simulating both sides.
+- The two-pass search (`OpenProject`) exercised against 3+ real running processes in more varied
+  configurations (e.g. two empty, one occupied by something else, one with the real target) —
+  only ever exercised opportunistically against whatever state a prior failure happened to leave.
+- The `Attach()`-fails-for-one-candidate skip path (the `try`/`catch` around each candidate in the
+  search loop) — reasoned through, never actually exercised against a genuinely dead/unresponsive
+  process.
+- `PathsMatch`/`FindAlreadyOpenProject` are pure string/path logic, not COM-touching — genuinely
+  unit-testable (unlike the rest of `OpennessGateway`), and currently have zero test coverage.
+  Lowest-effort, highest-value item on this list — worth doing before the others.

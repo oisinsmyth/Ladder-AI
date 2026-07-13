@@ -58,43 +58,90 @@ public sealed class OpennessGateway : IOpennessGateway
         RunWithTimeout(
             () =>
             {
-                // The identifier can be a project name already open in the attached Portal
-                // instance (common: engineer already has Portal + project open) or a path to
-                // a .apNN file to open fresh. Never re-open something already open.
-                var alreadyOpen = FindAlreadyOpenProject(_tiaPortal.Projects, projectIdentifier);
-                if (alreadyOpen is not null)
-                {
-                    _project = alreadyOpen;
-                    return;
-                }
-
-                // The attached process may have a DIFFERENT project open already — confirmed
-                // real, 2026-07-13: this is expected once a human can be running Portal manually,
-                // on their own project, at the same time as this tool (the project owner's own
-                // "you control one instance, I control another" ask). Never touch it — no
-                // Save()/Close() on a project this tool didn't open itself, unlike the earlier
-                // behavior this replaces. Openness only allows one project open per TiaPortal
+                // The identifier can be a project name already open in some Portal instance
+                // (common: engineer already has Portal + project open) or a path to a .apNN file
+                // to open fresh. Never re-open something already open. Never Save()/Close() a
+                // project this tool didn't open itself — confirmed real, 2026-07-13: this is
+                // expected once a human can be running Portal manually, on their own project, at
+                // the same time as this tool (the project owner's own "you control one instance,
+                // I control another" ask). Openness only allows one project open per TiaPortal
                 // session (confirmed real, 2026-07-10: Projects.Open() throws "Another project is
                 // already open" otherwise), so a process with something else already open is
-                // simply unusable for us, not an error to work around by closing what's there —
-                // get a dedicated fresh Portal instance instead.
-                var portal = _tiaPortal;
-                if (portal.Projects.Cast<Project>().Any())
+                // simply unusable for us, not an error to work around by closing what's there.
+                //
+                // Two full passes across every currently running process (not just the one
+                // Connect() originally attached to), in this order — confirmed necessary,
+                // 2026-07-14, from a real failure: an earlier version of this search picked
+                // whichever process it checked first that had *nothing* open, without first
+                // confirming no *other* running process already held the target project's own
+                // exclusive file lock — Projects.Open() then failed outright with TIA's own
+                // "already opened by user... on computer..." lock error, because a sibling
+                // process genuinely had it open under a name/path this code hadn't looked at yet.
+                // Pass 1 always searches every candidate for an exact already-open match before
+                // pass 2 ever considers an empty process fair game to open into.
+                _tiaPortal.Dispose();
+                var candidates = new List<TiaPortal>();
+                foreach (TiaPortalProcess candidateProcess in TiaPortal.GetProcesses())
                 {
-                    // Attach() alone never opens/closes/saves anything, so disposing an attached
-                    // (not self-created) handle just releases this tool's own reference — doesn't
-                    // touch the process or whatever's open in it. Confirmed safe by this
-                    // project's own established pattern of attaching to an already-running human
-                    // session across many live tests without ever closing it.
-                    portal.Dispose();
-                    portal = new TiaPortal(TiaPortalMode.WithUserInterface);
-                    _tiaPortal = portal;
+                    try
+                    {
+                        candidates.Add(candidateProcess.Attach());
+                    }
+                    catch (Exception)
+                    {
+                        // A listed process that can't be attached to (e.g. genuinely dead/
+                        // unresponsive) is simply not a candidate — skip it, don't abort the
+                        // whole search over one bad entry.
+                    }
                 }
 
+                foreach (var candidate in candidates)
+                {
+                    var alreadyOpen = FindAlreadyOpenProject(candidate.Projects, projectIdentifier);
+                    if (alreadyOpen is not null)
+                    {
+                        _tiaPortal = candidate;
+                        _project = alreadyOpen;
+                        DisposeAllExcept(candidates, candidate);
+                        return;
+                    }
+                }
+
+                foreach (var candidate in candidates)
+                {
+                    if (!candidate.Projects.Cast<Project>().Any())
+                    {
+                        _tiaPortal = candidate;
+                        _project = candidate.Projects.Open(new FileInfo(projectIdentifier));
+                        DisposeAllExcept(candidates, candidate);
+                        return;
+                    }
+                }
+
+                // Nothing already running is usable — get a dedicated fresh instance.
+                DisposeAllExcept(candidates, null);
+                var portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                _tiaPortal = portal;
                 _project = portal.Projects.Open(new FileInfo(projectIdentifier));
             },
             timeout,
             () => new ProjectOpenTimeoutException(timeout));
+    }
+
+    // Attach() alone never opens/closes/saves anything, so disposing an attached (not
+    // self-created) handle just releases this tool's own reference — doesn't touch the process or
+    // whatever's open in it. Confirmed safe by this project's own established pattern of
+    // attaching to an already-running human session across many live tests without ever closing
+    // it.
+    private static void DisposeAllExcept(IEnumerable<TiaPortal> candidates, TiaPortal? keep)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!ReferenceEquals(candidate, keep))
+            {
+                candidate.Dispose();
+            }
+        }
     }
 
     private static Project? FindAlreadyOpenProject(ProjectComposition projects, string identifier)
@@ -106,13 +153,33 @@ public sealed class OpennessGateway : IOpennessGateway
                 return project;
             }
 
-            if (project.Path is not null && string.Equals(project.Path.FullName, identifier, StringComparison.OrdinalIgnoreCase))
+            if (project.Path is not null && PathsMatch(project.Path.FullName, identifier))
             {
                 return project;
             }
         }
 
         return null;
+    }
+
+    // Plain string comparison spuriously misses an already-open project when the caller's own
+    // identifier uses a different slash direction than Project.Path.FullName's own native
+    // backslash format (e.g. "C:/foo/bar.ap20" vs "C:\foo\bar.ap20") — confirmed real,
+    // 2026-07-14: this caused FindAlreadyOpenProject to conclude a project wasn't already open
+    // when it genuinely was, triggering a spurious extra Portal instance launch. Path.GetFullPath
+    // canonicalizes both sides (slash direction, relative segments) before comparing.
+    private static bool PathsMatch(string a, string b)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            // identifier isn't a well-formed path at all (e.g. it's meant to match by Name only,
+            // already checked above) — not a match, not an error.
+            return false;
+        }
     }
 
     public IReadOnlyList<BlockInfo> EnumerateBlocks()
