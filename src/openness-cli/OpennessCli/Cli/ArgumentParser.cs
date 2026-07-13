@@ -63,6 +63,19 @@ public sealed record DeleteCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Grounding/scaffolding command (2026-07-14, `PlantAutoControl` round-trip plan Phase 0.2) — creates an
+// instance DB backing an already-existing FB, for FBs imported standalone with no calling context.
+// Not S6+ logic generation: invents no tag/address/DB number (DbName is engineer-supplied, the DB
+// number itself is always auto-assigned by TIA).
+public sealed record CreateInstanceDbCommandOptions(
+    string ProjectIdentifier,
+    string GroupPath,
+    string DbName,
+    string InstanceOfName,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -78,6 +91,8 @@ public abstract record ParseResult
     public sealed record CompileSuccess(CompileCommandOptions Options) : ParseResult;
 
     public sealed record DeleteSuccess(DeleteCommandOptions Options) : ParseResult;
+
+    public sealed record CreateInstanceDbSuccess(CreateInstanceDbCommandOptions Options) : ParseResult;
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
 
@@ -96,6 +111,7 @@ public static class ArgumentParser
         "  openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
@@ -116,9 +132,10 @@ public static class ArgumentParser
             "import" => ParseImport(args),
             "compile" => ParseCompile(args),
             "delete" => ParseDelete(args),
+            "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, sanity-check.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -541,6 +558,95 @@ public static class ArgumentParser
         }
 
         return new ParseResult.DeleteSuccess(new DeleteCommandOptions(projectIdentifier, block, device, confirm, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseCreateInstanceDb(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? group = null;
+        string? name = null;
+        string? instanceOf = null;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--group":
+                    if (!TryTakeValue(args, ref i, "--group", out group, out var groupErr))
+                    {
+                        return new ParseResult.Failure(groupErr);
+                    }
+
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    break;
+                case "--instance-of":
+                    if (!TryTakeValue(args, ref i, "--instance-of", out instanceOf, out var instanceOfErr))
+                    {
+                        return new ParseResult.Failure(instanceOfErr);
+                    }
+
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (group is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --group <device>/<path>.{Environment.NewLine}{Usage}");
+        }
+
+        if (name is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <name>.{Environment.NewLine}{Usage}");
+        }
+
+        if (instanceOf is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --instance-of <FBName>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.CreateInstanceDbSuccess(new CreateInstanceDbCommandOptions(projectIdentifier, group, name, instanceOf, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

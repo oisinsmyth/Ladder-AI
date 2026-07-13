@@ -64,6 +64,16 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files);
 
     /// <summary>
+    /// Creates a new instance DB named <paramref name="dbName"/> in the block group at
+    /// <paramref name="groupPath"/>, backing an instance of the FB named
+    /// <paramref name="instanceOfName"/> (<c>PlcBlockComposition.CreateInstanceDB</c>, confirmed
+    /// real 2026-07-14). Always auto-numbered — never invents a literal DB number (CLAUDE.md hard
+    /// rule 3). For an FB imported standalone with no calling context, this supplies the storage
+    /// its own multi-instance Static members (e.g. TON_TIME timers) need to compile.
+    /// </summary>
+    BlockInfo CreateInstanceDb(string groupPath, string dbName, string instanceOfName);
+
+    /// <summary>
     /// Imports <paramref name="files"/> as PLC tag tables into the tag-table group at
     /// <paramref name="groupPath"/> — same path format as <see cref="ImportBlocks"/>, but a
     /// distinct composition tree (<c>PlcTagTableGroup.TagTables</c>). Returns imported tag-table

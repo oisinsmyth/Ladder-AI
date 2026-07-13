@@ -46,6 +46,8 @@ internal static class Program
                     return RunCompile(gateway, compile.Options, timeoutOpenSeconds);
                 case ParseResult.DeleteSuccess delete:
                     return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
+                case ParseResult.CreateInstanceDbSuccess createInstanceDb:
+                    return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
                 default:
@@ -185,6 +187,14 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    private static int RunCreateInstanceDb(IOpennessGateway gateway, CreateInstanceDbCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var info = gateway.CreateInstanceDb(options.GroupPath, options.DbName, options.InstanceOfName);
+        Console.WriteLine($"Created '{info.Name}' (DB{info.Number}, instance of '{options.InstanceOfName}') at {info.Path}.");
+        return ExitCodes.Success;
+    }
+
     private static int RunSanityCheck(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -200,6 +210,7 @@ internal static class Program
         ParseResult.ImportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };

@@ -573,6 +573,35 @@ public sealed class OpennessGateway : IOpennessGateway
         return imported;
     }
 
+    // PlcBlockComposition.CreateInstanceDB(name, isAutoNumbered, number, instanceOfName) — confirmed
+    // real, 2026-07-14 (Siemens.Engineering.xml doc comments, TIA Portal V20 PublicAPI). Grounded
+    // for a genuine round-trip gap, not logic generation: an FB imported standalone (no calling
+    // context) has nowhere for its own multi-instance Static members (e.g. TON_TIME timers) to
+    // resolve their storage, surfacing as "Missing instance DB" on compile. Creating the instance
+    // DB invents nothing — no tag, address, or DB number (always auto-numbered, TIA's own choice,
+    // never a literal passed in here) — it only gives an already-existing, already-imported block
+    // the scaffolding TIA itself would create automatically had the block been placed via a CALL
+    // in the UI. Same category as importing a real dependency DB, not S6+ logic generation.
+    public BlockInfo CreateInstanceDb(string groupPath, string dbName, string instanceOfName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CreateInstanceDb)}.");
+        }
+
+        var group = FindGroup(_project, groupPath);
+
+        try
+        {
+            var db = group.Blocks.CreateInstanceDB(dbName, isAutoNumbered: true, 0, instanceOfName);
+            return ToBlockInfo(db, groupPath);
+        }
+        finally
+        {
+            SaveProject();
+        }
+    }
+
     // Returns imported type names, not BlockInfo — a PlcType has no Number/ProgrammingLanguage to
     // report (confirmed real, 2026-07-14), so BlockInfo's own shape doesn't fit; kept minimal
     // rather than retrofitting BlockInfo with fields that would be meaningless for a UDT.

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using OpennessCli.Cli;
 using Xunit;
 
@@ -291,7 +292,7 @@ public class ExportImportCompileArgumentParserTests
     }
 
     [Fact]
-    public void Parse_UnknownSubcommand_ListsAllSix()
+    public void Parse_UnknownSubcommand_ListsAllSubcommands()
     {
         var result = ArgumentParser.Parse(new[] { "bogus" });
         var failure = Assert.IsType<ParseResult.Failure>(result);
@@ -300,7 +301,65 @@ public class ExportImportCompileArgumentParserTests
         Assert.Contains("import", failure.Message);
         Assert.Contains("compile", failure.Message);
         Assert.Contains("delete", failure.Message);
+        Assert.Contains("create-instance-db", failure.Message);
         Assert.Contains("sanity-check", failure.Message);
+    }
+
+    [Fact]
+    public void Parse_CreateInstanceDb_WithAllRequiredFlags_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "create-instance-db", "SampleProject",
+            "--group", "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "--name", "MotorStarter_Instance",
+            "--instance-of", "MotorStarter",
+        });
+
+        var success = Assert.IsType<ParseResult.CreateInstanceDbSuccess>(result);
+        Assert.Equal("SampleProject", success.Options.ProjectIdentifier);
+        Assert.Equal("S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0", success.Options.GroupPath);
+        Assert.Equal("MotorStarter_Instance", success.Options.DbName);
+        Assert.Equal("MotorStarter", success.Options.InstanceOfName);
+    }
+
+    [Theory]
+    [InlineData("--group")]
+    [InlineData("--name")]
+    [InlineData("--instance-of")]
+    public void Parse_CreateInstanceDb_MissingRequiredFlag_Fails(string flagToOmit)
+    {
+        var flags = new Dictionary<string, string>
+        {
+            ["--group"] = "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            ["--name"] = "MotorStarter_Instance",
+            ["--instance-of"] = "MotorStarter",
+        };
+        flags.Remove(flagToOmit);
+
+        var args = new List<string> { "create-instance-db", "SampleProject" };
+        foreach (var flag in flags)
+        {
+            args.Add(flag.Key);
+            args.Add(flag.Value);
+        }
+
+        var result = ArgumentParser.Parse(args.ToArray());
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_CreateInstanceDb_MissingProject_Fails()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "create-instance-db",
+            "--group", "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "--name", "MotorStarter_Instance",
+            "--instance-of", "MotorStarter",
+        });
+
+        Assert.IsType<ParseResult.Failure>(result);
     }
 
     [Fact]

@@ -2580,5 +2580,45 @@ Flagged explicitly in `src/converter/README.md`'s own gaps list rather than left
 and live-verified in both directions on the first attempt each time. `SampleProject` now carries
 "Default tag table" as real, deliberate Phase 2 groundwork toward `PlantAutoControl`'s own full
 dependency closure — not scratch left behind. All three suites green: 262 converter (up from 255),
-96 `openness-cli` (up from 94), 11 golden-harness. Not yet committed — task list #127, awaiting the
-project owner's own explicit "commit this."
+96 `openness-cli` (up from 94), 11 golden-harness. Committed (`b2fe156`).
+
+### Phase 0.2: `CreateInstanceDB` grounded live — `MotorStarter` now compiles, not just imports — 2026-07-14
+
+Next step of the approved `PlantAutoControl` round-trip plan: ground `PlcBlockComposition.
+CreateInstanceDB` before assuming it's the right tool for the "Missing instance DB" gap
+(`MotorDOL`/`MotorStarter`'s own `LocalVariable`-scoped `TON` timers are multi-instance — their
+storage lives in whichever DB backs a *call* to `MotorStarter`, which doesn't exist since it was
+imported standalone with no calling FC). The prior reflected-API survey
+(`docs/notes/openness-api-surface-v20.md`) had flagged `CreateFB`/`CreateInstanceDB` as "squarely
+S6+ (logic generation) territory" — the plan explicitly called this framing out for re-examination:
+creating an instance DB for an *already-existing* FB writes no logic and invents no tag/address/DB
+number (CLAUDE.md hard rule 3) — it's project-structure scaffolding, the same category as importing
+a real dependency DB, not S6+ generation.
+
+**Confirmed real signature** via `Siemens.Engineering.xml` (TIA Portal V20 `PublicAPI`,
+`/PublicAPI/V20/Siemens.Engineering.xml`): `PlcBlockComposition.CreateInstanceDB(string name, bool
+isAutoNumbered, int number, string instanceOfName) -> InstanceDB`. Used with `isAutoNumbered:
+true` — the DB number itself is always TIA's own choice, never a literal supplied here, so nothing
+about calling this invents a DB number.
+
+**Built**: `OpennessGateway.CreateInstanceDb(groupPath, dbName, instanceOfName)` (wraps `FindGroup`
++ `group.Blocks.CreateInstanceDB(...)`, mirrors `ImportBlocks`'s own `SaveProject()`-in-`finally`
+discipline), a new `create-instance-db <project> --group <path> --name <name> --instance-of
+<FBName>` subcommand (`ArgumentParser`/`Program.cs`, mirroring `delete`'s own parsing shape). 5 new
+argument-parser tests — 101/101 `openness-cli` tests (up from 96).
+
+**Live-verified against real data, 2026-07-14.** `create-instance-db SampleProject --group
+"S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0" --name MotorStarter_Instance --instance-of
+MotorStarter` succeeded on the first attempt (`list` confirmed the new DB present, `"type": "DB"`,
+initially `"consistent": false` — expected, clears on compile, not a bug). `compile --block
+MotorStarter`: **`STATE: Success, ERRORS: 0, WARNINGS: 0`** — the "Missing instance DB" errors on
+Networks 3/8 are gone. A subsequent whole-project `compile SampleProject` (no `--block`) was also
+`STATE: Success, ERRORS: 0`.
+
+**Bottom line**: `CreateInstanceDB` is confirmed the right tool, grounded and live-verified in one
+pass. This closes the "Tier 1" gap from this session's own "what's left in `PlantAutoControl`" breakdown
+— `MotorStarter` (sanitized `MotorDOL`) is now the **first of `PlantAutoControl`'s 8 dependency FBs
+proven to round-trip *and compile*** in a target project, not just import cleanly. Directly unblocks
+Phase 1 (the same technique applies to each of the other 7 dependency FBs) and informs Phase 3
+(`PlantAutoControl`'s own 20 call-site instances will need the same treatment, pending Phase 0.3's
+grounding of exactly how `PlantAutoControl` itself represents those call sites).

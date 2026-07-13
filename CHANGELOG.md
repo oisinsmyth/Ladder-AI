@@ -10,6 +10,25 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**`openness-cli`: new `create-instance-db` command — `MotorStarter` is now the first `PlantAutoControl` dependency FB proven to compile, not just import, in a target project**
+
+- Phase 0.2 of the approved `PlantAutoControl` round-trip plan: ground `PlcBlockComposition.
+  CreateInstanceDB` live before assuming it's the right tool for the "Missing instance DB" gap
+  blocking `MotorStarter` (and, eventually, `PlantAutoControl`'s own 20 call-site instances).
+- Confirmed real signature via `Siemens.Engineering.xml` (TIA V20 `PublicAPI`):
+  `CreateInstanceDB(name, isAutoNumbered, number, instanceOfName) -> InstanceDB`. Not S6+ logic
+  generation or tag/hardware invention (CLAUDE.md hard rule 3) — the DB number is always
+  auto-assigned, never a literal passed in; the DB's own content is entirely derived from the
+  existing FB's own declaration.
+- Built `OpennessGateway.CreateInstanceDb` + a new `create-instance-db` subcommand
+  (`ArgumentParser`/`Program.cs`), 5 new argument-parser tests (101/101 `openness-cli` tests, up
+  from 96).
+- **Live-verified**: created `MotorStarter_Instance` (instance of `MotorStarter`) in
+  `SampleProject`. `compile --block MotorStarter` went from `"Missing instance DB"` (two networks)
+  to `STATE: Success, ERRORS: 0`; a subsequent whole-project compile was also clean. This closes
+  the "Tier 1" gap flagged when the `PlantAutoControl` round-trip plan was scoped — `MotorStarter` now
+  round-trips *and* compiles, the first of `PlantAutoControl`'s 8 dependency FBs to do so.
+
 **Converter + `openness-cli`: PLC tag table support (`TAGTABLE`), deliberately minimal, live-verified**
 
 - Found while confirming `PlantAutoControl`'s own exact dependency list: 10 of its ~36 referenced
