@@ -1088,7 +1088,8 @@ nested sub-members directly in the IR, one level deep, never referencing a separ
 by name — a deliberate choice (project owner's call, 2026-07-11), not a limitation: the source DB
 XML already contains the full nested shape at the point of declaration, so inlining round-trips
 with zero new converter capability, where reference-by-name would need real UDT/`PlcType` export
-support that doesn't exist yet (`ir/SPEC.md` "Structured members" has the full tradeoff). Nested
+support — which now exists (below, S1 item 26) but hasn't been adopted here; still inline, on
+purpose, not by default (`ir/SPEC.md` "Structured members" has the full tradeoff). Nested
 members are structurally minimal — only `Name`/`Datatype` and an optional `StartValue`, no
 `Remanence`/`Accessibility`/`AttributeList` — confirmed real against `ConveyorMotor1` (an instance of
 `FB MotorDOL`: a `"TypeDOL"`-typed member with 29 scalar sub-members, several `TON_TIME`/etc.
@@ -1097,6 +1098,105 @@ timer members with `PT`/`ET`/`IN`/`Q`).
 **Still hard error (design philosophy #10):** a doubly-nested structured member (a nested member
 that is itself structured); a nested `Section` named anything but `"None"`; any non-`Static`
 top-level Interface section with content.
+
+## UDT / PLC data type support (S1 item 26, 2026-07-14)
+
+Picked up per the project owner's own explicit ask, prompted by a real gap the `MotorDOL`
+full-cycle test found: even a fully self-contained FB (zero external tag/DB/FB references) still
+depends on its own declared UDT, and neither `openness-cli` nor the converter had any support for
+PLC data types at all. Grounded first (Phase 0, real `TypeDOL` export — `MotorDOL`'s own
+dependency) before any parser code, same discipline as every other construct in this project.
+
+**Confirmed real shape**, root element `SW.Types.PlcStruct`:
+
+```xml
+<SW.Types.PlcStruct ID="0">
+  <AttributeList>
+    <Interface><Sections xmlns="...Interface/v5">
+      <Section Name="None">
+        <Member Name="InHand" Datatype="Bool">
+          <AttributeList>
+            <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+          </AttributeList>
+        </Member>
+        ...
+      </Section>
+    </Sections></Interface>
+    <IsFailsafeCompliant>false</IsFailsafeCompliant>
+    <Name>TypeDOL</Name>
+    <Namespace />
+  </AttributeList>
+  <ObjectList>...Comment and Title MultilingualText, both empty...</ObjectList>
+</SW.Types.PlcStruct>
+```
+
+Genuinely simpler than a DB (no `Number`, no `InstanceOfName`), but with real, confirmed
+differences from `DbSourceParser`'s own shape, not assumed from the surface similarity:
+- The single Interface section is named `"None"`, not `"Static"` — structurally closer to a
+  *structured member's own nested* section than to a block/DB's own top-level multi-section
+  Interface.
+- Each `<Member>` carries **no `Remanence`/`Accessibility` attribute on the tag itself** — unlike
+  a DB/FB Static member, which always has both. Its own `AttributeList`'s four `BooleanAttribute`s
+  (`ExternalAccessible`/`ExternalVisible`/`ExternalWritable`/`SetPoint`) match a DB member's own
+  exactly, so `DbInterfaceMembers`'s existing `RequireDefaultBooleanAttributes` helper is reused
+  directly — only the outer Member-tag handling differs, in new `ParseTypeMember`/`WriteTypeMember`
+  methods added alongside the existing `ParseMember`/`WriteMember`.
+- **`IsFailsafeCompliant`** — a new, safety-adjacent field. Refused outright (hard error, not a
+  silent pass-through) if ever anything other than `"false"` — CLAUDE.md hard rule 2 extends
+  naturally: never touch safety/failsafe content, even to read it. Not stored as an IR field
+  (only one value ever observed) — regenerated as a validated fixed constant on write, same
+  "don't store a confirmed constant" reasoning as `Move`'s own `DisabledENO="true"`.
+- `ObjectList` carries **both** Comment and Title `MultilingualText` elements — a DB's own only
+  carries Comment; a UDT's own Title element is present (empty), not absent.
+- Members reuse `DbMember` directly (`Name`/`Datatype`/`StartValue`/`SetPoint` — `Retain`/
+  `Version`/`NestedMembers` all default/absent, since no real UDT member has shown any of them
+  yet; a nested/structured UDT member is refused, not guessed at, if ever encountered).
+
+**New files**: `SimaticMl/PlcTypeModel.cs` (`PlcTypeSource`), `PlcTypeSourceParser.cs`/
+`PlcTypeSourceWriter.cs` (mirror `DbSourceParser.cs`/`DbSourceWriter.cs` closely), `Ir/TypeIr.cs`
+(`TypeIrSerializer`/`TypeIrParser`, mirroring `DbIr.cs` — readable form `TYPE <Name> / ROOTID <id>
+/ [COMMENT] / MEMBERS`, reusing `DbMemberLineFormat` directly, no `NUMBER`/`INSTANCEOF` lines).
+`Program.cs`'s `ConvertToIr`/`ConvertToXml`/`RunSanitize` gained a third `IsTypeXml` detection
+branch alongside the existing `IsDbXml` one. `Sanitizer.ApplyToType` mirrors `ApplyToDb` — same
+shared `Names`/`Tags` map tables, so a type's own declaration and a block's own `Datatype="<Type>"`
+reference always agree.
+
+**`openness-cli` side**: new `ExportType`/`ImportTypes`/`CompileType` on `OpennessGateway`, using
+the real `PlcType`/`PlcTypeComposition`/`PlcTypeGroup` API (confirmed via `Siemens.Engineering.xml`
+doc comments — mirrors `PlcBlock`/etc. almost exactly). **No safety refusal for types** — `PlcType`
+genuinely has no `ProgrammingLanguage` property at all (confirmed by its absence from the full
+reflected property list), so there's nothing for the F-prefix classifier to check.
+`export`/`compile` gained `--type <name>` as a mutually-exclusive alternative to `--block`;
+`import` gained a `--type` switch selecting which composition (`Types` vs `Blocks`) gets imported
+into. `list`/`delete --type` deliberately deferred — not needed for this item's own goal, and
+`BlockInfo`'s own Number-less/Language-less fit for a UDT is a real design question worth the
+project owner's input rather than guessing overnight.
+
+10 new converter tests (`PlcTypeTests.cs`, fixture genericized from the real `TypeDOL` shape down
+to 6 representative members spanning every real datatype seen — `Bool`/`Real`/`UDInt`/`Word`/
+`String`), 6 new `openness-cli` argument-parser tests. All three suites green: 254 converter (up
+from 244), 79 openness-cli (up from 73), 11 golden-harness.
+
+**Live-verified against real data, 2026-07-14.** Exported `TypeDOL` fresh from `JOB9002`
+(`JOB9002_PLC` device — `TypeDOL` exists identically on both stations, `--device` needed to
+disambiguate). `to-ir`/`to-xml` round-trip byte-structurally identical (only the already-accepted
+DocumentInfo/whitespace/synthetic-MultilingualText-ID differences every other block/DB round-trip
+already has). Sanitized (`sanitization/TypeDOL.map.json`, reusing the already-established
+`TypeDOL`→`MotorIOSet` name from `sanitization/reference-project.map.json`), imported cleanly into
+`SampleProject`, compiled cleanly via the new `compile --type` (`IsConsistent` quirk, same as
+blocks — cleared in one call). Re-imported the already-sanitized `MotorDOL.sanitized.xml` (from
+the paused full-cycle work): **the `Data type "MotorIOSet" is unknown` error is gone** — UDT
+support directly resolves the gap it was built for.
+
+**A genuinely new, separate finding surfaced immediately after**: importing `MotorDOL` itself now
+fails with a *different* error — `"The elements must be sorted according to the current flow"` at
+`Part UId=49` (an `RCoil`, network 3, `"Start Signal After Inhibit/Fault"`). This is a real
+`FlgNetWriter` gap (Parts/Wires aren't emitted in whatever order TIA's own Import() validator
+expects) — unrelated to UDT support, previously masked by the UDT blocker this item resolves, not
+investigated further here. Full story: `docs/notes/stage-gates.md` ("UDT/PLC data type support").
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

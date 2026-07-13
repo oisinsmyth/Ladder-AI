@@ -51,6 +51,26 @@ public class ExportImportCompileArgumentParserTests
     }
 
     [Fact]
+    public void Parse_Export_WithType_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "export", "MyProject", "--type", "TypeDOL", "--out", "C:\\out.xml" });
+
+        var success = Assert.IsType<ParseResult.ExportSuccess>(result);
+        Assert.Equal("TypeDOL", success.Options.TypeName);
+        Assert.Null(success.Options.BlockName);
+    }
+
+    [Fact]
+    public void Parse_Export_BlockAndType_Fails()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "export", "MyProject", "--block", "PlantAutoControl", "--type", "TypeDOL", "--out", "C:\\out.xml",
+        });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
     public void Parse_Import_WithGroupAndFiles_Succeeds()
     {
         var result = ArgumentParser.Parse(new[]
@@ -76,6 +96,31 @@ public class ExportImportCompileArgumentParserTests
     {
         var result = ArgumentParser.Parse(new[] { "import", "MyProject", "--group", "station_2/PLC/Control" });
         Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_Import_WithType_SetsAsType()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "import", "MyProject", "--group", "station_2/JOB9002_PLC/Control", "--type", "C:\\TypeDOL.xml",
+        });
+
+        var success = Assert.IsType<ParseResult.ImportSuccess>(result);
+        Assert.True(success.Options.AsType);
+        Assert.Equal(new[] { "C:\\TypeDOL.xml" }, success.Options.Files);
+    }
+
+    [Fact]
+    public void Parse_Import_WithoutType_AsTypeIsFalse()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "import", "MyProject", "--group", "station_2/JOB9002_PLC/Control", "C:\\a.xml",
+        });
+
+        var success = Assert.IsType<ParseResult.ImportSuccess>(result);
+        Assert.False(success.Options.AsType);
     }
 
     [Fact]
@@ -108,6 +153,23 @@ public class ExportImportCompileArgumentParserTests
         var success = Assert.IsType<ParseResult.CompileSuccess>(result);
         Assert.Equal("NodeStatusAlarms", success.Options.Block);
         Assert.Equal("station_1", success.Options.Device);
+    }
+
+    [Fact]
+    public void Parse_Compile_WithType_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "compile", "MyProject", "--type", "TypeDOL", "--device", "station_1" });
+
+        var success = Assert.IsType<ParseResult.CompileSuccess>(result);
+        Assert.Equal("TypeDOL", success.Options.Type);
+        Assert.Null(success.Options.Block);
+    }
+
+    [Fact]
+    public void Parse_Compile_BlockAndType_Fails()
+    {
+        var result = ArgumentParser.Parse(new[] { "compile", "MyProject", "--block", "NodeStatusAlarms", "--type", "TypeDOL" });
+        Assert.IsType<ParseResult.Failure>(result);
     }
 
     [Fact]

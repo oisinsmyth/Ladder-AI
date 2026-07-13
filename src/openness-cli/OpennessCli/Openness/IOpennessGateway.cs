@@ -21,12 +21,30 @@ public interface IOpennessGateway : IDisposable
     void ExportBlock(string blockName, string? deviceFilter, string outPath);
 
     /// <summary>
+    /// Exports the named PLC data type (UDT) to <paramref name="outPath"/>. Same
+    /// <paramref name="deviceFilter"/> disambiguation as <see cref="ExportBlock"/>. No safety
+    /// refusal here — confirmed real, 2026-07-14: <c>PlcType</c> has no <c>ProgrammingLanguage</c>
+    /// property at all (reflected on the installed DLL), so there's nothing for the F-prefix
+    /// safety classifier to check; a UDT is a plain data-type declaration, never executable logic.
+    /// </summary>
+    void ExportType(string typeName, string? deviceFilter, string outPath);
+
+    /// <summary>
     /// Imports <paramref name="files"/> into the block group at <paramref name="groupPath"/>
     /// (format: "&lt;device&gt;/&lt;group&gt;/.../&lt;group&gt;", matching the Path shown by
     /// `list`). No generic "import wherever it goes" exists on the Siemens side, so an explicit
     /// target is required here too.
     /// </summary>
     IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files);
+
+    /// <summary>
+    /// Imports <paramref name="files"/> as PLC data types (UDTs) into the type group at
+    /// <paramref name="groupPath"/> — same path format as <see cref="ImportBlocks"/>, but a
+    /// distinct composition tree (<c>PlcTypeGroup.Types</c>, not <c>PlcBlockGroup.Blocks</c>).
+    /// Returns imported type names, not <see cref="BlockInfo"/> — a UDT has no Number/
+    /// ProgrammingLanguage to report.
+    /// </summary>
+    IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files);
 
     /// <summary>Compiles the PLC software under <paramref name="deviceFilter"/> (or the project's only PLC device, if unambiguous).</summary>
     CompileResult Compile(string? deviceFilter);
@@ -52,6 +70,13 @@ public interface IOpennessGateway : IDisposable
     /// same way as <see cref="ExportBlock"/>. Refuses safety content, same as export/import.
     /// </summary>
     CompileResult CompileBlock(string blockName, string? deviceFilter);
+
+    /// <summary>
+    /// Compiles a single named PLC data type (UDT) via its own <c>ICompilable</c> service —
+    /// mirrors <see cref="CompileBlock"/>, minus the safety check (no <c>ProgrammingLanguage</c>
+    /// on <c>PlcType</c> — see <see cref="ExportType"/>'s own doc comment).
+    /// </summary>
+    CompileResult CompileType(string typeName, string? deviceFilter);
 
     /// <summary>
     /// Read-only health check: enumerates every block's consistency flag (no export attempt
@@ -106,6 +131,22 @@ public sealed class AmbiguousBlockException : Exception
 {
     public AmbiguousBlockException(string blockName, IEnumerable<string> paths)
         : base($"Block '{blockName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+public sealed class TypeNotFoundException : Exception
+{
+    public TypeNotFoundException(string typeName)
+        : base($"No PLC data type (UDT) named '{typeName}' found in the project.")
+    {
+    }
+}
+
+public sealed class AmbiguousTypeException : Exception
+{
+    public AmbiguousTypeException(string typeName, IEnumerable<string> paths)
+        : base($"Type '{typeName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
     {
     }
 }

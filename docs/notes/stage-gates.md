@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, plus GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members. **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **all 8 of its dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 244 converter, 68 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`/`compile --type`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members, and now UDT/PLC data type support (S1 item 26 — `SW.Types.PlcStruct`, live-verified). **`FC PlantAutoControl` now converts as a whole block** (`to-ir → to-xml → to-ir` byte-identical) — the first real production block this session to fully round-trip end to end; **all 8 of its dependency FBs** (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem`) now do too. The true TIA-cycle proof for `PlantAutoControl` specifically remains open: it depends on external tags/FBs no other TIA project has — see S1 items 16/17 below. UDT support (item 26) resolved `MotorDOL`'s own `TypeDOL` dependency blocker but surfaced a new, separate, unaddressed `FlgNetWriter` Part-ordering bug blocking `MotorDOL`'s own import — open item, not yet fixed. Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`). All PC-side suites green: 254 converter, 79 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -2212,3 +2212,86 @@ the project owner's explicit go-ahead before committing.
 **Bottom line:** the concurrent-session safety property (never force-close a project this tool
 didn't open) is preserved; the resource-pileup side effect that safety property introduced is
 fixed by preferring reuse of any already-usable running process over always creating a new one.
+
+### S1 item 26 (UDT / PLC data type support), 2026-07-14
+
+Picked up per the project owner's own explicit ask ("let's work on UDTs next"), directly motivated
+by a real gap the paused `MotorDOL` full-cycle test found: even a fully self-contained FB (zero
+external tag/DB/FB references) still depends on its own declared UDT (`TypeDOL`) — neither
+`openness-cli` nor the converter had any PLC-data-type support at all before this item.
+
+**Phase 0 grounding hit a real, initially-alarming obstacle**: launching a second concurrent Portal
+instance to export `TypeDOL` (one `SampleProject` instance was already idly running) repeatedly
+failed to connect at all — four patient retries, up to a full 9-minute timeout, all failed
+identically with no second process ever appearing (`docs/notes/openness-quirks.md`'s own "A second
+concurrent Portal instance sometimes won't connect at all" section has the detail). Respected the
+existing discipline around not killing Portal processes without explicit, specific, per-instance
+confirmation — rather than force a diagnostic overnight, the item paused with implementation-ready
+`openness-cli` plumbing done but zero converter code written against an unconfirmed shape.
+
+**Resolved on retry, not by a fix**: the next session turn, a fresh `export --type TypeDOL --device
+JOB9002_PLC` attempt succeeded immediately — a new Portal instance launched, just needed more
+patience than the earlier attempts' timeout budgets allowed. The blocker was transient, not a real
+concurrency limit; `openness-quirks.md`'s own "unresolved" framing for that section is now stale
+and should be read alongside this entry, not as the final word.
+
+**Confirmed real shape**, root element `SW.Types.PlcStruct`, structurally closer to `PlcBlock` than
+first assumed but with genuine, confirmed differences (full detail: `src/converter/README.md`'s new
+"UDT / PLC data type support" section): no `Number`, no `ProgrammingLanguage` (so no safety
+classification concept exists for a UDT at all — confirmed by its absence from the reflected
+property list, not assumed); the one Interface section is named `"None"`, not `"Static"`; each
+`<Member>` carries no `Remanence`/`Accessibility` attribute (unlike a DB/FB Static member, which
+always has both) but the same four `BooleanAttribute`s; a new safety-adjacent
+`<IsFailsafeCompliant>` element, hard-errored on if ever anything but `"false"` (CLAUDE.md hard
+rule 2 extended to a construct that has no other safety-classification surface); `ObjectList`
+carries both Comment and Title `MultilingualText` (a DB's own only carries Comment).
+
+**Design**: reused `DbMember`/`DbMemberLineFormat` directly rather than building a parallel member
+model — the four `BooleanAttribute`s and `StartValue` shape match a DB/FB Static member's own
+exactly, confirmed by grounding rather than assumed from the surface similarity. New
+`PlcTypeSource`/`PlcTypeSourceParser`/`PlcTypeSourceWriter`/`TypeIr.cs` mirror
+`DbSource`/`DbSourceParser`/`DbSourceWriter`/`DbIr.cs` closely, simpler in the same places a UDT is
+simpler than a DB (no `NUMBER`/`INSTANCEOF` lines). `Sanitizer.ApplyToType` reuses the existing
+`Names`/`Tags` map tables unchanged. `openness-cli` gained `ExportType`/`ImportTypes`/`CompileType`
+on `OpennessGateway` (using the real `PlcType`/`PlcTypeComposition`/`PlcTypeGroup` API, confirmed
+via `Siemens.Engineering.xml` doc comments to mirror `PlcBlock`/etc. almost exactly) and `--type` as
+a mutually-exclusive alternative to `--block` on `export`/`import`/`compile`. `list`/`delete --type`
+deliberately deferred — not needed for this item's own goal.
+
+10 new converter tests (`PlcTypeTests.cs`, fixture genericized from the real `TypeDOL` shape down to
+6 representative members spanning every real datatype seen), 6 new `openness-cli` argument-parser
+tests. All three suites green: **254 converter tests** (up from 244), **79 openness-cli tests** (up
+from 73), 11 golden-harness.
+
+#### Live verification against real data, 2026-07-14 — the original blocker is resolved; a new, separate one is found
+
+Exported the real `TypeDOL` from `JOB9002_PLC` (`--device` needed — `TypeDOL` exists identically on
+both stations), round-tripped `to-ir`/`to-xml` byte-structurally identical (only the already-
+accepted DocumentInfo/whitespace/synthetic-MultilingualText-ID differences every other block/DB
+round-trip already has). Sanitized (`sanitization/TypeDOL.map.json`, reusing the already-
+established `TypeDOL`→`MotorIOSet` name from `sanitization/reference-project.map.json`), imported
+cleanly into `SampleProject`, compiled cleanly via the new `compile --type` (the already-documented
+`IsConsistent` quirk applies here too — cleared in one call, same as blocks). All real exported
+content deleted from scratch temp immediately after use.
+
+**Re-imported the already-sanitized `MotorDOL.sanitized.xml` (paused, waiting since the earlier
+full-cycle work) — the original `Data type "MotorIOSet" is unknown` error is gone.** UDT support
+directly and completely resolves the gap it was built for.
+
+**A genuinely new, separate finding surfaced immediately after**: importing `MotorDOL` itself now
+fails with a *different* error — `"The elements must be sorted according to the current flow"` at
+`Part UId=49` (an `RCoil`, network 3, "Start Signal After Inhibit/Fault"). Confirmed this is
+unrelated to UDT support or sanitization (sanitization only renames identifiers, never reorders XML
+elements) — a real `FlgNetWriter` Part-ordering gap, TIA's own `Import()` validator apparently
+expecting Parts/Wires in some data-flow-topological order this converter doesn't currently
+guarantee. Per hard rule 7, not hand-patched — flagged as a new, distinct open item rather than
+fixed silently inside this one. Confirmed the failed import rolled back cleanly (`list` showed
+`SampleProject`'s original 10 blocks, unchanged) and that `MotorIOSet` itself remained present and
+compilable throughout.
+
+**Bottom line:** UDT/PLC-data-type support is built, tested, and live-verified end to end — the
+exact blocker that motivated it (`MotorDOL`'s own `TypeDOL` dependency) is closed. The broader goal
+this session's "full import+compile cycle test" work has been chasing (`MotorDOL` compiling
+standalone in `SampleProject`) is not yet reached — the UDT gap that was blocking it is gone, but a
+new, separate, unaddressed Part-ordering bug now stands in its place. Worth raising with the project
+owner as its own item once this one is committed.

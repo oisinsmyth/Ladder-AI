@@ -10,19 +10,26 @@ public sealed record ListOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Exactly one of BlockName/TypeName is set — --block and --type are mutually exclusive
+// alternatives (a PLC data type/UDT, confirmed real 2026-07-14, has no Number/ProgrammingLanguage
+// the way a block does, so it needs its own distinct resolution path, not a shared "name" field).
 public sealed record ExportCommandOptions(
     string ProjectIdentifier,
-    string BlockName,
+    string? BlockName,
+    string? TypeName,
     string? Device,
     string OutPath,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// AsType selects which composition Import() targets (PlcTypeGroup.Types vs. PlcBlockGroup.Blocks)
+// — defaults to false (blocks), today's existing behavior, unchanged.
 public sealed record ImportCommandOptions(
     string ProjectIdentifier,
     string GroupPath,
     IReadOnlyList<string> Files,
+    bool AsType,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -31,6 +38,7 @@ public sealed record CompileCommandOptions(
     string ProjectIdentifier,
     string? Device,
     string? Block,
+    string? Type,
     bool Json,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
@@ -74,12 +82,13 @@ public static class ArgumentParser
     private const string Usage =
         "Usage:\n" +
         "  openness-cli list          <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli export        <project> --block <name> --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli import        <project> --group <device>/<path> <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli compile       <project> [--device <name>] [--block <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli export        <project> (--block <name> | --type <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli import        <project> --group <device>/<path> [--type] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.";
+        "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
+        "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.";
 
     public static ParseResult Parse(string[] args)
     {
@@ -167,6 +176,7 @@ public static class ArgumentParser
     {
         string? projectIdentifier = null;
         string? block = null;
+        string? type = null;
         string? device = null;
         string? outPath = null;
         string? tiaInstall = null;
@@ -181,6 +191,13 @@ public static class ArgumentParser
                     if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
                     {
                         return new ParseResult.Failure(blockErr);
+                    }
+
+                    break;
+                case "--type":
+                    if (!TryTakeValue(args, ref i, "--type", out type, out var typeErr))
+                    {
+                        return new ParseResult.Failure(typeErr);
                     }
 
                     break;
@@ -234,9 +251,14 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        if (block is null)
+        if (block is null && type is null)
         {
-            return new ParseResult.Failure($"Missing required flag: --block <name>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Missing required flag: --block <name> or --type <name>.{Environment.NewLine}{Usage}");
+        }
+
+        if (block is not null && type is not null)
+        {
+            return new ParseResult.Failure($"--block and --type are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
         if (outPath is null)
@@ -244,7 +266,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --out <path>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, device, outPath, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, device, outPath, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseImport(string[] args)
@@ -252,6 +274,7 @@ public static class ArgumentParser
         string? projectIdentifier = null;
         string? group = null;
         var files = new List<string>();
+        var asType = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -266,6 +289,9 @@ public static class ArgumentParser
                         return new ParseResult.Failure(groupErr);
                     }
 
+                    break;
+                case "--type":
+                    asType = true;
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -322,7 +348,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: at least one <file>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files, asType, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompile(string[] args)
@@ -330,6 +356,7 @@ public static class ArgumentParser
         string? projectIdentifier = null;
         string? device = null;
         string? block = null;
+        string? type = null;
         var json = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -350,6 +377,13 @@ public static class ArgumentParser
                     if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
                     {
                         return new ParseResult.Failure(blockErr);
+                    }
+
+                    break;
+                case "--type":
+                    if (!TryTakeValue(args, ref i, "--type", out type, out var typeErr))
+                    {
+                        return new ParseResult.Failure(typeErr);
                     }
 
                     break;
@@ -392,7 +426,12 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, json, tiaInstall, timeoutConnect, timeoutOpen));
+        if (block is not null && type is not null)
+        {
+            return new ParseResult.Failure($"--block and --type are mutually exclusive.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, type, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseDelete(string[] args)

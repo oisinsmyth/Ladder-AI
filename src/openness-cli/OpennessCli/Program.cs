@@ -101,25 +101,50 @@ internal static class Program
     private static int RunExport(IOpennessGateway gateway, ExportCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        gateway.ExportBlock(options.BlockName, options.Device, options.OutPath);
-        Console.WriteLine($"Exported '{options.BlockName}' -> {options.OutPath}");
+        if (options.TypeName is not null)
+        {
+            gateway.ExportType(options.TypeName, options.Device, options.OutPath);
+            Console.WriteLine($"Exported '{options.TypeName}' -> {options.OutPath}");
+        }
+        else
+        {
+            gateway.ExportBlock(options.BlockName!, options.Device, options.OutPath);
+            Console.WriteLine($"Exported '{options.BlockName}' -> {options.OutPath}");
+        }
+
         return ExitCodes.Success;
     }
 
     private static int RunImport(IOpennessGateway gateway, ImportCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var imported = gateway.ImportBlocks(options.GroupPath, options.Files);
-        Console.WriteLine(OutputFormatter.FormatTable(imported));
+        if (options.AsType)
+        {
+            var importedTypes = gateway.ImportTypes(options.GroupPath, options.Files);
+            foreach (var name in importedTypes)
+            {
+                Console.WriteLine(name);
+            }
+        }
+        else
+        {
+            var imported = gateway.ImportBlocks(options.GroupPath, options.Files);
+            Console.WriteLine(OutputFormatter.FormatTable(imported));
+        }
+
         return ExitCodes.Success;
     }
 
     private static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = options.Block is null
-            ? gateway.Compile(options.Device)
-            : gateway.CompileBlock(options.Block, options.Device);
+        var result = (options.Block, options.Type) switch
+        {
+            (null, null) => gateway.Compile(options.Device),
+            (not null, null) => gateway.CompileBlock(options.Block, options.Device),
+            (null, not null) => gateway.CompileType(options.Type, options.Device),
+            _ => throw new InvalidOperationException("--block and --type are mutually exclusive."),
+        };
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
         return result.State == Model.CompileState.Success ? ExitCodes.Success : ExitCodes.CompileFailed;
     }

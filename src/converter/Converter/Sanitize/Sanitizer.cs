@@ -146,6 +146,40 @@ public static class Sanitizer
         return db with { Name = sanitizedName!, InstanceOfName = sanitizedInstanceOfName, Comment = sanitizedComment, Members = sanitizedMembers };
     }
 
+    /// <summary>
+    /// PLC data type (UDT) analogue of <see cref="ApplyToDb"/> — same reasoning: a type has no
+    /// tag references of its own, its name and member names are what other blocks' Datatype/tag
+    /// references point at, sanitized via the same shared <see cref="SanitizationMap.Names"/>/
+    /// <see cref="SanitizationMap.Tags"/> tables so a UDT's own declaration and a block's own
+    /// `Datatype="&lt;Type&gt;"` reference (<see cref="SanitizeDatatype"/>) always agree.
+    /// </summary>
+    public static PlcTypeSource ApplyToType(PlcTypeSource type, SanitizationMap map)
+    {
+        var missing = new List<string>();
+
+        var sanitizedName = Require(
+            map.Names.TryGetValue(type.Name, out var mappedName) ? mappedName : null,
+            $"Names[\"{type.Name}\"]",
+            missing);
+
+        var sanitizedComment = SanitizeComment(
+            type.Comment,
+            map.Comments.TryGetValue(type.Name, out var mappedComment) ? mappedComment : null,
+            $"Comments[\"{type.Name}\"]",
+            missing);
+
+        var sanitizedMembers = type.Members.Select(member => SanitizeMember(type.Name, member, map, missing)).ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new SanitizationMapException(
+                $"Sanitization map is missing {missing.Count} entr{(missing.Count == 1 ? "y" : "ies")}:\n  " +
+                string.Join("\n  ", missing));
+        }
+
+        return type with { Name = sanitizedName!, Comment = sanitizedComment, Members = sanitizedMembers };
+    }
+
     // ownerName is a DB name for DbSource.Members, or a block (FC/FB) name for
     // BlockSource.StaticMembers/TempMembers — the same Tags-map convention
     // ("<Owner>.<Member>" -> "<InventedOwner>.<InventedMember>") covers both, one shared mapping.

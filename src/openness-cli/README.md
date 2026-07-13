@@ -6,9 +6,9 @@ C# CLI — the only component that talks to TIA Portal (via Openness). Built in 
 
 ```
 openness-cli list          <project>                                           # enumerate blocks; F-/safety blocks flagged, never opened
-openness-cli export        <project> --block <name> [--device <name>] --out <path>   # block → SimaticML (refuses safety blocks)
-openness-cli import        <project> --group <device>/<path> <files...>        # SimaticML → TIA
-openness-cli compile       <project> [--device <name>]                         # diagnostics; non-zero exit on error
+openness-cli export        <project> (--block <name> | --type <name>) [--device <name>] --out <path>   # block/UDT → SimaticML (refuses safety blocks)
+openness-cli import        <project> --group <device>/<path> [--type] <files...>   # SimaticML → TIA (--type imports into the Types composition, not Blocks)
+openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
@@ -45,6 +45,8 @@ openness-cli export <project> --block <name> [--device <device>] --out <path> [c
 
 Refuses (before calling `Export()` at all) if the block classifies as safety. `--device` disambiguates when the same block name/number exists under more than one device (common — this project's own scratch copy has two linked PLC stations). Deletes a pre-existing file at `--out` itself rather than surfacing Siemens's "file already exists" exception; retries once if `Export()` returns without producing a file (a real, observed quirk — `docs/notes/openness-quirks.md`).
 
+`--type <name>` exports a PLC data type (UDT) instead of a block — mutually exclusive with `--block`. Backed by `PlcType.Export()`, the real `SW.Types.PlcType`/`PlcTypeComposition`/`PlcTypeGroup` API (confirmed via `Siemens.Engineering.xml` doc comments to mirror `PlcBlock`/etc. almost exactly). **No safety refusal for types** — `PlcType` genuinely has no `ProgrammingLanguage` property at all (confirmed by its absence from the full reflected property list), so there's nothing for the safety classifier to check. Same `--device` disambiguation as `--block`.
+
 ```
 openness-cli import <project> --group <device>/<path> <file> [<file> ...] [common flags]
 ```
@@ -53,6 +55,8 @@ openness-cli import <project> --group <device>/<path> <file> [<file> ...] [commo
 
 **This is also "update a block": importing to a group that already has a same-named block overwrites it in place** (`ImportOptions.Override`, always passed) rather than erroring or duplicating — confirmed live, 2026-07-13, against `SampleProject`'s own `TimerSample`: re-imported a version with one changed field, re-exported, and the change was present with no second block created (`docs/notes/openness-quirks.md` has the full story, including the `IsConsistent` gotcha below). There is no separate "update" subcommand — `import` already is one, once you point `--group` at wherever the existing block lives.
 
+`--type` imports the given file(s) as PLC data types (into the `Types` composition at `--group`'s path) instead of blocks (`Blocks`) — needed first when a block's own `import` would otherwise fail with `Data type "<name>" is unknown`. Live-verified, 2026-07-14: importing a sanitized `TypeDOL` UDT this way into `SampleProject`, then retrying a block import that depended on it, made the "unknown data type" error disappear — `docs/notes/stage-gates.md` ("S1 item 26") has the full story.
+
 ```
 openness-cli compile <project> [--device <device>] [--block <name>] [--json] [common flags]
 ```
@@ -60,6 +64,8 @@ openness-cli compile <project> [--device <device>] [--block <name>] [--json] [co
 Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — whole-program compile. With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-10 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`. Non-zero exit when `State != Success`.
 
 A block-level compile can fail with a real error (not just an `IsConsistent` artifact) if something it calls hasn't itself been recompiled yet — seen live on `ControlMain` (calls `PlantAutoControl`): failed first, then succeeded cleanly once `PlantAutoControl` had been compiled. Compile callees before callers, or just retry a caller after its callees are clean.
+
+`--type <name>` compiles a PLC data type instead of a block — mutually exclusive with `--block`, same `--device` disambiguation, no safety refusal (see `export --type` above). Live-verified, 2026-07-14: `compile --type MotorIOSet` cleared the same post-import `IsConsistent` quirk blocks hit, in one call.
 
 ```
 openness-cli delete <project> --block <name> [--device <device>] --yes [common flags]

@@ -186,6 +186,61 @@ internal static class DbInterfaceMembers
         return new DbMember(name, datatype, Retain: false, startValue);
     }
 
+    /// <summary>
+    /// Parses a PLC data type (UDT)'s own member shape — confirmed real, 2026-07-14 (`TypeDOL`,
+    /// grounding S1's UDT support): `&lt;Member Name=... Datatype=...&gt;&lt;AttributeList&gt;
+    /// ...same four BooleanAttributes as a DB/FB Static member (ExternalAccessible/Visible/
+    /// Writable/SetPoint, via <see cref="RequireDefaultBooleanAttributes"/>)...&lt;/AttributeList&gt;
+    /// [&lt;StartValue&gt;...&lt;/StartValue&gt;]&lt;/Member&gt;` — genuinely distinct from
+    /// <see cref="ParseMember"/>'s own shape: **no `Remanence`/`Accessibility` attribute on the
+    /// `&lt;Member&gt;` tag itself** (every real `TypeDOL` member confirmed lacking both). Nested
+    /// structured members (a UDT field typed as another UDT) are refused rather than guessed at —
+    /// `ParseNestedMembers`'s own shape was confirmed for DB/FB Static members specifically, not
+    /// for this context, and no real example has shown it here.
+    /// </summary>
+    public static DbMember ParseTypeMember(XElement member, string context)
+    {
+        var name = RequireAttribute(member, "Name");
+        var datatype = RequireAttribute(member, "Datatype");
+
+        if (member.Elements().Any(e => e.Name.LocalName == "Sections"))
+        {
+            throw new UnsupportedConstructException(
+                $"{context} member '{name}' has nested structured content (<Sections>) — not confirmed real for a PLC data type's own member, refused rather than guessed at.");
+        }
+
+        var setPoint = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: true);
+
+        var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
+        var startValue = startValueElement?.Value;
+
+        return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue, SetPoint: setPoint);
+    }
+
+    /// <summary>Inverse of <see cref="ParseTypeMember"/> — no Remanence/Accessibility attribute, same four BooleanAttributes as WriteMember's own AttributeList.</summary>
+    public static XElement WriteTypeMember(DbMember member)
+    {
+        var attributeList = new XElement(
+            Ns + "AttributeList",
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "SetPoint"), new XAttribute("SystemDefined", "true"), member.SetPoint ? "true" : "false"));
+
+        var memberElement = new XElement(
+            Ns + "Member",
+            new XAttribute("Name", member.Name),
+            new XAttribute("Datatype", member.Datatype),
+            attributeList);
+
+        if (member.StartValue is not null)
+        {
+            memberElement.Add(new XElement(Ns + "StartValue", member.StartValue));
+        }
+
+        return memberElement;
+    }
+
     public static XElement WriteConstantMember(DbMember member)
     {
         var startValue = member.StartValue

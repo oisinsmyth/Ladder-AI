@@ -507,15 +507,22 @@ than prose here.
 ## Tag tables, UDTs, DBs
 
 **Status: DB shape below is converter-verified (2026-07-10, against three real GlobalDB
-exports — `src/converter/README.md`); the original sketch had two things wrong, corrected here.
-UDT support is still a sketch, not yet built.**
+exports — `src/converter/README.md`). UDT (PLC data type) support is converter-verified
+2026-07-14, against a real export (`TypeDOL`, `src/converter/README.md`) — the original sketch's
+own `UDT <Name>` grammar (below) was a pre-grounding guess; the confirmed real shape uses the
+`TYPE` keyword instead, corrected here.**
 
 Simpler tabular sub-format — no wiring, so the network grammar above doesn't apply:
 
 ```
-UDT <Name>
-  <member> : <Type>
-  <member> : <Type>
+TYPE <Name>
+  ROOTID <id>
+  COMMENT "<text>"                        # omitted if empty, same rule as BLOCK/DB
+  MEMBERS
+    <member> : <Type>
+    <member> : <Type> = <start value>
+    <member> : <Type> SETPOINT            # present only when the source's own SetPoint
+                                           # BooleanAttribute is true
 
 DB <Name>
   ROOTID <id>
@@ -531,6 +538,24 @@ DB <Name>
       <nested member> : <Type>            # structured members only — one level, see below
       <nested member> : <Type> = <start value>
 ```
+
+**`TYPE` (a standalone PLC data type / UDT, source root element `SW.Types.PlcStruct`)** —
+confirmed real 2026-07-14, grounded against `TypeDOL` (`FB MotorDOL`'s own dependency, found
+while attempting a full import+compile cycle test for `PlantAutoControl`'s dependency FBs). Genuinely
+simpler than `DB`: no `NUMBER` (a `PlcType` has no `Number` the way a block does — confirmed by
+its absence from the reflected `Siemens.Engineering` API), no `INSTANCEOF` (a type is never an
+instance of anything). Members reuse the exact same underlying shape as a DB's own `Static`
+section (`Name`/`Datatype`/optional `StartValue`/`SETPOINT`) — but the real *source XML* differs
+in two confirmed ways from a DB/FB Static member: the section is named `"None"`, not `"Static"`,
+and each `<Member>` carries no `Remanence`/`Accessibility` attribute on the tag itself (only its
+own `AttributeList`'s four `BooleanAttribute`s — `ExternalAccessible`/`ExternalVisible`/
+`ExternalWritable`/`SetPoint` — which do match exactly). No real example has shown `RETAIN` or a
+nested/structured member on a type's own member yet — the converter hard-errors on either rather
+than guessing (`docs/notes/stage-gates.md`, "UDT/PLC data type support"). This is a standalone
+top-level construct (its own exportable/importable `SW.Types.PlcStruct` file), genuinely separate
+from — and does not yet replace — the inline structured-member representation a DB/FB's own
+`Static` section still uses (below); see that section's own note on why reference-by-name was
+deferred, now unblocked by this capability but not yet acted on.
 
 Two corrections from the original sketch, both wrong until checked against a real export:
 
@@ -558,18 +583,23 @@ for Global DBs (absence-means-default, same convention as `COMMENT`).
 
 **Structured members — inline, decided 2026-07-11 (project owner's call).** Two representations
 were weighed: inline the nested members directly at each use site (chosen), or have a DB member
-reference a separately-defined `UDT <Name>` (this section's existing top-level form) by name,
+reference a separately-defined `TYPE <Name>` (this section's own top-level form, above) by name,
 carrying only per-instance overrides — closer to how a controls engineer already thinks about
 UDTs (site convention C-302: the reusable unit) and how a programming language treats a data
-class. Reference-by-name is the better long-term shape but isn't safely buildable yet: there is
-no UDT export capability (`openness-cli` only touches `PlcBlock`s, not `PlcType`s), so the
-"canonical" UDT shape would have to be derived by guessing from whichever DB happens to be
-converted first — in tension with this project's core no-guessing discipline (`04-design-philosophy.md`
-#7/#10). Inline needs nothing new: the DB source XML already contains the full nested shape at
-the point of declaration (TIA writes it out redundantly with the UDT/timer's own definition, not
-just a type-name pointer), so it round-trips with zero new converter capability. Revisit
-reference-by-name as its own deliberate phase once real UDT export exists — not by drifting back
-into it without an ADR (`10-non-goals.md`'s "not now" discipline).
+class. Reference-by-name is the better long-term shape but wasn't safely buildable at the time:
+there was no UDT export capability (`openness-cli` only touched `PlcBlock`s, not `PlcType`s), so
+the "canonical" UDT shape would have had to be derived by guessing from whichever DB happened to
+be converted first — in tension with this project's core no-guessing discipline
+(`04-design-philosophy.md` #7/#10). Inline needs nothing new: the DB source XML already contains
+the full nested shape at the point of declaration (TIA writes it out redundantly with the UDT/
+timer's own definition, not just a type-name pointer), so it round-trips with zero new converter
+capability. **Update, 2026-07-14: real UDT export now exists** (`TYPE`, above) — the blocker this
+note originally described is resolved. Reference-by-name has *not* been adopted, though — this
+was scoped narrowly (get a UDT's own declaration round-tripping standalone, to unblock importing
+a dependency FB that needs its own UDT present in the target project) and deliberately didn't
+revisit the DB/FB inline-vs-reference design question, per this doc's own "not by drifting back
+into it without an ADR" rule. Worth raising as its own deliberate follow-up now that it's
+possible, not assumed.
 
 Two structured-member shapes confirmed real, both one level of nesting, never deeper (a nested
 member that is itself structured is a hard error — unconfirmed shape):

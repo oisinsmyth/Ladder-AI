@@ -382,3 +382,45 @@ covered, worth a dedicated pass later:
 - `PathsMatch`/`FindAlreadyOpenProject` are pure string/path logic, not COM-touching — genuinely
   unit-testable (unlike the rest of `OpennessGateway`), and currently have zero test coverage.
   Lowest-effort, highest-value item on this list — worth doing before the others.
+
+## A second concurrent Portal instance sometimes won't connect at all (2026-07-14, transient — resolved on retry)
+
+**Update, 2026-07-14, next session turn:** a fresh retry (`export --type TypeDOL --device
+JOB9002_PLC`, same target project, one `SampleProject` instance still idly running) succeeded
+immediately — a new Portal instance launched, just slower than the timeout budgets below allowed
+for. Never reproduced again afterward in the same session. Whatever caused the four failures below
+was transient, not a hard concurrency limit — the working hypotheses underneath (licensing/seat
+limits, resource contention) are now the *less* likely explanations, though still unconfirmed
+either way. Leaving the original entry below intact as the real, live symptom observed at the
+time — just no longer treat it as an open blocker.
+
+Hit live while grounding UDT support (`export --type TypeDOL` against `JOB9002`, one `SampleProject`
+Portal instance already idly running from earlier work). Four patient retries
+(`--timeout-connect` 240s, 280s, 320s, 560s — the last one waited a full 9 minutes) all failed
+identically at the *connect* stage — `openness-cli`'s own graceful internal timeout fired every
+time (confirmed: `ConnectTimeoutException`'s message, not a Bash-tool-level kill), and `tasklist`
+confirmed **no second Portal process ever appeared** — the launch attempt itself never got far
+enough to spawn a visible process, let alone open a project. A plain `list` against the same
+project failed identically, ruling out anything specific to `--type`/`export`.
+
+**Not the same failure mode as the earlier pileup bug** (`docs/notes/openness-quirks.md`'s own
+"Follow-up, 2026-07-14" section) — that one produced *extra* processes; this one produces *none*.
+Whatever's gating this happens before `TiaPortal`'s own constructor returns anything observable.
+
+**Not resolved this session** — the one obvious next diagnostic step (close the idle
+`SampleProject` instance and retry with zero other Portal processes running, to isolate whether
+this is specifically about *concurrency* or something else entirely) needs explicit human
+confirmation before killing a Portal process, correctly enforced by Claude Code's own safety
+classifier even under a general "keep working, I trust your judgment" instruction — a blanket
+statement doesn't meet the bar this session already established (explicit, specific,
+per-instance confirmation) for an irreversible action, especially with the user not immediately
+available to catch a mistake. Left the idle instance running rather than forcing the issue.
+
+**Working hypotheses, none confirmed**: a TIA Portal licensing/seat limit specific to
+Openness-launched (`new TiaPortal(...)`) instances (as opposed to a manually double-clicked
+`Siemens.Automation.Portal.exe`, which is how the *other* concurrent instance in this same session
+was created, and which worked fine); resource contention from the already-running instance
+starving a second cold launch; or something specific to this particular machine's state at the
+time, unrelated to concurrency at all. Needs the project owner to either watch a retry happen live
+(catch a dialog or other visible symptom the automated side can't see) or explicitly authorize
+closing the idle instance first to isolate the variable.

@@ -10,6 +10,7 @@ using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Types;
 using ModelBlockType = OpennessCli.Model.BlockType;
 using ModelCompileState = OpennessCli.Model.CompileState;
 
@@ -309,6 +310,52 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // No safety refusal here — confirmed real, 2026-07-14 (reflecting on the installed DLL):
+    // PlcType has no ProgrammingLanguage property at all, so there's nothing for the F-prefix
+    // classifier to check. A UDT is a plain data-type declaration, never executable logic.
+    public void ExportType(string typeName, string? deviceFilter, string outPath)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ExportType)}.");
+        }
+
+        var matches = FindMatchingTypes(_project, typeName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new TypeNotFoundException(typeName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousTypeException(typeName, matches.Select(m => m.Path));
+        }
+
+        var type = matches[0].Type;
+
+        if (File.Exists(outPath))
+        {
+            File.Delete(outPath);
+        }
+
+        type.Export(new FileInfo(outPath), Siemens.Engineering.ExportOptions.WithDefaults);
+
+        if (!File.Exists(outPath))
+        {
+            // Same quirk as ExportBlock — one retry before giving up.
+            type.Export(new FileInfo(outPath), Siemens.Engineering.ExportOptions.WithDefaults);
+            if (!File.Exists(outPath))
+            {
+                throw new ExportProducedNoFileException(outPath);
+            }
+        }
+    }
+
     public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files)
     {
         if (_project is null)
@@ -339,6 +386,37 @@ public sealed class OpennessGateway : IOpennessGateway
                 }
 
                 imported.Add(ToBlockInfo(block, groupPath));
+            }
+        }
+
+        return imported;
+    }
+
+    // Returns imported type names, not BlockInfo — a PlcType has no Number/ProgrammingLanguage to
+    // report (confirmed real, 2026-07-14), so BlockInfo's own shape doesn't fit; kept minimal
+    // rather than retrofitting BlockInfo with fields that would be meaningless for a UDT.
+    public IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTypes)}.");
+        }
+
+        var group = FindTypeGroup(_project, groupPath);
+        var imported = new List<string>();
+
+        foreach (var file in files)
+        {
+            var results = group.Types.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+            foreach (var item in results)
+            {
+                if (item is not PlcType type)
+                {
+                    throw new InvalidOperationException(
+                        $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+                }
+
+                imported.Add(type.Name);
             }
         }
 
@@ -424,6 +502,41 @@ public sealed class OpennessGateway : IOpennessGateway
         var compilable = block.GetService<ICompilable>()
             ?? throw new InvalidOperationException(
                 $"Block '{blockName}' does not expose an ICompilable service — expected one to be available (confirmed live on other blocks, see docs/notes/openness-quirks.md).");
+
+        return RunCompile(compilable);
+    }
+
+    // Mirrors CompileBlock exactly, minus the safety check (no ProgrammingLanguage on PlcType —
+    // see ExportType's own doc comment). Whether PlcType.GetService<ICompilable>() actually
+    // returns a working compiler the way PlcBlock's does is unconfirmed until live-verified —
+    // structurally plausible (PlcType implements IEngineeringServiceProvider too), not assumed.
+    public CompileResult CompileType(string typeName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CompileType)}.");
+        }
+
+        var matches = FindMatchingTypes(_project, typeName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new TypeNotFoundException(typeName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousTypeException(typeName, matches.Select(m => m.Path));
+        }
+
+        var type = matches[0].Type;
+        var compilable = type.GetService<ICompilable>()
+            ?? throw new InvalidOperationException(
+                $"Type '{typeName}' does not expose an ICompilable service.");
 
         return RunCompile(compilable);
     }
@@ -588,6 +701,65 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // Mirrors FindMatchingBlocks/FindBlocksInDeviceItem/FindBlocksInGroup exactly, walking
+    // PlcSoftware.TypeGroup/PlcTypeGroup.Types/.Groups instead of .BlockGroup/PlcBlockGroup.
+    // Blocks/.Groups — confirmed real, 2026-07-14 (reflecting on the installed DLL): the same
+    // recursive group shape, just for PLC data types (UDTs) instead of blocks.
+    private static IEnumerable<(PlcType Type, string Path)> FindMatchingTypes(Project project, string typeName)
+    {
+        foreach (Device device in project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                foreach (var match in FindTypesInDeviceItem(item, device.Name, typeName))
+                {
+                    yield return match;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(PlcType Type, string Path)> FindTypesInDeviceItem(DeviceItem item, string parentPath, string typeName)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        var softwareContainer = item.GetService<SoftwareContainer>();
+        if (softwareContainer?.Software is PlcSoftware plcSoftware)
+        {
+            foreach (var match in FindTypesInGroup(plcSoftware.TypeGroup, path, typeName))
+            {
+                yield return match;
+            }
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            foreach (var match in FindTypesInDeviceItem(child, path, typeName))
+            {
+                yield return match;
+            }
+        }
+    }
+
+    private static IEnumerable<(PlcType Type, string Path)> FindTypesInGroup(PlcTypeGroup group, string groupPath, string typeName)
+    {
+        foreach (PlcType type in group.Types)
+        {
+            if (type.Name == typeName)
+            {
+                yield return (type, groupPath);
+            }
+        }
+
+        foreach (PlcTypeUserGroup subGroup in group.Groups)
+        {
+            foreach (var match in FindTypesInGroup(subGroup, $"{groupPath}/{subGroup.Name}", typeName))
+            {
+                yield return match;
+            }
+        }
+    }
+
     private static IEnumerable<(DeviceItem Item, string Path)> FindPlcDeviceItems(Project project)
     {
         foreach (Device device in project.Devices)
@@ -672,6 +844,59 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             group = group.Groups.Cast<PlcBlockUserGroup>().FirstOrDefault(g => g.Name == segments[i])
                 ?? throw new InvalidOperationException($"Block group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
+        }
+
+        return group;
+    }
+
+    // Mirrors FindGroup exactly, resolving into PlcSoftware.TypeGroup/PlcTypeGroup instead of
+    // .BlockGroup/PlcBlockGroup — a separate composition tree, not a view onto the same one
+    // (confirmed real, 2026-07-14: PlcTypeGroup has no relation to PlcBlockGroup beyond both
+    // hanging off the same PlcSoftware).
+    private static PlcTypeGroup FindTypeGroup(Project project, string groupPath)
+    {
+        var segments = groupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0)
+        {
+            throw new InvalidOperationException("Empty --group path.");
+        }
+
+        var device = project.Devices.Cast<Device>().FirstOrDefault(d => d.Name == segments[0])
+            ?? throw new DeviceNotFoundException(segments[0]);
+
+        var i = 1;
+        DeviceItem? currentItem = null;
+        IEnumerable<DeviceItem> currentLevel = device.DeviceItems.Cast<DeviceItem>();
+
+        while (i < segments.Length)
+        {
+            var next = currentLevel.FirstOrDefault(it => it.Name == segments[i]);
+            if (next is null)
+            {
+                break;
+            }
+
+            currentItem = next;
+            currentLevel = next.DeviceItems.Cast<DeviceItem>();
+            i++;
+        }
+
+        if (currentItem is null)
+        {
+            throw new InvalidOperationException($"No device item found under '{groupPath}'.");
+        }
+
+        var softwareContainer = currentItem.GetService<SoftwareContainer>();
+        if (softwareContainer?.Software is not PlcSoftware plcSoftware)
+        {
+            throw new InvalidOperationException($"'{string.Join("/", segments, 0, i)}' is not a PLC software container.");
+        }
+
+        PlcTypeGroup group = plcSoftware.TypeGroup;
+        for (; i < segments.Length; i++)
+        {
+            group = group.Groups.Cast<PlcTypeUserGroup>().FirstOrDefault(g => g.Name == segments[i])
+                ?? throw new InvalidOperationException($"Type group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
         }
 
         return group;

@@ -50,6 +50,9 @@ internal static class Program
     private static bool IsDbXml(XDocument document) =>
         document.Root?.Descendants().Any(e => e.Name.LocalName is "SW.Blocks.GlobalDB" or "SW.Blocks.InstanceDB") ?? false;
 
+    private static bool IsTypeXml(XDocument document) =>
+        document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Types.PlcStruct") ?? false;
+
     private static int RunSanitize(string[] args)
     {
         string? file = null;
@@ -89,6 +92,16 @@ internal static class Program
                 var sanitizedDb = Sanitizer.ApplyToDb(db, map);
                 var dbXml = DbSourceWriter.Write(sanitizedDb);
                 dbXml.Save(outPath);
+                Console.WriteLine($"{file} -> {outPath}");
+                return 0;
+            }
+
+            if (IsTypeXml(document))
+            {
+                var type = PlcTypeSourceParser.Parse(document);
+                var sanitizedType = Sanitizer.ApplyToType(type, map);
+                var typeXml = PlcTypeSourceWriter.Write(sanitizedType);
+                typeXml.Save(outPath);
                 Console.WriteLine($"{file} -> {outPath}");
                 return 0;
             }
@@ -139,6 +152,16 @@ internal static class Program
             return;
         }
 
+        if (IsTypeXml(document))
+        {
+            var type = PlcTypeSourceParser.Parse(document);
+            var typeIrText = TypeIrSerializer.Serialize(type);
+            var typeOutPath = Path.ChangeExtension(sourcePath, ".ir");
+            File.WriteAllText(typeOutPath, typeIrText);
+            Console.WriteLine($"{sourcePath} -> {typeOutPath}");
+            return;
+        }
+
         var block = BlockSourceParser.Parse(document);
 
         var networks = new List<IrNetwork>();
@@ -177,6 +200,16 @@ internal static class Program
             var dbOutPath = Path.ChangeExtension(sourcePath, ".xml");
             dbXml.Save(dbOutPath);
             Console.WriteLine($"{sourcePath} -> {dbOutPath}");
+            return;
+        }
+
+        if (irText.StartsWith("TYPE ", StringComparison.Ordinal))
+        {
+            var type = TypeIrParser.ParseType(irText);
+            var typeXml = PlcTypeSourceWriter.Write(type);
+            var typeOutPath = Path.ChangeExtension(sourcePath, ".xml");
+            typeXml.Save(typeOutPath);
+            Console.WriteLine($"{sourcePath} -> {typeOutPath}");
             return;
         }
 

@@ -10,6 +10,26 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**UDT / PLC data type support (S1 item 26) — converter + `openness-cli`**
+
+- Closes a real gap the paused `MotorDOL` full-cycle test found: even a fully self-contained FB
+  still depends on its own declared UDT, and neither the converter nor `openness-cli` had any
+  PLC-data-type support at all. Grounded against a real export (`TypeDOL`) before writing any
+  parser code, per this project's own discipline.
+- New converter pipeline: `PlcTypeSource`/`PlcTypeSourceParser`/`PlcTypeSourceWriter`/`TypeIr.cs`
+  (mirroring the DB pipeline, reusing `DbMember`/`DbMemberLineFormat` directly),
+  `Sanitizer.ApplyToType`. New `openness-cli` `--type` support on `export`/`import`/`compile`
+  (`ExportType`/`ImportTypes`/`CompileType`, using the real `PlcType`/`PlcTypeComposition`/
+  `PlcTypeGroup` API — no safety check needed, `PlcType` has no `ProgrammingLanguage` at all).
+- 10 new converter tests, 6 new openness-cli tests — 254 converter, 79 openness-cli, 11
+  golden-harness, all green.
+- **Live-verified**: sanitized `TypeDOL`→`MotorIOSet` imports and compiles cleanly in
+  `SampleProject`; re-importing `MotorDOL` no longer hits `Data type "MotorIOSet" is unknown` —
+  the original blocker is resolved. A new, separate `FlgNetWriter` Part-ordering bug now blocks
+  `MotorDOL`'s own import (`"The elements must be sorted according to the current flow"`) —
+  flagged as a distinct open item, not fixed here. Full story: `docs/notes/stage-gates.md` ("S1
+  item 26").
+
 **`openness-cli`: fix a real Portal-instance-pileup bug in the concurrent-session fix**
 
 - The concurrent-session fix (2026-07-13) traded "force-close whatever's open" for "always launch
