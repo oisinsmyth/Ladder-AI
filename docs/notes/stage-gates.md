@@ -2374,8 +2374,61 @@ real occurrences this session happened with stale processes already piled up; a 
 was reliable every single time it was tested. Two real, previously-unknown bugs were found and
 fixed in the course of proving this (the human-window case, the orphan-accumulation case) — genuine
 gaps closed, not evidence the broader design was unsound. **89/89 openness-cli tests pass** (up
-from 79 at the start of this work). Not yet committed — `src/openness-cli/OpennessCli/Openness/
-OpennessGateway.cs`, `LaunchedInstanceRegistry.cs`, `PathsMatchTests.cs`,
-`LaunchedInstanceRegistryTests.cs`, plus `docs/notes/concurrent-portal-test-plan.md`,
-`docs/notes/openness-quirks.md`, `docs/notes/openness-api-surface-v20.md`, and `CLAUDE.md`'s own
-environment note, all updated same session.
+from 79 at the start of this work). Committed as `2829ec1`.
+
+### S1 item 26 continued: `FlgNetBuilder` Part-ordering fully fixed — `MotorDOL` now imports into `SampleProject` — 2026-07-14
+
+Picked back up per the project owner's own explicit instruction, resuming exactly from
+`RESUME-FlgNetBuilder-Timer-Ordering.md` (deleted now that this is folded in here). Two real bugs
+in `FlgNetBuilder`, both root-caused by comparing against a fresh, untouched `MotorDOL` export from
+`JOB9002` (re-exported live specifically for this — the earlier raw copy had been deleted per
+data-boundary cleanup):
+
+1. **`OrStep`'s own Part was emitted before its branches** (already fixed and confirmed correct
+   before the Portal-stability audit interrupted this work) — `BuildStep`'s `OrStep` case now adds
+   the `O` Part *after* building its branches, mirroring `NotStep`'s own existing children-then-self
+   order. Verified: regenerated Parts order changed from `O(44), O(41), Contact39, Contact40, ...`
+   to the correct `Contact39, Contact40, O(41), ...` — upstream before downstream.
+2. **The deeper root cause: Timer builds were phase-hoisted, not inline with the production that
+   needs them.** `FlgNetBuilder.Build()` used to build *all* Timers in one global phase before *any*
+   Assignment/Move/etc. — real TIA export order is instead **fully contiguous per rung**
+   (`Contact34-37, Coil38` then `Contact39-46, O(41), O(44), TON(47), RCoil(49)`, back to back), not
+   grouped by construct type. Since `RCoil(49)`'s own rung depends on `TON(47)` (built in the
+   Timers phase) while `Coil(38)`'s completely unrelated rung sat physically between them (from the
+   Assignments phase), TIA's own `Import()` validator rejected the document even though every
+   dependency was still technically declared before its dependent — the first network this session
+   ever hit with two independent rungs where one uses a `TimerOutputStep`.
+
+**Fix**: Timers are no longer pre-built. A new `EnsureTimerBuilt` helper builds a Timer's own Part
+(and upstream IN-chain) the first time any production's `BuildStep` reaches it via a
+`TimerOutputStep` — contiguous with whichever production triggers it, matching real TIA order
+exactly. A Timer never referenced via `TimerOutputStep` (e.g. `FC ControlDelays`' own `Q` read via
+an ordinary `Access`) still falls through to a catch-all pass at the end of `Build()`. Required
+threading a new `timersByTonPartUId` lookup through `BuildTimer`/`BuildMove`/`BuildWordAnd`/
+`BuildCall`/`BuildEnSource`/`BuildMul`/`BuildConvert`/`BuildSwap`/`BuildOneChain`/`BuildStep` (every
+method that could recursively reach a `TimerOutputStep`) — mechanical once the design was settled.
+All 254 converter tests still pass (no test asserts Part order, only endpoint sets/counts — this
+refactor changes ordering only, not topology).
+
+**Live-verified, 2026-07-14**: regenerated `MotorDOL`'s sanitized XML fresh from the pristine
+original export (not from the earlier, still-buggy regeneration, to avoid compounding artifacts).
+Confirmed Parts order in the affected network now reads `Contact34, 35, 36, 37, Coil38, Contact39,
+40, O(41), Contact42, 43, O(44), Contact45, 46, TON(47), RCoil(49)` — an **exact match** with the
+real TIA-original export's own order. Retried the import into `SampleProject`:
+**succeeded** — `MotorStarter` (sanitized `MotorDOL`) is now FB2 in `SampleProject`, the blocker
+this whole sub-investigation existed to resolve.
+
+**A new, separate, expected finding surfaced on compile, not a regression**: `compile --block
+MotorStarter` fails with `"Network 3: Missing instance DB"` / `"Network 8: Missing instance DB"` —
+`MotorDOL`'s own `LocalVariable`-scoped timer instances (multi-instance, storage living in the
+calling FB/DB's own instance data) have nowhere to resolve to, since it was imported standalone
+with no instance DB and no calling FC. This is the same category of gap already documented for
+`PlantAutoControl` itself (S1 items 16/17: testing an isolated block without its full calling/dependency
+context in `SampleProject` surfaces exactly this kind of missing-context error) — not a converter
+bug, not investigated further here.
+
+**Bottom line**: the `FlgNetWriter`/`FlgNetBuilder` Part-ordering gap that blocked `MotorDOL`'s own
+import is fully fixed and live-verified. The broader "does a dependency FB compile standalone in
+`SampleProject`" question (S1 items 16/17's own original question, revisited via UDT support and
+now this) still isn't answered for `MotorDOL` — it's blocked on a *different*, well-understood kind
+of gap (missing instance DB / calling context), not a converter defect.

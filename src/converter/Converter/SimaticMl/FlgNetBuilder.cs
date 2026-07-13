@@ -84,32 +84,23 @@ public static class FlgNetBuilder
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
 
-        for (var t = 0; t < network.Timers.Count; t++)
-        {
-            var timerSidecar = sidecar.Timers[t];
-            BuildTimer(timerSidecar, parts, emittedPartUIds, wireEndpointsByUId);
-
-            // RailWireUId is null when the chain's first step is a TimerOutputStep — the IN is
-            // fed directly by another TON's Q, never touches Powerrail, so there's nothing to
-            // wire here at all (confirmed real, 2026-07-11, FC TimerSample's own pattern applied
-            // to IN; not yet seen live but the same mechanism, so handled identically).
-            if (timerSidecar.RailWireUId is int timerRailWireUId)
-            {
-                // Rail-facing endpoints: every first-step Contact/OR-branch/comparison uses its
-                // own rail-facing port (RailFacingEndpoints already knows which — "in" for
-                // Contact, "pre" for a comparison); only when there are no steps at all is the
-                // rail wired straight to the TON itself, whose port is "IN" (uppercase).
-                var railFacingEndpoints = timerSidecar.Steps.Count > 0
-                    ? RailFacingEndpoints(timerSidecar.Steps[0])
-                    : new[] { (UId: timerSidecar.TonPartUId, Port: "IN") };
-                AddRailEndpoints(wireEndpointsByUId, timerRailWireUId, railFacingEndpoints);
-            }
-        }
+        // Timers are no longer built in their own up-front phase — confirmed real, 2026-07-14
+        // (FB MotorDOL, S1 item 26's live verification): TIA's own Import() validator rejects a
+        // network where an unrelated production's own Parts sit physically between a TON and the
+        // production that reads its Q, even though every dependency is still declared before its
+        // dependent ("The elements must be sorted according to the current flow"). A Timer whose
+        // Q/ET is read via a TimerOutputStep is now built inline, contiguous with whichever
+        // production's chain first reaches it (EnsureTimerBuilt, called from BuildStep) — matching
+        // the real TIA-original export's own ordering exactly (grounded directly against a fresh
+        // export, not guessed). A Timer never referenced via TimerOutputStep (read only via an
+        // ordinary Access elsewhere, e.g. FC ControlDelays' own Q read) has nothing to be
+        // contiguous with, so it still falls through to the catch-all pass at the end, unchanged.
+        var timersByTonPartUId = sidecar.Timers.ToDictionary(t => t.TonPartUId);
 
         for (var a = 0; a < network.Assignments.Count; a++)
         {
             var assignmentSidecar = sidecar.Assignments[a];
-            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildOneChain(network.Assignments[a], assignmentSidecar, network.Number, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when the chain's first step is a TimerOutputStep — the coil is
             // fed directly by a TON's Q, never touches Powerrail (confirmed real, 2026-07-11,
@@ -131,7 +122,7 @@ public static class FlgNetBuilder
         for (var m = 0; m < network.Moves.Count; m++)
         {
             var moveSidecar = sidecar.Moves[m];
-            BuildMove(moveSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildMove(moveSidecar, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
             // Timer/Coil above (not yet seen live, same mechanism, handled identically).
@@ -147,7 +138,7 @@ public static class FlgNetBuilder
         for (var d = 0; d < network.WordAnds.Count; d++)
         {
             var wordAndSidecar = sidecar.WordAnds[d];
-            BuildWordAnd(wordAndSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildWordAnd(wordAndSidecar, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
             // Timer/Coil/Move above (not yet seen live, same mechanism, handled identically).
@@ -163,7 +154,7 @@ public static class FlgNetBuilder
         for (var c = 0; c < network.Calls.Count; c++)
         {
             var callSidecar = sidecar.Calls[c];
-            BuildCall(callSidecar, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildCall(callSidecar, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
             // RailWireUId is null when `en`'s first step is a TimerOutputStep, same reasoning as
             // Timer/Coil/Move/WAND above (not yet seen live, same mechanism, handled identically).
@@ -178,17 +169,25 @@ public static class FlgNetBuilder
 
         for (var m = 0; m < network.Muls.Count; m++)
         {
-            BuildMul(sidecar.Muls[m], parts, emittedPartUIds, wireEndpointsByUId);
+            BuildMul(sidecar.Muls[m], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         for (var c2 = 0; c2 < network.Converts.Count; c2++)
         {
-            BuildConvert(sidecar.Converts[c2], parts, emittedPartUIds, wireEndpointsByUId);
+            BuildConvert(sidecar.Converts[c2], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         for (var s = 0; s < network.Swaps.Count; s++)
         {
-            BuildSwap(sidecar.Swaps[s], parts, emittedPartUIds, wireEndpointsByUId);
+            BuildSwap(sidecar.Swaps[s], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        // Catch-all: any Timer never reached via a TimerOutputStep above (read only via an
+        // ordinary Access elsewhere, e.g. FC ControlDelays' own Q read) still needs to be built —
+        // EnsureTimerBuilt no-ops for anything already built inline above.
+        foreach (var timerSidecar in sidecar.Timers)
+        {
+            EnsureTimerBuilt(timerSidecar.TonPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         var wires = wireEndpointsByUId.Select(kv => new WireNode(kv.Key, kv.Value)).ToList();
@@ -244,7 +243,11 @@ public static class FlgNetBuilder
     // its ET wire if the sidecar recorded one (OpenCon only), and — for TONR — its R (reset) wire
     // (tag or literal, same AddOperandWire as PT — confirmed real, 2026-07-12, S1 item 19).
     private static void BuildTimer(
-        TimerBindingSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        TimerBindingSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
@@ -252,7 +255,7 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.TonPartUId, "IN");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
@@ -270,6 +273,47 @@ public static class FlgNetBuilder
         if (sidecar.Reset is { } reset)
         {
             AddOperandWire(wireEndpointsByUId, reset, sidecar.TonPartUId, "R");
+        }
+    }
+
+    // Builds a Timer's own Part (and its upstream IN-chain) the first time anything needs it —
+    // either inline, from BuildStep's own TimerOutputStep case (the common case: contiguous with
+    // whichever production's chain first reads its Q/ET), or from Build()'s own catch-all pass at
+    // the end (a Timer never referenced via TimerOutputStep, e.g. FC ControlDelays' own Q read via
+    // an ordinary Access elsewhere, has nothing to be contiguous with). No-ops if already built —
+    // confirmed real, 2026-07-14 (FB MotorDOL, S1 item 26's live verification): building every
+    // Timer in its own global phase ahead of everything else put an unrelated production's Parts
+    // between a TON and the production reading its Q, which TIA's own Import() validator rejected
+    // ("The elements must be sorted according to the current flow") even though every dependency
+    // was still technically declared before its dependent.
+    private static void EnsureTimerBuilt(
+        int tonPartUId,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        if (emittedPartUIds.Contains(tonPartUId))
+        {
+            return;
+        }
+
+        if (!timersByTonPartUId.TryGetValue(tonPartUId, out var timerSidecar))
+        {
+            throw new IrFormatException($"No timer sidecar found for TON Part UId={tonPartUId}.");
+        }
+
+        BuildTimer(timerSidecar, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        // RailWireUId is null when the chain's first step is a TimerOutputStep — the IN is fed
+        // directly by another TON's Q, never touches Powerrail (confirmed real, 2026-07-11,
+        // FC TimerSample's own pattern applied to IN).
+        if (timerSidecar.RailWireUId is int timerRailWireUId)
+        {
+            var railFacingEndpoints = timerSidecar.Steps.Count > 0
+                ? RailFacingEndpoints(timerSidecar.Steps[0])
+                : new[] { (UId: timerSidecar.TonPartUId, Port: "IN") };
+            AddRailEndpoints(wireEndpointsByUId, timerRailWireUId, railFacingEndpoints);
         }
     }
 
@@ -291,7 +335,11 @@ public static class FlgNetBuilder
     // `out1` wire (the write target — same IdentCon-fed wire shape as an ordinary Contact/Coil
     // operand, just port "out1" and the opposite read/write direction).
     private static void BuildMove(
-        MoveStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        MoveStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
@@ -299,7 +347,7 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "en");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.MovePartUId, "Move"));
@@ -317,7 +365,11 @@ public static class FlgNetBuilder
     // same IdentCon-fed wire shape as Move's own `out1`, just port "out" instead — confirmed
     // real, 2026-07-12, FB VSDUpdateComs).
     private static void BuildWordAnd(
-        WordAndStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        WordAndStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
@@ -325,7 +377,7 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.AndPartUId, "en");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.AndPartUId, "And", Cardinality: sidecar.Inputs.Count, SrcType: sidecar.SrcType));
@@ -348,7 +400,11 @@ public static class FlgNetBuilder
     // the source's own Parameter Name (confirmed real, 2026-07-12, FC PlantAutoControl) instead of a
     // fixed port.
     private static void BuildCall(
-        CallStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        CallStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         for (var i = 0; i < sidecar.Steps.Count; i++)
         {
@@ -356,7 +412,7 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, "en");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         // Instance is optional — confirmed real, 2026-07-12 (S1 item 24): an FC call carries no
@@ -398,7 +454,12 @@ public static class FlgNetBuilder
     // 2026-07-12 (S1 item 18), a direct wire from the immediately preceding Mul/Convert's own
     // `eno` port. See EnSourceSidecar's own doc comment.
     private static void BuildEnSource(
-        EnSourceSidecar en, int partUId, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        EnSourceSidecar en,
+        int partUId,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
         switch (en)
         {
@@ -409,7 +470,7 @@ public static class FlgNetBuilder
                         ? EntryTarget(condition.Steps[i + 1])
                         : new WireEndpoint(EndpointKind.NameCon, partUId, "en");
 
-                    BuildStep(condition.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                    BuildStep(condition.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
                 }
 
                 if (condition.RailWireUId is int railWireUId)
@@ -440,9 +501,13 @@ public static class FlgNetBuilder
     // ordinary `<TemplateValue Name="SrcType">` (confirmed real, 2026-07-12, S1 item 20 live
     // verification, `FB AirStar` — a genuine second real shape, not assumed universal either way).
     private static void BuildMul(
-        MulStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        MulStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
-        BuildEnSource(sidecar.En, sidecar.MulPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        BuildEnSource(sidecar.En, sidecar.MulPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
         AddPart(parts, emittedPartUIds, new PartNode(
             sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: sidecar.Inputs.Count,
@@ -471,9 +536,13 @@ public static class FlgNetBuilder
     // source, same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire
     // shape as Move's own out1).
     private static void BuildConvert(
-        ConvertStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        ConvertStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
-        BuildEnSource(sidecar.En, sidecar.ConvertPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        BuildEnSource(sidecar.En, sidecar.ConvertPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.ConvertPartUId, "Convert", SrcType: sidecar.SrcType, DestType: sidecar.DestType));
 
@@ -488,9 +557,13 @@ public static class FlgNetBuilder
     // Convert's own `out`). Mirrors BuildConvert exactly, minus DestType — a Swap Part carries
     // only SrcType.
     private static void BuildSwap(
-        SwapStatementSidecar sidecar, List<PartNode> parts, HashSet<int> emittedPartUIds, Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+        SwapStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
     {
-        BuildEnSource(sidecar.En, sidecar.SwapPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        BuildEnSource(sidecar.En, sidecar.SwapPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.SwapPartUId, "Swap", SrcType: sidecar.SrcType));
 
@@ -527,6 +600,7 @@ public static class FlgNetBuilder
         CoilAssignment assignment,
         CoilAssignmentSidecar sidecar,
         int networkNumber,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
         List<PartNode> parts,
         HashSet<int> emittedPartUIds,
         Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
@@ -546,7 +620,7 @@ public static class FlgNetBuilder
                 ? EntryTarget(sidecar.Steps[i + 1])
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "in");
 
-            BuildStep(sidecar.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+            BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.CoilUId, CoilPartNameFor(assignment.Kind)));
@@ -572,6 +646,7 @@ public static class FlgNetBuilder
     private static void BuildStep(
         ChainStepSidecar step,
         WireEndpoint outgoingTarget,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
         List<PartNode> parts,
         HashSet<int> emittedPartUIds,
         Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
@@ -587,7 +662,14 @@ public static class FlgNetBuilder
                 break;
 
             case ChainStepSidecar.OrStep orStep:
-                AddPart(parts, emittedPartUIds, new PartNode(orStep.OrPartUId, "O", Cardinality: orStep.Branches.Count));
+                // The O Part itself is added AFTER its branches are built (mirrors NotStep's own
+                // children-then-self order below) — not before. TIA's own Import() validator
+                // requires Parts in signal-flow order (upstream before downstream); adding the O
+                // Part first put a downstream element ahead of the upstream Contacts/nested-ORs
+                // that feed it, which round-tripped fine locally (nothing here compares Part
+                // order) but was rejected on real import: "The elements must be sorted according
+                // to the current flow" — found live, 2026-07-14, FB MotorDOL's own nested
+                // O(44)/O(41) shape (S1 item 26's live verification).
                 for (var b = 0; b < orStep.Branches.Count; b++)
                 {
                     var branch = orStep.Branches[b];
@@ -604,7 +686,7 @@ public static class FlgNetBuilder
                             ? EntryTarget(branch.Steps[i + 1])
                             : branchEntryTarget;
 
-                        BuildStep(branch.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                        BuildStep(branch.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
                     }
 
                     // A branch's own rail wire (the common case — every branch fed directly by
@@ -623,14 +705,18 @@ public static class FlgNetBuilder
                     }
                 }
 
+                AddPart(parts, emittedPartUIds, new PartNode(orStep.OrPartUId, "O", Cardinality: orStep.Branches.Count));
                 AddEndpoint(wireEndpointsByUId, orStep.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, orStep.OrPartUId, "out"));
                 AddEndpoint(wireEndpointsByUId, orStep.OutgoingWireUId, outgoingTarget);
                 break;
 
             case ChainStepSidecar.TimerOutputStep timerOutput:
-                // No Part/Access to build — the TON Part itself is built once by BuildTimer;
-                // this just rewires its already-emitted "Q" port to whatever's next. Confirmed
-                // real, 2026-07-11, FC TimerSample.
+                // Builds the referenced TON's own Part (and its upstream IN-chain) inline, right
+                // here, the first time any production's chain actually reads its Q/ET — no-ops if
+                // already built by an earlier production or the catch-all pass. See
+                // EnsureTimerBuilt's own doc comment for why this replaced the old "build every
+                // Timer in its own global phase first" design.
+                EnsureTimerBuilt(timerOutput.TonPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
                 AddEndpoint(wireEndpointsByUId, timerOutput.OutgoingWireUId, new WireEndpoint(EndpointKind.NameCon, timerOutput.TonPartUId, timerOutput.Port));
                 AddEndpoint(wireEndpointsByUId, timerOutput.OutgoingWireUId, outgoingTarget);
                 break;
@@ -654,7 +740,7 @@ public static class FlgNetBuilder
                         ? EntryTarget(notStep.Steps[i + 1])
                         : notEntryTarget;
 
-                    BuildStep(notStep.Steps[i], nextTarget, parts, emittedPartUIds, wireEndpointsByUId);
+                    BuildStep(notStep.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
                 }
 
                 if (notStep.RailWireUId is int notRailWireUId)

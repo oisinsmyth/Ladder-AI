@@ -22,72 +22,51 @@ documented/committed, delete it from this file rather than letting it accumulate
 **S1 — Lossless round-trip, ACTIVE.** See `docs/notes/stage-gates.md` for full gate history. All
 8 of `PlantAutoControl`'s dependency FBs are IR-complete (`to-ir → to-xml → to-ir` byte-identical).
 UDT/PLC-data-type support (S1 item 26) is committed (`557d35c`). `openness-cli`'s concurrent-Portal
-stability work (safe concurrent sessions, pileup fix, and now a full stability audit with two more
-real bugs found and fixed) is done and tested but **not yet committed** — see below. Full story for
-each closed item: `docs/notes/stage-gates.md`.
+stability audit (two real bugs found and fixed) is committed (`2829ec1`). `FlgNetBuilder`'s
+Part-ordering bug (blocking `MotorDOL`'s own import) is fixed and live-verified — see below, not
+yet committed. Full story for each closed item: `docs/notes/stage-gates.md`.
 
 Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: `openness-cli` concurrent-Portal stability audit — DONE, TESTED, LIVE-VERIFIED, NOT YET COMMITTED
+## Current task: `FlgNetBuilder` Part-ordering fix — DONE, TESTED, LIVE-VERIFIED, NOT YET COMMITTED
 
-**Status as of 2026-07-14.** Project owner asked for a rigorous test schedule after the "second
-Portal instance sometimes won't connect" symptom recurred twice in one session — worried the
-concurrent-session feature itself (`4841bf5`/`8042648`) was unstable. Full walkthrough recorded in
-`docs/notes/concurrent-portal-test-plan.md`; authoritative closing record in
-`docs/notes/stage-gates.md` ("concurrent-Portal stability audit").
+**Status as of 2026-07-14.** Resumed from `RESUME-FlgNetBuilder-Timer-Ordering.md` (now deleted,
+folded into `docs/notes/stage-gates.md` "S1 item 26 continued"). Two real bugs in `FlgNetBuilder`,
+both fixed:
 
-**Verdict: the concurrent-session feature is not the cause of instability** — every stress scenario
-tried (two-party concurrency, same-project refusal, killed-mid-flight client, 5 back-to-back fresh
-launches from a clean baseline) behaved correctly. The "won't connect" symptom correlates with
-stale-process pileup, not concurrency.
+1. `OrStep`'s own Part was emitted before its branches — fixed (mirrors `NotStep`'s own
+   children-then-self order).
+2. Timer builds were phase-hoisted (all built in one global phase ahead of everything else) rather
+   than inline with the production that needs them — real TIA export order is fully contiguous per
+   rung, not grouped by construct type. Fixed with a new `EnsureTimerBuilt` helper that builds a
+   Timer the first time a `TimerOutputStep` reaches it, contiguous with that production; a
+   catch-all pass still handles Timers never referenced this way.
 
-**Two real bugs found and fixed along the way, both closed same-day, neither left as a follow-up**:
-1. `OpenProject()` was silently repurposing a human's own freshly-launched, empty Portal window —
-   fixed (`_connectLaunchedFreshInstance` tracking), retested live with the project owner watching.
-2. A client killed mid-launch left a permanently orphaned process behind — fixed via a new
-   `LaunchedInstanceRegistry` (persists which PIDs this tool itself launched, across invocations;
-   an empty process is only ever reused if positively confirmed as this tool's own). Required
-   correcting two errors in `docs/notes/openness-api-surface-v20.md`'s original 2026-07-10 survey
-   (missed `TiaPortalProcess.Id` entirely; had `GetCurrentProcess()`'s return type wrong).
-   Live-verified end to end by direct construction (a real kill-timing race proved impractical to
-   hit externally with the needed precision — see stage-gates.md for why).
+**Live-verified**: regenerated `MotorDOL`'s sanitized XML fresh, confirmed Parts order now matches
+the real TIA export exactly, and **the import into `SampleProject` succeeded** —
+`MotorStarter` (sanitized `MotorDOL`) is now FB2 there, the blocker this whole sub-investigation
+existed to resolve. 254/254 converter tests, 11/11 golden-harness, all pass.
 
-**89/89 openness-cli tests pass** (up from 79). Docs updated same session:
-`docs/notes/concurrent-portal-test-plan.md` (new), `docs/notes/openness-quirks.md` (closing entry),
-`docs/notes/openness-api-surface-v20.md` (corrections), `CLAUDE.md` (environment note),
-`docs/notes/stage-gates.md` (dated entry).
+**A new, separate, expected finding on compile, not a regression**: `compile --block MotorStarter`
+fails with `"Missing instance DB"` (Networks 3/8) — the same category of gap already documented for
+`PlantAutoControl` itself (S1 items 16/17): an isolated FB's own `LocalVariable`-scoped timer instances
+need a calling context (an instance DB, or a calling FC) to resolve, which `SampleProject` doesn't
+have for `MotorDOL`. Not a converter bug, not investigated further.
 
 **Not committed** — waiting for the project owner's own explicit "commit this."
 
-**Unrelated, separate, still in progress — do not conflate with the above**: a `FlgNetBuilder`
-Timer/Part-ordering refactor (found via `MotorDOL`'s own Part-ordering bug, tracked below) is
-mid-flight and **does not currently compile**. Full resume context:
-`RESUME-FlgNetBuilder-Timer-Ordering.md` (repo root) — read that file first before touching
-`src/converter/Converter/SimaticMl/FlgNetBuilder.cs` again.
+## Full import+compile cycle test for `PlantAutoControl`'s dependency FBs — Part-ordering blocker resolved; blocked on missing-instance-DB now
 
-## Open item, found during S1 item 26's UDT live verification, NOT YET FIXED: `MotorDOL` Part-ordering bug
-
-Re-importing `MotorDOL` itself (after its `TypeDOL`/`MotorIOSet` dependency was resolved) hit a
-**new, separate** error: `"The elements must be sorted according to the current flow"` at
-`Part UId=49` (an `RCoil`, network 3, "Start Signal After Inhibit/Fault") — TIA's own `Import()`
-validator apparently expects Parts/Wires listed in some data-flow-topological order this
-converter's `FlgNetWriter` doesn't currently guarantee. **Actively being worked** — see
-`RESUME-FlgNetBuilder-Timer-Ordering.md` for exact status (one real sub-bug already fixed and
-confirmed correct — `OrStep` Part ordering; a second, deeper root cause identified — Timer builds
-are phase-hoisted rather than built inline with the production that triggers them — fix designed
-and partially implemented, file does not currently compile). Full grounding detail:
-`docs/notes/stage-gates.md` ("S1 item 26").
-
-## Full import+compile cycle test for `PlantAutoControl`'s dependency FBs — blocked on the FlgNetBuilder work above
-
-The original blocker (`Data type "MotorIOSet" is unknown`) is resolved (S1 item 26). The remaining
-blocker is the `MotorDOL` Part-ordering bug above, actively being fixed. Not resuming further
-per-FB testing until that's finished.
+The `Data type "MotorIOSet" is unknown` blocker (S1 item 26) and the Part-ordering blocker
+(above) are both resolved. `MotorDOL` now imports cleanly into `SampleProject`. The remaining
+blocker for a full compile is the "missing instance DB" gap above — same category as `PlantAutoControl`
+itself's own known dependency gaps (S1 items 16/17). Not resuming further per-FB testing unless the
+project owner wants to pursue building out a calling context for this.
 
 **Scratch state**: `sanitization/MotorDOL.map.json` and `sanitization/TypeDOL.map.json` are real,
-reusable artifacts (gitignored, not committed) — kept. `$CLAUDE_JOB_DIR/tmp/autocontrol_fullcycle/`
-and `$CLAUDE_JOB_DIR/tmp/udt_grounding/` hold a mix of real `JOB9002`-derived content (some raw,
-should be deleted once no longer needed for grounding) and sanitized artifacts (safe to keep) —
-see `RESUME-FlgNetBuilder-Timer-Ordering.md`'s own "Scratch files" section for the exact
-per-file breakdown.
+reusable artifacts (gitignored, not committed) — kept.
+`$CLAUDE_JOB_DIR/tmp/autocontrol_fullcycle/MotorDOL.fresh.xml` is real, unsanitized `JOB9002`-derived
+content (the ground-truth export used to fix the Part-ordering bug) — should be deleted once this
+item is fully closed out. The `.sanitized.xml`/`.sanitized.ir` siblings are sanitized, non-identifying,
+safe to keep. `$CLAUDE_JOB_DIR/tmp/udt_grounding/` holds only sanitized content, safe to keep.

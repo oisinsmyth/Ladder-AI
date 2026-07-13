@@ -10,6 +10,20 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Converter: `FlgNetBuilder` Part-ordering fix — `MotorDOL` now imports into `SampleProject`**
+
+- Two real bugs found and fixed, root-caused against a fresh `MotorDOL` export: (1) `OrStep`'s own
+  Part was emitted before its branches — fixed to mirror `NotStep`'s children-then-self order. (2)
+  Timer builds were phase-hoisted (all built in one global phase) rather than inline with the
+  production that needs them — real TIA export order is contiguous per rung, not grouped by
+  construct type; fixed with a new `EnsureTimerBuilt` helper.
+- Live-verified: regenerated `MotorDOL`'s sanitized XML, confirmed Part order now matches the real
+  TIA export exactly, and the import into `SampleProject` succeeded (`MotorStarter`, FB2) — the
+  blocker this investigation existed to resolve.
+- A new, separate, expected finding on compile (not a regression): "Missing instance DB" — same
+  category of gap already known for `PlantAutoControl` itself (S1 items 16/17), not a converter bug.
+- 254/254 converter tests, 11/11 golden-harness. Full story: `docs/notes/stage-gates.md`.
+
 **`openness-cli`: concurrent-Portal stability audit — two real bugs found and fixed, feature itself cleared**
 
 - Project owner asked for a rigorous test schedule after the "second Portal instance sometimes
