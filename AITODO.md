@@ -73,33 +73,35 @@ safe to keep. `$CLAUDE_JOB_DIR/tmp/udt_grounding/` holds only sanitized content,
 
 ## Recently closed
 
-- **PLC tag table support (`TAGTABLE`)** — task #127, committed (`b2fe156`). Full story:
-  `docs/notes/stage-gates.md` ("PLC tag table support"), `src/converter/README.md`.
-- **`create-instance-db` + `MotorStarter` now compiles** — see current task below, not yet
-  committed.
+- **PLC tag table support (`TAGTABLE`)** — task #127, committed (`b2fe156`).
+- **`create-instance-db` + `MotorStarter` now compiles** — task #122, committed (`ef2ff1d`). First
+  of `PlantAutoControl`'s 8 dependency FBs proven to round-trip *and* compile.
 
-## Current task: `openness-cli create-instance-db` — DONE, TESTED, LIVE-VERIFIED, NOT YET COMMITTED
+## Current task: Phase 1 — remaining 7 dependency FBs (`EquipmentControlSystem` done, 6 to go) — NOT YET COMMITTED
 
-**Status as of 2026-07-14.** Task #122 (Phase 0.2 of the approved `PlantAutoControl` round-trip plan):
-grounded `PlcBlockComposition.CreateInstanceDB` live rather than assuming it's the right fix for
-`MotorStarter`'s own "Missing instance DB" compile errors. Confirmed real signature
-(`CreateInstanceDB(name, isAutoNumbered, number, instanceOfName) -> InstanceDB`) via
-`Siemens.Engineering.xml`. Not S6+ logic generation or tag/hardware invention — invents no tag,
-address, or DB number (always auto-numbered). Built `OpennessGateway.CreateInstanceDb` + a new
-`create-instance-db` subcommand, 5 new tests (101/101 `openness-cli` tests, up from 96).
+**Status as of 2026-07-14.** Task #124. `EquipmentControlSystem` (as `EquipmentControlSystem`) done: exported,
+sanitized (new `EquipmentControlSystem.map.json`, reusing `MotorDOL.map.json`'s own conventions — same
+template), imported, **compiled clean on the first attempt after a fix** (`STATE: Success, ERRORS:
+0`), no `create-instance-db` step needed this time (unexplained but not a blocker).
 
-**Live-verified**: created `MotorStarter_Instance` (instance of `MotorStarter`) in `SampleProject`.
-`compile --block MotorStarter` went from `"Missing instance DB"` to `STATE: Success, ERRORS: 0`;
-whole-project `compile` also clean. **`MotorStarter` is now the first of `PlantAutoControl`'s 8
-dependency FBs proven to round-trip *and* compile** in a target project — closes the "Tier 1" gap.
-Full story: `docs/notes/stage-gates.md` ("Phase 0.2: `CreateInstanceDB` grounded live").
+**A real converter bug found and fixed along the way**: a third structured-member shape (anonymous
+`Datatype="Struct"`, nested `<Member>` children direct, not `<Sections>`-wrapped, each with its own
+full `<AttributeList>`) was silently dropping its nested fields entirely — `to-ir` reported success
+with zero nested members, no error. Fixed via `DbInterfaceMembers.ParseMember`/`WriteMember`,
+reusing `ParseTypeMember`/`WriteTypeMember` (identical shape to a UDT's own member). 3 new tests,
+genericized fixture (`GlobalDbWithAnonymousStructMember.xml`). 265/265 converter tests (up from
+262). Full story: `docs/notes/stage-gates.md` ("Phase 1: `FB EquipmentControlSystem`").
 
 **Not committed** — waiting for the project owner's own explicit "commit this."
 
-**Next**: Phase 0.3 (formally close out — already effectively answered via the earlier
-CALL-instance grounding: `PlantAutoControl`'s own 20 call sites are `GlobalVariable`-scoped named
-instances, not multi-instance, so they'll need their own named instance DBs the same way, not
-`CreateInstanceDB` against `PlantAutoControl` itself), then Phase 1 (apply this same
-`create-instance-db` technique to the remaining 7 dependency FBs — `EquipmentControlSystem`/`ShredderControlSystem`/
-`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem`), Phase 2 (bulk DB/tag-table
-closure for `PlantAutoControl`'s other ~26 roots), Phase 3 (`PlantAutoControl` itself).
+**Scratch state**: `sanitization/EquipmentControlSystem.map.json` real, reusable, gitignored — kept.
+`$CLAUDE_JOB_DIR/tmp/phase1_fbs/EquipmentControlSystem.fresh.xml` is real, unsanitized `JOB9002` content — delete
+once this item is fully closed out. `.sanitized.xml`/`.fresh.ir`/`.regen.*` siblings are either
+sanitized or pure round-trip scratch, lower priority.
+
+**Next**: continue Phase 1 with the remaining 6 dependency FBs — `ShredderControlSystem`/`FilterUnitSystem`/
+`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — same pattern each time (export, sanitize,
+import, compile, `create-instance-db` if actually needed, fix and test any new gap found). Given
+`EquipmentControlSystem` shared `MotorDOL`'s own template closely, plausible some of the remaining 6 do too —
+don't assume this, ground each one. Then Phase 2 (bulk DB/tag-table closure for `PlantAutoControl`'s
+other ~26 roots), Phase 3 (`PlantAutoControl` itself).

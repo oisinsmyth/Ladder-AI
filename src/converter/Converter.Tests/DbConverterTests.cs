@@ -128,6 +128,53 @@ public class DbConverterTests
     }
 
     [Fact]
+    public void Parse_AnonymousStructMember_ReadsNestedMembersWithFullAttributeList()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithAnonymousStructMember.xml"));
+
+        var inputs = Assert.Single(db.Members);
+        Assert.Equal("Inputs", inputs.Name);
+        Assert.Equal("Struct", inputs.Datatype);
+        Assert.True(inputs.Retain);
+        Assert.Null(inputs.Version);
+        Assert.Null(inputs.StartValue);
+        Assert.NotNull(inputs.NestedMembers);
+        Assert.Equal(2, inputs.NestedMembers!.Count);
+
+        Assert.Equal("InHand", inputs.NestedMembers[0].Name);
+        Assert.Equal("Bool", inputs.NestedMembers[0].Datatype);
+        Assert.Null(inputs.NestedMembers[0].StartValue);
+        Assert.False(inputs.NestedMembers[0].SetPoint);
+
+        Assert.Equal("RunTime", inputs.NestedMembers[1].Name);
+        Assert.Equal("Real", inputs.NestedMembers[1].Datatype);
+        Assert.Equal("0.0", inputs.NestedMembers[1].StartValue);
+        Assert.True(inputs.NestedMembers[1].SetPoint);
+    }
+
+    [Fact]
+    public void RoundTrip_AnonymousStructMember_ParseWriteParse_IsStable()
+    {
+        var original = DbSourceParser.Parse(LoadFixture("GlobalDbWithAnonymousStructMember.xml"));
+
+        var written = DbSourceWriter.Write(original);
+        var reparsed = DbSourceParser.Parse(written);
+
+        AssertDbSourcesEqual(original, reparsed);
+    }
+
+    [Fact]
+    public void IrRoundTrip_AnonymousStructMember_SerializeParse_IsStable()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithAnonymousStructMember.xml"));
+
+        var irText = DbIrSerializer.Serialize(db);
+        var reparsed = DbIrParser.ParseDb(irText);
+
+        AssertDbSourcesEqual(db, reparsed);
+    }
+
+    [Fact]
     public void Parse_InstanceDbWithBothStructuredMemberKinds_ReadsBoth()
     {
         var db = DbSourceParser.Parse(LoadFixture("InstanceDbWithStructuredMembers.xml"));

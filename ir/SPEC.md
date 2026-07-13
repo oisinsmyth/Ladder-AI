@@ -645,12 +645,30 @@ member that is itself structured is a hard error — unconfirmed shape):
   instance's own static data (`PT`/`ET`/`IN`/`Q` for `TON_TIME`), never carrying a `StartValue` in
   any real example seen.
 
-Nested members themselves are structurally minimal — confirmed real: only `Name`/`Datatype`
-attributes and an optional `<StartValue>` child, no `Remanence`, no `Accessibility`, no
+Nested members in both cases above are structurally minimal — confirmed real: only `Name`/
+`Datatype` attributes and an optional `<StartValue>` child, no `Remanence`, no `Accessibility`, no
 `AttributeList`. The parser hard-errors on any other attribute or child on a nested member
 (catches an unconfirmed `Remanence`, a doubly-nested structured member, or a nested `Section`
 named anything but `"None"` — all real-but-unconfirmed, refused rather than guessed at, same
 mechanism handling all three since none has ever been seen).
+
+- **Anonymous struct** (`Datatype` is literally `Struct`, no type name at all) — a third confirmed
+  shape, found 2026-07-14 (`FB EquipmentControlSystem`'s own `Inputs`/`Outputs : Struct` members, grounding
+  Phase 1 of the `PlantAutoControl` round-trip plan). Genuinely different from both cases above: nested
+  `<Member>` elements are **direct children of the owning member**, not wrapped in a `<Sections>
+  <Section Name="None">` — and each nested member carries **its own full `<AttributeList>`**
+  (`ExternalAccessible`/`ExternalVisible`/`ExternalWritable`/`SetPoint`, exactly `TYPE`'s own member
+  shape above), not the bare `Name`/`Datatype`[/`StartValue`]-only shape the two cases above use.
+  **This was a real bug, not just an unconfirmed shape**: before being grounded, `Datatype="Struct"`
+  fell through to the plain-scalar parse path (no `<Sections>` wrapper present, so the existing
+  `isStructured` check found nothing) and the nested `<Member>` children were silently discarded —
+  `to-ir` produced `Inputs : Struct RETAIN` with no nested lines at all, no error raised. Caught by
+  a real compile failure (`"Interface: A structure without components is not allowed"` /
+  `"Tag #Inputs.InHand not defined"`) when the resulting block was imported into `SampleProject`,
+  not by any pre-existing test. Fixed: nested members are now detected by direct `<Member>`
+  children (not by `<Sections>` presence) and parsed via the same helper `TYPE`'s own members use
+  (`DbInterfaceMembers.ParseTypeMember`/`WriteTypeMember`), since the shapes are identical. Full
+  story: `docs/notes/stage-gates.md`, "Phase 1: `FB EquipmentControlSystem`".
 
 ## Comment/title placement
 

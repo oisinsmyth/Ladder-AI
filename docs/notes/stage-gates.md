@@ -2622,3 +2622,55 @@ proven to round-trip *and compile*** in a target project, not just import cleanl
 Phase 1 (the same technique applies to each of the other 7 dependency FBs) and informs Phase 3
 (`PlantAutoControl`'s own 20 call-site instances will need the same treatment, pending Phase 0.3's
 grounding of exactly how `PlantAutoControl` itself represents those call sites).
+
+### Phase 1: `FB EquipmentControlSystem` — a real data-loss bug found and fixed; second dependency FB now compiles clean — 2026-07-14
+
+First of the remaining 7 dependency FBs (Phase 1). Exported fresh from `JOB9002`, sanitized (new
+`EquipmentControlSystem.map.json` — this FB shares the exact same title/comment wording and member-naming
+convention as `MotorDOL`, right down to identical network titles like `"DOL Motor Start / Stop"`
+and identical comment text, strongly suggesting both were built from the same site template;
+reused `MotorDOL.map.json`'s own established conventions directly rather than re-deriving them).
+
+**A real converter bug surfaced on first import attempt**: `compile --block
+EquipmentControlSystem` failed with 133 errors — `"Interface: A structure without components is
+not allowed"` and dozens of `"Tag #Inputs.InHand not defined"`. Root-caused to `EquipmentControlSystem`'s own
+`Inputs`/`Outputs : Struct` members — a **third, previously-unseen structured-member shape**
+(plain anonymous struct, no UDT type name), genuinely different from both shapes `ir/SPEC.md`
+already documented: nested `<Member>` elements are direct children of the owning member (no
+`<Sections><Section Name="None">` wrapper), each with its own full `<AttributeList>` — the exact
+shape `TYPE`'s own members already use, not the bare `Name`/`Datatype`-only shape a UDT-typed/
+system-function-block-instance member's nested members have.
+
+**This was a real bug, not just an unconfirmed shape refused loudly**: `DbInterfaceMembers.
+ParseMember` only checked for a `<Sections>` wrapper to detect structured content — with none
+present, `Datatype="Struct"` silently fell through to the plain-scalar path and the nested
+`<Member>` children were discarded entirely. No error, no warning — `to-ir` reported success with
+`Inputs : Struct RETAIN` and zero nested lines. A real, silent data-loss bug, caught only because
+the resulting block was actually imported and compiled against real TIA Portal, not by any
+pre-existing unit test — the same category of finding as the `Sanitizer` Instance-reference gap
+found earlier this session, and further evidence for this project's own "ground every claim
+against real TIA behavior, don't trust a clean `to-ir` alone" discipline.
+
+**Fixed**: nested members for this shape are now detected by direct `<Member>` children (not by
+`<Sections>` presence) and parsed via `DbInterfaceMembers.ParseTypeMember`/`WriteTypeMember` —
+reused directly rather than duplicated, since the shape is identical to a PLC data type's own
+member shape. 3 new tests (`Parse_AnonymousStructMember_ReadsNestedMembersWithFullAttributeList`,
+`RoundTrip_AnonymousStructMember_ParseWriteParse_IsStable`,
+`IrRoundTrip_AnonymousStructMember_SerializeParse_IsStable`), genericized fixture
+(`GlobalDbWithAnonymousStructMember.xml`). **265/265 converter tests pass** (up from 262).
+
+**Live-verified, 2026-07-14.** Re-sanitized and re-imported `EquipmentControlSystem` (as
+`EquipmentControlSystem`) into `SampleProject`. Confirmed the sanitized XML now carries all 88
+nested `<Member>` elements (previously 0 for `Inputs`/`Outputs`). `compile --block
+EquipmentControlSystem`: **`STATE: Success, ERRORS: 0, WARNINGS: 0`**, on the first attempt after
+the fix — notably, no `create-instance-db` step was needed this time (unlike `MotorStarter`), even
+though `EquipmentControlSystem` has the same kind of multi-instance `TON_TIME` timers referenced by `.Q` in
+network bodies; not investigated further since the result is a clean pass, not a blocker. A
+subsequent whole-project `compile SampleProject` was also `STATE: Success, ERRORS: 0`, and `list`
+confirmed both `MotorStarter` and `EquipmentControlSystem` as `"consistent": true`.
+
+**Bottom line**: second of `PlantAutoControl`'s 8 dependency FBs now proven to round-trip *and*
+compile. A genuinely new, previously-unseen structured-member shape confirmed real and fixed
+before it could silently corrupt any future FB sharing this same "anonymous struct" convention —
+plausible this recurs across some of the remaining 6 FBs, given how closely `EquipmentControlSystem` mirrors
+`MotorDOL`'s own template.

@@ -10,6 +10,27 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Converter: fix a real data-loss bug — an anonymous `Struct` member's nested fields were silently dropped; `EquipmentControlSystem` (`EquipmentControlSystem`) is the second `PlantAutoControl` dependency FB to compile clean**
+
+- Phase 1 of the approved `PlantAutoControl` round-trip plan (get the remaining 7 dependency FBs
+  importing/compiling standalone): exported `EquipmentControlSystem` from `JOB9002`, and its own `Inputs`/
+  `Outputs : Struct` members (a plain anonymous struct, no UDT type name) compiled with **zero
+  nested fields** after import — `"Interface: A structure without components is not allowed"` /
+  `"Tag #Inputs.InHand not defined"`.
+- Root cause: this is a third real structured-member shape, distinct from the two already known
+  (UDT-typed / system-function-block instance): nested `<Member>` elements are direct children of
+  the owning member (no `<Sections><Section Name="None">` wrapper), each carrying its own full
+  `<AttributeList>`. The existing parser only checked for the `<Sections>` wrapper to detect
+  structured content, so `Datatype="Struct"` fell through to the plain-scalar path and its nested
+  members were silently discarded — no error, no warning, `to-ir` looked entirely successful.
+- Fixed: detect direct nested `<Member>` children and parse them via the same helper `TYPE`'s own
+  members already use (`ParseTypeMember`/`WriteTypeMember` — the shapes are identical). 3 new
+  tests, genericized fixture. 265/265 converter tests (up from 262).
+- **Live-verified**: re-sanitized and re-imported `EquipmentControlSystem` (as `EquipmentControlSystem`) into
+  `SampleProject` — `compile --block EquipmentControlSystem`: `STATE: Success, ERRORS: 0`, on the
+  first attempt after the fix, no instance-DB step needed. Whole-project compile also clean.
+  Second of `PlantAutoControl`'s 8 dependency FBs proven to round-trip *and* compile.
+
 **`openness-cli`: new `create-instance-db` command — `MotorStarter` is now the first `PlantAutoControl` dependency FB proven to compile, not just import, in a target project**
 
 - Phase 0.2 of the approved `PlantAutoControl` round-trip plan: ground `PlcBlockComposition.

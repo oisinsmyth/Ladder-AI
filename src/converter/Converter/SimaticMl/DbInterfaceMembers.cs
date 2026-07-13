@@ -43,6 +43,20 @@ internal static class DbInterfaceMembers
         var nestedSections = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections");
         var isStructured = nestedSections is not null;
 
+        // A third structured-member shape, confirmed real 2026-07-14 (`FB EquipmentControlSystem`, an
+        // untyped `Inputs`/`Outputs : Struct` member — an anonymous inline struct, no reusable
+        // UDT name): nested `<Member>` elements are *direct children* of the owning member, not
+        // wrapped in a `<Sections><Section Name="None">` the way a UDT-typed/system-function-
+        // block-instance member's nested members are — and each nested member carries its own
+        // full `<AttributeList>` (the exact shape `ParseTypeMember` already handles for a PLC
+        // data type's own members), not the bare Name/Datatype[/StartValue]-only shape
+        // `ParseNestedMembers`/`ParseBareMember` expect. Previously silently mis-parsed as a
+        // plain scalar member (Datatype="Struct", no start value) — the nested content was
+        // dropped entirely rather than hard-erroring, a real bug (`docs/notes/stage-gates.md`,
+        // "Phase 1: FB EquipmentControlSystem").
+        var directNestedMembers = member.Elements().Where(e => e.Name.LocalName == "Member").ToList();
+        var isAnonymousStruct = directNestedMembers.Count > 0;
+
         var remanence = (string?)member.Attribute("Remanence");
         var retain = remanence switch
         {
@@ -59,6 +73,30 @@ internal static class DbInterfaceMembers
         // 2026-07-10 (caught live: every BooleanAttribute read back as "absent"). Search by
         // LocalName instead, same discipline used everywhere else in this parser.
         var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
+
+        if (isAnonymousStruct)
+        {
+            if (isStructured)
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{name}' has both direct nested <Member> children and a <Sections> wrapper — this combination hasn't been observed.");
+            }
+
+            if (datatype != "Struct")
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' — only 'Struct' has been observed with this shape.");
+            }
+
+            if (startValueElement is not null)
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{name}' is an anonymous struct but also has its own <StartValue> — this combination hasn't been observed.");
+            }
+
+            var anonymousNestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
+            return new DbMember(name, datatype, retain, StartValue: null, Version: version, SetPoint: setPoint, NestedMembers: anonymousNestedMembers);
+        }
 
         if (isStructured)
         {
@@ -337,7 +375,18 @@ internal static class DbInterfaceMembers
             new XAttribute("Accessibility", "Public"),
             attributeList);
 
-        if (isStructured)
+        if (isStructured && member.Datatype == "Struct")
+        {
+            // Anonymous struct (`FB EquipmentControlSystem`'s own `Inputs`/`Outputs`, confirmed real
+            // 2026-07-14): nested members are direct children, each with its own full
+            // AttributeList (ParseTypeMember's exact shape) — no <Sections> wrapper, unlike the
+            // UDT-typed/system-function-block-instance case below.
+            foreach (var nested in member.NestedMembers!)
+            {
+                memberElement.Add(WriteTypeMember(nested));
+            }
+        }
+        else if (isStructured)
         {
             var noneSection = new XElement(Ns + "Section", new XAttribute("Name", "None"));
             foreach (var nested in member.NestedMembers!)
