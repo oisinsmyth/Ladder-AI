@@ -424,3 +424,74 @@ starving a second cold launch; or something specific to this particular machine'
 time, unrelated to concurrency at all. Needs the project owner to either watch a retry happen live
 (catch a dialog or other visible symptom the automated side can't see) or explicitly authorize
 closing the idle instance first to isolate the variable.
+
+## CLOSED, 2026-07-14 — dedicated stability audit, root cause confirmed: process pileup, not the concurrent-session feature
+
+The project owner raised a direct concern after this symptom's second occurrence in one session
+(the entry above, plus a near-identical hang hit again later the same day): is the concurrent-Portal
+feature itself unstable? Rather than take another anecdotal data point, a full rigorous test plan
+was designed and walked through together, live, phase by phase
+(`docs/notes/concurrent-portal-test-plan.md` has the complete record — every test's exact PIDs,
+timings, and pass/fail, not summarized from memory). Six phases, all closed out:
+
+- **Phase 0** (single-instance sanity, no concurrency) — 4/4 pass.
+- **Phase 1** — found a real, previously-untested bug: `OpenProject()`'s "an empty process is fair
+  game" rule didn't distinguish a human's own freshly-launched, still-empty Portal window from one
+  this tool created itself, so it would silently open its own target into a human's window without
+  asking. **Fixed**: `Connect()` now records whether it had to launch a brand-new instance; only
+  that exact instance (known, for certain, to be this tool's own, this run) is ever treated as fair
+  game when empty. Any other discovered empty process — a human's window, or a leftover orphan from
+  an earlier run — is now left alone unconditionally; a dedicated fresh instance is launched instead.
+  Retested live after the fix: confirmed a human's empty window was untouched, a separate instance
+  launched for the CLI's own target.
+- **Phase 2** (genuine two-party concurrency, different projects, for the first time with an actual
+  second human rather than one operator simulating both sides) — 4/4 pass. No interference either
+  direction; a real unsaved human edit survived every concurrent CLI operation untouched.
+- **Phase 3** (same-project concurrency) — 1/1 pass. TIA's own single-writer lock refused the second
+  open cleanly, no hang, no corruption — a genuine TIA-side constraint, working exactly as it should.
+- **Phase 4** (the actual instability question) — killing the client process genuinely mid-launch
+  (not just a generic kill — reproduced via an atomic launch+find-PID+kill script, confirmed by an
+  empty output file, i.e. the operation never got to finish) does **not** leave Portal itself stuck:
+  a follow-up call succeeded cleanly every time. Then, the decisive test: **5 fresh-instance
+  launches in a row, from a clean baseline, alternating target projects, cleaning up between each
+  trial — 5/5 succeeded, no hangs, consistent ~20-28s connect times.** Every real hang this session
+  ever hit happened with multiple stale/orphaned processes already sitting around; from a clean
+  process list, concurrent access was completely reliable across every trial.
+- **Phase 5** (test-coverage gap) — `PathsMatch` (the exact code the 2026-07-14 slash-direction bug
+  lived in) had zero unit test coverage; added 6 tests, `internal`-scoped with a new
+  `InternalsVisibleTo` for the test assembly. `FindAlreadyOpenProject` itself stays live-verified
+  only (real COM-backed `Project`/`ProjectComposition` types, no fake available).
+
+**Verdict, stated plainly: the concurrent-session feature is not the cause of instability.**
+Every scenario deliberately constructed to stress it — real two-party use, same-project refusal,
+a client killed mid-connect, five back-to-back fresh launches — behaved correctly and predictably.
+The "sometimes won't connect at all" symptom correlates with **Portal-process accumulation**, not
+with concurrency itself: both real occurrences this session happened with several stale processes
+already piled up; a clean process list was reliable every single time it was tested today. One real
+bug was found and fixed (the empty-window case above) — a genuine gap, now closed, not evidence the
+broader design was unsound.
+
+**Second real gap found and also closed the same day, not left as an accepted cost**: a client
+killed mid-launch used to leave a permanently orphaned process behind — nothing would ever reuse or
+clean it up, symmetric with (and a direct side effect of) never touching a human's window. Closing
+this properly required a fresh, full re-reflection on `TiaPortalProcess` — the original 2026-07-10
+API survey had recorded only `Attach()`/`Dispose()` on that type, missing `Id` (the real OS process
+ID) entirely, which is exactly the identifier needed to tell "an empty process this tool launched
+itself, in an earlier interrupted run" from "a human's own empty window" (`docs/notes/
+openness-api-surface-v20.md` has the correction). Built `LaunchedInstanceRegistry` — persists which
+PIDs this tool has itself launched, across separate invocations, marked at launch and unmarked on
+success; `OpenProject()` now reuses a discovered empty process only if the registry positively
+confirms it's this tool's own, never guessed. Live-verified the full recognize → reuse → unmark
+cycle (a marked, genuinely-empty process's memory jumped when its target opened into it, no
+redundant instance was launched, and the mark was correctly cleared afterward). One genuinely
+interesting complication surfaced along the way: killing the client process doesn't always abort an
+already-issued, in-flight Portal launch — it can complete asynchronously regardless, which is why
+externally timing a kill to hit the exact narrow "marked but not yet opened" window proved
+impractical and the fix was verified by direct construction instead of a live race. Full story,
+including why the live-race approach didn't pan out and how verification was actually done:
+`docs/notes/concurrent-portal-test-plan.md`.
+
+**Practical guidance going forward**: periodically check `tasklist` for
+`Siemens.Automation.Portal.exe` and close idle instances by hand if any pile up regardless — process
+hygiene remains the first line of defense against the pileup state that correlates with connection
+hangs, even though orphan accumulation specifically is now self-healing on the next invocation.

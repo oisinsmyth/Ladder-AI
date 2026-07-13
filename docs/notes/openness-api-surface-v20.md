@@ -31,8 +31,15 @@ racks, HMI targets, technological objects, safety blocks) are still reflection-c
 Siemens.Engineering.TiaPortal
   TiaPortal(TiaPortalMode mode)                    — constructor; only overload
   static IList<TiaPortalProcess> GetProcesses()
-  static TiaPortalProcess GetProcess(...)           — 2 overloads, unused so far
-  TiaPortal GetCurrentProcess()
+  static TiaPortalProcess GetProcess(Int32, Int32)          — 2 overloads, unused so far
+  static TiaPortalProcess GetProcess(Int32, TimeSpan)
+  TiaPortalProcess GetCurrentProcess()               — corrected 2026-07-14: returns
+                                                        TiaPortalProcess, not TiaPortal as this
+                                                        doc previously (wrongly) recorded — never
+                                                        actually called until the concurrent-Portal
+                                                        stability audit needed a real process
+                                                        identifier and a fresh re-reflection caught
+                                                        the error.
   Projects : ProjectComposition                     — IEnumerable<Project>
   T GetService<T>()                                  — generic instance method
   Dispose()
@@ -44,6 +51,23 @@ Siemens.Engineering.TiaPortalMode  (enum)
 Siemens.Engineering.TiaPortalProcess
   Attach() : TiaPortal
   Dispose()
+  Id : Int32                          — the real OS process ID. Confirmed real, 2026-07-14 — this
+                                         doc's original 2026-07-10 survey missed every property on
+                                         this type entirely (recorded only Attach()/Dispose()),
+                                         which is why openness-cli spent a whole session unable to
+                                         tell "did I myself launch this Portal process" from "did a
+                                         human" — the identifier existed the entire time.
+  Path : FileInfo                     — the TIA Portal binary's own path, not a project path.
+  ProjectPath : FileInfo               — the project open in this process, if any, readable
+                                         WITHOUT calling Attach() first. Not yet used anywhere in
+                                         openness-cli as of 2026-07-14 — a real simplification
+                                         opportunity for OpenProject()'s own search (today it
+                                         Attach()es to every candidate before checking what's open
+                                         in it), noted here, not acted on yet.
+  Mode : TiaPortalMode
+  AcquisitionTime : DateTime
+  AttachedSessions : IList<...>        — unexplored
+  InstalledSoftware : IList<...>        — unexplored
 ```
 
 `openness-cli`'s `Connect()`: `GetProcesses()` → attach to `[0]` if any exist, else

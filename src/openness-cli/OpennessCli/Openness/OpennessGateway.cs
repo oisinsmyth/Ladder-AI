@@ -35,15 +35,44 @@ public sealed class OpennessGateway : IOpennessGateway
     private TiaPortal? _tiaPortal;
     private Project? _project;
 
+    // Set true only when Connect() itself had to launch a brand new instance because zero Portal
+    // processes existed at all — this exact instance is known, for certain, to have been created
+    // by this tool, this run, not a human's own manually-launched window, so its own "empty" state
+    // can be trusted as fair game without consulting LaunchedInstanceRegistry at all.
+    private bool _connectLaunchedFreshInstance;
+
+    // The OS process ID of whatever this invocation itself just launched via `new TiaPortal(...)`
+    // (Connect()'s own fresh launch, or OpenProject()'s own fallback launch) — recorded in
+    // LaunchedInstanceRegistry the moment it's created, removed once a project is successfully
+    // opened into it. Null whenever this invocation attached to something that already existed.
+    private int? _pendingLaunchPid;
+
     public void Connect(TimeSpan timeout)
     {
         RunWithTimeout(
             () =>
             {
                 var processes = TiaPortal.GetProcesses();
-                _tiaPortal = processes.Count > 0
-                    ? processes[0].Attach()
-                    : new TiaPortal(TiaPortalMode.WithUserInterface);
+                if (processes.Count > 0)
+                {
+                    _tiaPortal = processes[0].Attach();
+                    _connectLaunchedFreshInstance = false;
+                }
+                else
+                {
+                    var portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                    _tiaPortal = portal;
+                    _connectLaunchedFreshInstance = true;
+
+                    // Marked immediately, before anything else can go wrong (a slow/refused
+                    // Projects.Open(), this client getting killed) — confirmed real, 2026-07-14
+                    // (concurrent-Portal stability audit, docs/notes/concurrent-portal-test-plan.md
+                    // T4.1): without this, a client killed mid-launch left a permanently orphaned
+                    // process behind that nothing would ever recognize or reuse again. See
+                    // LaunchedInstanceRegistry's own doc comment.
+                    _pendingLaunchPid = portal.GetCurrentProcess().Id;
+                    LaunchedInstanceRegistry.MarkLaunched(_pendingLaunchPid.Value);
+                }
             },
             timeout,
             () => new ConnectTimeoutException(timeout));
@@ -70,23 +99,33 @@ public sealed class OpennessGateway : IOpennessGateway
                 // already open" otherwise), so a process with something else already open is
                 // simply unusable for us, not an error to work around by closing what's there.
                 //
-                // Two full passes across every currently running process (not just the one
-                // Connect() originally attached to), in this order — confirmed necessary,
-                // 2026-07-14, from a real failure: an earlier version of this search picked
-                // whichever process it checked first that had *nothing* open, without first
-                // confirming no *other* running process already held the target project's own
-                // exclusive file lock — Projects.Open() then failed outright with TIA's own
-                // "already opened by user... on computer..." lock error, because a sibling
-                // process genuinely had it open under a name/path this code hadn't looked at yet.
-                // Pass 1 always searches every candidate for an exact already-open match before
-                // pass 2 ever considers an empty process fair game to open into.
+                // If Connect() had to launch a brand new instance (zero Portal processes existed
+                // at all), there is nothing else to search: this exact instance is known, for
+                // certain, to be both empty and created by this tool in this exact call — open
+                // directly into it and skip the search entirely.
+                if (_connectLaunchedFreshInstance)
+                {
+                    _project = _tiaPortal.Projects.Open(new FileInfo(projectIdentifier));
+                    UnmarkPendingLaunchOnSuccess();
+                    return;
+                }
+
+                // Full search across every currently running process (not just the one Connect()
+                // originally attached to) — confirmed necessary, 2026-07-14, from a real failure:
+                // an earlier version of this search picked whichever process it checked first
+                // that had *nothing* open, without first confirming no *other* running process
+                // already held the target project's own exclusive file lock — Projects.Open()
+                // then failed outright with TIA's own "already opened by user... on computer..."
+                // lock error, because a sibling process genuinely had it open under a name/path
+                // this code hadn't looked at yet. Search every candidate for an exact already-open
+                // match before falling back to a fresh instance.
                 _tiaPortal.Dispose();
-                var candidates = new List<TiaPortal>();
+                var candidates = new List<(TiaPortal Portal, int ProcessId)>();
                 foreach (TiaPortalProcess candidateProcess in TiaPortal.GetProcesses())
                 {
                     try
                     {
-                        candidates.Add(candidateProcess.Attach());
+                        candidates.Add((candidateProcess.Attach(), candidateProcess.Id));
                     }
                     catch (Exception)
                     {
@@ -96,7 +135,7 @@ public sealed class OpennessGateway : IOpennessGateway
                     }
                 }
 
-                foreach (var candidate in candidates)
+                foreach (var (candidate, _) in candidates)
                 {
                     var alreadyOpen = FindAlreadyOpenProject(candidate.Projects, projectIdentifier);
                     if (alreadyOpen is not null)
@@ -108,25 +147,51 @@ public sealed class OpennessGateway : IOpennessGateway
                     }
                 }
 
-                foreach (var candidate in candidates)
+                // An empty process discovered here is fair game ONLY if LaunchedInstanceRegistry
+                // positively identifies it as one this tool itself launched in an earlier,
+                // apparently-interrupted invocation (its own client killed before it could open a
+                // project and unmark itself) — never for a process this tool has no record of
+                // creating, which might just as easily be a human's own freshly-launched, still-
+                // empty window. Confirmed real, 2026-07-14 (concurrent-Portal stability audit,
+                // docs/notes/concurrent-portal-test-plan.md T1.1 found the human-window case; T4.1
+                // found the orphan-accumulation cost of closing it the conservative way). This
+                // closes the orphan gap without reopening the human-window one: the registry only
+                // ever contains PIDs this tool marked itself, nothing is ever guessed.
+                foreach (var (candidate, processId) in candidates)
                 {
-                    if (!candidate.Projects.Cast<Project>().Any())
+                    if (!candidate.Projects.Cast<Project>().Any() && LaunchedInstanceRegistry.IsMarkedAsLaunchedByThisTool(processId))
                     {
                         _tiaPortal = candidate;
                         _project = candidate.Projects.Open(new FileInfo(projectIdentifier));
+                        LaunchedInstanceRegistry.Unmark(processId);
                         DisposeAllExcept(candidates, candidate);
                         return;
                     }
                 }
 
-                // Nothing already running is usable — get a dedicated fresh instance.
+                // Nothing already running is usable, and nothing empty is positively identified as
+                // this tool's own — get a dedicated fresh instance, marked the same way Connect()
+                // marks its own fresh launch, so a future invocation can recognize this one too if
+                // this client gets killed before it finishes.
                 DisposeAllExcept(candidates, null);
                 var portal = new TiaPortal(TiaPortalMode.WithUserInterface);
                 _tiaPortal = portal;
+                _pendingLaunchPid = portal.GetCurrentProcess().Id;
+                LaunchedInstanceRegistry.MarkLaunched(_pendingLaunchPid.Value);
                 _project = portal.Projects.Open(new FileInfo(projectIdentifier));
+                UnmarkPendingLaunchOnSuccess();
             },
             timeout,
             () => new ProjectOpenTimeoutException(timeout));
+    }
+
+    private void UnmarkPendingLaunchOnSuccess()
+    {
+        if (_pendingLaunchPid is int pid)
+        {
+            LaunchedInstanceRegistry.Unmark(pid);
+            _pendingLaunchPid = null;
+        }
     }
 
     // Attach() alone never opens/closes/saves anything, so disposing an attached (not
@@ -134,9 +199,9 @@ public sealed class OpennessGateway : IOpennessGateway
     // whatever's open in it. Confirmed safe by this project's own established pattern of
     // attaching to an already-running human session across many live tests without ever closing
     // it.
-    private static void DisposeAllExcept(IEnumerable<TiaPortal> candidates, TiaPortal? keep)
+    private static void DisposeAllExcept(IEnumerable<(TiaPortal Portal, int ProcessId)> candidates, TiaPortal? keep)
     {
-        foreach (var candidate in candidates)
+        foreach (var (candidate, _) in candidates)
         {
             if (!ReferenceEquals(candidate, keep))
             {
@@ -169,7 +234,12 @@ public sealed class OpennessGateway : IOpennessGateway
     // 2026-07-14: this caused FindAlreadyOpenProject to conclude a project wasn't already open
     // when it genuinely was, triggering a spurious extra Portal instance launch. Path.GetFullPath
     // canonicalizes both sides (slash direction, relative segments) before comparing.
-    private static bool PathsMatch(string a, string b)
+    // Internal (not private) so OpennessCli.Tests can exercise this directly — pure string/path
+    // logic, no COM dependency, unlike the rest of this class. Confirmed real, 2026-07-14
+    // (concurrent-Portal stability audit, docs/notes/concurrent-portal-test-plan.md T5.1): this had
+    // zero test coverage despite being exactly the code a real bug (the slash-direction mismatch
+    // documented above) was found in.
+    internal static bool PathsMatch(string a, string b)
     {
         try
         {
@@ -366,27 +436,39 @@ public sealed class OpennessGateway : IOpennessGateway
         var group = FindGroup(_project, groupPath);
         var imported = new List<BlockInfo>();
 
-        foreach (var file in files)
+        try
         {
-            var results = group.Blocks.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
-            foreach (var item in results)
+            foreach (var file in files)
             {
-                if (item is not PlcBlock block)
+                var results = group.Blocks.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+                foreach (var item in results)
                 {
-                    throw new InvalidOperationException(
-                        $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
-                }
+                    if (item is not PlcBlock block)
+                    {
+                        throw new InvalidOperationException(
+                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+                    }
 
-                var language = block.ProgrammingLanguage.ToString();
-                if (SafetyClassifier.IsSafety(language))
-                {
-                    // Defense in depth: nothing upstream of this pipeline should ever produce
-                    // safety-language IR, but verify rather than assume (belt-and-braces).
-                    throw new SafetyContentRefusedException(block.Name, language);
-                }
+                    var language = block.ProgrammingLanguage.ToString();
+                    if (SafetyClassifier.IsSafety(language))
+                    {
+                        // Defense in depth: nothing upstream of this pipeline should ever produce
+                        // safety-language IR, but verify rather than assume (belt-and-braces).
+                        throw new SafetyContentRefusedException(block.Name, language);
+                    }
 
-                imported.Add(ToBlockInfo(block, groupPath));
+                    imported.Add(ToBlockInfo(block, groupPath));
+                }
             }
+        }
+        finally
+        {
+            // Confirmed real, 2026-07-14: Import() only mutates the in-memory project model —
+            // nothing here ever called Project.Save(), so every prior "live-verified" import was
+            // only as durable as whichever Portal process happened to stay alive afterward.
+            // Killing that process (or the machine restarting) silently discarded it, no error.
+            // try/finally so whatever succeeded before a later file's failure still persists.
+            SaveProject();
         }
 
         return imported;
@@ -405,19 +487,26 @@ public sealed class OpennessGateway : IOpennessGateway
         var group = FindTypeGroup(_project, groupPath);
         var imported = new List<string>();
 
-        foreach (var file in files)
+        try
         {
-            var results = group.Types.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
-            foreach (var item in results)
+            foreach (var file in files)
             {
-                if (item is not PlcType type)
+                var results = group.Types.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+                foreach (var item in results)
                 {
-                    throw new InvalidOperationException(
-                        $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
-                }
+                    if (item is not PlcType type)
+                    {
+                        throw new InvalidOperationException(
+                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+                    }
 
-                imported.Add(type.Name);
+                    imported.Add(type.Name);
+                }
             }
+        }
+        finally
+        {
+            SaveProject();
         }
 
         return imported;
@@ -441,7 +530,9 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new DeviceNotFoundException(deviceFilter);
         }
 
-        return CompileDeviceItem(candidates[0].Item, candidates[0].Path);
+        var result = CompileDeviceItem(candidates[0].Item, candidates[0].Path);
+        SaveProject();
+        return result;
     }
 
     private static CompileResult CompileDeviceItem(DeviceItem deviceItem, string path)
@@ -503,7 +594,9 @@ public sealed class OpennessGateway : IOpennessGateway
             ?? throw new InvalidOperationException(
                 $"Block '{blockName}' does not expose an ICompilable service — expected one to be available (confirmed live on other blocks, see docs/notes/openness-quirks.md).");
 
-        return RunCompile(compilable);
+        var result = RunCompile(compilable);
+        SaveProject();
+        return result;
     }
 
     // Mirrors CompileBlock exactly, minus the safety check (no ProgrammingLanguage on PlcType —
@@ -538,7 +631,9 @@ public sealed class OpennessGateway : IOpennessGateway
             ?? throw new InvalidOperationException(
                 $"Type '{typeName}' does not expose an ICompilable service.");
 
-        return RunCompile(compilable);
+        var result = RunCompile(compilable);
+        SaveProject();
+        return result;
     }
 
     // Confirmed real via Siemens's own Siemens.Engineering.xml doc comments (2026-07-13):
@@ -583,6 +678,7 @@ public sealed class OpennessGateway : IOpennessGateway
         if (confirm)
         {
             block.Delete();
+            SaveProject();
         }
 
         return info;
@@ -633,6 +729,11 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             deviceCompiles.Add(new DeviceCompileSummary(path, CompileDeviceItem(item, path)));
         }
+
+        // sanity-check's own device compiles are read-as-diagnostic in intent, but Compile() has
+        // the same real IsConsistent-flipping side effect here as everywhere else it's called —
+        // save once at the end so that side effect doesn't silently evaporate either.
+        SaveProject();
 
         return new SanityCheckResult(blocks.Count, inconsistentBlocks, deviceCompiles);
     }
@@ -914,6 +1015,18 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             throw task.Exception!.GetBaseException();
         }
+    }
+
+    // Confirmed real, 2026-07-14: no code path in this gateway ever called Project.Save() before
+    // this fix — Import()/Delete()/Compile() only mutate the in-memory project model. Whatever
+    // Portal process ends up holding that in-memory state is the only thing keeping it alive;
+    // closing that process (a taskkill, a crash, the machine restarting) silently discards it with
+    // no error, no warning. Caught live: a UDT imported and confirmed compiling earlier in the same
+    // session had vanished from disk the moment the Portal process holding it was closed. Every
+    // state-mutating gateway method now calls this once it's done.
+    private void SaveProject()
+    {
+        _project!.Save();
     }
 
     public void Dispose()

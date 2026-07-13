@@ -10,6 +10,23 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**`openness-cli`: concurrent-Portal stability audit — two real bugs found and fixed, feature itself cleared**
+
+- Project owner asked for a rigorous test schedule after the "second Portal instance sometimes
+  won't connect" symptom recurred twice in one session. Full walkthrough, phase by phase, real
+  PIDs/timings recorded: `docs/notes/concurrent-portal-test-plan.md`.
+- **Verdict: the concurrent-session feature is not the cause of instability.** Every stress
+  scenario tried behaved correctly; the symptom correlates with stale-process pileup, not
+  concurrency (5/5 fresh launches succeeded from a clean baseline; every real hang this session
+  happened with processes already piled up).
+- **Two real bugs found and fixed, both closed same-day**: (1) `OpenProject()` was silently
+  repurposing a human's own freshly-launched, empty Portal window — fixed and retested live. (2) A
+  client killed mid-launch left a permanently orphaned process behind — fixed with a new
+  `LaunchedInstanceRegistry` that lets the tool recognize its own past orphans (via
+  `TiaPortalProcess.Id`, missed entirely by the original 2026-07-10 API survey) without ever
+  touching a human's window. Live-verified end to end.
+- 89/89 openness-cli tests pass (up from 79). Full story: `docs/notes/stage-gates.md`.
+
 **UDT / PLC data type support (S1 item 26) — converter + `openness-cli`**
 
 - Closes a real gap the paused `MotorDOL` full-cycle test found: even a fully self-contained FB

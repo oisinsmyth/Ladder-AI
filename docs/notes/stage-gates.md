@@ -2295,3 +2295,87 @@ this session's "full import+compile cycle test" work has been chasing (`MotorDOL
 standalone in `SampleProject`) is not yet reached — the UDT gap that was blocking it is gone, but a
 new, separate, unaddressed Part-ordering bug now stands in its place. Worth raising with the project
 owner as its own item once this one is committed.
+
+### `openness-cli`: concurrent-Portal stability audit — real bugs found and fixed; feature itself cleared — 2026-07-14
+
+Committed as `557d35c` since S1 item 26 above; this entry covers unrelated work afterward. Project
+owner raised a direct concern: the "second Portal instance sometimes won't connect at all" symptom
+(`docs/notes/openness-quirks.md`) had now recurred twice in one session with two different
+resolutions — was the concurrent-session feature itself (`4841bf5`/`8042648`, 2026-07-13/14)
+unstable? Rather than take another anecdotal data point, a full rigorous test plan was designed and
+walked through together, live, phase by phase — `docs/notes/concurrent-portal-test-plan.md` has the
+complete record (every test's exact PIDs, timings, pass/fail).
+
+**Six phases, real bugs found and fixed along the way, not just observed**:
+
+1. **Phase 0** (single-instance sanity) — 4/4 pass. Two corrections to assumed baselines: one
+   logical Portal instance normally presents as ~2 OS processes, not 1; `Save()` (the fix from S1
+   item 26's own commit) only writes to disk when the project is actually dirty.
+2. **Phase 1 — real bug found and fixed**: `OpenProject()`'s "an empty process is fair game" rule
+   didn't distinguish a human's own freshly-launched, still-empty Portal window from anything else
+   — it would silently open its own target into a human's window, unannounced. Reproduced live with
+   the project owner watching (their own empty window visibly changed to show `SampleProject`).
+   **Fixed**: `Connect()` now records whether it had to launch a brand-new instance
+   (`_connectLaunchedFreshInstance`); only that exact instance is ever treated as fair game when
+   empty. Retested live after the fix: a fresh empty window was confirmed untouched, a separate
+   instance launched instead.
+3. **Phase 2** (genuine two-party concurrency, different projects, for the first time with an
+   actual second human rather than one operator simulating both sides) — 4/4 pass. No interference
+   either direction; a real unsaved edit (`AlarmMain` Network 1, `JOB9002`) survived every concurrent
+   CLI operation untouched.
+4. **Phase 3** (same-project concurrency) — 1/1 pass. TIA's own single-writer lock refused cleanly,
+   no hang, no corruption.
+5. **Phase 4 — the actual instability question**. Killing the client process genuinely mid-launch
+   (reproduced via an atomic launch+find-PID+kill script, confirmed by an empty output file) does
+   **not** leave Portal itself stuck — a follow-up call always succeeded cleanly. The decisive test:
+   **5 fresh-instance launches in a row, from a clean baseline, alternating target projects — 5/5
+   succeeded, no hangs, ~20-28s each.** Every real hang this session ever hit happened with multiple
+   stale processes already piled up; from a clean process list, concurrent access was completely
+   reliable every time. One real, separate cost was found here too (see below).
+6. **Phase 5** (test-coverage gap) — `PathsMatch` (the exact code the 2026-07-14 slash-direction bug
+   lived in) had zero unit test coverage. Added 6 tests, `internal`-scoped with a new
+   `InternalsVisibleTo`. `FindAlreadyOpenProject` stays live-verified only (real COM-backed types,
+   no fake available).
+
+**A second real gap, found during Phase 4 and closed the same day rather than left as an accepted
+cost**: a client killed mid-launch used to leave a permanently orphaned Portal process behind —
+the Phase 1 fix's own restriction (never trust "empty" unless positively identified as this tool's
+own) meant nothing would ever reuse or clean it up either. Closing this required a fresh, full
+re-reflection on `TiaPortalProcess` — the original 2026-07-10 API survey
+(`docs/notes/openness-api-surface-v20.md`) had recorded only `Attach()`/`Dispose()` on that type,
+missing `Id` (the real OS process ID) entirely, and had `TiaPortal.GetCurrentProcess()`'s own return
+type wrong too (`TiaPortal`, not the actual `TiaPortalProcess`) — both corrected. Built
+`LaunchedInstanceRegistry` (`src/openness-cli/OpennessCli/Openness/LaunchedInstanceRegistry.cs`): a
+small JSON file persisting which OS process IDs this tool has itself launched, across separate
+invocations, marked at launch and unmarked on success. `OpenProject()`'s search gained a new pass
+between "exact match" and "launch yet another fresh instance": a discovered empty process is reused
+only if the registry positively confirms this tool marked it itself — never guessed, so the Phase 1
+fix isn't reopened. Stale marks (process fully exited) are pruned automatically on read. 4 new unit
+tests (`LaunchedInstanceRegistryTests.cs`, pure file/PID logic).
+
+**Live verification found a genuinely interesting complication along the way, not a flaw in the
+fix**: killing the client process doesn't always abort an already-issued, in-flight Portal launch —
+the underlying OS-level launch (and even a subsequent `Projects.Open()`, if that line had already
+been reached) can complete asynchronously regardless of whether the .NET client that started it is
+still alive. This made externally timing a kill to land in the exact narrow "marked but not yet
+opened" window impractical (sub-second precision needed, tool-call latency exceeds it) — several
+attempts either killed too early (before any process existed, no side effect) or too late (the
+async completion had already succeeded on its own). **Verified the fix by direct construction
+instead**: launched a genuinely empty Portal instance directly (bypassing Openness), marked its
+real PID via the registry API (simulating the exact state a real kill-race would produce), then ran
+`list` against an unopened project and confirmed: the marked process's memory jumped (project
+opened into it, +497MB), no redundant instance was launched, and the registry correctly cleared
+afterward. This directly proves the recognize → reuse → unmark cycle works end to end.
+
+**Verdict: the concurrent-session feature itself is not the cause of instability.** Every scenario
+deliberately constructed to stress it behaved correctly and predictably. The "sometimes won't
+connect at all" symptom correlates with Portal-process accumulation, not with concurrency — both
+real occurrences this session happened with stale processes already piled up; a clean process list
+was reliable every single time it was tested. Two real, previously-unknown bugs were found and
+fixed in the course of proving this (the human-window case, the orphan-accumulation case) — genuine
+gaps closed, not evidence the broader design was unsound. **89/89 openness-cli tests pass** (up
+from 79 at the start of this work). Not yet committed — `src/openness-cli/OpennessCli/Openness/
+OpennessGateway.cs`, `LaunchedInstanceRegistry.cs`, `PathsMatchTests.cs`,
+`LaunchedInstanceRegistryTests.cs`, plus `docs/notes/concurrent-portal-test-plan.md`,
+`docs/notes/openness-quirks.md`, `docs/notes/openness-api-surface-v20.md`, and `CLAUDE.md`'s own
+environment note, all updated same session.
