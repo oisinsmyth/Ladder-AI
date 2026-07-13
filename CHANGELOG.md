@@ -10,6 +10,30 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Converter + `openness-cli`: PLC tag table support (`TAGTABLE`), deliberately minimal, live-verified**
+
+- Found while confirming `PlantAutoControl`'s own exact dependency list: 10 of its ~36 referenced
+  top-level roots (`Tag_45`-`Tag_54`) turned out to be genuine PLC tag-table entries (bare
+  single-component `Access`, absent from `list`'s own block enumeration), not DB members — a
+  construct this project had never touched before.
+- Grounded first against the real "Default tag table" (`station_2/JOB9002_PLC`, 900+ tags): root
+  `SW.Tags.PlcTagTable`, simpler than a DB or UDT (no nesting, no `BooleanAttribute`-wrapping, no
+  table-level Comment/Title).
+- Built: converter parse/write/IR/sanitize (`PlcTagTableModel.cs`, `PlcTagTableSourceParser/
+  Writer.cs`, `Ir/TagTableIr.cs`, `Sanitizer.ApplyToTagTable`); `openness-cli` `EnumerateTagTables`/
+  `ExportTagTable`/`ImportTagTables`, `list --tagtables`, `export`/`import --tagtable`.
+- **Deliberately minimal, not a general tag-table framework** (project owner's own explicit call)
+  — covers only what `PlantAutoControl`'s own 10 dependency tags need. Full, dated list of intentional
+  gaps (no constants, no folder support, `DataTypeName` never sanitized, no `delete`/`compile
+  --tagtable`, whole-table-only Openness import/export): `src/converter/README.md`, "PLC tag table
+  support".
+- **Live-verified end to end**: `export --tagtable "Default tag table" --device JOB9002_PLC`
+  against `JOB9002` succeeded first try. Built a minimal 10-tag table by filtering the real export's
+  own IR text down to `Tag_45`-`Tag_54` (editing IR, not raw SimaticML) rather than sanitizing the
+  full 900+-tag table. `import --tagtable` against `SampleProject`'s root tag-table group
+  succeeded first try; `list --tagtables` confirmed it present. 262/262 converter tests, 96/96
+  `openness-cli` tests (up from 255/94).
+
 **Converter: fix a real `Sanitizer` bug — Part instances (Timer/CALL) were never sanitized**
 
 - Project owner spotted it directly, reading the sanitized `MotorStarter` output: timer names were

@@ -93,8 +93,17 @@ internal static class Program
     private static int RunList(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var blocks = gateway.EnumerateBlocks();
-        Console.WriteLine(options.Json ? OutputFormatter.FormatJson(blocks) : OutputFormatter.FormatTable(blocks));
+        if (options.TagTables)
+        {
+            var tagTables = gateway.EnumerateTagTables();
+            Console.WriteLine(options.Json ? OutputFormatter.FormatTagTableJson(tagTables) : OutputFormatter.FormatTagTableTable(tagTables));
+        }
+        else
+        {
+            var blocks = gateway.EnumerateBlocks();
+            Console.WriteLine(options.Json ? OutputFormatter.FormatJson(blocks) : OutputFormatter.FormatTable(blocks));
+        }
+
         return ExitCodes.Success;
     }
 
@@ -105,6 +114,11 @@ internal static class Program
         {
             gateway.ExportType(options.TypeName, options.Device, options.OutPath);
             Console.WriteLine($"Exported '{options.TypeName}' -> {options.OutPath}");
+        }
+        else if (options.TagTableName is not null)
+        {
+            gateway.ExportTagTable(options.TagTableName, options.Device, options.OutPath);
+            Console.WriteLine($"Exported '{options.TagTableName}' -> {options.OutPath}");
         }
         else
         {
@@ -122,6 +136,14 @@ internal static class Program
         {
             var importedTypes = gateway.ImportTypes(options.GroupPath, options.Files);
             foreach (var name in importedTypes)
+            {
+                Console.WriteLine(name);
+            }
+        }
+        else if (options.AsTagTable)
+        {
+            var importedTagTables = gateway.ImportTagTables(options.GroupPath, options.Files);
+            foreach (var name in importedTagTables)
             {
                 Console.WriteLine(name);
             }

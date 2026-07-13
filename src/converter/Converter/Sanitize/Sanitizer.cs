@@ -180,6 +180,52 @@ public static class Sanitizer
         return type with { Name = sanitizedName!, Comment = sanitizedComment, Members = sanitizedMembers };
     }
 
+    /// <summary>
+    /// PLC tag table analogue of <see cref="ApplyToType"/>. A tag's own real "path" as referenced
+    /// elsewhere is its bare name alone (confirmed real, 2026-07-14 — a tag reference is a single-
+    /// component `Access`, never `TableName.TagName`), so each tag is looked up in
+    /// <see cref="SanitizationMap.Tags"/> by its own bare name, not the "Owner.Member" dotted
+    /// convention <see cref="SanitizeMember"/> uses for DB/UDT/block members.
+    /// <c>DataTypeName</c>/<c>LogicalAddress</c> are structural (a built-in type name, a physical
+    /// I/O address) and are never sanitized, same category as a UId.
+    /// </summary>
+    public static PlcTagTableSource ApplyToTagTable(PlcTagTableSource tagTable, SanitizationMap map)
+    {
+        var missing = new List<string>();
+
+        var sanitizedName = Require(
+            map.Names.TryGetValue(tagTable.Name, out var mappedName) ? mappedName : null,
+            $"Names[\"{tagTable.Name}\"]",
+            missing);
+
+        var sanitizedTags = tagTable.Tags.Select(tag => SanitizeTag(tag, map, missing)).ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new SanitizationMapException(
+                $"Sanitization map is missing {missing.Count} entr{(missing.Count == 1 ? "y" : "ies")}:\n  " +
+                string.Join("\n  ", missing));
+        }
+
+        return tagTable with { Name = sanitizedName!, Tags = sanitizedTags };
+    }
+
+    private static PlcTagSource SanitizeTag(PlcTagSource tag, SanitizationMap map, List<string> missing)
+    {
+        var sanitizedName = Require(
+            map.Tags.TryGetValue(tag.Name, out var mappedTagName) ? mappedTagName : null,
+            $"Tags[\"{tag.Name}\"]",
+            missing);
+
+        var sanitizedComment = SanitizeComment(
+            tag.Comment,
+            map.Comments.TryGetValue(tag.Name, out var mappedComment) ? mappedComment : null,
+            $"Comments[\"{tag.Name}\"]",
+            missing);
+
+        return tag with { Name = sanitizedName!, Comment = sanitizedComment };
+    }
+
     // ownerName is a DB name for DbSource.Members, or a block (FC/FB) name for
     // BlockSource.StaticMembers/TempMembers — the same Tags-map convention
     // ("<Owner>.<Member>" -> "<InventedOwner>.<InventedMember>") covers both, one shared mapping.

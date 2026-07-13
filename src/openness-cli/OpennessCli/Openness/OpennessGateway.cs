@@ -10,6 +10,7 @@ using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using ModelBlockType = OpennessCli.Model.BlockType;
 using ModelCompileState = OpennessCli.Model.CompileState;
@@ -289,6 +290,59 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // Mirrors EnumerateBlocks/WalkDeviceItem/WalkBlockGroup exactly, walking
+    // PlcSoftware.TagTableGroup/PlcTagTableGroup.TagTables/.Groups instead of
+    // .BlockGroup/PlcBlockGroup.Blocks/.Groups — confirmed real, 2026-07-14 (reflecting on the
+    // installed DLL): the same recursive group shape, for PLC tag tables instead of blocks.
+    public IReadOnlyList<TagTableInfo> EnumerateTagTables()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EnumerateTagTables)}.");
+        }
+
+        var results = new List<TagTableInfo>();
+
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                WalkDeviceItemForTagTables(item, device.Name, results);
+            }
+        }
+
+        return results;
+    }
+
+    private static void WalkDeviceItemForTagTables(DeviceItem item, string parentPath, List<TagTableInfo> results)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        var softwareContainer = item.GetService<SoftwareContainer>();
+        if (softwareContainer?.Software is PlcSoftware plcSoftware)
+        {
+            WalkTagTableGroup(plcSoftware.TagTableGroup, path, results);
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            WalkDeviceItemForTagTables(child, path, results);
+        }
+    }
+
+    private static void WalkTagTableGroup(PlcTagTableGroup group, string groupPath, List<TagTableInfo> results)
+    {
+        foreach (PlcTagTable tagTable in group.TagTables)
+        {
+            results.Add(new TagTableInfo(tagTable.Name, groupPath));
+        }
+
+        foreach (PlcTagTableUserGroup subGroup in group.Groups)
+        {
+            WalkTagTableGroup(subGroup, $"{groupPath}/{subGroup.Name}", results);
+        }
+    }
+
     private static void WalkBlockGroup(PlcBlockGroup group, string groupPath, List<BlockInfo> results)
     {
         foreach (PlcBlock block in group.Blocks)
@@ -426,6 +480,51 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // No safety refusal — a tag table has no ProgrammingLanguage either, same reasoning as
+    // ExportType.
+    public void ExportTagTable(string tagTableName, string? deviceFilter, string outPath)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ExportTagTable)}.");
+        }
+
+        var matches = FindMatchingTagTables(_project, tagTableName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new TagTableNotFoundException(tagTableName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousTagTableException(tagTableName, matches.Select(m => m.Path));
+        }
+
+        var tagTable = matches[0].TagTable;
+
+        if (File.Exists(outPath))
+        {
+            File.Delete(outPath);
+        }
+
+        tagTable.Export(new FileInfo(outPath), Siemens.Engineering.ExportOptions.WithDefaults);
+
+        if (!File.Exists(outPath))
+        {
+            // Same quirk as ExportBlock/ExportType — one retry before giving up.
+            tagTable.Export(new FileInfo(outPath), Siemens.Engineering.ExportOptions.WithDefaults);
+            if (!File.Exists(outPath))
+            {
+                throw new ExportProducedNoFileException(outPath);
+            }
+        }
+    }
+
     public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files)
     {
         if (_project is null)
@@ -501,6 +600,43 @@ public sealed class OpennessGateway : IOpennessGateway
                     }
 
                     imported.Add(type.Name);
+                }
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        return imported;
+    }
+
+    // Returns imported tag-table names, not BlockInfo — same reasoning as ImportTypes: a
+    // PlcTagTable has no Number/ProgrammingLanguage either.
+    public IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTagTables)}.");
+        }
+
+        var group = FindTagTableGroup(_project, groupPath);
+        var imported = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                var results = group.TagTables.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+                foreach (var item in results)
+                {
+                    if (item is not PlcTagTable tagTable)
+                    {
+                        throw new InvalidOperationException(
+                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+                    }
+
+                    imported.Add(tagTable.Name);
                 }
             }
         }
@@ -861,6 +997,65 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // Mirrors FindMatchingTypes/FindTypesInDeviceItem/FindTypesInGroup exactly, walking
+    // PlcSoftware.TagTableGroup/PlcTagTableGroup.TagTables/.Groups instead of
+    // .TypeGroup/PlcTypeGroup.Types/.Groups — confirmed real, 2026-07-14 (reflecting on the
+    // installed DLL): the same recursive group shape, for PLC tag tables instead of UDTs.
+    private static IEnumerable<(PlcTagTable TagTable, string Path)> FindMatchingTagTables(Project project, string tagTableName)
+    {
+        foreach (Device device in project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                foreach (var match in FindTagTablesInDeviceItem(item, device.Name, tagTableName))
+                {
+                    yield return match;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(PlcTagTable TagTable, string Path)> FindTagTablesInDeviceItem(DeviceItem item, string parentPath, string tagTableName)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        var softwareContainer = item.GetService<SoftwareContainer>();
+        if (softwareContainer?.Software is PlcSoftware plcSoftware)
+        {
+            foreach (var match in FindTagTablesInGroup(plcSoftware.TagTableGroup, path, tagTableName))
+            {
+                yield return match;
+            }
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            foreach (var match in FindTagTablesInDeviceItem(child, path, tagTableName))
+            {
+                yield return match;
+            }
+        }
+    }
+
+    private static IEnumerable<(PlcTagTable TagTable, string Path)> FindTagTablesInGroup(PlcTagTableGroup group, string groupPath, string tagTableName)
+    {
+        foreach (PlcTagTable tagTable in group.TagTables)
+        {
+            if (tagTable.Name == tagTableName)
+            {
+                yield return (tagTable, groupPath);
+            }
+        }
+
+        foreach (PlcTagTableUserGroup subGroup in group.Groups)
+        {
+            foreach (var match in FindTagTablesInGroup(subGroup, $"{groupPath}/{subGroup.Name}", tagTableName))
+            {
+                yield return match;
+            }
+        }
+    }
+
     private static IEnumerable<(DeviceItem Item, string Path)> FindPlcDeviceItems(Project project)
     {
         foreach (Device device in project.Devices)
@@ -998,6 +1193,57 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             group = group.Groups.Cast<PlcTypeUserGroup>().FirstOrDefault(g => g.Name == segments[i])
                 ?? throw new InvalidOperationException($"Type group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
+        }
+
+        return group;
+    }
+
+    // Mirrors FindTypeGroup exactly, resolving into PlcSoftware.TagTableGroup/PlcTagTableGroup
+    // instead of .TypeGroup/PlcTypeGroup.
+    private static PlcTagTableGroup FindTagTableGroup(Project project, string groupPath)
+    {
+        var segments = groupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0)
+        {
+            throw new InvalidOperationException("Empty --group path.");
+        }
+
+        var device = project.Devices.Cast<Device>().FirstOrDefault(d => d.Name == segments[0])
+            ?? throw new DeviceNotFoundException(segments[0]);
+
+        var i = 1;
+        DeviceItem? currentItem = null;
+        IEnumerable<DeviceItem> currentLevel = device.DeviceItems.Cast<DeviceItem>();
+
+        while (i < segments.Length)
+        {
+            var next = currentLevel.FirstOrDefault(it => it.Name == segments[i]);
+            if (next is null)
+            {
+                break;
+            }
+
+            currentItem = next;
+            currentLevel = next.DeviceItems.Cast<DeviceItem>();
+            i++;
+        }
+
+        if (currentItem is null)
+        {
+            throw new InvalidOperationException($"No device item found under '{groupPath}'.");
+        }
+
+        var softwareContainer = currentItem.GetService<SoftwareContainer>();
+        if (softwareContainer?.Software is not PlcSoftware plcSoftware)
+        {
+            throw new InvalidOperationException($"'{string.Join("/", segments, 0, i)}' is not a PLC software container.");
+        }
+
+        PlcTagTableGroup group = plcSoftware.TagTableGroup;
+        for (; i < segments.Length; i++)
+        {
+            group = group.Groups.Cast<PlcTagTableUserGroup>().FirstOrDefault(g => g.Name == segments[i])
+                ?? throw new InvalidOperationException($"Tag table group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
         }
 
         return group;

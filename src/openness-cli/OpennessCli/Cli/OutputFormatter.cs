@@ -51,6 +51,37 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    private static readonly string[] TagTableHeaders = { "NAME", "PATH" };
+
+    public static string FormatTagTableTable(IReadOnlyList<TagTableInfo> tagTables)
+    {
+        if (tagTables.Count == 0)
+        {
+            return "(no tag tables found)";
+        }
+
+        var rows = tagTables.Select(t => new[] { t.Name, t.Path }).ToList();
+        var widths = Enumerable.Range(0, TagTableHeaders.Length)
+            .Select(col => Math.Max(TagTableHeaders[col].Length, rows.Max(r => r[col].Length)))
+            .ToArray();
+
+        var sb = new StringBuilder();
+        AppendRow(sb, TagTableHeaders, widths);
+        AppendSeparator(sb, widths);
+        foreach (var row in rows)
+        {
+            AppendRow(sb, row, widths);
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatTagTableJson(IReadOnlyList<TagTableInfo> tagTables)
+    {
+        var payload = tagTables.Select(t => new { name = t.Name, path = t.Path });
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatCompileTable(CompileResult result)
     {
         var sb = new StringBuilder();

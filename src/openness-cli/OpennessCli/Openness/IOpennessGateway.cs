@@ -13,6 +13,15 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<BlockInfo> EnumerateBlocks();
 
     /// <summary>
+    /// Enumerates every PLC tag table in the project — a distinct object type from blocks/DBs/UDTs
+    /// (<c>PlcSoftware.TagTableGroup</c>, confirmed real 2026-07-14 while grounding `PlantAutoControl`'s
+    /// own dependency closure: some of its referenced tags are bare, single-component Access
+    /// references that never appear in <see cref="EnumerateBlocks"/>'s own output — a genuine
+    /// PLC tag, not a DB member). No Number/Language/Safety concept exists for a tag table at all.
+    /// </summary>
+    IReadOnlyList<TagTableInfo> EnumerateTagTables();
+
+    /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
     /// <see cref="SafetyContentRefusedException"/>) before calling Export() at all if the block
     /// classifies as safety. <paramref name="deviceFilter"/> disambiguates when the same block
@@ -30,6 +39,14 @@ public interface IOpennessGateway : IDisposable
     void ExportType(string typeName, string? deviceFilter, string outPath);
 
     /// <summary>
+    /// Exports the named PLC tag table to <paramref name="outPath"/>. Same
+    /// <paramref name="deviceFilter"/> disambiguation as <see cref="ExportBlock"/>. No safety
+    /// refusal — a tag table has no <c>ProgrammingLanguage</c> either, same reasoning as
+    /// <see cref="ExportType"/>.
+    /// </summary>
+    void ExportTagTable(string tagTableName, string? deviceFilter, string outPath);
+
+    /// <summary>
     /// Imports <paramref name="files"/> into the block group at <paramref name="groupPath"/>
     /// (format: "&lt;device&gt;/&lt;group&gt;/.../&lt;group&gt;", matching the Path shown by
     /// `list`). No generic "import wherever it goes" exists on the Siemens side, so an explicit
@@ -45,6 +62,14 @@ public interface IOpennessGateway : IDisposable
     /// ProgrammingLanguage to report.
     /// </summary>
     IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files);
+
+    /// <summary>
+    /// Imports <paramref name="files"/> as PLC tag tables into the tag-table group at
+    /// <paramref name="groupPath"/> — same path format as <see cref="ImportBlocks"/>, but a
+    /// distinct composition tree (<c>PlcTagTableGroup.TagTables</c>). Returns imported tag-table
+    /// names, same reasoning as <see cref="ImportTypes"/>.
+    /// </summary>
+    IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files);
 
     /// <summary>Compiles the PLC software under <paramref name="deviceFilter"/> (or the project's only PLC device, if unambiguous).</summary>
     CompileResult Compile(string? deviceFilter);
@@ -147,6 +172,22 @@ public sealed class AmbiguousTypeException : Exception
 {
     public AmbiguousTypeException(string typeName, IEnumerable<string> paths)
         : base($"Type '{typeName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+public sealed class TagTableNotFoundException : Exception
+{
+    public TagTableNotFoundException(string tagTableName)
+        : base($"No PLC tag table named '{tagTableName}' found in the project.")
+    {
+    }
+}
+
+public sealed class AmbiguousTagTableException : Exception
+{
+    public AmbiguousTagTableException(string tagTableName, IEnumerable<string> paths)
+        : base($"Tag table '{tagTableName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
     {
     }
 }

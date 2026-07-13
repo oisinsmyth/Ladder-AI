@@ -71,6 +71,55 @@ public class ExportImportCompileArgumentParserTests
     }
 
     [Fact]
+    public void Parse_Export_WithTagTable_Succeeds()
+    {
+        var result = ArgumentParser.Parse(new[] { "export", "MyProject", "--tagtable", "Control", "--out", "C:\\out.xml" });
+
+        var success = Assert.IsType<ParseResult.ExportSuccess>(result);
+        Assert.Equal("Control", success.Options.TagTableName);
+        Assert.Null(success.Options.BlockName);
+        Assert.Null(success.Options.TypeName);
+    }
+
+    [Fact]
+    public void Parse_Export_BlockAndTagTable_Fails()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "export", "MyProject", "--block", "PlantAutoControl", "--tagtable", "Control", "--out", "C:\\out.xml",
+        });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_Export_TypeAndTagTable_Fails()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "export", "MyProject", "--type", "TypeDOL", "--tagtable", "Control", "--out", "C:\\out.xml",
+        });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_List_WithTagTables_SetsFlag()
+    {
+        var result = ArgumentParser.Parse(new[] { "list", "MyProject", "--tagtables" });
+
+        var success = Assert.IsType<ParseResult.ListSuccess>(result);
+        Assert.True(success.Options.TagTables);
+    }
+
+    [Fact]
+    public void Parse_List_WithoutTagTables_FlagIsFalse()
+    {
+        var result = ArgumentParser.Parse(new[] { "list", "MyProject" });
+
+        var success = Assert.IsType<ParseResult.ListSuccess>(result);
+        Assert.False(success.Options.TagTables);
+    }
+
+    [Fact]
     public void Parse_Import_WithGroupAndFiles_Succeeds()
     {
         var result = ArgumentParser.Parse(new[]
@@ -121,6 +170,31 @@ public class ExportImportCompileArgumentParserTests
 
         var success = Assert.IsType<ParseResult.ImportSuccess>(result);
         Assert.False(success.Options.AsType);
+    }
+
+    [Fact]
+    public void Parse_Import_WithTagTable_SetsAsTagTable()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "import", "MyProject", "--group", "station_2/JOB9002_PLC/Default tag table", "--tagtable", "C:\\Minimal.xml",
+        });
+
+        var success = Assert.IsType<ParseResult.ImportSuccess>(result);
+        Assert.True(success.Options.AsTagTable);
+        Assert.False(success.Options.AsType);
+        Assert.Equal(new[] { "C:\\Minimal.xml" }, success.Options.Files);
+    }
+
+    [Fact]
+    public void Parse_Import_TypeAndTagTable_Fails()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "import", "MyProject", "--group", "station_2/JOB9002_PLC/Control", "--type", "--tagtable", "C:\\a.xml",
+        });
+
+        Assert.IsType<ParseResult.Failure>(result);
     }
 
     [Fact]

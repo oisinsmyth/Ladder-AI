@@ -70,3 +70,39 @@ reusable artifacts (gitignored, not committed) — kept.
 content (the ground-truth export used to fix the Part-ordering bug) — should be deleted once this
 item is fully closed out. The `.sanitized.xml`/`.sanitized.ir` siblings are sanitized, non-identifying,
 safe to keep. `$CLAUDE_JOB_DIR/tmp/udt_grounding/` holds only sanitized content, safe to keep.
+
+## Current task: PLC tag table support (`TAGTABLE`) — DONE, TESTED, LIVE-VERIFIED, NOT YET COMMITTED
+
+**Status as of 2026-07-14.** Task #127, spun out of Phase 0.1 grounding for the `PlantAutoControl`
+round-trip plan (`docs/notes/stage-gates.md` / the approved plan): `PlantAutoControl` references 10 tags
+(`Tag_45`-`Tag_54`) that turned out to be genuine PLC tag-table entries, not DB members — a
+construct never touched before. Built end to end: converter parse/write/IR/sanitize
+(`PlcTagTableModel.cs`, `PlcTagTableSourceParser/Writer.cs`, `Ir/TagTableIr.cs`,
+`Sanitizer.ApplyToTagTable`) and `openness-cli` support (`EnumerateTagTables`/`ExportTagTable`/
+`ImportTagTables`, `list --tagtables`, `export`/`import --tagtable`). Deliberately minimal
+(project owner's own call) — full intentional-gaps list in `src/converter/README.md`, "PLC tag
+table support", and `ir/SPEC.md`'s "Tag tables, UDTs, DBs" section.
+
+**Live-verified, both directions**: `export --tagtable "Default tag table" --device JOB9002_PLC`
+against `JOB9002` succeeded first try. Built a minimal 10-tag table (filtered the real export's own
+IR text down to `Tag_45`-`Tag_54`, not a hand-sanitized full 900+-tag table). `import --tagtable`
+into `SampleProject`'s root tag-table group succeeded first try; `SampleProject` now has "Default
+tag table" (10 tags) as a real, growing part of `PlantAutoControl`'s dependency closure (Phase 2
+groundwork, not scratch mess — left in place deliberately). 262/262 converter tests, 96/96
+`openness-cli` tests.
+
+**Not committed** — waiting for the project owner's own explicit "commit this."
+
+**Scratch state, needs cleanup once committed**: `$CLAUDE_JOB_DIR/tmp/autocontrol_fullcycle/
+PlantAutoControl.fresh.xml` and `DefaultTagTable.fresh.xml` are real, unsanitized, full-size `JOB9002`
+content (the full block and the full 900+-tag table) — delete once this item is fully closed out.
+`MinimalTagTable.raw.ir`/`.raw.xml` carry only the 10 real tag names/addresses (`Tag_45`-`Tag_54`,
+`%IW64`-`%IW78`/`%QW64`-`%QW66`) — judged non-identifying (Siemens auto-generated placeholder
+names, no site business content), safe to keep; not run through `Sanitizer` for that reason,
+noted explicitly in `src/converter/README.md`'s gaps list rather than left silent.
+
+**Next**: resume the approved plan (`docs/notes/stage-gates.md`/task list #122-#126) — Phase 0.2
+(ground `CreateInstanceDB` live against `MotorStarter`), Phase 0.3 (formally close out — already
+effectively answered via this session's CALL-instance grounding), Phase 1 (remaining 7 dependency
+FBs), Phase 2 (bulk DB/tag-table closure for `PlantAutoControl`'s other ~26 roots), Phase 3
+(`PlantAutoControl` itself).

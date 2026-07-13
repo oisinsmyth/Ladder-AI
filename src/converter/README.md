@@ -1198,6 +1198,121 @@ fails with a *different* error — `"The elements must be sorted according to th
 expects) — unrelated to UDT support, previously masked by the UDT blocker this item resolves, not
 investigated further here. Full story: `docs/notes/stage-gates.md` ("UDT/PLC data type support").
 
+## PLC tag table support (2026-07-14, follow-on from `PlantAutoControl` dependency grounding)
+
+Surfaced while confirming `PlantAutoControl`'s own exact dependency list (S1 items 16/17's follow-on):
+10 of its ~36 referenced top-level roots (`Tag_45`-`Tag_54`) turned out to be genuine PLC tag-table
+entries, not DB members — absent from `list`'s own block enumeration entirely, and shaped as a
+bare single-component `Access` (`<Component Name="Tag_45" />`, never `Table.Tag`). A construct this
+project had never touched before.
+
+**Confirmed real shape**, grounded against the actual "Default tag table" (`station_2/JOB9002_PLC`,
+900+ tags), root element `SW.Tags.PlcTagTable` — genuinely simpler than a DB or UDT:
+
+```xml
+<SW.Tags.PlcTagTable ID="0">
+  <AttributeList>
+    <Name>Default tag table</Name>
+  </AttributeList>
+  <ObjectList>
+    <SW.Tags.PlcTag ID="91" CompositionName="Tags">
+      <AttributeList>
+        <DataTypeName>Word</DataTypeName>
+        <ExternalAccessible>true</ExternalAccessible>
+        <ExternalVisible>true</ExternalVisible>
+        <ExternalWritable>true</ExternalWritable>
+        <LogicalAddress>%IW64</LogicalAddress>
+        <Name>Tag_45</Name>
+      </AttributeList>
+      <ObjectList>...Comment MultilingualText only, no Title...</ObjectList>
+    </SW.Tags.PlcTag>
+  </ObjectList>
+</SW.Tags.PlcTagTable>
+```
+
+- No `Namespace`, no safety-adjacent field, no table-level Comment/Title at all — simpler than
+  `SW.Types.PlcStruct`'s own root.
+- Each tag's own `AttributeList` children are **plain elements, not `BooleanAttribute`-wrapped**
+  like a DB/UDT member — `DataTypeName`/`ExternalAccessible`/`ExternalVisible`/`ExternalWritable`/
+  `LogicalAddress`/`Name`, alphabetical order.
+- `ObjectList` carries only a Comment `MultilingualText` — no Title, unlike a UDT.
+- `LogicalAddress` treated as structural (never sanitized) — a physical I/O address, not
+  identifying business content, same category as a UId.
+- A tag's own real "path" as referenced elsewhere is its bare name alone (never
+  `TableName.TagName`), so `Sanitizer.SanitizeTag` looks up `map.Tags[tag.Name]` directly, not the
+  `"Owner.Member"` dotted convention `SanitizeMember` uses for DB/UDT/block members.
+- `PlcTag.IsSafety` exists as a C# property (per `Siemens.Engineering.dll` reflection) but **never
+  appears in the exported XML at all** — confirmed by grep across the full 900+-tag real export.
+  Nothing to hard-error on for this construct at the XML-parsing level; the F-block refusal already
+  covers safety at the block/network level, same reasoning as the UDT section above.
+
+**New files**: `SimaticMl/PlcTagTableModel.cs` (`PlcTagTableSource`/`PlcTagSource`),
+`PlcTagTableSourceParser.cs`/`PlcTagTableSourceWriter.cs`, `Ir/TagTableIr.cs`
+(`TagTableIrSerializer`/`TagTableIrParser` — readable form `TAGTABLE <Name> / ROOTID <id> / TAGS`,
+one line per tag: `<tag> <id> : <DataTypeName> @ <LogicalAddress> [ACCESSIBLE] [VISIBLE]
+[WRITABLE] [COMMENT "..."]`, flags shown only when true, same convention as `DbMemberLineFormat`'s
+own `SETPOINT`). `Sanitizer.ApplyToTagTable`/`SanitizeTag` sanitize `Name` (table and each tag) and
+`Comment` via the same shared `Names`/`Tags`/`Comments` map tables as everything else.
+`Program.cs`'s `ConvertToIr`/`ConvertToXml`/`RunSanitize` gained a third `IsTagTableXml` detection
+branch alongside `IsDbXml`/`IsTypeXml`. **`openness-cli` side**: new `EnumerateTagTables`/
+`ExportTagTable`/`ImportTagTables` on `OpennessGateway`, walking `PlcSoftware.TagTableGroup`
+exactly like `.TypeGroup`/`.BlockGroup`. `list --tagtables` enumerates tag tables instead of
+blocks; `export`/`import` gained `--tagtable <name>` (export) / `--tagtable` switch (import),
+mutually exclusive with `--block`/`--type` on export, `--type` on import.
+
+7 new converter tests (`PlcTagTableTests.cs`, fixture genericized to 3 representative tags —
+`Word`/`Bool`, one with a real comment), 7 new `openness-cli` tests (5 argument-parser + 2 for the
+`--tagtable` import switch). All suites green: 262 converter, 96 openness-cli.
+
+**Live-verified against real data, 2026-07-14/2026-07-13.** `export --tagtable "Default tag
+table" --device JOB9002_PLC` against `JOB9002` succeeded on the first attempt (5934-line real export,
+all 10 needed tags confirmed present). Rather than sanitize and recreate the real 900+-tag table
+(disproportionate to what `PlantAutoControl` actually needs — see scope decision below), the real export
+was converted to IR, filtered down to just the `Tag_45`-`Tag_54` lines (editing readable IR text,
+not raw SimaticML — CLAUDE.md hard rule 7), and converted back to a minimal 10-tag XML. `import
+--tagtable` against `SampleProject`'s root tag-table group succeeded on the first attempt;
+`list --tagtables` confirmed "Default tag table" (10 tags) now present. Both `export --tagtable`
+and `import --tagtable` are live-verified round trip, not just unit-tested.
+
+**Deliberately minimal, not a general tag-table framework** (project owner's own call,
+2026-07-14) — covers only what `PlantAutoControl`'s own 10 real dependency tags need. Intentional gaps,
+tracked here rather than left implicit:
+
+- **No `PlcConstant`/`PlcSystemConstant`/`PlcUserConstant` support** — only plain `PlcTag` entries.
+  `PlcTagTable` exposes `SystemConstants`/`UserConstants` compositions on the Openness side (per
+  reflection) that are entirely untouched; no real grounding data for either shape yet.
+  `PlcTagTableSourceParser` only ever looks at the `Tags` composition group and would silently miss
+  a constant if one were present in a future source table — not currently guarded against with a
+  hard error, since no real example of a constant-bearing table has been seen to confirm the XML
+  shape to error against.
+- **No tag-table folder/grouping structure beyond the flat traversal already built for
+  enumeration** — `WalkTagTableGroup`/`FindTagTableGroup` recurse through `PlcTagTableUserGroup`
+  correctly for `list --tagtables` and `--group` resolution, but nothing else (no `create-group`,
+  no move-between-groups).
+- **`DataTypeName` is never sanitized** — treated as structural like `LogicalAddress`. Untested
+  whether a tag can ever reference a UDT type name the way a DB/UDT member's `Datatype` attribute
+  can; all 10 real grounding tags are built-in `Word`. If a identifying tag table ever references a
+  UDT by name, that name would currently pass through unsanitized — a real gap, not yet hit.
+  `Sanitizer.ApplyToTagTable`'s own test (`Sanitize_RenamesTagTableAndTags`) explicitly asserts
+  `DataTypeName`/`LogicalAddress` stay untouched, documenting the current behavior rather than
+  hiding it.
+- **No `delete --tagtable`** — mirrors the same deliberate deferral already made for `--type` in
+  the UDT section above, same reasoning (not needed for this item's own goal).
+- **No `compile --tagtable`** — not attempted; a tag table's own consistency isn't a `Compile()`-
+  shaped operation the way a block's is (no real Openness precedent found for it), so this wasn't
+  built rather than guessed at.
+- **Whole-table-only Openness import/export** — there is no way to import or export a subset of a
+  real tag table directly; `PlcTagTable.Export()`/`PlcTagTableComposition.Import()` both operate on
+  an entire table. This is exactly why the minimal 10-tag table was built by filtering the real
+  export's own IR text down to the needed lines, rather than attempting a partial extraction
+  through Openness itself.
+- **Tag names/`LogicalAddress` values used for live verification are the real, unmodified
+  `JOB9002` values** (`Tag_45`-`Tag_54`, `%IW64`-`%IW78`/`%QW64`-`%QW66`) — not run through
+  `Sanitizer` before import. These are Siemens auto-generated placeholder-style names carrying no
+  identifying content (unlike e.g. `MotorDOL`'s own semantic member names), so this was
+  judged equivalent to `LogicalAddress`'s own "structural, not business content" category rather
+  than a data-boundary exception — flagged here explicitly rather than left silent.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

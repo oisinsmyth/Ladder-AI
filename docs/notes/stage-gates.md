@@ -2512,3 +2512,73 @@ network body until re-imported from a freshly-sanitized copy — not yet redone 
 (the block isn't compiling standalone yet regardless, per the missing-instance-DB gap above, so
 this doesn't block anything currently in progress, but is worth closing out before treating
 `MotorStarter` as a finished, trustworthy artifact).
+
+### PLC tag table support (`TAGTABLE`), deliberately minimal, live-verified end to end — 2026-07-14
+
+Picked up mid-way through Phase 0.1 grounding for the approved `PlantAutoControl` round-trip plan
+(confirming its exact dependency list, per S1 items 16/17's own reopened question). Re-ran the
+sanitization-map "collect everything missing" trick (`empty.map.json`, near-empty map) against a
+fresh `PlantAutoControl` export: 343 distinct tag paths across 36 distinct top-level roots. Cross-checked
+each root against `openness-cli list --json` for `JOB9002`: 26 are genuine DBs (confirmed `"type":
+"DB"`), but 10 (`Tag_45`-`Tag_54`) are **absent from the block enumeration entirely**. Their real
+XML shape confirmed the reason: a bare single-component `<Access Scope="GlobalVariable"><Symbol>
+<Component Name="Tag_45" /></Symbol></Access>` — no `Table.Tag` dotted structure, unlike any DB
+member reference. A genuinely new object type: `PlcSoftware.TagTableGroup` had been in the
+reflected API survey since S1's early Openness work, marked "unused so far," and never touched.
+
+**An initial hypothesis was wrong and corrected immediately**: `Control`/`Input`/`Output`/`PLC`/
+`Timings`/`HMIControlSignals` were first guessed to be tag tables too (generic-sounding names) —
+checked live via `list --json` and confirmed all 6 are actually `"type": "DB"`. Only `Tag_45`-`54`
+turned out to be real tag-table entries. Corrected course rather than building unneeded generality
+for names that were DBs all along — worth recording as a reminder that "looks like a tag table"
+isn't grounds enough on its own.
+
+**Grounded live** before writing any parser code (CLAUDE.md hard rule 3 discipline, same as every
+other construct in this project): confirmed the real Openness API surface (`PlcTagTable`, `PlcTag`,
+`PlcTagTableComposition`, `PlcTagTableGroup` — mirrors `PlcType`/`PlcTypeGroup` almost exactly, root
+reachable via `PlcSoftware.TagTableGroup`), then live-exported "Default tag table"
+(`station_2/JOB9002_PLC`, 900+ tags) via a newly built `list --tagtables`/`export --tagtable` on
+`openness-cli` — **succeeded on the first attempt**. Confirmed the real XML shape against this
+export (see `src/converter/README.md`, "PLC tag table support", for the full shape details) —
+notably simpler than either a DB or a UDT: no nesting, no `BooleanAttribute`-wrapped attributes, no
+table-level Comment/Title. `PlcTag.IsSafety` exists as a reflected C# property but **never appears
+in the exported XML at all** (confirmed by grep across the full 900+-tag export) — nothing to
+hard-error on for this construct at the XML level.
+
+**Scope decision** (project owner's own explicit call, via `AskUserQuestion`): the real table has
+900+ tags but `PlantAutoControl` needs only 10 — build a **minimal synthetic tag table**, not recreate
+the full real one. Built the converter-side pipeline (`PlcTagTableModel.cs`,
+`PlcTagTableSourceParser.cs`/`PlcTagTableSourceWriter.cs`, `Ir/TagTableIr.cs`,
+`Sanitizer.ApplyToTagTable`) and the `openness-cli` side (`EnumerateTagTables`/`ExportTagTable`/
+`ImportTagTables`, `list --tagtables`, `export`/`import --tagtable`), each mirroring the existing
+`--type`/UDT precedent closely. 7 new converter tests, 7 new `openness-cli` tests — all green on
+first run. Explicitly scoped **minimal, not a general tag-table framework** per the project owner's
+own instruction to track every intentional gap in a doc rather than build silently — full, dated
+list in `src/converter/README.md`'s own "PLC tag table support" section and `ir/SPEC.md`'s "Tag
+tables, UDTs, DBs" section (no `PlcConstant`/`PlcSystemConstant`/`PlcUserConstant`, no tag-table
+folder/grouping beyond enumeration, `DataTypeName` never sanitized, no `delete`/`compile
+--tagtable`, whole-table-only Openness import/export).
+
+**Live-verified, both directions.** `export --tagtable` (above) already proved the export half.
+For import: rather than hand-sanitize the full 900+-tag table (disproportionate to what's actually
+needed, and Openness only supports whole-table import/export — no partial-extraction path),
+converted the real export to IR (readable text) and filtered it down to just the `Tag_45`-`Tag_54`
+lines — editing IR text, not raw SimaticML, per CLAUDE.md hard rule 7 — then converted that back to
+a minimal 10-tag XML. `import --tagtable` against `SampleProject`'s root tag-table group (device
+path `S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0`, resolved the same way `--group` already works
+for blocks/types) **succeeded on the first attempt**; `list --tagtables` confirmed "Default tag
+table" (10 tags) now present in `SampleProject`. Both halves of the round trip are live-verified
+against real TIA Portal, not just unit-tested.
+
+Tag names/addresses used for this live verification (`Tag_45`-`Tag_54`, `%IW64`-`%IW78`/
+`%QW64`-`%QW66`) are the real, unmodified `JOB9002` values, not run through `Sanitizer` first — judged
+non-identifying (Siemens auto-generated placeholder-style names, no site business content,
+same "structural" category `LogicalAddress` itself already sits in), not a data-boundary exception.
+Flagged explicitly in `src/converter/README.md`'s own gaps list rather than left silent.
+
+**Bottom line**: a genuinely new Openness/converter object type, grounded, built minimal-by-design,
+and live-verified in both directions on the first attempt each time. `SampleProject` now carries
+"Default tag table" as real, deliberate Phase 2 groundwork toward `PlantAutoControl`'s own full
+dependency closure — not scratch left behind. All three suites green: 262 converter (up from 255),
+96 `openness-cli` (up from 94), 11 golden-harness. Not yet committed — task list #127, awaiting the
+project owner's own explicit "commit this."

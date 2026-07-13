@@ -3,33 +3,43 @@ using System.Collections.Generic;
 
 namespace OpennessCli.Cli;
 
+// TagTables switches list's own output from blocks to PLC tag tables — a distinct object type
+// (confirmed real 2026-07-14, grounding PlantAutoControl's own dependency closure: some referenced
+// tags are bare, single-component Access references that never show up in the ordinary block
+// enumeration at all). A separate view, not merged into the same listing, since a tag table has
+// none of BlockInfo's own fields (Number/Language/Safety/Consistent).
 public sealed record ListOptions(
     string ProjectIdentifier,
     bool Json,
+    bool TagTables,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
-// Exactly one of BlockName/TypeName is set — --block and --type are mutually exclusive
-// alternatives (a PLC data type/UDT, confirmed real 2026-07-14, has no Number/ProgrammingLanguage
-// the way a block does, so it needs its own distinct resolution path, not a shared "name" field).
+// Exactly one of BlockName/TypeName/TagTableName is set — --block/--type/--tagtable are mutually
+// exclusive alternatives (a PLC data type/UDT and a PLC tag table, both confirmed real 2026-07-14,
+// have no Number/ProgrammingLanguage the way a block does, so each needs its own distinct
+// resolution path, not a shared "name" field).
 public sealed record ExportCommandOptions(
     string ProjectIdentifier,
     string? BlockName,
     string? TypeName,
+    string? TagTableName,
     string? Device,
     string OutPath,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
-// AsType selects which composition Import() targets (PlcTypeGroup.Types vs. PlcBlockGroup.Blocks)
-// — defaults to false (blocks), today's existing behavior, unchanged.
+// AsType/AsTagTable select which composition Import() targets (PlcTypeGroup.Types /
+// PlcTagTableGroup.TagTables vs. PlcBlockGroup.Blocks) — both default to false (blocks), today's
+// existing behavior, unchanged. Mutually exclusive, same as --block/--type/--tagtable on export.
 public sealed record ImportCommandOptions(
     string ProjectIdentifier,
     string GroupPath,
     IReadOnlyList<string> Files,
     bool AsType,
+    bool AsTagTable,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -81,14 +91,16 @@ public static class ArgumentParser
 
     private const string Usage =
         "Usage:\n" +
-        "  openness-cli list          <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli export        <project> (--block <name> | --type <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli import        <project> --group <device>/<path> [--type] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli list          <project> [--json] [--tagtables] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
-        "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.";
+        "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
+        "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
+        "  list --tagtables enumerates tag tables instead of blocks.";
 
     public static ParseResult Parse(string[] args)
     {
@@ -114,6 +126,7 @@ public static class ArgumentParser
     {
         string? projectIdentifier = null;
         var json = false;
+        var tagTables = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -124,6 +137,9 @@ public static class ArgumentParser
             {
                 case "--json":
                     json = true;
+                    break;
+                case "--tagtables":
+                    tagTables = true;
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -161,7 +177,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ListSuccess(new ListOptions(projectIdentifier, json, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ListSuccess(new ListOptions(projectIdentifier, json, tagTables, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseSanityCheck(string[] args)
@@ -177,6 +193,7 @@ public static class ArgumentParser
         string? projectIdentifier = null;
         string? block = null;
         string? type = null;
+        string? tagTable = null;
         string? device = null;
         string? outPath = null;
         string? tiaInstall = null;
@@ -198,6 +215,13 @@ public static class ArgumentParser
                     if (!TryTakeValue(args, ref i, "--type", out type, out var typeErr))
                     {
                         return new ParseResult.Failure(typeErr);
+                    }
+
+                    break;
+                case "--tagtable":
+                    if (!TryTakeValue(args, ref i, "--tagtable", out tagTable, out var tagTableErr))
+                    {
+                        return new ParseResult.Failure(tagTableErr);
                     }
 
                     break;
@@ -251,14 +275,15 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        if (block is null && type is null)
+        var selectedCount = (block is not null ? 1 : 0) + (type is not null ? 1 : 0) + (tagTable is not null ? 1 : 0);
+        if (selectedCount == 0)
         {
-            return new ParseResult.Failure($"Missing required flag: --block <name> or --type <name>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Missing required flag: --block <name>, --type <name>, or --tagtable <name>.{Environment.NewLine}{Usage}");
         }
 
-        if (block is not null && type is not null)
+        if (selectedCount > 1)
         {
-            return new ParseResult.Failure($"--block and --type are mutually exclusive.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--block, --type, and --tagtable are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
         if (outPath is null)
@@ -266,7 +291,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --out <path>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, device, outPath, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, device, outPath, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseImport(string[] args)
@@ -275,6 +300,7 @@ public static class ArgumentParser
         string? group = null;
         var files = new List<string>();
         var asType = false;
+        var asTagTable = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -292,6 +318,9 @@ public static class ArgumentParser
                     break;
                 case "--type":
                     asType = true;
+                    break;
+                case "--tagtable":
+                    asTagTable = true;
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -348,7 +377,12 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: at least one <file>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files, asType, tiaInstall, timeoutConnect, timeoutOpen));
+        if (asType && asTagTable)
+        {
+            return new ParseResult.Failure($"--type and --tagtable are mutually exclusive.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files, asType, asTagTable, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompile(string[] args)

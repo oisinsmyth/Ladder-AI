@@ -53,6 +53,9 @@ internal static class Program
     private static bool IsTypeXml(XDocument document) =>
         document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Types.PlcStruct") ?? false;
 
+    private static bool IsTagTableXml(XDocument document) =>
+        document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Tags.PlcTagTable") ?? false;
+
     private static int RunSanitize(string[] args)
     {
         string? file = null;
@@ -102,6 +105,16 @@ internal static class Program
                 var sanitizedType = Sanitizer.ApplyToType(type, map);
                 var typeXml = PlcTypeSourceWriter.Write(sanitizedType);
                 typeXml.Save(outPath);
+                Console.WriteLine($"{file} -> {outPath}");
+                return 0;
+            }
+
+            if (IsTagTableXml(document))
+            {
+                var tagTable = PlcTagTableSourceParser.Parse(document);
+                var sanitizedTagTable = Sanitizer.ApplyToTagTable(tagTable, map);
+                var tagTableXml = PlcTagTableSourceWriter.Write(sanitizedTagTable);
+                tagTableXml.Save(outPath);
                 Console.WriteLine($"{file} -> {outPath}");
                 return 0;
             }
@@ -162,6 +175,16 @@ internal static class Program
             return;
         }
 
+        if (IsTagTableXml(document))
+        {
+            var tagTable = PlcTagTableSourceParser.Parse(document);
+            var tagTableIrText = TagTableIrSerializer.Serialize(tagTable);
+            var tagTableOutPath = Path.ChangeExtension(sourcePath, ".ir");
+            File.WriteAllText(tagTableOutPath, tagTableIrText);
+            Console.WriteLine($"{sourcePath} -> {tagTableOutPath}");
+            return;
+        }
+
         var block = BlockSourceParser.Parse(document);
 
         var networks = new List<IrNetwork>();
@@ -210,6 +233,16 @@ internal static class Program
             var typeOutPath = Path.ChangeExtension(sourcePath, ".xml");
             typeXml.Save(typeOutPath);
             Console.WriteLine($"{sourcePath} -> {typeOutPath}");
+            return;
+        }
+
+        if (irText.StartsWith("TAGTABLE ", StringComparison.Ordinal))
+        {
+            var tagTable = TagTableIrParser.ParseTagTable(irText);
+            var tagTableXml = PlcTagTableSourceWriter.Write(tagTable);
+            var tagTableOutPath = Path.ChangeExtension(sourcePath, ".xml");
+            tagTableXml.Save(tagTableOutPath);
+            Console.WriteLine($"{sourcePath} -> {tagTableOutPath}");
             return;
         }
 

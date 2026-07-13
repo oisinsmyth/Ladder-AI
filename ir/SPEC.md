@@ -510,7 +510,9 @@ than prose here.
 exports — `src/converter/README.md`). UDT (PLC data type) support is converter-verified
 2026-07-14, against a real export (`TypeDOL`, `src/converter/README.md`) — the original sketch's
 own `UDT <Name>` grammar (below) was a pre-grounding guess; the confirmed real shape uses the
-`TYPE` keyword instead, corrected here.**
+`TYPE` keyword instead, corrected here. PLC tag table support (`TAGTABLE`, below) is
+converter-verified and live-verified (export + import against real TIA Portal) 2026-07-14 —
+deliberately minimal, see its own section below.**
 
 Simpler tabular sub-format — no wiring, so the network grammar above doesn't apply:
 
@@ -572,6 +574,36 @@ structurally, only preserve it exactly. `<start value>` is likewise verbatim, in
 syntax the source uses (`FALSE`, `2.0`, `16#0000`, `'text'`, `T#1H`) — confirmed real, not
 invented; string values (`'text'`) are the one case with real sanitization implications (a real
 example was a descriptive equipment name), everything else is structural.
+
+**`TAGTABLE` (a standalone PLC tag table, source root element `SW.Tags.PlcTagTable`)** — confirmed
+real 2026-07-14, grounded against the real "Default tag table" (`station_2/JOB9002_PLC`), found
+while confirming `PlantAutoControl`'s own exact dependency list. Genuinely simpler and differently
+shaped than either `DB` or `TYPE`: no `Number`, no nesting, no `Remanence`/`Accessibility`/
+`SetPoint` concept at all. Grammar:
+
+```
+TAGTABLE <Name>
+  ROOTID <id>
+  TAGS
+    <tag> <id> : <DataTypeName> @ <LogicalAddress> [ACCESSIBLE] [VISIBLE] [WRITABLE] [COMMENT "<text>"]
+```
+
+Each tag's own `AttributeList` children are **plain elements, not `BooleanAttribute`-wrapped** like
+a DB/UDT member — `DataTypeName`/`ExternalAccessible`/`ExternalVisible`/`ExternalWritable`/
+`LogicalAddress`/`Name`. `ACCESSIBLE`/`VISIBLE`/`WRITABLE` are shown only when true (absence-means-
+default, same convention as `SETPOINT`) — every one of the 10 real grounding tags has all three
+true. `LogicalAddress` is verbatim structural content (a physical I/O address, e.g. `%IW64`),
+never sanitized, same category as a UId. A tag's own real "path" as referenced elsewhere is its
+bare name alone — never `TableName.TagName` — so sanitization looks it up directly (`map.Tags
+[tag.Name]`), not the `"Owner.Member"` dotted convention DB/UDT/block members use.
+
+Deliberately minimal, not a general tag-table framework (project owner's own call, 2026-07-14) —
+covers only plain `PlcTag` entries. Not covered: `PlcConstant`/`PlcSystemConstant`/
+`PlcUserConstant` (no real grounding data for either shape yet), tag-table folder/grouping
+structure beyond enumeration, `DataTypeName` sanitization (untested whether a tag can ever
+reference a UDT by name — all real grounding tags are built-in `Word`). Full list, including the
+`openness-cli`-side gaps (no `delete`/`compile --tagtable`, whole-table-only Openness import/
+export): `src/converter/README.md`, "PLC tag table support".
 
 Instance DBs (`SW.Blocks.InstanceDB`) carry `<InstanceOfName>`/`<InstanceOfType>` (the FB they
 instantiate) — confirmed real, 2026-07-10, converter-verified 2026-07-11 (S1 item 7 Phase B).
