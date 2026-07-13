@@ -156,10 +156,22 @@ public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, strin
 // `Add`'s own XML shape is identical to `Mul`'s (`DisabledENO="true"`, `Card="2"`,
 // `<AutomaticTyped Name="SrcType" />`) — same "IR doesn't compute runtime semantics" reasoning as
 // CoilKind/TimerKind, just a different Part Name to regenerate.
+//
+// Subtract/Divide — confirmed real 2026-07-14 (`FC Scale`, grounding `FB MotorVSDSystem`'s own
+// dependency closure): `Sub`/`Div`'s own XML shape is `DisabledENO="true"` +
+// `<AutomaticTyped Name="SrcType" />`, identical to Mul/Add's own untyped variant, but with
+// **no `<TemplateValue Name="Card">` element at all** — genuinely different from Mul/Add, which
+// always carry one (`Card="2"` in every real instance seen). Modeled as always-binary (`in1`/
+// `in2`, matching the wire ports actually observed) rather than Cardinality-driven — `MulStatement`
+// still carries a plain `Inputs` list generically, but `PartNode.Cardinality` is left `null` for
+// these two kinds specifically (never regenerated as a `Card` element), unlike Mul/Add's own
+// confirmed-real `Card="2"`.
 public enum MulKind
 {
     Multiply,
     Add,
+    Subtract,
+    Divide,
 }
 
 // A multiply/add box instruction (`Part Name="Mul"`/`"Add"`) — confirmed real, 2026-07-12 (S1

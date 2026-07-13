@@ -14,15 +14,14 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Convert", "Swap" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
-    // to Eq/Ge/Lt, same SrcType TemplateValue, same pre/in1/in2/out ports); Gt confirmed 2026-07-14
-    // (`FC Scale`, grounding `FB MotorVSDSystem`'s own dependency closure — identical shape again). Le's
-    // real Part Name remains unconfirmed, refused rather than guessed at even though the IEC
-    // family strongly suggests what it'd be named.
-    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt", "Ne", "Gt" };
+    // to Eq/Ge/Lt, same SrcType TemplateValue, same pre/in1/in2/out ports); Gt/Le both confirmed
+    // 2026-07-14 (`FC Scale`, grounding `FB MotorVSDSystem`'s own dependency closure — identical shape
+    // again, completing the full IEC comparison family).
+    private static readonly HashSet<string> SupportedComparisonPartNames = new(StringComparer.Ordinal) { "Eq", "Ge", "Lt", "Ne", "Gt", "Le" };
 
     // LocalConstant confirmed real 2026-07-12 (S1 item 21, FB MotorVSDSystem/AirStar — 4 independent
     // instances) — a genuinely different shape from GlobalVariable/LocalVariable (see ParseAccess's
@@ -83,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Move/And/Not/SCoil/RCoil/Mul/Add/Convert/Swap only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -111,8 +110,13 @@ public static class FlgNetParser
                 }
                 else if (name is "Mul" or "Add")
                 {
-                    var (mulCardinality, mulAutomaticSrcType, mulSrcType) = ParseMulFixedShape(child, name, uid);
+                    var (mulCardinality, mulAutomaticSrcType, mulSrcType) = ParseMulFixedShape(child, name, uid, requireCardinality: true);
                     parts.Add(new PartNode(uid, name, Cardinality: mulCardinality, AutomaticSrcType: mulAutomaticSrcType, SrcType: mulSrcType));
+                }
+                else if (name is "Sub" or "Div")
+                {
+                    var (_, subAutomaticSrcType, subSrcType) = ParseMulFixedShape(child, name, uid, requireCardinality: false);
+                    parts.Add(new PartNode(uid, name, AutomaticSrcType: subAutomaticSrcType, SrcType: subSrcType));
                 }
                 else if (name == "Convert")
                 {
@@ -273,7 +277,14 @@ public static class FlgNetParser
     // verifying S1 item 20 — a genuine counter-example to S1 item 18's own "always
     // AutomaticTyped" assumption, not guessed at or silently unified. Exactly one of the two must
     // be present; both or neither is refused.
-    private static (int Cardinality, bool AutomaticSrcType, string? SrcType) ParseMulFixedShape(XElement mulPart, string partName, int uid)
+    //
+    // Reused for Sub/Div too (confirmed real 2026-07-14, `FC Scale`) — identical DisabledENO/
+    // AutomaticTyped-or-TemplateValue shape, but genuinely different on `Card`: Sub/Div carry
+    // **no `Card` element at all** (always binary, `in1`/`in2` wire ports, never a chain),
+    // whereas Mul/Add always do. `requireCardinality` selects which: `true` requires a `Card`
+    // element (Mul/Add, unchanged); `false` requires its *absence* (hard error if present — an
+    // unconfirmed shape, refused rather than silently accepted) and returns a `null` Cardinality.
+    private static (int? Cardinality, bool AutomaticSrcType, string? SrcType) ParseMulFixedShape(XElement mulPart, string partName, int uid, bool requireCardinality)
     {
         var disabledEno = mulPart.Attribute("DisabledENO")?.Value;
         if (disabledEno != "true")
@@ -282,7 +293,23 @@ public static class FlgNetParser
                 $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
         }
 
-        var cardinality = ParseCardinality(mulPart, partName, uid);
+        int? cardinality;
+        if (requireCardinality)
+        {
+            cardinality = ParseCardinality(mulPart, partName, uid);
+        }
+        else
+        {
+            var cardTemplateValue = mulPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "Card");
+            if (cardTemplateValue is not null)
+            {
+                throw new UnsupportedConstructException(
+                    $"<Part Name=\"{partName}\" UId=\"{uid}\"> has a <TemplateValue Name=\"Card\"> element — not confirmed " +
+                    "real for Sub/Div (always binary, no real example has shown one), refused rather than guessed at.");
+            }
+
+            cardinality = null;
+        }
 
         var automaticTyped = mulPart.Element(Ns + "AutomaticTyped");
         var srcTypeTemplateValue = mulPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "SrcType");

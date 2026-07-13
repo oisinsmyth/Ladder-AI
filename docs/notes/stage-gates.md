@@ -2823,3 +2823,51 @@ converter capabilities (`Gt`, bare-parameter members) landed along the way. 2 FB
 documented precisely enough here to resume directly without re-deriving anything. Sanitization maps
 for every attempted FB (`FilterUnitSystem`/`AirStar`/`MotorFwdRevSystem`/`MotorFwdRevIOSet1`/`MotorVSDSystem`/
 `TypeVSD`) are built and kept in `sanitization/` (gitignored) for that resume.
+
+### Phase 1 continued: `Sub`/`Div`/`Le` added, `TomraControlSystem` + `MotorVSDSystem`'s own `Scale` dependency both compile clean — 7 of 8 dependency FBs now proven, 2026-07-13
+
+Closed `MotorVSDSystem`'s blocker from above (`Sub`, unsupported arithmetic) and `TomraControlSystem`
+(not yet attempted). Grounded `Sub`/`Div` directly against `FC Scale`'s own real export before
+writing any code: both are structurally distinct from `Mul`/`Add` (S1 item 18) in a way not
+previously modeled — **no `<TemplateValue Name="Card">` element at all**, ever (always binary,
+`in1`/`in2` only, no chaining), whereas `Mul`/`Add` always carry one (`Card="2"` in every real
+instance). Modeled by making `PartNode.Cardinality` an `int?`, left `null` for `Sub`/`Div`
+specifically (defaulted to `2` only inside `GraphReducer`'s own reduction step), and never
+regenerating a `Card` element for these two kinds on write. Also confirmed real: a `Sub`'s own
+`eno` chaining into a following `Div`'s own `en` (`GraphReducer.ResolveEnSource`'s producer check
+extended to recognize `Sub`/`Div` — deliberately **not** `Add`, which stays unconfirmed as a
+producer, matching this project's existing grounding discipline). `Le` (less-or-equal) followed
+immediately, same shape as `Gt`/`Eq`/`Ge`/`Lt`/`Ne` — completes the full IEC comparison family,
+none left unconfirmed. A real `FlgNetWriter` bug was caught by a round-trip test failure along the
+way: the `DisabledENO="true"`-writing condition listed `Mul`/`Add`/`Convert`/`Swap` but not
+`Sub`/`Div`. 283/283 converter tests pass (up from 272).
+
+With `Sub`/`Div`/`Le` landed, `FC Scale` (sanitized as `AnalogScale`) and `TomraControlSystem` (as
+`TomraControlSystem`) both compiled clean standalone — `TomraControlSystem` is the 6th of 8
+dependency FBs proven, `AnalogScale` isn't itself one of the 8 but is `MotorVSDSystem`'s own dependency.
+
+**`MotorVSDSystem` itself then hit a second, completely separate real bug** — after `AnalogScale`
+compiled clean on its own, `MotorVSDSystem`'s own compile still failed with the exact same two
+errors as before Scale was fixed: `"The referenced block \"Scale\" no longer exists"` and
+`"Tag #FaultTripTimer2.Q not defined"`. Root cause, found by inspecting `MotorVSDSystem.sanitized.xml` directly:
+`Sanitizer.SanitizeNetwork` renamed a Call Part's own `Instance` (the callee's instance-DB
+reference) but never its `BlockName` (the callee's own name) — a completely separate field on the
+same `PartNode`, exactly the same shape of gap as the earlier "Part.Instance never sanitized" bug
+(S1 item 7 Phase A/B era) but for a different field. The sanitized `MotorVSDSystem` block still
+said `<CallInfo Name="Scale">` even though `Scale` was independently sanitized/imported as
+`AnalogScale` — compiled clean in isolation, but its caller's own reference never got updated to
+match. Fixed by renaming `BlockName` via `map.Names` in `Sanitizer.SanitizeNetwork`, same treatment
+as `Instance`. Two new tests (`Apply_CallBlockName_IsSanitizedViaNamesMap`,
+`Apply_CallBlockName_MissingMapping_HardErrors`), new fixture `SanitizeSourceWithCall.xml`.
+
+The `FaultTripTimer2.Q` half of the error was a separate, non-converter bug: `MotorVSDSystem.map.json` itself
+was internally inconsistent — it renamed the static member `FaultTripTimer2` → `FaultTripTimer` but kept
+an identity mapping for the bare network-body reference `FaultTripTimer2.Q` (should have followed the
+same rename to `FaultTripTimer.Q`). Both map entries fixed by hand; every other timer in the same
+map was checked and found consistent (base name unchanged in each other case, so the identity
+mapping was correct there).
+
+With both fixes applied, re-sanitized and re-imported `MotorVSDSystem` → `MotorVSDSystem` compiled clean
+(`STATE: Warning, ERRORS: 0`, the same expected hardware-config warning every other FB shows). **7
+of `PlantAutoControl`'s 8 dependency FBs now proven.** Only `MotorFwdRevSystem`'s `CycleDelayReset`
+(standalone named `TON` instance, no Openness API path found yet) remains blocked.

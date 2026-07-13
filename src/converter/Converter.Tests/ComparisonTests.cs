@@ -244,13 +244,14 @@ public class ComparisonTests
     public void Parse_UnconfirmedComparisonPartName_ThrowsUnsupportedConstruct()
     {
         // "Ne" was this test's own example until S1 item 22 (2026-07-12) confirmed it real
-        // against FB AirStar — swapped to "Le" (still unconfirmed) to keep proving the same
-        // thing: an IEC-family Part Name that hasn't actually been grounded is still refused,
-        // not guessed at just because the family pattern is now well-established.
+        // against FB AirStar, then "Le" until 2026-07-14 (FC Scale) confirmed it real too — the
+        // full IEC comparison family (Eq/Ge/Lt/Ne/Gt/Le) is now built, so this uses a clearly
+        // fictitious Part Name instead, to keep proving the same thing generically: an
+        // unrecognized instruction is refused, not guessed at.
         var xml = """
             <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
               <Parts>
-                <Part Name="Le" UId="1">
+                <Part Name="Mod" UId="1">
                   <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
                 </Part>
                 <Part Name="Coil" UId="2" />
@@ -262,7 +263,7 @@ public class ComparisonTests
         var element = XElement.Parse(xml);
 
         var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
-        Assert.Contains("Le", ex.Message);
+        Assert.Contains("Mod", ex.Message);
     }
 
     // Ne (not-equal) — S1 item 22, 2026-07-12. Confirmed real against `FB AirStar` (found
@@ -373,5 +374,59 @@ public class ComparisonTests
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
         Assert.Equal("NETWORK 1 \"Level greater-than check\"\n  COIL Output2 := Enable AND Level > 10\n", text);
+    }
+
+    // Le (less-than-or-equal) — 2026-07-14, confirmed real against `FC Scale` (same grounding as
+    // Gt above). Identical shape to the rest of the family — completes the full IEC comparison
+    // set (Eq/Ge/Lt/Ne/Gt/Le), none left unconfirmed. The readable-form `<=` operator token was
+    // already wired up in IrParser's own ComparisonTokens, unused until now.
+    [Fact]
+    public void Parse_LeFeedsCoil_ProducesLePartWithSrcType()
+    {
+        var network = LoadFixture("LeFeedsCoil.xml");
+
+        var le = Assert.Single(network.Parts, p => p.Name == "Le");
+        Assert.Equal("Int", le.SrcType);
+    }
+
+    [Fact]
+    public void Reduce_LeFeedsCoil_ProducesLessOrEqualCompareExpr()
+    {
+        var network = LoadFixture("LeFeedsCoil.xml");
+
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level less-or-equal check", compileUnitUId: "3");
+
+        var assignment = Assert.Single(reduced.Network.Assignments);
+        var and = Assert.IsType<Expr.And>(assignment.Condition);
+        Assert.Equal("Enable", Assert.IsType<Expr.TagRef>(and.Operands[0]).Path);
+        var compare = Assert.IsType<Expr.Compare>(and.Operands[1]);
+        Assert.Equal("<=", compare.Operator);
+        Assert.Equal("Level", Assert.IsType<Expr.TagRef>(compare.Left).Path);
+        Assert.Equal("10", Assert.IsType<Expr.Literal>(compare.Right).Value);
+    }
+
+    [Fact]
+    public void RoundTrip_LeFeedsCoil_RebuildsIdenticalTopology()
+    {
+        var original = LoadFixture("LeFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Level less-or-equal check", compileUnitUId: "3");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+        var xml = FlgNetWriter.Write(rebuilt);
+        var reparsed = FlgNetParser.Parse(xml);
+
+        var lePart = Assert.Single(reparsed.Parts, p => p.Name == "Le");
+        Assert.Equal("Int", lePart.SrcType);
+    }
+
+    [Fact]
+    public void SerializeNetworkOnly_LeFeedsCoil_ProducesLessOrEqualOperator()
+    {
+        var network = LoadFixture("LeFeedsCoil.xml");
+        var reduced = GraphReducer.Reduce(network, networkNumber: 1, title: "Level less-or-equal check", compileUnitUId: "3");
+
+        var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
+
+        Assert.Equal("NETWORK 1 \"Level less-or-equal check\"\n  COIL Output2 := Enable AND Level <= 10\n", text);
     }
 }

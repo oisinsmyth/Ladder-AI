@@ -168,6 +168,36 @@ public class SanitizerTests
         Assert.Equal("SanitizedTimerInstance", tonPart.Instance!.DottedPath);
     }
 
+    // Real bug, found live 2026-07-13 (`FB MotorVSDSystem`'s own call to sanitized `Scale` ->
+    // `AnalogScale`): a Call Part's own BlockName (the *callee*'s name) is exactly the same
+    // identifying-name category as a DB/UDT name (sanitized via map.Names elsewhere) but lives
+    // only on PartNode, never reached by SanitizeNetwork's own pass — a caller compiled clean
+    // standalone yet failed to import once its callee was independently renamed, because the
+    // caller's own network body still said `CallInfo Name="Scale"`. Only Instance (the callee's
+    // own instance-DB reference) was sanitized before this fix; BlockName was not.
+    [Fact]
+    public void Apply_CallBlockName_IsSanitizedViaNamesMap()
+    {
+        var block = LoadFixture("SanitizeSourceWithCall.xml");
+        var map = FullMap();
+        map.Names["RealCalleeName"] = "SanitizedCalleeName";
+
+        var sanitized = Sanitizer.Apply(block, map);
+
+        var callPart = Assert.Single(sanitized.CompileUnits[0].Network.Parts, p => p.Name == "Call");
+        Assert.Equal("SanitizedCalleeName", callPart.BlockName);
+    }
+
+    [Fact]
+    public void Apply_CallBlockName_MissingMapping_HardErrors()
+    {
+        var block = LoadFixture("SanitizeSourceWithCall.xml");
+        var map = FullMap();
+
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.Apply(block, map));
+        Assert.Contains("Names[\"RealCalleeName\"]", ex.Message);
+    }
+
     private static DbSource LoadDbFixture(string name)
     {
         var document = XDocument.Load(Path.Combine("Fixtures", name));

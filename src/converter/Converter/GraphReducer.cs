@@ -51,8 +51,10 @@ public static class GraphReducer
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
         var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
         // Mul/Add (S1 items 18/19) share the exact same shape and reduction — tagged with
-        // MulStatement.Kind (derived from the Part Name below).
-        var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add").ToList();
+        // MulStatement.Kind (derived from the Part Name below). Sub/Div (2026-07-14, FC Scale)
+        // reuse the identical reduction too — always-binary, no Cardinality element (see
+        // ReduceMulOrAdd's own cardinality-defaulting comment).
+        var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add" or "Sub" or "Div").ToList();
         var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
         // Swap (S1 item 25) is structurally identical to Convert minus DestType — confirmed real,
         // 2026-07-12, FB TomraControlSystem.
@@ -555,7 +557,13 @@ public static class GraphReducer
             && others[0].Kind == EndpointKind.NameCon
             && others[0].PortName == "eno"
             && network.Parts.FirstOrDefault(p => p.UId == others[0].UId!.Value) is { } precedingPart
-            && precedingPart.Name is "Mul" or "Convert")
+            // "Mul"/"Convert" confirmed real 2026-07-12 (S1 items 18/19); "Sub"/"Div" confirmed
+            // real 2026-07-14 (`FC Scale`, grounding `FB MotorVSDSystem`'s own dependency closure —
+            // Sub->Sub and Sub->Div chains both directly observed). "Add" as a *producer* (as
+            // opposed to consumer, already supported via Mul->Add) hasn't been directly grounded
+            // yet — not added here, same "don't guess even when the family suggests it" discipline
+            // as Le/Gt's own history.
+            && precedingPart.Name is "Mul" or "Convert" or "Sub" or "Div")
         {
             visitedWireUIds.Add(wire.UId);
             return (new EnSource.PrecedingEno(), new EnSourceSidecar.PrecedingEnoSidecar(precedingPart.UId, wire.UId));
@@ -589,9 +597,13 @@ public static class GraphReducer
         var (en, enSidecar) = ResolveEnSource(
             network, mul.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-        if (mul.Cardinality is not int cardinality || cardinality < 1)
+        // Mul/Add always carry a real Cardinality (enforced at parse time); Sub/Div never do
+        // (always binary, `in1`/`in2`) — default to 2 only when genuinely absent, same
+        // "absence means default" convention used throughout this project.
+        var cardinality = mul.Cardinality ?? 2;
+        if (cardinality < 1)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: Mul/Add UId={mul.UId} has no usable cardinality.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: Mul/Add/Sub/Div UId={mul.UId} has no usable cardinality.");
         }
 
         var inputExprs = new List<Expr>();
@@ -623,12 +635,14 @@ public static class GraphReducer
 
     // Mul/Add (S1 item 19) map 1:1 to MulKind — no other Part Name has ever mapped to one of
     // these two kinds, so this is a straight lookup, not a guess (mirrors CoilKindFor's own
-    // pattern exactly).
+    // pattern exactly). Sub/Div (2026-07-14, FC Scale) extend the same lookup.
     private static MulKind MulKindFor(string partName, int networkNumber, int uid) => partName switch
     {
         "Mul" => MulKind.Multiply,
         "Add" => MulKind.Add,
-        _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a Mul/Add statement."),
+        "Sub" => MulKind.Subtract,
+        "Div" => MulKind.Divide,
+        _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a Mul/Add/Sub/Div statement."),
     };
 
     // A Convert's `en` is resolved via ResolveEnSource (ordinary condition, confirmed real
@@ -764,16 +778,16 @@ public static class GraphReducer
     // producer-identification comment.
     private static string? OutPortFor(string partName) => partName switch
     {
-        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Gt" or "Not" => "out",
+        "Contact" or "O" or "Eq" or "Ge" or "Lt" or "Ne" or "Gt" or "Le" or "Not" => "out",
         "TON" or "TONR" or "TOF" => "Q",
         _ => null,
     };
 
     // IR-text infix operator per Part Name — Eq/Ge confirmed real 2026-07-11, Lt confirmed real
     // 2026-07-12 (S1 item 19, FB MotorDOL/FilterUnitSystem), Ne confirmed real 2026-07-12 (S1 item 22,
-    // FB AirStar — identical shape to Eq/Ge/Lt), Gt confirmed real 2026-07-14 (FC Scale). Le's
-    // Part Name remains unconfirmed, so only these five are reachable —
-    // SupportedComparisonPartNames gates this at parse time.
+    // FB AirStar — identical shape to Eq/Ge/Lt), Gt/Le both confirmed real 2026-07-14 (FC Scale),
+    // completing the full IEC comparison family — SupportedComparisonPartNames gates this at
+    // parse time.
     private static string ComparisonOperator(string partName) => partName switch
     {
         "Eq" => "=",
@@ -781,6 +795,7 @@ public static class GraphReducer
         "Lt" => "<",
         "Ne" => "<>",
         "Gt" => ">",
+        "Le" => "<=",
         _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
     };
 
@@ -916,7 +931,7 @@ public static class GraphReducer
                 continue;
             }
 
-            if (upstreamPart.Name is "Eq" or "Ge" or "Lt" or "Ne" or "Gt")
+            if (upstreamPart.Name is "Eq" or "Ge" or "Lt" or "Ne" or "Gt" or "Le")
             {
                 var (leftExpr, leftOperand) = ResolveTagOrLiteralOperand(
                     wiresByPort, accessByUId, constantsByUId, upstreamPart.UId, "in1", networkNumber, visitedWireUIds, accessEntries, constantEntries);

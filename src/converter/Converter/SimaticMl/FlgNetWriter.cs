@@ -103,8 +103,9 @@ public static class FlgNetWriter
             // SrcType/DestType, unlike Move's, ARE carried as PartNode fields (only one real
             // value has been observed for each, not enough to treat as a universal constant) and
             // already round-trip via the existing Cardinality/SrcType/DestType blocks below. TON/
-            // TONR never carry DisabledENO at all (confirmed real, no EN/ENO on either).
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Convert" or "Swap")
+            // TONR never carry DisabledENO at all (confirmed real, no EN/ENO on either). Sub/Div
+            // (2026-07-14, FC Scale) share the same fixed DisabledENO="true" too.
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }

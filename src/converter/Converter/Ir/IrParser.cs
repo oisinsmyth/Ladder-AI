@@ -402,19 +402,26 @@ public static partial class IrParser
         // 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed via ParseEnSource
         // rather than ParseExpr directly.
         var muls = new List<MulStatement>();
-        while (i < lines.Length && (lines[i].StartsWith("  MUL(", StringComparison.Ordinal) || lines[i].StartsWith("  ADD(", StringComparison.Ordinal)))
+        while (i < lines.Length && (lines[i].StartsWith("  MUL(", StringComparison.Ordinal) || lines[i].StartsWith("  ADD(", StringComparison.Ordinal)
+            || lines[i].StartsWith("  SUB(", StringComparison.Ordinal) || lines[i].StartsWith("  DIV(", StringComparison.Ordinal)))
         {
             var mulMatch = MulLineRegex().Match(lines[i]);
             if (!mulMatch.Success)
             {
-                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>' or '  ADD(...)', got: '{lines[i]}'");
+                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>' or 'ADD(...)'/'SUB(...)'/'DIV(...)', got: '{lines[i]}'");
             }
 
-            var mulKind = mulMatch.Groups["kind"].Value == "ADD" ? MulKind.Add : MulKind.Multiply;
+            var mulKind = mulMatch.Groups["kind"].Value switch
+            {
+                "ADD" => MulKind.Add,
+                "SUB" => MulKind.Subtract,
+                "DIV" => MulKind.Divide,
+                _ => MulKind.Multiply,
+            };
             var args = mulMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
             if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
             {
-                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL/ADD's first argument, got: '{lines[i]}'");
+                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL/ADD/SUB/DIV's first argument, got: '{lines[i]}'");
             }
 
             var mulEn = ParseEnSource(args[0]["EN := ".Length..]);
@@ -425,7 +432,7 @@ public static partial class IrParser
                 var prefix = $"IN{k} := ";
                 if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
                 {
-                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL/ADD argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL/ADD/SUB/DIV argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
                 }
 
                 mulInputs.Add(ParseExprTerm(args[k][prefix.Length..]));
@@ -588,11 +595,8 @@ public static partial class IrParser
     // Longer operators first so e.g. ">=" is never mistaken for a "=" search hitting inside it —
     // in practice the exact character sequences never actually overlap (see ComparisonTokens'
     // own note), but ordering longest-first is the safer, more obviously-correct habit anyway.
-    // "=" / ">=" / "<" / "<>" / ">" (Eq/Ge/Lt/Ne/Gt) are all confirmed real and emitted by this
-    // converter — "<=" (Le) remains recognized here only because it's part of the documented IR
-    // grammar (`ir/SPEC.md`'s readable-form table), not because the converter builds networks
-    // that use it — Le's own Part Name is still unconfirmed, a hard error at the SimaticML level
-    // (FlgNetParser's SupportedComparisonPartNames).
+    // "=" / ">=" / "<" / "<>" / ">" / "<=" (Eq/Ge/Lt/Ne/Gt/Le) are all confirmed real and emitted
+    // by this converter — the full IEC comparison family, none left unconfirmed.
     private static readonly (string Operator, string Token)[] ComparisonTokens =
     {
         (">=", " >= "), ("<=", " <= "), ("<>", " <> "),
@@ -848,6 +852,8 @@ public static partial class IrParser
         {
             "mul" => MulKind.Multiply,
             "add" => MulKind.Add,
+            "sub" => MulKind.Subtract,
+            "div" => MulKind.Divide,
             _ => throw new IrFormatException($"Unexpected Mul kind '{mulKindText}' in SIDECAR for network {networkNumber}."),
         };
         var en = ParseEnSourceSidecar(lines, ref i, "    ");
@@ -1360,8 +1366,10 @@ public static partial class IrParser
 
     // Variable input count (Cardinality-driven, S1 item 18), same discipline as WAND's own
     // variable-arity argument list — the argument list itself is split on top-level commas
-    // separately (ParseNetwork). MUL/ADD (S1 item 19) share this regex, distinguished by keyword.
-    [GeneratedRegex(@"^  (?<kind>MUL|ADD)\((?<args>.+)\) => (?<dest>\S+)$")]
+    // separately (ParseNetwork). MUL/ADD (S1 item 19) share this regex, distinguished by keyword;
+    // SUB/DIV (2026-07-14, FC Scale) extend the same regex — always exactly 2 args in practice
+    // (no Cardinality element in the source), but parsed the same variable-arity way regardless.
+    [GeneratedRegex(@"^  (?<kind>MUL|ADD|SUB|DIV)\((?<args>.+)\) => (?<dest>\S+)$")]
     private static partial Regex MulLineRegex();
 
     // Fixed arity (EN, IN) — same regex-based shape as MOVE's own line.

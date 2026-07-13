@@ -509,8 +509,13 @@ public static class FlgNetBuilder
     {
         BuildEnSource(sidecar.En, sidecar.MulPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
+        // Mul/Add always regenerate a real Card element (confirmed real, every instance seen);
+        // Sub/Div never do (2026-07-14, FC Scale — always binary, no Cardinality element in the
+        // source) — Cardinality is left null on the PartNode for those two kinds specifically so
+        // FlgNetWriter's own `if (part.Cardinality is not null)` correctly omits it.
+        var cardinalityElement = RequiresCardinalityElement(sidecar.Kind) ? sidecar.Inputs.Count : (int?)null;
         AddPart(parts, emittedPartUIds, new PartNode(
-            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: sidecar.Inputs.Count,
+            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: cardinalityElement,
             AutomaticSrcType: sidecar.SrcType is null, SrcType: sidecar.SrcType));
 
         for (var k = 0; k < sidecar.Inputs.Count; k++)
@@ -524,13 +529,20 @@ public static class FlgNetBuilder
 
     // The inverse of GraphReducer.MulKindFor — MulStatementSidecar carries its own Kind (BuildMul
     // works entirely off the sidecar, never cross-referencing the model), mirroring
-    // CoilPartNameFor's/TimerPartNameFor's own precedent.
+    // CoilPartNameFor's/TimerPartNameFor's own precedent. Sub/Div (2026-07-14, FC Scale) extend
+    // the same lookup.
     private static string MulPartNameFor(MulKind kind) => kind switch
     {
         MulKind.Multiply => "Mul",
         MulKind.Add => "Add",
+        MulKind.Subtract => "Sub",
+        MulKind.Divide => "Div",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
+
+    // Mul/Add carry a real Card element (confirmed real, S1 items 18/19); Sub/Div (2026-07-14,
+    // FC Scale) never do — always binary, no real example has shown one.
+    private static bool RequiresCardinalityElement(MulKind kind) => kind is MulKind.Multiply or MulKind.Add;
 
     // Builds a Convert Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal
     // source, same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire

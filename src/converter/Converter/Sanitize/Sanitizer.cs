@@ -332,10 +332,28 @@ public static class Sanitizer
         // (RisingEdgeFlags1 → RisingEdgeFlags) worked everywhere by contrast, since that one
         // never happens to be a Part's own Instance. Fixed by sanitizing every Part.Instance the
         // same way, reusing the same helper.
+        //
+        // A Call Part's own BlockName (the *callee*'s name, e.g. `FB MotorVSDSystem`'s own call to
+        // `Scale`) is a second, separate gap of the exact same shape, found live 2026-07-13:
+        // BlockName is an identifying block name (same category as a DB/UDT name, sanitized via
+        // map.Names elsewhere) but lives only on PartNode, never reached by any pass above —
+        // compiled clean standalone yet still failed to import against a *renamed* callee
+        // ("Scale" sanitized independently to "AnalogScale") because the caller's own network body
+        // still said `CallInfo Name="Scale"`. Fixed the same way as Instance: rename BlockName via
+        // map.Names whenever a Part carries one (Call Parts only; every other Part kind leaves it
+        // null and is unaffected).
         var sanitizedParts = network.Parts
-            .Select(part => part.Instance is null
-                ? part
-                : part with { Instance = SanitizeAccessNode(part.Instance, map, missing) })
+            .Select(part =>
+            {
+                var sanitizedInstance = part.Instance is null ? null : SanitizeAccessNode(part.Instance, map, missing);
+                var sanitizedBlockName = part.BlockName is null
+                    ? null
+                    : Require(
+                        map.Names.TryGetValue(part.BlockName, out var mappedBlockName) ? mappedBlockName : null,
+                        $"Names[\"{part.BlockName}\"]",
+                        missing);
+                return part with { Instance = sanitizedInstance, BlockName = sanitizedBlockName ?? part.BlockName };
+            })
             .ToList();
 
         return network with { AccessNodes = sanitizedAccessNodes, Parts = sanitizedParts };

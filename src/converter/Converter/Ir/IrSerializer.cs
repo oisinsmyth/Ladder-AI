@@ -293,10 +293,13 @@ public static class IrSerializer
     };
 
     // ADD (S1 item 19) mirrors its own source Part Name, same convention as MUL/CONVERT.
+    // SUB/DIV (2026-07-14, FC Scale) extend the same convention.
     private static string MulKeywordFor(MulKind kind) => kind switch
     {
         MulKind.Multiply => "MUL",
         MulKind.Add => "ADD",
+        MulKind.Subtract => "SUB",
+        MulKind.Divide => "DIV",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 
@@ -638,6 +641,8 @@ public static class IrSerializer
     {
         MulKind.Multiply => "mul",
         MulKind.Add => "add",
+        MulKind.Subtract => "sub",
+        MulKind.Divide => "div",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 
