@@ -261,20 +261,39 @@ public static class Sanitizer
     private static FlgNetwork SanitizeNetwork(FlgNetwork network, SanitizationMap map, List<string> missing)
     {
         var sanitizedAccessNodes = network.AccessNodes
-            .Select(access =>
-            {
-                var realPath = string.Join('.', access.ComponentPath);
-                if (!map.Tags.TryGetValue(realPath, out var sanitizedPath))
-                {
-                    missing.Add($"Tags[\"{realPath}\"]");
-                    return access;
-                }
-
-                return access with { ComponentPath = sanitizedPath.Split('.') };
-            })
+            .Select(access => SanitizeAccessNode(access, map, missing))
             .ToList();
 
-        return network with { AccessNodes = sanitizedAccessNodes };
+        // A Part's own Instance (a TON/TONR/TOF's timer instance, or a CALL's own FB instance) is
+        // an AccessNode with exactly the same Scope+ComponentPath shape as an ordinary Access —
+        // see PartNode's own doc comment — but it lives in network.Parts, not network.AccessNodes,
+        // so it was never reached by the sanitization pass above. Real bug, found live 2026-07-14:
+        // MotorDOL's own GeneralDelayTimer1/FaultTripTimer2 instance references stayed unsanitized in the network
+        // body (visible as `<Instance><Component Name="GeneralDelayTimer1" /></Instance>`) even though the
+        // exact same names were correctly renamed at their Interface-declaration site (a completely
+        // separate code path, SanitizeMember) — an ordinary Access-based rename
+        // (RisingEdgeFlags1 → RisingEdgeFlags) worked everywhere by contrast, since that one
+        // never happens to be a Part's own Instance. Fixed by sanitizing every Part.Instance the
+        // same way, reusing the same helper.
+        var sanitizedParts = network.Parts
+            .Select(part => part.Instance is null
+                ? part
+                : part with { Instance = SanitizeAccessNode(part.Instance, map, missing) })
+            .ToList();
+
+        return network with { AccessNodes = sanitizedAccessNodes, Parts = sanitizedParts };
+    }
+
+    private static AccessNode SanitizeAccessNode(AccessNode access, SanitizationMap map, List<string> missing)
+    {
+        var realPath = string.Join('.', access.ComponentPath);
+        if (!map.Tags.TryGetValue(realPath, out var sanitizedPath))
+        {
+            missing.Add($"Tags[\"{realPath}\"]");
+            return access;
+        }
+
+        return access with { ComponentPath = sanitizedPath.Split('.') };
     }
 
     /// <summary>

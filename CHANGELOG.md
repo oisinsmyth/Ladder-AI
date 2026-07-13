@@ -10,6 +10,20 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Converter: fix a real `Sanitizer` bug — Part instances (Timer/CALL) were never sanitized**
+
+- Project owner spotted it directly, reading the sanitized `MotorStarter` output: timer names were
+  renamed at their Interface declaration but the same timers' own `<Instance>` references in the
+  network body were left as the real names.
+- Root cause: `SanitizeNetwork` only ever walked `network.AccessNodes`, never `network.Parts` — so
+  a `PartNode.Instance` (every `TON`/`TONR`/`TOF`/`CALL`'s own instance reference) was never
+  reached. Invisible until now because every previously-tested renamed tag happened to be an
+  ordinary Access reference, never a Part's own Instance.
+- Fixed: `SanitizeNetwork` now also sanitizes each `Part.Instance`. Verified as a genuine
+  regression (not just plausible) — the new test was confirmed to fail against the pre-fix code
+  via `git stash`, then pass with the fix. 255/255 converter tests pass. Full story:
+  `docs/notes/stage-gates.md`.
+
 **`tests/golden`: fix a real gap in `Normalizer` — wire-endpoint order isn't semantically meaningful**
 
 - Requested full round-trip proof for `MotorStarter` (`export → to-ir → to-xml → import&compile →

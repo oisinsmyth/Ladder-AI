@@ -148,6 +148,26 @@ public class SanitizerTests
         Assert.Contains("RealOutput", ex.Message);
     }
 
+    // Real bug, found live 2026-07-14 (MotorDOL/MotorStarter): a Part's own Instance (a TON's
+    // timer instance, or a CALL's own FB instance) was never sanitized — SanitizeNetwork only
+    // walked network.AccessNodes, never network.Parts, so a Part.Instance's own ComponentPath
+    // passed through unmodified even though the exact same name got correctly renamed at its
+    // Interface-declaration site (a separate code path, SanitizeMember). An ordinary Access-based
+    // rename worked everywhere by contrast, since it never happens to also be a Part's own
+    // Instance — this was invisible until a real, non-identity-mapped Instance rename was tried.
+    [Fact]
+    public void Apply_TimerInstanceReference_IsSanitized()
+    {
+        var block = LoadFixture("SanitizeSourceWithTimerInstance.xml");
+        var map = FullMap();
+        map.Tags["RealTimerInstance"] = "SanitizedTimerInstance";
+
+        var sanitized = Sanitizer.Apply(block, map);
+
+        var tonPart = Assert.Single(sanitized.CompileUnits[0].Network.Parts, p => p.Name == "TON");
+        Assert.Equal("SanitizedTimerInstance", tonPart.Instance!.DottedPath);
+    }
+
     private static DbSource LoadDbFixture(string name)
     {
         var document = XDocument.Load(Path.Combine("Fixtures", name));

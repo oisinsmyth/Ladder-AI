@@ -2477,3 +2477,38 @@ introduced — this is the first time that content has been checked with the *co
 tool, not just eyeballed. The live TIA half of the original request (import → compile → re-export)
 remains blocked on the separate, already-documented missing-instance-DB gap, not on anything found
 in this pass.
+
+### A real `Sanitizer` bug, found by the project owner directly inspecting the sanitized output — 2026-07-14
+
+Project owner noticed, just by reading the sanitized `MotorStarter` XML: timer names were renamed
+at their **Interface declaration** (`MotorStarter.GeneralDelayTimer1` → `MotorStarter.GeneralDelayTimer`,
+`MotorStarter.FaultTripTimer2` → `MotorStarter.FaultTripTimer`) but the **same timers' own instance
+references in the network body** (`<Instance Scope="LocalVariable"><Component Name="GeneralDelayTimer1" />
+</Instance>`, used by each `TON` Part) were left completely unsanitized — still the real names.
+
+**Root cause**: `Sanitizer.SanitizeNetwork` only ever sanitized `network.AccessNodes` (ordinary
+`<Access>`-based tag references) — it never walked `network.Parts` at all, so a `PartNode`'s own
+`Instance` field (an `AccessNode` with the exact same Scope+ComponentPath shape, used by every
+`TON`/`TONR`/`TOF` timer instance and every `CALL`'s own FB instance — confirmed by `PartNode`'s
+own doc comment) was never reached. This had been invisible until now: every previously-renamed
+tag in this map (`RisingEdgeFlags1`→`RisingEdgeFlags`, confirmed correctly applied everywhere,
+network body included) happened to be an ordinary Access reference, never a Part's own Instance —
+and every other renamed-vs-identity tag in the map's own `Tags` table couldn't reveal the gap
+either, since an identity mapping (`"X": "X"`) can't distinguish "sanitized" from "never touched."
+
+**Fixed**: `SanitizeNetwork` now also sanitizes each `Part.Instance` (when present) via the same
+tag-lookup helper already used for `AccessNodes`, extracted into a shared `SanitizeAccessNode`
+method. Verified as a genuine regression, not just a plausible-sounding theory: a new fixture
+(`SanitizeSourceWithTimerInstance.xml`, a `TON` with a `LocalVariable` instance) and test
+(`Apply_TimerInstanceReference_IsSanitized`) were confirmed to **fail** against the pre-fix code
+(`git stash`-verified) and pass with the fix. **255/255 converter tests pass** (up from 254).
+
+**Bottom line**: a real, previously-undetected sanitization gap — genuinely important given this
+tool's whole purpose is guaranteeing nothing unmapped/unsanitized reaches committed or
+cross-project output. Found by the project owner's own direct inspection, not by any existing
+test or process. `SampleProject`'s own currently-imported `MotorStarter` block was built from the
+pre-fix sanitized XML, so it still carries the real `GeneralDelayTimer1`/`FaultTripTimer2` instance names in its
+network body until re-imported from a freshly-sanitized copy — not yet redone as of this entry
+(the block isn't compiling standalone yet regardless, per the missing-instance-DB gap above, so
+this doesn't block anything currently in progress, but is worth closing out before treating
+`MotorStarter` as a finished, trustworthy artifact).
