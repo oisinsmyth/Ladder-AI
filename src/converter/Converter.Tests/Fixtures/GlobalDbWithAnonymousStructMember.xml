@@ -28,6 +28,22 @@
         </AttributeList>
         <StartValue>0.0</StartValue>
       </Member>
+      <Member Name="Nested" Datatype="Struct">
+        <AttributeList>
+          <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+          <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+          <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+          <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+        </AttributeList>
+        <Member Name="DeepFlag" Datatype="Bool">
+          <AttributeList>
+            <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+            <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+          </AttributeList>
+        </Member>
+      </Member>
     </Member>
   </Section>
 </Sections></Interface>

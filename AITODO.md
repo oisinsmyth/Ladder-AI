@@ -76,32 +76,35 @@ safe to keep. `$CLAUDE_JOB_DIR/tmp/udt_grounding/` holds only sanitized content,
 - **PLC tag table support (`TAGTABLE`)** — task #127, committed (`b2fe156`).
 - **`create-instance-db` + `MotorStarter` now compiles** — task #122, committed (`ef2ff1d`). First
   of `PlantAutoControl`'s 8 dependency FBs proven to round-trip *and* compile.
+- **Anonymous-struct converter fix + `EquipmentControlSystem` (`EquipmentControlSystem`) compiles** —
+  committed (`9ec648f`). Second dependency FB proven.
 
-## Current task: Phase 1 — remaining 7 dependency FBs (`EquipmentControlSystem` done, 6 to go) — NOT YET COMMITTED
+## Current task: Phase 1 — remaining 7 dependency FBs (`EquipmentControlSystem`/`ShredderControlSystem` done, 5 to go) — NOT YET COMMITTED
 
-**Status as of 2026-07-14.** Task #124. `EquipmentControlSystem` (as `EquipmentControlSystem`) done: exported,
-sanitized (new `EquipmentControlSystem.map.json`, reusing `MotorDOL.map.json`'s own conventions — same
-template), imported, **compiled clean on the first attempt after a fix** (`STATE: Success, ERRORS:
-0`), no `create-instance-db` step needed this time (unexplained but not a blocker).
+**Status as of 2026-07-14.** Task #124. `ShredderControlSystem` (as `ShredderControlSystem`) needed a
+much bigger external footprint than `MotorDOL`/`EquipmentControlSystem` — the real `Control` DB (→
+`PlantControl`) and 44 more tag-table entries (combined into one 54-tag minimal table). Two more
+real converter bugs found and fixed: arbitrary-depth anonymous-struct nesting (`ParseTypeMember`/
+`WriteTypeMember` made recursive) and a second, independently-broken duplicate of the same
+two-level-only bug in the IR *text* serializer (`IrSerializer.cs`, separate from `DbIrSerializer.cs`
+— now consolidated into shared `DbMemberLineFormat` helpers used by both). 267/267 converter tests
+(up from 265). Full story: `docs/notes/stage-gates.md` ("Phase 1: `FB ShredderControlSystem`").
 
-**A real converter bug found and fixed along the way**: a third structured-member shape (anonymous
-`Datatype="Struct"`, nested `<Member>` children direct, not `<Sections>`-wrapped, each with its own
-full `<AttributeList>`) was silently dropping its nested fields entirely — `to-ir` reported success
-with zero nested members, no error. Fixed via `DbInterfaceMembers.ParseMember`/`WriteMember`,
-reusing `ParseTypeMember`/`WriteTypeMember` (identical shape to a UDT's own member). 3 new tests,
-genericized fixture (`GlobalDbWithAnonymousStructMember.xml`). 265/265 converter tests (up from
-262). Full story: `docs/notes/stage-gates.md` ("Phase 1: `FB EquipmentControlSystem`").
+**One gap deliberately left open**: `ShredderControlSystem` compiles clean except for one tag,
+`Clock_0.5Hz` — Siemens's own auto-generated "Clock memory byte" system tag, which needs a CPU
+hardware-config change to resolve properly (not a data/tag import gap). Flagged via
+`AskUserQuestion`; project owner chose to stop here rather than build hardware-config capability.
 
 **Not committed** — waiting for the project owner's own explicit "commit this."
 
-**Scratch state**: `sanitization/EquipmentControlSystem.map.json` real, reusable, gitignored — kept.
-`$CLAUDE_JOB_DIR/tmp/phase1_fbs/EquipmentControlSystem.fresh.xml` is real, unsanitized `JOB9002` content — delete
-once this item is fully closed out. `.sanitized.xml`/`.fresh.ir`/`.regen.*` siblings are either
-sanitized or pure round-trip scratch, lower priority.
+**Scratch state**: `sanitization/EquipmentControlSystem.map.json`/`ShredderControlSystem.map.json`/`Control.map.json`
+real, reusable, gitignored — kept. `$CLAUDE_JOB_DIR/tmp/phase1_fbs/*.fresh.xml` (ShredderControlSystem,
+Control, DefaultTagTable) are real, unsanitized `JOB9002` content — delete once this item is fully
+closed out. `.sanitized.xml`/`MinimalTagTable54.raw.*` are either sanitized or non-identifying
+(bare tag names/addresses, same reasoning as the earlier 10-tag table) — safe to keep.
 
-**Next**: continue Phase 1 with the remaining 6 dependency FBs — `ShredderControlSystem`/`FilterUnitSystem`/
-`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — same pattern each time (export, sanitize,
-import, compile, `create-instance-db` if actually needed, fix and test any new gap found). Given
-`EquipmentControlSystem` shared `MotorDOL`'s own template closely, plausible some of the remaining 6 do too —
-don't assume this, ground each one. Then Phase 2 (bulk DB/tag-table closure for `PlantAutoControl`'s
-other ~26 roots), Phase 3 (`PlantAutoControl` itself).
+**Next**: continue Phase 1 with the remaining 5 dependency FBs — `FilterUnitSystem`/`MotorFwdRevSystem`/
+`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — same pattern each time (export, sanitize, import, compile,
+`create-instance-db` if actually needed, fix and test any new gap found). Don't assume any of them
+are as self-contained as `MotorDOL`/`EquipmentControlSystem` — ground each one. Then Phase 2 (bulk DB/tag-table
+closure for `PlantAutoControl`'s other ~26 roots), Phase 3 (`PlantAutoControl` itself).

@@ -231,10 +231,16 @@ internal static class DbInterfaceMembers
     /// Writable/SetPoint, via <see cref="RequireDefaultBooleanAttributes"/>)...&lt;/AttributeList&gt;
     /// [&lt;StartValue&gt;...&lt;/StartValue&gt;]&lt;/Member&gt;` — genuinely distinct from
     /// <see cref="ParseMember"/>'s own shape: **no `Remanence`/`Accessibility` attribute on the
-    /// `&lt;Member&gt;` tag itself** (every real `TypeDOL` member confirmed lacking both). Nested
-    /// structured members (a UDT field typed as another UDT) are refused rather than guessed at —
-    /// `ParseNestedMembers`'s own shape was confirmed for DB/FB Static members specifically, not
-    /// for this context, and no real example has shown it here.
+    /// `&lt;Member&gt;` tag itself** (every real `TypeDOL` member confirmed lacking both).
+    ///
+    /// Recursive as of 2026-07-14 (`FB ShredderControlSystem`'s own `ComsOutByte501`, an anonymous
+    /// `Struct` member — see <see cref="ParseMember"/> — with a nested `Struct`-typed field of its
+    /// own, one of which nests a *third* level): a member's own direct `<Member>` children (no
+    /// `<Sections>` wrapper) are parsed via this same method, arbitrarily deep, as long as each
+    /// intermediate level's own `Datatype` is literally `"Struct"` (anything else with direct
+    /// nested children is refused as unconfirmed). `<Sections>`-wrapped nested content is still
+    /// refused outright — that shape was confirmed for DB/FB Static members specifically
+    /// (<see cref="ParseNestedMembers"/>), not for a PLC data type's own member.
     /// </summary>
     public static DbMember ParseTypeMember(XElement member, string context)
     {
@@ -249,13 +255,31 @@ internal static class DbInterfaceMembers
 
         var setPoint = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: true);
 
+        var directNestedMembers = member.Elements().Where(e => e.Name.LocalName == "Member").ToList();
+        if (directNestedMembers.Count > 0)
+        {
+            if (datatype != "Struct")
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' — only 'Struct' has been observed with this shape.");
+            }
+
+            var nestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
+            return new DbMember(name, datatype, Retain: false, StartValue: null, SetPoint: setPoint, NestedMembers: nestedMembers);
+        }
+
         var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
         var startValue = startValueElement?.Value;
 
         return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue, SetPoint: setPoint);
     }
 
-    /// <summary>Inverse of <see cref="ParseTypeMember"/> — no Remanence/Accessibility attribute, same four BooleanAttributes as WriteMember's own AttributeList.</summary>
+    /// <summary>
+    /// Inverse of <see cref="ParseTypeMember"/> — no Remanence/Accessibility attribute, same four
+    /// BooleanAttributes as WriteMember's own AttributeList. Recursive: a member with
+    /// <see cref="DbMember.NestedMembers"/> populated writes them as direct children (no
+    /// `&lt;Sections&gt;` wrapper), arbitrarily deep, mirroring <see cref="ParseTypeMember"/>.
+    /// </summary>
     public static XElement WriteTypeMember(DbMember member)
     {
         var attributeList = new XElement(
@@ -271,7 +295,14 @@ internal static class DbInterfaceMembers
             new XAttribute("Datatype", member.Datatype),
             attributeList);
 
-        if (member.StartValue is not null)
+        if (member.NestedMembers is not null)
+        {
+            foreach (var nested in member.NestedMembers)
+            {
+                memberElement.Add(WriteTypeMember(nested));
+            }
+        }
+        else if (member.StartValue is not null)
         {
             memberElement.Add(new XElement(Ns + "StartValue", member.StartValue));
         }

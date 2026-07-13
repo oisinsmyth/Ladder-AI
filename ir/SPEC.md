@@ -634,7 +634,9 @@ into it without an ADR" rule. Worth raising as its own deliberate follow-up now 
 possible, not assumed.
 
 Two structured-member shapes confirmed real, both one level of nesting, never deeper (a nested
-member that is itself structured is a hard error — unconfirmed shape):
+member that is itself structured is a hard error — unconfirmed shape). **This "never deeper" claim
+is confirmed only for these two shapes** — the third shape below (anonymous struct) is confirmed
+real to recurse arbitrarily deep:
 
 - **UDT-typed** (`Datatype` is a quoted type name, e.g. `"TypeDOL"`) — nested members are plain
   scalars, each optionally carrying its own `<StartValue>` (confirmed: a real one had 29, all
@@ -667,8 +669,15 @@ mechanism handling all three since none has ever been seen).
   `"Tag #Inputs.InHand not defined"`) when the resulting block was imported into `SampleProject`,
   not by any pre-existing test. Fixed: nested members are now detected by direct `<Member>`
   children (not by `<Sections>` presence) and parsed via the same helper `TYPE`'s own members use
-  (`DbInterfaceMembers.ParseTypeMember`/`WriteTypeMember`), since the shapes are identical. Full
-  story: `docs/notes/stage-gates.md`, "Phase 1: `FB EquipmentControlSystem`".
+  (`DbInterfaceMembers.ParseTypeMember`/`WriteTypeMember`), since the shapes are identical.
+  **Confirmed to recurse to arbitrary depth**, found the same day (`FB ShredderControlSystem`'s own
+  `ComsOutByte501`, nesting a further `Struct`-typed member, one of which nests a third level) —
+  `ParseTypeMember`/`WriteTypeMember` are themselves recursive (a member's own direct `<Member>`
+  children are parsed via the same method whenever its `Datatype` is `"Struct"`), and the IR *text*
+  format's own member-line grammar (`DbMemberLineFormat.SerializeMemberRecursive`/
+  `ParseMemberRecursive`) recurses the same way, one two-space indent deeper per level, no fixed
+  depth limit. Full story: `docs/notes/stage-gates.md`, "Phase 1: `FB EquipmentControlSystem`" and "Phase 1:
+  `FB ShredderControlSystem`".
 
 ## Comment/title placement
 

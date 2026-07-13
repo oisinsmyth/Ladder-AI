@@ -249,16 +249,27 @@ public static class Sanitizer
 
         // Nested members (a structured member's own sub-fields, e.g. a UDT's InHand/Running or a
         // timer's PT/ET/IN/Q) are treated as structural, same category as their own scalar
-        // Datatype (Bool/Time/etc — never itself a quoted UDT reference, since double-nesting is
-        // hard-errored) — they're the reusable type's own field names, not site-specific
-        // identifying data, so they aren't renamed. Their StartValue *can* still carry
-        // identifying string content (same real risk the top-level rule exists for), so that
-        // alone is still sanitized.
+        // Datatype (Bool/Time/etc) — they're the reusable type's own field names, not
+        // site-specific identifying data, so they aren't renamed. Their StartValue *can* still
+        // carry identifying string content (same real risk the top-level rule exists for), so
+        // that alone is still sanitized — recursively, since an anonymous `Struct` member can
+        // nest arbitrarily deep (confirmed real 2026-07-14, `FB ShredderControlSystem`'s own
+        // `ComsOutByte501`, three levels deep).
         var sanitizedNestedMembers = member.NestedMembers?
-            .Select(nested => nested with { StartValue = SanitizeStartValue(nested.StartValue, ownerName, $"{member.Name}.{nested.Name}", map, missing) })
+            .Select(nested => SanitizeNestedMember(ownerName, $"{member.Name}.{nested.Name}", nested, map, missing))
             .ToList();
 
         return member with { Name = invented[(separatorIndex + 1)..], Datatype = sanitizedDatatype, StartValue = sanitizedStartValue, NestedMembers = sanitizedNestedMembers };
+    }
+
+    private static DbMember SanitizeNestedMember(string ownerName, string nestedPath, DbMember nested, SanitizationMap map, List<string> missing)
+    {
+        var sanitizedStartValue = SanitizeStartValue(nested.StartValue, ownerName, nestedPath, map, missing);
+        var sanitizedDeeperMembers = nested.NestedMembers?
+            .Select(deeper => SanitizeNestedMember(ownerName, $"{nestedPath}.{deeper.Name}", deeper, map, missing))
+            .ToList();
+
+        return nested with { StartValue = sanitizedStartValue, NestedMembers = sanitizedDeeperMembers };
     }
 
     // Only string-typed StartValues (Siemens single-quote literal syntax, e.g. 'Some Text') can

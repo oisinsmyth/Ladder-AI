@@ -10,6 +10,32 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Converter: fix two more real data-loss bugs (arbitrary-depth anonymous-struct nesting; a duplicated, independently-broken IR-text serializer) — `ShredderControlSystem` imports and compiles clean bar one flagged hardware-config dependency**
+
+- Phase 1, third dependency FB: `ShredderControlSystem` needed a much larger external footprint than
+  `MotorDOL`/`EquipmentControlSystem` — the real `Control` DB (renamed `PlantControl`, sanitized properly after
+  an initial identity-only map was caught and corrected) and 44 more PLC tag-table entries
+  (`Tag_1`-`Tag_44`, combined with the existing 10 into one 54-tag minimal table).
+- **A deeper anonymous-struct bug**: `ComsOutByte501` nests four further `Struct`-typed members,
+  one nesting a third level again — the single-level `EquipmentControlSystem` fix didn't recurse. Made
+  `ParseTypeMember`/`WriteTypeMember` genuinely recursive (arbitrary depth).
+- **A separate, independently-broken duplicate**: the IR *text* format (`to-ir`/`to-xml`) had its
+  own two-level-only member serializer in `IrSerializer.cs` (block STATIC sections), never fixed
+  alongside `DbIrSerializer.cs`'s own copy. Consolidated both into shared
+  `DbMemberLineFormat.SerializeMemberRecursive`/`ParseMemberRecursive`, used everywhere. New tests
+  at both the DB and block level (the block-level test exists specifically because the DB-level
+  ones alone wouldn't have caught `IrSerializer`'s own separate bug). 267/267 converter tests (up
+  from 265).
+- **Live-verified, iteratively**: cleared a `PlantControl`-not-yet-compiled error (compile it
+  first) and a `Clock_0.5Hz`-not-defined error (a genuine PLC tag, added to the minimal table).
+  **One gap deliberately left open**: `Clock_0.5Hz` turned out to be Siemens's own auto-generated
+  "Clock memory byte" system tag — a plain imported `PlcTag` with the same name/address doesn't
+  carry the internal registration TIA's compiler expects; the real fix needs a CPU hardware-config
+  change, a capability category this project has never touched (CLAUDE.md hard rule 6). Flagged to
+  the project owner, who chose to stop here rather than build hardware-config support.
+- `ShredderControlSystem` imports and compiles clean except for this one flagged tag — everything
+  else (its own logic, the `Control`/`PlantControl` reference, all 54 needed tags) is proven.
+
 **Converter: fix a real data-loss bug — an anonymous `Struct` member's nested fields were silently dropped; `EquipmentControlSystem` (`EquipmentControlSystem`) is the second `PlantAutoControl` dependency FB to compile clean**
 
 - Phase 1 of the approved `PlantAutoControl` round-trip plan (get the remaining 7 dependency FBs

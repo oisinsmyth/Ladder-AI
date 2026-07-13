@@ -39,6 +39,41 @@ internal static class DbMemberLineFormat
         sb.Append('\n');
     }
 
+    // Shared by DbIrSerializer (standalone DB files) and IrSerializer (a block's own STATIC
+    // section) — both reuse this rather than duplicating it, after a real bug (2026-07-14, `FB
+    // ShredderControlSystem`'s own `ComsOutByte501`, a Struct member nesting a further Struct-typed
+    // field three levels deep) was found in each's own separate, still-two-level-only copy.
+    // Recurses to arbitrary depth, each level two spaces deeper than its parent.
+    public static void SerializeMemberRecursive(StringBuilder sb, string indent, DbMember member)
+    {
+        SerializeLine(sb, indent, member);
+        if (member.NestedMembers is not null)
+        {
+            var childIndent = indent + "  ";
+            foreach (var nested in member.NestedMembers)
+            {
+                SerializeMemberRecursive(sb, childIndent, nested);
+            }
+        }
+    }
+
+    // Shared by DbIrParser and IrParser — mirrors SerializeMemberRecursive's own indent-based
+    // recursion exactly.
+    public static DbMember ParseMemberRecursive(string[] lines, ref int i, string indent)
+    {
+        var member = ParseLine(lines[i], indent);
+        i++;
+
+        var childIndent = indent + "  ";
+        var nestedMembers = new List<DbMember>();
+        while (i < lines.Length && lines[i].StartsWith(childIndent, StringComparison.Ordinal))
+        {
+            nestedMembers.Add(ParseMemberRecursive(lines, ref i, childIndent));
+        }
+
+        return nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member;
+    }
+
     public static DbMember ParseLine(string line, string indent)
     {
         var content = line[indent.Length..];

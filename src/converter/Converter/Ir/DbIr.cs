@@ -59,14 +59,7 @@ public static class DbIrSerializer
         sb.Append("  MEMBERS\n");
         foreach (var member in db.Members)
         {
-            DbMemberLineFormat.SerializeLine(sb, "    ", member);
-            if (member.NestedMembers is not null)
-            {
-                foreach (var nested in member.NestedMembers)
-                {
-                    DbMemberLineFormat.SerializeLine(sb, "      ", nested);
-                }
-            }
+            DbMemberLineFormat.SerializeMemberRecursive(sb, "    ", member);
         }
 
         return sb.ToString();
@@ -117,17 +110,7 @@ public static class DbIrParser
         var members = new List<DbMember>();
         while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal) && !lines[i].StartsWith("      ", StringComparison.Ordinal))
         {
-            var member = DbMemberLineFormat.ParseLine(lines[i], "    ");
-            i++;
-
-            var nestedMembers = new List<DbMember>();
-            while (i < lines.Length && lines[i].StartsWith("      ", StringComparison.Ordinal))
-            {
-                nestedMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "      "));
-                i++;
-            }
-
-            members.Add(nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member);
+            members.Add(DbMemberLineFormat.ParseMemberRecursive(lines, ref i, "    "));
         }
 
         return new DbSource(rootUId, name, number, instanceOfName, comment, members);

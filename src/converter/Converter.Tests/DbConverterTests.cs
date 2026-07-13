@@ -139,7 +139,7 @@ public class DbConverterTests
         Assert.Null(inputs.Version);
         Assert.Null(inputs.StartValue);
         Assert.NotNull(inputs.NestedMembers);
-        Assert.Equal(2, inputs.NestedMembers!.Count);
+        Assert.Equal(3, inputs.NestedMembers!.Count);
 
         Assert.Equal("InHand", inputs.NestedMembers[0].Name);
         Assert.Equal("Bool", inputs.NestedMembers[0].Datatype);
@@ -150,6 +150,24 @@ public class DbConverterTests
         Assert.Equal("Real", inputs.NestedMembers[1].Datatype);
         Assert.Equal("0.0", inputs.NestedMembers[1].StartValue);
         Assert.True(inputs.NestedMembers[1].SetPoint);
+    }
+
+    [Fact]
+    public void Parse_AnonymousStructMember_RecursesIntoDoublyNestedStruct()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithAnonymousStructMember.xml"));
+
+        var inputs = Assert.Single(db.Members);
+        var nested = inputs.NestedMembers![2];
+        Assert.Equal("Nested", nested.Name);
+        Assert.Equal("Struct", nested.Datatype);
+        Assert.Null(nested.StartValue);
+        Assert.NotNull(nested.NestedMembers);
+
+        var deepFlag = Assert.Single(nested.NestedMembers!);
+        Assert.Equal("DeepFlag", deepFlag.Name);
+        Assert.Equal("Bool", deepFlag.Datatype);
+        Assert.Null(deepFlag.NestedMembers);
     }
 
     [Fact]

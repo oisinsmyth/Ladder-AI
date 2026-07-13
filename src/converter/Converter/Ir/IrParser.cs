@@ -118,17 +118,7 @@ public static partial class IrParser
             var parsed = new List<DbMember>();
             while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal) && !lines[i].StartsWith("      ", StringComparison.Ordinal))
             {
-                var member = DbMemberLineFormat.ParseLine(lines[i], "    ");
-                i++;
-
-                var nestedMembers = new List<DbMember>();
-                while (i < lines.Length && lines[i].StartsWith("      ", StringComparison.Ordinal))
-                {
-                    nestedMembers.Add(DbMemberLineFormat.ParseLine(lines[i], "      "));
-                    i++;
-                }
-
-                parsed.Add(nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member);
+                parsed.Add(DbMemberLineFormat.ParseMemberRecursive(lines, ref i, "    "));
             }
 
             staticMembers = parsed;

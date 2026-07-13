@@ -2674,3 +2674,84 @@ compile. A genuinely new, previously-unseen structured-member shape confirmed re
 before it could silently corrupt any future FB sharing this same "anonymous struct" convention —
 plausible this recurs across some of the remaining 6 FBs, given how closely `EquipmentControlSystem` mirrors
 `MotorDOL`'s own template.
+
+### Phase 1: `FB ShredderControlSystem` — deeper structured-member bug, external DB/tag-table closure, one hardware-config gap flagged and deliberately not chased — 2026-07-14
+
+Second of the remaining 7 dependency FBs. Unlike `MotorDOL`/`EquipmentControlSystem`, `ShredderControlSystem` pulls
+in a much larger external footprint — surfaced by the same empty-sanitization-map trick used
+throughout this project: a reference into the real `Control` DB (`ShredderEStopFB`/`Test[7]`) and
+**44 separate PLC tag-table entries** (`Tag_1`-`Tag_44`, distinct from the 10 already built for
+`PlantAutoControl` itself). Confirmed with the project owner (`AskUserQuestion`) before building this
+out live, since it meant pulling a slice of Phase 2's own scope forward for one FB.
+
+**Built the extra dependency closure**: re-exported the real "Default tag table" from `JOB9002`,
+combined `Tag_1`-`Tag_54` into one contiguous minimal synthetic table (superseding the earlier
+10-tag one — a strict superset, nothing lost) via the same "filter the real export's own IR text"
+technique as before. Exported the real `Control` DB (small, ~17 members, whole-DB sanitized rather
+than a subset) — **`Control` → `PlantControl`, a real naming mistake caught by the auto-mode
+classifier**: the first sanitization map drafted renamed nothing at all (not even the DB's own
+name), which the project's own established discipline and `docs/13-data-boundary.md`'s 2026-07-11
+clarification both require (nested/generic field names may stay identity, but a DB's own top-level
+name always needs an invented replacement) — corrected immediately, no real name reached any
+import.
+
+**A second real converter bug, deeper than the first**: `ShredderControlSystem`'s own `ComsOutByte501`
+(one of several `Inputs`/`Outputs`-sibling anonymous `Struct` members, same shape as `EquipmentControlSystem`'s
+own `Inputs`/`Outputs`) turned out to itself nest **four further `Struct`-typed members**
+(`ComsOutByte1`-`ComsOutByte4`), one of which nests a **third** level again — a genuinely
+deeply-recursive real shape, not just the one-level case `EquipmentControlSystem` needed. The `ParseTypeMember`/
+`WriteTypeMember` reuse from the `EquipmentControlSystem` fix only handled one level; extended both to recurse
+to arbitrary depth (a member's own direct `<Member>` children are parsed/written via the same
+method, as long as each intermediate level's `Datatype` is `"Struct"`). `Sanitizer.SanitizeMember`'s
+own nested-member handling was shallow the same way — fixed via a new recursive
+`SanitizeNestedMember` helper so a deeply-nested member's own `StartValue` is sanitized at any
+depth, not just one level in.
+
+**A third, independent bug found investigating the first**: the IR *text* format (`to-ir`/`to-xml`)
+has its own **separate, independently broken** two-level-only member serialization —
+`IrSerializer.cs` (block-level STATIC sections) had a full duplicate of the same fixed-depth logic
+`DbIrSerializer.cs` had, and neither was the file first fixed for `EquipmentControlSystem`. Consolidated both
+into shared `DbMemberLineFormat.SerializeMemberRecursive`/`ParseMemberRecursive` helpers, used by
+`DbIrSerializer`, `DbIrParser`, `IrSerializer`, and `IrParser` alike — one recursive implementation,
+not four independently-drifting copies. New tests at both the DB level (`DbConverterTests.cs`,
+extended `GlobalDbWithAnonymousStructMember.xml` with a doubly-nested member) and the block level
+(`BlockInterfaceTests.cs`, extended `FbWithStaticAndTemp.xml` with a `ComsByte`/`SubByte` pair) —
+the block-level test exists specifically because `DbConverterTests` alone would never have caught
+`IrSerializer`'s own separate copy of the bug. **267/267 converter tests pass** (up from 265).
+
+**Live-verified, iteratively, 2026-07-14.** Imported the combined 54-tag table, `PlantControl`,
+and `ShredderControlSystem` together. First compile: the "structure without components" errors
+were gone (deep-nesting fix confirmed working), but two new, real, independent gaps surfaced:
+1. `"Block \"PlantControl\" that is accessed has not been compiled"` — resolved by compiling
+   `PlantControl` itself first (`compile --block PlantControl`: `STATE: Warning` but 0 errors —
+   the warning is the same generic "hardware I/O" one seen elsewhere, not a real problem).
+2. `"Tag \"Clock_0\".\"5Hz\" not defined"` — investigated and found to be a **genuine PLC tag**,
+   not a Static member (`GlobalVariable`-scoped `Clock_0.5Hz`, address `%M0.7`), one of a
+   Siemens-standard "Clock memory byte" set (`Clock_10Hz`/`Clock_5Hz`/.../`Clock_0.5Hz`/
+   `Clock_Byte`, all in the real "Default tag table" at `%M0.0`-`%M0.7`/`%MB0`) — added to the
+   minimal tag table and re-imported.
+
+**One gap deliberately left open, flagged to the project owner rather than chased further**: even
+with the tag present in the tag table (confirmed via re-export — `<Name>Clock_0.5Hz</Name>`,
+`<LogicalAddress>%M0.7</LogicalAddress>`, exactly right), `compile --block
+ShredderControlSystem` still reports `"Tag \"Clock_0\".\"5Hz\" not defined"` — including after a
+clean whole-project `compile SampleProject` (`STATE: Success, ERRORS: 0`, an already-documented
+quirk: device-level compile doesn't validate as deeply as block-level, `docs/notes/
+openness-quirks.md`) and a bare retry. Root cause, not chased further per the project owner's own
+call: `Clock_0.5Hz` isn't an ordinary tag someone typed into a table — it's the auto-generated tag
+of the CPU's own "Clock memory byte" **hardware configuration feature**. A plain `PlcTag` imported
+with the same name/address doesn't carry whatever internal registration TIA's compiler expects for
+the real system-clock tag; the actual fix would be enabling "Clock memory byte" on `SampleProject`'s
+own CPU device — a device hardware-configuration change, a capability category this project's
+tooling has never touched and CLAUDE.md hard rule 6 explicitly says not to add without being asked.
+Presented to the project owner via `AskUserQuestion`; chosen: stop here, accept
+`ShredderControlSystem` as done except for this one tag, move on.
+
+**Bottom line**: `ShredderControlSystem` imports and compiles cleanly except for one flagged,
+out-of-scope hardware-configuration dependency — everything else (its own logic, the `Control`/
+`PlantControl` DB reference, all 54 needed tags) is proven. Two more real, previously-unseen
+converter bugs found and fixed (deep anonymous-struct recursion; the IR-text format's own separate,
+independently-broken duplicate of the same bug) — both fixed at the shared-helper level so they
+can't recur independently again. Third of `PlantAutoControl`'s 8 dependency FBs attempted this session,
+and the first to surface a genuine, deliberately-deferred hardware-configuration boundary rather
+than a pure data/converter gap.

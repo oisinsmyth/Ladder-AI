@@ -36,7 +36,7 @@ public class BlockInterfaceTests
         var block = BlockSourceParser.Parse(LoadFixture("FbWithStaticAndTemp.xml"));
 
         Assert.NotNull(block.StaticMembers);
-        Assert.Equal(2, block.StaticMembers!.Count);
+        Assert.Equal(3, block.StaticMembers!.Count);
 
         var io = block.StaticMembers[0];
         Assert.Equal("IO", io.Name);
@@ -53,6 +53,34 @@ public class BlockInterfaceTests
         Assert.Equal("Time", temp.Name);
         Assert.Equal("Real", temp.Datatype);
         Assert.Null(temp.NestedMembers);
+    }
+
+    // Block-level STATIC parsing/writing goes through IrSerializer/IrParser, a separate code path
+    // from a standalone DB's own DbIrSerializer/DbIrParser — both were found to have their own,
+    // independently-broken, still-two-level-only nested-member handling (2026-07-14, `FB
+    // ShredderControlSystem`'s own `ComsOutByte501`, an anonymous Struct member nesting a further
+    // Struct-typed field). Fixed by sharing `DbMemberLineFormat.SerializeMemberRecursive`/
+    // `ParseMemberRecursive` between both. This test exercises the block-level path specifically
+    // (`ComsByte`/`SubByte` in the fixture), since `DbConverterTests` only covers the DB-level one.
+    [Fact]
+    public void Parse_FbWithAnonymousStructMember_RecursesArbitrarilyDeep()
+    {
+        var block = BlockSourceParser.Parse(LoadFixture("FbWithStaticAndTemp.xml"));
+
+        var comsByte = block.StaticMembers![2];
+        Assert.Equal("ComsByte", comsByte.Name);
+        Assert.Equal("Struct", comsByte.Datatype);
+        Assert.NotNull(comsByte.NestedMembers);
+        Assert.Equal(2, comsByte.NestedMembers!.Count);
+
+        Assert.Equal("Flag1", comsByte.NestedMembers[0].Name);
+        Assert.Null(comsByte.NestedMembers[0].NestedMembers);
+
+        var subByte = comsByte.NestedMembers[1];
+        Assert.Equal("SubByte", subByte.Name);
+        Assert.Equal("Struct", subByte.Datatype);
+        var deepFlag = Assert.Single(subByte.NestedMembers!);
+        Assert.Equal("Flag1", deepFlag.Name);
     }
 
     // Repurposed from a hard-error test (S1 item 20, 2026-07-12) — same "an obsolete hard-error

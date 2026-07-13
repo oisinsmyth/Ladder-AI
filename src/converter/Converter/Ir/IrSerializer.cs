@@ -203,14 +203,7 @@ public static class IrSerializer
             sb.Append("  STATIC\n");
             foreach (var member in block.StaticMembers)
             {
-                DbMemberLineFormat.SerializeLine(sb, "    ", member);
-                if (member.NestedMembers is not null)
-                {
-                    foreach (var nested in member.NestedMembers)
-                    {
-                        DbMemberLineFormat.SerializeLine(sb, "      ", nested);
-                    }
-                }
+                DbMemberLineFormat.SerializeMemberRecursive(sb, "    ", member);
             }
         }
 
