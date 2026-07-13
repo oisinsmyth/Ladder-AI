@@ -2432,3 +2432,48 @@ import is fully fixed and live-verified. The broader "does a dependency FB compi
 `SampleProject`" question (S1 items 16/17's own original question, revisited via UDT support and
 now this) still isn't answered for `MotorDOL` — it's blocked on a *different*, well-understood kind
 of gap (missing instance DB / calling context), not a converter defect.
+
+### S1 item 26 continued again: full converter round-trip proof for `MotorStarter`, and a real gap found in `Normalizer` itself — 2026-07-14
+
+Project owner asked for the actual Layer 1 assertion this whole project's testing strategy is built
+on (`docs/08-testing-strategy.md`): `export → to-ir → to-xml → import&compile → export → compare`.
+`MotorStarter` couldn't do the live half of this — it's currently `INCONSISTENT` in `SampleProject`
+(the "missing instance DB" finding just above), and `Export()` refuses any inconsistent block
+outright, blocking *both* the first export and the final re-export the same way (re-importing the
+regenerated XML would leave it inconsistent again, for the identical reason) — "skip compile" alone
+doesn't route around this, since `Export()` itself enforces consistency, not the test procedure.
+Confirmed with the project owner via `AskUserQuestion` rather than guessing which path to take;
+they chose the pure converter round trip (`to-ir → to-xml → compare`, no live TIA involved),
+leaving the instance-DB gap for another day.
+
+**IR-level round trip: byte-identical**, as expected (`to-ir → to-xml → to-ir`, matching this
+project's own established pattern for every prior block).
+
+**XML-level comparison via `Normalizer.AreSemanticallyEquivalent`: initially reported `false`** —
+investigated rather than dismissed, since the IR round trip's own success made a real XML-level
+difference implausible. Isolated the exact cause with a throwaway test (`ZZRoundTripCheck.cs`,
+deleted after use) dumping both sides' own `Normalizer.Strip()` output: **100% of the diff was
+endpoint order within individual `<Wire>` elements** — the same two electrically-identical wires
+listing their `<IdentCon>`/`<NameCon>` children in a different order, nothing else. Confirmed by
+filtering the diff for anything *other* than wire-endpoint elements: zero lines.
+
+**Real gap found and fixed, in `tests/golden`'s own `Normalizer.cs`, not the converter.**
+`Normalizer` already treats Wire-vs-Wire order (within `<Wires>`) and Access UId numbering as
+non-semantic — TIA relocates/renumbers freely, only the topology matters, confirmed real
+2026-07-10/11 — but had never extended that same principle one level deeper, to a single wire's
+*own* endpoint list. This had simply never been exercised before: every prior `Normalizer`
+comparison ran against a real live TIA re-export (single genuine copy each time), never a
+converter-only round trip regenerated twice and diffed against itself, on a network with genuine
+multi-endpoint wire fan-out (`MotorStarter`'s own Move-tap/OR-merge shapes). Fixed: `Wire` added
+to the existing order-independent-child-sort branch, same mechanism already used for `Wires`/
+`Parts`. Re-ran: **`AreSemanticallyEquivalent` now returns `true`.** Confirmed the fix doesn't mask
+real differences — the existing `AreSemanticallyEquivalent_DifferingWireEndpoint_ReturnsFalse` test
+(genuinely different endpoint *sets*, not just order) still correctly returns `false`. All 11
+(now 12, then back to 11 once the throwaway test was removed) `GoldenHarness.Tests` pass.
+
+**Bottom line**: `MotorStarter`'s converter-level round trip is now proven lossless end to end,
+including the wire-fan-out-heavy content the earlier `MotorDOL`/S1 item 10 grounding first
+introduced — this is the first time that content has been checked with the *correct* comparison
+tool, not just eyeballed. The live TIA half of the original request (import → compile → re-export)
+remains blocked on the separate, already-documented missing-instance-DB gap, not on anything found
+in this pass.

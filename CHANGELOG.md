@@ -10,6 +10,24 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**`tests/golden`: fix a real gap in `Normalizer` — wire-endpoint order isn't semantically meaningful**
+
+- Requested full round-trip proof for `MotorStarter` (`export → to-ir → to-xml → import&compile →
+  export → compare`) hit a real blocker: the block is currently `INCONSISTENT` (missing-instance-DB
+  gap, see below), and `Export()` refuses any inconsistent block — blocking both ends of the live
+  round trip the same way. Did the pure converter round trip instead (`to-ir → to-xml → compare`,
+  no live TIA), confirmed with the project owner.
+- IR round trip was byte-identical, but XML-level `Normalizer.AreSemanticallyEquivalent` reported
+  `false`. Investigated: 100% of the difference was endpoint order within individual `<Wire>`
+  elements — the same wires, same endpoints, different XML order, nothing else.
+- `Normalizer` already treats Wire-vs-Wire order and Access UId numbering as non-semantic (TIA
+  relocates/renumbers freely) but had never extended that to a wire's *own* endpoint list — never
+  exercised before since no prior comparison ran a converter-only round trip twice against a
+  network with genuine wire fan-out. Fixed (`Wire` added to the existing order-independent sort).
+  Confirmed the fix doesn't mask real differences (the existing differing-endpoint-set test still
+  correctly fails). `MotorStarter`'s round trip now confirms `true`. Full story:
+  `docs/notes/stage-gates.md`.
+
 **Converter: `FlgNetBuilder` Part-ordering fix — `MotorDOL` now imports into `SampleProject`**
 
 - Two real bugs found and fixed, root-caused against a fresh `MotorDOL` export: (1) `OrStep`'s own

@@ -170,14 +170,22 @@ public static class Normalizer
         var clone = new XElement(element.Name, attributes);
         var children = element.Elements().Where(c => !IsVolatile(c)).Select(c => Strip(c, accessContentKeyByUId)).ToList();
 
-        // <Wire> order within <Wires>, and <Access>/<Part> order within <Parts>, are not
-        // semantically meaningful — confirmed real, 2026-07-10 (Wire) and 2026-07-11 (Parts,
-        // same TON grounding that surfaced the Access-UId finding above): TIA relocates/renumbers
-        // freely, only the topology matters. Each element's own volatile UId is already resolved
-        // by this point, so sort by remaining content for an order-independent comparison.
-        // Deliberately narrow: <Component> order within <Symbol> (and everything else) still
-        // matters positionally and must never be reordered.
-        if (element.Name.LocalName is "Wires" or "Parts")
+        // <Wire> order within <Wires>, <Access>/<Part> order within <Parts>, and an individual
+        // <Wire>'s own endpoint order (<IdentCon>/<NameCon>/<Powerrail>/<OpenCon>) are all not
+        // semantically meaningful — confirmed real, 2026-07-10 (Wire-vs-Wire) and 2026-07-11
+        // (Parts, same TON grounding that surfaced the Access-UId finding above): TIA
+        // relocates/renumbers freely, only the topology matters. The endpoint-order case was
+        // confirmed real later, 2026-07-14: a converter-only round trip (to-ir → to-xml, no live
+        // TIA involved) of a real multi-endpoint-wire network (MotorDOL/MotorStarter) reported a
+        // false mismatch purely from two electrically-identical wires listing the same endpoints
+        // in a different order — a wire's own endpoint set, not its listed order, is what a wire
+        // actually means, same principle as everything else in this comment, just one level
+        // deeper (previously untested because no prior comparison ran a converter-only regenerate
+        // twice against a network with genuine wire fan-out). Each element's own volatile UId is
+        // already resolved by this point, so sort by remaining content for an order-independent
+        // comparison. Deliberately narrow: <Component> order within <Symbol> (and everything
+        // else) still matters positionally and must never be reordered.
+        if (element.Name.LocalName is "Wires" or "Parts" or "Wire")
         {
             children = children.OrderBy(c => c.ToString()).ToList();
         }
