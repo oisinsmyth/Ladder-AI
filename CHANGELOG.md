@@ -10,6 +10,18 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**S2 gate reviewed and signed off; move to S3 (comment generation)**
+
+- Exit criterion (10 sampled networks judged accurate, no hallucinated tags/behavior) cleared
+  several times over: 4 real JOB9002 blocks explained in conversation (`PerimeterSafetyAlarms`, `MotorDOL`,
+  `PlantAutoControl`, `MotorFwdRevSystem`, 51+ networks combined), all confirmed accurate by the project
+  owner. `WAIT`/`Jump` — carried forward from S1's own sign-off as open questions needing input —
+  explicitly closed as not needed, project owner's own call; Modbus's separate live-compile gap is
+  unaffected and stays open. S3's own entry criterion (`docs/11-review-workflow.md` agreed, not
+  just drafted) also cleared — summarized for the project owner and agreed as-is, unchanged.
+  `docs/notes/stage-gates.md` and `AITODO.md` updated; `AITODO.md` wiped of S2-era in-flight detail
+  per the same pattern as the S1→S2 transition.
+
 **Build S2's explanation-quality checklist from direct multi-agent comparison, not invented solo**
 
 - Produced three full real-JOB9002-block explanations in conversation (`PerimeterSafetyAlarms`, `MotorDOL`,

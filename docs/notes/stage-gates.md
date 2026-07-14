@@ -8,8 +8,8 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
 | S1 — Lossless round-trip | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | ADR-0001/`ir/SPEC.md` decided; converter + `openness-cli` + golden harness support ~24 instruction-level constructs (full list: `FlgNetParser.SupportedPartNames` plus `CALL`), all live-verified against real or reference-project data at least once. **`FC PlantAutoControl` round-trips through the true TIA cycle, completely** (2026-07-14 — export → sanitize → import → block-level compile clean → re-export → `Normalizer.AreSemanticallyEquivalent` = true) against its full real dependency closure (8 dependency FBs, 26 DB/tag-table roots) — the actual Layer 1 assertion this stage exists to prove, at production scale. **Reference-project corpus grown from 7 to 14 committed artifacts** (2026-07-14, "Reference corpus growth" below) specifically to close the gap between that production-scale proof and the committed regression suite: the corpus now exercises ~20 of the ~24 supported constructs (up from ~5), not just Contact/Coil/OR-merge/TON. Three smaller flagged gaps (data-boundary doc staleness, Sanitizer `ExternalAccessible`, `Normalizer` Part-identity) also closed the same day. **Signed off with two real items deliberately still open, carried forward rather than blocking the gate**: `WAIT` (missing library dependency in `SampleProject`, needs the project owner's input) and `Jump` (genuine cross-network control flow, needs a real IR-format design decision before any code gets written) — neither is part of the committed reference corpus, so neither affects the literal exit criterion; both tracked in `AITODO.md`. All PC-side suites green at sign-off: 366 converter, 101 openness-cli, 14 golden-harness (offline) + all 14 reference-project blocks verified live together in one `RunAll` pass. See Exit-criteria evidence. |
-| S2 — Read and explain | **ACTIVE** | — | Entry criteria met (S1 done). No work started yet — `AITODO.md` has the kickoff plan. Deliverables per `02-roadmap.md`: Claude Code reads IR and produces plain-language explanations of networks/blocks; an explanation quality checklist (doesn't exist yet — a deliverable of this stage, not a precondition). Exit: 10 sampled network explanations judged accurate by the engineer, no hallucinated tags or behavior. |
-| S3 — Comment generation | not started | — | |
+| S2 — Read and explain | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | Deliverables per `02-roadmap.md`: 4 real JOB9002 blocks explained in conversation (`PerimeterSafetyAlarms`, `MotorDOL`, `PlantAutoControl`, `MotorFwdRevSystem`; not committed anywhere, per `13-data-boundary.md`'s S2-kickoff entry) — 51+ networks sampled, all confirmed accurate by the project owner (2026-07-14), well past the 10-network exit bar. Explanation-quality checklist built and committed (`14-s2-explanation-checklist.md`), derived empirically from re-explaining the same real block across five subagents at varying context levels and verifying every claim against source, not invented solo (full methodology below, "S2: explanation-quality checklist built from direct comparison"). One real error did occur and was caught during that verification pass (a wrong field-uniformity count in the first `PlantAutoControl` pass) — corrected before the project owner's own sign-off; checklist item `E-01` exists specifically because of it. **Signed off with `WAIT`/`Jump` explicitly closed as not needed** (project owner's own call, 2026-07-14) — carried in S1's sign-off as open questions needing input, now resolved rather than deferred (detail in `AITODO.md`'s "Deliberately deferred" section). Modbus's own live-compile gap (same S1 finding) is untouched by this decision and stays open, unrelated to S2/S3. |
+| S3 — Comment generation | **ACTIVE** | — | Entry criteria met: S2 done, and `docs/11-review-workflow.md` explicitly agreed by the project owner (2026-07-14) — summarized for review, agreed as-is, unchanged from its original draft. No work started yet — `AITODO.md` has the kickoff framing. Deliverables per `02-roadmap.md`: AI writes network titles/comments and block comments into the IR; converter carries them into SimaticML; import+compile verified automatically. Exit: an undocumented block gets useful comments end-to-end — generated, imported, compiled, human-approved. |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
 | S5 — Data extraction | not started | — | Can run parallel with S3/S4 once S1 done |
 | S6 — Generation | not started | — | |
@@ -3423,5 +3423,25 @@ not assumed working.
 Checklist committed as `docs/14-s2-explanation-checklist.md` (indexed in `00-README.md`).
 `AITODO.md` updated to reflect the three original S2-kickoff questions as resolved, with a running
 count toward the 10-sample exit criterion.
+
+## S2 gate review: signed off, S3 opened (2026-07-14)
+
+Four real JOB9002 blocks explained in conversation this session — `PerimeterSafetyAlarms`, `MotorDOL`,
+`PlantAutoControl`, `MotorFwdRevSystem` — covering 51+ networks combined, all explicitly confirmed
+accurate by the project owner. Combined with the checklist itself (methodology above), that clears
+the roadmap's exit bar (10 sampled networks judged accurate, no hallucinated tags/behavior) several
+times over.
+
+The project owner separately confirmed `WAIT` and `Jump` — carried forward from S1's own sign-off
+as open questions needing input — are not needed. Closed rather than deferred; see `AITODO.md`'s
+"Deliberately deferred" section for the technical detail preserved in case either becomes relevant
+again. Modbus's live-compile gap, the third item from that same S1 carry-forward, is unaffected by
+this and stays open.
+
+S3's own entry criterion needed one thing beyond S2 itself: `docs/11-review-workflow.md` explicitly
+*agreed*, not just drafted or existing. Summarized for the project owner in conversation and agreed
+as-is — no changes requested, the doc stands exactly as originally drafted.
+
+S3 (comment generation) is now open. No work started yet.
 
 All three smaller flagged gaps from the earlier "what's left before S1" review are now closed.
