@@ -55,9 +55,29 @@ closed" above). Working overnight, autonomously, per the project owner's own exp
 ("work through as much as you can without me... follow the plan") — continue in tier order:
 
 - **Tier 4**: `Modbus_Master`/`Modbus_Comm_Load` (`FC ModbusComs`) — Instance-DB-backed like
-  `TON`/`Call` (reuse that machinery), but each real port (`REQ`/`MB_ADDR`/`DATA_PTR`/`DONE`/
-  `BUSY`/`ERROR`/`STATUS` etc.) needs grounding against the real wires before assuming a shape —
-  moderate-to-higher effort, a genuinely new comms-FB category.
+  `TON`/`Call` (reuse that machinery: `ParseInstanceReference`/`AccessNode`). **Fully re-grounded
+  2026-07-14 night** (every attribute checked directly via `grep`, not visual reading, per the
+  `LIMIT` lesson above) — genuinely more infrastructure than Tiers 1–3 combined, which is why this
+  was deliberately left for a fresh session rather than rushed at the tail of a long one:
+  - `Modbus_Master` (`Version="6.0"`, no `DisabledENO`): `en` rail-fed; **`REQ` is fed by a full
+    Contact chain's own `out`, not a plain IdentCon tag** — needs `TraceChain` (already generic
+    over port name, same mechanism `en`/a Coil's own condition already use), not
+    `ResolveTagOrLiteralOperand`. `MB_ADDR`/`MODE`/`DATA_ADDR`/`DATA_LEN`/`DATA_PTR` are ordinary
+    plain-tag inputs. **`DONE`/`BUSY`/`ERROR`/`STATUS` are four separate output tags** — no
+    existing production writes more than one destination; needs a new statement/sidecar shape,
+    not a reuse of the single-`DestTag` pattern every instruction so far has used.
+  - `Modbus_Comm_Load` (`Version="5.0"`, no `DisabledENO`): `en` rail-fed (fan-out shared with
+    several Contacts); `REQ`/`PORT`/`BAUD`/`PARITY`/`RESP_TO`/`MB_DB` are ordinary plain-tag
+    inputs; `DONE`/`ERROR`/`STATUS` are three output tags (same multi-output need as
+    `Modbus_Master`). **`FLOW_CTRL`/`RTS_ON_DLY`/`RTS_OFF_DLY` are wired to `<OpenCon>`** —
+    confirmed-real "deliberately left unconnected" ports, a genuinely new operand shape no
+    existing instruction has needed (`OperandSidecar` only has `TagOperand`/`LiteralOperand`
+    today — would need a third `OpenOperand` variant, plus a readable-IR-text sentinel, e.g. an
+    `OPEN` keyword parallel to `EnSource`'s own `ENO` sentinel).
+  - Net: needs three new pieces of general infrastructure (chain-fed non-`en` operand resolution
+    — mechanically ready, `TraceChain` already supports it; multi-output-tag productions; an
+    open/unconnected operand variant) before either instruction can be built, not just "port
+    grounding" as tonight's plan first estimated. Worth tackling as its own dedicated session.
 - **Tier 5**: re-ground `MOVE_BLK_VARIANT` — every sample seen so far (`MoveData`,
   `VSDDataSequence`) only had `en` wired; the real array/count port shape is still unknown. Find a
   fully-wired example before designing anything.
