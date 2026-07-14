@@ -34,8 +34,17 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
   reusing one `Access` UId across two wires; a `FillBlockI` fixture using a plain scalar where the
   real destination is array-indexed) — see `docs/notes/stage-gates.md` for the full story. `WAIT`
   (Tier 6) built and tested but not live-verified — hit a distinct, still-open blocker (see
-  "Current task" below). Tier 4 re-grounded but not built; `Jump` (Tier 6) investigated but
-  deliberately not built, pending a design decision.
+  "Open questions" below). `Jump` (Tier 6) investigated but deliberately not built, pending a
+  design decision.
+- **Tier 4 (`Modbus_Master`/`Modbus_Comm_Load`), 2026-07-14.** Built across all 7 files, 15 new
+  tests (359 total, all green). Live verification: import clean; compile narrowed 6 errors -> 2,
+  every fixed one confirming the converter's own modeling correct (fixture scope/type gaps, not
+  converter bugs). The final 2 trace to a confirmed general Openness limitation — standalone
+  system-FB instance DBs (`Modbus_Master_DB`/`MB_Master_Comm`) invisible to `SW.Blocks` entirely,
+  same class as the earlier `CycleDelayReset` finding — not a converter bug, no Openness-exposed
+  fix found. Left honestly unverified for full live compile, same standard as `WAIT`. Full story:
+  `docs/notes/stage-gates.md` ("Tier 4 built and tested..."), general limitation writeup:
+  `docs/notes/openness-quirks.md` ("Known constraints").
 - **The full `PlantAutoControl` round-trip plan — all three phases done, 2026-07-14.** Phase 1 (all 8
   dependency FBs compile clean), Phase 2 (all 26 real DB/tag-table roots sanitized/imported/
   compiled clean), Phase 3 (`PlantAutoControl` itself imports, compiles with 0 errors, and round-trips
@@ -52,66 +61,52 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 - Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
   `e0fd86a`. 3rd FB.
 
-## Current task: Phase 2 instruction-coverage plan, tiers 4–6 not yet started
+## Current task: none — all Phase 2 tiers built; two open questions await the project owner
 
-Tiers 1–3 (`Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc`) closed and committed 2026-07-14 (see "Recently
-closed" above). Working overnight, autonomously, per the project owner's own explicit request
-("work through as much as you can without me... follow the plan") — continue in tier order:
+Tiers 1–6 are all built and tested (359 converter tests, all green). Tiers 1, 2, 3, 5
+(`MOVE_BLK_VARIANT`), and `FillBlockI` (Tier 6) are fully live-verified. Tier 4
+(`Modbus_Master`/`Modbus_Comm_Load`) and `WAIT` (Tier 6) are built/tested but live-verification
+hit real, honestly-documented blockers outside the converter's own control (see "Open questions"
+below). `Jump` (Tier 6) was deliberately not built, pending a design decision. Nothing is currently
+in-flight — the two items below need the project owner's input before any further action.
 
-- **Tier 4**: `Modbus_Master`/`Modbus_Comm_Load` (`FC ModbusComs`) — Instance-DB-backed like
-  `TON`/`Call` (reuse that machinery: `ParseInstanceReference`/`AccessNode`). **Fully re-grounded
-  2026-07-14 night** (every attribute checked directly via `grep`, not visual reading, per the
-  `LIMIT` lesson above) — genuinely more infrastructure than Tiers 1–3 combined, which is why this
-  was deliberately left for a fresh session rather than rushed at the tail of a long one:
-  - `Modbus_Master` (`Version="6.0"`, no `DisabledENO`): `en` rail-fed; **`REQ` is fed by a full
-    Contact chain's own `out`, not a plain IdentCon tag** — needs `TraceChain` (already generic
-    over port name, same mechanism `en`/a Coil's own condition already use), not
-    `ResolveTagOrLiteralOperand`. `MB_ADDR`/`MODE`/`DATA_ADDR`/`DATA_LEN`/`DATA_PTR` are ordinary
-    plain-tag inputs. **`DONE`/`BUSY`/`ERROR`/`STATUS` are four separate output tags** — no
-    existing production writes more than one destination; needs a new statement/sidecar shape,
-    not a reuse of the single-`DestTag` pattern every instruction so far has used.
-  - `Modbus_Comm_Load` (`Version="5.0"`, no `DisabledENO`): `en` rail-fed (fan-out shared with
-    several Contacts); `REQ`/`PORT`/`BAUD`/`PARITY`/`RESP_TO`/`MB_DB` are ordinary plain-tag
-    inputs; `DONE`/`ERROR`/`STATUS` are three output tags (same multi-output need as
-    `Modbus_Master`). **`FLOW_CTRL`/`RTS_ON_DLY`/`RTS_OFF_DLY` are wired to `<OpenCon>`** —
-    confirmed-real "deliberately left unconnected" ports, a genuinely new operand shape no
-    existing instruction has needed (`OperandSidecar` only has `TagOperand`/`LiteralOperand`
-    today — would need a third `OpenOperand` variant, plus a readable-IR-text sentinel, e.g. an
-    `OPEN` keyword parallel to `EnSource`'s own `ENO` sentinel).
-  - Net: needs three new pieces of general infrastructure (chain-fed non-`en` operand resolution
-    — mechanically ready, `TraceChain` already supports it; multi-output-tag productions; an
-    open/unconnected operand variant) before either instruction can be built, not just "port
-    grounding" as tonight's plan first estimated. Worth tackling as its own dedicated session.
-- **Tier 5** (`MOVE_BLK_VARIANT`): **closed 2026-07-14.** Built, unit-tested (8 tests), and now
-  live-verified — imported/compiled clean (0 errors) in `SampleProject`, byte-identical round-trip.
-- **Tier 6**: `FillBlockI` **closed 2026-07-14** — built, tested, and live-verified alongside
-  `MOVE_BLK_VARIANT`. Along the way found the real `out` destination is array-indexed
-  (`CommsProcessData.NodeFaultCount[3]`, not a plain scalar) — no converter code changed (the
-  general array-index support already existed), only `FillBlockIFedByRail.xml` was corrected to
-  match. 345 converter tests total, all green.
-  - **`WAIT` — built and unit-tested, but hit a genuinely different live blocker, still open.**
-    TIA's own `Import()` rejects it — "An instruction with the name 'WAIT' cannot be found" — in
-    `SampleProject` specifically, even though the regenerated XML faithfully matches the real
-    `JOB9002` shape (confirmed not a converter bug: `MOVE_BLK_VARIANT`/`FillBlockI` imported into the
-    same target project cleanly in the same session). Likely a library/technology-object dependency
-    present in `JOB9002`'s own project but not in `SampleProject`'s — **not yet identified, needs the
-    project owner's input** rather than guessed at further (adding a library/technology object to a
-    project is a more consequential change than anything else done this whole plan). **Ask**: do
-    you know what `WAIT` depends on / whether `SampleProject` should have it added, or would you
-    rather verify `WAIT` against `JOB9002`'s own scratch copy instead (would need to extend the data
-    boundary approval's scope — see `docs/13-data-boundary.md` — to cover writing new synthetic
-    content into `JOB9002`, not just reading from it, which hasn't been explicitly approved yet)?
-  - **`Jump` was investigated and deliberately NOT built — needs the project owner's own design
-    call, not a routine build.** Grounding it found `JMP` is genuine **cross-network control
-    flow**: its `label` port references a new `Access Scope="Label"` node shape, and the actual
-    jump target is a network-level `<Labels><LabelDeclaration></Labels>` element (a sibling of
-    `<Parts>`/`<Wires>`) confirmed real in a *different* `CompileUnit` (network) than the `Jump`
-    Part itself. No existing production models anything beyond its own single network — this
-    needs a real IR-format decision (how should the readable form represent "network N can
-    transfer control to network M"?) before any parser/reducer code gets written. Full grounding
-    detail in `ir/SPEC.md`'s own `Jump` entry. **Ask the project owner how they'd like this
-    represented before starting** — this is exactly the kind of design question, not
-    implementation detail, that shouldn't be decided unilaterally.
+## Open questions (need the project owner's input, not further unilateral work)
+
+- **`WAIT` — built and unit-tested, but hit a genuinely different live blocker, still open.**
+  TIA's own `Import()` rejects it — "An instruction with the name 'WAIT' cannot be found" — in
+  `SampleProject` specifically, even though the regenerated XML faithfully matches the real
+  `JOB9002` shape (confirmed not a converter bug: `MOVE_BLK_VARIANT`/`FillBlockI` imported into the
+  same target project cleanly in the same session). Likely a library/technology-object dependency
+  present in `JOB9002`'s own project but not in `SampleProject`'s — **not yet identified, needs the
+  project owner's input** rather than guessed at further (adding a library/technology object to a
+  project is a more consequential change than anything else done this whole plan). **Ask**: do
+  you know what `WAIT` depends on / whether `SampleProject` should have it added, or would you
+  rather verify `WAIT` against `JOB9002`'s own scratch copy instead (would need to extend the data
+  boundary approval's scope — see `docs/13-data-boundary.md` — to cover writing new synthetic
+  content into `JOB9002`, not just reading from it, which hasn't been explicitly approved yet)?
+- **`Jump` was investigated and deliberately NOT built — needs the project owner's own design
+  call, not a routine build.** Grounding it found `JMP` is genuine **cross-network control
+  flow**: its `label` port references a new `Access Scope="Label"` node shape, and the actual
+  jump target is a network-level `<Labels><LabelDeclaration></Labels>` element (a sibling of
+  `<Parts>`/`<Wires>`) confirmed real in a *different* `CompileUnit` (network) than the `Jump`
+  Part itself. No existing production models anything beyond its own single network — this
+  needs a real IR-format decision (how should the readable form represent "network N can
+  transfer control to network M"?) before any parser/reducer code gets written. Full grounding
+  detail in `ir/SPEC.md`'s own `Jump` entry. **Ask the project owner how they'd like this
+  represented before starting** — this is exactly the kind of design question, not
+  implementation detail, that shouldn't be decided unilaterally.
+- **`Modbus_Master`/`Modbus_Comm_Load` (Tier 4) — built and unit-tested, live compile blocked by a
+  confirmed general Openness limitation, not a converter bug.** Both instructions' own port/wire/
+  parameter modeling is verified correct (every "tag not defined"/type-mismatch error cleared
+  during live verification). What's left unverified is TIA accepting a standalone instance DB for
+  either instruction in `SampleProject`: `create-instance-db` deterministically assigns an invalid
+  `DB0` for `Modbus_Master_DB`, and neither `Modbus_Master_DB` nor `MB_Master_Comm` is exportable
+  from `JOB9002` (both invisible to `SW.Blocks` entirely — same class of limitation as `WAIT`'s own
+  neighbor finding, `CycleDelayReset`; full detail in `docs/notes/openness-quirks.md`). No
+  Openness-exposed fix found. **Ask**: same question as `WAIT` in spirit — is this worth a
+  source-side fix in `JOB9002` (the only path that resolved `CycleDelayReset`), or is
+  Openness-API-only live verification for standalone system-FB instances simply out of reach and
+  worth accepting as a documented, permanent limitation?
 
 **Deliberately deferred, not a bug to chase:**
 - `Main` (OB1) doesn't round-trip through the full cycle — each fix reveals another narrow

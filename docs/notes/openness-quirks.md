@@ -36,6 +36,24 @@ already-open project name) requires an absolute path — a relative one throws
   process. Immediate retry on the same call succeeded. Cause unconfirmed (Portal-side timing?).
   Mitigation for real `export` subcommand work (S1 item 5): verify the output file actually
   exists after `Export()` returns before treating it as success; retry once before failing.
+- **Standalone (non-multi-instance) system-FB instance DBs are invisible to `SW.Blocks` entirely
+  — confirmed twice, generalizes beyond one instruction.** A `GlobalVariable`-scope instance of a
+  system FB (a name-only `<Instance>` reference to a standalone DB, not a multi-instance `Static`
+  member) doesn't appear in `PlcBlockComposition`/`list` under its own name, isn't exportable by
+  name (`export --block <name>` reports "No block named ... found" even though the block
+  genuinely exists and is referenced live elsewhere), and if recreated via
+  `PlcBlockComposition.CreateInstanceDB` the auto-numbering deterministically assigns `DB0` — a
+  number that is itself invalid (`"The entered address is not within the valid address range"`
+  on compile) and not repairable via any exposed Openness API (no way to directly set a DB's own
+  `Number`). First seen with a standalone `TON` (`CycleDelayReset` in `MotorFwdRevSystem`,
+  `docs/notes/stage-gates.md` Phase 1) — resolved there only by the project owner converting it
+  to a proper multi-instance `Static` member at the source. Confirmed again 2026-07-14 with
+  `Modbus_Master`/`Modbus_Comm_Load`'s own `Modbus_Master_DB`/`MB_Master_Comm` (Phase 2 Tier 4,
+  same doc) — neither name appears anywhere in `JOB9002`'s full block listing across either PLC
+  station, despite being real, live-referenced instance DBs. No Openness-exposed fix found either
+  time; both instances left honestly unverified for live compile rather than forced. If this
+  recurs a third time, treat it as a confirmed general limitation of standalone system-FB
+  instances (not per-instruction), not a one-off.
 
 ## .NET target framework — net48 required, not net8.0-windows
 Confirmed empirically while building `openness-cli` (2026-07-10): a `net8.0-windows` console app referencing `Siemens.Engineering.dll` by path builds cleanly, but fails at runtime the moment any API is called (e.g. `TiaPortal.GetProcesses()`):

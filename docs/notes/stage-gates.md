@@ -3227,3 +3227,63 @@ Flagged for the project owner rather than experimented on blindly (adding librar
 a more consequential change than anything else attempted tonight).
 
 **345 converter tests, all green.** `AITODO.md` updated to reflect current state.
+
+### Tier 4 built and tested, live verification blocked by a confirmed general Openness limitation — 2026-07-14
+
+Full converter support for `Modbus_Master`/`Modbus_Comm_Load` built across all 7 files
+(`FlgNetParser`/`FlgNetWriter`/`SimaticMl.Model`/`Ir.Model`/`GraphReducer`/`Ir.IrSerializer`/
+`Ir.IrParser`/`FlgNetBuilder`) — the three new pieces of general infrastructure Tier 4's grounding
+called for: `TraceChain` reused as-is for `Modbus_Master`'s chain-fed `REQ` port (a genuine
+`Contact -> Contact -> REQ` chain, not a plain tag), a new `BuildChainIntoPort` helper on the build
+side; `ResolveOptionalOutputPort` generalized to `ResolveOptionalOpenPort` (TON's own `ET`-specific
+naming dropped once `Modbus_Comm_Load`'s three deliberately-unconnected ports — `FLOW_CTRL`/
+`RTS_ON_DLY`/`RTS_OFF_DLY` — confirmed the shape wasn't TON-specific); multi-output-tag productions
+extended to four outputs (`Modbus_Master`: `DONE`/`BUSY`/`ERROR`/`STATUS`) and three (`Modbus_Comm_Load`:
+`DONE`/`ERROR`/`STATUS`), same pattern `MOVE_BLK_VARIANT` established. 15 new tests, **359 converter
+tests total, all green.**
+
+**Live verification: import clean, compile progressively narrowed from 6 errors to 2, both
+remaining errors traced to a confirmed Openness limitation, not the converter.** A synthetic FC
+composed from both fixture networks imported into `SampleProject` cleanly on the first attempt.
+Initial compile found 6 errors, each independently explainable:
+
+1. `Tag "GateBit"/"TriggerBit" not defined` — verification-fixture-only `GlobalVariable` ->
+   `LocalVariable` fix, same pattern as `Abs`/`LIMIT`/`FillBlockI`'s own `GateBit` issue. Committed
+   fixture (`ModbusMasterFedByRail.xml`) left untouched — it faithfully reflects the real shape.
+2. **A genuinely new, real finding**: `Modbus_Comm_Load`'s `PORT` formal parameter is a specific
+   Siemens system datatype called `PORT`, not a generic integer (`"The data type UDInt of the
+   actual parameter does not match the data type PORT of the formal parameter"`). Fixture harness's
+   `PortNumber` member retyped `UDInt` -> `PORT`; no converter code changed — the converter already
+   treats operand types opaquely, this was purely a verification-harness gap.
+3. `Missing instance DB` (both networks — `Modbus_Master_DB` and, via `Modbus_Comm_Load`'s own
+   `MB_DB` parameter, `Modbus_Master_DB` again) — expected, `SampleProject` had never seen either
+   instance before.
+
+Fixing 1–2 and creating both instance DBs via `create-instance-db` cleared 4 of the 6 errors
+outright (every "tag not defined"/"type mismatch" gone) — direct confirmation the converter's own
+port/wire/parameter modeling is correct. The remaining 2 (`"The entered address is not within the
+valid address range"`, one per network) trace to the exact same **standalone system-FB
+instance-DB limitation already documented for `CycleDelayReset`** (`docs/notes/openness-quirks.md`
+"Known constraints"): `create-instance-db` deterministically assigned `Modbus_Master_DB` number
+`DB0` (confirmed deterministic — deleted and recreated, got `DB0` again), which is itself invalid
+and has no exposed API to repair. The established fallback (export the real DB from `JOB9002` with
+its own valid pre-assigned number, the same technique that fixed `MotorStarter_Instance`) doesn't
+apply here either: neither `Modbus_Master_DB` nor `MB_Master_Comm` appears anywhere in `JOB9002`'s
+full block listing, across either PLC station — confirmed not just mis-numbered but genuinely
+invisible to `SW.Blocks`, exactly like `CycleDelayReset` was. Both fix paths exhausted; this
+generalizes the earlier single-instruction finding into a confirmed limitation of standalone
+system-FB instances broadly, not something specific to `TON`.
+
+**Left honestly unverified for full live compile, same standard as `WAIT`.** Not a converter bug —
+every error traceable to the converter's own output was found and fixed; what remains is entirely
+an Openness/TIA infrastructure gap outside this tool's reach (no UI-automation path, and the
+source-side fix that ultimately resolved `CycleDelayReset` — restructuring the real instance in
+`JOB9002` itself — is the project owner's call, not mine to attempt). Scratch state cleaned up fully:
+both broken instance DBs and the synthetic `Phase2Tier4Check` block deleted from `SampleProject`,
+temp harness (`TempPhase2Tier4Check.cs`) deleted, device recompiled clean (`errors=0`) after
+cleanup. `sanity-check` still shows 4 blocks `IsConsistent = false`
+(`NodeStatusAlarms`/`MotorFwdRevSystem_Instance`/`MotorVSDSystem_Instance`/`MotorVSDSystem`) —
+pre-existing from earlier Phase 1/2 work, untouched by Tier 4, device still compiles clean; not
+chased further here.
+
+**Tier 4's converter implementation is complete and as-verified as Openness currently allows.**

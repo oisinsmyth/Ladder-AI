@@ -275,6 +275,54 @@ public sealed record WaitStatement(EnSource En, Expr Wt);
 // `WAIT` above.
 public sealed record FillBlockIStatement(EnSource En, Expr In, Expr Count, string DestTag);
 
+// A Modbus RTU/TCP master-request instruction (`Part Name="Modbus_Master"`) — confirmed real,
+// 2026-07-14 (Phase 2 Tier 4, `FC ModbusComs`). Instance-DB-backed like TON/Call (`InstancePath`,
+// same AccessNode-derived shape). Six tag-or-literal inputs (`MbAddr`/`Mode`/`DataAddr`/
+// `DataLen`/`DataPtr` — all ordinary `ResolveTagOrLiteralOperand` operands — plus `Req`, which is
+// genuinely different: confirmed real fed by a full Contact chain's own `out`, not a plain tag, so
+// it's resolved via `TraceChain` like a Coil's own condition, not `ResolveTagOrLiteralOperand`;
+// modeled as an ordinary `Expr` here regardless, since the *readable* shape of a chain-derived
+// value and a plain tag reference are identical — only the sidecar needs to know which resolver
+// produced it). **The second instruction this converter models with more than one destination
+// write** (after `MOVE_BLK_VARIANT`) — four this time: `Done`/`Busy`/`Error`/`Status`, all
+// ordinary plain-tag writes.
+public sealed record ModbusMasterStatement(
+    EnSource En,
+    string InstancePath,
+    Expr Req,
+    Expr MbAddr,
+    Expr Mode,
+    Expr DataAddr,
+    Expr DataLen,
+    Expr DataPtr,
+    string DoneTag,
+    string BusyTag,
+    string ErrorTag,
+    string StatusTag);
+
+// A Modbus RTU/TCP port-configuration instruction (`Part Name="Modbus_Comm_Load"`) — confirmed
+// real, 2026-07-14 (Phase 2 Tier 4, `FC ModbusComs`). Instance-DB-backed like `Modbus_Master`
+// above. Six ordinary tag-or-literal inputs (`Req`/`Port`/`Baud`/`Parity`/`RespTo`/`MbDb` — unlike
+// `Modbus_Master`'s own `Req`, this one is a plain `IdentCon`-fed tag in every real instance seen,
+// resolved the ordinary way) and three destination writes (`Done`/`Error`/`Status`).
+// `FlowCtrl`/`RtsOnDly`/`RtsOffDly` are real ports too, but every real instance leaves them wired
+// to `<OpenCon>` (deliberately unconnected, same shape TON's own `ET` already established) — never
+// read, so never shown on this readable form, sidecar-only (see
+// ModbusCommLoadStatementSidecar's own doc comment), matching the precedent TON's own `Et` field
+// already set.
+public sealed record ModbusCommLoadStatement(
+    EnSource En,
+    string InstancePath,
+    Expr Req,
+    Expr Port,
+    Expr Baud,
+    Expr Parity,
+    Expr RespTo,
+    Expr MbDb,
+    string DoneTag,
+    string ErrorTag,
+    string StatusTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -354,7 +402,9 @@ public sealed record IrNetwork(
     IReadOnlyList<CalcStatement>? Calcs = null,
     IReadOnlyList<MoveBlkVariantStatement>? MoveBlkVariants = null,
     IReadOnlyList<WaitStatement>? Waits = null,
-    IReadOnlyList<FillBlockIStatement>? FillBlockIs = null)
+    IReadOnlyList<FillBlockIStatement>? FillBlockIs = null,
+    IReadOnlyList<ModbusMasterStatement>? ModbusMasters = null,
+    IReadOnlyList<ModbusCommLoadStatement>? ModbusCommLoads = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -386,10 +436,15 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<FillBlockIStatement> FillBlockIs { get; init; } = FillBlockIs ?? Array.Empty<FillBlockIStatement>();
 
+    public IReadOnlyList<ModbusMasterStatement> ModbusMasters { get; init; } = ModbusMasters ?? Array.Empty<ModbusMasterStatement>();
+
+    public IReadOnlyList<ModbusCommLoadStatement> ModbusCommLoads { get; init; } = ModbusCommLoads ?? Array.Empty<ModbusCommLoadStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
         && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
-        && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0;
+        && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0
+        && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -870,6 +925,63 @@ public sealed record FillBlockIStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One Modbus_Master's full round-trip data. Instance fields mirror TimerBindingSidecar's own
+// (InstanceUId/InstanceScope/InstanceComponentPath). ReqRailWireUId/ReqSteps mirror
+// CoilAssignmentSidecar's own rail+steps chain shape exactly (same TraceChain mechanism) — Req is
+// the one operand here resolved as a full boolean chain, not a plain tag, so it needs the
+// chain-shaped sidecar, not an ordinary OperandSidecar. Four separate destination pairs
+// (Done/Busy/Error/Status) instead of one.
+public sealed record ModbusMasterStatementSidecar(
+    int ModbusMasterPartUId,
+    string Version,
+    EnSourceSidecar En,
+    int InstanceUId,
+    string InstanceScope,
+    IReadOnlyList<string> InstanceComponentPath,
+    int? ReqRailWireUId,
+    IReadOnlyList<ChainStepSidecar> ReqSteps,
+    OperandSidecar MbAddr,
+    OperandSidecar Mode,
+    OperandSidecar DataAddr,
+    OperandSidecar DataLen,
+    OperandSidecar DataPtr,
+    int DoneAccessUId,
+    int DoneWireUId,
+    int BusyAccessUId,
+    int BusyWireUId,
+    int ErrorAccessUId,
+    int ErrorWireUId,
+    int StatusAccessUId,
+    int StatusWireUId);
+
+// One Modbus_Comm_Load's full round-trip data. Instance fields mirror ModbusMasterStatementSidecar's
+// own. FlowCtrl/RtsOnDly/RtsOffDly are `OpenConnectionSidecar`s — the same "wired to OpenCon, never
+// read" shape TON's own `Et` field already established — nullable in principle (matching Et's own
+// convention) though every real instance seen has all three present. Three destination pairs
+// (Done/Error/Status) instead of Modbus_Master's four (no Busy here).
+public sealed record ModbusCommLoadStatementSidecar(
+    int ModbusCommLoadPartUId,
+    string Version,
+    EnSourceSidecar En,
+    int InstanceUId,
+    string InstanceScope,
+    IReadOnlyList<string> InstanceComponentPath,
+    OperandSidecar Req,
+    OperandSidecar Port,
+    OperandSidecar Baud,
+    OperandSidecar Parity,
+    OpenConnectionSidecar? FlowCtrl,
+    OpenConnectionSidecar? RtsOnDly,
+    OpenConnectionSidecar? RtsOffDly,
+    OperandSidecar RespTo,
+    OperandSidecar MbDb,
+    int DoneAccessUId,
+    int DoneWireUId,
+    int ErrorAccessUId,
+    int ErrorWireUId,
+    int StatusAccessUId,
+    int StatusWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -890,7 +1002,9 @@ public sealed record NetworkSidecar(
     IReadOnlyList<CalcStatementSidecar>? Calcs = null,
     IReadOnlyList<MoveBlkVariantStatementSidecar>? MoveBlkVariants = null,
     IReadOnlyList<WaitStatementSidecar>? Waits = null,
-    IReadOnlyList<FillBlockIStatementSidecar>? FillBlockIs = null)
+    IReadOnlyList<FillBlockIStatementSidecar>? FillBlockIs = null,
+    IReadOnlyList<ModbusMasterStatementSidecar>? ModbusMasters = null,
+    IReadOnlyList<ModbusCommLoadStatementSidecar>? ModbusCommLoads = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -923,6 +1037,10 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<WaitStatementSidecar> Waits { get; init; } = Waits ?? Array.Empty<WaitStatementSidecar>();
 
     public IReadOnlyList<FillBlockIStatementSidecar> FillBlockIs { get; init; } = FillBlockIs ?? Array.Empty<FillBlockIStatementSidecar>();
+
+    public IReadOnlyList<ModbusMasterStatementSidecar> ModbusMasters { get; init; } = ModbusMasters ?? Array.Empty<ModbusMasterStatementSidecar>();
+
+    public IReadOnlyList<ModbusCommLoadStatementSidecar> ModbusCommLoads { get; init; } = ModbusCommLoads ?? Array.Empty<ModbusCommLoadStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

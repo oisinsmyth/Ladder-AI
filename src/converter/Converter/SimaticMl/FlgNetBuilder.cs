@@ -128,6 +128,18 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.FillBlockIs.Count} FillBlockI(s) but the sidecar records {sidecar.FillBlockIs.Count}.");
         }
 
+        if (network.ModbusMasters.Count != sidecar.ModbusMasters.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.ModbusMasters.Count} Modbus_Master(s) but the sidecar records {sidecar.ModbusMasters.Count}.");
+        }
+
+        if (network.ModbusCommLoads.Count != sidecar.ModbusCommLoads.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.ModbusCommLoads.Count} Modbus_Comm_Load(s) but the sidecar records {sidecar.ModbusCommLoads.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -268,6 +280,16 @@ public static class FlgNetBuilder
         for (var fb = 0; fb < network.FillBlockIs.Count; fb++)
         {
             BuildFillBlockI(sidecar.FillBlockIs[fb], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var mm = 0; mm < network.ModbusMasters.Count; mm++)
+        {
+            BuildModbusMaster(sidecar.ModbusMasters[mm], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var mc = 0; mc < network.ModbusCommLoads.Count; mc++)
+        {
+            BuildModbusCommLoad(sidecar.ModbusCommLoads[mc], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         // Catch-all: any Timer never reached via a TimerOutputStep above (read only via an
@@ -876,6 +898,98 @@ public static class FlgNetBuilder
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.FillBlockIPartUId, "out"));
     }
 
+    // Builds a Modbus_Master Part, its `en` wiring, its Instance (same shape TON/Call already
+    // use), its chain-fed `REQ` (BuildChainIntoPort — the one operand here resolved as a full
+    // boolean chain, not a plain tag), its five ordinary named-port inputs, and its four
+    // named-port outputs (Done/Busy/Error/Status — the second production this converter builds
+    // with more than one destination write, after MOVE_BLK_VARIANT).
+    private static void BuildModbusMaster(
+        ModbusMasterStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.ModbusMasterPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.ModbusMasterPartUId, "Modbus_Master", Version: sidecar.Version, Instance: instance));
+
+        BuildChainIntoPort(
+            sidecar.ReqRailWireUId, sidecar.ReqSteps, sidecar.ModbusMasterPartUId, "REQ",
+            timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddOperandWire(wireEndpointsByUId, sidecar.MbAddr, sidecar.ModbusMasterPartUId, "MB_ADDR");
+        AddOperandWire(wireEndpointsByUId, sidecar.Mode, sidecar.ModbusMasterPartUId, "MODE");
+        AddOperandWire(wireEndpointsByUId, sidecar.DataAddr, sidecar.ModbusMasterPartUId, "DATA_ADDR");
+        AddOperandWire(wireEndpointsByUId, sidecar.DataLen, sidecar.ModbusMasterPartUId, "DATA_LEN");
+        AddOperandWire(wireEndpointsByUId, sidecar.DataPtr, sidecar.ModbusMasterPartUId, "DATA_PTR");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DoneAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "DONE"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.BusyWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.BusyAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.BusyWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "BUSY"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.ErrorAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "ERROR"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.StatusAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "STATUS"));
+    }
+
+    // Builds a Modbus_Comm_Load Part, its `en` wiring, its Instance, four ordinary named-port
+    // inputs, its three deliberately-unconnected ports (FlowCtrl/RtsOnDly/RtsOffDly — same
+    // OpenCon-wiring shape TON's own ET already established), two more ordinary inputs, and its
+    // three named-port outputs (Done/Error/Status).
+    private static void BuildModbusCommLoad(
+        ModbusCommLoadStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.ModbusCommLoadPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.ModbusCommLoadPartUId, "Modbus_Comm_Load", Version: sidecar.Version, Instance: instance));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.Req, sidecar.ModbusCommLoadPartUId, "REQ");
+        AddOperandWire(wireEndpointsByUId, sidecar.Port, sidecar.ModbusCommLoadPartUId, "PORT");
+        AddOperandWire(wireEndpointsByUId, sidecar.Baud, sidecar.ModbusCommLoadPartUId, "BAUD");
+        AddOperandWire(wireEndpointsByUId, sidecar.Parity, sidecar.ModbusCommLoadPartUId, "PARITY");
+
+        if (sidecar.FlowCtrl is { } flowCtrl)
+        {
+            AddEndpoint(wireEndpointsByUId, flowCtrl.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "FLOW_CTRL"));
+            AddEndpoint(wireEndpointsByUId, flowCtrl.WireUId, new WireEndpoint(EndpointKind.OpenCon, flowCtrl.OpenConUId, null));
+        }
+
+        if (sidecar.RtsOnDly is { } rtsOnDly)
+        {
+            AddEndpoint(wireEndpointsByUId, rtsOnDly.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "RTS_ON_DLY"));
+            AddEndpoint(wireEndpointsByUId, rtsOnDly.WireUId, new WireEndpoint(EndpointKind.OpenCon, rtsOnDly.OpenConUId, null));
+        }
+
+        if (sidecar.RtsOffDly is { } rtsOffDly)
+        {
+            AddEndpoint(wireEndpointsByUId, rtsOffDly.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "RTS_OFF_DLY"));
+            AddEndpoint(wireEndpointsByUId, rtsOffDly.WireUId, new WireEndpoint(EndpointKind.OpenCon, rtsOffDly.OpenConUId, null));
+        }
+
+        AddOperandWire(wireEndpointsByUId, sidecar.RespTo, sidecar.ModbusCommLoadPartUId, "RESP_TO");
+        AddOperandWire(wireEndpointsByUId, sidecar.MbDb, sidecar.ModbusCommLoadPartUId, "MB_DB");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DoneAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "DONE"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.ErrorAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "ERROR"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.StatusAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "STATUS"));
+    }
+
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's
     // `in` alike (see OperandSidecar's own doc comment for why this is shared rather than
     // TON-specific).
@@ -896,6 +1010,41 @@ public static class FlgNetBuilder
 
             default:
                 throw new IrFormatException($"Unsupported operand kind: {operand.GetType().Name}");
+        }
+    }
+
+    // Builds a full boolean-chain into an arbitrary named port — the same steps-into-next-target,
+    // rail-fallback shape BuildEnSource's own ConditionSidecar case and BuildOneChain's own
+    // coil-chain already use, just generalized over the target port name rather than hardcoded to
+    // "en"/"in". Introduced for Modbus_Master's own Req (Phase 2 Tier 4, 2026-07-14, confirmed
+    // real fed by a full Contact chain, not a plain tag) — a new, standalone helper rather than
+    // refactoring the three already-proven, live-verified call sites above, to avoid regression
+    // risk on code no part of this task needed to touch.
+    private static void BuildChainIntoPort(
+        int? railWireUId,
+        IReadOnlyList<ChainStepSidecar> steps,
+        int partUId,
+        string port,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        for (var i = 0; i < steps.Count; i++)
+        {
+            var nextTarget = i + 1 < steps.Count
+                ? EntryTarget(steps[i + 1])
+                : new WireEndpoint(EndpointKind.NameCon, partUId, port);
+
+            BuildStep(steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        if (railWireUId is int rail)
+        {
+            var railFacingEndpoints = steps.Count > 0
+                ? RailFacingEndpoints(steps[0])
+                : new[] { (UId: partUId, Port: port) };
+            AddRailEndpoints(wireEndpointsByUId, rail, railFacingEndpoints);
         }
     }
 

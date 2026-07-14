@@ -692,17 +692,122 @@ public static partial class IrParser
             i++;
         }
 
+        // ModbusMasters are always emitted after FillBlockIs (IrSerializer). Instance path is the
+        // first positional argument (no label, same convention as TON/CALL's own). No trailing
+        // "=> dest" — four named outputs, disambiguated per-argument by ":=" vs "=>", same mixing
+        // convention MOVE_BLK_VARIANT already established.
+        var modbusMasters = new List<ModbusMasterStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  MODBUS_MASTER(", StringComparison.Ordinal))
+        {
+            var modbusMasterMatch = ModbusMasterLineRegex().Match(lines[i]);
+            if (!modbusMasterMatch.Success)
+            {
+                throw new IrFormatException(
+                    $"Expected '  MODBUS_MASTER(<path>, EN := <expr-or-ENO>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, " +
+                    $"DATA_ADDR := <expr>, DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, " +
+                    $"STATUS => <tag>)', got: '{lines[i]}'");
+            }
+
+            var modbusMasterArgs = modbusMasterMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (modbusMasterArgs.Length != 12
+                || !modbusMasterArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[3].StartsWith("MB_ADDR := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[4].StartsWith("MODE := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[5].StartsWith("DATA_ADDR := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[6].StartsWith("DATA_LEN := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[7].StartsWith("DATA_PTR := ", StringComparison.Ordinal)
+                || !modbusMasterArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
+                || !modbusMasterArgs[9].StartsWith("BUSY => ", StringComparison.Ordinal)
+                || !modbusMasterArgs[10].StartsWith("ERROR => ", StringComparison.Ordinal)
+                || !modbusMasterArgs[11].StartsWith("STATUS => ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException(
+                    "Expected '<path>, EN := <expr>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, DATA_ADDR := <expr>, " +
+                    $"DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, STATUS => <tag>' " +
+                    $"inside MODBUS_MASTER(...), got: '{lines[i]}'");
+            }
+
+            var modbusMasterPath = modbusMasterArgs[0];
+            var modbusMasterEn = ParseEnSource(modbusMasterArgs[1]["EN := ".Length..]);
+            var modbusMasterReq = ParseExpr(modbusMasterArgs[2]["REQ := ".Length..]);
+            var modbusMasterMbAddr = ParseExprTerm(modbusMasterArgs[3]["MB_ADDR := ".Length..]);
+            var modbusMasterMode = ParseExprTerm(modbusMasterArgs[4]["MODE := ".Length..]);
+            var modbusMasterDataAddr = ParseExprTerm(modbusMasterArgs[5]["DATA_ADDR := ".Length..]);
+            var modbusMasterDataLen = ParseExprTerm(modbusMasterArgs[6]["DATA_LEN := ".Length..]);
+            var modbusMasterDataPtr = ParseExprTerm(modbusMasterArgs[7]["DATA_PTR := ".Length..]);
+            var modbusMasterDone = modbusMasterArgs[8]["DONE => ".Length..];
+            var modbusMasterBusy = modbusMasterArgs[9]["BUSY => ".Length..];
+            var modbusMasterError = modbusMasterArgs[10]["ERROR => ".Length..];
+            var modbusMasterStatus = modbusMasterArgs[11]["STATUS => ".Length..];
+            modbusMasters.Add(new ModbusMasterStatement(
+                modbusMasterEn, modbusMasterPath, modbusMasterReq, modbusMasterMbAddr, modbusMasterMode, modbusMasterDataAddr,
+                modbusMasterDataLen, modbusMasterDataPtr, modbusMasterDone, modbusMasterBusy, modbusMasterError, modbusMasterStatus));
+            i++;
+        }
+
+        // ModbusCommLoads are always emitted after ModbusMasters (IrSerializer). Same shape as
+        // MODBUS_MASTER's own, minus BUSY (three outputs, not four).
+        var modbusCommLoads = new List<ModbusCommLoadStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  MODBUS_COMM_LOAD(", StringComparison.Ordinal))
+        {
+            var modbusCommLoadMatch = ModbusCommLoadLineRegex().Match(lines[i]);
+            if (!modbusCommLoadMatch.Success)
+            {
+                throw new IrFormatException(
+                    $"Expected '  MODBUS_COMM_LOAD(<path>, EN := <expr-or-ENO>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, " +
+                    $"PARITY := <expr>, RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>)', " +
+                    $"got: '{lines[i]}'");
+            }
+
+            var modbusCommLoadArgs = modbusCommLoadMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (modbusCommLoadArgs.Length != 11
+                || !modbusCommLoadArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[3].StartsWith("PORT := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[4].StartsWith("BAUD := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[5].StartsWith("PARITY := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[6].StartsWith("RESP_TO := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[7].StartsWith("MB_DB := ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[9].StartsWith("ERROR => ", StringComparison.Ordinal)
+                || !modbusCommLoadArgs[10].StartsWith("STATUS => ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException(
+                    "Expected '<path>, EN := <expr>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, PARITY := <expr>, " +
+                    $"RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>' inside " +
+                    $"MODBUS_COMM_LOAD(...), got: '{lines[i]}'");
+            }
+
+            var modbusCommLoadPath = modbusCommLoadArgs[0];
+            var modbusCommLoadEn = ParseEnSource(modbusCommLoadArgs[1]["EN := ".Length..]);
+            var modbusCommLoadReq = ParseExprTerm(modbusCommLoadArgs[2]["REQ := ".Length..]);
+            var modbusCommLoadPort = ParseExprTerm(modbusCommLoadArgs[3]["PORT := ".Length..]);
+            var modbusCommLoadBaud = ParseExprTerm(modbusCommLoadArgs[4]["BAUD := ".Length..]);
+            var modbusCommLoadParity = ParseExprTerm(modbusCommLoadArgs[5]["PARITY := ".Length..]);
+            var modbusCommLoadRespTo = ParseExprTerm(modbusCommLoadArgs[6]["RESP_TO := ".Length..]);
+            var modbusCommLoadMbDb = ParseExprTerm(modbusCommLoadArgs[7]["MB_DB := ".Length..]);
+            var modbusCommLoadDone = modbusCommLoadArgs[8]["DONE => ".Length..];
+            var modbusCommLoadError = modbusCommLoadArgs[9]["ERROR => ".Length..];
+            var modbusCommLoadStatus = modbusCommLoadArgs[10]["STATUS => ".Length..];
+            modbusCommLoads.Add(new ModbusCommLoadStatement(
+                modbusCommLoadEn, modbusCommLoadPath, modbusCommLoadReq, modbusCommLoadPort, modbusCommLoadBaud, modbusCommLoadParity,
+                modbusCommLoadRespTo, modbusCommLoadMbDb, modbusCommLoadDone, modbusCommLoadError, modbusCommLoadStatus));
+            i++;
+        }
+
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
-            && calcs.Count == 0 && moveBlkVariants.Count == 0 && waits.Count == 0 && fillBlockIs.Count == 0)
+            && calcs.Count == 0 && moveBlkVariants.Count == 0 && waits.Count == 0 && fillBlockIs.Count == 0
+            && modbusMasters.Count == 0 && modbusCommLoads.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI statements and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI/MODBUS_MASTER/MODBUS_COMM_LOAD statements and isn't marked [empty].");
         }
 
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
-            moveBlkVariants, waits, fillBlockIs);
+            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -1072,9 +1177,21 @@ public static partial class IrParser
             fillBlockIs.Add(ParseFillBlockISidecar(lines, ref i, number));
         }
 
+        var modbusMasters = new List<ModbusMasterStatementSidecar>();
+        while (i < lines.Length && ModbusMasterHeaderRegex().IsMatch(lines[i]))
+        {
+            modbusMasters.Add(ParseModbusMasterSidecar(lines, ref i, number));
+        }
+
+        var modbusCommLoads = new List<ModbusCommLoadStatementSidecar>();
+        while (i < lines.Length && ModbusCommLoadHeaderRegex().IsMatch(lines[i]))
+        {
+            modbusCommLoads.Add(ParseModbusCommLoadSidecar(lines, ref i, number));
+        }
+
         return new NetworkSidecar(
             number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
-            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs);
+            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -1364,6 +1481,114 @@ public static partial class IrParser
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
         return new FillBlockIStatementSidecar(fillBlockIPartUId, en, inOperand, countOperand, destAccessUId, destWireUId);
+    }
+
+    // A Modbus_Master's own sidecar shape adds Instance fields (mirrors ParseTimerSidecar's own)
+    // and a rail+steps chain for Req (mirrors a Coil's own IN-chain shape — "reqstep" instead of
+    // "step" to disambiguate the label, same reasoning EnSourceSidecar's own nested "step" labels
+    // already establish at a different indent level), then five ordinary operands and four
+    // separate destination pairs (Done/Busy/Error/Status).
+    private static ModbusMasterStatementSidecar ParseModbusMasterSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  modbusmaster <n>" header — index itself isn't needed, position in the list is enough.
+
+        var modbusMasterPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    modbusmasteruid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+
+        var reqRailWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    reqrail = "));
+        var reqSteps = new List<ChainStepSidecar>();
+        var rs = 0;
+        while (i < lines.Length && IsStepHeader(lines[i], "    ", $"reqstep {rs}"))
+        {
+            reqSteps.Add(ParseStep(lines, ref i, "    ", $"reqstep {rs}"));
+            rs++;
+        }
+
+        var mbAddrOperand = ParseOperand(lines, ref i, "    ", "mbaddr");
+        var modeOperand = ParseOperand(lines, ref i, "    ", "mode");
+        var dataAddrOperand = ParseOperand(lines, ref i, "    ", "dataaddr");
+        var dataLenOperand = ParseOperand(lines, ref i, "    ", "datalen");
+        var dataPtrOperand = ParseOperand(lines, ref i, "    ", "dataptr");
+
+        var doneAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    done = "));
+        var doneWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    donewire = "));
+        var busyAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    busy = "));
+        var busyWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    busywire = "));
+        var errorAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    error = "));
+        var errorWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    errorwire = "));
+        var statusAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    status = "));
+        var statusWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    statuswire = "));
+
+        return new ModbusMasterStatementSidecar(
+            modbusMasterPartUId, version, en, instanceUId, instanceScope, instancePath, reqRailWireUId, reqSteps,
+            mbAddrOperand, modeOperand, dataAddrOperand, dataLenOperand, dataPtrOperand,
+            doneAccessUId, doneWireUId, busyAccessUId, busyWireUId, errorAccessUId, errorWireUId, statusAccessUId, statusWireUId);
+    }
+
+    // A Modbus_Comm_Load's own sidecar shape adds Instance fields (mirrors ParseModbusMasterSidecar's
+    // own), four ordinary operands, three optional OpenConnectionSidecar lines (mirrors
+    // ParseTimerSidecar's own `et` line — absent-by-omission, same convention), two more ordinary
+    // operands, and three destination pairs (Done/Error/Status, no Busy).
+    private static ModbusCommLoadStatementSidecar ParseModbusCommLoadSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  modbuscommload <n>" header — index itself isn't needed, position in the list is enough.
+
+        var modbusCommLoadPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    modbuscommloaduid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+
+        var reqOperand = ParseOperand(lines, ref i, "    ", "req");
+        var portOperand = ParseOperand(lines, ref i, "    ", "port");
+        var baudOperand = ParseOperand(lines, ref i, "    ", "baud");
+        var parityOperand = ParseOperand(lines, ref i, "    ", "parity");
+
+        OpenConnectionSidecar? flowCtrl = null;
+        if (i < lines.Length && lines[i].StartsWith("    flowctrl = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    flowctrl = ".Length..].Split(' ');
+            flowCtrl = new OpenConnectionSidecar(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+
+        OpenConnectionSidecar? rtsOnDly = null;
+        if (i < lines.Length && lines[i].StartsWith("    rtsondly = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    rtsondly = ".Length..].Split(' ');
+            rtsOnDly = new OpenConnectionSidecar(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+
+        OpenConnectionSidecar? rtsOffDly = null;
+        if (i < lines.Length && lines[i].StartsWith("    rtsoffdly = ", StringComparison.Ordinal))
+        {
+            var parts = lines[i]["    rtsoffdly = ".Length..].Split(' ');
+            rtsOffDly = new OpenConnectionSidecar(int.Parse(parts[0]), int.Parse(parts[1]));
+            i++;
+        }
+
+        var respToOperand = ParseOperand(lines, ref i, "    ", "respto");
+        var mbDbOperand = ParseOperand(lines, ref i, "    ", "mbdb");
+
+        var doneAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    done = "));
+        var doneWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    donewire = "));
+        var errorAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    error = "));
+        var errorWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    errorwire = "));
+        var statusAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    status = "));
+        var statusWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    statuswire = "));
+
+        return new ModbusCommLoadStatementSidecar(
+            modbusCommLoadPartUId, version, en, instanceUId, instanceScope, instancePath,
+            reqOperand, portOperand, baudOperand, parityOperand, flowCtrl, rtsOnDly, rtsOffDly, respToOperand, mbDbOperand,
+            doneAccessUId, doneWireUId, errorAccessUId, errorWireUId, statusAccessUId, statusWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1860,6 +2085,14 @@ public static partial class IrParser
     [GeneratedRegex(@"^  FILLBLOCKI\(EN := (?<en>.+), IN := (?<in>.+), COUNT := (?<count>.+)\) => (?<dest>\S+)$")]
     private static partial Regex FillBlockILineRegex();
 
+    // No trailing "=> dest" — four named outputs, not one, all inside the parens (Phase 2 Tier 4).
+    [GeneratedRegex(@"^  MODBUS_MASTER\((?<args>.+)\)$")]
+    private static partial Regex ModbusMasterLineRegex();
+
+    // Same shape as MODBUS_MASTER's own, minus BUSY (three outputs, not four).
+    [GeneratedRegex(@"^  MODBUS_COMM_LOAD\((?<args>.+)\)$")]
+    private static partial Regex ModbusCommLoadLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1926,4 +2159,10 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  fillblocki (?<index>\d+)$")]
     private static partial Regex FillBlockIHeaderRegex();
+
+    [GeneratedRegex(@"^  modbusmaster (?<index>\d+)$")]
+    private static partial Regex ModbusMasterHeaderRegex();
+
+    [GeneratedRegex(@"^  modbuscommload (?<index>\d+)$")]
+    private static partial Regex ModbusCommLoadHeaderRegex();
 }

@@ -79,12 +79,17 @@ public static class GraphReducer
         // WaitStatement/FillBlockIStatement's own doc comments.
         var waitParts = network.Parts.Where(p => p.Name == "WAIT").ToList();
         var fillBlockIParts = network.Parts.Where(p => p.Name == "FillBlockI").ToList();
+        // Modbus_Master/Modbus_Comm_Load (Phase 2 Tier 4, 2026-07-14, FC ModbusComs) — see
+        // ModbusMasterStatement/ModbusCommLoadStatement's own doc comments.
+        var modbusMasterParts = network.Parts.Where(p => p.Name == "Modbus_Master").ToList();
+        var modbusCommLoadParts = network.Parts.Where(p => p.Name == "Modbus_Comm_Load").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0
             && absParts.Count == 0 && limitParts.Count == 0 && tSubParts.Count == 0 && tConvParts.Count == 0
-            && calcParts.Count == 0 && moveBlkVariantParts.Count == 0 && waitParts.Count == 0 && fillBlockIParts.Count == 0)
+            && calcParts.Count == 0 && moveBlkVariantParts.Count == 0 && waitParts.Count == 0 && fillBlockIParts.Count == 0
+            && modbusMasterParts.Count == 0 && modbusCommLoadParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, MOVE_BLK_VARIANT, WAIT, or FillBlockI found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, MOVE_BLK_VARIANT, WAIT, FillBlockI, Modbus_Master, or Modbus_Comm_Load found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -119,6 +124,10 @@ public static class GraphReducer
         var waitSidecars = new List<WaitStatementSidecar>();
         var fillBlockIStatements = new List<FillBlockIStatement>();
         var fillBlockISidecars = new List<FillBlockIStatementSidecar>();
+        var modbusMasterStatements = new List<ModbusMasterStatement>();
+        var modbusMasterSidecars = new List<ModbusMasterStatementSidecar>();
+        var modbusCommLoadStatements = new List<ModbusCommLoadStatement>();
+        var modbusCommLoadSidecars = new List<ModbusCommLoadStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -426,6 +435,42 @@ public static class GraphReducer
             }
         }
 
+        // Modbus_Master/Modbus_Comm_Load are reduced last, same reasoning as every other
+        // production above.
+        foreach (var modbusMaster in modbusMasterParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceModbusMaster(network, modbusMaster, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            modbusMasterStatements.Add(statement);
+            modbusMasterSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        foreach (var modbusCommLoad in modbusCommLoadParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceModbusCommLoad(network, modbusCommLoad, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            modbusCommLoadStatements.Add(statement);
+            modbusCommLoadSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -436,11 +481,11 @@ public static class GraphReducer
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
             swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements, waitStatements,
-            fillBlockIStatements);
+            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
-            moveBlkVariantSidecars, waitSidecars, fillBlockISidecars);
+            moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -508,7 +553,7 @@ public static class GraphReducer
         var (ptExpr, presetSidecar) = ResolveTagOrLiteralOperand(
             wiresByPort, accessByUId, constantsByUId, ton.UId, "PT", networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-        var et = ResolveOptionalOutputPort(wiresByPort, ton.UId, "ET", networkNumber, visitedWireUIds);
+        var et = ResolveOptionalOpenPort(wiresByPort, ton.Name, ton.UId, "ET", networkNumber, visitedWireUIds);
 
         var instance = ton.Instance
             ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Instance reference.");
@@ -1253,6 +1298,182 @@ public static class GraphReducer
         return (statement, sidecar, accessEntries, constantEntries);
     }
 
+    // A Modbus_Master's `en` resolves via ResolveEnSource. `REQ` is genuinely different from
+    // every other operand this converter has resolved so far: confirmed real fed by a full
+    // Contact chain's own `out` (not a plain IdentCon-fed tag), so it needs `TraceChain` — the
+    // same mechanism a Coil's own condition uses — rather than `ResolveTagOrLiteralOperand`.
+    // `MB_ADDR`/`MODE`/`DATA_ADDR`/`DATA_LEN`/`DATA_PTR` are ordinary tag-or-literal inputs.
+    // `DONE`/`BUSY`/`ERROR`/`STATUS` are four separate plain-tag writes (see
+    // ModbusMasterStatement's own doc comment).
+    private static (ModbusMasterStatement Statement, ModbusMasterStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceModbusMaster(
+        FlgNetwork network,
+        PartNode modbusMaster,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, modbusMaster.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (reqExpr, reqSteps, reqRailWireUId) = TraceChain(
+            network, (modbusMaster.UId, "REQ"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (mbAddrExpr, mbAddrSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusMaster.UId, "MB_ADDR", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (modeExpr, modeSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusMaster.UId, "MODE", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (dataAddrExpr, dataAddrSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusMaster.UId, "DATA_ADDR", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (dataLenExpr, dataLenSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusMaster.UId, "DATA_LEN", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (dataPtrExpr, dataPtrSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusMaster.UId, "DATA_PTR", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (doneTag, doneWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusMaster.UId, networkNumber, "DONE");
+        visitedWireUIds.Add(doneWireUId);
+        AddAccessEntry(accessEntries, doneTag);
+
+        var (busyTag, busyWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusMaster.UId, networkNumber, "BUSY");
+        visitedWireUIds.Add(busyWireUId);
+        AddAccessEntry(accessEntries, busyTag);
+
+        var (errorTag, errorWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusMaster.UId, networkNumber, "ERROR");
+        visitedWireUIds.Add(errorWireUId);
+        AddAccessEntry(accessEntries, errorTag);
+
+        var (statusTag, statusWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusMaster.UId, networkNumber, "STATUS");
+        visitedWireUIds.Add(statusWireUId);
+        AddAccessEntry(accessEntries, statusTag);
+
+        var instance = modbusMaster.Instance
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Modbus_Master UId={modbusMaster.UId} has no Instance reference.");
+        var instancePath = string.Join('.', instance.ComponentPath);
+
+        var statement = new ModbusMasterStatement(
+            en, instancePath, reqExpr, mbAddrExpr, modeExpr, dataAddrExpr, dataLenExpr, dataPtrExpr,
+            doneTag.TagPath, busyTag.TagPath, errorTag.TagPath, statusTag.TagPath);
+        var sidecar = new ModbusMasterStatementSidecar(
+            modbusMaster.UId,
+            modbusMaster.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Modbus_Master UId={modbusMaster.UId} has no Version."),
+            enSidecar,
+            instance.UId,
+            instance.Scope,
+            instance.ComponentPath,
+            reqRailWireUId,
+            reqSteps,
+            mbAddrSidecar,
+            modeSidecar,
+            dataAddrSidecar,
+            dataLenSidecar,
+            dataPtrSidecar,
+            doneTag.UId,
+            doneWireUId,
+            busyTag.UId,
+            busyWireUId,
+            errorTag.UId,
+            errorWireUId,
+            statusTag.UId,
+            statusWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A Modbus_Comm_Load's `en` resolves via ResolveEnSource. `REQ`/`PORT`/`BAUD`/`PARITY`/
+    // `RESP_TO`/`MB_DB` are ordinary tag-or-literal inputs (unlike Modbus_Master's own `REQ`, this
+    // one is a plain IdentCon-fed tag in every real instance seen). `FLOW_CTRL`/`RTS_ON_DLY`/
+    // `RTS_OFF_DLY` are real ports always left wired to OpenCon (`ResolveOptionalOpenPort`, same
+    // mechanism as TON's own `ET`). `DONE`/`ERROR`/`STATUS` are three separate plain-tag writes.
+    private static (ModbusCommLoadStatement Statement, ModbusCommLoadStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceModbusCommLoad(
+        FlgNetwork network,
+        PartNode modbusCommLoad,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, modbusCommLoad.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (reqExpr, reqSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "REQ", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (portExpr, portSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "PORT", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (baudExpr, baudSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "BAUD", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (parityExpr, paritySidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "PARITY", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var flowCtrl = ResolveOptionalOpenPort(wiresByPort, "Modbus_Comm_Load", modbusCommLoad.UId, "FLOW_CTRL", networkNumber, visitedWireUIds);
+        var rtsOnDly = ResolveOptionalOpenPort(wiresByPort, "Modbus_Comm_Load", modbusCommLoad.UId, "RTS_ON_DLY", networkNumber, visitedWireUIds);
+        var rtsOffDly = ResolveOptionalOpenPort(wiresByPort, "Modbus_Comm_Load", modbusCommLoad.UId, "RTS_OFF_DLY", networkNumber, visitedWireUIds);
+
+        var (respToExpr, respToSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "RESP_TO", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (mbDbExpr, mbDbSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, modbusCommLoad.UId, "MB_DB", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (doneTag, doneWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusCommLoad.UId, networkNumber, "DONE");
+        visitedWireUIds.Add(doneWireUId);
+        AddAccessEntry(accessEntries, doneTag);
+
+        var (errorTag, errorWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusCommLoad.UId, networkNumber, "ERROR");
+        visitedWireUIds.Add(errorWireUId);
+        AddAccessEntry(accessEntries, errorTag);
+
+        var (statusTag, statusWireUId) = ResolveOperand(wiresByPort, accessByUId, modbusCommLoad.UId, networkNumber, "STATUS");
+        visitedWireUIds.Add(statusWireUId);
+        AddAccessEntry(accessEntries, statusTag);
+
+        var instance = modbusCommLoad.Instance
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Modbus_Comm_Load UId={modbusCommLoad.UId} has no Instance reference.");
+        var instancePath = string.Join('.', instance.ComponentPath);
+
+        var statement = new ModbusCommLoadStatement(
+            en, instancePath, reqExpr, portExpr, baudExpr, parityExpr, respToExpr, mbDbExpr,
+            doneTag.TagPath, errorTag.TagPath, statusTag.TagPath);
+        var sidecar = new ModbusCommLoadStatementSidecar(
+            modbusCommLoad.UId,
+            modbusCommLoad.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Modbus_Comm_Load UId={modbusCommLoad.UId} has no Version."),
+            enSidecar,
+            instance.UId,
+            instance.Scope,
+            instance.ComponentPath,
+            reqSidecar,
+            portSidecar,
+            baudSidecar,
+            paritySidecar,
+            flowCtrl,
+            rtsOnDly,
+            rtsOffDly,
+            respToSidecar,
+            mbDbSidecar,
+            doneTag.UId,
+            doneWireUId,
+            errorTag.UId,
+            errorWireUId,
+            statusTag.UId,
+            statusWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
     // Resolves a single IdentCon-fed operand (no chain, unlike a boolean chain position) that's
     // either an ordinary tag (AccessNode) or a literal constant (ConstantAccessNode) — used for
     // a TON's `PT` (confirmed real 2026-07-11, FB MotorDOL / FC ControlDelays) and, since the
@@ -1330,32 +1551,39 @@ public static class GraphReducer
         _ => throw new UnsupportedConstructException($"Unsupported comparison Part Name '{partName}'."),
     };
 
-    // ET is an optional output port — confirmed real, 2026-07-11: entirely absent from <Wires>,
-    // or wired to OpenCon (FB MotorDOL). A wire to any other endpoint is refused — no live
-    // example of a *used* ET exists yet (unlike Q, which TraceChain now handles as a genuine
-    // chain leaf when wired directly to a consumer — see ChainStepSidecar.TimerOutputStep).
-    private static OpenConnectionSidecar? ResolveOptionalOutputPort(
+    // A port that's either entirely absent from <Wires> or wired to OpenCon — never a genuine
+    // consumer/producer connection. Confirmed real, 2026-07-11, for TON's own optional ET (`FB
+    // MotorDOL`), and again, 2026-07-14 (Phase 2 Tier 4), for Modbus_Comm_Load's own
+    // FlowCtrl/RtsOnDly/RtsOffDly (`FC ModbusComs`, always OpenCon in every real instance seen —
+    // never entirely absent, unlike ET) — generalized into one shared helper (contextLabel/partUId
+    // replacing the original TON-specific naming) once the second real instruction confirmed the
+    // shape isn't TON-ET-specific, same "don't stack special cases" reasoning as `Version`'s own
+    // generalization. A wire to any other endpoint is refused — no live example of a genuinely
+    // *used* optional port exists yet (unlike a TON's Q, which TraceChain handles as a real chain
+    // leaf when wired to an actual consumer — see ChainStepSidecar.TimerOutputStep).
+    private static OpenConnectionSidecar? ResolveOptionalOpenPort(
         Dictionary<(int, string), WireNode> wiresByPort,
-        int tonUId,
+        string contextLabel,
+        int partUId,
         string port,
         int networkNumber,
         HashSet<int> visitedWireUIds)
     {
-        if (!wiresByPort.TryGetValue((tonUId, port), out var wire))
+        if (!wiresByPort.TryGetValue((partUId, port), out var wire))
         {
             return null;
         }
 
         var others = wire.Endpoints
-            .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == tonUId && e.PortName == port))
+            .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == partUId && e.PortName == port))
             .ToList();
 
         if (others.Count != 1 || others[0].Kind != EndpointKind.OpenCon)
         {
             throw new UnsupportedConstructException(
-                $"Network {networkNumber}: TON UId={tonUId}'s '{port}' port is wired to a consumer — only an unconnected " +
-                $"(absent or OpenCon) '{port}' is supported this phase; reading a TON's output back only works via an " +
-                "ordinary Access elsewhere.");
+                $"Network {networkNumber}: {contextLabel} UId={partUId}'s '{port}' port is wired to a consumer — only an " +
+                $"unconnected (absent or OpenCon) '{port}' is supported this phase; reading its value back only works via " +
+                "an ordinary Access elsewhere.");
         }
 
         visitedWireUIds.Add(wire.UId);

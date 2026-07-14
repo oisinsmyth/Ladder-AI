@@ -653,6 +653,46 @@ NETWORK 8 "Run enable delay"
     represent "network N can transfer control to network M" — not a routine grounding-then-build
     task, and not something to decide unilaterally. Flagged for the project owner's own call
     before any code gets written; see `AITODO.md`.
+- **`Modbus_Master`/`Modbus_Comm_Load`, built 2026-07-14 (Phase 2 Tier 4).** Grounded against `FC
+  ModbusComs`. Both Instance-DB-backed like `TON`/`Call` (`Version`, no `DisabledENO`, no
+  `TemplateValue` children — reuses `ParseInstanceReference` directly).
+  - **`Modbus_Master`** (`Version="6.0"`): `en` rail-fed. **`REQ` is fed by a full `Contact ->
+    Contact -> out` chain, not a plain tag** — the first non-`en` port this converter resolves via
+    `TraceChain` (already generic over port name; only the *build*-side direction needed a new
+    helper, `BuildChainIntoPort`, added standalone rather than refactoring the three already-proven
+    chain-building call sites). `MB_ADDR`/`MODE`/`DATA_ADDR`/`DATA_LEN`/`DATA_PTR` are ordinary
+    tag-or-literal inputs. **Four separate output tags** (`DONE`/`BUSY`/`ERROR`/`STATUS`) — the
+    second instruction after `MOVE_BLK_VARIANT` with more than one destination, same explicit-named-
+    field pattern. Readable form: `MODBUS_MASTER(<instance>, EN := <expr-or-ENO>, REQ := <expr>,
+    MB_ADDR := <expr>, MODE := <expr>, DATA_ADDR := <expr>, DATA_LEN := <expr>, DATA_PTR := <expr>,
+    DONE => <tag>, BUSY => <tag>, ERROR => <tag>, STATUS => <tag>)`.
+  - **`Modbus_Comm_Load`** (`Version="5.0"`): `en` rail-fed; `REQ`/`PORT`/`BAUD`/`PARITY`/
+    `RESP_TO`/`MB_DB` are ordinary tag-or-literal inputs; `DONE`/`ERROR`/`STATUS` are three output
+    tags. **`FLOW_CTRL`/`RTS_ON_DLY`/`RTS_OFF_DLY` are always wired to `<OpenCon>`** — real,
+    deliberately-unconnected ports. Modeled by generalizing TON's own `ET`-port mechanism
+    (`ResolveOptionalOutputPort` → `ResolveOptionalOpenPort`, `OpenConnectionSidecar`) once this
+    second real instruction confirmed the shape isn't TON-`ET`-specific. These three ports never
+    appear on the readable form (sidecar-only) — the same "invisible when absent" convention `ENO`
+    already established. Readable form: `MODBUS_COMM_LOAD(<instance>, EN := <expr-or-ENO>, REQ :=
+    <expr>, PORT := <expr>, BAUD := <expr>, PARITY := <expr>, RESP_TO := <expr>, MB_DB := <expr>,
+    DONE => <tag>, ERROR => <tag>, STATUS => <tag>)`.
+  - 15 new converter tests, 359 total. **Live verification against real data, 2026-07-14**: import
+    clean first try; compile narrowed 6 errors to 2, every fixed one confirming the converter's own
+    modeling correct — two verification-fixture-only gaps (`GateBit`/`TriggerBit` needing
+    `LocalVariable` scope, same pattern as `Abs`/`LIMIT`/`FillBlockI`) and one genuinely new real
+    finding (`Modbus_Comm_Load`'s `PORT` formal parameter is the specific Siemens system datatype
+    `PORT`, not a generic integer — a harness-only fix, no converter code changed). The remaining 2
+    errors ("The entered address is not within the valid address range", one per network) trace to
+    a confirmed general Openness limitation, not a converter or fixture bug: standalone
+    (`GlobalVariable`-scope, non-multi-instance) system-FB instance DBs are invisible to
+    `SW.Blocks` entirely — `create-instance-db` deterministically assigns `Modbus_Master_DB` an
+    invalid `DB0` (confirmed by delete-and-recreate), and neither `Modbus_Master_DB` nor
+    `MB_Master_Comm` is exportable from `JOB9002` by name (absent from a full block-listing sweep of
+    both PLC stations). This is the same class of limitation already documented for
+    `CycleDelayReset` (a standalone `TON`, `PlantAutoControl` plan Phase 1) — now confirmed to
+    generalize beyond one instruction; full writeup in `docs/notes/openness-quirks.md`. Left
+    honestly unverified for full live compile, same standard as `WAIT`; scratch state (both broken
+    instance DBs, the synthetic test block) cleaned up afterward. See `AITODO.md`.
 
 ### Explicit form (fallback, per-network)
 

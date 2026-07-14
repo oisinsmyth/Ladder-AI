@@ -10,6 +10,27 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Phase 2 Tier 4: `Modbus_Master`/`Modbus_Comm_Load` built and tested; live compile blocked by a confirmed general Openness limitation**
+
+- Built across all 7 converter files: `TraceChain` reused as-is for `Modbus_Master`'s chain-fed
+  `REQ` port; `ResolveOptionalOutputPort` generalized to `ResolveOptionalOpenPort` for
+  `Modbus_Comm_Load`'s three deliberately-unconnected ports (`FLOW_CTRL`/`RTS_ON_DLY`/
+  `RTS_OFF_DLY`); multi-output-tag productions extended to 4 and 3 outputs respectively. 15 new
+  tests, 359 converter tests total, all green.
+- Live verification: import clean first try; compile narrowed 6 errors -> 2 across two fixture
+  fixes (verification-only `GateBit`/`TriggerBit` scope, matching the established pattern) and one
+  genuinely new real finding — `Modbus_Comm_Load`'s `PORT` parameter needs the actual Siemens
+  system datatype `PORT`, not a generic integer.
+- The remaining 2 errors trace to a confirmed general Openness limitation, not a converter bug:
+  standalone system-FB instance DBs (`Modbus_Master_DB`/`MB_Master_Comm`) are invisible to
+  `SW.Blocks` entirely — `create-instance-db` deterministically assigns an invalid `DB0`, and
+  neither DB is exportable from `JOB9002` by name. Same class of finding as `CycleDelayReset`
+  (Phase 1 of the `PlantAutoControl` plan) — now confirmed to generalize beyond one instruction.
+  Documented as a standing limitation in `docs/notes/openness-quirks.md`.
+- Left honestly unverified for full live compile, same standard as `WAIT`. Scratch state (broken
+  instance DBs, synthetic test block, temp harness) fully cleaned up. See
+  `docs/notes/stage-gates.md`/`AITODO.md` for full detail.
+
 **Phase 2 tiers 5/6 live verification: `MOVE_BLK_VARIANT`/`FillBlockI` closed, `WAIT` hit a distinct new blocker**
 
 - TIA Portal recovered on its own overnight (confirmed via `sanity-check`) — the earlier outage was

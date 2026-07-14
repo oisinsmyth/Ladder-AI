@@ -248,6 +248,44 @@ public static class IrSerializer
               .Append(", COUNT := ").Append(SerializeExpr(fillBlockI.Count))
               .Append(") => ").Append(fillBlockI.DestTag).Append('\n');
         }
+
+        // Instance path is the first positional argument (no label, same convention as TON/CALL's
+        // own). No trailing "=> dest" — four named outputs, not one, mixed in with the inputs
+        // inside the parens (":=" for inputs, "=>" for outputs), same convention MOVE_BLK_VARIANT
+        // already established. FlowCtrl/RtsOnDly/RtsOffDly (Modbus_Comm_Load only) are
+        // sidecar-only, never shown here — see ModbusCommLoadStatementSidecar's own doc comment.
+        foreach (var modbusMaster in network.ModbusMasters)
+        {
+            sb.Append("  MODBUS_MASTER(").Append(modbusMaster.InstancePath)
+              .Append(", EN := ").Append(SerializeEnSource(modbusMaster.En))
+              .Append(", REQ := ").Append(SerializeExpr(modbusMaster.Req))
+              .Append(", MB_ADDR := ").Append(SerializeExpr(modbusMaster.MbAddr))
+              .Append(", MODE := ").Append(SerializeExpr(modbusMaster.Mode))
+              .Append(", DATA_ADDR := ").Append(SerializeExpr(modbusMaster.DataAddr))
+              .Append(", DATA_LEN := ").Append(SerializeExpr(modbusMaster.DataLen))
+              .Append(", DATA_PTR := ").Append(SerializeExpr(modbusMaster.DataPtr))
+              .Append(", DONE => ").Append(modbusMaster.DoneTag)
+              .Append(", BUSY => ").Append(modbusMaster.BusyTag)
+              .Append(", ERROR => ").Append(modbusMaster.ErrorTag)
+              .Append(", STATUS => ").Append(modbusMaster.StatusTag)
+              .Append(")\n");
+        }
+
+        foreach (var modbusCommLoad in network.ModbusCommLoads)
+        {
+            sb.Append("  MODBUS_COMM_LOAD(").Append(modbusCommLoad.InstancePath)
+              .Append(", EN := ").Append(SerializeEnSource(modbusCommLoad.En))
+              .Append(", REQ := ").Append(SerializeExpr(modbusCommLoad.Req))
+              .Append(", PORT := ").Append(SerializeExpr(modbusCommLoad.Port))
+              .Append(", BAUD := ").Append(SerializeExpr(modbusCommLoad.Baud))
+              .Append(", PARITY := ").Append(SerializeExpr(modbusCommLoad.Parity))
+              .Append(", RESP_TO := ").Append(SerializeExpr(modbusCommLoad.RespTo))
+              .Append(", MB_DB := ").Append(SerializeExpr(modbusCommLoad.MbDb))
+              .Append(", DONE => ").Append(modbusCommLoad.DoneTag)
+              .Append(", ERROR => ").Append(modbusCommLoad.ErrorTag)
+              .Append(", STATUS => ").Append(modbusCommLoad.StatusTag)
+              .Append(")\n");
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -696,6 +734,83 @@ public static class IrSerializer
 
             sb.Append("    dest = ").Append(fillBlockI.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(fillBlockI.DestWireUId).Append('\n');
+        }
+
+        for (var mm = 0; mm < sidecar.ModbusMasters.Count; mm++)
+        {
+            var modbusMaster = sidecar.ModbusMasters[mm];
+            sb.Append("  modbusmaster ").Append(mm).Append('\n');
+            sb.Append("    modbusmasteruid = ").Append(modbusMaster.ModbusMasterPartUId).Append('\n');
+            sb.Append("    version = ").Append(modbusMaster.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", modbusMaster.En);
+
+            sb.Append("    instanceuid = ").Append(modbusMaster.InstanceUId).Append('\n');
+            sb.Append("    instancescope = ").Append(modbusMaster.InstanceScope).Append('\n');
+            sb.Append("    instancepath = ").Append(string.Join('.', modbusMaster.InstanceComponentPath)).Append('\n');
+
+            sb.Append("    reqrail = ").Append(SerializeRail(modbusMaster.ReqRailWireUId)).Append('\n');
+            for (var s = 0; s < modbusMaster.ReqSteps.Count; s++)
+            {
+                SerializeStep(sb, "    ", $"reqstep {s}", modbusMaster.ReqSteps[s]);
+            }
+
+            SerializeOperand(sb, "    ", "mbaddr", modbusMaster.MbAddr);
+            SerializeOperand(sb, "    ", "mode", modbusMaster.Mode);
+            SerializeOperand(sb, "    ", "dataaddr", modbusMaster.DataAddr);
+            SerializeOperand(sb, "    ", "datalen", modbusMaster.DataLen);
+            SerializeOperand(sb, "    ", "dataptr", modbusMaster.DataPtr);
+
+            sb.Append("    done = ").Append(modbusMaster.DoneAccessUId).Append('\n');
+            sb.Append("    donewire = ").Append(modbusMaster.DoneWireUId).Append('\n');
+            sb.Append("    busy = ").Append(modbusMaster.BusyAccessUId).Append('\n');
+            sb.Append("    busywire = ").Append(modbusMaster.BusyWireUId).Append('\n');
+            sb.Append("    error = ").Append(modbusMaster.ErrorAccessUId).Append('\n');
+            sb.Append("    errorwire = ").Append(modbusMaster.ErrorWireUId).Append('\n');
+            sb.Append("    status = ").Append(modbusMaster.StatusAccessUId).Append('\n');
+            sb.Append("    statuswire = ").Append(modbusMaster.StatusWireUId).Append('\n');
+        }
+
+        for (var mc = 0; mc < sidecar.ModbusCommLoads.Count; mc++)
+        {
+            var modbusCommLoad = sidecar.ModbusCommLoads[mc];
+            sb.Append("  modbuscommload ").Append(mc).Append('\n');
+            sb.Append("    modbuscommloaduid = ").Append(modbusCommLoad.ModbusCommLoadPartUId).Append('\n');
+            sb.Append("    version = ").Append(modbusCommLoad.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", modbusCommLoad.En);
+
+            sb.Append("    instanceuid = ").Append(modbusCommLoad.InstanceUId).Append('\n');
+            sb.Append("    instancescope = ").Append(modbusCommLoad.InstanceScope).Append('\n');
+            sb.Append("    instancepath = ").Append(string.Join('.', modbusCommLoad.InstanceComponentPath)).Append('\n');
+
+            SerializeOperand(sb, "    ", "req", modbusCommLoad.Req);
+            SerializeOperand(sb, "    ", "port", modbusCommLoad.Port);
+            SerializeOperand(sb, "    ", "baud", modbusCommLoad.Baud);
+            SerializeOperand(sb, "    ", "parity", modbusCommLoad.Parity);
+
+            if (modbusCommLoad.FlowCtrl is { } flowCtrl)
+            {
+                sb.Append("    flowctrl = ").Append(flowCtrl.WireUId).Append(' ').Append(flowCtrl.OpenConUId).Append('\n');
+            }
+
+            if (modbusCommLoad.RtsOnDly is { } rtsOnDly)
+            {
+                sb.Append("    rtsondly = ").Append(rtsOnDly.WireUId).Append(' ').Append(rtsOnDly.OpenConUId).Append('\n');
+            }
+
+            if (modbusCommLoad.RtsOffDly is { } rtsOffDly)
+            {
+                sb.Append("    rtsoffdly = ").Append(rtsOffDly.WireUId).Append(' ').Append(rtsOffDly.OpenConUId).Append('\n');
+            }
+
+            SerializeOperand(sb, "    ", "respto", modbusCommLoad.RespTo);
+            SerializeOperand(sb, "    ", "mbdb", modbusCommLoad.MbDb);
+
+            sb.Append("    done = ").Append(modbusCommLoad.DoneAccessUId).Append('\n');
+            sb.Append("    donewire = ").Append(modbusCommLoad.DoneWireUId).Append('\n');
+            sb.Append("    error = ").Append(modbusCommLoad.ErrorAccessUId).Append('\n');
+            sb.Append("    errorwire = ").Append(modbusCommLoad.ErrorWireUId).Append('\n');
+            sb.Append("    status = ").Append(modbusCommLoad.StatusAccessUId).Append('\n');
+            sb.Append("    statuswire = ").Append(modbusCommLoad.StatusWireUId).Append('\n');
         }
     }
 

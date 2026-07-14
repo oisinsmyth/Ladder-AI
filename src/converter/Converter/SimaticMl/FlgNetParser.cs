@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT/WAIT/FillBlockI only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT/WAIT/FillBlockI/Modbus_Master/Modbus_Comm_Load only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -167,6 +167,11 @@ public static class FlgNetParser
                 {
                     ParseFillBlockIFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name));
+                }
+                else if (name is "Modbus_Master" or "Modbus_Comm_Load")
+                {
+                    var (modbusVersion, modbusInstance) = ParseModbusFixedShape(child, name, uid);
+                    parts.Add(new PartNode(uid, name, Version: modbusVersion, Instance: modbusInstance));
                 }
                 else
                 {
@@ -469,6 +474,34 @@ public static class FlgNetParser
         }
 
         return (version, templateValue.Value);
+    }
+
+    // A communication-FB Part shape — confirmed real for both `Modbus_Master` (Phase 2 Tier 4,
+    // 2026-07-14, `FC ModbusComs`, `Version="6.0"`) and `Modbus_Comm_Load` (same block,
+    // `Version="5.0"`): `Version="N.N"` plus a single-component `<Instance>` (same shape TON/Call
+    // already use — reused via `ParseInstanceReference`, no new parsing needed there), no
+    // `DisabledENO`, no `TemplateValue` children at all — all their real complexity lives in the
+    // wiring (many named ports), not the Part element itself. Generalized into one shared helper
+    // once the second real instruction (`Modbus_Comm_Load`) confirmed `Modbus_Master`'s own shape
+    // wasn't instruction-specific.
+    private static (string Version, AccessNode Instance) ParseModbusFixedShape(XElement part, string partName, int uid)
+    {
+        var disabledEno = part.Attribute("DisabledENO")?.Value;
+        if (disabledEno is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
+        }
+
+        if (part.Elements(Ns + "TemplateValue").Any())
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has a <TemplateValue> element — no real instance has carried one.");
+        }
+
+        var version = RequireAttribute(part, "Version");
+        var instance = ParseInstanceReference(part, partName, uid);
+        return (version, instance);
     }
 
     // A time-arithmetic subtraction box instruction (`Part Name="T_SUB"`) — confirmed real,

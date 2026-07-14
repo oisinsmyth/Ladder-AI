@@ -1,0 +1,108 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="LocalVariable" UId="21">
+      <Symbol>
+        <Component Name="LoadRequest" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="22">
+      <Symbol>
+        <Component Name="PortNumber" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="23">
+      <Symbol>
+        <Component Name="BaudRate" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="24">
+      <Symbol>
+        <Component Name="ParitySetting" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="25">
+      <Symbol>
+        <Component Name="ResponseTimeout" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="26">
+      <Symbol>
+        <Component Name="Modbus_Master_DB" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="27">
+      <Symbol>
+        <Component Name="LoadDone" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="28">
+      <Symbol>
+        <Component Name="LoadError" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="29">
+      <Symbol>
+        <Component Name="LoadStatus" />
+      </Symbol>
+    </Access>
+    <Part Name="Modbus_Comm_Load" Version="5.0" UId="30">
+      <Instance Scope="GlobalVariable" UId="31">
+        <Component Name="MB_Master_Comm" />
+      </Instance>
+    </Part>
+  </Parts>
+  <Wires>
+    <Wire UId="32">
+      <Powerrail />
+      <NameCon UId="30" Name="en" />
+    </Wire>
+    <Wire UId="33">
+      <IdentCon UId="21" />
+      <NameCon UId="30" Name="REQ" />
+    </Wire>
+    <Wire UId="34">
+      <IdentCon UId="22" />
+      <NameCon UId="30" Name="PORT" />
+    </Wire>
+    <Wire UId="35">
+      <IdentCon UId="23" />
+      <NameCon UId="30" Name="BAUD" />
+    </Wire>
+    <Wire UId="36">
+      <IdentCon UId="24" />
+      <NameCon UId="30" Name="PARITY" />
+    </Wire>
+    <Wire UId="37">
+      <OpenCon UId="40" />
+      <NameCon UId="30" Name="FLOW_CTRL" />
+    </Wire>
+    <Wire UId="38">
+      <OpenCon UId="41" />
+      <NameCon UId="30" Name="RTS_ON_DLY" />
+    </Wire>
+    <Wire UId="39">
+      <OpenCon UId="42" />
+      <NameCon UId="30" Name="RTS_OFF_DLY" />
+    </Wire>
+    <Wire UId="43">
+      <IdentCon UId="25" />
+      <NameCon UId="30" Name="RESP_TO" />
+    </Wire>
+    <Wire UId="44">
+      <IdentCon UId="26" />
+      <NameCon UId="30" Name="MB_DB" />
+    </Wire>
+    <Wire UId="45">
+      <NameCon UId="30" Name="DONE" />
+      <IdentCon UId="27" />
+    </Wire>
+    <Wire UId="46">
+      <NameCon UId="30" Name="ERROR" />
+      <IdentCon UId="28" />
+    </Wire>
+    <Wire UId="47">
+      <NameCon UId="30" Name="STATUS" />
+      <IdentCon UId="29" />
+    </Wire>
+  </Wires>
+</FlgNet>
