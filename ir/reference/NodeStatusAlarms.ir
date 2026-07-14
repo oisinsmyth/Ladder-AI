@@ -3,6 +3,11 @@ ROOTID 0
 NUMBER 19
 LANGUAGE LAD
 
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
 NETWORK 1 ""
   COIL AlarmWords.AlarmWord0.%X0 := CommsProcessData.NodeFault[0]
   COIL AlarmWords.AlarmWord0.%X1 := CommsProcessData.NodeFault[1]
@@ -25,170 +30,200 @@ NETWORK 2 "" [empty]
 SIDECAR
 NETWORK 1
   compileunit = 3
-  access CommsProcessData.NodeFault[0] = 21
-  access AlarmWords.AlarmWord0.%X0 = 22
-  access CommsProcessData.NodeFault[1] = 23
-  access AlarmWords.AlarmWord0.%X1 = 24
-  access CommsProcessData.NodeFault[2] = 25
-  access AlarmWords.AlarmWord0.%X2 = 26
-  access CommsProcessData.NodeFault[3] = 27
-  access AlarmWords.AlarmWord0.%X3 = 28
-  access CommsProcessData.NodeFault[4] = 29
-  access AlarmWords.AlarmWord0.%X4 = 30
-  access CommsProcessData.NodeFault[5] = 31
-  access AlarmWords.AlarmWord0.%X5 = 32
-  access CommsProcessData.NodeFault[6] = 33
-  access AlarmWords.AlarmWord0.%X6 = 34
-  access CommsProcessData.NodeFault[7] = 35
-  access AlarmWords.AlarmWord0.%X7 = 36
-  access CommsProcessData.NodeFault[8] = 37
-  access AlarmWords.AlarmWord0.%X8 = 38
-  access CommsProcessData.NodeFault[9] = 39
-  access AlarmWords.AlarmWord0.%X9 = 40
-  access CommsProcessData.NodeFault[10] = 41
-  access AlarmWords.AlarmWord0.%X10 = 42
-  access CommsProcessData.NodeFault[11] = 43
-  access AlarmWords.AlarmWord0.%X11 = 44
-  access CommsProcessData.NodeFault[12] = 45
-  access AlarmWords.AlarmWord0.%X12 = 46
-  access CommsProcessData.NodeFault[13] = 47
-  access AlarmWords.AlarmWord0.%X13 = 48
-  access CommsProcessData.NodeFault[14] = 49
-  access AlarmWords.AlarmWord0.%X14 = 50
+  access CommsProcessData.NodeFault[0] = 21 GlobalVariable
+  access AlarmWords.AlarmWord0.%X0 = 22 GlobalVariable
+  access CommsProcessData.NodeFault[1] = 23 GlobalVariable
+  access AlarmWords.AlarmWord0.%X1 = 24 GlobalVariable
+  access CommsProcessData.NodeFault[2] = 25 GlobalVariable
+  access AlarmWords.AlarmWord0.%X2 = 26 GlobalVariable
+  access CommsProcessData.NodeFault[3] = 27 GlobalVariable
+  access AlarmWords.AlarmWord0.%X3 = 28 GlobalVariable
+  access CommsProcessData.NodeFault[4] = 29 GlobalVariable
+  access AlarmWords.AlarmWord0.%X4 = 30 GlobalVariable
+  access CommsProcessData.NodeFault[5] = 31 GlobalVariable
+  access AlarmWords.AlarmWord0.%X5 = 32 GlobalVariable
+  access CommsProcessData.NodeFault[6] = 33 GlobalVariable
+  access AlarmWords.AlarmWord0.%X6 = 34 GlobalVariable
+  access CommsProcessData.NodeFault[7] = 35 GlobalVariable
+  access AlarmWords.AlarmWord0.%X7 = 36 GlobalVariable
+  access CommsProcessData.NodeFault[8] = 37 GlobalVariable
+  access AlarmWords.AlarmWord0.%X8 = 38 GlobalVariable
+  access CommsProcessData.NodeFault[9] = 39 GlobalVariable
+  access AlarmWords.AlarmWord0.%X9 = 40 GlobalVariable
+  access CommsProcessData.NodeFault[10] = 41 GlobalVariable
+  access AlarmWords.AlarmWord0.%X10 = 42 GlobalVariable
+  access CommsProcessData.NodeFault[11] = 43 GlobalVariable
+  access AlarmWords.AlarmWord0.%X11 = 44 GlobalVariable
+  access CommsProcessData.NodeFault[12] = 45 GlobalVariable
+  access AlarmWords.AlarmWord0.%X12 = 46 GlobalVariable
+  access CommsProcessData.NodeFault[13] = 47 GlobalVariable
+  access AlarmWords.AlarmWord0.%X13 = 48 GlobalVariable
+  access CommsProcessData.NodeFault[14] = 49 GlobalVariable
+  access AlarmWords.AlarmWord0.%X14 = 50 GlobalVariable
   assignment 0
-    rail = 126
-    contact 0 = 51
-    contact 0 operand = 21
+    rail = 84
+    step 0 contact
+      uid = 51
+      operand = 21
+      operandwire = 81
+      negated = false
+      out = 82
     coil = 52
     coil operand = 22
-    wire 0 = 81
-    wire 1 = 82
-    wire 2 = 83
+    coil operandwire = 83
   assignment 1
-    rail = 126
-    contact 0 = 53
-    contact 0 operand = 23
+    rail = 84
+    step 0 contact
+      uid = 53
+      operand = 23
+      operandwire = 85
+      negated = false
+      out = 86
     coil = 54
     coil operand = 24
-    wire 0 = 84
-    wire 1 = 85
-    wire 2 = 86
+    coil operandwire = 87
   assignment 2
-    rail = 126
-    contact 0 = 55
-    contact 0 operand = 25
+    rail = 84
+    step 0 contact
+      uid = 55
+      operand = 25
+      operandwire = 88
+      negated = false
+      out = 89
     coil = 56
     coil operand = 26
-    wire 0 = 87
-    wire 1 = 88
-    wire 2 = 89
+    coil operandwire = 90
   assignment 3
-    rail = 126
-    contact 0 = 57
-    contact 0 operand = 27
+    rail = 84
+    step 0 contact
+      uid = 57
+      operand = 27
+      operandwire = 91
+      negated = false
+      out = 92
     coil = 58
     coil operand = 28
-    wire 0 = 90
-    wire 1 = 91
-    wire 2 = 92
+    coil operandwire = 93
   assignment 4
-    rail = 126
-    contact 0 = 59
-    contact 0 operand = 29
+    rail = 84
+    step 0 contact
+      uid = 59
+      operand = 29
+      operandwire = 94
+      negated = false
+      out = 95
     coil = 60
     coil operand = 30
-    wire 0 = 93
-    wire 1 = 94
-    wire 2 = 95
+    coil operandwire = 96
   assignment 5
-    rail = 126
-    contact 0 = 61
-    contact 0 operand = 31
+    rail = 84
+    step 0 contact
+      uid = 61
+      operand = 31
+      operandwire = 97
+      negated = false
+      out = 98
     coil = 62
     coil operand = 32
-    wire 0 = 96
-    wire 1 = 97
-    wire 2 = 98
+    coil operandwire = 99
   assignment 6
-    rail = 126
-    contact 0 = 63
-    contact 0 operand = 33
+    rail = 84
+    step 0 contact
+      uid = 63
+      operand = 33
+      operandwire = 100
+      negated = false
+      out = 101
     coil = 64
     coil operand = 34
-    wire 0 = 99
-    wire 1 = 100
-    wire 2 = 101
+    coil operandwire = 102
   assignment 7
-    rail = 126
-    contact 0 = 65
-    contact 0 operand = 35
+    rail = 84
+    step 0 contact
+      uid = 65
+      operand = 35
+      operandwire = 103
+      negated = false
+      out = 104
     coil = 66
     coil operand = 36
-    wire 0 = 102
-    wire 1 = 103
-    wire 2 = 104
+    coil operandwire = 105
   assignment 8
-    rail = 126
-    contact 0 = 67
-    contact 0 operand = 37
+    rail = 84
+    step 0 contact
+      uid = 67
+      operand = 37
+      operandwire = 106
+      negated = false
+      out = 107
     coil = 68
     coil operand = 38
-    wire 0 = 105
-    wire 1 = 106
-    wire 2 = 107
+    coil operandwire = 108
   assignment 9
-    rail = 126
-    contact 0 = 69
-    contact 0 operand = 39
+    rail = 84
+    step 0 contact
+      uid = 69
+      operand = 39
+      operandwire = 109
+      negated = false
+      out = 110
     coil = 70
     coil operand = 40
-    wire 0 = 108
-    wire 1 = 109
-    wire 2 = 110
+    coil operandwire = 111
   assignment 10
-    rail = 126
-    contact 0 = 71
-    contact 0 operand = 41
+    rail = 84
+    step 0 contact
+      uid = 71
+      operand = 41
+      operandwire = 112
+      negated = false
+      out = 113
     coil = 72
     coil operand = 42
-    wire 0 = 111
-    wire 1 = 112
-    wire 2 = 113
+    coil operandwire = 114
   assignment 11
-    rail = 126
-    contact 0 = 73
-    contact 0 operand = 43
+    rail = 84
+    step 0 contact
+      uid = 73
+      operand = 43
+      operandwire = 115
+      negated = false
+      out = 116
     coil = 74
     coil operand = 44
-    wire 0 = 114
-    wire 1 = 115
-    wire 2 = 116
+    coil operandwire = 117
   assignment 12
-    rail = 126
-    contact 0 = 75
-    contact 0 operand = 45
+    rail = 84
+    step 0 contact
+      uid = 75
+      operand = 45
+      operandwire = 118
+      negated = false
+      out = 119
     coil = 76
     coil operand = 46
-    wire 0 = 117
-    wire 1 = 118
-    wire 2 = 119
+    coil operandwire = 120
   assignment 13
-    rail = 126
-    contact 0 = 77
-    contact 0 operand = 47
+    rail = 84
+    step 0 contact
+      uid = 77
+      operand = 47
+      operandwire = 121
+      negated = false
+      out = 122
     coil = 78
     coil operand = 48
-    wire 0 = 120
-    wire 1 = 121
-    wire 2 = 122
+    coil operandwire = 123
   assignment 14
-    rail = 126
-    contact 0 = 79
-    contact 0 operand = 49
+    rail = 84
+    step 0 contact
+      uid = 79
+      operand = 49
+      operandwire = 124
+      negated = false
+      out = 125
     coil = 80
     coil operand = 50
-    wire 0 = 123
-    wire 1 = 124
-    wire 2 = 125
+    coil operandwire = 126
 NETWORK 2
   compileunit = 8

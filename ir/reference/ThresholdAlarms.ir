@@ -1,0 +1,191 @@
+BLOCK FC ThresholdAlarms
+ROOTID 0
+NUMBER 20
+LANGUAGE LAD
+COMMENT "Threshold/comparison reference examples (Eq/Ge/Lt/Ne/Gt/Le)"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  TEMP
+    ModeSelect : Int
+    AutoModeEnable : Bool
+    AutoModeActive : Bool
+    TankLevelHighEnable : Bool
+    TankLevel : Int
+    TankLevelHighAlarm : Bool
+    TankLevelLowEnable : Bool
+    TankLevelLowAlarm : Bool
+    FaultCheckEnable : Bool
+    StatusWord : Int
+    FaultPresent : Bool
+    PressureHighEnable : Bool
+    Pressure : Int
+    PressureHighAlarm : Bool
+    PressureLowEnable : Bool
+    PressureLowAlarm : Bool
+  CONSTANT
+
+NETWORK 1 "Mode selection (Eq)"
+  COIL AutoModeActive := ModeSelect = 1 AND AutoModeEnable
+
+NETWORK 2 "Tank level high alarm (Ge)"
+  COIL TankLevelHighAlarm := TankLevelHighEnable AND TankLevel >= 800
+
+NETWORK 3 "Tank level low alarm (Lt)"
+  COIL TankLevelLowAlarm := TankLevelLowEnable AND TankLevel < 200
+
+NETWORK 4 "Fault status check (Ne)"
+  COIL FaultPresent := FaultCheckEnable AND StatusWord <> 0
+
+NETWORK 5 "Pressure high alarm (Gt)"
+  COIL PressureHighAlarm := PressureHighEnable AND Pressure > 650
+
+NETWORK 6 "Pressure low alarm (Le)"
+  COIL PressureLowAlarm := PressureLowEnable AND Pressure <= 50
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access AutoModeEnable = 21 LocalVariable
+  access ModeSelect = 22 LocalVariable
+  access AutoModeActive = 23 LocalVariable
+  constant 1 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 compare
+      partname = Eq
+      uid = 25
+      srctype = Int
+      left tag = 22 28
+      right literal = 24 29
+      out = 30
+    step 1 contact
+      uid = 26
+      operand = 21
+      operandwire = 31
+      negated = false
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33
+NETWORK 2
+  compileunit = 8
+  access TankLevel = 21 LocalVariable
+  access TankLevelHighEnable = 22 LocalVariable
+  access TankLevelHighAlarm = 23 LocalVariable
+  constant 800 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 contact
+      uid = 25
+      operand = 22
+      operandwire = 28
+      negated = false
+      out = 29
+    step 1 compare
+      partname = Ge
+      uid = 26
+      srctype = Int
+      left tag = 21 30
+      right literal = 24 31
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33
+NETWORK 3
+  compileunit = D
+  access TankLevel = 21 LocalVariable
+  access TankLevelLowEnable = 22 LocalVariable
+  access TankLevelLowAlarm = 23 LocalVariable
+  constant 200 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 contact
+      uid = 25
+      operand = 22
+      operandwire = 28
+      negated = false
+      out = 29
+    step 1 compare
+      partname = Lt
+      uid = 26
+      srctype = Int
+      left tag = 21 30
+      right literal = 24 31
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33
+NETWORK 4
+  compileunit = 12
+  access StatusWord = 21 LocalVariable
+  access FaultCheckEnable = 22 LocalVariable
+  access FaultPresent = 23 LocalVariable
+  constant 0 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 contact
+      uid = 25
+      operand = 22
+      operandwire = 28
+      negated = false
+      out = 29
+    step 1 compare
+      partname = Ne
+      uid = 26
+      srctype = Int
+      left tag = 21 30
+      right literal = 24 31
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33
+NETWORK 5
+  compileunit = 17
+  access Pressure = 21 LocalVariable
+  access PressureHighEnable = 22 LocalVariable
+  access PressureHighAlarm = 23 LocalVariable
+  constant 650 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 contact
+      uid = 25
+      operand = 22
+      operandwire = 28
+      negated = false
+      out = 29
+    step 1 compare
+      partname = Gt
+      uid = 26
+      srctype = Int
+      left tag = 21 30
+      right literal = 24 31
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33
+NETWORK 6
+  compileunit = 1C
+  access Pressure = 21 LocalVariable
+  access PressureLowEnable = 22 LocalVariable
+  access PressureLowAlarm = 23 LocalVariable
+  constant 50 = 24 Int
+  assignment 0
+    rail = 34
+    step 0 contact
+      uid = 25
+      operand = 22
+      operandwire = 28
+      negated = false
+      out = 29
+    step 1 compare
+      partname = Le
+      uid = 26
+      srctype = Int
+      left tag = 21 30
+      right literal = 24 31
+      out = 32
+    coil = 27
+    coil operand = 23
+    coil operandwire = 33

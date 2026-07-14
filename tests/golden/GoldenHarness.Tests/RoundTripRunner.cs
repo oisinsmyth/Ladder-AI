@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace GoldenHarness;
 
 /// <summary>
@@ -95,8 +97,13 @@ public sealed class RoundTripRunner
         // IsConsistent flag, so the re-export below would refuse ("Inconsistent blocks... cannot
         // be exported") even on genuinely correct content. Block-level compile is what actually
         // clears it.
+        // openness-cli compile's own exit code is non-zero for any State != Success, including a
+        // benign hardware-config Warning with errors=0 — stricter than this project's own
+        // established "0 errors is clean, warnings are expected" bar (e.g. stage-gates.md
+        // repeatedly accepts "STATE: Warning, ERRORS: 0" as a clean compile). Parse the JSON body
+        // and gate on the actual error count rather than the raw exit code.
         var compile = Compile(project, device, blockName);
-        if (compile.ExitCode != 0)
+        if (compile.ExitCode != 0 && GetErrorCount(compile.StdOut) != 0)
         {
             return RoundTripReport.Failed("compile", compile);
         }
@@ -108,6 +115,25 @@ public sealed class RoundTripRunner
         }
 
         return RoundTripReport.Passed(exportedPath, reExportedPath);
+    }
+
+    /// <summary>
+    /// Reads the `errors` field from `compile --json` output. Returns -1 (never equal to a real
+    /// error count, so callers' `!= 0` checks still fail closed) if the output isn't the expected
+    /// shape — deliberately fail-safe rather than silently treating an unparseable result (e.g. a
+    /// connection failure that never reached compile at all) as "0 errors, clean."
+    /// </summary>
+    private static int GetErrorCount(string stdOut)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(stdOut);
+            return document.RootElement.GetProperty("errors").GetInt32();
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return -1;
+        }
     }
 }
 
