@@ -10,6 +10,19 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Build S2's explanation-quality checklist from direct multi-agent comparison, not invented solo**
+
+- Produced three full real-JOB9002-block explanations in conversation (`PerimeterSafetyAlarms`, `MotorDOL`,
+  `PlantAutoControl`), then re-explained `PlantAutoControl` with five subagents at varying context levels to
+  isolate what actually drives explanation quality vs. what just costs tokens. Cost didn't track
+  context linearly; the most reproducible quality lever was an explicit "check every instance
+  exhaustively, don't sample" instruction, which caught real cross-instance bugs sampling-based
+  descriptions missed. Checklist committed as `docs/14-s2-explanation-checklist.md` (8 items,
+  `E-01`…`E-08`), indexed in `00-README.md`. A `.claude/skills/explain-plc-block/` skill file was
+  also written, but confirmed *not* auto-discoverable by a fresh subagent's Skill tool in this
+  harness — works today only as a plain reference doc, not a real invocable skill. Full
+  methodology in `docs/notes/stage-gates.md`.
+
 **Fix `Normalizer`'s Part-UId volatility gap with real graph-based identity matching**
 
 - A bare `Part` (`Contact`/`Coil`/`TON`/etc.) has no distinguishing content of its own the way

@@ -35,24 +35,28 @@ engineer, with no hallucinated tags or behavior (design philosophy #7).
 Do not perform S3+ capabilities (comment/review/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S2 kickoff — no work started yet
+## Current task: checklist built, sampling explanations against it
 
-Nothing in-flight. First real decisions, before producing any explanations:
+The three original kickoff questions are resolved:
 
-- **What to explain first.** Two real corpora are available: the committed 14-block reference
-  project (Green-tier, safe to discuss/quote freely, but each block was purpose-built to exercise
-  one construct — not necessarily representative of how real logic reads) vs. `PlantAutoControl` and
-  its 8 dependency FBs (Amber-tier, real production logic, already sanitized/imported/live-verified
-  in `SampleProject` — the thing this capability actually needs to be good at). Leaning toward
-  starting with a few reference-project blocks as a low-stakes dry run of the *process* (what does
-  a good explanation even look like, how is accuracy judged) before spending the engineer's actual
-  review time on real logic — but this is worth confirming, not assuming.
-- **What the quality checklist should check.** Roadmap only says "judged accurate... no
-  hallucinated tags or behavior." Needs fleshing out before the first explanation is judged against
-  it, ideally *with* the engineer rather than invented solo.
-- **Where explanations live.** Not specified yet — inline chat output, a committed doc per block,
-  something else? Affects whether this produces any diffable artifact at all (design philosophy #1:
-  "every artifact is designed to be reviewed").
+- **What to explain first.** Real JOB9002 blocks directly, not the sanitized reference corpus —
+  explicit project-owner correction: sanitization strips exactly the real-world specificity (real
+  tag names, comments, titles) that makes an explanation useful, which is the whole point of S2.
+  `PerimeterSafetyAlarms`, `MotorDOL`, and `PlantAutoControl` explained and reviewed in conversation so far, all
+  confirmed accurate by the project owner. (`MotorVSDSystem` was also explained but explicitly flagged as
+  a demo, not counted toward the exit criterion below.)
+- **What the quality checklist should check.** Built: `docs/14-s2-explanation-checklist.md`.
+  Derived empirically — produced multiple independent explanations of the same real block
+  (`PlantAutoControl`), varying how much project/process context each attempt got, then verified every
+  claim in every attempt against source before writing down what actually separated a good
+  explanation from a weaker one. Not invented solo.
+- **Where explanations live.** Settled: in conversation only, per `docs/13-data-boundary.md`'s
+  2026-07-14 S2-kickoff entry. Nothing about real block content gets committed; the checklist
+  itself (methodology, not real project data) is the durable artifact.
+
+**Remaining before S2's exit criterion is met:** 10 sampled network/block explanations judged
+accurate by the engineer, checked against `docs/14-s2-explanation-checklist.md`. 3 counted so far
+(`PerimeterSafetyAlarms`/`MotorDOL`/`PlantAutoControl`). Keep sampling and updating this count as more land.
 
 ## Open questions carried over from S1 (still need the project owner's input, unrelated to S2)
 
