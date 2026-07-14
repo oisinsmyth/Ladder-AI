@@ -582,6 +582,29 @@ NETWORK 8 "Run enable delay"
     gaps not yet built and a separately-scoped `ExternalAccessible=False` Sanitizer gap, flagged
     below, not fixed — both cleaned up from `SampleProject` afterward, not left as permanent
     fixtures there.)
+- **`MOVE_BLK_VARIANT` (block-move-with-array-indexing), built 2026-07-14 (Phase 2 Tier 5).**
+  Re-grounded properly first: an earlier pass had concluded every real instance only had `en`
+  wired, from a `grep`/`head_limit`-truncated read that cut off before the rest of the wiring —
+  reading the full wire list directly (`FC MoveData`/`FC VSDDataSequence`, 4 identical real
+  instances) showed the real shape is fully wired and simple: `Version="1.2"`, no `DisabledENO`,
+  no other attributes or children at all (the plainest possible Part-level shape — all the
+  complexity lives in the wiring, not the Part element). Four fixed-named tag-or-literal inputs
+  (`SRC`/`COUNT`/`SRC_INDEX`/`DEST_INDEX`, uppercase), never chained or optional. **The first
+  instruction this converter reduces with two separate destination writes** — `Ret_Val` (a
+  status/error-code return) and `DEST` (the actual copy target), both ordinary plain-tag writes,
+  mixed-case exactly as the real source has them (`Ret_Val`, not `RET_VAL`). Modeled with explicit
+  named fields (`MoveBlkVariantStatement`/`...Sidecar`), not a generic list, since the ports are
+  fixed, never variable-arity. Readable-form syntax has no trailing `=> dest` (there's no single
+  "the" destination): `MOVE_BLK_VARIANT(EN := <expr-or-ENO>, SRC := <expr>, COUNT := <expr>,
+  SRC_INDEX := <expr>, DEST_INDEX := <expr>, Ret_Val => <tag>, DEST => <tag>)` — every port
+  (inputs and outputs alike) is one argument inside the parens, disambiguated by `:=` vs `=>`, the
+  same mixing convention `CALL`'s own argument list already established. 8 new converter tests
+  (`MoveBlkVariantTests.cs`, one fixture genericized from the real shape). **Unit-tested only —
+  live TIA verification not yet completed**, unlike every other Phase 2 tier above: two
+  consecutive `openness-cli import` attempts against a synthetic composed FC hit the same
+  first-connect Portal timeout, which needs a human to check for (and accept) an approval dialog
+  inside TIA Portal — not resolvable without that access. Not presented as "live-verified" or
+  "closed" until that step actually runs clean.
 
 ### Explicit form (fallback, per-network)
 

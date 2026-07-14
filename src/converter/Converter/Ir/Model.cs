@@ -248,6 +248,18 @@ public sealed record TConvStatement(EnSource En, Expr In, string DestTag);
 // content, not incidental typing metadata.
 public sealed record CalcStatement(EnSource En, IReadOnlyList<Expr> Inputs, string Equation, string DestTag);
 
+// A block-move-with-array-indexing instruction (`Part Name="MOVE_BLK_VARIANT"`) — confirmed real,
+// 2026-07-14 (Phase 2 Tier 5, `FC MoveData`/`FC VSDDataSequence`, 4 identical instances). The
+// first instruction this converter models with **two output tags** rather than one — `Ret_Val`
+// (a status/error-code return) and `Dest` (the actual copied-into array) — both plain-tag writes,
+// same shape as every other production's own single `DestTag`, just two of them. Four
+// fixed-named tag-or-literal inputs (`Src`/`Count`/`SrcIndex`/`DestIndex`) — genuinely simple
+// (never chained, never optional/unconnected), unlike the harder shapes `Modbus_Master`/
+// `Modbus_Comm_Load` (Phase 2 Tier 4) still need. Field names use ordinary C# casing; the source's
+// own port names are mixed-case (`Ret_Val`, not `RET_VAL`) — see the parser/writer/builder for the
+// exact literal strings used on the wire.
+public sealed record MoveBlkVariantStatement(EnSource En, Expr Src, Expr Count, Expr SrcIndex, Expr DestIndex, string RetValTag, string DestTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -324,7 +336,8 @@ public sealed record IrNetwork(
     IReadOnlyList<LimitStatement>? Limits = null,
     IReadOnlyList<TSubStatement>? TSubs = null,
     IReadOnlyList<TConvStatement>? TConvs = null,
-    IReadOnlyList<CalcStatement>? Calcs = null)
+    IReadOnlyList<CalcStatement>? Calcs = null,
+    IReadOnlyList<MoveBlkVariantStatement>? MoveBlkVariants = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -350,10 +363,12 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<CalcStatement> Calcs { get; init; } = Calcs ?? Array.Empty<CalcStatement>();
 
+    public IReadOnlyList<MoveBlkVariantStatement> MoveBlkVariants { get; init; } = MoveBlkVariants ?? Array.Empty<MoveBlkVariantStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
         && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
-        && Calcs.Count == 0;
+        && Calcs.Count == 0 && MoveBlkVariants.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -805,6 +820,21 @@ public sealed record CalcStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One MOVE_BLK_VARIANT's full round-trip data. Two destination pairs (RetVal/Dest) instead of
+// one — the first production needing that shape (see MoveBlkVariantStatement's own doc comment).
+public sealed record MoveBlkVariantStatementSidecar(
+    int MoveBlkVariantPartUId,
+    string Version,
+    EnSourceSidecar En,
+    OperandSidecar Src,
+    OperandSidecar Count,
+    OperandSidecar SrcIndex,
+    OperandSidecar DestIndex,
+    int RetValAccessUId,
+    int RetValWireUId,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -822,7 +852,8 @@ public sealed record NetworkSidecar(
     IReadOnlyList<LimitStatementSidecar>? Limits = null,
     IReadOnlyList<TSubStatementSidecar>? TSubs = null,
     IReadOnlyList<TConvStatementSidecar>? TConvs = null,
-    IReadOnlyList<CalcStatementSidecar>? Calcs = null)
+    IReadOnlyList<CalcStatementSidecar>? Calcs = null,
+    IReadOnlyList<MoveBlkVariantStatementSidecar>? MoveBlkVariants = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -849,6 +880,8 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<TConvStatementSidecar> TConvs { get; init; } = TConvs ?? Array.Empty<TConvStatementSidecar>();
 
     public IReadOnlyList<CalcStatementSidecar> Calcs { get; init; } = Calcs ?? Array.Empty<CalcStatementSidecar>();
+
+    public IReadOnlyList<MoveBlkVariantStatementSidecar> MoveBlkVariants { get; init; } = MoveBlkVariants ?? Array.Empty<MoveBlkVariantStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

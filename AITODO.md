@@ -78,9 +78,14 @@ closed" above). Working overnight, autonomously, per the project owner's own exp
     — mechanically ready, `TraceChain` already supports it; multi-output-tag productions; an
     open/unconnected operand variant) before either instruction can be built, not just "port
     grounding" as tonight's plan first estimated. Worth tackling as its own dedicated session.
-- **Tier 5**: re-ground `MOVE_BLK_VARIANT` — every sample seen so far (`MoveData`,
-  `VSDDataSequence`) only had `en` wired; the real array/count port shape is still unknown. Find a
-  fully-wired example before designing anything.
+- **Tier 5** (`MOVE_BLK_VARIANT`): re-grounded, built, and unit-tested 2026-07-14 night (the
+  earlier "only `en` wired" note was wrong — a `head_limit`-truncated read; the real shape is fully
+  wired and simple). 8 new tests (`MoveBlkVariantTests.cs`), 331 converter tests total, all green.
+  **Not yet live-TIA-verified** — two consecutive `openness-cli import` attempts hit the
+  first-connect Portal timeout with no one awake to check for the approval dialog. **Next step:
+  run the live import/compile/re-export cycle** (rebuild the synthetic composed FC the same way
+  Tiers 1/2/3 did — see `ir/SPEC.md`'s own `MOVE_BLK_VARIANT` entry for the exact shape) once
+  Portal is confirmed responsive; only mark this tier genuinely closed once that's clean.
 - **Tier 6**: `Jump` (+ implied `Label` — needs its own jump-target shape found), `FillBlockI`,
   `WAIT` — novel categories, no existing analog, each needs its own small grounding spike. Lowest
   priority.

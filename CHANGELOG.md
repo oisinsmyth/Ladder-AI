@@ -10,6 +10,20 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Phase 2 Tier 5: `MOVE_BLK_VARIANT` built and unit-tested — live TIA verification still pending**
+
+- Re-grounded properly (per the Tier 1–3 lesson above): the earlier "only `en` ever wired" note
+  was a `head_limit`-truncated read, not the real shape. All 4 real instances (`FC MoveData`/
+  `FC VSDDataSequence`) are fully wired and simple — four plain-tag inputs, no chains, no
+  `OpenCon`-optional ports, unlike Tier 4. Built the same way as tiers 1–3: the first instruction
+  this converter reduces with **two** destination writes (`Ret_Val`/`DEST`) instead of one. 8 new
+  tests (`MoveBlkVariantTests.cs`), 331 converter tests total, all green.
+- **Not live-verified**: two consecutive `openness-cli import` attempts against a synthetic
+  composed FC hit the first-connect Portal timeout, with no one awake to check for the approval
+  dialog. Explicitly not presented as closed/live-verified — next session should run the
+  import/compile/re-export cycle before treating this tier as done.
+- See `docs/notes/stage-gates.md`/`ir/SPEC.md`/`AITODO.md` for full detail.
+
 **Instruction-coverage sweep of the full `JOB9002` inventory + Phase 2 tiers 1–3: `Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc` built and live-verified**
 
 - Grounded all 36 remaining `JOB9002` blocks (both PLC stations) against the full instruction

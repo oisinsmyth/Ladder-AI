@@ -72,12 +72,15 @@ public static class GraphReducer
         // Calc (Phase 2 Tier 3, 2026-07-14, FB VSDSim) — Cardinality-driven inputs like Mul/Add,
         // see CalcStatement's own doc comment.
         var calcParts = network.Parts.Where(p => p.Name == "Calc").ToList();
+        // MOVE_BLK_VARIANT (Phase 2 Tier 5, 2026-07-14, FC MoveData/VSDDataSequence) — see
+        // MoveBlkVariantStatement's own doc comment.
+        var moveBlkVariantParts = network.Parts.Where(p => p.Name == "MOVE_BLK_VARIANT").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0
             && absParts.Count == 0 && limitParts.Count == 0 && tSubParts.Count == 0 && tConvParts.Count == 0
-            && calcParts.Count == 0)
+            && calcParts.Count == 0 && moveBlkVariantParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, or Calc found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, or MOVE_BLK_VARIANT found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -106,6 +109,8 @@ public static class GraphReducer
         var tConvSidecars = new List<TConvStatementSidecar>();
         var calcStatements = new List<CalcStatement>();
         var calcSidecars = new List<CalcStatementSidecar>();
+        var moveBlkVariantStatements = new List<MoveBlkVariantStatement>();
+        var moveBlkVariantSidecars = new List<MoveBlkVariantStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -360,6 +365,24 @@ public static class GraphReducer
             }
         }
 
+        // MOVE_BLK_VARIANT is reduced last, same reasoning as every other production above.
+        foreach (var moveBlkVariant in moveBlkVariantParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceMoveBlkVariant(network, moveBlkVariant, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            moveBlkVariantStatements.Add(statement);
+            moveBlkVariantSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -369,10 +392,11 @@ public static class GraphReducer
 
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
-            swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements);
+            swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
-            callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars);
+            callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
+            moveBlkVariantSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -1055,6 +1079,65 @@ public static class GraphReducer
             inputSidecars,
             equation,
             calc.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Calc UId={calc.UId} has no SrcType."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A MOVE_BLK_VARIANT's `en` resolves via ResolveEnSource (confirmed real either rail-fed or
+    // an ordinary TraceChain condition — never ENO-chained in any real instance). Its four inputs
+    // (`SRC`/`COUNT`/`SRC_INDEX`/`DEST_INDEX`) each resolve like a TON's own `PT`
+    // (ResolveTagOrLiteralOperand, one call per named port). Its two outputs (`Ret_Val`/`DEST`,
+    // mixed-case exactly as the real source has them) each write to a plain tag (ResolveOperand,
+    // same shape as Move's own `out1`) — the first production this converter reduces with two
+    // separate destination writes instead of one.
+    private static (MoveBlkVariantStatement Statement, MoveBlkVariantStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceMoveBlkVariant(
+        FlgNetwork network,
+        PartNode moveBlkVariant,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, moveBlkVariant.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (srcExpr, srcSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, moveBlkVariant.UId, "SRC", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (countExpr, countSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, moveBlkVariant.UId, "COUNT", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (srcIndexExpr, srcIndexSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, moveBlkVariant.UId, "SRC_INDEX", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destIndexExpr, destIndexSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, moveBlkVariant.UId, "DEST_INDEX", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (retValTag, retValWireUId) = ResolveOperand(wiresByPort, accessByUId, moveBlkVariant.UId, networkNumber, "Ret_Val");
+        visitedWireUIds.Add(retValWireUId);
+        AddAccessEntry(accessEntries, retValTag);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, moveBlkVariant.UId, networkNumber, "DEST");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new MoveBlkVariantStatement(en, srcExpr, countExpr, srcIndexExpr, destIndexExpr, retValTag.TagPath, destTag.TagPath);
+        var sidecar = new MoveBlkVariantStatementSidecar(
+            moveBlkVariant.UId,
+            moveBlkVariant.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: MOVE_BLK_VARIANT UId={moveBlkVariant.UId} has no Version."),
+            enSidecar,
+            srcSidecar,
+            countSidecar,
+            srcIndexSidecar,
+            destIndexSidecar,
+            retValTag.UId,
+            retValWireUId,
             destTag.UId,
             destWireUId);
 

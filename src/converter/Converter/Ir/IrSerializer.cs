@@ -217,6 +217,21 @@ public static class IrSerializer
 
             sb.Append(") => ").Append(calc.DestTag).Append(" \"").Append(EscapeString(calc.Equation)).Append("\"\n");
         }
+
+        // No trailing "=> dest" — MOVE_BLK_VARIANT has two named outputs, not one, so both are
+        // ordinary arguments inside the parens (":=" for inputs, "=>" for outputs), same mixing
+        // convention CALL's own argument list already established.
+        foreach (var moveBlkVariant in network.MoveBlkVariants)
+        {
+            sb.Append("  MOVE_BLK_VARIANT(EN := ").Append(SerializeEnSource(moveBlkVariant.En))
+              .Append(", SRC := ").Append(SerializeExpr(moveBlkVariant.Src))
+              .Append(", COUNT := ").Append(SerializeExpr(moveBlkVariant.Count))
+              .Append(", SRC_INDEX := ").Append(SerializeExpr(moveBlkVariant.SrcIndex))
+              .Append(", DEST_INDEX := ").Append(SerializeExpr(moveBlkVariant.DestIndex))
+              .Append(", Ret_Val => ").Append(moveBlkVariant.RetValTag)
+              .Append(", DEST => ").Append(moveBlkVariant.DestTag)
+              .Append(")\n");
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -621,6 +636,25 @@ public static class IrSerializer
             sb.Append("    srctype = ").Append(calc.SrcType).Append('\n');
             sb.Append("    dest = ").Append(calc.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(calc.DestWireUId).Append('\n');
+        }
+
+        for (var mb = 0; mb < sidecar.MoveBlkVariants.Count; mb++)
+        {
+            var moveBlkVariant = sidecar.MoveBlkVariants[mb];
+            sb.Append("  moveblkvariant ").Append(mb).Append('\n');
+            sb.Append("    moveblkvariantuid = ").Append(moveBlkVariant.MoveBlkVariantPartUId).Append('\n');
+            sb.Append("    version = ").Append(moveBlkVariant.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", moveBlkVariant.En);
+
+            SerializeOperand(sb, "    ", "src", moveBlkVariant.Src);
+            SerializeOperand(sb, "    ", "count", moveBlkVariant.Count);
+            SerializeOperand(sb, "    ", "srcindex", moveBlkVariant.SrcIndex);
+            SerializeOperand(sb, "    ", "destindex", moveBlkVariant.DestIndex);
+
+            sb.Append("    retval = ").Append(moveBlkVariant.RetValAccessUId).Append('\n');
+            sb.Append("    retvalwire = ").Append(moveBlkVariant.RetValWireUId).Append('\n');
+            sb.Append("    dest = ").Append(moveBlkVariant.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(moveBlkVariant.DestWireUId).Append('\n');
         }
     }
 

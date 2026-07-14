@@ -110,6 +110,12 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Calcs.Count} Calc(s) but the sidecar records {sidecar.Calcs.Count}.");
         }
 
+        if (network.MoveBlkVariants.Count != sidecar.MoveBlkVariants.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.MoveBlkVariants.Count} MOVE_BLK_VARIANT(s) but the sidecar records {sidecar.MoveBlkVariants.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -235,6 +241,11 @@ public static class FlgNetBuilder
         for (var cc = 0; cc < network.Calcs.Count; cc++)
         {
             BuildCalc(sidecar.Calcs[cc], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var mb = 0; mb < network.MoveBlkVariants.Count; mb++)
+        {
+            BuildMoveBlkVariant(sidecar.MoveBlkVariants[mb], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         // Catch-all: any Timer never reached via a TimerOutputStep above (read only via an
@@ -777,6 +788,33 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CalcPartUId, "out"));
+    }
+
+    // Builds a MOVE_BLK_VARIANT Part, its `en` wiring, its four named-port inputs (`SRC`/`COUNT`/
+    // `SRC_INDEX`/`DEST_INDEX`, uppercase), and its two named-port outputs (`Ret_Val`/`DEST`,
+    // mixed-case exactly as the real source has them) — the first production this converter
+    // builds with two separate destination writes instead of one.
+    private static void BuildMoveBlkVariant(
+        MoveBlkVariantStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.MoveBlkVariantPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MoveBlkVariantPartUId, "MOVE_BLK_VARIANT", Version: sidecar.Version));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.Src, sidecar.MoveBlkVariantPartUId, "SRC");
+        AddOperandWire(wireEndpointsByUId, sidecar.Count, sidecar.MoveBlkVariantPartUId, "COUNT");
+        AddOperandWire(wireEndpointsByUId, sidecar.SrcIndex, sidecar.MoveBlkVariantPartUId, "SRC_INDEX");
+        AddOperandWire(wireEndpointsByUId, sidecar.DestIndex, sidecar.MoveBlkVariantPartUId, "DEST_INDEX");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.RetValWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.RetValAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.RetValWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MoveBlkVariantPartUId, "Ret_Val"));
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MoveBlkVariantPartUId, "DEST"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

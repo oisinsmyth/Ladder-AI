@@ -614,16 +614,60 @@ public static partial class IrParser
             i++;
         }
 
+        // MOVE_BLK_VARIANTs are always emitted after Calcs (IrSerializer). No trailing "=> dest"
+        // — two named outputs, not one, so everything (inputs and outputs alike) is inside one
+        // top-level-comma-split argument list, disambiguated per-argument by ":=" vs "=>", same
+        // mixing convention CALL's own argument list already established.
+        var moveBlkVariants = new List<MoveBlkVariantStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  MOVE_BLK_VARIANT(", StringComparison.Ordinal))
+        {
+            var moveBlkVariantMatch = MoveBlkVariantLineRegex().Match(lines[i]);
+            if (!moveBlkVariantMatch.Success)
+            {
+                throw new IrFormatException(
+                    $"Expected '  MOVE_BLK_VARIANT(EN := <expr-or-ENO>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, " +
+                    $"DEST_INDEX := <expr>, Ret_Val => <tag>, DEST => <tag>)', got: '{lines[i]}'");
+            }
+
+            var moveBlkVariantArgs = moveBlkVariantMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (moveBlkVariantArgs.Length != 7
+                || !moveBlkVariantArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[1].StartsWith("SRC := ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[2].StartsWith("COUNT := ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[3].StartsWith("SRC_INDEX := ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[4].StartsWith("DEST_INDEX := ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[5].StartsWith("Ret_Val => ", StringComparison.Ordinal)
+                || !moveBlkVariantArgs[6].StartsWith("DEST => ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException(
+                    "Expected 'EN := <expr>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, DEST_INDEX := <expr>, " +
+                    $"Ret_Val => <tag>, DEST => <tag>' inside MOVE_BLK_VARIANT(...), got: '{lines[i]}'");
+            }
+
+            var moveBlkVariantEn = ParseEnSource(moveBlkVariantArgs[0]["EN := ".Length..]);
+            var moveBlkVariantSrc = ParseExprTerm(moveBlkVariantArgs[1]["SRC := ".Length..]);
+            var moveBlkVariantCount = ParseExprTerm(moveBlkVariantArgs[2]["COUNT := ".Length..]);
+            var moveBlkVariantSrcIndex = ParseExprTerm(moveBlkVariantArgs[3]["SRC_INDEX := ".Length..]);
+            var moveBlkVariantDestIndex = ParseExprTerm(moveBlkVariantArgs[4]["DEST_INDEX := ".Length..]);
+            var moveBlkVariantRetVal = moveBlkVariantArgs[5]["Ret_Val => ".Length..];
+            var moveBlkVariantDest = moveBlkVariantArgs[6]["DEST => ".Length..];
+            moveBlkVariants.Add(new MoveBlkVariantStatement(
+                moveBlkVariantEn, moveBlkVariantSrc, moveBlkVariantCount, moveBlkVariantSrcIndex, moveBlkVariantDestIndex,
+                moveBlkVariantRetVal, moveBlkVariantDest));
+            i++;
+        }
+
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
-            && calcs.Count == 0)
+            && calcs.Count == 0 && moveBlkVariants.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC statements and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT statements and isn't marked [empty].");
         }
 
         return new IrNetwork(
-            number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs);
+            number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
+            moveBlkVariants);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -975,9 +1019,15 @@ public static partial class IrParser
             calcs.Add(ParseCalcSidecar(lines, ref i, number));
         }
 
+        var moveBlkVariants = new List<MoveBlkVariantStatementSidecar>();
+        while (i < lines.Length && MoveBlkVariantHeaderRegex().IsMatch(lines[i]))
+        {
+            moveBlkVariants.Add(ParseMoveBlkVariantSidecar(lines, ref i, number));
+        }
+
         return new NetworkSidecar(
             number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
-            absStatements, limits, tSubs, tConvs, calcs);
+            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -1207,6 +1257,32 @@ public static partial class IrParser
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
         return new CalcStatementSidecar(calcPartUId, en, inputs, equation, srcType, destAccessUId, destWireUId);
+    }
+
+    // A MOVE_BLK_VARIANT's own sidecar shape has four named operands (src/count/srcindex/
+    // destindex) and two destination pairs (retval/retvalwire, dest/destwire) instead of the
+    // usual one — see MoveBlkVariantStatementSidecar's own doc comment.
+    private static MoveBlkVariantStatementSidecar ParseMoveBlkVariantSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  moveblkvariant <n>" header — index itself isn't needed, position in the list is enough.
+
+        var moveBlkVariantPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    moveblkvariantuid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var srcOperand = ParseOperand(lines, ref i, "    ", "src");
+        var countOperand = ParseOperand(lines, ref i, "    ", "count");
+        var srcIndexOperand = ParseOperand(lines, ref i, "    ", "srcindex");
+        var destIndexOperand = ParseOperand(lines, ref i, "    ", "destindex");
+
+        var retValAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    retval = "));
+        var retValWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    retvalwire = "));
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new MoveBlkVariantStatementSidecar(
+            moveBlkVariantPartUId, version, en, srcOperand, countOperand, srcIndexOperand, destIndexOperand,
+            retValAccessUId, retValWireUId, destAccessUId, destWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1691,6 +1767,10 @@ public static partial class IrParser
     [GeneratedRegex(@"^  CALC\((?<args>.+)\) => (?<dest>\S+) (?<equation>"".*"")$")]
     private static partial Regex CalcLineRegex();
 
+    // No trailing "=> dest" — two named outputs, not one, both inside the parens (Phase 2 Tier 5).
+    [GeneratedRegex(@"^  MOVE_BLK_VARIANT\((?<args>.+)\)$")]
+    private static partial Regex MoveBlkVariantLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1748,4 +1828,7 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  calc (?<index>\d+)$")]
     private static partial Regex CalcHeaderRegex();
+
+    [GeneratedRegex(@"^  moveblkvariant (?<index>\d+)$")]
+    private static partial Regex MoveBlkVariantHeaderRegex();
 }

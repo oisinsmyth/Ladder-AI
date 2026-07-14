@@ -3151,8 +3151,29 @@ then deleted from `SampleProject`).
 **40 new converter tests** across `AbsTests.cs`/`LimitTests.cs`/`TSubTConvTests.cs`/`CalcTests.cs`
 — 323 converter tests total, all green.
 
-**Not yet started tonight**: Tier 4 (`Modbus_Master`/`Modbus_Comm_Load` — Instance-DB-backed, like
-`TON`/`Call`, but with several real ports each still needing individual grounding), Tier 5
-(re-ground `MOVE_BLK_VARIANT` — every sample seen so far only had `en` wired, the real array/count
-port shape is still unknown), Tier 6 (`Jump`/implied `Label`, `FillBlockI`, `WAIT` — novel
-categories with no existing analog, lowest priority). See `AITODO.md` for current state.
+**Tier 5 (`MOVE_BLK_VARIANT`) also attempted the same night, with a different outcome.**
+Re-grounding it properly (per the `T_SUB`/`T_CONV` lesson just above — read the *full* wire list,
+don't trust a `head_limit`-truncated `grep`) found the earlier "only `en` wired" conclusion was
+simply wrong: all 4 real instances (`FC MoveData`/`FC VSDDataSequence`) are fully wired and,
+unlike `Modbus_Master`/`Modbus_Comm_Load`, genuinely simple — four plain-tag inputs, no chains, no
+`OpenCon`-optional ports. Built and unit-tested the same way as tiers 1–3 (8 new tests,
+`MoveBlkVariantTests.cs`, 331 converter tests total) — the first instruction this converter
+reduces with **two** destination writes (`Ret_Val`/`DEST`) instead of one, needing genuinely new
+(if simple) infrastructure. **Live TIA verification did not complete**: two consecutive
+`openness-cli import` attempts against a synthetic composed FC both hit the first-connect Portal
+timeout ("check Portal, accept the dialog if it's there") — with the project owner asleep, there
+was no way to check for or accept that dialog. The 6 `Siemens.Automation.Portal.exe` processes
+present were the *same* 6 PIDs seen at the very start of the night, unchanged through dozens of
+successful operations in between, so they don't look like the actual cause — more likely ordinary
+first-connect flakiness. Retrying blindly a third time (or killing processes without being able to
+confirm none held real unsaved work) was judged the wrong call rather than a shortcut worth taking
+— **`MOVE_BLK_VARIANT` is unit-tested only, explicitly not presented as live-verified or closed**
+until an `import`/`compile` actually runs clean. Cleaned up (temp verification `.cs` file deleted)
+rather than left half-finished.
+
+**Not yet started tonight**: Tier 4 (`Modbus_Master`/`Modbus_Comm_Load` — re-grounded precisely,
+see `AITODO.md`; needs three new pieces of general infrastructure, not just port grounding — a
+chain-fed `REQ` operand, multi-output-tag productions, and an open/unconnected operand variant),
+Tier 6 (`Jump`/implied `Label`, `FillBlockI`, `WAIT` — novel categories with no existing analog,
+lowest priority). See `AITODO.md` for current state, including `MOVE_BLK_VARIANT`'s still-pending
+live verification.

@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -152,6 +152,11 @@ public static class FlgNetParser
                 {
                     var (calcCardinality, calcSrcType, calcEquation) = ParseCalcFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, Cardinality: calcCardinality, SrcType: calcSrcType, Equation: calcEquation));
+                }
+                else if (name == "MOVE_BLK_VARIANT")
+                {
+                    var moveBlkVariantVersion = ParseMoveBlkVariantFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Version: moveBlkVariantVersion));
                 }
                 else
                 {
@@ -561,6 +566,31 @@ public static class FlgNetParser
         var srcType = ParseSrcType(calcPart, "Calc", uid);
 
         return (cardinality, srcType, equationElement.Value);
+    }
+
+    // A block-move-with-array-indexing instruction (`Part Name="MOVE_BLK_VARIANT"`) — confirmed
+    // real, 2026-07-14 (Phase 2 Tier 5, `FC MoveData`/`FC VSDDataSequence`, 4 identical
+    // instances): `Version="1.2"`, no other attributes or children at all — genuinely the
+    // simplest possible Part-level shape (all its complexity lives in the wiring: `en`/`SRC`/
+    // `COUNT`/`SRC_INDEX`/`DEST_INDEX` inputs, `Ret_Val`/`DEST` outputs — see
+    // MoveBlkVariantStatement's own doc comment). No `DisabledENO` in any real instance —
+    // checked for absence, not assumed.
+    private static string ParseMoveBlkVariantFixedShape(XElement part, int uid)
+    {
+        var disabledEno = part.Attribute("DisabledENO")?.Value;
+        if (disabledEno is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"MOVE_BLK_VARIANT\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
+        }
+
+        if (part.HasElements)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"MOVE_BLK_VARIANT\" UId=\"{uid}\"> has child elements — no real instance has carried any.");
+        }
+
+        return RequireAttribute(part, "Version");
     }
 
     // A TON/TONR's own Instance reference — same Scope values as an ordinary Access, but the
