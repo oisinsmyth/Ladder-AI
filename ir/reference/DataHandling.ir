@@ -1,0 +1,188 @@
+BLOCK FC DataHandling
+ROOTID 0
+NUMBER 22
+LANGUAGE LAD
+COMMENT "Data-handling reference examples (WAND/Calc/T_SUB/T_CONV/MOVE_BLK_VARIANT/Move)"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  TEMP
+    DriveRunPermit : Bool
+    StatusWord : Word
+    DriveHealthy : Bool
+    DriveFaultReset : Bool
+    CommandWord : Word
+    Speed : Real
+    Ratio : Real
+    Divisor : Real
+    ScaledSpeed : Real
+    StartTime : Time
+    EndTime : Time
+    ElapsedTime : Time
+    ElapsedMillis : UDInt
+    SourceArray : Variant
+    ElementCount : UDInt
+    SourceStartIndex : UDInt
+    DestStartIndex : UDInt
+    MoveResult : Int
+    TargetArray : Variant
+    RunPermit : Bool
+    SourceValue : Int
+    StatusCode : Int
+  CONSTANT
+
+NETWORK 1 "Drive command word (WAND)"
+  COIL StatusWord.%X0 := DriveRunPermit
+  COIL StatusWord.%X3 := DriveHealthy
+  COIL StatusWord.%X7 := DriveFaultReset
+  WAND(EN := TRUE, IN1 := StatusWord, IN2 := 16#89) => CommandWord
+
+NETWORK 2 "Speed ratio (Calc)"
+  CALC(EN := TRUE, IN1 := Speed, IN2 := Ratio, IN3 := Divisor) => ScaledSpeed "IN1*(IN2/IN3)"
+
+NETWORK 3 "Elapsed time conversion"
+  T_SUB(EN := TRUE, IN1 := StartTime, IN2 := EndTime) => ElapsedTime
+  T_CONV(EN := ENO, IN := StartTime) => ElapsedMillis
+
+NETWORK 4 "Variant block move"
+  MOVE_BLK_VARIANT(EN := TRUE, SRC := SourceArray, COUNT := ElementCount, SRC_INDEX := SourceStartIndex, DEST_INDEX := DestStartIndex, Ret_Val => MoveResult, DEST => TargetArray)
+
+NETWORK 5 "Status code tap"
+  MOVE(EN := RunPermit, IN := SourceValue) => StatusCode
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access DriveRunPermit = 21 LocalVariable
+  access StatusWord.%X0 = 22 LocalVariable
+  access DriveHealthy = 23 LocalVariable
+  access StatusWord.%X3 = 24 LocalVariable
+  access DriveFaultReset = 25 LocalVariable
+  access StatusWord.%X7 = 26 LocalVariable
+  access StatusWord = 27 LocalVariable
+  access CommandWord = 28 LocalVariable
+  constant 16#89 = 29 Word
+  assignment 0
+    rail = 40
+    step 0 contact
+      uid = 30
+      operand = 21
+      operandwire = 37
+      negated = false
+      out = 38
+    coil = 31
+    coil operand = 22
+    coil operandwire = 39
+  assignment 1
+    rail = 40
+    step 0 contact
+      uid = 32
+      operand = 23
+      operandwire = 41
+      negated = false
+      out = 42
+    coil = 33
+    coil operand = 24
+    coil operandwire = 43
+  assignment 2
+    rail = 40
+    step 0 contact
+      uid = 34
+      operand = 25
+      operandwire = 44
+      negated = false
+      out = 45
+    coil = 35
+    coil operand = 26
+    coil operandwire = 46
+  wand 0
+    anduid = 36
+    rail = 40
+    input 0 tag = 27 47
+    input 1 literal = 29 48
+    srctype = Word
+    dest = 28
+    destwire = 49
+NETWORK 2
+  compileunit = 8
+  access Speed = 21 LocalVariable
+  access Ratio = 22 LocalVariable
+  access Divisor = 23 LocalVariable
+  access ScaledSpeed = 24 LocalVariable
+  calc 0
+    calcuid = 25
+    en = condition
+      rail = 26
+    input 0 tag = 21 27
+    input 1 tag = 22 28
+    input 2 tag = 23 29
+    equation = "IN1*(IN2/IN3)"
+    srctype = Real
+    dest = 24
+    destwire = 30
+NETWORK 3
+  compileunit = D
+  access StartTime = 21 LocalVariable
+  access EndTime = 22 LocalVariable
+  access ElapsedTime = 23 LocalVariable
+  access StartTime = 24 LocalVariable
+  access ElapsedMillis = 25 LocalVariable
+  tsub 0
+    tsubuid = 26
+    version = 1.2
+    en = condition
+      rail = 28
+    in1 tag = 21 29
+    in2 tag = 22 30
+    datetype = Time
+    timetype = Time
+    dest = 23
+    destwire = 31
+  tconv 0
+    tconvuid = 27
+    version = 1.2
+    en = eno 26 32
+    in tag = 24 33
+    srctype = Time
+    desttype = UDInt
+    dest = 25
+    destwire = 34
+NETWORK 4
+  compileunit = 12
+  access SourceArray = 21 LocalVariable
+  access ElementCount = 22 LocalVariable
+  access SourceStartIndex = 23 LocalVariable
+  access DestStartIndex = 24 LocalVariable
+  access MoveResult = 25 LocalVariable
+  access TargetArray = 26 LocalVariable
+  moveblkvariant 0
+    moveblkvariantuid = 27
+    version = 1.2
+    en = condition
+      rail = 28
+    src tag = 21 29
+    count tag = 22 30
+    srcindex tag = 23 31
+    destindex tag = 24 32
+    retval = 25
+    retvalwire = 33
+    dest = 26
+    destwire = 34
+NETWORK 5
+  compileunit = 17
+  access RunPermit = 21 LocalVariable
+  access SourceValue = 22 LocalVariable
+  access StatusCode = 23 LocalVariable
+  move 0
+    moveuid = 25
+    rail = 30
+    step 0 contact
+      uid = 24
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    in tag = 22 28
+    dest = 23
+    destwire = 29

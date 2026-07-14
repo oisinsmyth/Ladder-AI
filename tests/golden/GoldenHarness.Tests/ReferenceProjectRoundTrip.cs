@@ -30,6 +30,8 @@ public static class ReferenceProjectRoundTrip
         "NodeStatusAlarms",
         "PerimeterSafetyAlarms",
         "ThresholdAlarms",
+        "SignalConditioning",
+        "DataHandling",
     };
 
     public static RoundTripReport Run(string blockName, string workDir)
