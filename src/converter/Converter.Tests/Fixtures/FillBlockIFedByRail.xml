@@ -17,7 +17,14 @@
     </Access>
     <Access Scope="LocalVariable" UId="24">
       <Symbol>
-        <Component Name="TargetBlock" />
+        <Component Name="TargetBlock" AccessModifier="Array">
+          <Access Scope="LiteralConstant">
+            <Constant>
+              <ConstantType>DInt</ConstantType>
+              <ConstantValue>0</ConstantValue>
+            </Constant>
+          </Access>
+        </Component>
       </Symbol>
     </Access>
     <Part Name="Contact" UId="25" />

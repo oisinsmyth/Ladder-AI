@@ -25,13 +25,17 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 
 ## Recently closed (all committed)
 
-- **Instruction-coverage sweep + Phase 2 tiers 1–3 (`Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc`),
-  2026-07-14.** Grounded all 36 remaining `JOB9002` blocks (both PLC stations), found 11 real
-  currently-unsupported instructions, ranked into a 6-tier plan. Tiers 1–3 (5 instructions) built,
-  tested (40 new tests, 323 total), and live-verified via a synthetic composed FC imported/compiled
-  clean in `SampleProject`. Two real bugs found only by live TIA verification (a misread `LIMIT`
-  `DisabledENO` attribute; a hand-built fixture reusing one `Access` UId across two wires, which
-  TIA's own export never does) — see `docs/notes/stage-gates.md` for the full story.
+- **Instruction-coverage sweep + Phase 2 tiers 1–3, 5, and part of 6 (`Abs`/`LIMIT`/`T_SUB`/
+  `T_CONV`/`Calc`/`MOVE_BLK_VARIANT`/`FillBlockI`), 2026-07-14.** Grounded all 36 remaining `JOB9002`
+  blocks (both PLC stations), found 11 real currently-unsupported instructions, ranked into a
+  6-tier plan. 7 instructions built, tested (45 new tests, 345 total), and live-verified —
+  imported/compiled clean (0 errors) in `SampleProject`. Several real bugs found only by live TIA
+  verification along the way (a misread `LIMIT` `DisabledENO` attribute; a hand-built fixture
+  reusing one `Access` UId across two wires; a `FillBlockI` fixture using a plain scalar where the
+  real destination is array-indexed) — see `docs/notes/stage-gates.md` for the full story. `WAIT`
+  (Tier 6) built and tested but not live-verified — hit a distinct, still-open blocker (see
+  "Current task" below). Tier 4 re-grounded but not built; `Jump` (Tier 6) investigated but
+  deliberately not built, pending a design decision.
 - **The full `PlantAutoControl` round-trip plan — all three phases done, 2026-07-14.** Phase 1 (all 8
   dependency FBs compile clean), Phase 2 (all 26 real DB/tag-table roots sanitized/imported/
   compiled clean), Phase 3 (`PlantAutoControl` itself imports, compiles with 0 errors, and round-trips
@@ -78,22 +82,25 @@ closed" above). Working overnight, autonomously, per the project owner's own exp
     — mechanically ready, `TraceChain` already supports it; multi-output-tag productions; an
     open/unconnected operand variant) before either instruction can be built, not just "port
     grounding" as tonight's plan first estimated. Worth tackling as its own dedicated session.
-- **Tier 5** (`MOVE_BLK_VARIANT`): re-grounded, built, and unit-tested 2026-07-14 night (the
-  earlier "only `en` wired" note was wrong — a `head_limit`-truncated read; the real shape is fully
-  wired and simple). 8 new tests (`MoveBlkVariantTests.cs`), 331 converter tests total, all green.
-  **Not yet live-TIA-verified** — two consecutive `openness-cli import` attempts hit the
-  first-connect Portal timeout with no one awake to check for the approval dialog. **Next step:
-  run the live import/compile/re-export cycle** (rebuild the synthetic composed FC the same way
-  Tiers 1/2/3 did — see `ir/SPEC.md`'s own `MOVE_BLK_VARIANT` entry for the exact shape) once
-  Portal is confirmed responsive; only mark this tier genuinely closed once that's clean.
-- **Tier 6**: `WAIT`/`FillBlockI` built and unit-tested 2026-07-14 night (13 new tests, 344
-  converter tests total, both genuinely simple once grounded — see `ir/SPEC.md`'s own entries for
-  the exact shapes). **Not yet live-TIA-verified** — by the time these were ready, TIA Portal had
-  stopped responding to *any* command at all (confirmed via the lightest possible one,
-  `sanity-check`), a genuine outage unrelated to these two instructions specifically. **Next step**:
-  once Portal is confirmed responsive, run the same live import/compile/re-export cycle used for
-  Tiers 1–3/5 (compose a synthetic FC from the `WaitFedByRail.xml`/`FillBlockIFedByRail.xml`
-  fixtures) before marking this tier closed.
+- **Tier 5** (`MOVE_BLK_VARIANT`): **closed 2026-07-14.** Built, unit-tested (8 tests), and now
+  live-verified — imported/compiled clean (0 errors) in `SampleProject`, byte-identical round-trip.
+- **Tier 6**: `FillBlockI` **closed 2026-07-14** — built, tested, and live-verified alongside
+  `MOVE_BLK_VARIANT`. Along the way found the real `out` destination is array-indexed
+  (`CommsProcessData.NodeFaultCount[3]`, not a plain scalar) — no converter code changed (the
+  general array-index support already existed), only `FillBlockIFedByRail.xml` was corrected to
+  match. 345 converter tests total, all green.
+  - **`WAIT` — built and unit-tested, but hit a genuinely different live blocker, still open.**
+    TIA's own `Import()` rejects it — "An instruction with the name 'WAIT' cannot be found" — in
+    `SampleProject` specifically, even though the regenerated XML faithfully matches the real
+    `JOB9002` shape (confirmed not a converter bug: `MOVE_BLK_VARIANT`/`FillBlockI` imported into the
+    same target project cleanly in the same session). Likely a library/technology-object dependency
+    present in `JOB9002`'s own project but not in `SampleProject`'s — **not yet identified, needs the
+    project owner's input** rather than guessed at further (adding a library/technology object to a
+    project is a more consequential change than anything else done this whole plan). **Ask**: do
+    you know what `WAIT` depends on / whether `SampleProject` should have it added, or would you
+    rather verify `WAIT` against `JOB9002`'s own scratch copy instead (would need to extend the data
+    boundary approval's scope — see `docs/13-data-boundary.md` — to cover writing new synthetic
+    content into `JOB9002`, not just reading from it, which hasn't been explicitly approved yet)?
   - **`Jump` was investigated and deliberately NOT built — needs the project owner's own design
     call, not a routine build.** Grounding it found `JMP` is genuine **cross-network control
     flow**: its `label` port references a new `Access Scope="Label"` node shape, and the actual

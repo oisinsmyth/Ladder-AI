@@ -3198,3 +3198,32 @@ for the project owner's own call rather than decided unilaterally. Full detail i
 chain-fed `REQ` operand, multi-output-tag productions, and an open/unconnected operand variant).
 See `AITODO.md` for current state, including both `MOVE_BLK_VARIANT`'s and `WAIT`/`FillBlockI`'s
 still-pending live verification, and the `Jump` design question awaiting the project owner.
+
+### Tier 5/6 live verification completed the next morning — `MOVE_BLK_VARIANT`/`FillBlockI` closed, `WAIT` hit a real distinct blocker, 2026-07-14
+
+TIA Portal had recovered on its own by the time the project owner returned (confirmed via the same
+`sanity-check` probe that found it down the night before) — the outage was transient, not caused by
+anything in this project.
+
+**`MOVE_BLK_VARIANT` and `FillBlockI` both now fully live-verified**: a synthetic FC composed from
+both fixture networks imported and compiled clean (0 errors) in `SampleProject`, byte-identical
+readable IR text before and after the full cycle. Getting there found one more real fixture gap,
+the same "only live TIA catches it" pattern as the whole night: `FillBlockI`'s real `out`
+destination (`CommsProcessData.NodeFaultCount[3]`, grounded originally in `FC ModbusComs`) is
+**array-indexed**, not a plain scalar tag — the synthetic verification fixture had used a plain
+scalar, which TIA's compiler correctly rejected ("Elements of a structure or of an ARRAY can only
+be filled if all the elements have the same elementary data type"). No converter code needed to
+change — the general array-index `AccessNode` support already existed (confirmed real since the
+original `CommsProcessData.Node_Error` grounding, well before tonight) — only `FillBlockIFedByRail.xml`
+needed correcting to match the real shape faithfully.
+
+**`WAIT` hit a genuinely different, still-open blocker**: TIA's own `Import()` rejects it —
+"An instruction with the name 'WAIT' cannot be found" — specifically in `SampleProject`, even
+though the regenerated XML faithfully reproduces the real `JOB9002` shape (confirmed not a converter
+bug: `MOVE_BLK_VARIANT`/`FillBlockI` imported into the very same target project cleanly in the same
+session). The likely explanation is a library/technology-object dependency present in `JOB9002`'s own
+project configuration but not in `SampleProject`'s — not yet confirmed, not guessed at further.
+Flagged for the project owner rather than experimented on blindly (adding libraries to a project is
+a more consequential change than anything else attempted tonight).
+
+**345 converter tests, all green.** `AITODO.md` updated to reflect current state.

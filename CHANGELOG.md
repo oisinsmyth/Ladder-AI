@@ -10,6 +10,23 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Phase 2 tiers 5/6 live verification: `MOVE_BLK_VARIANT`/`FillBlockI` closed, `WAIT` hit a distinct new blocker**
+
+- TIA Portal recovered on its own overnight (confirmed via `sanity-check`) — the earlier outage was
+  transient. `MOVE_BLK_VARIANT` and `FillBlockI` both now fully live-verified: a synthetic composed
+  FC imported and compiled clean (0 errors) in `SampleProject`, byte-identical round-trip.
+- Found one more real fixture gap along the way, same "only live TIA catches it" pattern as the
+  whole night before: `FillBlockI`'s real `out` destination (`CommsProcessData.NodeFaultCount[3]`)
+  is array-indexed, not a plain scalar — the verification fixture had used a plain scalar, which
+  TIA's compiler correctly rejected. No converter code changed (general array-index support already
+  existed); only `FillBlockIFedByRail.xml` was corrected.
+- `WAIT` hit a genuinely different, still-open blocker: TIA's `Import()` says "An instruction with
+  the name 'WAIT' cannot be found" in `SampleProject` specifically, even though the shape faithfully
+  matches the real `JOB9002` export — confirmed not a converter bug (`MOVE_BLK_VARIANT`/`FillBlockI`
+  imported cleanly into the same project). Likely a missing library/technology-object dependency —
+  flagged for the project owner rather than guessed at further.
+- 345 converter tests, all green. See `docs/notes/stage-gates.md`/`AITODO.md` for full detail.
+
 **Phase 2 Tier 6: `WAIT`/`FillBlockI` built and unit-tested — `Jump` deliberately not (needs a real design decision)**
 
 - `WAIT` (`en`/`WT`, no destination at all — the first production modeled with no output) and

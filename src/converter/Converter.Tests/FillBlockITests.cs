@@ -13,6 +13,15 @@ namespace Converter.Tests;
 /// content. Structurally close to `Move` (`en`-gated, one destination tag via `out`) plus one
 /// extra tag-or-literal input, `count` (how many elements to fill) — the fill value itself is
 /// `in`. Ports are lowercase (`en`/`in`/`count`/`out`), unlike `MOVE_BLK_VARIANT`'s own uppercase.
+///
+/// The real `out` destination (`CommsProcessData.NodeFaultCount[3]`) is array-indexed, not a
+/// plain scalar tag — confirmed live, 2026-07-14: TIA's own compiler rejected a live-verification
+/// attempt against a plain scalar destination ("Elements of a structure or of an ARRAY can only
+/// be filled if all the elements have the same elementary data type"), which is what surfaced
+/// this. No converter code changed for it — the existing general array-index `AccessNode` support
+/// (`ArrayIndex`/`DottedPath`, confirmed real since the very first array-subscript grounding) was
+/// already sufficient; only the fixture needed the array-indexed shape to be a faithful
+/// reproduction of the real one.
 /// </summary>
 public class FillBlockITests
 {
@@ -41,7 +50,7 @@ public class FillBlockITests
         Assert.Equal("GateBit", Assert.IsType<Expr.TagRef>(en.Value).Path);
         Assert.Equal("FillValue", Assert.IsType<Expr.TagRef>(statement.In).Path);
         Assert.Equal("FillCount", Assert.IsType<Expr.TagRef>(statement.Count).Path);
-        Assert.Equal("TargetBlock", statement.DestTag);
+        Assert.Equal("TargetBlock[0]", statement.DestTag);
     }
 
     [Fact]
@@ -73,7 +82,7 @@ public class FillBlockITests
 
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
-        Assert.Contains("  FILLBLOCKI(EN := GateBit, IN := FillValue, COUNT := FillCount) => TargetBlock\n", text);
+        Assert.Contains("  FILLBLOCKI(EN := GateBit, IN := FillValue, COUNT := FillCount) => TargetBlock[0]\n", text);
     }
 
     [Fact]

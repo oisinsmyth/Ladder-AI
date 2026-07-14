@@ -599,12 +599,10 @@ NETWORK 8 "Run enable delay"
   SRC_INDEX := <expr>, DEST_INDEX := <expr>, Ret_Val => <tag>, DEST => <tag>)` — every port
   (inputs and outputs alike) is one argument inside the parens, disambiguated by `:=` vs `=>`, the
   same mixing convention `CALL`'s own argument list already established. 8 new converter tests
-  (`MoveBlkVariantTests.cs`, one fixture genericized from the real shape). **Unit-tested only —
-  live TIA verification not yet completed**, unlike every other Phase 2 tier above: two
-  consecutive `openness-cli import` attempts against a synthetic composed FC hit the same
-  first-connect Portal timeout, which needs a human to check for (and accept) an approval dialog
-  inside TIA Portal — not resolvable without that access. Not presented as "live-verified" or
-  "closed" until that step actually runs clean.
+  (`MoveBlkVariantTests.cs`, one fixture genericized from the real shape). **Live-verified against
+  real data, 2026-07-14**: TIA Portal recovered from an earlier outage (below); a synthetic
+  composed FC imported and compiled clean (0 errors), byte-identical readable IR text before and
+  after the full cycle.
 - **`WAIT`/`FillBlockI`, built 2026-07-14 (Phase 2 Tier 6) — plus `Jump`, deliberately NOT built.**
   All three re-grounded precisely (every attribute checked directly, not visually re-read).
   - **`WAIT`** (`FC VSDDataSequence`): `Version="1.0"`, no `DisabledENO` (same bare-Version-only
@@ -612,16 +610,34 @@ NETWORK 8 "Run enable delay"
     once a second real instruction confirmed it). Two ports only: `en` and `WT` (wait time, a
     literal `Int` in the one real instance). **The first instruction this converter models with no
     destination tag at all** — a pure side-effecting delay. Readable form has no trailing
-    `=> dest`: `WAIT(EN := <expr-or-ENO>, WT := <expr>)`.
+    `=> dest`: `WAIT(EN := <expr-or-ENO>, WT := <expr>)`. **Live verification found a real,
+    distinct blocker**: TIA's own `Import()` rejects it — "An instruction with the name 'WAIT'
+    cannot be found" — in `SampleProject` specifically, even though the shape is faithfully
+    reproduced from a real `JOB9002` export. This isn't a converter bug (`MOVE_BLK_VARIANT`/
+    `FillBlockI` imported into the same target project cleanly); it looks like a
+    library/technology-object dependency present in `JOB9002` but not in `SampleProject`, not yet
+    identified. Flagged for the project owner rather than guessed at further — see `AITODO.md`.
   - **`FillBlockI`** (`FC ModbusComs`): `DisabledENO="true"`, no `Version` — the mirror-image Part
     shape of `WAIT`. Structurally close to `Move` (one destination tag via `out`) plus a second
     tag-or-literal input, `count` — the fill value itself is `in`. Readable form:
-    `FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>`.
-  - 13 new converter tests (`WaitTests.cs`/`FillBlockITests.cs`), 344 total. **Unit-tested only —
-    live TIA verification blocked**: by the time these were built, TIA Portal itself had stopped
-    responding to *any* command, including the lightest possible one (`sanity-check`) — not a
-    code-specific issue, a genuine external outage with no one awake to check for a stuck approval
-    dialog. Left unverified rather than rushed, same as `MOVE_BLK_VARIANT` above.
+    `FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>`. **Live verification
+    found a second real, distinct issue — this one in the fixture, not the converter**: the real
+    `out` destination (`CommsProcessData.NodeFaultCount[3]`) is array-indexed, not a plain scalar
+    tag. TIA's own compiler rejected a plain-scalar live-verification attempt ("Elements of a
+    structure or of an ARRAY can only be filled if all the elements have the same elementary data
+    type"), which is what surfaced it. No converter code changed — the existing general
+    array-index `AccessNode` support (confirmed real since the original `CommsProcessData.Node_Error`
+    grounding) was already sufficient; only `FillBlockIFedByRail.xml` needed the array-indexed
+    shape to faithfully match the real one. **Live-verified against real data, 2026-07-14** once
+    corrected: imported and compiled clean (0 errors) alongside `MOVE_BLK_VARIANT` in the same
+    synthetic FC, byte-identical round-trip.
+  - 13 new converter tests (`WaitTests.cs`/`FillBlockITests.cs`), 345 total. `WAIT` remains
+    **unit-tested only — live TIA verification blocked** on the library/technology question above;
+    `FillBlockI` is fully closed. (Earlier the same night, before Portal recovered, both were
+    blocked by a separate, now-resolved issue — TIA Portal itself had stopped responding to *any*
+    command, including the lightest possible one, `sanity-check` — a genuine external outage, not
+    a code issue. `WAIT`'s "instruction not found" is a different, still-open blocker, hit only
+    after Portal came back and the import could actually reach TIA's own validator.)
   - **`Jump` (`Part Name="Jump"`) was investigated but deliberately NOT built.** Grounding it
     (`FB VSDUpdateComs`) surfaced something much bigger than a routine new instruction: `Jump`'s
     own `label` port references a **new `Access Scope="Label"`** node (`<Access Scope="Label">
