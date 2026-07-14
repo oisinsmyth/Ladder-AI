@@ -8,6 +8,36 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-15
+
+**Open S5 (structured data extraction), in parallel with S4**
+
+- Roadmap explicitly allows this: S5's entry is just S1 done (S4 not required). S4 stays ACTIVE at
+  Phase 1 - opening S5 isn't a replacement for finishing it, just parallel work. No S5 work started
+  yet - detailed plan next, same process as S3/S4.
+
+**S4 Phase 1: mechanical rule-checking built and pilot-proven**
+
+- `converter review <file> [<file> ...] [--ignore-errors] [--json]` - 8 rules: C-003 (naming
+  prefix), C-005 (charset), C-201 (title/comment presence), C-301+C-501 (absolute addressing, all
+  three documented exceptions), C-406 (timer kind, both declaration and usage form), plus
+  C-102/C-401/C-404 built and explicitly labeled `CheckedVacuous` (no jump/counter/built-in-edge
+  construct exists in the current IR model at all, so these can't structurally fire).
+  `--ignore-errors` records a per-file error and continues a batch instead of aborting on the first
+  bad file.
+- 46 new tests (true-positive/true-negative per rule); full converter suite green (412/412).
+- Live pilot against all 14 `ir/reference/*.ir` files matched every finding predicted during
+  planning exactly (13/14 naming-prefix violations, 5 DB-kind header-comment gaps plus
+  `TimerSample`'s own, the `NodeStatusAlarms`/`PerimeterSafetyAlarms` alarm-word C-301/C-501 pair,
+  the `FBTimers`/`TimingAndCalls` C-406 declaration/usage split). Confirmed `DataHandling.ir`'s
+  C-301 exception mechanism against its real content (3 genuine slice-access writes, correctly
+  exempted), not just the synthetic unit test.
+- Exit criterion (`02-roadmap.md`: matches the engineer's own review, false-positive rate
+  acceptable) explicitly not yet met - needs a genuine blind comparison pass, not done this round.
+  S4 stays ACTIVE, Phase 1 only. Full detail and the durable checkability findings (severity/
+  checkability mismatches, C-301's three-exception scope, C-406's dual-form split, a rough
+  re-estimate of the remaining ~42 rules): `docs/notes/stage-gates.md`'s "S4 Phase 1" section.
+
 ## 2026-07-14
 
 **Open S4 (convention review)**

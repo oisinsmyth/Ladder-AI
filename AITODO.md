@@ -28,20 +28,31 @@ closed (embedded-newline guard; the previously-untested "edit an existing title"
 real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format), and the
 other 13 committed reference-corpus files swept afterward to confirm that bug wasn't a wider gap.
 
-**S4 — Convention review, ACTIVE**, opened 2026-07-14. Per `docs/02-roadmap.md`: review mode — AI
-checks IR against `06-lad-conventions.md`'s ~50 rules and emits a findings report (rule ID,
-location, severity, suggested fix); no auto-fix. Exit: review of the reference project matches the
-engineer's own independent review on a sample; false-positive rate acceptable. Do not perform S5+
-capabilities (generation/modification) — `CLAUDE.md` hard rule, gated by `docs/notes/stage-gates.md`.
+**S4 — Convention review, ACTIVE, Phase 1 built and pilot-proven 2026-07-15.** Per
+`docs/02-roadmap.md`: review mode — AI checks IR against `06-lad-conventions.md`'s ~50 rules and
+emits a findings report (rule ID, location, severity, suggested fix); no auto-fix. Exit: review of
+the reference project matches the engineer's own independent review on a sample; false-positive
+rate acceptable — **not yet met** (needs an actual blind comparison against the project owner's own
+judgment; the live pilot used findings already narrated during planning, not a clean blind test).
+Phase 1 (8 of the ~50 rules): `converter review` subcommand built, tested (46 new tests, 412/412
+suite-wide), live-piloted against all 14 reference-corpus files — matched every predicted finding
+exactly. Full detail: `docs/notes/stage-gates.md`'s "S4 Phase 1" section. Project owner's call,
+2026-07-15: good enough to pause active work and move to S5 — S4 stays ACTIVE at Phase 1, not
+marked done. Do not perform S6/S7 capabilities (generation/modification) — `CLAUDE.md` hard rule,
+gated by `docs/notes/stage-gates.md`; their own entry criteria aren't met yet regardless (S6 needs
+the pattern-library spec implemented, not done).
 
-## Current task: detailed S4 plan being built
+**S5 — Structured data extraction, ACTIVE**, opened 2026-07-15, in parallel with S4 (roadmap
+explicitly allows this — S5's entry is just S1 done, which it is). Per `docs/02-roadmap.md`:
+extractors for alarm lists, IO usage, and cross-references, emitting CSV/XLSX. Exit: extracted
+alarm and IO lists for the reference project verified against TIA's own cross-reference data.
 
-Nothing executed yet. Genuinely new kind of capability — not reading (S2) or writing documentation
-(S3), but systematically checking logic against rules and reporting findings. Real open questions
-before any code gets written: which of the ~50 convention rules are actually mechanically checkable
-from IR content alone versus needing external context (an agreed equipment-ID list, the pattern
-library, a human design-intent judgment); what the findings-report format should look like; which
-block(s) to pilot against. Working through these via the same plan-mode process used for S3.
+## Current task: detailed S5 plan not yet started
+
+Next step: work through an S5 plan the same way S3/S4's were built (plan-mode process, research
+agents on real open questions before code gets written) — e.g. what "verified against TIA's own
+cross-reference data" concretely means as a check, which reference-corpus content has enough real
+alarm/IO content to pilot against, CSV/XLSX output shape.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Converter.Ir;
+using Converter.Review;
 using Converter.Sanitize;
 using Converter.SimaticMl;
 
@@ -14,10 +15,16 @@ internal static class Program
             return RunSanitize(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "review")
+        {
+            return RunReview(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
+            Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
             return 1;
         }
 
@@ -137,6 +144,52 @@ internal static class Program
             Console.Error.WriteLine($"{file}: {ex.GetType().Name}: {ex.Message}");
             return 1;
         }
+    }
+
+    private static int RunReview(string[] args)
+    {
+        var files = new List<string>();
+        var ignoreErrors = false;
+        var json = false;
+
+        foreach (var arg in args)
+        {
+            switch (arg)
+            {
+                case "--ignore-errors":
+                    ignoreErrors = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    files.Add(arg);
+                    break;
+            }
+        }
+
+        if (files.Count == 0)
+        {
+            Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--ignore-errors] [--json]");
+            return 1;
+        }
+
+        ReviewReport report;
+        try
+        {
+            report = ReviewRunner.ReviewFiles(files, ignoreErrors);
+        }
+        catch (ReviewFileException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+
+        Console.WriteLine(json ? ReviewOutputFormatter.FormatJson(report) : ReviewOutputFormatter.FormatTable(report));
+
+        var hasErrorFindings = report.Files.Any(f => f.Findings.Any(finding => finding.Severity == FindingSeverity.Error));
+        var hasFileErrors = report.Files.Any(f => f.FileError is not null);
+        return hasErrorFindings || hasFileErrors ? 1 : 0;
     }
 
     private static string? RequireValue(string[] args, ref int i, string flag)

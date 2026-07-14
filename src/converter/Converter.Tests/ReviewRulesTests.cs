@@ -1,0 +1,388 @@
+using Converter.Ir;
+using Converter.Review;
+using Converter.SimaticMl;
+using Xunit;
+
+namespace Converter.Tests;
+
+/// <summary>
+/// S4 Phase 1 (2026-07-15): mechanical convention-review rule checks (docs/06-lad-conventions.md).
+/// True-positive/true-negative coverage for each of the 8 Phase-1 rules — 5 discriminating
+/// (C-003, C-005, C-201, C-301/C-501, C-406) and 3 defense-in-depth/vacuous (C-102, C-401,
+/// C-404) — built directly against <see cref="Rules"/>, no file I/O, matching this suite's
+/// existing "construct the model directly" style (see NetworkTitleCommentTests.cs).
+/// </summary>
+public class ReviewRulesTests
+{
+    private static IrBlock MakeBlock(
+        string kind,
+        string name,
+        IReadOnlyList<IrNetwork> networks,
+        string? comment = null,
+        IReadOnlyList<DbMember>? staticMembers = null,
+        IReadOnlyList<DbMember>? tempMembers = null) =>
+        new("0", kind, name, 1, "LAD", comment, networks, staticMembers, tempMembers);
+
+    // ---- C-003: block/DB naming prefix ----
+
+    [Fact]
+    public void CheckC003BlockPrefix_FbWithoutPrefix_Flags()
+    {
+        var block = MakeBlock("FB", "MotorDOL", Array.Empty<IrNetwork>());
+
+        var finding = Assert.Single(Rules.CheckC003BlockPrefix(block));
+        Assert.Equal("C-003", finding.RuleId);
+        Assert.Equal(FindingSeverity.Warn, finding.Severity);
+    }
+
+    [Fact]
+    public void CheckC003BlockPrefix_FbWithPrefix_Clean()
+    {
+        var block = MakeBlock("FB", "FB_MotorDOL", Array.Empty<IrNetwork>());
+
+        Assert.Empty(Rules.CheckC003BlockPrefix(block));
+    }
+
+    [Fact]
+    public void CheckC003BlockPrefix_FcWithoutPrefix_Flags()
+    {
+        var block = MakeBlock("FC", "PlantAutoControl", Array.Empty<IrNetwork>());
+
+        Assert.Single(Rules.CheckC003BlockPrefix(block));
+    }
+
+    [Fact]
+    public void CheckC003BlockPrefix_ObHasNoRequiredPrefix_Clean()
+    {
+        var block = MakeBlock("OB", "Main", Array.Empty<IrNetwork>());
+
+        Assert.Empty(Rules.CheckC003BlockPrefix(block));
+    }
+
+    [Fact]
+    public void CheckC003DbPrefix_PlainDbWithoutPrefix_Flags()
+    {
+        var db = new DbSource("0", "AlarmData", 1, InstanceOfName: null, Comment: null, Members: Array.Empty<DbMember>());
+
+        var finding = Assert.Single(Rules.CheckC003DbPrefix(db));
+        Assert.Equal(FindingSeverity.Warn, finding.Severity);
+    }
+
+    [Fact]
+    public void CheckC003DbPrefix_PlainDbWithPrefix_Clean()
+    {
+        var db = new DbSource("0", "DB_AlarmData", 1, InstanceOfName: null, Comment: null, Members: Array.Empty<DbMember>());
+
+        Assert.Empty(Rules.CheckC003DbPrefix(db));
+    }
+
+    [Fact]
+    public void CheckC003DbPrefix_InstanceDbWithoutIPrefix_Flags()
+    {
+        var db = new DbSource("0", "MotorDOL_1", 1, InstanceOfName: "FB_MotorDOL", Comment: null, Members: Array.Empty<DbMember>());
+
+        Assert.Single(Rules.CheckC003DbPrefix(db));
+    }
+
+    [Fact]
+    public void CheckC003DbPrefix_InstanceDbWithIPrefix_Clean()
+    {
+        var db = new DbSource("0", "iDB_MotorDOL_1", 1, InstanceOfName: "FB_MotorDOL", Comment: null, Members: Array.Empty<DbMember>());
+
+        Assert.Empty(Rules.CheckC003DbPrefix(db));
+    }
+
+    // ---- C-005: letters/digits/underscore only, per dot-separated path component ----
+
+    [Fact]
+    public void CheckC005Charset_ValidNames_Clean()
+    {
+        var network = new IrNetwork(1, "T", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor_A2")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC005Charset(block));
+    }
+
+    [Fact]
+    public void CheckC005Charset_HyphenInName_Flags()
+    {
+        var network = new IrNetwork(1, "T", new[] { new CoilAssignment("Output-1", new Expr.TagRef("Sensor1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC005Charset(block));
+        Assert.Equal("C-005", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Equal(1, finding.NetworkNumber);
+    }
+
+    [Fact]
+    public void CheckC005Charset_SliceAddressComponent_SkippedNotFlagged()
+    {
+        // .%X3 is addressing syntax (an alarm-word bit slice), not a user-chosen name - must not
+        // be charset-checked at all, even though '%' itself would fail IsValidIdentifier.
+        var network = new IrNetwork(1, "T", new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC005Charset(block));
+    }
+
+    [Fact]
+    public void CheckC005Charset_ArrayIndexSuffix_StrippedBeforeCheck()
+    {
+        // Recipe[3], unstripped, would fail on '[' / ']' - proves the bracket-suffix strip runs.
+        var network = new IrNetwork(1, "T", new[] { new CoilAssignment("Output1", new Expr.TagRef("Recipe[3]")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC005Charset(block));
+    }
+
+    [Fact]
+    public void CheckC005Charset_LiteralOperand_ExcludedFromCheck()
+    {
+        // T#100MS contains '#', would fail the charset check if TagReferences ever yielded an
+        // Expr.Literal's own value - it must not.
+        var network = new IrNetwork(1, "T", Array.Empty<CoilAssignment>(),
+            Timers: new[] { new TimerBinding("Timer1", new Expr.TagRef("StartCond"), new Expr.Literal("T#100MS")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC005Charset(block));
+    }
+
+    [Fact]
+    public void CheckC005CharsetDbMembers_ValidNames_Clean()
+    {
+        var members = new[] { new DbMember("MotorSpeed", "Real", false, null) };
+
+        Assert.Empty(Rules.CheckC005CharsetDbMembers("DB_Test", members));
+    }
+
+    [Fact]
+    public void CheckC005CharsetDbMembers_InvalidName_Flags()
+    {
+        var members = new[] { new DbMember("Motor-Speed", "Real", false, null) };
+
+        var finding = Assert.Single(Rules.CheckC005CharsetDbMembers("DB_Test", members));
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void CheckC005CharsetDbMembers_NestedInvalidName_FlagsViaRecursion()
+    {
+        var nested = new[] { new DbMember("Bad Name", "Bool", false, null) };
+        var members = new[] { new DbMember("Group1", "Struct", false, null, NestedMembers: nested) };
+
+        var finding = Assert.Single(Rules.CheckC005CharsetDbMembers("DB_Test", members));
+        Assert.Contains("Bad Name", finding.Description);
+    }
+
+    // ---- C-201: every block has a header comment; every non-empty network has a title ----
+
+    [Fact]
+    public void CheckC201HeaderComment_Null_Flags()
+    {
+        Assert.Single(Rules.CheckC201HeaderComment("FB_Test", null));
+    }
+
+    [Fact]
+    public void CheckC201HeaderComment_Empty_Flags()
+    {
+        Assert.Single(Rules.CheckC201HeaderComment("FB_Test", string.Empty));
+    }
+
+    [Fact]
+    public void CheckC201HeaderComment_Present_Clean()
+    {
+        Assert.Empty(Rules.CheckC201HeaderComment("FB_Test", "Does a thing."));
+    }
+
+    [Fact]
+    public void CheckC201NetworkTitles_MissingTitleWithRealLogic_Flags()
+    {
+        var network = new IrNetwork(1, string.Empty, new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC201NetworkTitles(block));
+        Assert.Equal(1, finding.NetworkNumber);
+    }
+
+    [Fact]
+    public void CheckC201NetworkTitles_EmptyNetworkNoTitle_NotFlagged()
+    {
+        // Mirrors the corpus's own trailing-[empty]-network pattern (TimerSample Network 4) - a
+        // network with zero Parts has nothing to title.
+        var network = new IrNetwork(4, string.Empty, Array.Empty<CoilAssignment>());
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC201NetworkTitles(block));
+    }
+
+    [Fact]
+    public void CheckC201NetworkTitles_Titled_Clean()
+    {
+        var network = new IrNetwork(1, "Motor start/stop", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC201NetworkTitles(block));
+    }
+
+    // ---- C-301 / C-501: symbolic addressing only, except alarm-word / comms / data-handling ----
+
+    [Fact]
+    public void CheckC301_NoSliceAccess_Clean()
+    {
+        var network = new IrNetwork(1, "Normal logic", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    [Fact]
+    public void CheckC301_SingleSliceBitTitled_SatisfiesAlarmException_Clean()
+    {
+        var network = new IrNetwork(1, "High temperature alarm", new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    [Fact]
+    public void CheckC301_SingleSliceBitUntitled_FlagsBothC301AndC501()
+    {
+        var network = new IrNetwork(1, string.Empty, new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(2, findings.Count);
+        Assert.Contains(findings, f => f.RuleId == "C-301" && f.Severity == FindingSeverity.Error);
+        Assert.Contains(findings, f => f.RuleId == "C-501" && f.Severity == FindingSeverity.Warn);
+    }
+
+    [Fact]
+    public void CheckC301_MultipleSliceBitsEvenTitled_FlagsBothRules()
+    {
+        var network = new IrNetwork(1, "Alarm word bits", new[]
+        {
+            new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")),
+            new CoilAssignment("AlarmWord.%X4", new Expr.TagRef("Cond2")),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(2, findings.Count);
+    }
+
+    [Fact]
+    public void CheckC301_DataHandlingSelfIdentifiedBlock_ExemptsSliceAccess_Clean()
+    {
+        // The exact scoping bug the S4 plan-agent review caught before implementation: C-301
+        // names three exceptions (alarm words/C-501, comms mapping, data-handling per C-105), not
+        // just the alarm-word one - a data-handling block's own untitled, multi-bit slice access
+        // must NOT be flagged (this is the DataHandling.ir shape).
+        var network = new IrNetwork(1, string.Empty, new[]
+        {
+            new CoilAssignment("PackedWord.%X0", new Expr.TagRef("Cond1")),
+            new CoilAssignment("PackedWord.%X1", new Expr.TagRef("Cond2")),
+        });
+        var block = MakeBlock("FB", "FB_DataHandling", new[] { network }, comment: "Data-handling block per C-105, indexed access throughout.");
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    [Fact]
+    public void CheckC301_CommsSelfIdentifiedBlock_ExemptsSliceAccess_Clean()
+    {
+        var network = new IrNetwork(1, string.Empty, new[] { new CoilAssignment("MappedWord.%X0", new Expr.TagRef("Cond1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network }, comment: "Handles Modbus communication mapping.");
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    // ---- C-406: TON is the only permitted timer instruction (declaration + usage forms) ----
+
+    [Fact]
+    public void CheckC406TimerUsage_Tonr_Flags()
+    {
+        var network = new IrNetwork(1, "T", Array.Empty<CoilAssignment>(),
+            Timers: new[] { new TimerBinding("Timer1", new Expr.TagRef("Start"), new Expr.Literal("T#5S"), TimerKind.Tonr, new Expr.TagRef("Reset1")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC406TimerUsage(block));
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void CheckC406TimerUsage_Tof_Flags()
+    {
+        var network = new IrNetwork(1, "T", Array.Empty<CoilAssignment>(),
+            Timers: new[] { new TimerBinding("Timer1", new Expr.TagRef("Start"), new Expr.Literal("T#5S"), TimerKind.Tof) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Single(Rules.CheckC406TimerUsage(block));
+    }
+
+    [Fact]
+    public void CheckC406TimerUsage_Ton_Clean()
+    {
+        var network = new IrNetwork(1, "T", Array.Empty<CoilAssignment>(),
+            Timers: new[] { new TimerBinding("Timer1", new Expr.TagRef("Start"), new Expr.Literal("T#5S")) });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC406TimerUsage(block));
+    }
+
+    [Fact]
+    public void CheckC406TimerDeclarations_TonrTime_Flags()
+    {
+        var members = new[] { new DbMember("Timer1", "TONR_TIME", false, null) };
+
+        var finding = Assert.Single(Rules.CheckC406TimerDeclarations("FB_Test", members));
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+    }
+
+    [Fact]
+    public void CheckC406TimerDeclarations_TofTime_Flags()
+    {
+        var members = new[] { new DbMember("Timer1", "TOF_TIME", false, null) };
+
+        Assert.Single(Rules.CheckC406TimerDeclarations("FB_Test", members));
+    }
+
+    [Fact]
+    public void CheckC406TimerDeclarations_TonTime_Clean()
+    {
+        var members = new[] { new DbMember("Timer1", "TON_TIME", false, null) };
+
+        Assert.Empty(Rules.CheckC406TimerDeclarations("FB_Test", members));
+    }
+
+    [Fact]
+    public void CheckC406TimerDeclarations_NestedTonrTime_FlagsViaRecursion()
+    {
+        var nested = new[] { new DbMember("InnerTimer", "TONR_TIME", false, null) };
+        var members = new[] { new DbMember("Group1", "Struct", false, null, NestedMembers: nested) };
+
+        Assert.Single(Rules.CheckC406TimerDeclarations("FB_Test", members));
+    }
+
+    // ---- C-102/C-401/C-404: defense-in-depth, structurally vacuous against the current IR model ----
+
+    [Fact]
+    public void CheckC102NoJumps_AlwaysEmpty()
+    {
+        Assert.Empty(Rules.CheckC102NoJumps(MakeBlock("FB", "FB_Test", Array.Empty<IrNetwork>())));
+    }
+
+    [Fact]
+    public void CheckC401NoCounters_AlwaysEmpty()
+    {
+        Assert.Empty(Rules.CheckC401NoCounters(MakeBlock("FB", "FB_Test", Array.Empty<IrNetwork>())));
+    }
+
+    [Fact]
+    public void CheckC404NoBuiltInEdgeInstructions_AlwaysEmpty()
+    {
+        Assert.Empty(Rules.CheckC404NoBuiltInEdgeInstructions(MakeBlock("FB", "FB_Test", Array.Empty<IrNetwork>())));
+    }
+}

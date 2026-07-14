@@ -2,6 +2,8 @@
 
 **Status: POPULATED — all rules below are confirmed site conventions (sessions of 2026-07-09) unless marked otherwise. Remaining gaps are listed in "To fill in".**
 
+**Mechanical review (S4):** a `converter review` tool checks a subset of these rules automatically against IR content — see `docs/notes/stage-gates.md`'s "S4 Phase 1" section for which rules are actually mechanically checkable (vs. needing cross-block context or genuine human judgment), and for specific findings about individual rules below (C-113/C-504/C-112's severity-vs-checkability mismatch, C-301's three-part exception scope, C-406's two checkable forms).
+
 Every rule gets an ID (`C-xxx`) so review findings can cite it, plus a severity: **error** (must fix), **warn** (should fix), **info** (style).
 
 Site mantra: **simple, simple, simple** — the test for control logic is that an electrician with a multimeter and a spanner can look at a rung and get a rough idea of what's going on. Reuse is achieved at the *block* level (standard FBs, UDTs, the pattern library), never through cleverness inside rungs.

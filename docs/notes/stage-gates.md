@@ -10,8 +10,8 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | S1 — Lossless round-trip | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | ADR-0001/`ir/SPEC.md` decided; converter + `openness-cli` + golden harness support ~24 instruction-level constructs (full list: `FlgNetParser.SupportedPartNames` plus `CALL`), all live-verified against real or reference-project data at least once. **`FC PlantAutoControl` round-trips through the true TIA cycle, completely** (2026-07-14 — export → sanitize → import → block-level compile clean → re-export → `Normalizer.AreSemanticallyEquivalent` = true) against its full real dependency closure (8 dependency FBs, 26 DB/tag-table roots) — the actual Layer 1 assertion this stage exists to prove, at production scale. **Reference-project corpus grown from 7 to 14 committed artifacts** (2026-07-14, "Reference corpus growth" below) specifically to close the gap between that production-scale proof and the committed regression suite: the corpus now exercises ~20 of the ~24 supported constructs (up from ~5), not just Contact/Coil/OR-merge/TON. Three smaller flagged gaps (data-boundary doc staleness, Sanitizer `ExternalAccessible`, `Normalizer` Part-identity) also closed the same day. **Signed off with two real items deliberately still open, carried forward rather than blocking the gate**: `WAIT` (missing library dependency in `SampleProject`, needs the project owner's input) and `Jump` (genuine cross-network control flow, needs a real IR-format design decision before any code gets written) — neither is part of the committed reference corpus, so neither affects the literal exit criterion; both tracked in `AITODO.md`. All PC-side suites green at sign-off: 366 converter, 101 openness-cli, 14 golden-harness (offline) + all 14 reference-project blocks verified live together in one `RunAll` pass. See Exit-criteria evidence. |
 | S2 — Read and explain | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | Deliverables per `02-roadmap.md`: 4 real JOB9002 blocks explained in conversation (`PerimeterSafetyAlarms`, `MotorDOL`, `PlantAutoControl`, `MotorFwdRevSystem`; not committed anywhere, per `13-data-boundary.md`'s S2-kickoff entry) — 51+ networks sampled, all confirmed accurate by the project owner (2026-07-14), well past the 10-network exit bar. Explanation-quality checklist built and committed (`14-s2-explanation-checklist.md`), derived empirically from re-explaining the same real block across five subagents at varying context levels and verifying every claim against source, not invented solo (full methodology below, "S2: explanation-quality checklist built from direct comparison"). One real error did occur and was caught during that verification pass (a wrong field-uniformity count in the first `PlantAutoControl` pass) — corrected before the project owner's own sign-off; checklist item `E-01` exists specifically because of it. **Signed off with `WAIT`/`Jump` explicitly closed as not needed** (project owner's own call, 2026-07-14) — carried in S1's sign-off as open questions needing input, now resolved rather than deferred (detail in `AITODO.md`'s "Deliberately deferred" section). Modbus's own live-compile gap (same S1 finding) is untouched by this decision and stays open, unrelated to S2/S3. |
 | S3 — Comment generation | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | Entry criteria met: S2 done, and `docs/11-review-workflow.md` explicitly agreed by the project owner (2026-07-14). Exit criterion met three times over, at increasing scale: `TimerSample` (Green-tier, title only, both block and network level), `PerimeterSafetyAlarms` (Green-tier, title + comment, both levels), and `PlantAutoControl` (real JOB9002 content — data-boundary approval explicitly extended first — title + comment, block level and all 20 networks, including replacing the original engineer's own titles). All three live-verified end-to-end (edit IR → `to-xml` → `import` → clear the known `IsConsistent` refusal via `compile` → re-export → confirm the new content is genuinely present → confirm nothing structural changed via `Normalizer`) and reviewed/approved before committing. Two real converter gaps closed along the way (embedded-newline guard in `IrSerializer`/`IrParser`; the previously-untested "edit an existing title" scenario, now covered by 4 new tests) plus one real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format) — swept the other 13 committed reference-corpus files afterward to confirm it wasn't a wider gap; it wasn't. Full detail: "S3 first/second/third proof" sections below. |
-| S4 — Convention review | **ACTIVE** | — | Entry criteria met: `06-lad-conventions.md` populated (cleared early, well before S3 closed). Deliverables per `02-roadmap.md`: review mode — AI checks IR against the conventions and emits a findings report (rule ID, location, severity, suggested fix); no auto-fix. Exit: review of the reference project matches the engineer's own review on a sample; false-positive rate acceptable. No work started yet — detailed plan being built. |
-| S5 — Data extraction | not started | — | Can run parallel with S3/S4 once S1 done |
+| S4 — Convention review | **ACTIVE** | — | Entry criteria met: `06-lad-conventions.md` populated (cleared early, well before S3 closed). Deliverables per `02-roadmap.md`: review mode — AI checks IR against the conventions and emits a findings report (rule ID, location, severity, suggested fix); no auto-fix. Exit: review of the reference project matches the engineer's own review on a sample; false-positive rate acceptable. **Phase 1 built and pilot-proven 2026-07-14/15**: 8 rules (C-003/C-005/C-201/C-301+C-501/C-406, plus C-102/C-401/C-404 labeled vacuous), `converter review` subcommand, 46 new tests, live pilot against all 14 reference-corpus files matched every predicted finding exactly. Exit criterion itself (blind false-positive validation against the engineer's own independent review) explicitly not yet met — full detail in "S4 Phase 1" section below. Project owner's call, 2026-07-15: good enough to pause active work here and move to S5, not the same as calling S4 done. |
+| S5 — Data extraction | **ACTIVE** | — | Entry criteria met: S1 done (S4 not required — roadmap explicitly allows running in parallel with S3/S4). Opened 2026-07-15, in parallel with S4 (still open at Phase 1, not blocking). No work started yet — detailed plan being built, same process as S3/S4. |
 | S6 — Generation | not started | — | |
 | S7 — Modify existing | not started | — | |
 | S8 — Pattern maturation | not started | — | |
@@ -3585,3 +3585,88 @@ block-only and full-redo rounds.
 Per the data-boundary entry's own scope: the real content itself (specific tag paths, exact
 comment wording) stays in conversation and inside JOB9002's own gitignored project, not reproduced
 here.
+
+## S4 Phase 1: mechanical rule-checking built and pilot-proven (2026-07-15)
+
+Built exactly the 8-rule Phase 1 slice scoped in the approved plan: `converter review <file>
+[<file> ...] [--ignore-errors] [--json]`, five discriminating rules (C-003 naming prefix, C-005
+charset, C-201 title/comment presence, C-301+C-501 absolute-addressing with all three documented
+exceptions, C-406 timer-kind checked in both declaration and usage form) plus three rules built and
+explicitly labeled `CheckedVacuous` rather than `Checked` (C-102/C-401/C-404 — no jump/counter/
+built-in-edge construct exists anywhere in the current IR model, confirmed against
+`FlgNetParser`'s own whitelist, so these can structurally never fire; reported honestly as "cannot
+fire against current IR capability" rather than implying real verification happened).
+`--ignore-errors` (added mid-session, on request) makes a batch review record a per-file
+`FileError` and continue rather than aborting the whole run on the first unparseable file — the
+abort-on-first-error default (matching `to-ir`/`to-xml`) is unchanged without it. 46 new unit tests
+(true-positive + true-negative per rule, including the exact `DataHandling.ir`-shaped C-301
+exception case); full converter suite green throughout (412/412).
+
+**Live pilot** against all 14 committed `ir/reference/*.ir` files reproduced every finding expected
+from planning, exactly — arithmetic double-checked against the tool's own summary line (29
+findings, 14 error/15 warn): 13/14 blocks missing their naming prefix (only `DB_Timers` already
+compliant); the 5 DB-kind blocks missing a header comment, plus `TimerSample` for a genuinely
+different reason (a real, previously-undetected gap — S3 gave it a block-level *Title*, never a
+*Comment*, and C-201 checks the latter; a distinction this project has otherwise been careful
+about); `NodeStatusAlarms` (15-bit alarm word, untitled — C-301+C-501 both fire) and
+`PerimeterSafetyAlarms` (8-bit alarm word, *has* title/comment from S3's own work, still fails
+C-501's literal "exactly one bit" condition — expected, not a reversal of that sign-off, a
+different axis than what S3 evaluated); `FBTimers`/`TimingAndCalls`'s C-406 declaration/usage
+split, one finding on each side. Confirmed `DataHandling.ir`'s own C-301 exemption directly against
+its real content (not just the synthetic unit test written for it): it has three genuine `.%X`
+slice-access writes (`StatusWord.%X0/.%X3/.%X7`) that would otherwise all be flagged, correctly
+exempted because its header comment says "Data-handling reference examples" — the exact scoping
+bug the plan-agent review caught before any code was written, now proven against real corpus
+content.
+
+**Exit criterion explicitly NOT yet met.** `02-roadmap.md`'s own S4 exit is "review of the reference
+project matches the engineer's own review on a sample; false-positive rate acceptable" — that needs
+an actual blind comparison against the project owner's independent judgment on the same content,
+which hasn't happened (the pilot above used findings already narrated during planning, acknowledged
+upfront as not a clean blind test). Full report presented for review 2026-07-15; project owner's
+read: good enough to pause active work here and move to S5, explicitly *not* the same as calling S4
+done — S4 stays **ACTIVE**, Phase 1 complete and pilot-proven, formal exit validation deferred
+rather than skipped silently. Two of the pilot's own findings (the packed alarm words in
+`NodeStatusAlarms`/`PerimeterSafetyAlarms`) are open questions about whether the *rule* or the
+*practice* is right, not resolved either way — carried forward, not force-closed.
+
+**Durable checkability findings** (owed from the plan's own "don't let this decay into
+conversation-only narrative" discipline — both prior project audits, 2026-07-11 and 2026-07-14,
+flagged exactly that failure mode as this project's most-repeated documentation bug):
+
+- Severity/checkability mismatches: **C-113** and **C-504** are *error*-severity rules that are
+  genuinely Bucket C (human design-intent judgment — "was this the right paradigm," "is this really
+  a known consequence of that alarm") — no code-property check can validate them even in principle,
+  only whether a stated *decision* exists (C-113's own "the chosen paradigm is stated in the header
+  comment" clause is separately Bucket-A checkable, but that's a materially weaker claim than "the
+  right paradigm was chosen"). **C-112** is *error*-severity and needs a WinCC HMI artifact this
+  pipeline never ingests at all — structurally out of reach, not just unbuilt.
+- **C-301's exception scope is three-part, not one**: alarm words (C-501's own conditions), comms
+  mapping, and data-handling blocks (C-105). A pre-implementation review caught a draft that only
+  modeled the first and would have false-positived on `DataHandling.ir`'s legitimate usage — all
+  three now share one `IsSelfIdentifiedExemptBlock` keyword-match mechanism (`Rules.cs`),
+  deliberately loose and Phase-1-appropriate, not a full C-105 compliance check.
+- **C-406 needs checking in two structurally different places**: the *declaration* form
+  (`DbMember.Datatype == "TONR_TIME"/"TOF_TIME"`, what `FBTimers.ir` has — zero networks, so a
+  usage-only check would have silently missed it) and the *usage* form (`TimerBinding.Kind` inside
+  a network's own `Timers` list, what `TimingAndCalls.ir` has instead). Both built and both fired
+  correctly in the pilot.
+- New, found while writing this section rather than during original planning: **C-408** ("`ET`
+  never compared against a constant to produce a boolean trigger") looks Bucket-A checkable after
+  all — a single-block scan for any `Expr.Compare` with one operand's `TagRef.Path` ending `.ET` —
+  worth a look for Phase 2, not built this round.
+- Rough re-estimate of the full ~50-rule set, done fresh against the actual rule text and the
+  now-built `TagReferences`/`Rules` infrastructure (supersedes the looser live-conversation estimate
+  from initial planning — deliberately not reconciled line-by-line against it, since that estimate's
+  own per-rule reasoning was never itself recorded anywhere durable): beyond the 8 rules built here,
+  candidates that look genuinely Bucket-A/single-block-checkable without new infrastructure include
+  C-103 (Set/Reset pairing within a block), C-107 (edge-memory array one-write-per-element
+  discipline), C-110 (OB1 input/output mapping call order), and C-408 above. A similar-sized group
+  needs cross-block or whole-project context that doesn't exist yet in this tooling (C-114's own
+  enable-chain cycle check is explicitly called out as mechanically checkable *in the rule's own
+  text*, once that cross-block graph exists; C-308's "`DB_Settings` never written from logic" is
+  fully mechanical in principle but needs scanning every block in a project, not one file at a
+  time). A firm remainder (e.g. C-002, C-004, C-101, C-108, C-113, C-117, C-202, C-309, C-405,
+  C-409, C-504, C-507) stays genuine human judgment regardless of tooling investment. Not
+  re-verified to the same rigor as the 8 rules actually built and tested this round — a starting
+  point for scoping a future Phase 2, not a committed spec.
