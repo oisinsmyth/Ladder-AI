@@ -1,0 +1,96 @@
+BLOCK FC BooleanExtras
+ROOTID 0
+NUMBER 23
+LANGUAGE LAD
+COMMENT "Boolean reference examples (standalone Not, SCoil/RCoil)"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  TEMP
+    EnableCmd : Bool
+    FaultLatch : Bool
+    RunA : Bool
+    StartCmd : Bool
+    Run : Bool
+    SetCmd : Bool
+    Motor1Latched : Bool
+    ResetCmd : Bool
+  CONSTANT
+
+NETWORK 1 "Interlock inversion (Not)"
+  COIL RunA := NOT EnableCmd AND FaultLatch
+
+NETWORK 2 "Motor latch (SCoil/RCoil)"
+  COIL Run := StartCmd
+  SCOIL Motor1Latched := SetCmd
+  RCOIL Motor1Latched := ResetCmd
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access FaultLatch = 21 LocalVariable
+  access EnableCmd = 22 LocalVariable
+  access RunA = 23 LocalVariable
+  assignment 0
+    rail = none
+    step 0 not
+      uid = 25
+      rail = 30
+      step 0 contact
+        uid = 24
+        operand = 22
+        operandwire = 28
+        negated = false
+        out = 29
+      out = 31
+    step 1 contact
+      uid = 26
+      operand = 21
+      operandwire = 32
+      negated = false
+      out = 33
+    coil = 27
+    coil operand = 23
+    coil operandwire = 34
+NETWORK 2
+  compileunit = 8
+  access StartCmd = 21 LocalVariable
+  access Run = 22 LocalVariable
+  access SetCmd = 23 LocalVariable
+  access Motor1Latched = 24 LocalVariable
+  access ResetCmd = 25 LocalVariable
+  access Motor1Latched = 26 LocalVariable
+  assignment 0
+    rail = 36
+    step 0 contact
+      uid = 27
+      operand = 21
+      operandwire = 33
+      negated = false
+      out = 34
+    coil = 28
+    coil operand = 22
+    coil operandwire = 35
+  assignment 1
+    rail = 36
+    step 0 contact
+      uid = 29
+      operand = 23
+      operandwire = 37
+      negated = false
+      out = 38
+    coil = 30
+    coil operand = 24
+    coil operandwire = 39
+  assignment 2
+    rail = 36
+    step 0 contact
+      uid = 31
+      operand = 25
+      operandwire = 40
+      negated = false
+      out = 41
+    coil = 32
+    coil operand = 26
+    coil operandwire = 42
