@@ -3090,3 +3090,69 @@ compile clean → re-export — including `PlantAutoControl` (`PlantAutoControl`
 `Normalizer` equivalence pass, not just a compile-clean check.** 5 real converter bugs found and
 fixed along the way, all with regression tests. 291 converter tests (up from 283), 101
 openness-cli, 11 golden-harness — all green.
+
+### Instruction-coverage sweep of the full `JOB9002` inventory, and Phase 2 tiers 1–3: `Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc` built, 2026-07-14
+
+(Not to be confused with the `PlantAutoControl` round-trip plan's own "Phase 1/2/3" above — this is a
+separate, later plan, the project owner's own explicit follow-on request after the full-cycle
+verification pass: "examine what instructions we are missing... lay out what's needed for phase
+2.")
+
+**Grounding pass**: exported every remaining block across *both* `JOB9002` PLC stations (`JOB9002_PLC`
+and `JOB9001_PLC` — confirmed the same approved site per `docs/13-data-boundary.md`, not a second
+site) not already swept by the `PlantAutoControl` dependency work — 36 blocks, one export per
+block per the project owner's own explicit instruction ("run it one block at a time"), the
+`IsConsistent` quirk hit repeatedly and cleared the same way as every prior session (block-level
+`compile`). Tallying every `<Part Name="...">` across all ~49 blocks now grounded found 11
+real, currently-unsupported instructions: `MOVE_BLK_VARIANT`, `LIMIT`, `Calc`, `T_SUB`, `T_CONV`,
+`WAIT`, `Modbus_Master`, `Modbus_Comm_Load`, `Jump`, `FillBlockI`, `Abs` — none guessed, all with a
+real `UId` in a real block. Ranked by confidence/effort (near-identical-to-existing-code first,
+genuinely novel categories last) into a 6-tier plan; the project owner asked to start on it
+overnight.
+
+**Tier 1 (`Abs`/`LIMIT`) and Tier 3 (`Calc`) built and live-verified** — see `ir/SPEC.md`'s own
+Network-body history for the full per-instruction shape/grammar detail. Headline findings:
+- `PartNode.TonVersion` renamed to `Version` — `LIMIT` (and, looking ahead, `Modbus_Master`/
+  `Modbus_Comm_Load`) needed the same bare `Version="N.N"` attribute TON already carried, so the
+  field was generalized rather than growing a parallel `LimitVersion` field, the same "don't stack
+  special cases" call already made once this session for the Part/wire-endpoint sort.
+- **`LIMIT`'s `DisabledENO` was misread from the raw export** — the parser was first built
+  requiring its *absence* (a clean `dotnet test` pass the whole time, since the hand-built fixture
+  was wrong in exactly the same way). Only surfaced when the live TIA import rejected the
+  regenerated XML outright: "ENO cannot be deactivated for the 'LIMIT' instruction." Fixed by
+  re-reading the raw export directly rather than trusting the earlier transcription — the real
+  shape does carry `DisabledENO="true"`, same as `Convert`/`Swap`/`Abs`/`Mul`/`Sub`/`Div`.
+- A **`Calc` sanitize attempt on the real `VSDSim`** hit a separate, pre-existing Sanitizer gap
+  unrelated to tonight's instruction work: a Static member (`SpeedCalcArray`) with
+  `ExternalAccessible="False"` — already a deliberate, tested hard-error case
+  (`GlobalDbWithNonDefaultAttribute.xml`), now genuinely grounded as real for the first time.
+  **Not fixed tonight** — flagged as its own well-scoped follow-on (would need a new `DbMember`
+  field, `DbInterfaceMembers` parse/write changes, and a new IR-text marker, the same shape as the
+  existing `IsBareParameter`/`Informative` additions) rather than scope-creeping into it mid-plan.
+  Live verification instead used a synthetic FC composed from the already-proven `Abs`/`LIMIT`/
+  `Calc` fixture networks (avoiding the unrelated gap entirely) — imported into `SampleProject`,
+  compiled clean (0 errors), re-exported, confirmed byte-identical readable IR text before and
+  after the full cycle. Deleted from `SampleProject` afterward (synthetic scaffolding, not
+  reference content worth keeping there).
+
+**Tier 2 (`T_SUB`/`T_CONV`) built and live-verified.** Time-arithmetic variants of `Sub`/`Convert`
+(`FB VibratorCycle`, a real `T_SUB -> T_CONV -> Convert` ENO chain) — extended `ResolveEnSource`'s
+existing Mul/Convert/Sub/Div allowlist to include both as valid ENO-chain sources. **A second real
+finding, also only caught live**: the hand-built fixture reused one `<Access>` UId (`StartTime`)
+across two different `<Wire>` elements (one feeding `T_SUB.IN1`, one feeding `T_CONV.IN`) — TIA's
+`Import()` rejected it, "the connection ... is used multiple times at the cables." Direct
+inspection of the real export confirmed why: TIA itself never dedupes Access-by-tag-name within a
+network — `VibratorCycleTimer.PT`/`.ET`, `Remainder`, `UDintTime`, and `time` are each declared
+*twice*, once per wire reference, with two different UIds. Fixed by declaring a second `Access`
+element for the fixture's own second reference, matching the real shape. Same live-verification
+approach as Tier 1/3 (synthetic composed FC, imported/compiled clean/re-exported/byte-identical,
+then deleted from `SampleProject`).
+
+**40 new converter tests** across `AbsTests.cs`/`LimitTests.cs`/`TSubTConvTests.cs`/`CalcTests.cs`
+— 323 converter tests total, all green.
+
+**Not yet started tonight**: Tier 4 (`Modbus_Master`/`Modbus_Comm_Load` — Instance-DB-backed, like
+`TON`/`Call`, but with several real ports each still needing individual grounding), Tier 5
+(re-ground `MOVE_BLK_VARIANT` — every sample seen so far only had `en` wired, the real array/count
+port shape is still unknown), Tier 6 (`Jump`/implied `Label`, `FillBlockI`, `WAIT` — novel
+categories with no existing analog, lowest priority). See `AITODO.md` for current state.

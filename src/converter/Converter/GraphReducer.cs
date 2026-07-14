@@ -59,10 +59,25 @@ public static class GraphReducer
         // Swap (S1 item 25) is structurally identical to Convert minus DestType — confirmed real,
         // 2026-07-12, FB TomraControlSystem.
         var swapParts = network.Parts.Where(p => p.Name == "Swap").ToList();
+        // Abs (Phase 2 Tier 1, 2026-07-14, FB VSDSim) shares Swap's exact shape (en-gated, single
+        // SrcType, one in/out) — a different source Part Name, same reduction.
+        var absParts = network.Parts.Where(p => p.Name == "Abs").ToList();
+        // LIMIT (Phase 2 Tier 1, 2026-07-14, FB VSDSim) is its own shape — three fixed-named
+        // inputs (MN/IN/MX), see LimitStatement's own doc comment.
+        var limitParts = network.Parts.Where(p => p.Name == "LIMIT").ToList();
+        // T_SUB/T_CONV (Phase 2 Tier 2, 2026-07-14, FB VibratorCycle) — time-arithmetic variants
+        // of Sub/Convert, see TSubStatement/TConvStatement's own doc comments.
+        var tSubParts = network.Parts.Where(p => p.Name == "T_SUB").ToList();
+        var tConvParts = network.Parts.Where(p => p.Name == "T_CONV").ToList();
+        // Calc (Phase 2 Tier 3, 2026-07-14, FB VSDSim) — Cardinality-driven inputs like Mul/Add,
+        // see CalcStatement's own doc comment.
+        var calcParts = network.Parts.Where(p => p.Name == "Calc").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
-            && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0)
+            && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0
+            && absParts.Count == 0 && limitParts.Count == 0 && tSubParts.Count == 0 && tConvParts.Count == 0
+            && calcParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, or Swap found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, or Calc found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -81,6 +96,16 @@ public static class GraphReducer
         var convertSidecars = new List<ConvertStatementSidecar>();
         var swapStatements = new List<SwapStatement>();
         var swapSidecars = new List<SwapStatementSidecar>();
+        var absStatements = new List<AbsStatement>();
+        var absSidecars = new List<AbsStatementSidecar>();
+        var limitStatements = new List<LimitStatement>();
+        var limitSidecars = new List<LimitStatementSidecar>();
+        var tSubStatements = new List<TSubStatement>();
+        var tSubSidecars = new List<TSubStatementSidecar>();
+        var tConvStatements = new List<TConvStatement>();
+        var tConvSidecars = new List<TConvStatementSidecar>();
+        var calcStatements = new List<CalcStatement>();
+        var calcSidecars = new List<CalcStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -243,6 +268,98 @@ public static class GraphReducer
             }
         }
 
+        // Abs/LIMIT are reduced last, same reasoning as every other production above (own
+        // en/inputs never depend on another production's own reduction completing first).
+        foreach (var abs in absParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceAbs(network, abs, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            absStatements.Add(statement);
+            absSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        foreach (var limit in limitParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceLimit(network, limit, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            limitStatements.Add(statement);
+            limitSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        // T_SUB/T_CONV are reduced last, same reasoning as every other production above. T_SUB
+        // must reduce before T_CONV for no correctness reason (ResolveEnSource inspects the raw
+        // network directly, not already-reduced Model output, same as Mul-before-Convert) — kept
+        // in this order purely to match IrSerializer's own emission order.
+        foreach (var tSub in tSubParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceTSub(network, tSub, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            tSubStatements.Add(statement);
+            tSubSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        foreach (var tConv in tConvParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceTConv(network, tConv, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            tConvStatements.Add(statement);
+            tConvSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        // Calc is reduced last, same reasoning as every other production above.
+        foreach (var calc in calcParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceCalc(network, calc, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            calcStatements.Add(statement);
+            calcSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -252,10 +369,10 @@ public static class GraphReducer
 
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
-            swapStatements);
+            swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
-            callSidecars, mulSidecars, convertSidecars, swapSidecars);
+            callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -342,7 +459,7 @@ public static class GraphReducer
         var binding = new TimerBinding(instancePath, inExpr, ptExpr, kind, resetExpr);
         var sidecar = new TimerBindingSidecar(
             ton.UId,
-            ton.TonVersion ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Version."),
+            ton.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no Version."),
             ton.TimeType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: TON UId={ton.UId} has no time_type."),
             instance.UId,
             instance.Scope,
@@ -562,8 +679,10 @@ public static class GraphReducer
             // Sub->Sub and Sub->Div chains both directly observed). "Add" as a *producer* (as
             // opposed to consumer, already supported via Mul->Add) hasn't been directly grounded
             // yet — not added here, same "don't guess even when the family suggests it" discipline
-            // as Le/Gt's own history.
-            && precedingPart.Name is "Mul" or "Convert" or "Sub" or "Div")
+            // as Le/Gt's own history. "T_SUB"/"T_CONV" confirmed real 2026-07-14 (Phase 2 Tier 2,
+            // `FB VibratorCycle`: a T_SUB->T_CONV->Convert chain, T_SUB and T_CONV each producing
+            // the next link's `en` via `eno` directly, same mechanism).
+            && precedingPart.Name is "Mul" or "Convert" or "Sub" or "Div" or "T_SUB" or "T_CONV")
         {
             visitedWireUIds.Add(wire.UId);
             return (new EnSource.PrecedingEno(), new EnSourceSidecar.PrecedingEnoSidecar(precedingPart.UId, wire.UId));
@@ -716,6 +835,226 @@ public static class GraphReducer
             enSidecar,
             inSidecar,
             swap.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Swap UId={swap.UId} has no SrcType."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // An Abs's `en`/`in`/`out` resolve exactly like Swap's own — identical shape, different
+    // source Part Name (Phase 2 Tier 1, 2026-07-14, FB VSDSim).
+    private static (AbsStatement Statement, AbsStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceAbs(
+        FlgNetwork network,
+        PartNode abs,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, abs.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, abs.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, abs.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new AbsStatement(en, inExpr, destTag.TagPath);
+        var sidecar = new AbsStatementSidecar(
+            abs.UId,
+            enSidecar,
+            inSidecar,
+            abs.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Abs UId={abs.UId} has no SrcType."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A LIMIT's `en` resolves via ResolveEnSource (a plain condition in both real instances,
+    // never ENO-chained). Its three inputs (`MN`/`IN`/`MX`) each resolve exactly like a TON's own
+    // `PT` (ResolveTagOrLiteralOperand, one call per named port — fixed-named, not
+    // Cardinality-driven, so no loop the way Mul/WAND's own variable input lists need). `out`
+    // writes to a plain tag, same as Convert/Swap/Abs's own.
+    private static (LimitStatement Statement, LimitStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceLimit(
+        FlgNetwork network,
+        PartNode limit,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, limit.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (minExpr, minSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, limit.UId, "MN", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, limit.UId, "IN", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (maxExpr, maxSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, limit.UId, "MX", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, limit.UId, networkNumber, "OUT");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new LimitStatement(en, minExpr, inExpr, maxExpr, destTag.TagPath);
+        var sidecar = new LimitStatementSidecar(
+            limit.UId,
+            limit.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: LIMIT UId={limit.UId} has no Version."),
+            enSidecar,
+            minSidecar,
+            inSidecar,
+            maxSidecar,
+            limit.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: LIMIT UId={limit.UId} has no value_type."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A T_SUB's `en` resolves via ResolveEnSource (directly rail-fed in the one real instance,
+    // never Contact-gated — but ResolveEnSource handles either case the same way it does for
+    // every other production). Its two inputs (`IN1`/`IN2`, uppercase) each resolve like Sub's own
+    // `in1`/`in2` (ResolveTagOrLiteralOperand). `OUT` (uppercase) writes to a plain tag.
+    private static (TSubStatement Statement, TSubStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceTSub(
+        FlgNetwork network,
+        PartNode tSub,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, tSub.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (in1Expr, in1Sidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, tSub.UId, "IN1", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (in2Expr, in2Sidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, tSub.UId, "IN2", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, tSub.UId, networkNumber, "OUT");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new TSubStatement(en, in1Expr, in2Expr, destTag.TagPath);
+        var sidecar = new TSubStatementSidecar(
+            tSub.UId,
+            tSub.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_SUB UId={tSub.UId} has no Version."),
+            enSidecar,
+            in1Sidecar,
+            in2Sidecar,
+            tSub.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_SUB UId={tSub.UId} has no date_type."),
+            tSub.TimeType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_SUB UId={tSub.UId} has no time_type."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A T_CONV's `en`/`in`/`out` resolve exactly like Convert's own, using the uppercase `IN`/
+    // `OUT` port names confirmed real for T_CONV (unlike ordinary Convert's lowercase).
+    private static (TConvStatement Statement, TConvStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceTConv(
+        FlgNetwork network,
+        PartNode tConv,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, tConv.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, tConv.UId, "IN", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, tConv.UId, networkNumber, "OUT");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new TConvStatement(en, inExpr, destTag.TagPath);
+        var sidecar = new TConvStatementSidecar(
+            tConv.UId,
+            tConv.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_CONV UId={tConv.UId} has no Version."),
+            enSidecar,
+            inSidecar,
+            tConv.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_CONV UId={tConv.UId} has no src_type."),
+            tConv.DestType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: T_CONV UId={tConv.UId} has no dest_type."),
+            destTag.UId,
+            destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A Calc's `en` resolves via ResolveEnSource (directly rail-fed in both real instances).
+    // Inputs are Cardinality-driven tag-or-literal operands (`in1`..`inCard`), identical loop
+    // shape to ReduceMul's own. `out` writes to a plain tag. Equation is carried verbatim from
+    // the PartNode (never parsed/interpreted — see PartNode.Equation's own doc comment).
+    private static (CalcStatement Statement, CalcStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceCalc(
+        FlgNetwork network,
+        PartNode calc,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, calc.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var cardinality = calc.Cardinality
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Calc UId={calc.UId} has no usable cardinality.");
+        if (cardinality < 1)
+        {
+            throw new NonReducibleNetworkException($"Network {networkNumber}: Calc UId={calc.UId} has no usable cardinality.");
+        }
+
+        var inputExprs = new List<Expr>();
+        var inputSidecars = new List<OperandSidecar>();
+        for (var k = 1; k <= cardinality; k++)
+        {
+            var (inputExpr, inputSidecar) = ResolveTagOrLiteralOperand(
+                wiresByPort, accessByUId, constantsByUId, calc.UId, $"in{k}", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+            inputExprs.Add(inputExpr);
+            inputSidecars.Add(inputSidecar);
+        }
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, calc.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var equation = calc.Equation ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Calc UId={calc.UId} has no Equation.");
+        var statement = new CalcStatement(en, inputExprs, equation, destTag.TagPath);
+        var sidecar = new CalcStatementSidecar(
+            calc.UId,
+            enSidecar,
+            inputSidecars,
+            equation,
+            calc.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Calc UId={calc.UId} has no SrcType."),
             destTag.UId,
             destWireUId);
 

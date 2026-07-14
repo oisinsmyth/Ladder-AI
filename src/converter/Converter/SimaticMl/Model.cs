@@ -83,7 +83,7 @@ public sealed record AccessNode(
 // Cardinality: an OR-merge's branch count (`<TemplateValue Name="Card" Type="Cardinality">`) —
 // "O"-only. Both confirmed real, 2026-07-10 (docs/notes/stage-gates.md, S1 item 7).
 //
-// TonVersion/TimeType/Instance: a TON's own `Version="1.0"` attribute, its
+// Version/TimeType/Instance: a TON's own `Version="1.0"` attribute, its
 // `<TemplateValue Name="time_type" Type="Type">Time</TemplateValue>`, and its
 // `<Instance Scope="..." UId="..."><Component .../></Instance>` — confirmed real, 2026-07-11,
 // against `FB MotorDOL` (Scope="LocalVariable", multi-instance in the calling FB's own iDB) and
@@ -93,6 +93,11 @@ public sealed record AccessNode(
 // component path) as an ordinary Access — the `<Instance>` wrapper just skips the `<Symbol>`
 // indirection an ordinary `<Access>` uses. This also means a future FC/FB call's own instance
 // argument can reuse AccessNode rather than needing a redesign.
+//
+// `Version` itself was renamed from `TonVersion` 2026-07-14 once `LIMIT`/`Modbus_Master`/
+// `Modbus_Comm_Load` confirmed the same bare `Version="N.N"` attribute on non-TON Parts too —
+// generalized rather than adding parallel `LimitVersion`/`ModbusVersion` fields for the same
+// underlying attribute.
 //
 // SrcType: a comparison's (`Eq`/`Ge`) own `<TemplateValue Name="SrcType" Type="Type">` —
 // confirmed real, 2026-07-11, `FC ControlDelays` (`Int` in every instance seen; stored verbatim,
@@ -118,6 +123,13 @@ public sealed record AccessNode(
 // value that doesn't exist in the source). `Convert` is typed *between* two types — `SrcType`
 // (reused, already existing) and the new `DestType` — both ordinary `TemplateValue`s.
 //
+// Equation: a `Calc` Part's own free-text `<Equation>` element (Phase 2 Tier 3, 2026-07-14, `FB
+// VSDSim`, e.g. `"IN1*(IN2/IN3)"`) — carried verbatim, never parsed/validated as an expression
+// (this converter has no Siemens-CALC-syntax parser and doesn't need one; the string round-trips
+// unchanged). Genuinely different from every other typed instruction: Calc is Cardinality-driven
+// like Mul/Add (its own `in1`..`inCard` operands) but the *combination* of those operands is
+// whatever the equation text says, not implied by the Part Name the way Mul means "multiply all."
+//
 // All optional fields live on the one PartNode type rather than subtypes since every other Part
 // kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
 // on `Name` for anything Part-shape-specific.
@@ -126,7 +138,7 @@ public sealed record PartNode(
     string Name,
     bool Negated = false,
     int? Cardinality = null,
-    string? TonVersion = null,
+    string? Version = null,
     string? TimeType = null,
     AccessNode? Instance = null,
     string? SrcType = null,
@@ -134,7 +146,8 @@ public sealed record PartNode(
     string? BlockType = null,
     IReadOnlyList<CallParameterNode>? CallParameters = null,
     bool AutomaticSrcType = false,
-    string? DestType = null);
+    string? DestType = null,
+    string? Equation = null);
 
 // A wired parameter declared at a Call site — confirmed real, 2026-07-12, `FC PlantAutoControl`: only
 // parameters that are actually wired appear here at all (19 of 20 real Call instances have zero

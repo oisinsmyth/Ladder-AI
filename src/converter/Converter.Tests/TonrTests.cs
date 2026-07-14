@@ -44,7 +44,7 @@ public class TonrTests
         var network = LoadFixture("WithTonr.xml");
 
         var tonr = Assert.Single(network.Parts, p => p.Name == "TONR");
-        Assert.Equal("1.0", tonr.TonVersion);
+        Assert.Equal("1.0", tonr.Version);
         Assert.Equal("Time", tonr.TimeType);
         Assert.NotNull(tonr.Instance);
         Assert.Equal("LocalVariable", tonr.Instance!.Scope);
@@ -94,7 +94,7 @@ public class TonrTests
 
         var tonrPart = Assert.Single(reparsed.Parts, p => p.Name == "TONR");
         Assert.Equal(32, tonrPart.UId);
-        Assert.Equal("1.0", tonrPart.TonVersion);
+        Assert.Equal("1.0", tonrPart.Version);
 
         var resetWire = Assert.Single(reparsed.Wires, w => w.UId == 44);
         Assert.Contains(resetWire.Endpoints, e => e.Kind == EndpointKind.NameCon && e.UId == 32 && e.PortName == "R");

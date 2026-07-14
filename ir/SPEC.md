@@ -528,6 +528,60 @@ NETWORK 8 "Run enable delay"
   both round-trip `to-ir → to-xml → to-ir` byte-identical. All 5 of `PlantAutoControl`'s dependency FBs
   blocked by `Mul`/`Convert`/`TONR` at the start of S1 items 18/19 now fully round-trip as whole
   blocks.
+- **`Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc`, built 2026-07-14 (Phase 2, tiers 1–3).** The first
+  instructions built from the dedicated instruction-coverage sweep across the *full* `JOB9002`
+  block inventory (both PLC stations, ~49 blocks, not just `PlantAutoControl`'s own dependency
+  closure) — grounded, ranked by confidence, then built cheapest-first, exactly the same
+  discipline as every prior item, just applied at wider scope.
+  - **`Abs`** (`FB VSDSim`): structurally identical to `Swap` (`en`-gated, single tag-or-literal
+    `in`, one destination tag, `DisabledENO="true"`, one `SrcType`) — `ParseSwapFixedShape` was
+    generalized into `ParseDisabledEnoSingleSrcTypeShape` once a second real instruction confirmed
+    the shape isn't Swap-specific. Readable form: `ABS(EN := <expr-or-ENO>, IN := <expr>) => <dest>`.
+  - **`LIMIT`** (`FB VSDSim`, 2 instances): three fixed-named tag-or-literal inputs (`MN`/`IN`/`MX`,
+    uppercase) and an uppercase `OUT` — genuinely different arity from every prior typed
+    instruction. Carries `Version` (same attribute TON carries — `PartNode.TonVersion` was renamed
+    to `Version` once LIMIT confirmed it isn't TON-specific) and a `value_type` TemplateValue
+    (stored on the existing `SrcType` field). Readable form: `LIMIT(EN := <expr-or-ENO>, MN :=
+    <expr>, IN := <expr>, MX := <expr>) => <dest>`. **A grounding mistake, caught only by live
+    verification**: LIMIT's real shape does carry `DisabledENO="true"` — an earlier reading of the
+    export missed it, so the parser was first built requiring its *absence*. TIA's own `Import()`
+    rejected the resulting XML outright ("ENO cannot be deactivated for the 'LIMIT' instruction"),
+    which is what surfaced the error — no unit test caught it, since the hand-built fixture was
+    self-consistently wrong along with the code. Fixed by re-reading the raw export directly.
+  - **`T_SUB`/`T_CONV`** (`FB VibratorCycle`): time-arithmetic variants of `Sub`/`Convert`. `T_SUB`
+    is binary (`IN1`/`IN2` -> `OUT`, uppercase) with two independently-typed operands (`date_type`/
+    `time_type` TemplateValues, stored on the existing `SrcType`/`TimeType` fields). `T_CONV`
+    mirrors `Convert` exactly (`IN`/`OUT` uppercase, `src_type`/`dest_type` lowercase TemplateValue
+    names). Neither carries `DisabledENO` at all — confirmed directly via `grep` on the raw export
+    after the LIMIT mistake, not trusted from memory. Both confirmed real ENO-chain participants
+    (`T_SUB`'s own `eno` feeds `T_CONV`'s `en`), extending `ResolveEnSource`'s allowlist. Readable
+    form: `T_SUB(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` / `T_CONV(EN :=
+    <expr-or-ENO>, IN := <expr>) => <dest>`. **A second real finding, also only caught live**: the
+    real source declares a *separate* `<Access>` element (fresh UId) for every wire reference to a
+    tag, even re-reads of the same tag within one network (confirmed directly: `VibratorCycleTimer
+    .PT`/`.ET`, `Remainder`, `UDintTime`, and `time` are each declared twice, once per reference) —
+    never one `IdentCon` UId reused across two `Wire`s. The hand-built fixture initially reused one
+    `IdentCon` for two wires; TIA's `Import()` rejected it ("connection ... used multiple times at
+    the cables"). Worth remembering for any future hand-built fixture reading the same tag twice.
+  - **`Calc`** (`FB VSDSim`, 2 identical instances): Cardinality-driven inputs like `Mul`/`Add`
+    (`in1`..`inCard`, lowercase), but a free-text `<Equation>` element (e.g. `"IN1*(IN2/IN3)"`)
+    defines the combination instead of the Part Name implying it — carried verbatim on a new
+    `PartNode.Equation` field, never parsed as an expression (this converter has no Siemens-CALC-
+    syntax parser and doesn't need one). Shown in the readable form (unlike `SrcType`, sidecar-
+    only) since it's the instruction's entire defining content: `CALC(EN := <expr-or-ENO>, IN1 :=
+    <expr>, ...) => <dest> "<equation>"` — the quoted equation trails the destination tag, kept
+    outside the comma-separated argument list so its own arithmetic-operator characters (and any
+    parens) can never collide with the top-level-comma split the argument list itself relies on.
+  - 40 new converter tests total (`AbsTests.cs`/`LimitTests.cs`/`TSubTConvTests.cs`/`CalcTests.cs`,
+    one fixture per instruction/pairing, all genericized from the real grounded shapes). **Live-
+    verified against real data, 2026-07-14**: a synthetic FC composed from the proven Abs/LIMIT/
+    Calc fixture networks, and a second composed from the T_SUB/T_CONV pairing, both imported into
+    `SampleProject` and compiled clean (0 errors) — the readable IR text is byte-identical before
+    and after the full `import → compile → re-export → to-ir` cycle. (A synthetic composition, not
+    the real `VSDSim`/`VibratorCycle` blocks themselves, because `VSDSim` also uses `Calc`-adjacent
+    gaps not yet built and a separately-scoped `ExternalAccessible=False` Sanitizer gap, flagged
+    below, not fixed — both cleaned up from `SampleProject` afterward, not left as permanent
+    fixtures there.)
 
 ### Explicit form (fallback, per-network)
 

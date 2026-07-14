@@ -487,13 +487,143 @@ public static partial class IrParser
             i++;
         }
 
-        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
-            && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0)
+        // Abs statements are always emitted after Swaps (IrSerializer) — same fixed-arity (EN, IN)
+        // shape as SWAP's own line.
+        var absStatements = new List<AbsStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  ABS(", StringComparison.Ordinal))
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP statements and isn't marked [empty].");
+            var absMatch = AbsLineRegex().Match(lines[i]);
+            if (!absMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  ABS(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var absEn = ParseEnSource(absMatch.Groups["en"].Value);
+            var absIn = ParseExprTerm(absMatch.Groups["in"].Value);
+            absStatements.Add(new AbsStatement(absEn, absIn, absMatch.Groups["dest"].Value));
+            i++;
         }
 
-        return new IrNetwork(number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps);
+        // Limits are always emitted after Abs statements (IrSerializer). Three fixed-named
+        // inputs (MN/IN/MX), same top-level-comma-split discipline as WAND/CALL/MUL's own
+        // variable-arity argument lists — safe for the same reason (no Expr ever renders a
+        // literal comma).
+        var limits = new List<LimitStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  LIMIT(", StringComparison.Ordinal))
+        {
+            var limitMatch = LimitLineRegex().Match(lines[i]);
+            if (!limitMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  LIMIT(EN := <expr-or-ENO>, MN := <expr>, IN := <expr>, MX := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var limitArgs = limitMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (limitArgs.Length != 4 || !limitArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                || !limitArgs[1].StartsWith("MN := ", StringComparison.Ordinal)
+                || !limitArgs[2].StartsWith("IN := ", StringComparison.Ordinal)
+                || !limitArgs[3].StartsWith("MX := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected 'EN := <expr>, MN := <expr>, IN := <expr>, MX := <expr>' inside LIMIT(...), got: '{lines[i]}'");
+            }
+
+            var limitEn = ParseEnSource(limitArgs[0]["EN := ".Length..]);
+            var limitMin = ParseExprTerm(limitArgs[1]["MN := ".Length..]);
+            var limitIn = ParseExprTerm(limitArgs[2]["IN := ".Length..]);
+            var limitMax = ParseExprTerm(limitArgs[3]["MX := ".Length..]);
+            limits.Add(new LimitStatement(limitEn, limitMin, limitIn, limitMax, limitMatch.Groups["dest"].Value));
+            i++;
+        }
+
+        // T_SUBs are always emitted after Limits (IrSerializer). Two fixed-named inputs (IN1/IN2),
+        // same top-level-comma-split discipline as LIMIT's own.
+        var tSubs = new List<TSubStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  T_SUB(", StringComparison.Ordinal))
+        {
+            var tSubMatch = TSubLineRegex().Match(lines[i]);
+            if (!tSubMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  T_SUB(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var tSubArgs = tSubMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (tSubArgs.Length != 3 || !tSubArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                || !tSubArgs[1].StartsWith("IN1 := ", StringComparison.Ordinal)
+                || !tSubArgs[2].StartsWith("IN2 := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected 'EN := <expr>, IN1 := <expr>, IN2 := <expr>' inside T_SUB(...), got: '{lines[i]}'");
+            }
+
+            var tSubEn = ParseEnSource(tSubArgs[0]["EN := ".Length..]);
+            var tSubIn1 = ParseExprTerm(tSubArgs[1]["IN1 := ".Length..]);
+            var tSubIn2 = ParseExprTerm(tSubArgs[2]["IN2 := ".Length..]);
+            tSubs.Add(new TSubStatement(tSubEn, tSubIn1, tSubIn2, tSubMatch.Groups["dest"].Value));
+            i++;
+        }
+
+        // T_CONVs are always emitted after T_SUBs (IrSerializer) — same fixed-arity (EN, IN)
+        // shape as CONVERT/SWAP/ABS's own line.
+        var tConvs = new List<TConvStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  T_CONV(", StringComparison.Ordinal))
+        {
+            var tConvMatch = TConvLineRegex().Match(lines[i]);
+            if (!tConvMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  T_CONV(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var tConvEn = ParseEnSource(tConvMatch.Groups["en"].Value);
+            var tConvIn = ParseExprTerm(tConvMatch.Groups["in"].Value);
+            tConvs.Add(new TConvStatement(tConvEn, tConvIn, tConvMatch.Groups["dest"].Value));
+            i++;
+        }
+
+        // Calcs are always emitted after T_CONVs (IrSerializer). Cardinality-driven inputs (same
+        // top-level-comma-split discipline as MUL/WAND), plus a trailing quoted Equation string
+        // kept outside the argument-list parens entirely (see IrSerializer's own comment).
+        var calcs = new List<CalcStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  CALC(", StringComparison.Ordinal))
+        {
+            var calcMatch = CalcLineRegex().Match(lines[i]);
+            if (!calcMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  CALC(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest> \"<equation>\"', got: '{lines[i]}'");
+            }
+
+            var calcArgs = calcMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (calcArgs.Length < 2 || !calcArgs[0].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException($"Expected 'EN := <expr>' as CALC's first argument, got: '{lines[i]}'");
+            }
+
+            var calcEn = ParseEnSource(calcArgs[0]["EN := ".Length..]);
+
+            var calcInputs = new List<Expr>();
+            for (var k = 1; k < calcArgs.Length; k++)
+            {
+                var prefix = $"IN{k} := ";
+                if (!calcArgs[k].StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected '{prefix}<expr>' as CALC argument {k + 1}, got: '{calcArgs[k]}' in '{lines[i]}'");
+                }
+
+                calcInputs.Add(ParseExprTerm(calcArgs[k][prefix.Length..]));
+            }
+
+            var calcEquation = ParseQuotedString(calcMatch.Groups["equation"].Value);
+            calcs.Add(new CalcStatement(calcEn, calcInputs, calcEquation, calcMatch.Groups["dest"].Value));
+            i++;
+        }
+
+        if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
+            && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
+            && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
+            && calcs.Count == 0)
+        {
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC statements and isn't marked [empty].");
+        }
+
+        return new IrNetwork(
+            number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -815,7 +945,39 @@ public static partial class IrParser
             swaps.Add(ParseSwapSidecar(lines, ref i, number));
         }
 
-        return new NetworkSidecar(number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps);
+        var absStatements = new List<AbsStatementSidecar>();
+        while (i < lines.Length && AbsHeaderRegex().IsMatch(lines[i]))
+        {
+            absStatements.Add(ParseAbsSidecar(lines, ref i, number));
+        }
+
+        var limits = new List<LimitStatementSidecar>();
+        while (i < lines.Length && LimitHeaderRegex().IsMatch(lines[i]))
+        {
+            limits.Add(ParseLimitSidecar(lines, ref i, number));
+        }
+
+        var tSubs = new List<TSubStatementSidecar>();
+        while (i < lines.Length && TSubHeaderRegex().IsMatch(lines[i]))
+        {
+            tSubs.Add(ParseTSubSidecar(lines, ref i, number));
+        }
+
+        var tConvs = new List<TConvStatementSidecar>();
+        while (i < lines.Length && TConvHeaderRegex().IsMatch(lines[i]))
+        {
+            tConvs.Add(ParseTConvSidecar(lines, ref i, number));
+        }
+
+        var calcs = new List<CalcStatementSidecar>();
+        while (i < lines.Length && CalcHeaderRegex().IsMatch(lines[i]))
+        {
+            calcs.Add(ParseCalcSidecar(lines, ref i, number));
+        }
+
+        return new NetworkSidecar(
+            number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
+            absStatements, limits, tSubs, tConvs, calcs);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -930,6 +1092,121 @@ public static partial class IrParser
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
         return new SwapStatementSidecar(swapPartUId, en, inOperand, srcType, destAccessUId, destWireUId);
+    }
+
+    // An Abs's own sidecar shape mirrors ParseSwapSidecar exactly (same shape, different source
+    // Part Name).
+    private static AbsStatementSidecar ParseAbsSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  abs <n>" header — index itself isn't needed, position in the list is enough.
+
+        var absPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    absuid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new AbsStatementSidecar(absPartUId, en, inOperand, srcType, destAccessUId, destWireUId);
+    }
+
+    // A LIMIT's own sidecar shape adds a Version line (same role as a timer's own, see
+    // TimerBindingSidecar) and three named operands (mn/in/mx) instead of Convert/Swap/Abs's
+    // single "in" — see LimitStatementSidecar's own doc comment.
+    private static LimitStatementSidecar ParseLimitSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  limit <n>" header — index itself isn't needed, position in the list is enough.
+
+        var limitPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    limituid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var minOperand = ParseOperand(lines, ref i, "    ", "mn");
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+        var maxOperand = ParseOperand(lines, ref i, "    ", "mx");
+
+        var valueType = RequirePrefixedLine(lines, ref i, "    valuetype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new LimitStatementSidecar(limitPartUId, version, en, minOperand, inOperand, maxOperand, valueType, destAccessUId, destWireUId);
+    }
+
+    // A T_SUB's own sidecar shape adds a Version line (same role as LIMIT's own) and two named
+    // operands (in1/in2, mirroring Sub's own binary shape) plus datetype/timetype instead of a
+    // single srctype.
+    private static TSubStatementSidecar ParseTSubSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  tsub <n>" header — index itself isn't needed, position in the list is enough.
+
+        var tSubPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    tsubuid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var in1Operand = ParseOperand(lines, ref i, "    ", "in1");
+        var in2Operand = ParseOperand(lines, ref i, "    ", "in2");
+
+        var dateType = RequirePrefixedLine(lines, ref i, "    datetype = ");
+        var timeType = RequirePrefixedLine(lines, ref i, "    timetype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new TSubStatementSidecar(tSubPartUId, version, en, in1Operand, in2Operand, dateType, timeType, destAccessUId, destWireUId);
+    }
+
+    // A T_CONV's own sidecar shape mirrors ParseConvertSidecar exactly, plus a Version line
+    // (which ordinary Convert never carries).
+    private static TConvStatementSidecar ParseTConvSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  tconv <n>" header — index itself isn't needed, position in the list is enough.
+
+        var tConvPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    tconvuid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+        var destType = RequirePrefixedLine(lines, ref i, "    desttype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new TConvStatementSidecar(tConvPartUId, version, en, inOperand, srcType, destType, destAccessUId, destWireUId);
+    }
+
+    // A Calc's own sidecar shape mirrors ParseMulSidecar's Cardinality-driven input-operand loop,
+    // plus a quoted `equation` line (same ParseQuotedString every TITLE/COMMENT line already
+    // uses) instead of Mul's own optional srctype-or-AutomaticTyped choice — Calc's SrcType is
+    // always an explicit TemplateValue, never AutomaticTyped (see ParseCalcFixedShape's own doc
+    // comment), so it's a plain required line here, not optional.
+    private static CalcStatementSidecar ParseCalcSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  calc <n>" header — index itself isn't needed, position in the list is enough.
+
+        var calcPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    calcuid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inputs = new List<OperandSidecar>();
+        var k = 0;
+        while (i < lines.Length && (lines[i].StartsWith($"    input {k} tag = ", StringComparison.Ordinal) || lines[i].StartsWith($"    input {k} literal = ", StringComparison.Ordinal)))
+        {
+            inputs.Add(ParseOperand(lines, ref i, "    ", $"input {k}"));
+            k++;
+        }
+
+        var equation = ParseQuotedString(RequirePrefixedLine(lines, ref i, "    equation = "));
+        var srcType = RequirePrefixedLine(lines, ref i, "    srctype = ");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new CalcStatementSidecar(calcPartUId, en, inputs, equation, srcType, destAccessUId, destWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1390,6 +1667,30 @@ public static partial class IrParser
     [GeneratedRegex(@"^  SWAP\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
     private static partial Regex SwapLineRegex();
 
+    // Fixed arity (EN, IN) — same regex-based shape as SWAP's own line (Phase 2 Tier 1).
+    [GeneratedRegex(@"^  ABS\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex AbsLineRegex();
+
+    // Three fixed-named inputs (MN/IN/MX), same outer-shape-only-matched, split-on-top-level-
+    // commas discipline as TON/WAND/MUL/CALL's own variable-arity argument lists (Phase 2 Tier 1).
+    [GeneratedRegex(@"^  LIMIT\((?<args>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex LimitLineRegex();
+
+    // Two fixed-named inputs (IN1/IN2), same outer-shape-only-matched discipline as LIMIT's own
+    // (Phase 2 Tier 2).
+    [GeneratedRegex(@"^  T_SUB\((?<args>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex TSubLineRegex();
+
+    // Fixed arity (EN, IN) — same regex-based shape as CONVERT/SWAP/ABS's own line (Phase 2 Tier 2).
+    [GeneratedRegex(@"^  T_CONV\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex TConvLineRegex();
+
+    // Variable input count (Cardinality-driven, Phase 2 Tier 3), same discipline as WAND/MUL's own
+    // variable-arity argument list, plus a trailing quoted Equation string after the destination
+    // tag — kept outside the argument-list parens (see IrSerializer's own comment on why).
+    [GeneratedRegex(@"^  CALC\((?<args>.+)\) => (?<dest>\S+) (?<equation>"".*"")$")]
+    private static partial Regex CalcLineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1432,4 +1733,19 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  swap (?<index>\d+)$")]
     private static partial Regex SwapHeaderRegex();
+
+    [GeneratedRegex(@"^  abs (?<index>\d+)$")]
+    private static partial Regex AbsHeaderRegex();
+
+    [GeneratedRegex(@"^  limit (?<index>\d+)$")]
+    private static partial Regex LimitHeaderRegex();
+
+    [GeneratedRegex(@"^  tsub (?<index>\d+)$")]
+    private static partial Regex TSubHeaderRegex();
+
+    [GeneratedRegex(@"^  tconv (?<index>\d+)$")]
+    private static partial Regex TConvHeaderRegex();
+
+    [GeneratedRegex(@"^  calc (?<index>\d+)$")]
+    private static partial Regex CalcHeaderRegex();
 }

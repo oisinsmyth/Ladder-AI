@@ -25,6 +25,13 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 
 ## Recently closed (all committed)
 
+- **Instruction-coverage sweep + Phase 2 tiers 1–3 (`Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc`),
+  2026-07-14.** Grounded all 36 remaining `JOB9002` blocks (both PLC stations), found 11 real
+  currently-unsupported instructions, ranked into a 6-tier plan. Tiers 1–3 (5 instructions) built,
+  tested (40 new tests, 323 total), and live-verified via a synthetic composed FC imported/compiled
+  clean in `SampleProject`. Two real bugs found only by live TIA verification (a misread `LIMIT`
+  `DisabledENO` attribute; a hand-built fixture reusing one `Access` UId across two wires, which
+  TIA's own export never does) — see `docs/notes/stage-gates.md` for the full story.
 - **The full `PlantAutoControl` round-trip plan — all three phases done, 2026-07-14.** Phase 1 (all 8
   dependency FBs compile clean), Phase 2 (all 26 real DB/tag-table roots sanitized/imported/
   compiled clean), Phase 3 (`PlantAutoControl` itself imports, compiles with 0 errors, and round-trips
@@ -41,10 +48,22 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 - Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
   `e0fd86a`. 3rd FB.
 
-## Current task: none in-flight
+## Current task: Phase 2 instruction-coverage plan, tiers 4–6 not yet started
 
-No uncommitted work as of 2026-07-14 (post full-cycle-verification-pass commit `60ac96f`). The
-`PlantAutoControl` round-trip plan (`quirky-gathering-ripple.md`) is fully closed.
+Tiers 1–3 (`Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc`) closed and committed 2026-07-14 (see "Recently
+closed" above). Working overnight, autonomously, per the project owner's own explicit request
+("work through as much as you can without me... follow the plan") — continue in tier order:
+
+- **Tier 4**: `Modbus_Master`/`Modbus_Comm_Load` (`FC ModbusComs`) — Instance-DB-backed like
+  `TON`/`Call` (reuse that machinery), but each real port (`REQ`/`MB_ADDR`/`DATA_PTR`/`DONE`/
+  `BUSY`/`ERROR`/`STATUS` etc.) needs grounding against the real wires before assuming a shape —
+  moderate-to-higher effort, a genuinely new comms-FB category.
+- **Tier 5**: re-ground `MOVE_BLK_VARIANT` — every sample seen so far (`MoveData`,
+  `VSDDataSequence`) only had `en` wired; the real array/count port shape is still unknown. Find a
+  fully-wired example before designing anything.
+- **Tier 6**: `Jump` (+ implied `Label` — needs its own jump-target shape found), `FillBlockI`,
+  `WAIT` — novel categories, no existing analog, each needs its own small grounding spike. Lowest
+  priority.
 
 **Deliberately deferred, not a bug to chase:**
 - `Main` (OB1) doesn't round-trip through the full cycle — each fix reveals another narrow
@@ -57,9 +76,16 @@ No uncommitted work as of 2026-07-14 (post full-cycle-verification-pass commit `
   "not equivalent" for them. Fixing this properly needs graph-based Part identity matching, not a
   simple content-key map the way `Access` already has — flagged as a real, well-scoped follow-on,
   not attempted yet.
+- A Sanitizer gap, newly confirmed real 2026-07-14: a Static member with
+  `ExternalAccessible="False"` (`FB VSDSim`'s own `SpeedCalcArray`) hard-errors — already a
+  deliberate, tested case (`GlobalDbWithNonDefaultAttribute.xml`), just never previously grounded
+  as real. Would need a new `DbMember` field, `DbInterfaceMembers` parse/write changes, and a new
+  IR-text marker (same shape as the existing `IsBareParameter`/`Informative` additions) — flagged
+  rather than fixed mid-Phase-2-plan, since it's unrelated to LAD instruction coverage.
 
 **Possible next work** (no explicit instruction yet — ask before starting):
 - Build the `Normalizer` Part-identity fix above.
+- Fix the `ExternalAccessible=False` Sanitizer gap above.
 - Grow the committed reference-project corpus to actually exercise the ~15 instruction-level
   constructs (`Mul`/`Convert`/`Sub`/`Div`/comparisons beyond `Eq`/`Ge`/`CALL`/`SWAP`/`SCoil`/
   `RCoil`/`WAND`/`Not`/`TONR`/`TOF`) that currently have no permanent, committed, live-TIA-verified

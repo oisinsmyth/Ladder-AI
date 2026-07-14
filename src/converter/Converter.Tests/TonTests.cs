@@ -37,7 +37,7 @@ public class TonTests
         var network = LoadFixture("WithTon.xml");
 
         var ton = Assert.Single(network.Parts, p => p.Name == "TON");
-        Assert.Equal("1.0", ton.TonVersion);
+        Assert.Equal("1.0", ton.Version);
         Assert.Equal("Time", ton.TimeType);
         Assert.NotNull(ton.Instance);
         Assert.Equal("GlobalVariable", ton.Instance!.Scope);
@@ -110,7 +110,7 @@ public class TonTests
 
         var tonPart = Assert.Single(reparsed.Parts, p => p.Name == "TON");
         Assert.Equal(32, tonPart.UId);
-        Assert.Equal("1.0", tonPart.TonVersion);
+        Assert.Equal("1.0", tonPart.Version);
         Assert.Equal("Time", tonPart.TimeType);
         Assert.Equal("GlobalVariable", tonPart.Instance!.Scope);
         Assert.Equal(33, tonPart.Instance.UId);
@@ -420,7 +420,7 @@ public class TonTests
         var network = LoadFixture("WithTof.xml");
 
         var tof = Assert.Single(network.Parts, p => p.Name == "TOF");
-        Assert.Equal("1.0", tof.TonVersion);
+        Assert.Equal("1.0", tof.Version);
         Assert.Equal("Time", tof.TimeType);
         Assert.NotNull(tof.Instance);
         Assert.Equal("GlobalVariable", tof.Instance!.Scope);
@@ -458,7 +458,7 @@ public class TonTests
 
         var tofPart = Assert.Single(reparsed.Parts, p => p.Name == "TOF");
         Assert.Equal(32, tofPart.UId);
-        Assert.Equal("1.0", tofPart.TonVersion);
+        Assert.Equal("1.0", tofPart.Version);
 
         Assert.DoesNotContain(reparsed.Wires, w => w.Endpoints.Any(e => e.Kind == EndpointKind.NameCon && e.UId == 32 && e.PortName == "R"));
     }

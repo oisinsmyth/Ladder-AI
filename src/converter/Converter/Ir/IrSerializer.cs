@@ -170,6 +170,53 @@ public static class IrSerializer
               .Append(", IN := ").Append(SerializeExpr(swap.In))
               .Append(") => ").Append(swap.DestTag).Append('\n');
         }
+
+        foreach (var abs in network.AbsStatements)
+        {
+            sb.Append("  ABS(EN := ").Append(SerializeEnSource(abs.En))
+              .Append(", IN := ").Append(SerializeExpr(abs.In))
+              .Append(") => ").Append(abs.DestTag).Append('\n');
+        }
+
+        foreach (var limit in network.Limits)
+        {
+            sb.Append("  LIMIT(EN := ").Append(SerializeEnSource(limit.En))
+              .Append(", MN := ").Append(SerializeExpr(limit.Min))
+              .Append(", IN := ").Append(SerializeExpr(limit.In))
+              .Append(", MX := ").Append(SerializeExpr(limit.Max))
+              .Append(") => ").Append(limit.DestTag).Append('\n');
+        }
+
+        foreach (var tSub in network.TSubs)
+        {
+            sb.Append("  T_SUB(EN := ").Append(SerializeEnSource(tSub.En))
+              .Append(", IN1 := ").Append(SerializeExpr(tSub.In1))
+              .Append(", IN2 := ").Append(SerializeExpr(tSub.In2))
+              .Append(") => ").Append(tSub.DestTag).Append('\n');
+        }
+
+        foreach (var tConv in network.TConvs)
+        {
+            sb.Append("  T_CONV(EN := ").Append(SerializeEnSource(tConv.En))
+              .Append(", IN := ").Append(SerializeExpr(tConv.In))
+              .Append(") => ").Append(tConv.DestTag).Append('\n');
+        }
+
+        // Equation trails the destination tag as a quoted string (escaped the same way TITLE/
+        // COMMENT already are) — kept outside the comma-separated argument list entirely so the
+        // equation text (which may itself contain arithmetic operators, though never a comma in
+        // any real instance seen) can never collide with the top-level-comma-split the argument
+        // list itself relies on.
+        foreach (var calc in network.Calcs)
+        {
+            sb.Append("  CALC(EN := ").Append(SerializeEnSource(calc.En));
+            for (var k = 0; k < calc.Inputs.Count; k++)
+            {
+                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(calc.Inputs[k]));
+            }
+
+            sb.Append(") => ").Append(calc.DestTag).Append(" \"").Append(EscapeString(calc.Equation)).Append("\"\n");
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -492,6 +539,88 @@ public static class IrSerializer
             sb.Append("    srctype = ").Append(swap.SrcType).Append('\n');
             sb.Append("    dest = ").Append(swap.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(swap.DestWireUId).Append('\n');
+        }
+
+        for (var ab = 0; ab < sidecar.AbsStatements.Count; ab++)
+        {
+            var abs = sidecar.AbsStatements[ab];
+            sb.Append("  abs ").Append(ab).Append('\n');
+            sb.Append("    absuid = ").Append(abs.AbsPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", abs.En);
+
+            SerializeOperand(sb, "    ", "in", abs.In);
+
+            sb.Append("    srctype = ").Append(abs.SrcType).Append('\n');
+            sb.Append("    dest = ").Append(abs.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(abs.DestWireUId).Append('\n');
+        }
+
+        for (var lm = 0; lm < sidecar.Limits.Count; lm++)
+        {
+            var limit = sidecar.Limits[lm];
+            sb.Append("  limit ").Append(lm).Append('\n');
+            sb.Append("    limituid = ").Append(limit.LimitPartUId).Append('\n');
+            sb.Append("    version = ").Append(limit.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", limit.En);
+
+            SerializeOperand(sb, "    ", "mn", limit.Min);
+            SerializeOperand(sb, "    ", "in", limit.In);
+            SerializeOperand(sb, "    ", "mx", limit.Max);
+
+            sb.Append("    valuetype = ").Append(limit.ValueType).Append('\n');
+            sb.Append("    dest = ").Append(limit.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(limit.DestWireUId).Append('\n');
+        }
+
+        for (var ts = 0; ts < sidecar.TSubs.Count; ts++)
+        {
+            var tSub = sidecar.TSubs[ts];
+            sb.Append("  tsub ").Append(ts).Append('\n');
+            sb.Append("    tsubuid = ").Append(tSub.TSubPartUId).Append('\n');
+            sb.Append("    version = ").Append(tSub.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", tSub.En);
+
+            SerializeOperand(sb, "    ", "in1", tSub.In1);
+            SerializeOperand(sb, "    ", "in2", tSub.In2);
+
+            sb.Append("    datetype = ").Append(tSub.DateType).Append('\n');
+            sb.Append("    timetype = ").Append(tSub.TimeType).Append('\n');
+            sb.Append("    dest = ").Append(tSub.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(tSub.DestWireUId).Append('\n');
+        }
+
+        for (var tc = 0; tc < sidecar.TConvs.Count; tc++)
+        {
+            var tConv = sidecar.TConvs[tc];
+            sb.Append("  tconv ").Append(tc).Append('\n');
+            sb.Append("    tconvuid = ").Append(tConv.TConvPartUId).Append('\n');
+            sb.Append("    version = ").Append(tConv.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", tConv.En);
+
+            SerializeOperand(sb, "    ", "in", tConv.In);
+
+            sb.Append("    srctype = ").Append(tConv.SrcType).Append('\n');
+            sb.Append("    desttype = ").Append(tConv.DestType).Append('\n');
+            sb.Append("    dest = ").Append(tConv.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(tConv.DestWireUId).Append('\n');
+        }
+
+        for (var cc = 0; cc < sidecar.Calcs.Count; cc++)
+        {
+            var calc = sidecar.Calcs[cc];
+            sb.Append("  calc ").Append(cc).Append('\n');
+            sb.Append("    calcuid = ").Append(calc.CalcPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", calc.En);
+
+            for (var k = 0; k < calc.Inputs.Count; k++)
+            {
+                SerializeOperand(sb, "    ", $"input {k}", calc.Inputs[k]);
+            }
+
+            sb.Append("    equation = \"").Append(EscapeString(calc.Equation)).Append("\"\n");
+            sb.Append("    srctype = ").Append(calc.SrcType).Append('\n');
+            sb.Append("    dest = ").Append(calc.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(calc.DestWireUId).Append('\n');
         }
     }
 

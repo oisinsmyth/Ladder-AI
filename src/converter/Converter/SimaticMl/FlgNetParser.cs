@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -91,7 +91,7 @@ public static class FlgNetParser
                 if (name is "TON" or "TONR" or "TOF")
                 {
                     var (version, timeType, instance) = ParseTon(child, name, uid);
-                    parts.Add(new PartNode(uid, name, TonVersion: version, TimeType: timeType, Instance: instance));
+                    parts.Add(new PartNode(uid, name, Version: version, TimeType: timeType, Instance: instance));
                 }
                 else if (SupportedComparisonPartNames.Contains(name))
                 {
@@ -125,8 +125,33 @@ public static class FlgNetParser
                 }
                 else if (name == "Swap")
                 {
-                    var swapSrcType = ParseSwapFixedShape(child, uid);
+                    var swapSrcType = ParseDisabledEnoSingleSrcTypeShape(child, "Swap", uid);
                     parts.Add(new PartNode(uid, name, SrcType: swapSrcType));
+                }
+                else if (name == "Abs")
+                {
+                    var absSrcType = ParseDisabledEnoSingleSrcTypeShape(child, "Abs", uid);
+                    parts.Add(new PartNode(uid, name, SrcType: absSrcType));
+                }
+                else if (name == "LIMIT")
+                {
+                    var (limitVersion, limitValueType) = ParseLimitFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Version: limitVersion, SrcType: limitValueType));
+                }
+                else if (name == "T_SUB")
+                {
+                    var (tSubVersion, dateType, timeType) = ParseTSubFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Version: tSubVersion, SrcType: dateType, TimeType: timeType));
+                }
+                else if (name == "T_CONV")
+                {
+                    var (tConvVersion, tConvSrcType, tConvDestType) = ParseTConvFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Version: tConvVersion, SrcType: tConvSrcType, DestType: tConvDestType));
+                }
+                else if (name == "Calc")
+                {
+                    var (calcCardinality, calcSrcType, calcEquation) = ParseCalcFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: calcCardinality, SrcType: calcSrcType, Equation: calcEquation));
                 }
                 else
                 {
@@ -380,20 +405,162 @@ public static class FlgNetParser
         return (srcType, destTypeValue.Value);
     }
 
-    // A byte-swap box instruction (`Part Name="Swap"`) — confirmed real, 2026-07-12 (S1 item 25,
-    // `FB TomraControlSystem`, 2 instances). Structurally identical to Convert's own shape
-    // (`DisabledENO="true"`, one `SrcType` `TemplateValue`) minus `DestType` — a byte-swap doesn't
-    // change the value's type. Both real instances: `Type="Type">Word</TemplateValue>`.
-    private static string ParseSwapFixedShape(XElement swapPart, int uid)
+    // A DisabledENO="true" + single SrcType TemplateValue shape — confirmed real for Swap
+    // (2026-07-12, S1 item 25, `FB TomraControlSystem`, 2 instances, `Type="Type">Word</TemplateValue>`)
+    // and Abs (2026-07-14, `FB VSDSim`'s own numeric-simulation ladder, `SrcType="Real"`) —
+    // identical shape, generalized once a second real instruction confirmed it isn't Swap-
+    // specific (same "don't stack special cases" reasoning as the Version field rename).
+    private static string ParseDisabledEnoSingleSrcTypeShape(XElement part, string partName, int uid)
     {
-        var disabledEno = swapPart.Attribute("DisabledENO")?.Value;
+        var disabledEno = part.Attribute("DisabledENO")?.Value;
         if (disabledEno != "true")
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"Swap\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
         }
 
-        return ParseSrcType(swapPart, "Swap", uid);
+        return ParseSrcType(part, partName, uid);
+    }
+
+    // A clamp/limiter box instruction (`Part Name="LIMIT"`) — confirmed real, 2026-07-14, `FB
+    // VSDSim` (2 instances): `Version="1.0"` (same attribute TON carries, stored on the same
+    // PartNode.Version field — see its own doc comment), `DisabledENO="true"` (same reasoning as
+    // Convert/Swap/Abs's own — confirmed live, 2026-07-14: TIA's own Import() validator rejects a
+    // regenerated LIMIT that omits it, "ENO cannot be deactivated for the 'LIMIT' instruction" —
+    // an earlier reading of the real export had missed this attribute entirely), plus a single
+    // `value_type` `TemplateValue` (`Type="Type">Real</TemplateValue>` in both instances) —
+    // genuinely a different TemplateValue Name than every other typed instruction's own
+    // "SrcType", but the same semantic role (the type LIMIT operates on), so stored in the same
+    // PartNode.SrcType field rather than a new one.
+    private static (string Version, string ValueType) ParseLimitFixedShape(XElement limitPart, int uid)
+    {
+        var disabledEno = limitPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"LIMIT\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var version = RequireAttribute(limitPart, "Version");
+
+        var templateValue = limitPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "value_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"LIMIT\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"value_type\"> element.");
+        var type = RequireAttribute(templateValue, "Type");
+        if (type != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"LIMIT\" UId=\"{uid}\">'s <TemplateValue Name=\"value_type\" Type=\"{type}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        return (version, templateValue.Value);
+    }
+
+    // A time-arithmetic subtraction box instruction (`Part Name="T_SUB"`) — confirmed real,
+    // 2026-07-14, `FB VibratorCycle` (Phase 2 Tier 2): `Version="1.2"`, two TemplateValues
+    // (`date_type` then `time_type`, in that order — matching the wire order, IN1 then IN2 — both
+    // `"Time"` in the one real instance, stored verbatim rather than assumed always Time-typed).
+    // No DisabledENO at all (same "checked for absence" discipline as LIMIT). `date_type`/
+    // `time_type` are stored on the existing PartNode.SrcType/TimeType fields respectively (same
+    // semantic role — the type of each operand — reused rather than adding parallel fields; a
+    // coincidental name collision with TON's own `time_type` TemplateValue, genuinely unrelated
+    // instructions sharing an attribute name).
+    private static (string Version, string DateType, string TimeType) ParseTSubFixedShape(XElement tSubPart, int uid)
+    {
+        var disabledEno = tSubPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_SUB\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
+        }
+
+        var version = RequireAttribute(tSubPart, "Version");
+
+        var dateTypeValue = tSubPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "date_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"T_SUB\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"date_type\"> element.");
+        var dateType = RequireAttribute(dateTypeValue, "Type");
+        if (dateType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_SUB\" UId=\"{uid}\">'s <TemplateValue Name=\"date_type\" Type=\"{dateType}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        var timeTypeValue = tSubPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "time_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"T_SUB\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"time_type\"> element.");
+        var timeType = RequireAttribute(timeTypeValue, "Type");
+        if (timeType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_SUB\" UId=\"{uid}\">'s <TemplateValue Name=\"time_type\" Type=\"{timeType}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        return (version, dateTypeValue.Value, timeTypeValue.Value);
+    }
+
+    // A time-arithmetic type-conversion box instruction (`Part Name="T_CONV"`) — confirmed real,
+    // 2026-07-14, `FB VibratorCycle` (Phase 2 Tier 2), immediately following T_SUB in an
+    // ENO-chain: `Version="1.2"`, `src_type`/`dest_type` TemplateValues (lowercase, unlike
+    // ordinary Convert's `SrcType`/`DestType`) — same semantic role as Convert's own pair, stored
+    // on the existing PartNode.SrcType/DestType fields. No DisabledENO (same as T_SUB).
+    private static (string Version, string SrcType, string DestType) ParseTConvFixedShape(XElement tConvPart, int uid)
+    {
+        var disabledEno = tConvPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_CONV\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
+        }
+
+        var version = RequireAttribute(tConvPart, "Version");
+
+        var srcTypeValue = tConvPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "src_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"T_CONV\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"src_type\"> element.");
+        var srcTypeType = RequireAttribute(srcTypeValue, "Type");
+        if (srcTypeType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_CONV\" UId=\"{uid}\">'s <TemplateValue Name=\"src_type\" Type=\"{srcTypeType}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        var destTypeValue = tConvPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "dest_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"T_CONV\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"dest_type\"> element.");
+        var destTypeType = RequireAttribute(destTypeValue, "Type");
+        if (destTypeType != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"T_CONV\" UId=\"{uid}\">'s <TemplateValue Name=\"dest_type\" Type=\"{destTypeType}\"> — only " +
+                "Type=\"Type\" has been observed.");
+        }
+
+        return (version, srcTypeValue.Value, destTypeValue.Value);
+    }
+
+    // A free-expression box instruction (`Part Name="Calc"`) — confirmed real, 2026-07-14, `FB
+    // VSDSim` (Phase 2 Tier 3, 2 instances, identical shape): `DisabledENO="true"` (same
+    // reasoning as Mul/Add's own), a free-text `<Equation>` element (e.g. `"IN1*(IN2/IN3)"` —
+    // carried verbatim, see PartNode.Equation's own doc comment), a `Card` TemplateValue
+    // (Cardinality-driven inputs, same as Mul/Add/WAND), and an explicit `SrcType` TemplateValue
+    // (both real instances `"Real"` — no `AutomaticTyped` alternative has been observed for Calc,
+    // unlike Mul/Add, so only the explicit-TemplateValue shape is accepted here).
+    private static (int Cardinality, string SrcType, string Equation) ParseCalcFixedShape(XElement calcPart, int uid)
+    {
+        var disabledEno = calcPart.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"Calc\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        var equationElement = calcPart.Element(Ns + "Equation")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"Calc\" UId=\"{uid}\"> is missing its <Equation> element.");
+
+        var cardinality = ParseCardinality(calcPart, "Calc", uid);
+        var srcType = ParseSrcType(calcPart, "Calc", uid);
+
+        return (cardinality, srcType, equationElement.Value);
     }
 
     // A TON/TONR's own Instance reference — same Scope values as an ordinary Access, but the

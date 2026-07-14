@@ -10,6 +10,30 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Instruction-coverage sweep of the full `JOB9002` inventory + Phase 2 tiers 1–3: `Abs`/`LIMIT`/`T_SUB`/`T_CONV`/`Calc` built and live-verified**
+
+- Grounded all 36 remaining `JOB9002` blocks (both PLC stations) against the full instruction
+  vocabulary, one export per block; found 11 real, currently-unsupported instructions
+  (`MOVE_BLK_VARIANT`, `LIMIT`, `Calc`, `T_SUB`, `T_CONV`, `WAIT`, `Modbus_Master`,
+  `Modbus_Comm_Load`, `Jump`, `FillBlockI`, `Abs`); ranked into a 6-tier plan by confidence/effort.
+- Built and live-verified tiers 1–3 (5 instructions): `Abs` (identical shape to `Swap`), `LIMIT`
+  (a new 3-fixed-input arity, `MN`/`IN`/`MX`), `T_SUB`/`T_CONV` (time-arithmetic `Sub`/`Convert`
+  variants, extending the ENO-chain allowlist), `Calc` (Cardinality-driven inputs plus a verbatim
+  free-text `Equation` string). `PartNode.TonVersion` generalized to `Version` (no longer
+  TON-specific). 40 new converter tests, 323 total.
+- Two real bugs found only by live TIA import — neither caught by unit tests, since the hand-built
+  fixtures were self-consistently wrong along with the code: `LIMIT`'s `DisabledENO="true"` was
+  misread from the raw export as absent; a fixture reused one `Access` UId across two wires, a
+  shape TIA's own export never produces (confirmed real: it always declares a fresh Access UId per
+  wire reference, even for repeat reads of the same tag).
+- Live-verified via a synthetic composed FC (not the real `VSDSim`/`VibratorCycle` blocks
+  themselves — `VSDSim` also hit an unrelated, pre-existing Sanitizer gap, `ExternalAccessible=
+  False`, flagged for later, not fixed) — imported/compiled clean (0 errors) in `SampleProject`,
+  byte-identical readable IR before/after the full cycle, then deleted (synthetic scaffolding, not
+  reference content).
+- See `docs/notes/stage-gates.md` for the full story, `ir/SPEC.md` for the grammar, `AITODO.md`
+  for tiers 4–6 (not yet started).
+
 **Full-cycle verification pass: every block in `SampleProject` — 5 more real converter bugs found and fixed; 47 of 48 blocks now round-trip completely**
 
 - Project owner's own explicit ask: run the complete export → `to-ir` → `to-xml` → import →

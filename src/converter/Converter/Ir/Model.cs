@@ -209,6 +209,45 @@ public sealed record ConvertStatement(EnSource En, Expr In, string DestTag);
 // staying separate variants rather than merging unrelated Part Names into one type.
 public sealed record SwapStatement(EnSource En, Expr In, string DestTag);
 
+// An absolute-value box instruction (`Part Name="Abs"`) — confirmed real, 2026-07-14 (Phase 2
+// Tier 1, `FB VSDSim`'s own numeric-simulation ladder). Structurally identical to SwapStatement
+// (en-gated, single tag-or-literal input, one destination tag, one SrcType) — modeled as its own
+// record for the same reason Swap didn't fold into ConvertStatement: each source Part Name keeps
+// its own IR construct.
+public sealed record AbsStatement(EnSource En, Expr In, string DestTag);
+
+// A clamp/limiter box instruction (`Part Name="LIMIT"`) — confirmed real, 2026-07-14 (Phase 2
+// Tier 1, `FB VSDSim`, 2 instances). Genuinely different arity from every other typed instruction
+// so far: three fixed-named tag-or-literal inputs (`MN`/`IN`/`MX` — minimum, value, maximum) not
+// one, so Min/In/Max are three separate Expr fields rather than reusing Convert/Swap/Abs's single
+// `In`. No DisabledENO in the source (see FlgNetParser's own ParseLimitFixedShape) — En is still
+// resolved via the ordinary ResolveEnSource path (a plain condition in both real instances, never
+// ENO-chained), so EnSource is unchanged.
+public sealed record LimitStatement(EnSource En, Expr Min, Expr In, Expr Max, string DestTag);
+
+// A time-arithmetic subtraction box instruction (`Part Name="T_SUB"`) — confirmed real,
+// 2026-07-14 (Phase 2 Tier 2, `FB VibratorCycle`). Binary, like Sub/Div (two tag-or-literal
+// inputs, one destination tag) rather than unary like Convert/Swap/Abs — In1/In2 mirror Sub's own
+// shape exactly, but modeled as its own record (not reusing MulStatement's variable-arity Inputs
+// list) since T_SUB's two operands are independently typed (`date_type`/`time_type`, sidecar-only
+// — see TSubStatementSidecar) rather than one shared SrcType the way Sub/Div are.
+public sealed record TSubStatement(EnSource En, Expr In1, Expr In2, string DestTag);
+
+// A time-arithmetic type-conversion box instruction (`Part Name="T_CONV"`) — confirmed real,
+// 2026-07-14 (Phase 2 Tier 2, `FB VibratorCycle`, immediately following T_SUB in an ENO-chain).
+// Structurally identical to ConvertStatement (en-gated, single tag-or-literal input, one
+// destination tag, typed between two types) — modeled as its own record for the same reason Swap
+// didn't fold into ConvertStatement: each source Part Name keeps its own IR construct.
+public sealed record TConvStatement(EnSource En, Expr In, string DestTag);
+
+// A free-expression box instruction (`Part Name="Calc"`) — confirmed real, 2026-07-14 (Phase 2
+// Tier 3, `FB VSDSim`, 2 instances). Cardinality-driven Inputs, same shape as MulStatement's own,
+// but the combination of those inputs is whatever Equation says (carried verbatim — see
+// PartNode.Equation's own doc comment) rather than implied by the Part Name. Equation is shown in
+// the readable IR text (unlike SrcType, sidecar-only) since it's the instruction's entire defining
+// content, not incidental typing metadata.
+public sealed record CalcStatement(EnSource En, IReadOnlyList<Expr> Inputs, string Equation, string DestTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -280,7 +319,12 @@ public sealed record IrNetwork(
     string? Comment = null,
     IReadOnlyList<MulStatement>? Muls = null,
     IReadOnlyList<ConvertStatement>? Converts = null,
-    IReadOnlyList<SwapStatement>? Swaps = null)
+    IReadOnlyList<SwapStatement>? Swaps = null,
+    IReadOnlyList<AbsStatement>? AbsStatements = null,
+    IReadOnlyList<LimitStatement>? Limits = null,
+    IReadOnlyList<TSubStatement>? TSubs = null,
+    IReadOnlyList<TConvStatement>? TConvs = null,
+    IReadOnlyList<CalcStatement>? Calcs = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -296,8 +340,20 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<SwapStatement> Swaps { get; init; } = Swaps ?? Array.Empty<SwapStatement>();
 
+    public IReadOnlyList<AbsStatement> AbsStatements { get; init; } = AbsStatements ?? Array.Empty<AbsStatement>();
+
+    public IReadOnlyList<LimitStatement> Limits { get; init; } = Limits ?? Array.Empty<LimitStatement>();
+
+    public IReadOnlyList<TSubStatement> TSubs { get; init; } = TSubs ?? Array.Empty<TSubStatement>();
+
+    public IReadOnlyList<TConvStatement> TConvs { get; init; } = TConvs ?? Array.Empty<TConvStatement>();
+
+    public IReadOnlyList<CalcStatement> Calcs { get; init; } = Calcs ?? Array.Empty<CalcStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
-        && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0;
+        && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
+        && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
+        && Calcs.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -684,6 +740,71 @@ public sealed record SwapStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One Abs's full round-trip data. Mirrors SwapStatementSidecar exactly (same shape, different
+// source Part Name).
+public sealed record AbsStatementSidecar(
+    int AbsPartUId,
+    EnSourceSidecar En,
+    OperandSidecar In,
+    string SrcType,
+    int DestAccessUId,
+    int DestWireUId);
+
+// One LIMIT's full round-trip data. Version mirrors TimerBindingSidecar's own (a Part-level
+// Version attribute, not shown in the readable IR text). ValueType is sidecar-only, same
+// precedent as every other typed instruction's own SrcType/DestType. Min/In/Max are three
+// separate OperandSidecars (LIMIT's genuinely-different 3-input arity — see LimitStatement's own
+// doc comment) rather than a list, since the three ports are fixed-named, not cardinality-driven.
+public sealed record LimitStatementSidecar(
+    int LimitPartUId,
+    string Version,
+    EnSourceSidecar En,
+    OperandSidecar Min,
+    OperandSidecar In,
+    OperandSidecar Max,
+    string ValueType,
+    int DestAccessUId,
+    int DestWireUId);
+
+// One T_SUB's full round-trip data. Version mirrors LimitStatementSidecar's own. DateType/
+// TimeType are sidecar-only (same precedent as every other typed instruction's own SrcType/
+// DestType) — the source's own `date_type`/`time_type` TemplateValue names, not shown in the
+// readable IR text.
+public sealed record TSubStatementSidecar(
+    int TSubPartUId,
+    string Version,
+    EnSourceSidecar En,
+    OperandSidecar In1,
+    OperandSidecar In2,
+    string DateType,
+    string TimeType,
+    int DestAccessUId,
+    int DestWireUId);
+
+// One T_CONV's full round-trip data. Mirrors ConvertStatementSidecar exactly, plus Version (which
+// ordinary Convert never carries).
+public sealed record TConvStatementSidecar(
+    int TConvPartUId,
+    string Version,
+    EnSourceSidecar En,
+    OperandSidecar In,
+    string SrcType,
+    string DestType,
+    int DestAccessUId,
+    int DestWireUId);
+
+// One Calc's full round-trip data. Mirrors MulStatementSidecar's own Cardinality-driven Inputs
+// shape, plus Equation (also shown in the readable text — kept here too since FlgNetBuilder only
+// ever reads from the sidecar, never the Model, when rebuilding XML).
+public sealed record CalcStatementSidecar(
+    int CalcPartUId,
+    EnSourceSidecar En,
+    IReadOnlyList<OperandSidecar> Inputs,
+    string Equation,
+    string SrcType,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -696,7 +817,12 @@ public sealed record NetworkSidecar(
     IReadOnlyList<CallStatementSidecar>? Calls = null,
     IReadOnlyList<MulStatementSidecar>? Muls = null,
     IReadOnlyList<ConvertStatementSidecar>? Converts = null,
-    IReadOnlyList<SwapStatementSidecar>? Swaps = null)
+    IReadOnlyList<SwapStatementSidecar>? Swaps = null,
+    IReadOnlyList<AbsStatementSidecar>? AbsStatements = null,
+    IReadOnlyList<LimitStatementSidecar>? Limits = null,
+    IReadOnlyList<TSubStatementSidecar>? TSubs = null,
+    IReadOnlyList<TConvStatementSidecar>? TConvs = null,
+    IReadOnlyList<CalcStatementSidecar>? Calcs = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -713,6 +839,16 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<ConvertStatementSidecar> Converts { get; init; } = Converts ?? Array.Empty<ConvertStatementSidecar>();
 
     public IReadOnlyList<SwapStatementSidecar> Swaps { get; init; } = Swaps ?? Array.Empty<SwapStatementSidecar>();
+
+    public IReadOnlyList<AbsStatementSidecar> AbsStatements { get; init; } = AbsStatements ?? Array.Empty<AbsStatementSidecar>();
+
+    public IReadOnlyList<LimitStatementSidecar> Limits { get; init; } = Limits ?? Array.Empty<LimitStatementSidecar>();
+
+    public IReadOnlyList<TSubStatementSidecar> TSubs { get; init; } = TSubs ?? Array.Empty<TSubStatementSidecar>();
+
+    public IReadOnlyList<TConvStatementSidecar> TConvs { get; init; } = TConvs ?? Array.Empty<TConvStatementSidecar>();
+
+    public IReadOnlyList<CalcStatementSidecar> Calcs { get; init; } = Calcs ?? Array.Empty<CalcStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

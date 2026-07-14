@@ -88,9 +88,9 @@ public static class FlgNetWriter
             }
 
             var partElement = new XElement(ns + "Part", new XAttribute("Name", part.Name));
-            if (part.TonVersion is not null)
+            if (part.Version is not null)
             {
-                partElement.Add(new XAttribute("Version", part.TonVersion));
+                partElement.Add(new XAttribute("Version", part.Version));
             }
 
             partElement.Add(new XAttribute("UId", part.UId));
@@ -104,8 +104,12 @@ public static class FlgNetWriter
             // value has been observed for each, not enough to treat as a universal constant) and
             // already round-trip via the existing Cardinality/SrcType/DestType blocks below. TON/
             // TONR never carry DisabledENO at all (confirmed real, no EN/ENO on either). Sub/Div
-            // (2026-07-14, FC Scale) share the same fixed DisabledENO="true" too.
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap")
+            // (2026-07-14, FC Scale) share the same fixed DisabledENO="true" too, as does Abs and
+            // LIMIT (2026-07-14, FB VSDSim — LIMIT's own DisabledENO was missed in an earlier
+            // reading of the real export; TIA's own Import() validator caught the omission live,
+            // "ENO cannot be deactivated for the 'LIMIT' instruction"). T_SUB/T_CONV are confirmed
+            // real WITHOUT DisabledENO at all (VibratorCycle grounding) — deliberately excluded.
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }
@@ -124,6 +128,13 @@ public static class FlgNetWriter
                     new XAttribute("Scope", instance.Scope),
                     new XAttribute("UId", instance.UId),
                     instanceComponents));
+            }
+
+            // Calc's own free-text Equation — confirmed real, 2026-07-14, FB VSDSim, always
+            // before Card/SrcType in the real source's own element order.
+            if (part.Equation is not null)
+            {
+                partElement.Add(new XElement(ns + "Equation", part.Equation));
             }
 
             if (part.Cardinality is not null)
@@ -152,6 +163,32 @@ public static class FlgNetWriter
                 partElement.Add(new XElement(ns + "AutomaticTyped", new XAttribute("Name", "SrcType")));
             }
 
+            if (part.SrcType is not null)
+            {
+                // LIMIT's own TemplateValue is named "value_type", not "SrcType" — confirmed
+                // real, 2026-07-14, FB VSDSim (2 instances) — same semantic role (the type the
+                // instruction operates on), reusing PartNode.SrcType rather than a parallel field,
+                // but the source attribute name genuinely differs, so this is the one Part Name
+                // that needs a different Name here. T_SUB's own first TemplateValue is named
+                // "date_type" (Phase 2 Tier 2, FB VibratorCycle) — also reusing SrcType. T_CONV's
+                // is "src_type" (lowercase, unlike ordinary Convert's "SrcType").
+                var srcTypeAttributeName = part.Name switch
+                {
+                    "LIMIT" => "value_type",
+                    "T_SUB" => "date_type",
+                    "T_CONV" => "src_type",
+                    _ => "SrcType",
+                };
+                partElement.Add(new XElement(
+                    ns + "TemplateValue",
+                    new XAttribute("Name", srcTypeAttributeName),
+                    new XAttribute("Type", "Type"),
+                    part.SrcType));
+            }
+
+            // TimeType comes after SrcType here — matches every real instance seen where both are
+            // present (T_SUB: date_type then time_type, Phase 2 Tier 2). TON/TONR/TOF never carry
+            // SrcType at all, so their own solitary TimeType is unaffected by this ordering.
             if (part.TimeType is not null)
             {
                 partElement.Add(new XElement(
@@ -161,23 +198,15 @@ public static class FlgNetWriter
                     part.TimeType));
             }
 
-            if (part.SrcType is not null)
-            {
-                partElement.Add(new XElement(
-                    ns + "TemplateValue",
-                    new XAttribute("Name", "SrcType"),
-                    new XAttribute("Type", "Type"),
-                    part.SrcType));
-            }
-
             // Convert's own DestType — confirmed real, 2026-07-12, S1 item 18, always paired
             // with SrcType above, matching the real source's own element order (SrcType then
-            // DestType).
+            // DestType). T_CONV's own is "dest_type" (lowercase, Phase 2 Tier 2).
             if (part.DestType is not null)
             {
+                var destTypeAttributeName = part.Name == "T_CONV" ? "dest_type" : "DestType";
                 partElement.Add(new XElement(
                     ns + "TemplateValue",
-                    new XAttribute("Name", "DestType"),
+                    new XAttribute("Name", destTypeAttributeName),
                     new XAttribute("Type", "Type"),
                     part.DestType));
             }

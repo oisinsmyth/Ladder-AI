@@ -80,6 +80,36 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.Swaps.Count} Swap(s) but the sidecar records {sidecar.Swaps.Count}.");
         }
 
+        if (network.AbsStatements.Count != sidecar.AbsStatements.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.AbsStatements.Count} Abs(es) but the sidecar records {sidecar.AbsStatements.Count}.");
+        }
+
+        if (network.Limits.Count != sidecar.Limits.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Limits.Count} Limit(s) but the sidecar records {sidecar.Limits.Count}.");
+        }
+
+        if (network.TSubs.Count != sidecar.TSubs.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.TSubs.Count} T_SUB(s) but the sidecar records {sidecar.TSubs.Count}.");
+        }
+
+        if (network.TConvs.Count != sidecar.TConvs.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.TConvs.Count} T_CONV(s) but the sidecar records {sidecar.TConvs.Count}.");
+        }
+
+        if (network.Calcs.Count != sidecar.Calcs.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Calcs.Count} Calc(s) but the sidecar records {sidecar.Calcs.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -180,6 +210,31 @@ public static class FlgNetBuilder
         for (var s = 0; s < network.Swaps.Count; s++)
         {
             BuildSwap(sidecar.Swaps[s], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var ab = 0; ab < network.AbsStatements.Count; ab++)
+        {
+            BuildAbs(sidecar.AbsStatements[ab], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var lm = 0; lm < network.Limits.Count; lm++)
+        {
+            BuildLimit(sidecar.Limits[lm], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var ts = 0; ts < network.TSubs.Count; ts++)
+        {
+            BuildTSub(sidecar.TSubs[ts], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var tc = 0; tc < network.TConvs.Count; tc++)
+        {
+            BuildTConv(sidecar.TConvs[tc], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var cc = 0; cc < network.Calcs.Count; cc++)
+        {
+            BuildCalc(sidecar.Calcs[cc], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         // Catch-all: any Timer never reached via a TimerOutputStep above (read only via an
@@ -289,7 +344,7 @@ public static class FlgNetBuilder
 
         var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
         AddPart(parts, emittedPartUIds, new PartNode(
-            sidecar.TonPartUId, TimerPartNameFor(sidecar.Kind), TonVersion: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
+            sidecar.TonPartUId, TimerPartNameFor(sidecar.Kind), Version: sidecar.Version, TimeType: sidecar.TimeType, Instance: instance));
 
         AddOperandWire(wireEndpointsByUId, sidecar.Preset, sidecar.TonPartUId, "PT");
 
@@ -612,6 +667,116 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.SwapPartUId, "out"));
+    }
+
+    // Builds an Abs Part — mirrors BuildSwap exactly (same shape, different source Part Name,
+    // Phase 2 Tier 1).
+    private static void BuildAbs(
+        AbsStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.AbsPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.AbsPartUId, "Abs", SrcType: sidecar.SrcType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.AbsPartUId, "in");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.AbsPartUId, "out"));
+    }
+
+    // Builds a LIMIT Part, its `en` wiring, its three named-port inputs (`MN`/`IN`/`MX` — same
+    // AddOperandWire as Convert/Swap/Abs's own `in`, just three calls instead of one, uppercase
+    // port names matching the real source exactly — see LimitStatementSidecar's own doc comment),
+    // and its `OUT` wire (uppercase, unlike every other typed instruction's lowercase `out`).
+    // Version is carried on the PartNode itself (same field TON uses), not a TemplateValue.
+    private static void BuildLimit(
+        LimitStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.LimitPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.LimitPartUId, "LIMIT", Version: sidecar.Version, SrcType: sidecar.ValueType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.Min, sidecar.LimitPartUId, "MN");
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.LimitPartUId, "IN");
+        AddOperandWire(wireEndpointsByUId, sidecar.Max, sidecar.LimitPartUId, "MX");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.LimitPartUId, "OUT"));
+    }
+
+    // Builds a T_SUB Part, its `en` wiring, its two named-port inputs (`IN1`/`IN2`, uppercase —
+    // same AddOperandWire as Sub's own `in1`/`in2`), and its `OUT` wire (uppercase). Version and
+    // DateType/TimeType are carried on the PartNode itself.
+    private static void BuildTSub(
+        TSubStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.TSubPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.TSubPartUId, "T_SUB", Version: sidecar.Version, SrcType: sidecar.DateType, TimeType: sidecar.TimeType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In1, sidecar.TSubPartUId, "IN1");
+        AddOperandWire(wireEndpointsByUId, sidecar.In2, sidecar.TSubPartUId, "IN2");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TSubPartUId, "OUT"));
+    }
+
+    // Builds a T_CONV Part — mirrors BuildConvert exactly, plus Version, using the uppercase
+    // `IN`/`OUT` port names confirmed real for T_CONV.
+    private static void BuildTConv(
+        TConvStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.TConvPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.TConvPartUId, "T_CONV", Version: sidecar.Version, SrcType: sidecar.SrcType, DestType: sidecar.DestType));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.TConvPartUId, "IN");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TConvPartUId, "OUT"));
+    }
+
+    // Builds a Calc Part — mirrors BuildMul's own Cardinality-driven input loop (lowercase
+    // `in1`..`inN`/`out`, matching Calc's own confirmed-real port names), plus the Equation
+    // string carried straight onto the PartNode (never parsed). Calc's SrcType is always an
+    // explicit TemplateValue (AutomaticSrcType always false), unlike Mul/Add's own either/or.
+    private static void BuildCalc(
+        CalcStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.CalcPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.CalcPartUId, "Calc", Cardinality: sidecar.Inputs.Count, SrcType: sidecar.SrcType, Equation: sidecar.Equation));
+
+        for (var k = 0; k < sidecar.Inputs.Count; k++)
+        {
+            AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.CalcPartUId, $"in{k + 1}");
+        }
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CalcPartUId, "out"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's
