@@ -25,6 +25,22 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 
 ## Recently closed (all committed)
 
+- **Reference corpus growth: 7 new blocks, 2026-07-14.** Project owner's own ask, after reviewing
+  what's left before S1 is "done" in spirit: the committed `ir/reference/`/`simatic-ml/reference/`
+  corpus only exercised ~5 of the ~24 instruction-level constructs this converter supports, with
+  everything else proven only against uncommittable real JOB9002 content (today's own audit finding).
+  Added `ThresholdAlarms` (comparisons), `SignalConditioning`/`DataHandling` (arithmetic/box
+  family), `BooleanExtras` (standalone Not — first-ever live-TIA verification of it, SCoil/RCoil),
+  `FBTimers`/`ScaleValue`/`TimingAndCalls` (TONR/TOF/CALL) — corpus now 14 blocks, ~20 constructs
+  covered. Two pre-existing stale `.ir` files found and fixed along the way (sidecar text format
+  predating S1 item 11), plus a real `RunAll` bug (TIA's own `IsConsistent` cascade corrupting a
+  naive per-block batch verification — fixed with a proper three-phase `RunAllSettled`). All 14
+  reference-project blocks verified together in one pass for the first time. Full story:
+  `tests/golden/README.md` ("Reference corpus growth"), `docs/notes/stage-gates.md` (same
+  section name). `WAIT`/`Jump` stay excluded (see "Open questions" below, unchanged);
+  Modbus_Master/Modbus_Comm_Load's multi-instance form was considered and deliberately not
+  attempted — see "Deliberately deferred" below, this one's a closed engineering call, not an
+  open question for the project owner.
 - **Instruction-coverage sweep + Phase 2 tiers 1–3, 5, and part of 6 (`Abs`/`LIMIT`/`T_SUB`/
   `T_CONV`/`Calc`/`MOVE_BLK_VARIANT`/`FillBlockI`), 2026-07-14.** Grounded all 36 remaining `JOB9002`
   blocks (both PLC stations), found 11 real currently-unsupported instructions, ranked into a
@@ -61,14 +77,18 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 - Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
   `e0fd86a`. 3rd FB.
 
-## Current task: none — all Phase 2 tiers built; two open questions await the project owner
+## Current task: none — Phase 2 tiers built, reference corpus grown; two open questions await the project owner
 
 Tiers 1–6 are all built and tested (359 converter tests, all green). Tiers 1, 2, 3, 5
 (`MOVE_BLK_VARIANT`), and `FillBlockI` (Tier 6) are fully live-verified. Tier 4
 (`Modbus_Master`/`Modbus_Comm_Load`) and `WAIT` (Tier 6) are built/tested but live-verification
 hit real, honestly-documented blockers outside the converter's own control (see "Open questions"
-below). `Jump` (Tier 6) was deliberately not built, pending a design decision. Nothing is currently
-in-flight — the two items below need the project owner's input before any further action.
+below). `Jump` (Tier 6) was deliberately not built, pending a design decision. The committed
+reference-project corpus has since been grown from 7 to 14 blocks (2026-07-14, "Recently closed"
+above) specifically to give the ~20 already-working constructs permanent, committed regression
+coverage — independent of whether `WAIT`/`Jump`/Modbus's remaining gaps ever close. Nothing is
+currently in-flight — the two items below need the project owner's input before any further
+action.
 
 ## Open questions (need the project owner's input, not further unilateral work)
 
@@ -125,15 +145,19 @@ in-flight — the two items below need the project owner's input before any furt
   as real. Would need a new `DbMember` field, `DbInterfaceMembers` parse/write changes, and a new
   IR-text marker (same shape as the existing `IsBareParameter`/`Informative` additions) — flagged
   rather than fixed mid-Phase-2-plan, since it's unrelated to LAD instruction coverage.
+- **Modbus_Master/Modbus_Comm_Load's multi-instance form, considered during reference-corpus
+  growth (2026-07-14) and deliberately not attempted** — unlike `WAIT`/`Jump`, this one's a closed
+  engineering call, not something needing the project owner's input. Would have stacked two
+  independently-unproven assumptions (whether these two instructions support multi-instance at
+  all — never seen real, only the standalone `GlobalVariable`-scope form was grounded in `JOB9002`;
+  whether a hand-authored DB with an FB-typed member, untested anywhere in this project, can stand
+  in for a proper instance DB) for one FC's worth of optional coverage, disproportionate given
+  everything else in that pass closed cleanly. Revisit only if a real grounded example of
+  Modbus multi-instance usage ever turns up.
 
 **Possible next work** (no explicit instruction yet — ask before starting):
 - Build the `Normalizer` Part-identity fix above.
 - Fix the `ExternalAccessible=False` Sanitizer gap above.
-- Grow the committed reference-project corpus to actually exercise the ~15 instruction-level
-  constructs (`Mul`/`Convert`/`Sub`/`Div`/comparisons beyond `Eq`/`Ge`/`CALL`/`SWAP`/`SCoil`/
-  `RCoil`/`WAND`/`Not`/`TONR`/`TOF`) that currently have no permanent, committed, live-TIA-verified
-  regression coverage — see `docs/audit/2026-07-14-code-quality-and-docs-audit.md` for the full
-  finding.
 - S2 (read and explain) — the next roadmap stage once S1's gate review is formally signed off.
 
 **Sanitization maps built and kept** (`sanitization/`, gitignored): all 8 dependency FBs' own maps,

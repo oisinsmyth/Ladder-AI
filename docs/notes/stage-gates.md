@@ -7,7 +7,7 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see Exit-criteria evidence below). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |
-| S1 — Lossless round-trip | **ACTIVE (walking skeleton core proven end-to-end, incl. re-export/`Normalizer` equivalence — the earlier "re-export blocked" state was resolved same-session via block-level compile, see detail below)** | — | ADR-0001/`ir/SPEC.md` decided; converter (C#, `src/converter/`), `openness-cli export`/`import`/`compile`/`compile --block`/`compile --type`, and golden harness machinery (`tests/golden/`) built and live-verified for Contact/Coil, OR-merge (branches are recursive chains — multi-contact, nested, comparison-as-branch, all live-verified), negated contacts (multi-assignment, slice- and array-addressed), TON/TONR/TOF (both instance scopes), comparisons (Eq/Ge/Lt/Ne), MOVE, WAND (bitwise word AND), CALL (FB/FC block calls, incl. FC calls with no `<Instance>`), SCoil/RCoil (set/reset coils), network/block-level Title, MUL/CONVERT/ADD/SWAP (arithmetic, incl. ENO-chaining), FC/FB parameter-interface modeling (Input/Output/InOut/Constant), `Access Scope="LocalConstant"`, GlobalDB/InstanceDB `Static`-section round-trip including one-level structured members, and now UDT/PLC data type support (S1 item 26 — `SW.Types.PlcStruct`, live-verified). **`FC PlantAutoControl` now round-trips through the true TIA cycle, completely** (export → sanitize → import → block-level compile clean, 0 errors → re-export → `Normalizer.AreSemanticallyEquivalent` = true, 2026-07-14) — the actual Layer 1 assertion this project's S1 stage exists to prove, demonstrated end-to-end against the real site master-control block and its complete real dependency closure (all 8 dependency FBs — `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — plus all 26 real DB/tag-table roots it references, 20 Instance DBs + 6 GlobalDBs/tag tables). What earlier looked like a permanent blocker (external tags/FBs no other TIA project has, S1 items 16/17) turned out to be exactly what the reference-project DB pipeline (S1 item 1 Phase 2) was already built to close — bulk export/sanitize/import of the real dependencies, same pattern, larger scale. Full detail below ("Phase 1/2/3" sections). UDT support (item 26) resolved `MotorDOL`'s own `TypeDOL` dependency blocker; the `FlgNetWriter` Part-ordering bug it surfaced was fixed the same session (see "Phase 1" detail below). Reference project has 7 committed corpus artifacts (5 FCs/DBs + `PerimeterSafetyAlarms` + `TimerSample`/`DB_Timers`) — `PlantAutoControl`'s own round trip is Amber-tier scratch work, not part of this committed Green-tier corpus. All PC-side suites green: 287 converter, 101 openness-cli, 11 golden-harness tests. See Exit-criteria evidence. |
+| S1 — Lossless round-trip | **ACTIVE — literal roadmap exit criterion met ("golden-file suite green for the whole reference project"); two real, honestly-documented gaps remain open before a gate review would be proportionate (see below)** | — | ADR-0001/`ir/SPEC.md` decided; converter + `openness-cli` + golden harness support ~24 instruction-level constructs (full list: `FlgNetParser.SupportedPartNames` plus `CALL`), all live-verified against real or reference-project data at least once. **`FC PlantAutoControl` round-trips through the true TIA cycle, completely** (2026-07-14 — export → sanitize → import → block-level compile clean → re-export → `Normalizer.AreSemanticallyEquivalent` = true) against its full real dependency closure (8 dependency FBs, 26 DB/tag-table roots) — the actual Layer 1 assertion this stage exists to prove, at production scale. **Reference-project corpus grown from 7 to 14 committed artifacts** (2026-07-14, "Reference corpus growth" below) specifically to close the gap between that production-scale proof and the committed regression suite: the corpus now exercises ~20 of the ~24 supported constructs (up from ~5), not just Contact/Coil/OR-merge/TON. Two items remain deliberately unresolved, not oversights: `WAIT` (missing library dependency in `SampleProject`, needs the project owner's input) and `Jump` (genuine cross-network control flow, needs a real IR-format design decision before any code gets written) — both flagged in `AITODO.md`'s "Open questions", neither blocks the literal exit criterion. All PC-side suites green: 359 converter, 101 openness-cli, 11 golden-harness (offline) + all 14 reference-project blocks verified live together in one `RunAll` pass. See Exit-criteria evidence. |
 | S2 — Read and explain | not started | — | |
 | S3 — Comment generation | not started | — | |
 | S4 — Convention review | not started | — | Blocker cleared early: 06-lad-conventions.md is populated |
@@ -3287,3 +3287,41 @@ pre-existing from earlier Phase 1/2 work, untouched by Tier 4, device still comp
 chased further here.
 
 **Tier 4's converter implementation is complete and as-verified as Openness currently allows.**
+
+### Reference corpus growth: 7 new blocks close the "no permanent regression suite" gap — 2026-07-14
+
+Project owner's own explicit ask, after reviewing what's actually left before S1 is "done" in
+spirit, not just by the roadmap's literal exit criterion ("golden-file suite green for the whole
+reference project" — technically already true for the original 7 blocks, but those only exercise
+~5 of the ~24 instruction-level constructs this converter now supports; everything else was only
+ever proven against real, uncommittable JOB9002 content, per today's own audit). Added 7 new
+committed `ir/reference/`/`simatic-ml/reference/` blocks: `ThresholdAlarms` (comparisons),
+`SignalConditioning`/`DataHandling` (arithmetic/box family), `BooleanExtras` (standalone Not,
+SCoil/RCoil), `FBTimers`/`ScaleValue`/`TimingAndCalls` (TONR/TOF/CALL). Full per-block story,
+including two real structural findings (`TONR_TIME`'s DB-member shape has no `R` field; a bare
+`T#5S`-style time literal is rejected on a TONR/TOF `PT` port) and a real `RunAll` bug fixed along
+the way (TIA's own `IsConsistent` cascade corrupting a naive per-block batch run — fixed with a
+proper three-phase `RunAllSettled`): `tests/golden/README.md`'s own "Reference corpus growth"
+section has the complete detail, kept there rather than duplicated here since that's where this
+corpus's own story already lives.
+
+**Deliberately excluded from this pass, real reasons not oversights**: `WAIT` (missing library
+dependency, already flagged) and `Jump` (no design decision yet) stay out for the same reasons as
+always. Modbus_Master/Modbus_Comm_Load's *standalone* form was already excluded (Tier 4, above);
+its *multi-instance* form was considered and deliberately not attempted — would have stacked two
+independently-unproven assumptions (whether Modbus_Master/Modbus_Comm_Load support multi-instance
+at all, never grounded against real data; whether a hand-authored DB with an FB-typed member,
+untested anywhere in this project, can stand in for a proper instance DB) for one FC's worth of
+optional coverage, disproportionate given everything else closed cleanly.
+
+**Also found and fixed, unrelated to any single new block**: two pre-existing committed `.ir`
+files (`NodeStatusAlarms.ir`/`PerimeterSafetyAlarms.ir`) used a sidecar text format that predates
+the S1 item 11 scope-suffix/nested-`OrStep`-branch changes and could no longer be parsed by the
+current `IrParser` — confirmed via `Normalizer.AreSemanticallyEquivalent` that the committed XML
+had no semantic drift, only the `.ir` encoding was stale; regenerated both from a fresh export.
+
+**359 converter tests** (unchanged — this pass composed already-tested unit fixtures into
+reference-project content, not new unit-level coverage), **101 openness-cli**, **11
+golden-harness** offline, plus all 14 reference-project blocks — the complete committed corpus,
+old and new — now verified together in one `RunAll` pass for the first time: import, compile (0
+errors), re-export, `Normalizer`-equivalent, every one.

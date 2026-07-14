@@ -33,6 +33,25 @@ is invented; only structure (wiring topology, instruction types, slice/array add
 types/retention) reflects something real — DBs are brought in *complete* (all members), not
 trimmed to only what the paired FC references. See `docs/13-data-boundary.md`.
 
+**Extended again 2026-07-14 (instruction-coverage corpus growth)** with 7 more artifacts closing
+the gap `docs/audit/2026-07-14-code-quality-and-docs-audit.md` flagged: "proven live-TIA
+round-trips aren't protected by any permanent regression suite" — roughly 15 of the ~24
+instruction-level constructs this converter supports had only ever been proven against real,
+uncommittable Amber-tier content, with no permanent committed evidence behind the claim.
+`ThresholdAlarms` (comparisons — Eq/Ge/Lt/Ne/Gt/Le, all as infix operators), `SignalConditioning`
+(Mul/Convert ENO-chained, Lt-gated Sub/Div, Abs, Swap), `DataHandling` (WAND, Calc, T_SUB/T_CONV,
+MOVE_BLK_VARIANT, Move), `BooleanExtras` (standalone Not, SCoil/RCoil), `FBTimers`/`ScaleValue`/
+`TimingAndCalls` (TONR/TOF against a hand-numbered standalone-timer DB, CALL to a new,
+self-authored callee FC). Unlike the first seven, these are original content composed from
+already-proven unit-test fixtures with invented tag names throughout (not derived from a fresh
+real export) — see `docs/notes/stage-gates.md`'s own 2026-07-14 "reference corpus growth" entry
+for the full per-block story, including two real structural findings from live verification
+(`TONR_TIME`'s DB-member shape has no `R` field despite `R` being a real wired port; a bare
+`T#5S`-style time literal is rejected on a TONR/TOF `PT` port in this shape — both worked around
+rather than guessed past). `WAIT`, `Jump`, and Modbus_Master/Modbus_Comm_Load's own multi-instance
+form are deliberately **not** in the corpus — real, separately-documented reasons in
+`AITODO.md`'s "Open questions", not oversights.
+
 The full live round-trip (`export -> to-ir -> to-xml -> [sanitize ->] import -> compile ->
 re-export`, `Layer 1` assertion 2 via `Normalizer.AreSemanticallyEquivalent`) has been run and
 passed against a real TIA project for all seven artifacts, DBs compiled before the FCs that
@@ -110,3 +129,87 @@ Also fixed alongside it: `<Parts>` order (like `<Wires>` order, already normaliz
 semantically meaningful either — TIA doesn't preserve `BlockSourceWriter`'s own Access/Part
 ordering on re-export. Both fixes are covered by the existing `NormalizerTests.cs` suite pattern
 (11 tests, all still passing) plus this live round-trip itself.
+
+## Reference corpus growth: 7 new blocks, a real `RunAll` bug, two pre-existing staleness bugs (2026-07-14)
+
+Full story of the 2026-07-14 corpus extension mentioned in "The corpus" above.
+
+**Two pre-existing `.ir` files were stale, not caused by this pass but found while placing new
+content alongside them**: `NodeStatusAlarms.ir`/`PerimeterSafetyAlarms.ir` still used a sidecar
+text format that predates the scope-suffix-on-`access`-lines and nested-`OrStep`-branch changes
+(S1 item 11, 2026-07-11/12) — the current `IrParser` can no longer parse them. The committed
+`simatic-ml/reference/*.xml` for both was confirmed, via `Normalizer.AreSemanticallyEquivalent`
+against a fresh live export, to have no semantic drift at all — only the `.ir` text's own encoding
+was stale. Regenerated both from a fresh export and confirmed self-stable (a full parse → build →
+write → re-parse → re-serialize cycle reproduces the committed text byte-for-byte) before
+replacing them.
+
+**New content methodology**: every new block reuses an already-proven `Converter.Tests/Fixtures/*.xml`
+unit fixture (scope swapped to `LocalVariable`, tags renamed to something thematically coherent)
+rather than inventing new wiring shapes — the instructions were already grounded against real
+data when those fixtures were built; this pass only needed to prove they compile as *permanent,
+committed* content, not re-derive their shape. Two genuine exceptions, both deliberately avoiding
+a shape the fixture itself used real but this pass had independent reason to distrust:
+
+- **The richer "telescoping" `Move` shape (two taps sharing chain positions with a terminal Coil,
+  `MoveTelescopingChain.xml`) was tried first and rejected by live TIA import** — `"The elements
+  must be sorted according to the current flow"`, the same class of error the S1 item 26
+  `FlgNetBuilder` Part-ordering bug produced, but confirmed **not** the same bug: `FlgNetBuilder`'s
+  own general `parts.Sort((a, b) => a.UId.CompareTo(b.UId))` fix (added for that earlier bug) was
+  already in effect and didn't help here. Left as a real, still-open question about non-rail
+  multi-consumer wire-endpoint ordering — not forced through by guessing. `SignalConditioning`/
+  `DataHandling` use the simpler, already-safe plain-`Contact`-tap `Move` shape instead.
+- Standalone `Not` (`NotFedByContact.xml`) also taps a shared, non-rail wire the same way — given
+  the `Move` finding above, `BooleanExtras` uses a plain linear chain (`Contact -> Not -> Contact
+  -> Coil`) instead, sidestepping the same open question. This is also the **first-ever live-TIA
+  verification of standalone `Not` at all** — `ir/SPEC.md` had explicitly flagged it as unverified
+  (every real instance found always paired it with an unbuilt `CALL`, so no real network could
+  isolate it before now).
+
+**Two genuinely new real findings, both from `TimingAndCalls`' own live verification**:
+`TONR_TIME`'s DB-member nested-member shape doesn't include an `R` field ("Element 'R' cannot be
+found") despite `R` being a real, wired port on the `TONR` `Part` itself — matches `TON_TIME`'s
+plain `PT`/`ET`/`IN`/`Q` shape exactly. And a bare time literal like `T#5S`/`T#5000MS` is rejected
+on a `TONR`/`TOF` `PT` port in this shape (`"The value ... cannot be set for the parameter of the
+type 'Time'"`) — worked around by reverting to the already-grounded tag-fed `PT` (matching
+`WithTonr.xml`/`WithTof.xml`'s own real shape) rather than chasing the literal format further.
+
+**`FBTimers` (DB30) generalizes the `DB_Timers` precedent** — a hand-numbered, ordinary `GlobalDB`
+with `TONR_TIME`/`TOF_TIME`-typed members — deliberately instead of a dedicated FB +
+`create-instance-db`: that path is confirmed broken for *any* fresh instance-DB creation in this
+project's current state (`docs/notes/openness-quirks.md`'s "standalone system-FB instance DBs"
+finding, from the same session's Modbus_Master/Modbus_Comm_Load work) — `create-instance-db`
+deterministically assigns an invalid `DB0`, not repairable via any exposed API. Hand-authoring the
+DB directly, with an explicit valid number chosen up front, sidesteps the whole problem — TIA
+doesn't distinguish "GlobalDB with a system-struct-typed member" from a dedicated `InstanceDB`
+for this purpose, and only the latter has the auto-numbering bug.
+
+**`TimingAndCalls`' own `CALL` target changed mid-pass**: the real Siemens "Scale" instruction
+referenced in `ir/SPEC.md`'s own `CALL` section (`FB MotorVSDSystem`'s dependency) turned out, on live
+compile, to be real *site* content from `JOB9002` (sanitized elsewhere as `AnalogScale`), not a
+built-in library instruction — `"The referenced block Scale no longer exists"` in `SampleProject`.
+Replaced with `ScaleValue`, a new, small, self-authored callee FC (`Input`/`Output` interface,
+`IsBareParameter` on every member — the real shape for FC parameters, confirmed by a live rejection
+of the default `Remanence`-attribute shape `DbMember`'s own scalar-member default otherwise
+produces).
+
+**A real, general bug in `RunAll` itself, found only by finally running the complete corpus (old +
+new, 14 blocks) together in one pass** — apparently never done before this point. Re-*importing*
+any block, even byte-identical content, flags every block that references it (a DB's own
+dependent FC, an FB a `CALL` targets) as freshly `IsConsistent = false` again, regardless of
+dependency order — TIA's own cascade, not a content bug. A naive per-block loop (what `RunAll` did
+before) processes this sequentially, so an earlier block's own *import* step can invalidate a
+later, dependent block's *baseline export* before that block's own turn even starts — confirmed
+live (`NodeStatusAlarms` failing to export because `CommsProcessData`/`AlarmWords`, both earlier
+in dependency order, had already been freshly re-imported). Fixed with a proper three-phase
+`RunAllSettled` (`RoundTripRunner.cs`): capture every block's baseline export *first*, before
+anything is imported; regenerate and re-import everything second; compile and re-export each one
+last, so nothing subsequent can touch it again. All 14 reference-project blocks — the full
+committed corpus — now verified together in one run: import, compile (0 errors), re-export,
+`Normalizer`-equivalent, every one.
+
+Also fixed alongside it: `RunFull`'s own compile-stage check used `openness-cli compile`'s raw
+exit code, which is non-zero for *any* non-`Success` state — including the same benign
+hardware-config warning every block in this project shows, with 0 actual errors. Stricter than
+this project's own established "0 errors is clean, warnings are expected" bar used everywhere
+else in `stage-gates.md`. Now parses the JSON body and gates on the real error count.

@@ -10,6 +10,50 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Fix `RunAll`'s `IsConsistent` cascade; wire `TimerSample`/`DB_Timers` into it for the first time**
+
+- Growing the reference corpus surfaced a real gap: re-importing any block re-flags every block
+  that references it as inconsistent again, regardless of dependency order — a naive per-block
+  batch run corrupts earlier blocks' baseline exports partway through. Fixed with a proper
+  three-phase `RunAllSettled` (capture every baseline export first, then import everything, then
+  compile+re-export each one last). `TimerSample`/`DB_Timers` (committed since 2026-07-11) were
+  also never wired into `RunAll`'s own block list — added now. All 14 reference-project blocks
+  verified together in one pass for the first time.
+
+**Reference corpus: add `FBTimers`/`ScaleValue`/`TimingAndCalls` (TONR/TOF/CALL)**
+
+- `FBTimers` (DB30): hand-numbered standalone-timer DB generalizing the `DB_Timers` precedent to
+  `TONR_TIME`/`TOF_TIME`, avoiding the confirmed-broken `create-instance-db`/`InstanceDB` path.
+  `ScaleValue`: new, self-authored callee FC. `TimingAndCalls`: TONR/TOF + CALL. Two real findings:
+  `TONR_TIME`'s DB-member shape has no `R` field despite `R` being a real wired port; a bare
+  `T#5S`-style time literal is rejected on a TONR/TOF `PT` port (reverted to the already-grounded
+  tag-fed `PT`). The real Siemens "Scale" FC referenced in `ir/SPEC.md` turned out to be real
+  restricted content from `JOB9002`, not a library instruction — hence the new callee. All live-verified.
+
+**Reference corpus: add `BooleanExtras` (standalone Not, SCoil/RCoil)**
+
+- First-ever live-TIA verification of standalone `Not` — `ir/SPEC.md` had flagged it as unverified
+  (every real instance pairs it with an unbuilt `CALL`). Used a plain linear chain rather than the
+  unit fixture's own shared-wire-tap shape, sidestepping the same non-rail fan-out ordering risk
+  found for `Move`. Clean compile, 0 errors.
+
+**Reference corpus: add `SignalConditioning` + `DataHandling` (arithmetic/box family)**
+
+- Mul/Convert (ENO-chained), Sub/Div (Lt-gated), Abs, Swap, WAND, Calc, T_SUB/T_CONV,
+  MOVE_BLK_VARIANT, Move. The richer "telescoping" Move shape (two taps sharing chain positions)
+  was tried and rejected by live TIA import even after `FlgNetBuilder`'s own Part-UId-sort fix —
+  left as a real, separately-flagged open question; used the simpler, safe Contact-tap shape
+  instead. All live-verified.
+
+**Reference corpus: add `ThresholdAlarms` (Eq/Ge/Lt/Ne/Gt/Le); fix two stale sidecar-format `.ir` files**
+
+- New FC exercising the full IEC comparison family — none were previously in the committed
+  golden-harness corpus despite long-standing converter support. Found and fixed along the way:
+  `NodeStatusAlarms.ir`/`PerimeterSafetyAlarms.ir` predated a sidecar-format change and could no
+  longer be parsed by the current `IrParser` — no semantic drift (confirmed via `Normalizer`),
+  just stale encoding, regenerated from a fresh export. Also fixed `RoundTripRunner.RunFull`'s own
+  compile-stage check, which treated a benign hardware-config warning as a failure.
+
 **Phase 2 Tier 4: `Modbus_Master`/`Modbus_Comm_Load` built and tested; live compile blocked by a confirmed general Openness limitation**
 
 - Built across all 7 converter files: `TraceChain` reused as-is for `Modbus_Master`'s chain-fed
