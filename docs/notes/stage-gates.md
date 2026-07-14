@@ -3545,3 +3545,43 @@ text, nothing structural. Full live cycle otherwise identical to the first proof
 confirmed all four new strings are what's actually in the re-exported IR → full 14-block `RunAll`
 still passes. Presented for review (title, comment, and the reasoning behind the comment, so it
 could actually be checked against the real rungs) before committing.
+
+## S3 third proof: real JOB9002 content, `PlantAutoControl` (2026-07-14)
+
+First two proofs used the Green-tier reference corpus deliberately, precisely to avoid this
+question until it needed answering: the recorded JOB9002 data-boundary approval covered A-01/A-02
+spikes, S1 grounding, and S2 (read-only) explanation work, but never S3 write activity. Asked
+before touching anything, per `CLAUDE.md`'s own "check the recorded scope, don't extend it
+yourself, flag before proceeding" instruction, rather than assuming either way. Extended and
+recorded as its own dated entry in `13-data-boundary.md` once confirmed.
+
+Target: `PlantAutoControl`, the same block already extensively read and explained during S2. Genuinely
+different shape of gap than the reference-corpus proofs: every one of its 20 networks already
+carried a real title from the original engineer, so the first-round gap was the block itself,
+which had neither a title nor a comment. Grounded fresh (a new export, not carried forward from
+memory) before writing anything, matching the same discipline as the S2 explanation work. Compiled
+clean on the first attempt — 0 errors, 0 warnings, a fully-configured real device, unlike the
+synthetic scratch project's own benign hardware-config warning seen on the first two proofs.
+
+Presented for review; the project owner then asked for a full redo covering all 20 networks, not
+just the block, including replacing the existing titles rather than only adding comments alongside
+them — a materially bigger, more consequential change than anything attempted previously (real
+production content, an original engineer's own prior work, 20 networks instead of one). Clarified
+the exact scope explicitly before touching anything — keep-vs-replace the existing titles,
+comprehensive-vs-selective network coverage — rather than assuming either reading of an ambiguous
+instruction, given the stakes.
+
+Rewrote all 20 network titles and added a comment to each, grounded in the same verified
+understanding built during S2's own explanation of this block, re-confirmed against the fresh
+export rather than trusted from memory. Found and fixed two genuine spelling errors already flagged
+during that S2 explanation, and otherwise converged close to the original engineer's own naming
+wherever it was already accurate — authored fresh rather than either a blind rewrite or a rubber
+stamp. Verification scaled up the same Comment-aware structural check used on the second proof:
+stripped both the true pre-edit baseline and the fully-redone re-export, blanked all Comment text
+in both, confirmed the results are byte-identical — across all 20 networks, the only differences
+anywhere are the intended new Title/Comment text. Compiled clean, 0 errors, 0 warnings, on both the
+block-only and full-redo rounds.
+
+Per the data-boundary entry's own scope: the real content itself (specific tag paths, exact
+comment wording) stays in conversation and inside JOB9002's own gitignored project, not reproduced
+here.

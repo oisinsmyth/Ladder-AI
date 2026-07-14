@@ -37,22 +37,22 @@ end-to-end — generated, imported, compiled, human-approved.
 Do not perform S4+ capabilities (convention review/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: two proofs done — real-project (JOB9002) scope now under discussion
+## Current task: three proofs done — Green-tier corpus and real JOB9002 content both proven
 
-S3's first two write-path proofs are done, `TimerSample` (title only, both levels) and
-`PerimeterSafetyAlarms` (title + comment, both levels) — full story in `docs/notes/stage-gates.md`'s
-"S3 first proof"/"S3 second proof" sections. Both live-verified end-to-end (edit IR → `to-xml` →
-`import` → clear the known `IsConsistent` refusal via `compile` → re-export → confirm the new
-content is genuinely present → confirm nothing structural changed → full 14-block `RunAll`), both
-reviewed and approved before committing. `NodeStatusAlarms` remains the one still-untitled
-reference-corpus block if another Green-tier proof is wanted.
+S3's write path is now proven at both scales. `TimerSample` (Green-tier, title only, both levels)
+and `PerimeterSafetyAlarms` (Green-tier, title + comment, both levels) proved the mechanism against
+the reference corpus. `PlantAutoControl` (real JOB9002 content, title + comment, block level *and* all 20
+networks, including replacing the original engineer's own titles where asked) proved it at real
+production scale — the JOB9002 data-boundary approval was explicitly extended to cover S3 write
+activity first (`docs/13-data-boundary.md`, dated entry), not assumed. Full story, including two
+real spelling errors found and fixed along the way, in `docs/notes/stage-gates.md`'s "S3 third
+proof" section. All three: live-verified end-to-end (edit IR → `to-xml` → `import` → clear the
+known `IsConsistent` refusal via `compile` → re-export → confirm the new content is genuinely
+present → confirm nothing structural changed via `Normalizer`), reviewed and approved before
+committing.
 
-**Now asked to try this against real JOB9002 content specifically (`PlantAutoControl`), not the reference
-corpus.** Flagged before starting, not yet resolved: the recorded JOB9002 data-boundary approval
-(`docs/13-data-boundary.md`) covers A-01/A-02 spikes, S1 grounding, and S2 (read-only) explanation
-work — S3 write/comment-generation activity is not in that list. `CLAUDE.md`'s own instruction is
-explicit: check the recorded scope, don't extend it unilaterally, flag before proceeding. Asked the
-project owner directly rather than assuming either way.
+Nothing in-flight. `NodeStatusAlarms` remains the one still-untitled reference-corpus block if
+another Green-tier proof is ever wanted; no further real-project targets requested yet.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

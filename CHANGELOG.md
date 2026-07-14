@@ -10,6 +10,25 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**S3 third proof: real JOB9002 content, block + all 20 networks (`PlantAutoControl`)**
+
+- Extended the JOB9002 data-boundary approval to cover S3 write activity first, recorded as its own
+  dated entry, before touching anything - the recorded scope covered S1/S2 but never write/comment
+  generation.
+- First round: `PlantAutoControl` block-level Title + Comment only (every network already had a real
+  title from the original engineer, so the block itself was the genuine gap). Compiled clean, 0
+  errors/warnings, on a fully-configured real device.
+- Asked to redo network-level titles and comments too, including replacing the existing titles -
+  clarified the exact scope (keep-vs-replace, comprehensive-vs-selective) before starting, given
+  the stakes of rewriting an original engineer's own real production documentation at 20x the
+  scale of anything done before. Found and fixed two genuine spelling errors along the way.
+- Verification scaled the same Comment-aware structural check (strip both trees, blank Comment
+  text, confirm byte-identical) across the full 20-network redo - the only differences anywhere
+  are the intended new Title/Comment text. Compiled clean both rounds. Reviewed and approved
+  before committing. Full story: `docs/notes/stage-gates.md`. Real content (tag paths, exact
+  comment wording) stays in conversation and inside JOB9002's own gitignored project, per the
+  genericization rule.
+
 **S3 second proof: title + comment, both block and network level (`PerimeterSafetyAlarms`)**
 
 - Explicit instruction this round, directly responding to the gap caught in the first proof:

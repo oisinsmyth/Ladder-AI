@@ -81,6 +81,18 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     whole point of S2. Explanations happen in conversation, not committed to any file — the
     existing genericization rule above (invented names in *committed* content) still applies in
     full if any example from this work ever gets written into a doc.
+  - **2026-07-14, S3 — extended to write/comment-generation activity.** Project owner's own
+    explicit instruction, after two proofs against the Green-tier reference corpus: try S3's
+    title/comment-generation capability against real JOB9002 content specifically (starting with
+    `PlantAutoControl`). Scope: writing a block-level (and, where genuinely useful, network-level)
+    title/comment into real JOB9002 blocks' own IR — using real tag names, matching how a real
+    engineer would document real content — and importing the result back into JOB9002's own scratch
+    copy, the same live-verification pipeline already proven against the reference corpus. JOB9002's
+    own scratch copy is gitignored and never committed, so the real content this produces never
+    leaves the local project file. The existing genericization rule above still applies in full to
+    anything written *about* this work in `docs/notes/stage-gates.md`/`CHANGELOG.md` or any other
+    committed doc — real tag names are fine to use in the real project's own IR/comment content
+    itself, not in prose describing it here.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's
