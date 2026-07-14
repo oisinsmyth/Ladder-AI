@@ -34,15 +34,22 @@ namespace Converter.Ir;
 ///                                              # BooleanAttribute is true — verbatim, not a
 ///                                              # per-kind default (2026-07-11, Phase B: a real
 ///                                              # structured member disproved "always true")
+///     &lt;member&gt; : &lt;Datatype&gt; EXTERNALACCESSIBLE=FALSE   # present only when the source's own
+///     &lt;member&gt; : &lt;Datatype&gt; EXTERNALVISIBLE=FALSE     # ExternalAccessible/Visible/Writable
+///     &lt;member&gt; : &lt;Datatype&gt; EXTERNALWRITABLE=FALSE     # BooleanAttribute is false — all
+///                                              # three default true (2026-07-14: `FB VSDSim`'s
+///                                              # own `SpeedCalcArray` disproved "always true" for
+///                                              # ExternalAccessible specifically)
 /// ```
 ///
 /// `Datatype` is written verbatim (e.g. `Array[0..14] of Bool`) — the " : "/" RETAIN"/"
 /// SETPOINT"/" = "/" VERSION " delimiters are fixed strings the parser anchors on rather than
 /// splitting on whitespace, so a multi-word datatype never needs escaping. A member line's
 /// trailing tokens always appear in this fixed order when present: `VERSION`, then `RETAIN`, then
-/// `SETPOINT`, then `= <start>` — parsed by stripping from the end (`= <start>` first, then
-/// ` SETPOINT`, then ` RETAIN`, then ` VERSION <v>`), symmetric with how the serializer appends
-/// them.
+/// `SETPOINT`, then `EXTERNALACCESSIBLE=FALSE`, then `EXTERNALVISIBLE=FALSE`, then
+/// `EXTERNALWRITABLE=FALSE`, then `= <start>` — parsed by stripping from the end (`= <start>`
+/// first, then each `EXTERNAL*=FALSE` marker rightmost-first, then ` SETPOINT`, then ` RETAIN`,
+/// then ` VERSION <v>`), symmetric with how the serializer appends them.
 /// </summary>
 public static class DbIrSerializer
 {

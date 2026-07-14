@@ -447,4 +447,28 @@ public class SanitizerTests
         Assert.Equal("EquipmentName", equipmentName.Name);
         Assert.Equal("'Sanitized Equipment Name'", equipmentName.StartValue);
     }
+
+    // Confirmed real 2026-07-14 (`FB VSDSim`'s own Static member with ExternalAccessible=false) —
+    // this used to hard-error before reaching Sanitizer at all (DbSourceParser itself refused the
+    // shape). Now that parsing captures it, confirm Sanitizer's own `with` expression (SanitizeMember)
+    // carries it through untouched — not a renamed/sanitized value, just passed through like any
+    // other non-identifying structural field.
+    [Fact]
+    public void ApplyToDb_ExternalAccessibleFalseMember_IsPreserved()
+    {
+        var db = DbSourceParser.Parse(XDocument.Load(Path.Combine("Fixtures", "GlobalDbWithExternalAccessibleFalse.xml")));
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName" },
+            Tags = new Dictionary<string, string> { ["RealDbName.InternalCalcBuffer"] = "SanitizedDbName.InternalBuffer" },
+        };
+
+        var sanitized = Sanitizer.ApplyToDb(db, map);
+
+        var member = Assert.Single(sanitized.Members);
+        Assert.Equal("InternalBuffer", member.Name);
+        Assert.False(member.ExternalAccessible);
+        Assert.False(member.ExternalVisible);
+        Assert.False(member.ExternalWritable);
+    }
 }

@@ -3325,3 +3325,40 @@ reference-project content, not new unit-level coverage), **101 openness-cli**, *
 golden-harness** offline, plus all 14 reference-project blocks — the complete committed corpus,
 old and new — now verified together in one `RunAll` pass for the first time: import, compile (0
 errors), re-export, `Normalizer`-equivalent, every one.
+
+### Three smaller flagged gaps closed: data-boundary doc, Sanitizer `ExternalAccessible`, Normalizer Part-identity — 2026-07-14
+
+Project owner's own explicit ask, after reviewing what was left once the reference-corpus growth
+above closed. Three independent items, `WAIT`/`Jump` deliberately still excluded (unchanged).
+
+**`docs/13-data-boundary.md`'s JOB9002 approval-scope record backfilled.** The recorded scope only
+listed the original A-01/A-02 spikes and early S1 IR/converter design work — it had drifted well
+behind the much larger volume of Amber-tier access actually done since (the full instruction-
+coverage grounding sweeps, the `PlantAutoControl` plan's own bulk dependency-closure export/sanitize/
+import), even though that work was itself separately confirmed with the project owner at the time
+it happened. Added a new dated sub-entry recording the real scope, same genericization rule
+applied.
+
+**Sanitizer `ExternalAccessible=False` gap, closed — and a second real finding surfaced by live
+verification.** `DbInterfaceMembers.RequireDefaultBooleanAttributes` used to hard-error whenever
+any of `ExternalAccessible`/`ExternalVisible`/`ExternalWritable` was false — confirmed real
+2026-07-14 (`FB VSDSim`'s own `SpeedCalcArray`, `ExternalAccessible=false`, found during the
+instruction-coverage sweep). Fixed generally, not just for the one confirmed attribute: `DbMember`
+gained three new fields (default `true`), captured and regenerated verbatim exactly like
+`SetPoint` rather than hard-refused; a new IR-text marker per attribute (`EXTERNALACCESSIBLE=FALSE`
+etc., shown only when false — deliberately *not* matching `TAGTABLE`'s own shown-when-true
+`ACCESSIBLE`/`VISIBLE`/`WRITABLE` convention, since that one was never tested against a real false
+tag and copying it here would put the marker on nearly every member line in every committed DB).
+
+Live verification (composing a throwaway DB, not part of the reference corpus) found a real,
+previously-unknown constraint neither the original gap report nor the fix's own first attempt
+anticipated: **`ExternalAccessible=false` requires `ExternalVisible`/`ExternalWritable` to also be
+false** — `ExternalAccessible=false` alone with the other two left `true` was tried first and
+TIA's own `Import()` rejected it ("The attribute 'ExternalVisible' cannot be set"). Fixed the
+committed fixture to match (all three false) and separately live-verified that
+`ExternalWritable=false` *alone* (the existing `GlobalDbWithNonDefaultAttribute.xml` fixture's own
+shape, a common "externally readable but not writable" pattern) genuinely is independently valid
+— confirmed clean, 0 errors, in isolation. So `ExternalAccessible` gates the other two; they don't
+gate each other or it. 7 new/updated converter tests (`GlobalDbWithExternalAccessibleFalse.xml`,
+a newly-invented fixture — the real member name from `FB VSDSim` stays out of committed content,
+same discipline as every other fixture in this corpus). **366 converter tests, all green.**

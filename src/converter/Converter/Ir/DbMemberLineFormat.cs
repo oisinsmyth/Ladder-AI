@@ -8,7 +8,8 @@ namespace Converter.Ir;
 /// grammar) — used identically by a DB's own `MEMBERS` section (<see cref="DbIrSerializer"/>/
 /// <see cref="DbIrParser"/>) and a block's `INTERFACE` `STATIC`/`TEMP` sections (confirmed real,
 /// 2026-07-11, S1 item 7 Phase B: same underlying XML shape, same IR line grammar, one member per
-/// line: `&lt;name&gt; : &lt;Datatype&gt;[ VERSION &lt;v&gt;][ RETAIN][ SETPOINT][ = &lt;start
+/// line: `&lt;name&gt; : &lt;Datatype&gt;[ VERSION &lt;v&gt;][ RETAIN][ SETPOINT][
+/// EXTERNALACCESSIBLE=FALSE][ EXTERNALVISIBLE=FALSE][ EXTERNALWRITABLE=FALSE][ = &lt;start
 /// value&gt;]`, nested members one level of indentation deeper).
 /// </summary>
 internal static partial class DbMemberLineFormat
@@ -42,6 +43,30 @@ internal static partial class DbMemberLineFormat
         if (member.SetPoint)
         {
             sb.Append(" SETPOINT");
+        }
+
+        // ExternalAccessible/Visible/Writable: default true (the overwhelming majority of
+        // members), so only emitted when false. Deliberately diverges from TagTableIrSerializer's
+        // own ACCESSIBLE/VISIBLE/WRITABLE (shown when *true*, same literal-value convention as
+        // SETPOINT/RETAIN/BAREPARAM) — that choice was never actually tested against a real false
+        // tag (all 10 grounding tags have all three true), whereas a real false *is* confirmed
+        // here (`FB VSDSim`'s own `SpeedCalcArray`, 2026-07-14). Following the tag convention
+        // literally would put this marker on nearly every member line in every already-committed
+        // DB, for a case that's true in every member seen but one — see DbModel.cs's own DbMember
+        // doc comment.
+        if (!member.ExternalAccessible)
+        {
+            sb.Append(" EXTERNALACCESSIBLE=FALSE");
+        }
+
+        if (!member.ExternalVisible)
+        {
+            sb.Append(" EXTERNALVISIBLE=FALSE");
+        }
+
+        if (!member.ExternalWritable)
+        {
+            sb.Append(" EXTERNALWRITABLE=FALSE");
         }
 
         if (member.StartValue is not null)
@@ -107,6 +132,30 @@ internal static partial class DbMemberLineFormat
             rest = rest[..eqIndex];
         }
 
+        // ExternalAccessible/Visible/Writable: appended after SETPOINT in SerializeLine, so
+        // peeled before it here (rightmost-first, same reverse-order discipline as every other
+        // trailing marker in this format). Each is independently optional.
+        var externalWritable = true;
+        if (rest.EndsWith(" EXTERNALWRITABLE=FALSE", StringComparison.Ordinal))
+        {
+            externalWritable = false;
+            rest = rest[..^" EXTERNALWRITABLE=FALSE".Length];
+        }
+
+        var externalVisible = true;
+        if (rest.EndsWith(" EXTERNALVISIBLE=FALSE", StringComparison.Ordinal))
+        {
+            externalVisible = false;
+            rest = rest[..^" EXTERNALVISIBLE=FALSE".Length];
+        }
+
+        var externalAccessible = true;
+        if (rest.EndsWith(" EXTERNALACCESSIBLE=FALSE", StringComparison.Ordinal))
+        {
+            externalAccessible = false;
+            rest = rest[..^" EXTERNALACCESSIBLE=FALSE".Length];
+        }
+
         var setPoint = false;
         if (rest.EndsWith(" SETPOINT", StringComparison.Ordinal))
         {
@@ -159,7 +208,8 @@ internal static partial class DbMemberLineFormat
 
         return new DbMember(
             name, rest, retain, startValue, version, setPoint,
-            NestedMembers: null, IsBareParameter: isBareParameter, Informative: informative, InformativeComment: informativeComment);
+            NestedMembers: null, IsBareParameter: isBareParameter, Informative: informative, InformativeComment: informativeComment,
+            ExternalAccessible: externalAccessible, ExternalVisible: externalVisible, ExternalWritable: externalWritable);
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(" INFORMATIVE \"(?<text>.*)\"$")]

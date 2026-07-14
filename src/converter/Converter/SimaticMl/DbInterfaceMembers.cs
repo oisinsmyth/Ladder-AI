@@ -17,11 +17,11 @@ internal static class DbInterfaceMembers
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/Interface/v5";
 
-    // Confirmed real, 2026-07-10 across three GlobalDBs and 2026-07-11 across structured/FB
-    // members too — always true, no exception seen. SetPoint is deliberately excluded: see
-    // DbModel.cs's DbMember.SetPoint doc comment for the real counterexample that disproved
-    // treating it as a fixed default.
-    private static readonly IReadOnlyCollection<string> RequiredTrueBooleanAttributes = new[] { "ExternalAccessible", "ExternalVisible", "ExternalWritable" };
+    // True in the overwhelming majority of members, but not a fixed default: `FB VSDSim`'s own
+    // `SpeedCalcArray` has `ExternalAccessible=false` (confirmed real 2026-07-14) — see
+    // DbModel.cs's DbMember.ExternalAccessible/Visible/Writable doc comment. Captured and
+    // regenerated verbatim per member, same discipline as SetPoint, not hard-refused.
+    private static readonly IReadOnlyCollection<string> DefaultTrueBooleanAttributes = new[] { "ExternalAccessible", "ExternalVisible", "ExternalWritable" };
 
     // Confirmed real, 2026-07-11: both a structured member's own nested members (a DB's) and an
     // FB's Temp-section members share this same minimal shape — only Name/Datatype attributes
@@ -96,7 +96,7 @@ internal static class DbInterfaceMembers
             _ => throw new SimaticMlFormatException($"{context} member '{name}' has unrecognized Remanence '{remanence}'."),
         };
 
-        var setPoint = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint);
+        var booleanAttributes = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint);
 
         // Member/AttributeList/StartValue inherit the Interface namespace declared on the
         // ancestor <Sections xmlns="..."> — Element("StartValue")/Element("AttributeList")
@@ -126,7 +126,9 @@ internal static class DbInterfaceMembers
             }
 
             var anonymousNestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
-            return new DbMember(name, datatype, retain, StartValue: null, Version: version, SetPoint: setPoint, NestedMembers: anonymousNestedMembers);
+            return new DbMember(
+                name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: anonymousNestedMembers,
+                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
         }
 
         if (isStructured)
@@ -138,11 +140,15 @@ internal static class DbInterfaceMembers
             }
 
             var nestedMembers = ParseNestedMembers(nestedSections!, context, name);
-            return new DbMember(name, datatype, retain, StartValue: null, Version: version, SetPoint: setPoint, NestedMembers: nestedMembers);
+            return new DbMember(
+                name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
+                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
         }
 
         var startValue = startValueElement?.Value;
-        return new DbMember(name, datatype, retain, string.IsNullOrEmpty(startValue) ? null : startValue, Version: version, SetPoint: setPoint, NestedMembers: null);
+        return new DbMember(
+            name, datatype, retain, string.IsNullOrEmpty(startValue) ? null : startValue, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: null,
+            ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
     }
 
     public static IReadOnlyList<DbMember> ParseNestedMembers(XElement sections, string context, string ownerMemberName)
@@ -284,7 +290,7 @@ internal static class DbInterfaceMembers
                 $"{context} member '{name}' has nested structured content (<Sections>) — not confirmed real for a PLC data type's own member, refused rather than guessed at.");
         }
 
-        var setPoint = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: true);
+        var booleanAttributes = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: true);
 
         var directNestedMembers = member.Elements().Where(e => e.Name.LocalName == "Member").ToList();
         if (directNestedMembers.Count > 0)
@@ -296,13 +302,17 @@ internal static class DbInterfaceMembers
             }
 
             var nestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
-            return new DbMember(name, datatype, Retain: false, StartValue: null, SetPoint: setPoint, NestedMembers: nestedMembers);
+            return new DbMember(
+                name, datatype, Retain: false, StartValue: null, SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
+                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
         }
 
         var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
         var startValue = startValueElement?.Value;
 
-        return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue, SetPoint: setPoint);
+        return new DbMember(
+            name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue, SetPoint: booleanAttributes.SetPoint,
+            ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
     }
 
     /// <summary>
@@ -315,9 +325,9 @@ internal static class DbInterfaceMembers
     {
         var attributeList = new XElement(
             Ns + "AttributeList",
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
-            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), member.ExternalAccessible ? "true" : "false"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), member.ExternalVisible ? "true" : "false"),
+            new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), member.ExternalWritable ? "true" : "false"),
             new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "SetPoint"), new XAttribute("SystemDefined", "true"), member.SetPoint ? "true" : "false"));
 
         var memberElement = new XElement(
@@ -355,12 +365,15 @@ internal static class DbInterfaceMembers
     }
 
     /// <summary>
-    /// Validates ExternalAccessible/Visible/Writable are all true (no exception seen), and returns the member's own SetPoint value verbatim.
-    /// When <paramref name="requireSetPoint"/> is false (Input/Output members — confirmed real, 2026-07-12, S1 item 20), a missing SetPoint
-    /// attribute is not an error; the returned value is simply `false` in that case (nothing to carry, mirrors the "don't store a confirmed
+    /// Reads ExternalAccessible/Visible/Writable and SetPoint verbatim — none are a fixed default,
+    /// each captured and regenerated exactly (DbModel.cs's own DbMember doc comments have the real
+    /// counterexamples that disproved treating any of them as always-true/false). When
+    /// <paramref name="requireSetPoint"/> is false (Input/Output members — confirmed real,
+    /// 2026-07-12, S1 item 20), a missing SetPoint attribute is not an error; the returned value is
+    /// simply `false` in that case (nothing to carry, mirrors the "don't store a confirmed
     /// constant" reasoning already used for Move's own DisabledENO).
     /// </summary>
-    private static bool RequireDefaultBooleanAttributes(XElement member, string context, string memberName, bool requireSetPoint)
+    private static BooleanAttributes RequireDefaultBooleanAttributes(XElement member, string context, string memberName, bool requireSetPoint)
     {
         var memberAttributeList = member.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
         var actual = memberAttributeList?
@@ -369,29 +382,32 @@ internal static class DbInterfaceMembers
             .ToDictionary(e => (string)e.Attribute("Name")!, e => bool.Parse(e.Value), StringComparer.Ordinal)
             ?? new Dictionary<string, bool>();
 
-        foreach (var attrName in RequiredTrueBooleanAttributes)
+        var values = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var attrName in DefaultTrueBooleanAttributes)
         {
-            if (!actual.TryGetValue(attrName, out var value) || !value)
+            if (!actual.TryGetValue(attrName, out var value))
             {
                 throw new UnsupportedConstructException(
-                    $"{context} member '{memberName}' has a non-default BooleanAttribute '{attrName}' " +
-                    $"(expected True, got {(actual.TryGetValue(attrName, out var v) ? v.ToString() : "absent")}) — " +
-                    "not confirmed safe to ignore by this converter slice yet.");
+                    $"{context} member '{memberName}' is missing the '{attrName}' BooleanAttribute.");
             }
+
+            values[attrName] = value;
         }
 
         if (!actual.TryGetValue("SetPoint", out var setPoint))
         {
             if (!requireSetPoint)
             {
-                return false;
+                return new BooleanAttributes(values["ExternalAccessible"], values["ExternalVisible"], values["ExternalWritable"], false);
             }
 
             throw new UnsupportedConstructException($"{context} member '{memberName}' is missing the 'SetPoint' BooleanAttribute.");
         }
 
-        return setPoint;
+        return new BooleanAttributes(values["ExternalAccessible"], values["ExternalVisible"], values["ExternalWritable"], setPoint);
     }
+
+    private readonly record struct BooleanAttributes(bool ExternalAccessible, bool ExternalVisible, bool ExternalWritable, bool SetPoint);
 
     /// <summary>
     /// <paramref name="includeSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, whose
@@ -434,9 +450,9 @@ internal static class DbInterfaceMembers
         // isStructured, which a real counterexample disproved (DbModel.cs has the story).
         var attributeListChildren = new List<XElement>
         {
-            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), "true"),
-            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), "true"),
-            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), "true"),
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), member.ExternalAccessible ? "true" : "false"),
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalVisible"), new XAttribute("SystemDefined", "true"), member.ExternalVisible ? "true" : "false"),
+            new(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalWritable"), new XAttribute("SystemDefined", "true"), member.ExternalWritable ? "true" : "false"),
         };
         if (includeSetPoint)
         {

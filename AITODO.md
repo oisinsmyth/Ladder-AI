@@ -25,6 +25,18 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
 
 ## Recently closed (all committed)
 
+- **Three smaller flagged gaps closed, 2026-07-14.** Project owner's own ask, after reviewing
+  what was left once reference-corpus growth (below) closed. (1) `docs/13-data-boundary.md`'s
+  JOB9002 approval-scope record backfilled — it had drifted well behind the actual volume of
+  Amber-tier access done since (grounding sweeps, the `PlantAutoControl` plan's own bulk import work),
+  even though that work was itself separately confirmed with the project owner at the time. (2)
+  Sanitizer's `ExternalAccessible=False` hard-error fixed generally (all three of
+  ExternalAccessible/Visible/Writable, not just the one confirmed attribute) — live verification
+  surfaced a real, previously-unknown constraint: `ExternalAccessible=false` requires the other
+  two false as well (`ExternalVisible=true` alongside it is rejected by TIA's own `Import()`),
+  while `ExternalWritable=false` alone is independently valid. 7 new/updated tests, 366 converter
+  tests total. Full story: `docs/notes/stage-gates.md` ("Three smaller flagged gaps closed").
+  Item (3), the `Normalizer` Part-identity gap, is still open — see below.
 - **Reference corpus growth: 7 new blocks, 2026-07-14.** Project owner's own ask, after reviewing
   what's left before S1 is "done" in spirit: the committed `ir/reference/`/`simatic-ml/reference/`
   corpus only exercised ~5 of the ~24 instruction-level constructs this converter supports, with
@@ -139,12 +151,6 @@ action.
   "not equivalent" for them. Fixing this properly needs graph-based Part identity matching, not a
   simple content-key map the way `Access` already has — flagged as a real, well-scoped follow-on,
   not attempted yet.
-- A Sanitizer gap, newly confirmed real 2026-07-14: a Static member with
-  `ExternalAccessible="False"` (`FB VSDSim`'s own `SpeedCalcArray`) hard-errors — already a
-  deliberate, tested case (`GlobalDbWithNonDefaultAttribute.xml`), just never previously grounded
-  as real. Would need a new `DbMember` field, `DbInterfaceMembers` parse/write changes, and a new
-  IR-text marker (same shape as the existing `IsBareParameter`/`Informative` additions) — flagged
-  rather than fixed mid-Phase-2-plan, since it's unrelated to LAD instruction coverage.
 - **Modbus_Master/Modbus_Comm_Load's multi-instance form, considered during reference-corpus
   growth (2026-07-14) and deliberately not attempted** — unlike `WAIT`/`Jump`, this one's a closed
   engineering call, not something needing the project owner's input. Would have stacked two
@@ -157,7 +163,6 @@ action.
 
 **Possible next work** (no explicit instruction yet — ask before starting):
 - Build the `Normalizer` Part-identity fix above.
-- Fix the `ExternalAccessible=False` Sanitizer gap above.
 - S2 (read and explain) — the next roadmap stage once S1's gate review is formally signed off.
 
 **Sanitization maps built and kept** (`sanitization/`, gitignored): all 8 dependency FBs' own maps,

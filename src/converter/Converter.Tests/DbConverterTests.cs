@@ -36,6 +36,9 @@ public class DbConverterTests
         Assert.Equal(expected.StartValue, actual.StartValue);
         Assert.Equal(expected.Version, actual.Version);
         Assert.Equal(expected.SetPoint, actual.SetPoint);
+        Assert.Equal(expected.ExternalAccessible, actual.ExternalAccessible);
+        Assert.Equal(expected.ExternalVisible, actual.ExternalVisible);
+        Assert.Equal(expected.ExternalWritable, actual.ExternalWritable);
 
         if (expected.NestedMembers is null)
         {
@@ -392,12 +395,54 @@ public class DbConverterTests
         AssertDbSourcesEqual(db, reparsed);
     }
 
+    // Confirmed real 2026-07-14 (`FB VSDSim`'s own `SpeedCalcArray`, ExternalAccessible=false) —
+    // this used to hard-error (UnsupportedConstructException) before a real counterexample to
+    // "always true" existed for any of ExternalAccessible/Visible/Writable. Captured and
+    // regenerated verbatim now, same discipline as SetPoint.
     [Fact]
-    public void Parse_NonDefaultBooleanAttribute_HardErrors()
+    public void Parse_NonDefaultBooleanAttribute_CapturesValue()
     {
-        var ex = Assert.Throws<UnsupportedConstructException>(() => DbSourceParser.Parse(LoadFixture("GlobalDbWithNonDefaultAttribute.xml")));
-        Assert.Contains("ExternalWritable", ex.Message);
-        Assert.Contains("LockedFlag", ex.Message);
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithNonDefaultAttribute.xml"));
+
+        var member = Assert.Single(db.Members);
+        Assert.Equal("LockedFlag", member.Name);
+        Assert.True(member.ExternalAccessible);
+        Assert.True(member.ExternalVisible);
+        Assert.False(member.ExternalWritable);
+    }
+
+    [Fact]
+    public void RoundTrip_NonDefaultBooleanAttribute_IsStable()
+    {
+        var original = DbSourceParser.Parse(LoadFixture("GlobalDbWithNonDefaultAttribute.xml"));
+
+        var written = DbSourceWriter.Write(original);
+        var reparsed = DbSourceParser.Parse(written);
+
+        AssertDbSourcesEqual(original, reparsed);
+    }
+
+    [Fact]
+    public void Parse_ExternalAccessibleFalse_CapturesValue()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithExternalAccessibleFalse.xml"));
+
+        var member = Assert.Single(db.Members);
+        Assert.Equal("InternalCalcBuffer", member.Name);
+        Assert.False(member.ExternalAccessible);
+        Assert.False(member.ExternalVisible);
+        Assert.False(member.ExternalWritable);
+    }
+
+    [Fact]
+    public void RoundTrip_ExternalAccessibleFalse_IsStable()
+    {
+        var original = DbSourceParser.Parse(LoadFixture("GlobalDbWithExternalAccessibleFalse.xml"));
+
+        var written = DbSourceWriter.Write(original);
+        var reparsed = DbSourceParser.Parse(written);
+
+        AssertDbSourcesEqual(original, reparsed);
     }
 
     [Fact]
@@ -494,6 +539,43 @@ public class DbConverterTests
     public void FullRoundTrip_InstanceDbWithStructuredMembers_XmlToIrToXml_PreservesEverything()
     {
         var original = DbSourceParser.Parse(LoadFixture("InstanceDbWithStructuredMembers.xml"));
+
+        var irText = DbIrSerializer.Serialize(original);
+        var fromIr = DbIrParser.ParseDb(irText);
+        var regeneratedXml = DbSourceWriter.Write(fromIr);
+        var reparsedFromXml = DbSourceParser.Parse(regeneratedXml);
+
+        AssertDbSourcesEqual(original, reparsedFromXml);
+    }
+
+    [Fact]
+    public void IrSerializer_WritesAllThreeExternalFalseMarkers()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithExternalAccessibleFalse.xml"));
+
+        var irText = DbIrSerializer.Serialize(db);
+
+        Assert.Contains(
+            "    InternalCalcBuffer : Array[0..9] of Real EXTERNALACCESSIBLE=FALSE EXTERNALVISIBLE=FALSE EXTERNALWRITABLE=FALSE",
+            irText);
+    }
+
+    [Fact]
+    public void IrSerializer_WritesExternalWritableFalseMarker()
+    {
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithNonDefaultAttribute.xml"));
+
+        var irText = DbIrSerializer.Serialize(db);
+
+        Assert.Contains("    LockedFlag : Bool EXTERNALWRITABLE=FALSE", irText);
+        Assert.DoesNotContain("EXTERNALACCESSIBLE", irText);
+        Assert.DoesNotContain("EXTERNALVISIBLE", irText);
+    }
+
+    [Fact]
+    public void FullRoundTrip_ExternalAccessibleFalse_XmlToIrToXml_PreservesEverything()
+    {
+        var original = DbSourceParser.Parse(LoadFixture("GlobalDbWithExternalAccessibleFalse.xml"));
 
         var irText = DbIrSerializer.Serialize(original);
         var fromIr = DbIrParser.ParseDb(irText);

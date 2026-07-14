@@ -10,6 +10,19 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Fix Sanitizer's `ExternalAccessible=False` hard-error; backfill data-boundary approval record**
+
+- `DbMember` gained `ExternalAccessible`/`ExternalVisible`/`ExternalWritable` fields (default
+  true), captured and regenerated verbatim like `SetPoint` rather than hard-refused when false —
+  confirmed real (`FB VSDSim`'s own Static member). New IR-text markers
+  (`EXTERNALACCESSIBLE=FALSE` etc.), shown only when false. Live verification found a real
+  constraint: `ExternalAccessible=false` requires the other two false as well (TIA's own
+  `Import()` rejects `ExternalVisible=true` alongside it); `ExternalWritable=false` alone is
+  independently valid. 7 new/updated tests, 366 converter tests total.
+- Backfilled `docs/13-data-boundary.md`'s JOB9002 approval-scope record, which had drifted behind
+  the actual scope of Amber-tier work done since (already separately confirmed with the project
+  owner at the time, just never recorded in this doc).
+
 **Fix `RunAll`'s `IsConsistent` cascade; wire `TimerSample`/`DB_Timers` into it for the first time**
 
 - Growing the reference corpus surfaced a real gap: re-importing any block re-flags every block

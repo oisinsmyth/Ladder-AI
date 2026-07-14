@@ -44,7 +44,9 @@ BLOCK <FB|FC|OB> <Name>
     INOUT                           # always shown when non-empty; never seen absent or populated in any real block
       <name> : <Type>[ RETAIN]
     STATIC                          # FB only — absent entirely for an FC, not just empty (S1 item 7 Phase B)
-      <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ = <start value>]
+      <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ EXTERNALACCESSIBLE=FALSE][ EXTERNALVISIBLE=FALSE][ EXTERNALWRITABLE=FALSE][ = <start value>]
+                                     # the three EXTERNAL* markers default true, shown only when false — confirmed
+                                     # real 2026-07-14, `FB VSDSim`'s own `SpeedCalcArray` (ExternalAccessible=false)
         <nested member>             # one level deeper — UDT-typed or SFB-instance-typed members only
     TEMP                            # always shown when non-empty
       <name> : <Type>
@@ -750,6 +752,19 @@ DB <Name>
     <member> : <Type> VERSION <v>         # only present when the source carries one (below)
       <nested member> : <Type>            # structured members only — one level, see below
       <nested member> : <Type> = <start value>
+    <member> : <Type> EXTERNALACCESSIBLE=FALSE   # shown only when false — confirmed real
+    <member> : <Type> EXTERNALVISIBLE=FALSE      # 2026-07-14, `FB VSDSim`'s own `SpeedCalcArray`
+    <member> : <Type> EXTERNALWRITABLE=FALSE     # (ExternalAccessible=false). All three default
+                                                  # true; deliberately shown-on-false rather than
+                                                  # shown-on-true like TAGTABLE's own ACCESSIBLE/
+                                                  # VISIBLE/WRITABLE below — that convention was
+                                                  # never tested against a real false tag, and
+                                                  # applying it here would put the marker on nearly
+                                                  # every member line in every committed DB.
+                                                  # Live-verified constraint (TIA's own Import(),
+                                                  # not enforced by this converter): EXTERNALACCESSIBLE=FALSE
+                                                  # requires the other two false as well; EXTERNALWRITABLE=FALSE
+                                                  # alone (read-only external access) is independently valid.
 ```
 
 **`TYPE` (a standalone PLC data type / UDT, source root element `SW.Types.PlcStruct`)** —

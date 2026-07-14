@@ -38,6 +38,22 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     1. A-01/A-02 Openness verification spikes (`docs/notes/stage-gates.md` S0) — done.
     2. **2026-07-10, extended:** S1 IR/converter design work — grounding ADR-0001 and
        `ir/SPEC.md` against real SimaticML structure (`docs/adr/adr-0001-ir-format.md`).
+    3. **2026-07-11 through 2026-07-14, extended further (record backfilled 2026-07-14 — this
+       work was already done and separately confirmed with the project owner at the time; this
+       entry just catches the doc up):** the same S1 IR/converter design-work pattern, continued
+       at much larger scale as new instructions and block shapes were needed — full
+       instruction-coverage grounding sweeps across every remaining block on *both* PLC stations
+       (reading real block content to identify unsupported LAD constructs, cross-referencing
+       against `FlgNetParser.SupportedPartNames`; basis for `docs/notes/stage-gates.md`'s whole
+       Phase 2 tier sequence and `ir/SPEC.md`'s own per-instruction grounding citations), and the
+       `PlantAutoControl` round-trip plan's bulk export/sanitize/import of `PlantAutoControl`'s full real
+       dependency closure (8 dependency FBs — `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/
+       `FilterUnitSystem`/`MotorFwdRevSystem`/`AirStar`/`MotorVSDSystem`/`TomraControlSystem` — plus 26 real DB/
+       tag-table roots) into `SampleProject`, explicitly confirmed by the project owner ahead of
+       that work: "recreate `PlantAutoControl`'s tag/DB dependencies by bulk export+sanitize+import of
+       the real DBs/tag tables from `JOB9002`... go all the way to `PlantAutoControl` itself in this
+       pass, not stop at the 8 FBs." Same genericization rule applied throughout (sanitized before
+       import into `SampleProject`; `sanitization/` maps gitignored, never committed).
   - **Rule for this and any future scope:** example content pulled from JOB9002 into a *committed*
     doc (`ir/SPEC.md`, ADRs, anything under `docs/`) must be genericized — invented tag/instance
     names, never copied verbatim from the real project. Structural findings (XML element shapes,

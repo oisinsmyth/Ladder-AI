@@ -72,6 +72,22 @@ public sealed record DbSource(
 // `FB TomraControlSystem`, which has both, just missing `SetPoint`). Needed only to round-trip the
 // writer's own shape choice — Retain/SetPoint alone can't distinguish "genuinely bare" from "an
 // ordinary member that happens to have Retain=false, SetPoint=false".
+//
+// ExternalAccessible/ExternalVisible/ExternalWritable: default true, matching every member seen
+// until a real counterexample — `FB VSDSim`'s own `SpeedCalcArray` has `ExternalAccessible=false`
+// (confirmed real 2026-07-14) — disproved the earlier assumption that all three are always true
+// (`DbInterfaceMembers.RequireDefaultBooleanAttributes` used to hard-error on any of them being
+// false, per `GlobalDbWithNonDefaultAttribute.xml`'s own deliberately-synthetic test case, built
+// before a real example existed). Same "capture and regenerate exactly" discipline as `SetPoint`
+// — not derivable from the member's own kind/shape, genuinely varies per member.
+//
+// Live-verified constraint, 2026-07-14 (not enforced by this converter — TIA's own Import() is
+// the check): `ExternalAccessible=false` requires `ExternalVisible`/`ExternalWritable` to *also*
+// be false — `ExternalAccessible=false` alone with the other two left `true` was tried first and
+// rejected ("The attribute 'ExternalVisible' cannot be set"). `ExternalWritable=false` alone
+// (Accessible/Visible left `true` — `GlobalDbWithNonDefaultAttribute.xml`'s own shape, a common
+// "externally readable but not writable" pattern) *is* independently valid — confirmed separately.
+// So `ExternalAccessible` gates the other two; they don't gate each other or it.
 public sealed record DbMember(
     string Name,
     string Datatype,
@@ -82,4 +98,7 @@ public sealed record DbMember(
     IReadOnlyList<DbMember>? NestedMembers = null,
     bool IsBareParameter = false,
     bool Informative = false,
-    string? InformativeComment = null);
+    string? InformativeComment = null,
+    bool ExternalAccessible = true,
+    bool ExternalVisible = true,
+    bool ExternalWritable = true);
