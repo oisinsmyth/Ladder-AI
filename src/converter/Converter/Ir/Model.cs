@@ -327,7 +327,8 @@ public sealed record IrBlock(
     IReadOnlyList<DbMember>? InputMembers = null,
     IReadOnlyList<DbMember>? OutputMembers = null,
     IReadOnlyList<DbMember>? InOutMembers = null,
-    IReadOnlyList<DbMember>? ConstantMembers = null)
+    IReadOnlyList<DbMember>? ConstantMembers = null,
+    string? SecondaryType = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 

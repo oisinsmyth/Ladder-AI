@@ -44,6 +44,8 @@ public static class BlockSourceParser
         var objectList = blockElement.Element("ObjectList")
             ?? throw new SimaticMlFormatException("Block element is missing its <ObjectList>.");
 
+        var secondaryType = attributeList.Element("SecondaryType")?.Value;
+
         var blockComment = ReadComment(objectList);
         // Title (S1 item 17, 2026-07-12) — confirmed real at block level after all (two of
         // PlantAutoControl's own dependency FBs, `MotorVSDSystem`/`AirStar`, both titled "VSD Motor"), read
@@ -63,7 +65,7 @@ public static class BlockSourceParser
 
         return new BlockSource(
             rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers, blockTitle,
-            inputMembers, outputMembers, inOutMembers, constantMembers);
+            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType);
     }
 
     private static CompileUnitSource ParseCompileUnit(XElement compileUnit)

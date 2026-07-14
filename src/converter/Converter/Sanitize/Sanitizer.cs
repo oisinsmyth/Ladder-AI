@@ -375,6 +375,18 @@ public static class Sanitizer
         return network with { AccessNodes = sanitizedAccessNodes, Parts = sanitizedParts };
     }
 
+    // Real bug, found live 2026-07-14 (`FB ShredderControlSystem`'s own reference to the system tag
+    // `Clock_0.5Hz`): a real Siemens tag/component name can itself contain a literal '.' (Clock
+    // tags are the confirmed real example — `Clock_0.5Hz`/`Clock_1.25Hz` are each a single
+    // component, not two). Blindly `sanitizedPath.Split('.')` assumed every '.' in the invented
+    // value is a component-boundary separator, so an identity-mapped `Clock_0.5Hz` got split into
+    // two bogus components (`Clock_0`, `5Hz`) — TIA then reported "Tag \"Clock_0\".\"5Hz\" not
+    // defined", a real, sanitizer-introduced corruption, not a missing-tag gap. Fixed by splitting
+    // into exactly `access.ComponentPath.Length` pieces (the real, trusted component count) via
+    // `Split('.', count)`, which merges any excess dots into the final piece — correct both for
+    // this single-component case (no split at all) and for every ordinary multi-component path
+    // (Names/Tags-map convention already keeps the invented value's own dot count in lockstep with
+    // the real one).
     private static AccessNode SanitizeAccessNode(AccessNode access, SanitizationMap map, List<string> missing)
     {
         var realPath = string.Join('.', access.ComponentPath);
@@ -384,7 +396,7 @@ public static class Sanitizer
             return access;
         }
 
-        return access with { ComponentPath = sanitizedPath.Split('.') };
+        return access with { ComponentPath = sanitizedPath.Split('.', access.ComponentPath.Count) };
     }
 
     /// <summary>

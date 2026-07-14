@@ -58,6 +58,14 @@ public sealed record DbSource(
 // Retain/Version/further nesting has ever been observed on one — DbSourceParser hard-errors
 // rather than silently accept an unconfirmed nested shape). Null for a plain scalar/array member.
 //
+// Informative/InformativeComment: confirmed real 2026-07-14, `OB1 Main`'s own system-defined
+// Input parameters (`Initial_Call`/`Remanence`) — the same bare (no Remanence attribute, no
+// AttributeList) shape as IsBareParameter, plus `Informative="true"` and a
+// `<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText></Comment>` child. TIA's own
+// Import() requires OB system parameters specifically to carry this ("OB system parameters must
+// be informative") — never seen on an ordinary bare FC/FB parameter, hence its own pair of fields
+// rather than folding into IsBareParameter's existing shape.
+//
 // IsBareParameter: confirmed real 2026-07-14 (`FC Scale`'s own Input/Output params, a small
 // project utility FC) — a genuinely minimal Input/Output/InOut member shape with no `Remanence`
 // attribute and no `<AttributeList>` at all (distinct from the ordinary Input/Output shape,
@@ -72,4 +80,6 @@ public sealed record DbMember(
     string? Version = null,
     bool SetPoint = false,
     IReadOnlyList<DbMember>? NestedMembers = null,
-    bool IsBareParameter = false);
+    bool IsBareParameter = false,
+    bool Informative = false,
+    string? InformativeComment = null);

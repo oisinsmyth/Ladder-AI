@@ -2980,3 +2980,113 @@ missed for this one since it didn't exist as a normal Static member until the fi
 re-imported, compiled: **`MotorFwdRevSystem` — `STATE: Warning, ERRORS: 0`.**
 
 **All 8 of `PlantAutoControl`'s dependency FBs now compile clean.** Phase 1 is complete.
+
+### Full-cycle verification pass: every block in `SampleProject`, one by one — 2026-07-14
+
+Project owner's own explicit ask: run the *complete* export → `to-ir` → `to-xml` → import →
+compile → re-export cycle (not just sanitize+import, the path every phase above actually used)
+against **every block already sitting in `SampleProject`** — 49 blocks, the full accumulated
+history of this project's own work plus the pre-existing reference/`TimerSample` corpus — one at a
+time, fixing whatever real issues surfaced. This is a materially stronger test than anything run
+before it: it's the first time the converter's own `to-ir`/`to-xml` round trip (not just
+`sanitize`, which operates on the parsed XML model directly, bypassing the IR text layer entirely)
+was exercised against this much real, structurally-varied content in one pass.
+
+**One pre-existing broken artifact found and removed, not fixed:** `MotorStarter_Instance` (DB0),
+leftover scaffolding from the very first `create-instance-db` spike, was stuck with an invalid DB
+number (`0`) — not repairable via any exposed Openness API (no way to directly set a DB's own
+`Number`), and fully superseded by the real `MotorStarterInst1`-`9` DBs from Phase 2. Deleted with
+the project owner's explicit confirmation.
+
+**Five real, previously-unknown converter bugs found and fixed**, each caught only because this
+pass ran the full cycle against real, already-imported content rather than synthetic fixtures:
+
+1. **`Sanitizer.SanitizeAccessNode` corrupted any real tag whose own name contains a literal `.`**
+   (`FB ShredderControlSystem`'s own reference to the genuine Siemens system tag `Clock_0.5Hz` — real
+   XML: one `<Component Name="Clock_0.5Hz" />`, not two). `sanitizedPath.Split('.')` assumed every
+   `.` in the invented value is a component-boundary separator, splitting an identity-mapped
+   `Clock_0.5Hz` into two bogus components (`Clock_0`, `5Hz`) — TIA then reported the tag as
+   undefined. Fixed by splitting into exactly `access.ComponentPath.Count` pieces (the real,
+   trusted component count) instead of an unlimited split.
+2. **The exact same class of bug, independently, in `AccessNode.FromDottedPath`** — the IR text
+   round-trip path (no `Sanitizer` involved at all) hit the identical `Clock_0.5Hz` corruption via
+   its own naive `path.Split('.')`. Since a flat IR-text tag string carries no side-channel
+   component count the way `Sanitizer` had, fixed by recognizing Siemens's own fixed set of 8
+   "Clock memory byte" system tag names (`Clock_10Hz` … `Clock_0.1Hz`) as atomic before the general
+   splitting fallback — grounded directly against the real export, not a general escaping scheme
+   guessed at for a case that's only ever been seen once.
+3. **A whole class of "wrong document order" bugs in `FlgNetBuilder.Build`**, found via two
+   distinct real networks: `FB MotorStarter`'s "HMI Times" network interleaves three independent
+   `Mul → Convert` chains (`Mul, Convert, Mul, Convert, Mul, Convert`) but came out grouped by kind
+   (each production kind has its own dedicated build loop); `FB AirStarSystem`'s own network has
+   four independent Coil-assignment chains laid out with their contacts spatially interleaved in
+   the real ladder diagram, which also came out grouped by chain instead. TIA's own Import()
+   validator rejects both ("The elements must be sorted according to the current flow"). Rather
+   than special-case each pair of kinds as its own gap (the first attempt, a Mul/Convert-specific
+   merge-sort, was superseded once the second, structurally-different case showed the problem was
+   general), fixed with one general mechanism: sort the fully-built `parts` list by `UId` — a
+   confirmed-real, trustworthy proxy for true document position (same reasoning `EnsureTimerBuilt`
+   already relied on) — regardless of which loop built each Part.
+4. **The same general fix, extended to wire endpoints**: `FB AirStarSystem`'s own rail wire, shared
+   by more than two consumers, hit a second, related TIA validation ("The parts in the parts list
+   and the connections in the power rail ... with more than two I/Os must be located in the same
+   sequence") — a wire's own endpoint list also needs real document order, not just its Parts.
+   Endpoints were appended in whichever order each production's own loop happened to reach the
+   shared wire. Fixed by sorting each wire's own endpoint list by `UId` too (a `null` UId —
+   Powerrail itself — sorting first, the natural "source before consumers" position).
+5. **`IsBareParameter` (S1 item 20's `FC Scale`/`AnalogScale` fix) was never carried by the IR text
+   format** — `DbMemberLineFormat` (shared by a DB's own `MEMBERS` section and a block's own
+   `STATIC`) had no marker for it at all, so a bare parameter crossing the `to-ir`/`to-xml`
+   boundary silently reverted to the ordinary member shape, and TIA's own Import() then refused the
+   resulting (wrong) `Remanence` attribute outright. Fixed with a new ` BAREPARAM` line-format
+   marker, peeled/appended in the same fixed-suffix-order convention as `VERSION`/`RETAIN`/
+   `SETPOINT`.
+
+**`OB1 Main` — two more real, OB-specific gaps found and fixed, one left open:**
+- **`SecondaryType`** (`<SecondaryType>ProgramCycle</SecondaryType>`, required by Openness's own
+  `Create()` for an OB specifically — "The argument 'SecondaryType' is missing" otherwise) was
+  never modeled at all (parsing silently ignored it, matching how parsing has always been more
+  tolerant than writing). Added as a nullable field threaded through `BlockSource`/`IrBlock`/the IR
+  text format (a new optional `SECONDARYTYPE <value>` line) end to end.
+- **`Informative`/`InformativeComment`**: an OB's own system-defined Input parameters
+  (`Initial_Call`/`Remanence`) carry `Informative="true"` plus a
+  `<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText></Comment>` child — TIA's own
+  Import() requires this specifically for OB system parameters ("OB system parameters must be
+  informative"). Added as two new fields on the existing bare-parameter shape (`IsBareParameter`),
+  with matching IR-text (`INFORMATIVE "text"`) and XML support.
+- **Left open, recommended to defer**: after both fixes, `Main` hit a third, narrower issue —
+  "Section 'Output' is not valid for this block" (an OB's own required Interface section set
+  apparently excludes `Output`/`InOut` entirely when unused, unlike FC/FB where a present-but-empty
+  section is always valid). `Main` (OB1) is TIA's own auto-generated system placeholder block, not
+  restricted content, and OB support was never a stated project goal (S1's own scope has always been
+  FC/FB/DB/UDT/tag-table) — each fix so far has revealed another narrow, OB-specific quirk with no
+  sign the tail is short. Recommended as a deliberately out-of-scope, deferred item rather than
+  continuing to chase it.
+
+**A genuinely new TIA behavior confirmed, exposing a real gap in the verification tooling itself
+(not the converter):** running the actual `Normalizer.AreSemanticallyEquivalent` check (not just
+"compiles with 0 errors") across all 47 successfully-round-tripped blocks found 40 pass outright;
+the other 7 (`AirStarSystem`, `AnalogScale`, `EquipmentControlSystem`, `FilterUnitSystem`,
+`MotorFwdRevSystem`, `MotorStarter`, `MotorVSDSystem`) report "not semantically equivalent" —
+but spot-checking one (`MotorStarter`) directly confirmed the *only* difference is that TIA
+reassigned every Part's own `UId` on import/compile (155 Parts, identical count and kind
+distribution before and after — Contact/Coil/O/Mul/Convert/etc. all match exactly). This is the
+same class of already-known-and-accepted behavior `Normalizer.cs` already handles for `Wire` and
+`Access` UId ("TIA relocates/renumbers freely, only the topology matters") — just never previously
+observed to apply to `Part` UId too, likely because no prior comparison exercised a block whose
+own content had gone through this many import/compile cycles in one session (a block with `Part`
+UId that happens to already match what TIA would assign on its own — confirmed for
+`PlantAutoControl`, zero Part UId drift — never triggers the reassignment at all). **Deliberately
+not fixed now**: unlike `Access` (content-addressable by its own `Symbol`/tag path, safely
+collapsible to a stable key), a bare `Contact`/`Coil` Part has no distinguishing content of its own
+— many identical-looking Parts coexist in one network — so a correct fix needs real graph-based
+identity matching (matching Parts by their own wiring relationships, not content), not a simple
+content-key map the way `Access` got. A real, well-scoped follow-on for `tests/golden/Normalizer`,
+not a converter correctness issue — every one of these 7 blocks compiles with `ERRORS: 0`.
+
+**Bottom line: 47 of 48 blocks in `SampleProject` (every block except `Main`/OB1, deferred as
+out-of-scope) now round-trip through the complete, true cycle — export → convert → import →
+compile clean → re-export — including `PlantAutoControl` (`PlantAutoControl` itself) with a byte-level
+`Normalizer` equivalence pass, not just a compile-clean check.** 5 real converter bugs found and
+fixed along the way, all with regression tests. 291 converter tests (up from 283), 101
+openness-cli, 11 golden-harness — all green.

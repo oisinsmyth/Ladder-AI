@@ -70,7 +70,22 @@ internal static class DbInterfaceMembers
         {
             var bareStartValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
             var bareStartValue = bareStartValueElement?.Value;
-            return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(bareStartValue) ? null : bareStartValue, Version: version, SetPoint: false, NestedMembers: null, IsBareParameter: true);
+
+            // Informative/InformativeComment: confirmed real 2026-07-14, `OB1 Main`'s own system
+            // parameters — see DbModel.cs's own doc comment.
+            var isInformative = (string?)member.Attribute("Informative") == "true";
+            string? informativeComment = null;
+            if (isInformative)
+            {
+                var commentElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Comment");
+                var textElement = commentElement?.Elements().FirstOrDefault(e => e.Name.LocalName == "MultiLanguageText");
+                informativeComment = textElement?.Value
+                    ?? throw new SimaticMlFormatException($"{context} member '{name}' has Informative=\"true\" but no <Comment><MultiLanguageText> child.");
+            }
+
+            return new DbMember(
+                name, datatype, Retain: false, string.IsNullOrEmpty(bareStartValue) ? null : bareStartValue, Version: version, SetPoint: false,
+                NestedMembers: null, IsBareParameter: true, Informative: isInformative, InformativeComment: informativeComment);
         }
 
         var remanence = (string?)member.Attribute("Remanence");
@@ -391,6 +406,14 @@ internal static class DbInterfaceMembers
                 new XAttribute("Name", member.Name),
                 new XAttribute("Datatype", member.Datatype),
                 new XAttribute("Accessibility", "Public"));
+
+            if (member.Informative)
+            {
+                bareElement.Add(new XAttribute("Informative", "true"));
+                bareElement.Add(new XElement(
+                    Ns + "Comment",
+                    new XElement(Ns + "MultiLanguageText", new XAttribute("Lang", "en-US"), member.InformativeComment)));
+            }
 
             if (member.StartValue is not null)
             {

@@ -12,6 +12,11 @@ public static class IrSerializer
         sb.Append("ROOTID ").Append(block.RootUId).Append('\n');
         sb.Append("NUMBER ").Append(block.Number).Append('\n');
         sb.Append("LANGUAGE ").Append(block.Language).Append('\n');
+        if (!string.IsNullOrEmpty(block.SecondaryType))
+        {
+            sb.Append("SECONDARYTYPE ").Append(block.SecondaryType).Append('\n');
+        }
+
         if (!string.IsNullOrEmpty(block.Title))
         {
             sb.Append("TITLE \"").Append(EscapeString(block.Title)).Append("\"\n");

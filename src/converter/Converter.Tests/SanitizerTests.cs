@@ -198,6 +198,27 @@ public class SanitizerTests
         Assert.Contains("Names[\"RealCalleeName\"]", ex.Message);
     }
 
+    // Real bug, found live 2026-07-14 (`FB ShredderControlSystem`'s own reference to the real Siemens
+    // system tag `Clock_0.5Hz`): a single real component's own name can contain a literal '.' —
+    // blindly splitting the invented value on every '.' turned an identity-mapped `Clock_0.5Hz`
+    // into two bogus components (`Clock_0`/`5Hz`), which TIA then reported as an undefined tag.
+    // Confirmed real via `FC ShredderControlSystem`'s own fresh export: `<Component Name="Clock_0.5Hz"
+    // />` — one component, not two.
+    [Fact]
+    public void Apply_SingleComponentAccessWithDotInInventedName_IsNotSplit()
+    {
+        var block = LoadFixture("SanitizeSource.xml");
+        var map = FullMap();
+        map.Tags["RealOutput"] = "Clock_0.5Hz";
+
+        var sanitized = Sanitizer.Apply(block, map);
+
+        var access = Assert.Single(
+            sanitized.CompileUnits[0].Network.AccessNodes,
+            a => a.DottedPath == "Clock_0.5Hz");
+        Assert.Single(access.ComponentPath);
+    }
+
     private static DbSource LoadDbFixture(string name)
     {
         var document = XDocument.Load(Path.Combine("Fixtures", name));

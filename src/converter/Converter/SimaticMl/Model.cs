@@ -45,6 +45,23 @@ public sealed record AccessNode(
         }
     }
 
+    // Siemens's own fixed set of 8 "Clock memory byte" system tags — confirmed real, 2026-07-14
+    // (`FB ShredderControlSystem`'s own reference to `Clock_0.5Hz`, real XML: a single
+    // `<Component Name="Clock_0.5Hz" />`, not two). Each one's own literal name contains a '.',
+    // genuinely ambiguous against DottedPath's own "join components with '.'" convention — a
+    // single component with an embedded dot is textually indistinguishable from two components.
+    // Real bug, found live via the full export/convert/import/compile/re-export cycle: naively
+    // `Split('.')`-ing one of these back apart turned `Clock_0.5Hz` into two bogus components
+    // (`Clock_0`, `5Hz`), and TIA's own Import() then reported the resulting two-component access
+    // as an undefined tag. Recognized as a whole, atomic name here — before the general splitting
+    // fallback below — rather than guessing at a general escaping scheme for the one confirmed
+    // real case.
+    private static readonly HashSet<string> KnownDottedSingleComponentNames = new(StringComparer.Ordinal)
+    {
+        "Clock_10Hz", "Clock_5Hz", "Clock_2Hz", "Clock_1Hz",
+        "Clock_0.5Hz", "Clock_0.625Hz", "Clock_0.3Hz", "Clock_0.1Hz",
+    };
+
     /// <summary>Inverse of <see cref="DottedPath"/> — used when rebuilding an AccessNode from an IR tag string.</summary>
     public static AccessNode FromDottedPath(int uid, string scope, string dottedPath)
     {
@@ -56,7 +73,9 @@ public sealed record AccessNode(
         var arrayIndex = arrayMatch.Success ? int.Parse(arrayMatch.Groups["index"].Value) : (int?)null;
         var path = arrayMatch.Success ? arrayMatch.Groups["path"].Value : rest;
 
-        return new AccessNode(uid, scope, path.Split('.'), slice, arrayIndex);
+        var componentPath = KnownDottedSingleComponentNames.Contains(path) ? new[] { path } : path.Split('.');
+
+        return new AccessNode(uid, scope, componentPath, slice, arrayIndex);
     }
 }
 
@@ -233,6 +252,14 @@ public sealed record CompileUnitSource(string UId, string? Comment, string? Titl
 // line in the IR (mirroring the existing `COMMENT "..."` line — genuinely a new line, not a
 // repurposed one, since the BLOCK line's own quoted text is the block's real Name, not available
 // to repurpose the way a NETWORK line's label was).
+// SecondaryType: confirmed real 2026-07-14, `OB1 Main` (`SecondaryType>ProgramCycle`) — required
+// by Openness's own `Create()` for an OB specifically ("The argument 'SecondaryType' is missing"
+// otherwise); never present on any FC/FB grounded so far, hence nullable rather than tied to Kind
+// (kept generic, same reasoning as every other optional field here). A real, previously-silent
+// data-loss bug: parsing succeeded without it (BlockSourceParser never read it at all), but the
+// writer's own AttributeList omitted it entirely, so re-importing a rebuilt OB failed outright —
+// caught by the full export/convert/import/compile/re-export cycle run against every block
+// already in the scratch project, not by an isolated unit test.
 public sealed record BlockSource(
     string RootUId,
     string Kind,
@@ -247,7 +274,8 @@ public sealed record BlockSource(
     IReadOnlyList<DbMember>? InputMembers = null,
     IReadOnlyList<DbMember>? OutputMembers = null,
     IReadOnlyList<DbMember>? InOutMembers = null,
-    IReadOnlyList<DbMember>? ConstantMembers = null)
+    IReadOnlyList<DbMember>? ConstantMembers = null,
+    string? SecondaryType = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 

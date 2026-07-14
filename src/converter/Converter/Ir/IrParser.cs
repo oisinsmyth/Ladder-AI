@@ -24,6 +24,16 @@ public static partial class IrParser
         var number = int.Parse(RequirePrefixedLine(lines, ref i, "NUMBER "));
         var language = RequirePrefixedLine(lines, ref i, "LANGUAGE ");
 
+        // SecondaryType (S1, 2026-07-14) — required by Openness for an OB specifically
+        // (e.g. "ProgramCycle" for OB1 Main); never present on FC/FB. Parsed right after
+        // LANGUAGE, matching IrSerializer's own emission order.
+        string? secondaryType = null;
+        if (i < lines.Length && lines[i].StartsWith("SECONDARYTYPE ", StringComparison.Ordinal))
+        {
+            secondaryType = lines[i]["SECONDARYTYPE ".Length..];
+            i++;
+        }
+
         // Block-level Title (S1 item 17, 2026-07-12) — mirrors Comment's own optional-line
         // handling, parsed first to match IrSerializer's own TITLE-then-COMMENT ordering.
         string? title = null;
@@ -76,7 +86,7 @@ public static partial class IrParser
         return (
             new IrBlock(
                 rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title,
-                inputMembers, outputMembers, inOutMembers, constantMembers),
+                inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType),
             sidecars);
     }
 

@@ -45,6 +45,10 @@ public static class BlockSourceWriter
         attributeListChildren.Add(new XElement("Namespace"));
         attributeListChildren.Add(new XElement("Number", block.Number));
         attributeListChildren.Add(new XElement("ProgrammingLanguage", block.Language));
+        if (block.SecondaryType is not null)
+        {
+            attributeListChildren.Add(new XElement("SecondaryType", block.SecondaryType));
+        }
 
         var attributeList = new XElement("AttributeList", attributeListChildren);
 

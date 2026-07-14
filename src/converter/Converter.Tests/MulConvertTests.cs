@@ -381,4 +381,24 @@ public class MulConvertTests
         var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
         Assert.Contains("both", ex.Message);
     }
+
+    // Real bug, found live 2026-07-14 (`FB MotorStarter`'s own "HMI Times" network, discovered via
+    // the full export/convert/import/compile/re-export cycle run against every block already in
+    // the scratch project): FlgNetBuilder.Build processed every Mul in one loop then every Convert
+    // in a second loop, so two independent Mul->Convert chains that are genuinely interleaved in
+    // the real source (`Mul, Convert, Mul, Convert`) got rebuilt grouped by kind (`Mul, Mul,
+    // Convert, Convert`) — TIA's own Import() validator rejects this ("The elements must be sorted
+    // according to the current flow"). Fixed by merge-sorting both lists on their own real
+    // MulPartUId/ConvertPartUId before building.
+    [Fact]
+    public void RoundTrip_TwoIndependentMulConvertChains_PreservesInterleavedPartOrder()
+    {
+        var original = LoadFixture("TwoIndependentMulConvertChainsInterleaved.xml");
+        var reduced = GraphReducer.Reduce(original, networkNumber: 1, title: "Two independent scale chains", compileUnitUId: "1C");
+
+        var rebuilt = FlgNetBuilder.Build(reduced.Network, reduced.Sidecar);
+
+        var order = rebuilt.Parts.Select(p => p.Name).ToList();
+        Assert.Equal(new[] { "Mul", "Convert", "Mul", "Convert" }, order);
+    }
 }

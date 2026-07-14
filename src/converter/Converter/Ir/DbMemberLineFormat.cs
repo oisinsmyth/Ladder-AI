@@ -11,11 +11,24 @@ namespace Converter.Ir;
 /// line: `&lt;name&gt; : &lt;Datatype&gt;[ VERSION &lt;v&gt;][ RETAIN][ SETPOINT][ = &lt;start
 /// value&gt;]`, nested members one level of indentation deeper).
 /// </summary>
-internal static class DbMemberLineFormat
+internal static partial class DbMemberLineFormat
 {
     public static void SerializeLine(StringBuilder sb, string indent, DbMember member)
     {
         sb.Append(indent).Append(member.Name).Append(" : ").Append(member.Datatype);
+        if (member.IsBareParameter)
+        {
+            sb.Append(" BAREPARAM");
+        }
+
+        // Informative/InformativeComment: confirmed real 2026-07-14, `OB1 Main`'s own system
+        // parameters — see DbModel.cs's own doc comment. Only ever seen alongside IsBareParameter,
+        // so no independent handling is needed for the non-bare case.
+        if (member.Informative)
+        {
+            sb.Append(" INFORMATIVE \"").Append(EscapeString(member.InformativeComment ?? string.Empty)).Append('"');
+        }
+
         if (member.Version is not null)
         {
             sb.Append(" VERSION ").Append(member.Version);
@@ -116,6 +129,43 @@ internal static class DbMemberLineFormat
             rest = rest[..versionIndex];
         }
 
-        return new DbMember(name, rest, retain, startValue, version, setPoint);
+        // IsBareParameter: confirmed real 2026-07-14 (`FC Scale`'s own Input/Output params, S1
+        // item 20) — a genuinely minimal member shape (no Remanence attribute, no AttributeList at
+        // all) distinct from an ordinary member that happens to have Retain/SetPoint both false.
+        // Real bug, found live via the full export/convert/import/compile/re-export cycle run
+        // against every block already in the scratch project (`AnalogScale`): this line format
+        // never carried the flag at all, so a bare parameter silently reverted to the ordinary
+        // shape crossing the to-ir/to-xml boundary, and TIA's own Import() then refused the
+        // resulting (wrong) `Remanence` attribute outright.
+        // Informative/InformativeComment: confirmed real 2026-07-14, `OB1 Main`'s own system
+        // parameters — see DbModel.cs's own doc comment. Peeled before BAREPARAM (its own append
+        // came after BAREPARAM's), matching the reverse-order peeling convention used throughout
+        // this method.
+        var informative = false;
+        string? informativeComment = null;
+        var informativeMatch = InformativeSuffixRegex().Match(rest);
+        if (informativeMatch.Success)
+        {
+            informative = true;
+            informativeComment = UnescapeString(informativeMatch.Groups["text"].Value);
+            rest = rest[..informativeMatch.Index];
+        }
+
+        var isBareParameter = rest.EndsWith(" BAREPARAM", StringComparison.Ordinal);
+        if (isBareParameter)
+        {
+            rest = rest[..^" BAREPARAM".Length];
+        }
+
+        return new DbMember(
+            name, rest, retain, startValue, version, setPoint,
+            NestedMembers: null, IsBareParameter: isBareParameter, Informative: informative, InformativeComment: informativeComment);
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(" INFORMATIVE \"(?<text>.*)\"$")]
+    private static partial System.Text.RegularExpressions.Regex InformativeSuffixRegex();
+
+    private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static string UnescapeString(string value) => value.Replace("\\\"", "\"").Replace("\\\\", "\\");
 }

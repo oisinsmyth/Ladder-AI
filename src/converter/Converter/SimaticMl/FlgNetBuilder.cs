@@ -190,7 +190,36 @@ public static class FlgNetBuilder
             EnsureTimerBuilt(timerSidecar.TonPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
-        var wires = wireEndpointsByUId.Select(kv => new WireNode(kv.Key, kv.Value)).ToList();
+        // Final sort by UId — the real, general fix for a whole class of "wrong document order"
+        // bugs, found live 2026-07-14 via the full export/convert/import/compile/re-export cycle
+        // run against every block already in the scratch project (not an isolated unit test).
+        // Each production kind above (Assignments, Moves, WordAnds, Calls, Muls, Converts, Swaps)
+        // is built in its own dedicated loop, so any interleaving *between* kinds — or even
+        // between independent chains of the *same* kind — that existed in the real source gets
+        // lost (`FB MotorStarter`'s own three interleaved `Mul->Convert` pairs came out grouped by
+        // kind; `FB AirStarSystem`'s own four independent Coil-assignment chains, laid out with
+        // their contacts spatially interleaved in the real ladder diagram, came out grouped by
+        // chain instead). TIA's own Import() validator rejects both ("The elements must be sorted
+        // according to the current flow"). Confirmed real: a Part's own UId is assigned by TIA in
+        // true document order in every example grounded so far (this is also why `EnsureTimerBuilt`
+        // above already treats it as a trustworthy position proxy) — so re-sorting the fully-built
+        // list by UId reconstructs the real order regardless of which loop built each Part,
+        // correctly handling every interleaving shape at once rather than special-casing each
+        // pair of kinds as its own gap is found.
+        parts.Sort((a, b) => a.UId.CompareTo(b.UId));
+
+        // Same document-order fix as the Parts sort above, applied to each wire's own endpoint
+        // list — real bug, found live 2026-07-14 (`FB AirStarSystem`): a rail wire shared by more
+        // than two consumers needs its own endpoints listed in real document order too, not just
+        // its Parts — TIA's own Import() validator rejects a mismatch here separately ("The parts
+        // in the parts list and the connections in the power rail ... with more than two I/Os must
+        // be located in the same sequence"). Endpoints were appended in whichever order each
+        // production's own dedicated loop happened to reach the shared wire, not real document
+        // order. A null UId (Powerrail itself, the wire's own producer) sorts first — the natural
+        // "source before consumers" position, matching every real rail wire seen.
+        var wires = wireEndpointsByUId
+            .Select(kv => new WireNode(kv.Key, kv.Value.OrderBy(e => e.UId ?? int.MinValue).ToList()))
+            .ToList();
 
         // Scope is carried per-entry (not assumed) since 2026-07-11 — a plain tag Access can be
         // LocalVariable-scoped too (an FC/FB's own interface parameter, confirmed real grounding

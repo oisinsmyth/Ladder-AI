@@ -116,6 +116,54 @@ public class BlockInterfaceTests
         Assert.Equal("Real", Assert.Single(reparsed.InputMembers!).Datatype);
     }
 
+    // Real bug, found live 2026-07-14 (`AnalogScale`, the sanitized `FC Scale`, discovered via the
+    // full export/convert/import/compile/re-export cycle run against every block already in the
+    // scratch project): the XML round-trip above was tested and passed, but the IR *text* format
+    // (`DbMemberLineFormat`, shared with a standalone DB's own `MEMBERS` section) never carried
+    // `IsBareParameter` at all, so a bare parameter crossing the to-ir/to-xml boundary silently
+    // reverted to the ordinary member shape — TIA's own Import() then refused the resulting
+    // (wrong) `Remanence` attribute outright. Exercised here via a DB (the same shared line format
+    // a block's own STATIC section uses), since that's the public surface — `DbMemberLineFormat`
+    // itself is internal.
+    [Fact]
+    public void IrRoundTrip_BareParameterMember_PreservesBareShape()
+    {
+        var bareMember = new DbMember("Input", "Real", Retain: false, StartValue: null, IsBareParameter: true);
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { bareMember });
+
+        var ir = DbIrSerializer.Serialize(db);
+        Assert.Contains("BAREPARAM", ir);
+
+        var reparsed = DbIrParser.ParseDb(ir);
+        var reparsedMember = Assert.Single(reparsed.Members);
+        Assert.True(reparsedMember.IsBareParameter);
+        Assert.Equal("Input", reparsedMember.Name);
+        Assert.Equal("Real", reparsedMember.Datatype);
+    }
+
+    // Real bug, found live 2026-07-14 (`OB1 Main`, discovered via the same full round-trip cycle):
+    // an OB's own system-defined Input parameters (`Initial_Call`/`Remanence`) carry
+    // `Informative="true"` plus a `<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText>
+    // </Comment>` child — TIA's own Import() requires this specifically ("OB system parameters
+    // must be informative"), and (like IsBareParameter above) the IR text format silently dropped
+    // it crossing the to-ir/to-xml boundary.
+    [Fact]
+    public void IrRoundTrip_InformativeBareParameterMember_PreservesInformativeCommentText()
+    {
+        var informativeMember = new DbMember(
+            "Initial_Call", "Bool", Retain: false, StartValue: null,
+            IsBareParameter: true, Informative: true, InformativeComment: "Initial call of this OB");
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { informativeMember });
+
+        var ir = DbIrSerializer.Serialize(db);
+        Assert.Contains("INFORMATIVE \"Initial call of this OB\"", ir);
+
+        var reparsed = DbIrParser.ParseDb(ir);
+        var reparsedMember = Assert.Single(reparsed.Members);
+        Assert.True(reparsedMember.Informative);
+        Assert.Equal("Initial call of this OB", reparsedMember.InformativeComment);
+    }
+
     // Repurposed from a hard-error test (S1 item 20, 2026-07-12) — same "an obsolete hard-error
     // test becomes a positive one once the real shape is modeled" pattern already used for TON's
     // direct-Q-wiring and block-level Title. The fixture's own content was also corrected to the
