@@ -10,6 +10,84 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Full-cycle verification pass: every block in `SampleProject` — 5 more real converter bugs found and fixed; 47 of 48 blocks now round-trip completely**
+
+- Project owner's own explicit ask: run the complete export → `to-ir` → `to-xml` → import →
+  compile → re-export cycle against all 49 blocks already sitting in `SampleProject` (the full
+  accumulated project history, not just the `PlantAutoControl` dependency set), one at a time. First
+  time the converter's own `to-ir`/`to-xml` round trip — not just `sanitize`, which bypasses the IR
+  text layer — was exercised this broadly against real content in one pass.
+- Deleted one broken, unrepairable scaffold artifact (`MotorStarter_Instance`, stuck at an invalid
+  DB number `0` from the earliest `create-instance-db` spike, superseded by the real
+  `MotorStarterInst1`-`9` DBs) — project owner's explicit confirmation.
+- **5 real bugs found and fixed**: (1) `Sanitizer.SanitizeAccessNode` and (2)
+  `AccessNode.FromDottedPath` both corrupted a real tag whose own name contains a literal `.`
+  (`Clock_0.5Hz`, a genuine Siemens system clock tag) via naive `Split('.')`. (3) `FlgNetBuilder`
+  grouped Parts by production kind instead of true document order whenever multiple chains
+  interleave (`Mul`/`Convert` pairs; independent Coil-assignment chains) — fixed generally by
+  sorting the final `parts` list by `UId` rather than special-casing each pair of kinds. (4) The
+  same general fix extended to each wire's own endpoint list. (5) `IsBareParameter` (`FC Scale`/
+  `AnalogScale`) was never carried by the IR text format, silently reverting on the `to-ir`/`to-xml`
+  round trip.
+- Also added (not fully completing) OB support: `SecondaryType` and `Informative`/
+  `InformativeComment`, needed for `OB1 Main` — deliberately not pursued further after a third
+  OB-specific quirk surfaced (`Main` is TIA's own template block, not restricted content; OB support
+  was never a project goal).
+- Confirmed a new TIA behavior exposing a real gap in `tests/golden/Normalizer` itself, not the
+  converter: Part UId (not just Wire/Access) can also be reassigned by TIA on import/compile —
+  flagged as a well-scoped follow-on (needs graph-based Part identity matching), not fixed under
+  time pressure.
+- **47 of 48 `SampleProject` blocks now round-trip completely**, including `PlantAutoControl`
+  (`PlantAutoControl` itself) with a byte-level `Normalizer` equivalence pass. 291 converter tests (up
+  from 283), 101 openness-cli, 11 golden-harness — all green. Commit `60ac96f`. Full story:
+  `docs/notes/stage-gates.md`.
+
+**Instance DB Input/Output support; `PlantAutoControl` proves the full TIA round trip — the actual goal of this whole multi-session effort**
+
+- `DbSource`/`DbSourceParser`/`DbSourceWriter`/`Sanitizer.ApplyToDb`/`DbIrSerializer`/`DbIrParser`
+  only modeled a DB's own `Static` section — correct for every Instance DB grounded so far, but
+  `TomraControlInst1` (needed for `PlantAutoControl`'s own dependency closure) genuinely persists its own
+  FB's Input/Output formal-parameter storage too. Extended to model `Input`/`Output`/`InOut`
+  sections on a DB the same way `BlockSource` already does for FC/FB blocks. New fixture + 4 tests,
+  287/287 converter tests.
+- **Phase 2 closed**: built the exact, current dependency list via `Sanitizer.Apply` against an
+  empty map (collects every missing entry in one pass) — 523 missing entries, 26 real DB/tag-table
+  roots (20 Instance DBs of the 8 already-proven dependency FBs, 6 GlobalDBs/tag tables), 343
+  unique tag paths. All 26 exported, sanitized (maps generated programmatically off the
+  missing-entries list), imported, and block-level compiled clean.
+- **Phase 3 closed**: built `PlantAutoControl`'s own sanitization map (343 tags, 35 names, 20 network
+  titles) the same way, driven directly off the missing-entries list. Sanitized, imported, and
+  **compiled clean on the first attempt — 0 errors.** Re-exported and confirmed
+  `Normalizer.AreSemanticallyEquivalent` = **true**.
+- This is the actual Layer 1 assertion (`docs/08-testing-strategy.md`) S1 exists to prove,
+  demonstrated end-to-end for `PlantAutoControl` itself — the real site master-control block, its
+  complete real dependency closure, imported into an independent TIA project, compiling clean, and
+  round-tripping losslessly. Commit `a1f46d3`. Full story: `docs/notes/stage-gates.md` ("Phase 2"/
+  "Phase 3").
+
+**`Sub`/`Div`/`Le` converter support; fix a real `Sanitizer` gap — a Call Part's own callee name was never sanitized; `MotorFwdRevSystem` fixed at the source — all 8 `PlantAutoControl` dependency FBs now compile clean**
+
+- `Sub`/`Div` (confirmed real via `FC Scale`) round out the arithmetic family alongside `Mul`/`Add`
+  — the key structural difference is they never carry a `Card` `TemplateValue` (always binary, no
+  chaining), modeled via a nullable `PartNode.Cardinality`. `Le` completes the IEC comparison
+  family (`Eq`/`Ge`/`Lt`/`Ne`/`Gt`/`Le`), none left unconfirmed. 283/283 converter tests.
+- **Real bug found and fixed**: `Sanitizer.SanitizeNetwork` renamed a Call Part's own `Instance`
+  reference but never its `BlockName` (the callee's own name) — found live via `MotorVSDSystem`
+  still failing to compile ("Scale no longer exists") after its own `Scale` dependency (renamed
+  `AnalogScale`) already compiled clean standalone. Fixed by renaming `BlockName` via `map.Names`,
+  same treatment as `Instance`.
+- **`MotorFwdRevSystem` fixed at the source**: the `CycleDelayReset` blocker (a standalone
+  single-instance `TON`, invisible to the whole `SW.Blocks` object model — no `create-instance-db`
+  path, not listed, not exportable by name) was confirmed exhausted from the Openness side. Project
+  owner then fixed the actual root cause directly in `JOB9002`: converted `CycleDelayReset` to a
+  proper multi-instance `Static`-section timer, the same shape every other working timer in the FB
+  already uses. One small map gap (a stale identity mapping that should have followed the
+  `FaultTripTimer2`→`FaultTripTimer` rename) fixed alongside it.
+- **All 8 of `PlantAutoControl`'s dependency FBs now compile clean** — `MotorStarter`/
+  `EquipmentControlSystem`/`ShredderControlSystem`(bar one hw-config tag)/`FilterUnitSystem`/
+  `AirStarSystem`/`TomraControlSystem`/`MotorVSDSystem`/`MotorFwdRevSystem`. Commit `e2fb301`. Full
+  story: `docs/notes/stage-gates.md`.
+
 **Phase 1 continued: `FilterUnitSystem`/`AirStarSystem` compile clean; `Gt` comparison + a fourth Input/Output member shape added; `MotorVSDSystem`/`MotorFwdRevSystem` blocked on two new, real, deliberately-deferred gaps**
 
 - `FilterUnitSystem` (`FilterUnitSystem`) compiled clean first try — fully self-contained, reuses the

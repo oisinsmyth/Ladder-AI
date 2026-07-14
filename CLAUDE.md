@@ -22,12 +22,17 @@ AI-assisted Siemens LAD engineering. You (Claude Code) read, document, review, a
 ## Commands
 
 ```
-openness-cli list          <project>                                       # enumerate blocks; F-/safety blocks flagged, never opened
-openness-cli export        <project> --block <name> [--device <name>] --out <path>
-openness-cli import        <project> --group <device>/<path> <files...>
-openness-cli compile       <project> [--device <name>]                     # non-zero exit on error
+openness-cli list          <project>                                                     # enumerate blocks; F-/safety blocks flagged, never opened; --tagtables lists tag tables instead
+openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>
+openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>
+openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # non-zero exit on error
+openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)
+openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                       # block-consistency + compile health — run this first if export/import/compile misbehave
-converter to-ir|to-xml <file>       # Contact/Coil-only slice today (S1 walking skeleton); anything else is a correct hard error, not a bug — see docs/notes/stage-gates.md
+converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, comparisons (Eq/Ge/Lt/Ne/Gt/Le), TON/TONR/TOF, MOVE, WAND, CALL, SWAP, SCoil/RCoil,
+                                    # MUL/CONVERT/ADD/SUB/DIV; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
+                                    # this slice is a correct hard error, not a bug — see docs/notes/stage-gates.md for exactly what's covered.
+converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 

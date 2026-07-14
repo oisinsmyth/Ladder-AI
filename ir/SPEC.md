@@ -25,12 +25,20 @@ plan items 4–7) — anything marked **[converter-verify]** below is a contract
 BLOCK <FB|FC|OB> <Name>
   NUMBER <n>
   LANGUAGE <LAD>                    # LAD only ever appears here — converter refuses anything else (CLAUDE.md hard rule 1)
+  SECONDARYTYPE <value>             # OB only — confirmed real 2026-07-14 (OB1 Main, "ProgramCycle"); omitted for FC/FB,
+                                     # which never carry it. Required by Openness's own Create() for an OB specifically.
   TITLE "<block title>"             # omitted entirely if empty — confirmed real, 2026-07-12 (S1 item 17)
   COMMENT "<block header comment>"  # omitted entirely if empty
 
   INTERFACE                         # omitted entirely if every section below is absent/empty
     INPUT                           # omitted if absent from source; shown (with zero members) if present-but-empty
-      <name> : <Type>[ RETAIN]      # confirmed real 2026-07-12 (S1 item 20) — same shape as STATIC, minus SETPOINT
+      <name> : <Type>[ BAREPARAM][ RETAIN]   # confirmed real 2026-07-12 (S1 item 20) — same shape as STATIC, minus
+                                              # SETPOINT; BAREPARAM marks the minimal no-Remanence/no-AttributeList
+                                              # shape (S1, 2026-07-14, `FC Scale`) — see its own note below
+      <name> : <Type> BAREPARAM INFORMATIVE "<text>"   # OB system parameters only (`Initial_Call`/`Remanence`) —
+                                                        # confirmed real 2026-07-14, `OB1 Main`; TIA's own Import()
+                                                        # requires this specifically ("OB system parameters must be
+                                                        # informative")
     OUTPUT
       <name> : <Type>[ RETAIN]
     INOUT                           # always shown when non-empty; never seen absent or populated in any real block
@@ -110,7 +118,18 @@ shape above: not `TomraControlSystem`'s ordinary Input/Output shape (has both `R
 `Accessibility`), not `ParseConstantMember`'s shape (which requires a `StartValue`). Modeled via a
 new `DbMember.IsBareParameter` flag (needed only to round-trip the writer's own shape choice —
 `Retain`/`SetPoint` alone can't distinguish "genuinely bare" from "an ordinary member that happens
-to have both false").
+to have both false"). **Real bug, found live 2026-07-14** (`AnalogScale`, the sanitized `FC Scale`,
+via the full export/convert/import/compile/re-export cycle run against every block already in the
+scratch project): the IR *text* format never carried this flag at all, so a bare parameter
+crossing the `to-ir`/`to-xml` boundary silently reverted to the ordinary shape — fixed with the
+` BAREPARAM` line-format marker shown in the grammar above.
+
+**`Informative`/`InformativeComment`, confirmed real 2026-07-14** (`OB1 Main`'s own system-defined
+Input parameters, `Initial_Call`/`Remanence`) — the same bare shape as `IsBareParameter` above,
+plus `Informative="true"` and a `<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText>
+</Comment>` child. Never seen on an ordinary FC/FB bare parameter, only on an OB's own system
+parameters — TIA's own Import() requires it specifically for those ("OB system parameters must be
+informative").
 
 ## Network body
 
@@ -133,7 +152,7 @@ lookup table entry:
 | `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
 | `Coil` | `COIL <tag> := <expr>` |
 | `SCoil`/`RCoil` (set/reset coils) — **confirmed real and built, 2026-07-12 (S1 item 15)**, structurally identical to `Coil` (same `in`/`operand` ports, never a producer) | `SCOIL <tag> := <expr>` / `RCOIL <tag> := <expr>` |
-| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Gt` — **confirmed real and built, 2026-07-14** (`FC Scale`, grounding `FB MotorVSDSystem`'s dependency closure); `Le` still unconfirmed | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
+| `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Gt`/`Le` — **confirmed real and built, 2026-07-14** (`FC Scale`, grounding `FB MotorVSDSystem`'s dependency closure) — **the full IEC comparison family, none left unconfirmed** | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
 | `O` (OR-merge) — **each branch an ordinary chain, confirmed real and built, 2026-07-11/12 (S1 item 11)** | `OR` |
 
 **No boolean "AND-merge" Part exists (resolved, 2026-07-12, S1 item 12).** This table originally
@@ -466,6 +485,22 @@ NETWORK 8 "Run enable delay"
   (`MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`) confirmed `Mul`/
   `Convert` are no longer the blocker in any of them — all 5 now progress to a different,
   already-known deferred item (`TONR`, a retentive TON variant, `ir/SPEC.md`'s own open items).
+- **`SUB`/`DIV` (subtraction/division, `Part Name="Sub"`/`"Div"`), confirmed real and built,
+  2026-07-13** (`FC Scale`, a small project utility FC grounding `FB MotorVSDSystem`'s own dependency
+  closure). Extends `Mul`/`Add`'s own `MulKind` enum (`Multiply`/`Add`/`Subtract`/`Divide`) rather
+  than a parallel construct, but with one confirmed structural difference: **`Sub`/`Div` never
+  carry a `Card` `TemplateValue` at all** — always binary (`in1`/`in2` only), never chained the way
+  `Mul`/`Add`'s own `Card="2"` implies is possible. Modeled by leaving `PartNode.Cardinality`
+  nullable specifically for these two kinds (defaulted to `2` only during reduction), and never
+  regenerating a `Card` element for them on write. Also confirmed real: a `Sub`'s own `eno`
+  chaining into a following `Div`'s own `en` (the same `PrecedingEno` mechanism `Mul`→`Convert`
+  already uses) — extended to recognize `Sub`/`Div` as valid ENO-chain producers, **deliberately
+  not `Add`**, which stays unconfirmed as a producer in that role. Readable-form syntax:
+  `SUB(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>` / `DIV(...)`, identical to
+  `MUL`'s own grammar. Covered by 5 converter tests (`SubDivTests.cs`, one fixture built directly
+  from the real `Scale` wiring pattern). **Live-verified against real data:** `FC Scale` (sanitized
+  as `AnalogScale`) compiles clean in `SampleProject`, genuinely exercising both `Sub` and the
+  `Sub`→`Div` ENO chain.
 - **`TONR`/`ADD`/`LT` (`Part Name="TONR"`/`"Add"`/`"Lt"`), built 2026-07-12 (S1 item 19).** Picked
   up per the project owner's own choice (over the FC/FB parameter-interface gap) after `TONR` was
   confirmed real by S1 item 18's own live-verification sweep. Grounded first (two independent real
@@ -760,8 +795,8 @@ question, left open on purpose rather than guessed).
   (`MotorDOL`) and the standalone rail-fed case (`ShredderControlSystem`); a whole-block `to-ir` sweep
   of all 5 previously-blocked dependency FBs confirmed none hit `Mul`/`Convert` errors anymore —
   they now hit `TONR` instead (see the S1 item 15 bullet above, now confirmed real by this
-  finding). Arithmetic beyond `Mul`/`Convert` (`Add`/`Sub`/`Div`/`Abs`/`Swap`/`Calc`) remains out
-  of scope — none observed co-occurring with `Mul`/`Convert` in any grounded real network.
+  finding). **`Add` resolved S1 item 19 (below); `Sub`/`Div` resolved 2026-07-13 (see the
+  readable-form section above)** — `Abs`/`Calc` remain out of scope, none observed.
 - **Resolved, 2026-07-12 (S1 item 19): `TONR`/`Add`/`Lt` built** — see the readable-form section
   above. Confirms `TONR`'s own real shape (identical to `TON`, plus a genuine new `R` reset port)
   and, mid-grounding, that `Add`/`Lt` were also needed to fully round-trip the same real networks
@@ -771,8 +806,9 @@ question, left open on purpose rather than guessed).
   grounded) round-trip `to-ir → to-xml → to-ir` byte-identical. All 8 of `PlantAutoControl`'s dependency
   FBs are now either fully instruction-level round-trippable (5, this item plus S1 item 18) or
   blocked only by the separate, already-known FC/FB parameter-interface gap (3: `TomraControlSystem`/
-  `MotorVSDSystem`/`AirStar`). Arithmetic beyond `Mul`/`Convert`/`Add` and comparisons beyond
-  `Eq`/`Ge`/`Lt` remain out of scope — none observed needing them.
+  `MotorVSDSystem`/`AirStar`). **`Sub`/`Div` and `Ne`/`Gt`/`Le` all subsequently resolved** — see the
+  readable-form section above; none of `Mul`/`Convert`/`Add`/`Sub`/`Div` or the full IEC comparison
+  family remain out of scope as of 2026-07-14.
 - **Resolved, 2026-07-12 (S1 item 20): FC/FB parameter-interface modeling
   (`Input`/`Output`/`InOut`/`Constant`) built** — see the file-shape section above for the full
   story (a genuinely new third member shape for `Constant`, and a `SetPoint`-optional variant of
@@ -803,9 +839,10 @@ question, left open on purpose rather than guessed).
   `Convert`'s own — not shown in the readable IR text). Live re-verified against the real
   `AirStar` export: the `Mul`-specific error is gone; the block now progresses to the same
   `LocalConstant` gap `MotorVSDSystem` also hits (unrelated, still open — see below).
-- **New, 2026-07-12: `Swap` (word byte-swap, presumably) confirmed real** — found live-verifying
-  S1 item 20 against `TomraControlSystem`. Not grounded at the XML-shape level yet — a new, real,
-  currently-unaddressed gap, not yet scoped into any item.
+- **Resolved, 2026-07-12 (S1 item 25): `Swap` (word byte-swap) built** — found live-verifying S1
+  item 20 against `TomraControlSystem`; see the readable-form section above for the full grounded shape
+  and live-verification result (`TomraControlSystem` fully round-trips, the eighth and final of
+  `PlantAutoControl`'s own 8 dependency FBs to do so).
 - **Resolved, 2026-07-12 (S1 item 21): `Access Scope="LocalConstant"` built.** Grounded against
   real `MotorVSDSystem`/`AirStar` (4 independent instances: `MinSpd` ×2, `PulseTimerMS` ×2) — a genuine
   fourth Access shape, neither `AccessNode`'s own `<Symbol>` shape nor `ConstantAccessNode`'s
@@ -873,9 +910,9 @@ question, left open on purpose rather than guessed).
   (purpose-built by the project owner in the reference project, no comparisons/Move/RCoil) ran
   the complete `export → to-ir → to-xml → import → compile → re-export → Normalizer` cycle and
   passed — see `tests/golden/README.md`.
-- `Ne`/`Le`/`Lt` Part Names confirmed real 2026-07-12 (found while sweeping for AND-merge — see
-  above). `Lt` built S1 item 19; `Ne` built S1 item 22 (see its own "Resolved" bullet below);
-  `Le`/`Gt` still unconfirmed real, not built.
+- `Ne`/`Le`/`Lt`/`Gt` Part Names confirmed real 2026-07-12 (found while sweeping for AND-merge —
+  see above). `Lt` built S1 item 19; `Ne` built S1 item 22; `Gt`/`Le` both confirmed real and built
+  2026-07-14 (`FC Scale`) — the full IEC comparison family, none left unconfirmed.
 - **Resolved, 2026-07-12 (S1 item 11):** a comparison composing with an OR-merge (as a branch, or
   feeding one) — real (`ControlDelays`' `O(41)`). OR-merge branches generalized to ordinary
   chains (reusing `GraphReducer.TraceChain` recursively), so a comparison appearing there needs

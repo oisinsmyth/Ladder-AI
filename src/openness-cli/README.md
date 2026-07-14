@@ -5,9 +5,9 @@ C# CLI — the only component that talks to TIA Portal (via Openness). Built in 
 ## Subcommands (contract per docs/05-architecture.md)
 
 ```
-openness-cli list          <project>                                           # enumerate blocks; F-/safety blocks flagged, never opened
-openness-cli export        <project> (--block <name> | --type <name>) [--device <name>] --out <path>   # block/UDT → SimaticML (refuses safety blocks)
-openness-cli import        <project> --group <device>/<path> [--type] <files...>   # SimaticML → TIA (--type imports into the Types composition, not Blocks)
+openness-cli list          <project> [--tagtables]                            # enumerate blocks (or tag tables, with --tagtables); F-/safety blocks flagged, never opened
+openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>   # block/UDT/tag table → SimaticML (refuses safety blocks)
+openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB

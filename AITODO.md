@@ -20,67 +20,53 @@ documented/committed, delete it from this file rather than letting it accumulate
 ## Project stage
 
 **S1 — Lossless round-trip, ACTIVE.** See `docs/notes/stage-gates.md` for full gate history.
-Working through the approved `PlantAutoControl` round-trip plan (Phase 0 grounding done, Phase 1
-in progress: get `PlantAutoControl`'s 8 dependency FBs importing+compiling standalone in
-`SampleProject`). Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md
-hard rule, gated by `docs/notes/stage-gates.md`.
+Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
+`docs/notes/stage-gates.md`.
 
 ## Recently closed (all committed)
 
+- **The full `PlantAutoControl` round-trip plan — all three phases done, 2026-07-14.** Phase 1 (all 8
+  dependency FBs compile clean), Phase 2 (all 26 real DB/tag-table roots sanitized/imported/
+  compiled clean), Phase 3 (`PlantAutoControl` itself imports, compiles with 0 errors, and round-trips
+  losslessly — `Normalizer.AreSemanticallyEquivalent` = true). Commits `e2fb301`, `a1f46d3`.
+- **Full-cycle verification pass across every block in `SampleProject`, 2026-07-14.** Ran the
+  complete export → `to-ir` → `to-xml` → import → compile → re-export cycle against all 49 blocks
+  already in the project, one at a time. 5 more real converter bugs found and fixed (Sanitizer/
+  `AccessNode` dotted-tag-name corruption, general Part/wire-endpoint document-order sort, IR-text
+  `IsBareParameter` loss). 47 of 48 blocks now round-trip completely (`Main`/OB1 deferred — see
+  below). Commit `60ac96f`.
 - PLC tag table support (`TAGTABLE`) — task #127, `b2fe156`.
 - `create-instance-db` command + `MotorStarter` compiles — task #122, `ef2ff1d`. 1st dependency FB.
 - Anonymous-struct converter fix + `EquipmentControlSystem` compiles — `9ec648f`. 2nd FB.
 - Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
   `e0fd86a`. 3rd FB.
 
-## Current task: Phase 1 — `PlantAutoControl`'s 8 dependency FBs (task #124, in_progress)
+## Current task: none in-flight
 
-**Status as of 2026-07-14, working at an explicitly usage-limit-conscious pace (project owner's
-own instruction).** 5 of 8 FBs proven; 2 blocked on real, well-scoped gaps; 1 not yet attempted.
-**Not yet committed** — the work below (`FilterUnitSystem`/`AirStar` success, `Gt` comparison,
-bare-parameter member shape, `MotorFwdRevSystem`/`MotorVSDSystem` UDTs) needs a commit before anything else.
+No uncommitted work as of 2026-07-14 (post full-cycle-verification-pass commit `60ac96f`). The
+`PlantAutoControl` round-trip plan (`quirky-gathering-ripple.md`) is fully closed.
 
-| FB | Status |
-|---|---|
-| `MotorStarter` (`MotorDOL`) | ✅ compiles clean (committed) |
-| `EquipmentControlSystem` (`EquipmentControlSystem`) | ✅ compiles clean (committed) |
-| `ShredderControlSystem` (`ShredderControlSystem`) | ✅ compiles clean bar `Clock_0.5Hz` (committed; hardware-config tag, deliberately left open) |
-| `FilterUnitSystem` (`FilterUnitSystem`) | ✅ compiles clean, first try — self-contained, reuses `TypeDOL`/`MotorIOSet` |
-| `AirStarSystem` (`AirStar`) | ✅ compiles clean — needed 5 more tag-table entries + reused `PlantControl.Test` |
-| `MotorFwdRevSystem` (`MotorFwdRevSystem`) | ❌ blocked: `CycleDelayReset`, a standalone named `TON` instance (not a user-FB instance) — `create-instance-db --instance-of TON` fails (`"Block 'TON' does not exist"`, only resolves user FBs). Needs a different approach, not investigated further. |
-| `MotorVSDSystem` (`MotorVSDSystem`) | ❌ blocked: calls `FC Scale`, which itself uses `Sub` (subtraction) — unsupported arithmetic instruction, comparable scope to the `Add`/`Mul` addition (S1 item 18). Not started. |
-| `TomraControlSystem` (`TomraControlSystem`) | ⬜ not yet attempted |
+**Deliberately deferred, not a bug to chase:**
+- `Main` (OB1) doesn't round-trip through the full cycle — each fix reveals another narrow
+  OB-specific Interface-section quirk (`SecondaryType`/`Informative` fixed; `Output` section
+  validity still open). `Main` is TIA's own auto-generated template block, not restricted content,
+  and OB support was never a stated project goal. Deferred per the project owner's own call.
+- A `tests/golden/Normalizer` gap: TIA can reassign a Part's own `UId` on import/compile (not just
+  Wire/Access, as previously documented) — confirmed benign (matching Part count/kind, 0 compile
+  errors) on 7 of 47 full-cycle blocks, but `Normalizer.AreSemanticallyEquivalent` reports a false
+  "not equivalent" for them. Fixing this properly needs graph-based Part identity matching, not a
+  simple content-key map the way `Access` already has — flagged as a real, well-scoped follow-on,
+  not attempted yet.
 
-**Two new converter capabilities landed getting `MotorVSDSystem` this far** (both real, both tested,
-both needed regardless of the `Sub` blocker — not wasted work):
-- **`Gt` (greater-than) comparison** — confirmed real via `FC Scale`, identical shape to the
-  already-supported `Eq`/`Ge`/`Lt`/`Ne` family. `FlgNetParser`/`GraphReducer` updated, 4 new tests.
-- **A fourth, minimal Input/Output/InOut member shape** — `FC Scale`'s own params have no
-  `Remanence` and no `<AttributeList>` at all (previously a hard error). New `DbMember.
-  IsBareParameter` flag. 1 new test.
-- **272/272 converter tests pass** (up from 267 at the last commit). `openness-cli` unchanged
-  (101/101, not re-run this round but no `openness-cli` code touched).
+**Possible next work** (no explicit instruction yet — ask before starting):
+- Build the `Normalizer` Part-identity fix above.
+- Grow the committed reference-project corpus to actually exercise the ~15 instruction-level
+  constructs (`Mul`/`Convert`/`Sub`/`Div`/comparisons beyond `Eq`/`Ge`/`CALL`/`SWAP`/`SCoil`/
+  `RCoil`/`WAND`/`Not`/`TONR`/`TOF`) that currently have no permanent, committed, live-TIA-verified
+  regression coverage — see `docs/audit/2026-07-14-code-quality-and-docs-audit.md` for the full
+  finding.
+- S2 (read and explain) — the next roadmap stage once S1's gate review is formally signed off.
 
-Full story for everything above: `docs/notes/stage-gates.md`, "Phase 1 continued: `FilterUnitSystem`/
-`AirStar` compile clean, `Gt` + a fourth Input/Output shape added, two FBs blocked on real gaps".
-
-**Sanitization maps built and kept** (`sanitization/`, gitignored): `FilterUnitSystem`, `AirStar`,
-`Control` (real DB, → `PlantControl`), `MotorFwdRevSystem`, `MotorFwdRevIOSet1`, `MotorVSDSystem`, `TypeVSD`.
-Reusable directly if/when `MotorFwdRevSystem`/`MotorVSDSystem` are picked back up.
-
-**Scratch state**: `$CLAUDE_JOB_DIR/tmp/phase1_fbs/` holds sanitized/non-identifying artifacts only
-— raw `JOB9002` exports (`*.fresh.xml`/`.fresh.ir` for each FB/UDT/DB, `Scale.fresh.xml`) should be
-deleted once each item is fully closed out; `.sanitized.*` siblings and the combined
-`MinimalTagTable54.raw.*` are safe to keep.
-
-**Next steps, in order**:
-1. Commit the current uncommitted work (see `git status` — converter fixes for `Gt`/bare-parameter,
-   plus docs).
-2. Either resume `MotorFwdRevSystem`/`MotorVSDSystem` (both need genuinely new capability — a
-   system-instruction single-instance-DB creation path, and `Sub` arithmetic support respectively)
-   or move to `TomraControlSystem` (not yet attempted, unknown scope) — project owner's call given
-   remaining budget.
-3. Once all 8 FBs (or as many as feasible) are proven: Phase 2 (bulk DB/tag-table closure for
-   `PlantAutoControl`'s other ~26 dependency roots), Phase 3 (`PlantAutoControl` itself — its own 20
-   call-site instance DBs, re-import, compile, re-export, `Normalizer` equivalence proof — the
-   actual Layer 1 assertion this whole effort exists to establish).
+**Sanitization maps built and kept** (`sanitization/`, gitignored): all 8 dependency FBs' own maps,
+plus `PlantAutoControl.map.json` itself and per-instance maps for all 26 DB/tag-table roots. Reusable
+directly for any follow-on work against the same real project.
