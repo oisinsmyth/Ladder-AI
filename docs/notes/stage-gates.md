@@ -3445,3 +3445,65 @@ as-is — no changes requested, the doc stands exactly as originally drafted.
 S3 (comment generation) is now open. No work started yet.
 
 All three smaller flagged gaps from the earlier "what's left before S1" review are now closed.
+
+## S3 first proof: a real title written through the IR layer, end to end (2026-07-14)
+
+Planned properly before touching anything (two Explore agents + a Plan-agent review, each finding
+verified directly rather than trusted secondhand): both network- and block-level Title/Comment were
+already fully supported by the write path (`IrParser`/`IrSerializer`/`BlockSourceWriter` → real
+SimaticML `<MultilingualText>` emission), but two real gaps existed — no guard against embedded
+newlines in Title/Comment text, and no test anywhere for the actual "edit an existing title,
+verify the new value is what gets written" scenario (every prior test was parse, fresh
+construction, or unchanged-round-trip). Fixed both first: `IrSerializer.EscapeString` now rejects
+embedded `\n`/`\r` with a clear error (`docs/04-design-philosophy.md`'s "fail loudly and early");
+4 new tests added to `NetworkTitleCommentTests.cs` (network- and block-level edit round-trips, plus
+the newline-guard itself). Also fixed a stale comment in `Normalizer.IsVolatile` (`tests/golden/`)
+that justified skipping Title content on "always empty" grounds — an assumption S1 items 16/17
+already disproved; the skip behavior itself was still correct, just for a different reason than
+stated. 485 tests green (370 converter + 14 golden + 101 openness-cli) before touching TIA.
+
+Research also surfaced that the exact live-TIA mechanics needed (export, edit a Title, re-import
+with `Override`, clear the known `IsConsistent` refusal via `compile`, re-export, confirm the new
+value landed) had already been proven live the day before, on this same block, verifying
+`openness-cli`'s own import-overwrite behavior — narrowing what this proof actually needed to
+verify to one specific, previously-untested link: editing through the *IR layer* itself.
+
+Target, confirmed with the project owner ahead of time: `TimerSample` (`ir/reference/`) — the one
+reference-corpus block with zero real-site lineage (built directly in TIA, not sanitized from
+production logic), lowest possible risk for a first write-path proof.
+
+**Hit a real, pre-existing bug immediately, unrelated to the edit itself**: `to-xml` on the
+committed `TimerSample.ir` — original file, before any edit — threw `Malformed sidecar constant
+line`. Isolated properly (reran the plain `git show HEAD:...` original before assuming anything):
+confirmed the same failure on the untouched file, so not a regression from this session's own
+Phase 0 changes. Root cause: the exact same "stale sidecar format" class of bug already found and
+fixed for `NodeStatusAlarms`/`PerimeterSafetyAlarms` earlier this session — `TimerSample.ir` simply
+wasn't swept up in that pass. The sidecar's `constant` line grammar gained a mandatory type suffix
+and timer sidecars gained a `kind` field at some point after this file was last generated; the
+committed text predates both. Fixed the same proven way: exported `TimerSample` fresh from
+`SampleProject`, regenerated the `.ir`, confirmed zero semantic drift against the committed XML
+(`Normalizer.AreSemanticallyEquivalent` = true, checked directly) before applying the title edit to
+that current-format version instead of the stale one.
+
+From there: title written into the IR for the block's 3 non-empty networks (network 4 is genuinely
+empty, no Parts — left untitled, nothing to describe) → `to-xml` → `import` (`Override`) → the
+expected `IsConsistent` refusal → cleared via `compile --block TimerSample`, 0 errors (one
+unrelated device-level hardware-config warning, the same benign class already documented) →
+re-exported → confirmed the new titles are what's actually in the re-exported IR, not just what
+was written locally → `Normalizer` confirmed the logic itself is untouched, only Title differs →
+full 14-block `RunAll` still passes.
+
+**Presented for review — the project owner caught a real, valid gap before approving**: the
+proof only wrote *network*-level titles; the block itself (`FC TimerSample`) was left with no
+title at all, despite block-level Title being the same already-proven write path. Not a nitpick —
+directly relevant to what S3 is actually supposed to produce. Fixed properly rather than deferred:
+added `TITLE "Chained On-Delay Timer Sequence"` to the block header, reran the full live cycle a
+second time (import → clear `IsConsistent` → compile clean → re-export → confirm both block- and
+network-level titles present → `Normalizer` confirms logic still untouched → full `RunAll` still
+passes, all 14 blocks). Committed corpus pair (`ir/reference/TimerSample.ir`,
+`simatic-ml/reference/TimerSample.xml`) reflects the block-titled version, not the intermediate
+network-only one.
+
+S3's own exit criterion — an undocumented block gets useful comments end-to-end, generated,
+imported, compiled, human-approved — is met by this one block. Richer, non-synthetic candidates
+(`PerimeterSafetyAlarms`, `NodeStatusAlarms`) are the natural next targets, not part of this proof.

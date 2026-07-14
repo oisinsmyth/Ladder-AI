@@ -2,16 +2,22 @@ BLOCK FC TimerSample
 ROOTID 0
 NUMBER 1
 LANGUAGE LAD
+TITLE "Chained On-Delay Timer Sequence"
 
-NETWORK 1 ""
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "Timer 0: Fixed 100ms Preset"
   TON(DB_Timers.SampleTimer0, IN := TempControlBools.run0, PT := T#100MS)
   COIL TempControlBools.out0 := DB_Timers.SampleTimer0.Q
 
-NETWORK 2 ""
+NETWORK 2 "Timer 1: Gated by Run0 and Run1, Tag-Fed Preset"
   TON(DB_Timers.SampleTimer1, IN := TempControlBools.run0 AND TempControlBools.run1, PT := TempControlDInt.length)
   COIL TempControlBools.out1 := DB_Timers.SampleTimer1.Q
 
-NETWORK 3 ""
+NETWORK 3 "Timer 2: Chained After Timer 0 and Timer 1 Complete"
   TON(DB_Timers.SampleTimer2, IN := DB_Timers.SampleTimer0.Q AND DB_Timers.SampleTimer1.Q AND TempControlBools.run2, PT := TempControlDInt.length)
   COIL TempControlBools.out2 := DB_Timers.SampleTimer2.Q
 
@@ -22,15 +28,16 @@ NETWORK 1
   compileunit = 3
   access TempControlBools.run0 = 21 GlobalVariable
   access TempControlBools.out0 = 22 GlobalVariable
-  constant T#100MS = 23
+  constant T#100MS = 23 none
   timer 0
     tonpartuid = 25
+    kind = ton
     version = 1.0
     timetype = Time
     instanceuid = 26
     instancescope = GlobalVariable
     instancepath = DB_Timers.SampleTimer0
-    rail = 35
+    rail = 33
     step 0 contact
       uid = 24
       operand = 21
@@ -44,10 +51,10 @@ NETWORK 1
     step 0 timeroutput
       tonpartuid = 25
       port = Q
-      out = 33
+      out = 34
     coil = 27
     coil operand = 22
-    coil operandwire = 34
+    coil operandwire = 35
 NETWORK 2
   compileunit = 8
   access TempControlBools.run1 = 21 GlobalVariable
@@ -56,12 +63,13 @@ NETWORK 2
   access TempControlBools.out1 = 24 GlobalVariable
   timer 0
     tonpartuid = 27
+    kind = ton
     version = 1.0
     timetype = Time
     instanceuid = 28
     instancescope = GlobalVariable
     instancepath = DB_Timers.SampleTimer1
-    rail = 39
+    rail = 37
     step 0 contact
       uid = 25
       operand = 22
@@ -81,10 +89,10 @@ NETWORK 2
     step 0 timeroutput
       tonpartuid = 27
       port = Q
-      out = 37
+      out = 38
     coil = 29
     coil operand = 24
-    coil operandwire = 38
+    coil operandwire = 39
 NETWORK 3
   compileunit = D
   access TempControlBools.run2 = 21 GlobalVariable
@@ -94,12 +102,13 @@ NETWORK 3
   access TempControlBools.out2 = 25 GlobalVariable
   timer 0
     tonpartuid = 29
+    kind = ton
     version = 1.0
     timetype = Time
     instanceuid = 30
     instancescope = GlobalVariable
     instancepath = DB_Timers.SampleTimer2
-    rail = 43
+    rail = 41
     step 0 contact
       uid = 26
       operand = 23
@@ -125,9 +134,9 @@ NETWORK 3
     step 0 timeroutput
       tonpartuid = 29
       port = Q
-      out = 41
+      out = 42
     coil = 31
     coil operand = 25
-    coil operandwire = 42
+    coil operandwire = 43
 NETWORK 4
   compileunit = 12

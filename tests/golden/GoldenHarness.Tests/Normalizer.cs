@@ -353,9 +353,17 @@ public static class Normalizer
 
         // "Title" isn't its own element name — it's a MultilingualText distinguished only by its
         // own CompositionName attribute (same shape as the "Comment" one right next to it), so it
-        // can't go in VolatileElementNames the way a real element name can. Confirmed real,
-        // 2026-07-10, always empty (BlockSourceParser.RequireEmptyTitle hard-errors otherwise —
-        // safe to skip here because a non-empty one never reaches this point).
+        // can't go in VolatileElementNames the way a real element name can.
+        //
+        // Deliberately skipped regardless of content — title is documentation, not logic, so a
+        // changed title shouldn't make AreSemanticallyEquivalent report a real difference. This
+        // comment originally (2026-07-10) justified the skip on "Title is always empty" grounds;
+        // that assumption was disproven 2026-07-12 (S1 items 16/17 — MotorVSDSystem/AirStar both carry
+        // a real, non-empty Title, and the format now fully supports writing one, S3's own
+        // write path). The skip itself is still correct, just for the reason stated above, not
+        // the original one. NOTE the asymmetry: "Comment" (structurally identical, right next to
+        // this) is NOT given the same treatment below — real Comment content genuinely is a
+        // semantic difference this check is meant to catch.
         if (child.Name.LocalName == "MultilingualText" && (string?)child.Attribute("CompositionName") == "Title")
         {
             return true;

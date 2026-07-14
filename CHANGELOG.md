@@ -10,6 +10,28 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**S3 first proof: write a real title through the IR layer, end to end (`TimerSample`)**
+
+- Two small converter fixes first: `IrSerializer`/`IrParser` now reject embedded `\n`/`\r` in
+  Title/Comment text with a clear error instead of risking a corrupted `.ir` file; 4 new tests in
+  `NetworkTitleCommentTests.cs` cover the previously-untested "edit an existing title" scenario at
+  both network and block level. Also fixed a stale comment in `Normalizer.IsVolatile` (the
+  "Title is always empty" justification predated S1 items 16/17, which disproved it — the
+  skip-Title behavior itself was already correct, just documented for the wrong reason).
+- Live proof against `ir/reference/TimerSample.ir` (zero real-site lineage, lowest-risk
+  target): hit a real pre-existing bug immediately — the committed file's sidecar predates a later
+  mandatory-type-suffix format change, same class of staleness already fixed for
+  `NodeStatusAlarms`/`PerimeterSafetyAlarms` earlier this session. Fixed by regenerating from a
+  fresh live export (confirmed zero semantic drift first) before applying the title edit.
+- Full cycle proven twice: once for network-level titles, then again after the project owner
+  caught that the block itself (`FC TimerSample`) still had no title — block-level Title uses the
+  same write path but was missed on the first pass. Both rounds: edit IR → `to-xml` → `import`
+  (`Override`) → clear the known `IsConsistent` refusal via `compile` → re-export → confirm the new
+  text is genuinely present → `Normalizer.AreSemanticallyEquivalent` confirms logic-only change →
+  full 14-block `RunAll` passes. Committed corpus pair reflects the block-titled final version.
+- S3's exit criterion (an undocumented block gets useful comments end-to-end, human-approved) met.
+  Full story: `docs/notes/stage-gates.md`.
+
 **S2 gate reviewed and signed off; move to S3 (comment generation)**
 
 - Exit criterion (10 sampled networks judged accurate, no hallucinated tags/behavior) cleared

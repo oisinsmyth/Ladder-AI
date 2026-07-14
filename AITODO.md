@@ -37,24 +37,24 @@ end-to-end — generated, imported, compiled, human-approved.
 Do not perform S4+ capabilities (convention review/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: S3 kickoff — no work started yet
+## Current task: first proof done (`TimerSample`) — picking the next block
 
-Nothing in-flight. One real decision before writing anything, not yet made:
+S3's first write-path proof landed 2026-07-14: `ir/reference/TimerSample.ir` (block + all 3
+non-empty networks) went from untitled to titled, through the real IR-edit → `to-xml` → `import` →
+`compile` → re-export → review cycle, confirmed logic-unchanged (`Normalizer`) and confirmed
+against a full 14-block `RunAll`. Full story in `docs/notes/stage-gates.md`'s "S3 first proof"
+section, including a real pre-existing stale-sidecar-format bug hit and fixed along the way, and a
+real gap the project owner caught before approving (block-level title was missed on the first
+pass — network titles alone aren't the whole ask). Two small converter fixes landed alongside it:
+an embedded-newline guard in `IrSerializer`/`IrParser`, and a stale-comment fix in
+`Normalizer.IsVolatile`.
 
-- **Which project S3's first proof runs against.** Two candidates, genuinely different in kind:
-  `SampleProject` (the purpose-built, Green-tier reference project used throughout S1 — an
-  invented, undocumented block there is a completely safe target, no data-boundary question at
-  all) vs. `JOB9002`'s own scratch copy (itself already a scratch copy of the private engineering project,
-  per `docs/13-data-boundary.md` — but writing *into* it, even just a comment, is a materially
-  different action than the read-only export/explain work S2 did there, and hasn't been explicitly
-  approved). Leaning toward `SampleProject` for the *first* proof specifically because it cleanly
-  separates "does the write path work at all" from any data-boundary question — but this is worth
-  confirming with the project owner, not assuming, especially since real commented blocks are
-  presumably more useful to the engineer than an invented one.
-- Once that's settled: pick one genuinely undocumented block/network in the chosen project, write
-  a title/comment via IR, `to-xml`, `import`, `compile` — the standard S1-proven pipeline, just
-  writing instead of only reading for the first time — and present the diff against
-  `docs/11-review-workflow.md`'s own checklist for the engineer's approval.
+Not yet decided: which block next. `PerimeterSafetyAlarms` (richest untitled logic — OR-merge of 3
+negated contacts) and `NodeStatusAlarms` (straightforward but non-trivial 15-tap bit mapping) are
+the two remaining genuinely-untitled reference-corpus candidates (see the S2-era survey still
+useful here) — both would need a network *and* block title/comment this time, not just a title,
+now that the block-level gap is known. Worth confirming with the project owner before starting,
+same as the first pick.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

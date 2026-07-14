@@ -1994,6 +1994,13 @@ public static partial class IrParser
         raw = raw.Trim();
         if (raw.Length < 2 || raw[0] != '"' || raw[^1] != '"')
         {
+            // Also the natural failure mode for a quoted string that was written (or hand-edited)
+            // with an embedded raw newline: the document is already split on '\n' before this
+            // method ever runs (see the line-splitting at the top of Parse), so the closing '"'
+            // would land on a different physical line than this one, tripping this same check —
+            // no separate embedded-newline check is needed here, this one already covers it.
+            // IrSerializer.EscapeString is the actual prevention point (rejects it before a
+            // corrupt file can be written in the first place).
             throw new IrFormatException($"Expected a quoted string, got: '{raw}'");
         }
 

@@ -229,4 +229,75 @@ public class NetworkTitleCommentTests
 
         Assert.Equal("VSD Motor", reparsed.Title);
     }
+
+    // The scenario S3 (comment generation) actually needs, and which none of the tests above
+    // cover: every existing test is pure parse, fresh construction, or an unchanged round-trip.
+    // These start from a parsed *existing* value and change it — proving the write path handles
+    // an edit, not just preservation.
+
+    [Fact]
+    public void SerializeNetworkOnly_TitleChangedFromExisting_NewTitleWinsOldTitleGone()
+    {
+        var originalText = "NETWORK 1 \"Old Title\"\n  COIL Output1 := Sensor1\n";
+        var parsed = IrParser.ParseNetworkOnly(originalText);
+        Assert.Equal("Old Title", parsed.Title);
+
+        var edited = parsed with { Title = "New Title" };
+        var newText = IrSerializer.SerializeNetworkOnly(edited);
+
+        Assert.Contains("\"New Title\"", newText);
+        Assert.DoesNotContain("Old Title", newText);
+
+        var reparsed = IrParser.ParseNetworkOnly(newText);
+        Assert.Equal("New Title", reparsed.Title);
+    }
+
+    [Fact]
+    public void SerializeBlock_TitleChangedFromExisting_NewTitleWinsOldTitleGone()
+    {
+        var block = new IrBlock("0", "FB", "VSDMotor", 5, "LAD", null, new[]
+        {
+            new IrNetwork(1, "Network one", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        }, Title: "Old Block Title");
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        var originalText = IrSerializer.SerializeBlock(block, new[] { sidecar });
+        var (parsed, sidecars) = IrParser.ParseBlock(originalText);
+        Assert.Equal("Old Block Title", parsed.Title);
+
+        var edited = parsed with { Title = "New Block Title" };
+        var newText = IrSerializer.SerializeBlock(edited, sidecars);
+
+        Assert.Contains("TITLE \"New Block Title\"", newText);
+        Assert.DoesNotContain("Old Block Title", newText);
+
+        var (reparsed, _) = IrParser.ParseBlock(newText);
+        Assert.Equal("New Block Title", reparsed.Title);
+    }
+
+    // Embedded-newline guard (S3 pre-flight): nothing escapes \n/\r today, and the whole .ir
+    // document is split on \n before any quoted-string parsing runs, so a raw newline in
+    // AI-generated Title/Comment text would corrupt the format rather than round-trip. Serializer
+    // is the actual prevention point — it must fail loudly rather than emit something unparseable.
+
+    [Fact]
+    public void SerializeNetworkOnly_TitleContainsNewline_ThrowsClearError()
+    {
+        var network = new IrNetwork(1, "Bad\nTitle", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
+
+        var ex = Assert.Throws<IrFormatException>(() => IrSerializer.SerializeNetworkOnly(network));
+        Assert.Contains("newline", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SerializeBlock_CommentContainsCarriageReturn_ThrowsClearError()
+    {
+        var block = new IrBlock("0", "FB", "VSDMotor", 5, "LAD", "Bad\rComment", new[]
+        {
+            new IrNetwork(1, "Network one", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+
+        var ex = Assert.Throws<IrFormatException>(() => IrSerializer.SerializeBlock(block, new[] { sidecar }));
+        Assert.Contains("newline", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
