@@ -19,40 +19,24 @@ documented/committed, delete it from this file rather than letting it accumulate
 
 ## Project stage
 
-**S3 — Comment generation, ACTIVE.** S2 (read and explain) formally gate-reviewed and signed off
-2026-07-14 — see `docs/notes/stage-gates.md` for the full S2 history (4 real JOB9002 blocks explained
-and confirmed accurate, 51+ networks sampled well past the 10-network exit bar; explanation-quality
-checklist built and committed, `docs/14-s2-explanation-checklist.md`). This doc is wiped clean of
-S2-era detail per the same pattern as the S1→S2 transition — that history is permanently preserved
-in `docs/notes/stage-gates.md`, not lost.
+**S3 — Comment generation, DONE — gate reviewed and signed off by the project owner, 2026-07-14.**
+Full history in `docs/notes/stage-gates.md`'s status table and its "S3 first/second/third proof"
+sections: exit criterion met three times over (`TimerSample`, `PerimeterSafetyAlarms` — Green-tier
+reference corpus; `PlantAutoControl` — real JOB9002 content at full 20-network scale), the JOB9002
+data-boundary approval explicitly extended to cover write activity first, two real converter gaps
+closed (embedded-newline guard; the previously-untested "edit an existing title" scenario), one
+real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format), and the
+other 13 committed reference-corpus files swept afterward to confirm that bug wasn't a wider gap.
 
-Per `docs/02-roadmap.md`: S3 is the first *write* path — comments are the lowest-risk change
-because they cannot alter logic, and this is where the compile gate, import path, and
-`docs/11-review-workflow.md` (explicitly agreed by the project owner, 2026-07-14, unchanged from
-its original draft) actually get exercised for the first time. Deliverables: AI writes network
-titles/comments and block comments into the IR; the converter carries them into SimaticML;
-import+compile verified automatically. Exit: an undocumented block gets useful comments
-end-to-end — generated, imported, compiled, human-approved.
-
-Do not perform S4+ capabilities (convention review/generate/modify) — CLAUDE.md hard rule, gated by
+**S4 has not been opened.** Its own entry blocker (`06-lad-conventions.md` populated) was already
+cleared earlier in the project, so nothing stands in the way whenever the project owner wants to
+start it — but that's a separate decision, not made yet. Do not perform S4+ capabilities
+(convention review/generate/modify) until it's explicitly opened — `CLAUDE.md` hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: three proofs done — Green-tier corpus and real JOB9002 content both proven
+## Current task: none — between phases
 
-S3's write path is now proven at both scales. `TimerSample` (Green-tier, title only, both levels)
-and `PerimeterSafetyAlarms` (Green-tier, title + comment, both levels) proved the mechanism against
-the reference corpus. `PlantAutoControl` (real JOB9002 content, title + comment, block level *and* all 20
-networks, including replacing the original engineer's own titles where asked) proved it at real
-production scale — the JOB9002 data-boundary approval was explicitly extended to cover S3 write
-activity first (`docs/13-data-boundary.md`, dated entry), not assumed. Full story, including two
-real spelling errors found and fixed along the way, in `docs/notes/stage-gates.md`'s "S3 third
-proof" section. All three: live-verified end-to-end (edit IR → `to-xml` → `import` → clear the
-known `IsConsistent` refusal via `compile` → re-export → confirm the new content is genuinely
-present → confirm nothing structural changed via `Normalizer`), reviewed and approved before
-committing.
-
-Nothing in-flight. `NodeStatusAlarms` remains the one still-untitled reference-corpus block if
-another Green-tier proof is ever wanted; no further real-project targets requested yet.
+Nothing in-flight. S3 is closed; S4 is not yet open.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

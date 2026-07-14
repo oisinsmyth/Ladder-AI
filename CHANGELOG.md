@@ -10,6 +10,15 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**S3 gate reviewed and signed off**
+
+- Exit criterion (an undocumented block gets useful comments end-to-end, human-approved) met three
+  times over: `TimerSample` and `PerimeterSafetyAlarms` against the Green-tier reference corpus,
+  `PlantAutoControl` against real JOB9002 content at full 20-network scale. Swept all 13 other committed
+  reference-corpus `.ir` files to confirm the stale-sidecar bug found in `TimerSample` wasn't a
+  wider gap - it wasn't, all clean. S4 not opened yet (separate decision); its own entry blocker
+  was already cleared earlier in the project. Full history: `docs/notes/stage-gates.md`.
+
 **S3 third proof: real JOB9002 content, block + all 20 networks (`PlantAutoControl`)**
 
 - Extended the JOB9002 data-boundary approval to cover S3 write activity first, recorded as its own
