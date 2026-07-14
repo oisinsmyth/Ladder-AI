@@ -74,6 +74,13 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
   - JOB9002 is a design-time aid only — it does not become the committed `tests/golden/` corpus;
     that still needs a purpose-built Green project (`docs/notes/stage-gates.md`, S1 overall plan
     item 8).
+  - **2026-07-14, S2 kickoff — extended to explanation work.** Project owner's own explicit
+    instruction, mid-session: read and explain real JOB9002 blocks directly (not the sanitized
+    reference-corpus equivalents), since sanitization strips exactly the specific real-world
+    context — real tag names, comments, titles — that makes an explanation useful, which is the
+    whole point of S2. Explanations happen in conversation, not committed to any file — the
+    existing genericization rule above (invented names in *committed* content) still applies in
+    full if any example from this work ever gets written into a doc.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's
