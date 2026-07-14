@@ -3171,9 +3171,30 @@ confirm none held real unsaved work) was judged the wrong call rather than a sho
 until an `import`/`compile` actually runs clean. Cleaned up (temp verification `.cs` file deleted)
 rather than left half-finished.
 
-**Not yet started tonight**: Tier 4 (`Modbus_Master`/`Modbus_Comm_Load` — re-grounded precisely,
-see `AITODO.md`; needs three new pieces of general infrastructure, not just port grounding — a
-chain-fed `REQ` operand, multi-output-tag productions, and an open/unconnected operand variant),
-Tier 6 (`Jump`/implied `Label`, `FillBlockI`, `WAIT` — novel categories with no existing analog,
-lowest priority). See `AITODO.md` for current state, including `MOVE_BLK_VARIANT`'s still-pending
-live verification.
+**Tier 6 also attempted the same night — `WAIT`/`FillBlockI` built, `Jump` deliberately not.**
+Re-grounded all three precisely (`grep`, not visual re-reading, throughout). `WAIT` (`FC
+VSDDataSequence`) and `FillBlockI` (`FC ModbusComs`) both turned out genuinely simple — mirror-image
+Part shapes (`WAIT`: bare `Version`, no `DisabledENO`; `FillBlockI`: `DisabledENO="true"`, no
+`Version`) — built the same way as every tier above, 13 more tests (344 converter tests total).
+`WAIT` is the first production modeled with no destination tag at all (a pure delay, not a value
+producer); `FillBlockI` is Move-shaped plus a `count` input. **Live verification is blocked** — by
+the time these were ready, TIA Portal had stopped responding to *any* command at all, including
+the lightest possible one (`sanity-check`, no scratch-project write involved) — confirming this
+isn't specific to importing these two instructions, a genuine external outage with no one awake to
+check for a stuck approval dialog. Left honestly unverified rather than retried blindly (each retry
+risks piling up more stale Portal processes, the tool's own explicit concern).
+
+`Jump` turned out to be the biggest finding of the night, and was **deliberately not built**:
+grounding it (`FB VSDUpdateComs`) found its `label` port references a brand new `Access
+Scope="Label"` node shape, and the actual jump target is a **network-level `<Labels>
+<LabelDeclaration>` element** — a sibling of `<Parts>`/`<Wires>` — confirmed real in a *different*
+`CompileUnit` than the `Jump` Part itself. `JMP` is genuine cross-network control flow, something
+no production this converter has ever needed to model (every one so far is an independent,
+network-local statement). This is a real IR-format design question, not a routine build — flagged
+for the project owner's own call rather than decided unilaterally. Full detail in `ir/SPEC.md`.
+
+**Not yet started**: Tier 4 (`Modbus_Master`/`Modbus_Comm_Load` — re-grounded precisely, see
+`AITODO.md`; needs three new pieces of general infrastructure, not just port grounding — a
+chain-fed `REQ` operand, multi-output-tag productions, and an open/unconnected operand variant).
+See `AITODO.md` for current state, including both `MOVE_BLK_VARIANT`'s and `WAIT`/`FillBlockI`'s
+still-pending live verification, and the `Jump` design question awaiting the project owner.

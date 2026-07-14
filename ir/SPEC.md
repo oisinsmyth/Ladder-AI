@@ -605,6 +605,38 @@ NETWORK 8 "Run enable delay"
   first-connect Portal timeout, which needs a human to check for (and accept) an approval dialog
   inside TIA Portal — not resolvable without that access. Not presented as "live-verified" or
   "closed" until that step actually runs clean.
+- **`WAIT`/`FillBlockI`, built 2026-07-14 (Phase 2 Tier 6) — plus `Jump`, deliberately NOT built.**
+  All three re-grounded precisely (every attribute checked directly, not visually re-read).
+  - **`WAIT`** (`FC VSDDataSequence`): `Version="1.0"`, no `DisabledENO` (same bare-Version-only
+    shape as `MOVE_BLK_VARIANT` — generalized into one shared `ParseBareVersionOnlyShape` helper
+    once a second real instruction confirmed it). Two ports only: `en` and `WT` (wait time, a
+    literal `Int` in the one real instance). **The first instruction this converter models with no
+    destination tag at all** — a pure side-effecting delay. Readable form has no trailing
+    `=> dest`: `WAIT(EN := <expr-or-ENO>, WT := <expr>)`.
+  - **`FillBlockI`** (`FC ModbusComs`): `DisabledENO="true"`, no `Version` — the mirror-image Part
+    shape of `WAIT`. Structurally close to `Move` (one destination tag via `out`) plus a second
+    tag-or-literal input, `count` — the fill value itself is `in`. Readable form:
+    `FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>`.
+  - 13 new converter tests (`WaitTests.cs`/`FillBlockITests.cs`), 344 total. **Unit-tested only —
+    live TIA verification blocked**: by the time these were built, TIA Portal itself had stopped
+    responding to *any* command, including the lightest possible one (`sanity-check`) — not a
+    code-specific issue, a genuine external outage with no one awake to check for a stuck approval
+    dialog. Left unverified rather than rushed, same as `MOVE_BLK_VARIANT` above.
+  - **`Jump` (`Part Name="Jump"`) was investigated but deliberately NOT built.** Grounding it
+    (`FB VSDUpdateComs`) surfaced something much bigger than a routine new instruction: `Jump`'s
+    own `label` port references a **new `Access Scope="Label"`** node (`<Access Scope="Label">
+    <Label Name="X" /></Access>` — a completely different inner shape from every other Access,
+    which always has a `<Symbol>` child), and the actual jump *target* is a **network-level
+    `<Labels><LabelDeclaration UId="N"><Label Name="X" /></LabelDeclaration></Labels>` element** —
+    a sibling of `<Parts>`/`<Wires>` inside `<FlgNet>`, confirmed real in a *different* `CompileUnit*
+    (i.e. a different network) than the one containing the `Jump` Part itself. In other words:
+    `JMP` is genuine cross-network control flow (jump to a different network within the block),
+    not a same-network construct — something no production this converter models has ever needed
+    to represent (every existing production is an independent, network-local imperative
+    statement). This is a real IR-format-level design question — how should the readable form
+    represent "network N can transfer control to network M" — not a routine grounding-then-build
+    task, and not something to decide unilaterally. Flagged for the project owner's own call
+    before any code gets written; see `AITODO.md`.
 
 ### Explicit form (fallback, per-network)
 

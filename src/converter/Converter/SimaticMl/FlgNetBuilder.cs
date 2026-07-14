@@ -116,6 +116,18 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.MoveBlkVariants.Count} MOVE_BLK_VARIANT(s) but the sidecar records {sidecar.MoveBlkVariants.Count}.");
         }
 
+        if (network.Waits.Count != sidecar.Waits.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.Waits.Count} WAIT(s) but the sidecar records {sidecar.Waits.Count}.");
+        }
+
+        if (network.FillBlockIs.Count != sidecar.FillBlockIs.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.FillBlockIs.Count} FillBlockI(s) but the sidecar records {sidecar.FillBlockIs.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -246,6 +258,16 @@ public static class FlgNetBuilder
         for (var mb = 0; mb < network.MoveBlkVariants.Count; mb++)
         {
             BuildMoveBlkVariant(sidecar.MoveBlkVariants[mb], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var w = 0; w < network.Waits.Count; w++)
+        {
+            BuildWait(sidecar.Waits[w], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var fb = 0; fb < network.FillBlockIs.Count; fb++)
+        {
+            BuildFillBlockI(sidecar.FillBlockIs[fb], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         // Catch-all: any Timer never reached via a TimerOutputStep above (read only via an
@@ -815,6 +837,43 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MoveBlkVariantPartUId, "DEST"));
+    }
+
+    // Builds a WAIT Part, its `en` wiring, and its one named-port input (`WT`, uppercase) — no
+    // destination wiring at all, see WaitStatementSidecar's own doc comment.
+    private static void BuildWait(
+        WaitStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.WaitPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.WaitPartUId, "WAIT", Version: sidecar.Version));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.Wt, sidecar.WaitPartUId, "WT");
+    }
+
+    // Builds a FillBlockI Part, its `en` wiring, its two named-port inputs (`in`/`count`,
+    // lowercase — matching the real source exactly, unlike MOVE_BLK_VARIANT's own uppercase), and
+    // its `out` wire (same IdentCon-fed shape as Move's own `out1`).
+    private static void BuildFillBlockI(
+        FillBlockIStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        BuildEnSource(sidecar.En, sidecar.FillBlockIPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.FillBlockIPartUId, "FillBlockI"));
+
+        AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.FillBlockIPartUId, "in");
+        AddOperandWire(wireEndpointsByUId, sidecar.Count, sidecar.FillBlockIPartUId, "count");
+
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
+        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.FillBlockIPartUId, "out"));
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

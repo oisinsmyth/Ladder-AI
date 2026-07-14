@@ -657,17 +657,52 @@ public static partial class IrParser
             i++;
         }
 
+        // WAITs are always emitted after MOVE_BLK_VARIANTs (IrSerializer). No trailing "=> dest"
+        // — a pure side-effecting delay, no destination at all.
+        var waits = new List<WaitStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  WAIT(", StringComparison.Ordinal))
+        {
+            var waitMatch = WaitLineRegex().Match(lines[i]);
+            if (!waitMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  WAIT(EN := <expr-or-ENO>, WT := <expr>)', got: '{lines[i]}'");
+            }
+
+            var waitEn = ParseEnSource(waitMatch.Groups["en"].Value);
+            var waitWt = ParseExprTerm(waitMatch.Groups["wt"].Value);
+            waits.Add(new WaitStatement(waitEn, waitWt));
+            i++;
+        }
+
+        // FillBlockIs are always emitted after WAITs (IrSerializer). Fixed arity (EN, IN, COUNT),
+        // same regex-based shape as MOVE's own line.
+        var fillBlockIs = new List<FillBlockIStatement>();
+        while (i < lines.Length && lines[i].StartsWith("  FILLBLOCKI(", StringComparison.Ordinal))
+        {
+            var fillBlockIMatch = FillBlockILineRegex().Match(lines[i]);
+            if (!fillBlockIMatch.Success)
+            {
+                throw new IrFormatException($"Expected '  FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>', got: '{lines[i]}'");
+            }
+
+            var fillBlockIEn = ParseEnSource(fillBlockIMatch.Groups["en"].Value);
+            var fillBlockIIn = ParseExprTerm(fillBlockIMatch.Groups["in"].Value);
+            var fillBlockICount = ParseExprTerm(fillBlockIMatch.Groups["count"].Value);
+            fillBlockIs.Add(new FillBlockIStatement(fillBlockIEn, fillBlockIIn, fillBlockICount, fillBlockIMatch.Groups["dest"].Value));
+            i++;
+        }
+
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
-            && calcs.Count == 0 && moveBlkVariants.Count == 0)
+            && calcs.Count == 0 && moveBlkVariants.Count == 0 && waits.Count == 0 && fillBlockIs.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT statements and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI statements and isn't marked [empty].");
         }
 
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
-            moveBlkVariants);
+            moveBlkVariants, waits, fillBlockIs);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -1025,9 +1060,21 @@ public static partial class IrParser
             moveBlkVariants.Add(ParseMoveBlkVariantSidecar(lines, ref i, number));
         }
 
+        var waits = new List<WaitStatementSidecar>();
+        while (i < lines.Length && WaitHeaderRegex().IsMatch(lines[i]))
+        {
+            waits.Add(ParseWaitSidecar(lines, ref i, number));
+        }
+
+        var fillBlockIs = new List<FillBlockIStatementSidecar>();
+        while (i < lines.Length && FillBlockIHeaderRegex().IsMatch(lines[i]))
+        {
+            fillBlockIs.Add(ParseFillBlockISidecar(lines, ref i, number));
+        }
+
         return new NetworkSidecar(
             number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
-            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants);
+            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -1283,6 +1330,40 @@ public static partial class IrParser
         return new MoveBlkVariantStatementSidecar(
             moveBlkVariantPartUId, version, en, srcOperand, countOperand, srcIndexOperand, destIndexOperand,
             retValAccessUId, retValWireUId, destAccessUId, destWireUId);
+    }
+
+    // A WAIT's own sidecar shape has a Version line (same role as LIMIT/T_SUB's own) and one
+    // named operand (wt) — no destination lines at all, see WaitStatementSidecar's own doc
+    // comment.
+    private static WaitStatementSidecar ParseWaitSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  wait <n>" header — index itself isn't needed, position in the list is enough.
+
+        var waitPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    waituid = "));
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var wtOperand = ParseOperand(lines, ref i, "    ", "wt");
+
+        return new WaitStatementSidecar(waitPartUId, version, en, wtOperand);
+    }
+
+    // A FillBlockI's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus a
+    // second named operand (count) — no Version (FillBlockI never carries one, unlike WAIT).
+    private static FillBlockIStatementSidecar ParseFillBlockISidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  fillblocki <n>" header — index itself isn't needed, position in the list is enough.
+
+        var fillBlockIPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    fillblockiuid = "));
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var inOperand = ParseOperand(lines, ref i, "    ", "in");
+        var countOperand = ParseOperand(lines, ref i, "    ", "count");
+
+        var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
+        var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
+
+        return new FillBlockIStatementSidecar(fillBlockIPartUId, en, inOperand, countOperand, destAccessUId, destWireUId);
     }
 
     // A Call's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, plus
@@ -1771,6 +1852,14 @@ public static partial class IrParser
     [GeneratedRegex(@"^  MOVE_BLK_VARIANT\((?<args>.+)\)$")]
     private static partial Regex MoveBlkVariantLineRegex();
 
+    // No trailing "=> dest" — WAIT has no destination at all (Phase 2 Tier 6).
+    [GeneratedRegex(@"^  WAIT\(EN := (?<en>.+), WT := (?<wt>.+)\)$")]
+    private static partial Regex WaitLineRegex();
+
+    // Fixed arity (EN, IN, COUNT) — same regex-based shape as MOVE's own line (Phase 2 Tier 6).
+    [GeneratedRegex(@"^  FILLBLOCKI\(EN := (?<en>.+), IN := (?<in>.+), COUNT := (?<count>.+)\) => (?<dest>\S+)$")]
+    private static partial Regex FillBlockILineRegex();
+
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
@@ -1831,4 +1920,10 @@ public static partial class IrParser
 
     [GeneratedRegex(@"^  moveblkvariant (?<index>\d+)$")]
     private static partial Regex MoveBlkVariantHeaderRegex();
+
+    [GeneratedRegex(@"^  wait (?<index>\d+)$")]
+    private static partial Regex WaitHeaderRegex();
+
+    [GeneratedRegex(@"^  fillblocki (?<index>\d+)$")]
+    private static partial Regex FillBlockIHeaderRegex();
 }

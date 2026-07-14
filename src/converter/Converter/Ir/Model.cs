@@ -260,6 +260,21 @@ public sealed record CalcStatement(EnSource En, IReadOnlyList<Expr> Inputs, stri
 // exact literal strings used on the wire.
 public sealed record MoveBlkVariantStatement(EnSource En, Expr Src, Expr Count, Expr SrcIndex, Expr DestIndex, string RetValTag, string DestTag);
 
+// A time-delay instruction (`Part Name="WAIT"`) — confirmed real, 2026-07-14 (Phase 2 Tier 6, `FC
+// VSDDataSequence`). Genuinely the simplest production this converter models: `en`-gated (via
+// EnSource) with a single tag-or-literal `WT` (wait time) input — and **no destination tag at
+// all**, the first instruction here with no output of any kind (a pure side-effecting delay, not
+// a value producer). `Version="1.0"`, no `DisabledENO` — same bare-Version-only Part shape as
+// `MOVE_BLK_VARIANT` (see `FlgNetParser.ParseBareVersionOnlyShape`).
+public sealed record WaitStatement(EnSource En, Expr Wt);
+
+// A block-fill-with-integer instruction (`Part Name="FillBlockI"`) — confirmed real, 2026-07-14
+// (Phase 2 Tier 6, `FC ModbusComs`). Structurally close to Move (`en`-gated, one destination tag
+// via `out`) plus one extra tag-or-literal input, `COUNT` (how many elements to fill) — the fill
+// *value* itself is `IN`. `DisabledENO="true"`, no `Version` — the mirror-image Part shape of
+// `WAIT` above.
+public sealed record FillBlockIStatement(EnSource En, Expr In, Expr Count, string DestTag);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -337,7 +352,9 @@ public sealed record IrNetwork(
     IReadOnlyList<TSubStatement>? TSubs = null,
     IReadOnlyList<TConvStatement>? TConvs = null,
     IReadOnlyList<CalcStatement>? Calcs = null,
-    IReadOnlyList<MoveBlkVariantStatement>? MoveBlkVariants = null)
+    IReadOnlyList<MoveBlkVariantStatement>? MoveBlkVariants = null,
+    IReadOnlyList<WaitStatement>? Waits = null,
+    IReadOnlyList<FillBlockIStatement>? FillBlockIs = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -365,10 +382,14 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<MoveBlkVariantStatement> MoveBlkVariants { get; init; } = MoveBlkVariants ?? Array.Empty<MoveBlkVariantStatement>();
 
+    public IReadOnlyList<WaitStatement> Waits { get; init; } = Waits ?? Array.Empty<WaitStatement>();
+
+    public IReadOnlyList<FillBlockIStatement> FillBlockIs { get; init; } = FillBlockIs ?? Array.Empty<FillBlockIStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
         && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
-        && Calcs.Count == 0 && MoveBlkVariants.Count == 0;
+        && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -835,6 +856,20 @@ public sealed record MoveBlkVariantStatementSidecar(
     int DestAccessUId,
     int DestWireUId);
 
+// One WAIT's full round-trip data. No destination fields at all — see WaitStatement's own doc
+// comment.
+public sealed record WaitStatementSidecar(int WaitPartUId, string Version, EnSourceSidecar En, OperandSidecar Wt);
+
+// One FillBlockI's full round-trip data. Mirrors MoveStatementSidecar's own shape plus a second
+// operand (Count).
+public sealed record FillBlockIStatementSidecar(
+    int FillBlockIPartUId,
+    EnSourceSidecar En,
+    OperandSidecar In,
+    OperandSidecar Count,
+    int DestAccessUId,
+    int DestWireUId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -853,7 +888,9 @@ public sealed record NetworkSidecar(
     IReadOnlyList<TSubStatementSidecar>? TSubs = null,
     IReadOnlyList<TConvStatementSidecar>? TConvs = null,
     IReadOnlyList<CalcStatementSidecar>? Calcs = null,
-    IReadOnlyList<MoveBlkVariantStatementSidecar>? MoveBlkVariants = null)
+    IReadOnlyList<MoveBlkVariantStatementSidecar>? MoveBlkVariants = null,
+    IReadOnlyList<WaitStatementSidecar>? Waits = null,
+    IReadOnlyList<FillBlockIStatementSidecar>? FillBlockIs = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -882,6 +919,10 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<CalcStatementSidecar> Calcs { get; init; } = Calcs ?? Array.Empty<CalcStatementSidecar>();
 
     public IReadOnlyList<MoveBlkVariantStatementSidecar> MoveBlkVariants { get; init; } = MoveBlkVariants ?? Array.Empty<MoveBlkVariantStatementSidecar>();
+
+    public IReadOnlyList<WaitStatementSidecar> Waits { get; init; } = Waits ?? Array.Empty<WaitStatementSidecar>();
+
+    public IReadOnlyList<FillBlockIStatementSidecar> FillBlockIs { get; init; } = FillBlockIs ?? Array.Empty<FillBlockIStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);

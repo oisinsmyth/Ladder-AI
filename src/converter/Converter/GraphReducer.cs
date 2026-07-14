@@ -75,12 +75,16 @@ public static class GraphReducer
         // MOVE_BLK_VARIANT (Phase 2 Tier 5, 2026-07-14, FC MoveData/VSDDataSequence) — see
         // MoveBlkVariantStatement's own doc comment.
         var moveBlkVariantParts = network.Parts.Where(p => p.Name == "MOVE_BLK_VARIANT").ToList();
+        // WAIT/FillBlockI (Phase 2 Tier 6, 2026-07-14, FC VSDDataSequence/ModbusComs) — see
+        // WaitStatement/FillBlockIStatement's own doc comments.
+        var waitParts = network.Parts.Where(p => p.Name == "WAIT").ToList();
+        var fillBlockIParts = network.Parts.Where(p => p.Name == "FillBlockI").ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0
             && absParts.Count == 0 && limitParts.Count == 0 && tSubParts.Count == 0 && tConvParts.Count == 0
-            && calcParts.Count == 0 && moveBlkVariantParts.Count == 0)
+            && calcParts.Count == 0 && moveBlkVariantParts.Count == 0 && waitParts.Count == 0 && fillBlockIParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, or MOVE_BLK_VARIANT found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, MOVE_BLK_VARIANT, WAIT, or FillBlockI found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -111,6 +115,10 @@ public static class GraphReducer
         var calcSidecars = new List<CalcStatementSidecar>();
         var moveBlkVariantStatements = new List<MoveBlkVariantStatement>();
         var moveBlkVariantSidecars = new List<MoveBlkVariantStatementSidecar>();
+        var waitStatements = new List<WaitStatement>();
+        var waitSidecars = new List<WaitStatementSidecar>();
+        var fillBlockIStatements = new List<FillBlockIStatement>();
+        var fillBlockISidecars = new List<FillBlockIStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -383,6 +391,41 @@ public static class GraphReducer
             }
         }
 
+        // WAIT/FillBlockI are reduced last, same reasoning as every other production above.
+        foreach (var wait in waitParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceWait(network, wait, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            waitStatements.Add(statement);
+            waitSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
+        foreach (var fillBlockI in fillBlockIParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceFillBlockI(network, fillBlockI, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            fillBlockIStatements.Add(statement);
+            fillBlockISidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -392,11 +435,12 @@ public static class GraphReducer
 
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
-            swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements);
+            swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements, waitStatements,
+            fillBlockIStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
-            moveBlkVariantSidecars);
+            moveBlkVariantSidecars, waitSidecars, fillBlockISidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -1140,6 +1184,71 @@ public static class GraphReducer
             retValWireUId,
             destTag.UId,
             destWireUId);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A WAIT's `en` resolves via ResolveEnSource. Its one input (`WT`) resolves like a TON's own
+    // `PT` (ResolveTagOrLiteralOperand). No destination at all — see WaitStatement's own doc
+    // comment.
+    private static (WaitStatement Statement, WaitStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceWait(
+        FlgNetwork network,
+        PartNode wait,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, wait.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (wtExpr, wtSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, wait.UId, "WT", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var statement = new WaitStatement(en, wtExpr);
+        var sidecar = new WaitStatementSidecar(
+            wait.UId,
+            wait.Version ?? throw new NonReducibleNetworkException($"Network {networkNumber}: WAIT UId={wait.UId} has no Version."),
+            enSidecar,
+            wtSidecar);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // A FillBlockI's `en` resolves via ResolveEnSource. Its two inputs (`in`/`count`) each
+    // resolve like Move's own `in` (ResolveTagOrLiteralOperand). `out` writes to a plain tag,
+    // same shape as Move's own `out1`.
+    private static (FillBlockIStatement Statement, FillBlockIStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceFillBlockI(
+        FlgNetwork network,
+        PartNode fillBlockI,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, fillBlockI.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, fillBlockI.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (countExpr, countSidecar) = ResolveTagOrLiteralOperand(
+            wiresByPort, accessByUId, constantsByUId, fillBlockI.UId, "count", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, fillBlockI.UId, networkNumber, "out");
+        visitedWireUIds.Add(destWireUId);
+        AddAccessEntry(accessEntries, destTag);
+
+        var statement = new FillBlockIStatement(en, inExpr, countExpr, destTag.TagPath);
+        var sidecar = new FillBlockIStatementSidecar(fillBlockI.UId, enSidecar, inSidecar, countSidecar, destTag.UId, destWireUId);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

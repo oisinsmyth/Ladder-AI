@@ -14,7 +14,7 @@ public static class FlgNetParser
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
     private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT" };
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI" };
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +82,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT only.");
+                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT/WAIT/FillBlockI only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -155,8 +155,18 @@ public static class FlgNetParser
                 }
                 else if (name == "MOVE_BLK_VARIANT")
                 {
-                    var moveBlkVariantVersion = ParseMoveBlkVariantFixedShape(child, uid);
+                    var moveBlkVariantVersion = ParseBareVersionOnlyShape(child, "MOVE_BLK_VARIANT", uid);
                     parts.Add(new PartNode(uid, name, Version: moveBlkVariantVersion));
+                }
+                else if (name == "WAIT")
+                {
+                    var waitVersion = ParseBareVersionOnlyShape(child, "WAIT", uid);
+                    parts.Add(new PartNode(uid, name, Version: waitVersion));
+                }
+                else if (name == "FillBlockI")
+                {
+                    ParseFillBlockIFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name));
                 }
                 else
                 {
@@ -568,29 +578,49 @@ public static class FlgNetParser
         return (cardinality, srcType, equationElement.Value);
     }
 
-    // A block-move-with-array-indexing instruction (`Part Name="MOVE_BLK_VARIANT"`) — confirmed
-    // real, 2026-07-14 (Phase 2 Tier 5, `FC MoveData`/`FC VSDDataSequence`, 4 identical
-    // instances): `Version="1.2"`, no other attributes or children at all — genuinely the
-    // simplest possible Part-level shape (all its complexity lives in the wiring: `en`/`SRC`/
-    // `COUNT`/`SRC_INDEX`/`DEST_INDEX` inputs, `Ret_Val`/`DEST` outputs — see
-    // MoveBlkVariantStatement's own doc comment). No `DisabledENO` in any real instance —
-    // checked for absence, not assumed.
-    private static string ParseMoveBlkVariantFixedShape(XElement part, int uid)
+    // A bare `Version="N.N"`-only Part shape — no `DisabledENO`, no `TemplateValue`/other
+    // children at all — confirmed real for `MOVE_BLK_VARIANT` (Phase 2 Tier 5, 2026-07-14, `FC
+    // MoveData`/`FC VSDDataSequence`, 4 instances; all its complexity lives in the wiring, see
+    // MoveBlkVariantStatement's own doc comment) and `WAIT` (Phase 2 Tier 6, 2026-07-14, `FC
+    // VSDDataSequence`; see WaitStatement's own doc comment) — generalized once a second real
+    // instruction confirmed the shape isn't MOVE_BLK_VARIANT-specific, same "don't stack special
+    // cases" reasoning as `Version` itself and `ParseDisabledEnoSingleSrcTypeShape`.
+    private static string ParseBareVersionOnlyShape(XElement part, string partName, int uid)
     {
         var disabledEno = part.Attribute("DisabledENO")?.Value;
         if (disabledEno is not null)
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"MOVE_BLK_VARIANT\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — no real instance has carried this attribute.");
         }
 
         if (part.HasElements)
         {
             throw new UnsupportedConstructException(
-                $"<Part Name=\"MOVE_BLK_VARIANT\" UId=\"{uid}\"> has child elements — no real instance has carried any.");
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has child elements — no real instance has carried any.");
         }
 
         return RequireAttribute(part, "Version");
+    }
+
+    // A bare-input, no-output instruction (`Part Name="FillBlockI"`) — confirmed real, 2026-07-14
+    // (Phase 2 Tier 6, `FC ModbusComs`): `DisabledENO="true"`, no `Version`, no other content —
+    // genuinely the mirror-image shape of WAIT (Version, no DisabledENO) below. All its
+    // complexity lives in the wiring too — see FillBlockIStatement's own doc comment.
+    private static void ParseFillBlockIFixedShape(XElement part, int uid)
+    {
+        var disabledEno = part.Attribute("DisabledENO")?.Value;
+        if (disabledEno != "true")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"FillBlockI\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
+        }
+
+        if (part.HasElements)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"FillBlockI\" UId=\"{uid}\"> has child elements — no real instance has carried any.");
+        }
     }
 
     // A TON/TONR's own Instance reference — same Scope values as an ordinary Access, but the

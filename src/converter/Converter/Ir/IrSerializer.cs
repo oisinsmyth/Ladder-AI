@@ -232,6 +232,22 @@ public static class IrSerializer
               .Append(", DEST => ").Append(moveBlkVariant.DestTag)
               .Append(")\n");
         }
+
+        // No trailing "=> dest" — WAIT is a pure side-effecting delay, no destination at all.
+        foreach (var wait in network.Waits)
+        {
+            sb.Append("  WAIT(EN := ").Append(SerializeEnSource(wait.En))
+              .Append(", WT := ").Append(SerializeExpr(wait.Wt))
+              .Append(")\n");
+        }
+
+        foreach (var fillBlockI in network.FillBlockIs)
+        {
+            sb.Append("  FILLBLOCKI(EN := ").Append(SerializeEnSource(fillBlockI.En))
+              .Append(", IN := ").Append(SerializeExpr(fillBlockI.In))
+              .Append(", COUNT := ").Append(SerializeExpr(fillBlockI.Count))
+              .Append(") => ").Append(fillBlockI.DestTag).Append('\n');
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -655,6 +671,31 @@ public static class IrSerializer
             sb.Append("    retvalwire = ").Append(moveBlkVariant.RetValWireUId).Append('\n');
             sb.Append("    dest = ").Append(moveBlkVariant.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(moveBlkVariant.DestWireUId).Append('\n');
+        }
+
+        for (var w = 0; w < sidecar.Waits.Count; w++)
+        {
+            var wait = sidecar.Waits[w];
+            sb.Append("  wait ").Append(w).Append('\n');
+            sb.Append("    waituid = ").Append(wait.WaitPartUId).Append('\n');
+            sb.Append("    version = ").Append(wait.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", wait.En);
+
+            SerializeOperand(sb, "    ", "wt", wait.Wt);
+        }
+
+        for (var fb = 0; fb < sidecar.FillBlockIs.Count; fb++)
+        {
+            var fillBlockI = sidecar.FillBlockIs[fb];
+            sb.Append("  fillblocki ").Append(fb).Append('\n');
+            sb.Append("    fillblockiuid = ").Append(fillBlockI.FillBlockIPartUId).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", fillBlockI.En);
+
+            SerializeOperand(sb, "    ", "in", fillBlockI.In);
+            SerializeOperand(sb, "    ", "count", fillBlockI.Count);
+
+            sb.Append("    dest = ").Append(fillBlockI.DestAccessUId).Append('\n');
+            sb.Append("    destwire = ").Append(fillBlockI.DestWireUId).Append('\n');
         }
     }
 

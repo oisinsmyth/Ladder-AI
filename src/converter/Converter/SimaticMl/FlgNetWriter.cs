@@ -107,9 +107,11 @@ public static class FlgNetWriter
             // (2026-07-14, FC Scale) share the same fixed DisabledENO="true" too, as does Abs and
             // LIMIT (2026-07-14, FB VSDSim — LIMIT's own DisabledENO was missed in an earlier
             // reading of the real export; TIA's own Import() validator caught the omission live,
-            // "ENO cannot be deactivated for the 'LIMIT' instruction"). T_SUB/T_CONV are confirmed
-            // real WITHOUT DisabledENO at all (VibratorCycle grounding) — deliberately excluded.
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT")
+            // "ENO cannot be deactivated for the 'LIMIT' instruction"). FillBlockI (2026-07-14, FC
+            // ModbusComs) shares the same fixed DisabledENO="true" too. T_SUB/T_CONV/
+            // MOVE_BLK_VARIANT/WAIT are confirmed real WITHOUT DisabledENO at all — deliberately
+            // excluded from this list.
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT" or "FillBlockI")
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }

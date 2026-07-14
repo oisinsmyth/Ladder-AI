@@ -10,6 +10,21 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Phase 2 Tier 6: `WAIT`/`FillBlockI` built and unit-tested — `Jump` deliberately not (needs a real design decision)**
+
+- `WAIT` (`en`/`WT`, no destination at all — the first production modeled with no output) and
+  `FillBlockI` (Move-shaped plus a `count` input) both re-grounded precisely and built, 13 new
+  tests, 344 converter tests total.
+- **Not live-verified**: by the time these were ready, TIA Portal had stopped responding to *any*
+  command at all (confirmed via the lightest possible one, `sanity-check`) — a genuine outage, not
+  specific to these instructions. Left unverified rather than retried blindly.
+- **`Jump` investigated, deliberately not built.** Its `label` port references a new `Access
+  Scope="Label"` node, and the actual jump target is a network-level `<Labels><LabelDeclaration>`
+  element confirmed real in a *different* network than the `Jump` Part itself — genuine
+  cross-network control flow, which no production this converter models has ever needed to
+  represent. A real IR-format design question, flagged for the project owner rather than decided
+  unilaterally. See `ir/SPEC.md`'s own `Jump` entry for the full grounding.
+
 **Phase 2 Tier 5: `MOVE_BLK_VARIANT` built and unit-tested — live TIA verification still pending**
 
 - Re-grounded properly (per the Tier 1–3 lesson above): the earlier "only `en` ever wired" note

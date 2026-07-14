@@ -86,9 +86,25 @@ closed" above). Working overnight, autonomously, per the project owner's own exp
   run the live import/compile/re-export cycle** (rebuild the synthetic composed FC the same way
   Tiers 1/2/3 did — see `ir/SPEC.md`'s own `MOVE_BLK_VARIANT` entry for the exact shape) once
   Portal is confirmed responsive; only mark this tier genuinely closed once that's clean.
-- **Tier 6**: `Jump` (+ implied `Label` — needs its own jump-target shape found), `FillBlockI`,
-  `WAIT` — novel categories, no existing analog, each needs its own small grounding spike. Lowest
-  priority.
+- **Tier 6**: `WAIT`/`FillBlockI` built and unit-tested 2026-07-14 night (13 new tests, 344
+  converter tests total, both genuinely simple once grounded — see `ir/SPEC.md`'s own entries for
+  the exact shapes). **Not yet live-TIA-verified** — by the time these were ready, TIA Portal had
+  stopped responding to *any* command at all (confirmed via the lightest possible one,
+  `sanity-check`), a genuine outage unrelated to these two instructions specifically. **Next step**:
+  once Portal is confirmed responsive, run the same live import/compile/re-export cycle used for
+  Tiers 1–3/5 (compose a synthetic FC from the `WaitFedByRail.xml`/`FillBlockIFedByRail.xml`
+  fixtures) before marking this tier closed.
+  - **`Jump` was investigated and deliberately NOT built — needs the project owner's own design
+    call, not a routine build.** Grounding it found `JMP` is genuine **cross-network control
+    flow**: its `label` port references a new `Access Scope="Label"` node shape, and the actual
+    jump target is a network-level `<Labels><LabelDeclaration></Labels>` element (a sibling of
+    `<Parts>`/`<Wires>`) confirmed real in a *different* `CompileUnit` (network) than the `Jump`
+    Part itself. No existing production models anything beyond its own single network — this
+    needs a real IR-format decision (how should the readable form represent "network N can
+    transfer control to network M"?) before any parser/reducer code gets written. Full grounding
+    detail in `ir/SPEC.md`'s own `Jump` entry. **Ask the project owner how they'd like this
+    represented before starting** — this is exactly the kind of design question, not
+    implementation detail, that shouldn't be decided unilaterally.
 
 **Deliberately deferred, not a bug to chase:**
 - `Main` (OB1) doesn't round-trip through the full cycle — each fix reveals another narrow
