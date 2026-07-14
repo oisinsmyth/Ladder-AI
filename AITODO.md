@@ -19,96 +19,42 @@ documented/committed, delete it from this file rather than letting it accumulate
 
 ## Project stage
 
-**S1 — Lossless round-trip, ACTIVE.** See `docs/notes/stage-gates.md` for full gate history.
-Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md hard rule, gated by
+**S2 — Read and explain, ACTIVE.** S1 (lossless round-trip) formally gate-reviewed and signed off
+2026-07-14 — see `docs/notes/stage-gates.md` for the full S1 history (converter/tooling now
+supports ~24 instruction-level constructs; 14-block committed reference corpus; `PlantAutoControl`
+itself round-trips losslessly against its full real dependency closure). This doc is wiped clean
+of S1-era detail per the project owner's own instruction — that history is permanently preserved
+in `docs/notes/stage-gates.md`, not lost, just no longer cluttering the in-flight scratchpad.
+
+Per `docs/02-roadmap.md`: S2's deliverables are (a) Claude Code reading IR and producing
+plain-language explanations of networks and blocks, and (b) an explanation quality checklist —
+**the checklist doesn't exist yet; it's a deliverable of this stage, not a precondition for
+starting it.** Exit criterion: explanations of 10 sampled networks judged accurate by the
+engineer, with no hallucinated tags or behavior (design philosophy #7).
+
+Do not perform S3+ capabilities (comment/review/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Recently closed (all committed)
+## Current task: S2 kickoff — no work started yet
 
-- **Three smaller flagged gaps closed, 2026-07-14.** Project owner's own ask, after reviewing
-  what was left once reference-corpus growth (below) closed. (1) `docs/13-data-boundary.md`'s
-  JOB9002 approval-scope record backfilled — it had drifted well behind the actual volume of
-  Amber-tier access done since (grounding sweeps, the `PlantAutoControl` plan's own bulk import work),
-  even though that work was itself separately confirmed with the project owner at the time. (2)
-  Sanitizer's `ExternalAccessible=False` hard-error fixed generally (all three of
-  ExternalAccessible/Visible/Writable, not just the one confirmed attribute) — live verification
-  surfaced a real, previously-unknown constraint: `ExternalAccessible=false` requires the other
-  two false as well (`ExternalVisible=true` alongside it is rejected by TIA's own `Import()`),
-  while `ExternalWritable=false` alone is independently valid. 7 new/updated tests, 366 converter
-  tests total. (3) `tests/golden/Normalizer`'s Part-UId volatility gap fixed with real graph-based
-  identity matching (iterative structural refinement, Weisfeiler-Leman-style) — a bare Part has no
-  distinguishing content of its own the way Access does, so identity comes from wiring topology
-  instead. Found and fixed a real bug along the way (signature strings grew multiplicatively round
-  to round, overflowing Int32 on `MotorStarter` — fixed with a SHA256 hash per round). Live-verified
-  against all 7 real blocks originally confirmed affected — all now compare equal; the full 14-block
-  reference corpus still round-trips cleanly too. 14 golden-harness tests total. Full story:
-  `docs/notes/stage-gates.md` ("Three smaller flagged gaps closed").
-- **Reference corpus growth: 7 new blocks, 2026-07-14.** Project owner's own ask, after reviewing
-  what's left before S1 is "done" in spirit: the committed `ir/reference/`/`simatic-ml/reference/`
-  corpus only exercised ~5 of the ~24 instruction-level constructs this converter supports, with
-  everything else proven only against uncommittable real JOB9002 content (today's own audit finding).
-  Added `ThresholdAlarms` (comparisons), `SignalConditioning`/`DataHandling` (arithmetic/box
-  family), `BooleanExtras` (standalone Not — first-ever live-TIA verification of it, SCoil/RCoil),
-  `FBTimers`/`ScaleValue`/`TimingAndCalls` (TONR/TOF/CALL) — corpus now 14 blocks, ~20 constructs
-  covered. Two pre-existing stale `.ir` files found and fixed along the way (sidecar text format
-  predating S1 item 11), plus a real `RunAll` bug (TIA's own `IsConsistent` cascade corrupting a
-  naive per-block batch verification — fixed with a proper three-phase `RunAllSettled`). All 14
-  reference-project blocks verified together in one pass for the first time. Full story:
-  `tests/golden/README.md` ("Reference corpus growth"), `docs/notes/stage-gates.md` (same
-  section name). `WAIT`/`Jump` stay excluded (see "Open questions" below, unchanged);
-  Modbus_Master/Modbus_Comm_Load's multi-instance form was considered and deliberately not
-  attempted — see "Deliberately deferred" below, this one's a closed engineering call, not an
-  open question for the project owner.
-- **Instruction-coverage sweep + Phase 2 tiers 1–3, 5, and part of 6 (`Abs`/`LIMIT`/`T_SUB`/
-  `T_CONV`/`Calc`/`MOVE_BLK_VARIANT`/`FillBlockI`), 2026-07-14.** Grounded all 36 remaining `JOB9002`
-  blocks (both PLC stations), found 11 real currently-unsupported instructions, ranked into a
-  6-tier plan. 7 instructions built, tested (45 new tests, 345 total), and live-verified —
-  imported/compiled clean (0 errors) in `SampleProject`. Several real bugs found only by live TIA
-  verification along the way (a misread `LIMIT` `DisabledENO` attribute; a hand-built fixture
-  reusing one `Access` UId across two wires; a `FillBlockI` fixture using a plain scalar where the
-  real destination is array-indexed) — see `docs/notes/stage-gates.md` for the full story. `WAIT`
-  (Tier 6) built and tested but not live-verified — hit a distinct, still-open blocker (see
-  "Open questions" below). `Jump` (Tier 6) investigated but deliberately not built, pending a
-  design decision.
-- **Tier 4 (`Modbus_Master`/`Modbus_Comm_Load`), 2026-07-14.** Built across all 7 files, 15 new
-  tests (359 total, all green). Live verification: import clean; compile narrowed 6 errors -> 2,
-  every fixed one confirming the converter's own modeling correct (fixture scope/type gaps, not
-  converter bugs). The final 2 trace to a confirmed general Openness limitation — standalone
-  system-FB instance DBs (`Modbus_Master_DB`/`MB_Master_Comm`) invisible to `SW.Blocks` entirely,
-  same class as the earlier `CycleDelayReset` finding — not a converter bug, no Openness-exposed
-  fix found. Left honestly unverified for full live compile, same standard as `WAIT`. Full story:
-  `docs/notes/stage-gates.md` ("Tier 4 built and tested..."), general limitation writeup:
-  `docs/notes/openness-quirks.md` ("Known constraints").
-- **The full `PlantAutoControl` round-trip plan — all three phases done, 2026-07-14.** Phase 1 (all 8
-  dependency FBs compile clean), Phase 2 (all 26 real DB/tag-table roots sanitized/imported/
-  compiled clean), Phase 3 (`PlantAutoControl` itself imports, compiles with 0 errors, and round-trips
-  losslessly — `Normalizer.AreSemanticallyEquivalent` = true). Commits `e2fb301`, `a1f46d3`.
-- **Full-cycle verification pass across every block in `SampleProject`, 2026-07-14.** Ran the
-  complete export → `to-ir` → `to-xml` → import → compile → re-export cycle against all 49 blocks
-  already in the project, one at a time. 5 more real converter bugs found and fixed (Sanitizer/
-  `AccessNode` dotted-tag-name corruption, general Part/wire-endpoint document-order sort, IR-text
-  `IsBareParameter` loss). 47 of 48 blocks now round-trip completely (`Main`/OB1 deferred — see
-  below). Commit `60ac96f`.
-- PLC tag table support (`TAGTABLE`) — task #127, `b2fe156`.
-- `create-instance-db` command + `MotorStarter` compiles — task #122, `ef2ff1d`. 1st dependency FB.
-- Anonymous-struct converter fix + `EquipmentControlSystem` compiles — `9ec648f`. 2nd FB.
-- Deep-recursion + IR-text-serializer fixes + `ShredderControlSystem` compiles (bar one tag) —
-  `e0fd86a`. 3rd FB.
+Nothing in-flight. First real decisions, before producing any explanations:
 
-## Current task: none — Phase 2 tiers built, reference corpus grown; two open questions await the project owner
+- **What to explain first.** Two real corpora are available: the committed 14-block reference
+  project (Green-tier, safe to discuss/quote freely, but each block was purpose-built to exercise
+  one construct — not necessarily representative of how real logic reads) vs. `PlantAutoControl` and
+  its 8 dependency FBs (Amber-tier, real production logic, already sanitized/imported/live-verified
+  in `SampleProject` — the thing this capability actually needs to be good at). Leaning toward
+  starting with a few reference-project blocks as a low-stakes dry run of the *process* (what does
+  a good explanation even look like, how is accuracy judged) before spending the engineer's actual
+  review time on real logic — but this is worth confirming, not assuming.
+- **What the quality checklist should check.** Roadmap only says "judged accurate... no
+  hallucinated tags or behavior." Needs fleshing out before the first explanation is judged against
+  it, ideally *with* the engineer rather than invented solo.
+- **Where explanations live.** Not specified yet — inline chat output, a committed doc per block,
+  something else? Affects whether this produces any diffable artifact at all (design philosophy #1:
+  "every artifact is designed to be reviewed").
 
-Tiers 1–6 are all built and tested (359 converter tests, all green). Tiers 1, 2, 3, 5
-(`MOVE_BLK_VARIANT`), and `FillBlockI` (Tier 6) are fully live-verified. Tier 4
-(`Modbus_Master`/`Modbus_Comm_Load`) and `WAIT` (Tier 6) are built/tested but live-verification
-hit real, honestly-documented blockers outside the converter's own control (see "Open questions"
-below). `Jump` (Tier 6) was deliberately not built, pending a design decision. The committed
-reference-project corpus has since been grown from 7 to 14 blocks (2026-07-14, "Recently closed"
-above) specifically to give the ~20 already-working constructs permanent, committed regression
-coverage — independent of whether `WAIT`/`Jump`/Modbus's remaining gaps ever close. Nothing is
-currently in-flight — the two items below need the project owner's input before any further
-action.
-
-## Open questions (need the project owner's input, not further unilateral work)
+## Open questions carried over from S1 (still need the project owner's input, unrelated to S2)
 
 - **`WAIT` — built and unit-tested, but hit a genuinely different live blocker, still open.**
   TIA's own `Import()` rejects it — "An instruction with the name 'WAIT' cannot be found" — in
@@ -133,7 +79,7 @@ action.
   detail in `ir/SPEC.md`'s own `Jump` entry. **Ask the project owner how they'd like this
   represented before starting** — this is exactly the kind of design question, not
   implementation detail, that shouldn't be decided unilaterally.
-- **`Modbus_Master`/`Modbus_Comm_Load` (Tier 4) — built and unit-tested, live compile blocked by a
+- **`Modbus_Master`/`Modbus_Comm_Load` — built and unit-tested, live compile blocked by a
   confirmed general Openness limitation, not a converter bug.** Both instructions' own port/wire/
   parameter modeling is verified correct (every "tag not defined"/type-mismatch error cleared
   during live verification). What's left unverified is TIA accepting a standalone instance DB for
@@ -146,23 +92,19 @@ action.
   Openness-API-only live verification for standalone system-FB instances simply out of reach and
   worth accepting as a documented, permanent limitation?
 
+None of the three block S2 — they're converter/tooling-side gaps, orthogonal to reading and
+explaining already-working IR. Carried here so they don't get lost, not because S2 depends on them.
+
 **Deliberately deferred, not a bug to chase:**
 - `Main` (OB1) doesn't round-trip through the full cycle — each fix reveals another narrow
   OB-specific Interface-section quirk (`SecondaryType`/`Informative` fixed; `Output` section
   validity still open). `Main` is TIA's own auto-generated template block, not restricted content,
   and OB support was never a stated project goal. Deferred per the project owner's own call.
-- **Modbus_Master/Modbus_Comm_Load's multi-instance form, considered during reference-corpus
-  growth (2026-07-14) and deliberately not attempted** — unlike `WAIT`/`Jump`, this one's a closed
-  engineering call, not something needing the project owner's input. Would have stacked two
-  independently-unproven assumptions (whether these two instructions support multi-instance at
-  all — never seen real, only the standalone `GlobalVariable`-scope form was grounded in `JOB9002`;
-  whether a hand-authored DB with an FB-typed member, untested anywhere in this project, can stand
-  in for a proper instance DB) for one FC's worth of optional coverage, disproportionate given
-  everything else in that pass closed cleanly. Revisit only if a real grounded example of
+- Modbus_Master/Modbus_Comm_Load's multi-instance form — considered during reference-corpus
+  growth and deliberately not attempted (unlike the three above, a closed engineering call, not
+  something needing the project owner's input). Would have stacked two independently-unproven
+  assumptions for one FC's worth of optional coverage. Revisit only if a real grounded example of
   Modbus multi-instance usage ever turns up.
-
-**Possible next work** (no explicit instruction yet — ask before starting):
-- S2 (read and explain) — the next roadmap stage once S1's gate review is formally signed off.
 
 **Sanitization maps built and kept** (`sanitization/`, gitignored): all 8 dependency FBs' own maps,
 plus `PlantAutoControl.map.json` itself and per-instance maps for all 26 DB/tag-table roots. Reusable
