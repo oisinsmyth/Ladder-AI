@@ -33,6 +33,9 @@ public static class ReferenceProjectRoundTrip
         "SignalConditioning",
         "DataHandling",
         "BooleanExtras",
+        "FBTimers",
+        "ScaleValue",
+        "TimingAndCalls",
     };
 
     public static RoundTripReport Run(string blockName, string workDir)

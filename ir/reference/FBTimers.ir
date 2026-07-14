@@ -1,0 +1,14 @@
+DB FBTimers
+  ROOTID 0
+  NUMBER 30
+  MEMBERS
+    RunTimeTimer : TONR_TIME VERSION 1.0
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HoldTimer : TOF_TIME VERSION 1.0
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

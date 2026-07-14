@@ -1,0 +1,32 @@
+BLOCK FC ScaleValue
+ROOTID 0
+NUMBER 25
+LANGUAGE LAD
+COMMENT "Reference callee FC for CALL examples (TimingAndCalls)"
+
+INTERFACE
+  INPUT
+    RawInput : Real BAREPARAM
+    ScaleFactor : Real BAREPARAM
+  OUTPUT
+    ScaledResult : Real BAREPARAM
+  CONSTANT
+
+NETWORK 1 "Linear scale"
+  MUL(EN := TRUE, IN1 := RawInput, IN2 := ScaleFactor) => ScaledResult
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access RawInput = 21 LocalVariable
+  access ScaleFactor = 22 LocalVariable
+  access ScaledResult = 23 LocalVariable
+  mul 0
+    muluid = 24
+    kind = mul
+    en = condition
+      rail = 25
+    input 0 tag = 21 26
+    input 1 tag = 22 27
+    dest = 23
+    destwire = 28

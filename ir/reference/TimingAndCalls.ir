@@ -1,0 +1,91 @@
+BLOCK FC TimingAndCalls
+ROOTID 0
+NUMBER 24
+LANGUAGE LAD
+COMMENT "Timer/block-call reference examples (TONR/TOF/CALL)"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  TEMP
+    RunEnable : Bool
+    ResetRequest : Bool
+    RunTimePreset : Time
+    HoldEnable : Bool
+    HoldTimePreset : Time
+    RawValue : Real
+    ScaleMax : Real
+    ScaledValue : Real
+  CONSTANT
+
+NETWORK 1 "Run time accumulation (TONR)"
+  TONR(FBTimers.RunTimeTimer, IN := RunEnable, PT := RunTimePreset, R := ResetRequest)
+
+NETWORK 2 "Hold delay (TOF)"
+  TOF(FBTimers.HoldTimer, IN := HoldEnable, PT := HoldTimePreset)
+
+NETWORK 3 "Analog scaling (CALL ScaleValue)"
+  CALL ScaleValue(EN := TRUE, RawInput := RawValue, ScaleFactor := ScaleMax, ScaledResult => ScaledValue)
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access RunEnable = 21 LocalVariable
+  access RunTimePreset = 22 LocalVariable
+  access ResetRequest = 23 LocalVariable
+  timer 0
+    tonpartuid = 25
+    kind = tonr
+    version = 1.0
+    timetype = Time
+    instanceuid = 26
+    instancescope = GlobalVariable
+    instancepath = FBTimers.RunTimeTimer
+    rail = 33
+    step 0 contact
+      uid = 24
+      operand = 21
+      operandwire = 28
+      negated = false
+      out = 29
+    preset tag = 22 30
+    et = 31 27
+    reset tag = 23 32
+NETWORK 2
+  compileunit = 8
+  access HoldEnable = 21 LocalVariable
+  access HoldTimePreset = 22 LocalVariable
+  timer 0
+    tonpartuid = 24
+    kind = tof
+    version = 1.0
+    timetype = Time
+    instanceuid = 25
+    instancescope = GlobalVariable
+    instancepath = FBTimers.HoldTimer
+    rail = 31
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 27
+      negated = false
+      out = 28
+    preset tag = 22 29
+    et = 30 26
+NETWORK 3
+  compileunit = D
+  access RawValue = 21 LocalVariable
+  access ScaleMax = 22 LocalVariable
+  access ScaledValue = 23 LocalVariable
+  call 0
+    calluid = 24
+    blockname = ScaleValue
+    blocktype = FC
+    rail = 28
+    argument 0 input RawInput Real
+      value tag = 21 25
+    argument 1 input ScaleFactor Real
+      value tag = 22 26
+    argument 2 output ScaledResult Real
+      dest = 23
+      destwire = 27
