@@ -10,6 +10,24 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**S3 second proof: title + comment, both block and network level (`PerimeterSafetyAlarms`)**
+
+- Explicit instruction this round, directly responding to the gap caught in the first proof:
+  short title + longer why-comment, at both block and network level this time. Picked
+  `PerimeterSafetyAlarms` over `NodeStatusAlarms` for richer logic (an `OR`-merge of 3 negated
+  contacts) — genuine "why" to write about, not just "what."
+- Comment content grounded directly against the real rungs: bits 0-4 negate because their source
+  tags read true-when-intact (a break reads false, needs `NOT` to alarm); bits 5-7 don't negate,
+  the opposite field-device convention (already true-when-triggered); bit 0 is a separate summary
+  coil for one HMI indicator rather than decoding three bits individually.
+- Verification needed a different approach than the first proof: `Normalizer.IsVolatile` treats
+  Title as ignorable but deliberately *not* Comment, so a plain equivalence check would correctly
+  report a difference here. Instead stripped both documents, additionally blanked just the Comment
+  text in both, and confirmed the results are then byte-identical — proving the only difference
+  anywhere is the intended new text, nothing structural. Full live cycle (import → clear
+  `IsConsistent` → compile clean → re-export → confirm content landed → full 14-block `RunAll`)
+  otherwise matches the first proof. Reviewed and approved before committing.
+
 **S3 first proof: write a real title through the IR layer, end to end (`TimerSample`)**
 
 - Two small converter fixes first: `IrSerializer`/`IrParser` now reject embedded `\n`/`\r` in

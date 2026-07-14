@@ -37,24 +37,22 @@ end-to-end — generated, imported, compiled, human-approved.
 Do not perform S4+ capabilities (convention review/generate/modify) — CLAUDE.md hard rule, gated by
 `docs/notes/stage-gates.md`.
 
-## Current task: first proof done (`TimerSample`) — picking the next block
+## Current task: two proofs done — real-project (JOB9002) scope now under discussion
 
-S3's first write-path proof landed 2026-07-14: `ir/reference/TimerSample.ir` (block + all 3
-non-empty networks) went from untitled to titled, through the real IR-edit → `to-xml` → `import` →
-`compile` → re-export → review cycle, confirmed logic-unchanged (`Normalizer`) and confirmed
-against a full 14-block `RunAll`. Full story in `docs/notes/stage-gates.md`'s "S3 first proof"
-section, including a real pre-existing stale-sidecar-format bug hit and fixed along the way, and a
-real gap the project owner caught before approving (block-level title was missed on the first
-pass — network titles alone aren't the whole ask). Two small converter fixes landed alongside it:
-an embedded-newline guard in `IrSerializer`/`IrParser`, and a stale-comment fix in
-`Normalizer.IsVolatile`.
+S3's first two write-path proofs are done, `TimerSample` (title only, both levels) and
+`PerimeterSafetyAlarms` (title + comment, both levels) — full story in `docs/notes/stage-gates.md`'s
+"S3 first proof"/"S3 second proof" sections. Both live-verified end-to-end (edit IR → `to-xml` →
+`import` → clear the known `IsConsistent` refusal via `compile` → re-export → confirm the new
+content is genuinely present → confirm nothing structural changed → full 14-block `RunAll`), both
+reviewed and approved before committing. `NodeStatusAlarms` remains the one still-untitled
+reference-corpus block if another Green-tier proof is wanted.
 
-Not yet decided: which block next. `PerimeterSafetyAlarms` (richest untitled logic — OR-merge of 3
-negated contacts) and `NodeStatusAlarms` (straightforward but non-trivial 15-tap bit mapping) are
-the two remaining genuinely-untitled reference-corpus candidates (see the S2-era survey still
-useful here) — both would need a network *and* block title/comment this time, not just a title,
-now that the block-level gap is known. Worth confirming with the project owner before starting,
-same as the first pick.
+**Now asked to try this against real JOB9002 content specifically (`PlantAutoControl`), not the reference
+corpus.** Flagged before starting, not yet resolved: the recorded JOB9002 data-boundary approval
+(`docs/13-data-boundary.md`) covers A-01/A-02 spikes, S1 grounding, and S2 (read-only) explanation
+work — S3 write/comment-generation activity is not in that list. `CLAUDE.md`'s own instruction is
+explicit: check the recorded scope, don't extend it unilaterally, flag before proceeding. Asked the
+project owner directly rather than assuming either way.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

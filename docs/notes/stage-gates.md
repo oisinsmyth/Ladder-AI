@@ -3507,3 +3507,41 @@ network-only one.
 S3's own exit criterion — an undocumented block gets useful comments end-to-end, generated,
 imported, compiled, human-approved — is met by this one block. Richer, non-synthetic candidates
 (`PerimeterSafetyAlarms`, `NodeStatusAlarms`) are the natural next targets, not part of this proof.
+
+## S3 second proof: `PerimeterSafetyAlarms` — title *and* comment, both levels (2026-07-14)
+
+Explicit instruction this round: title (short) and comment (longer, explains *why*) together, on
+whichever block, both block- and network-level this time — the project owner's own direct response
+to the block-title gap caught in the first proof. Picked `PerimeterSafetyAlarms` over
+`NodeStatusAlarms` deliberately: richer logic (an `OR`-merge of 3 negated safety-zone contacts, not
+just a flat bit-mapping) means there's genuine "why" to write a comment about, not just "what" —
+matching `06-lad-conventions.md` C-202 ("comments say why, not what").
+
+Learned from the first proof's own stale-sidecar surprise: sanity-checked `to-xml` on the committed
+file *before* editing anything, this time — clean, so no repeat of the `TimerSample` detour.
+
+Grounded the actual comment content directly from the real rungs, not from memory of explaining
+this same block earlier in S2: bits 0-4 (`AlarmWord1.%X0`-`%X4`) all negate their source
+(`SafetyZone1-3`/`SafetyGate1`) — consistent only with those tags reading true-when-intact, so a
+break reads false and needs `NOT` to alarm. Bits 5-7 (`PullCord1`/`FireDamper1`/`FireDamper2`) carry
+no negation at all — the opposite field-device convention, already true-when-triggered. Bit 0 is a
+separate summary coil (`OR` of the three zone bits), not a re-read of an already-computed value —
+existing purely so the HMI can show one "perimeter breached" indicator without decoding three bits
+individually. Wrote both a short block-level `TITLE` ("Perimeter Safety Alarms") + higher-level
+block `COMMENT` (what the block is for), and a network-level `TITLE` + the detailed polarity/summary
+`COMMENT` above (the specific why). Network 2 (genuinely empty, no Parts) got neither — nothing to
+document.
+
+**Verification needed a different check than the first proof, and this was worked out properly, not
+glossed over**: `Normalizer.IsVolatile` deliberately treats Title as ignorable but *not* Comment —
+real comment content is exactly the kind of difference that check exists to catch. A plain
+`AreSemanticallyEquivalent` call would have correctly returned false here, which isn't a failure,
+just not the right tool for "did anything besides my intended documentation change." Instead:
+stripped both the original and re-exported XML via `Normalizer.Strip`, then additionally blanked
+the `Comment` `MultilingualTextItem` text in both stripped trees, and confirmed the two are then
+byte-identical — proving the *only* difference anywhere in the document is the new Title/Comment
+text, nothing structural. Full live cycle otherwise identical to the first proof: import
+(`Override`) → cleared the expected `IsConsistent` refusal via `compile`, 0 errors → re-exported →
+confirmed all four new strings are what's actually in the re-exported IR → full 14-block `RunAll`
+still passes. Presented for review (title, comment, and the reasoning behind the comment, so it
+could actually be checked against the real rungs) before committing.

@@ -2,13 +2,16 @@ BLOCK FC PerimeterSafetyAlarms
 ROOTID 0
 NUMBER 18
 LANGUAGE LAD
+TITLE "Perimeter Safety Alarms"
+COMMENT "Packs perimeter-related safety and fire-damper field alarms into AlarmWords.AlarmWord1 for HMI display."
 
 INTERFACE
   INPUT
   OUTPUT
   CONSTANT
 
-NETWORK 1 ""
+NETWORK 1 "Perimeter Safety Alarm Bit Mapping"
+  COMMENT "Bits 0-4 are negated because SafetyZone1-3/SafetyGate1 read true when the circuit is intact, so a break reads false and NOT is what raises the alarm. Bits 5-7 are not negated: PullCord1/FireDamper1/FireDamper2 already report true-when-triggered from the field device. Bit 0 summarizes bits 1-3 (any zone breach) so the HMI can show one perimeter-alarm indicator without decoding the individual bits."
   COIL AlarmWords.AlarmWord1.%X0 := NOT EquipmentStatus.SafetyZone1 OR NOT EquipmentStatus.SafetyZone2 OR NOT EquipmentStatus.SafetyZone3
   COIL AlarmWords.AlarmWord1.%X1 := NOT EquipmentStatus.SafetyZone1
   COIL AlarmWords.AlarmWord1.%X2 := NOT EquipmentStatus.SafetyZone2
