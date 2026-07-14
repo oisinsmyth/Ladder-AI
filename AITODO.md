@@ -28,15 +28,20 @@ closed (embedded-newline guard; the previously-untested "edit an existing title"
 real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format), and the
 other 13 committed reference-corpus files swept afterward to confirm that bug wasn't a wider gap.
 
-**S4 has not been opened.** Its own entry blocker (`06-lad-conventions.md` populated) was already
-cleared earlier in the project, so nothing stands in the way whenever the project owner wants to
-start it — but that's a separate decision, not made yet. Do not perform S4+ capabilities
-(convention review/generate/modify) until it's explicitly opened — `CLAUDE.md` hard rule, gated by
-`docs/notes/stage-gates.md`.
+**S4 — Convention review, ACTIVE**, opened 2026-07-14. Per `docs/02-roadmap.md`: review mode — AI
+checks IR against `06-lad-conventions.md`'s ~50 rules and emits a findings report (rule ID,
+location, severity, suggested fix); no auto-fix. Exit: review of the reference project matches the
+engineer's own independent review on a sample; false-positive rate acceptable. Do not perform S5+
+capabilities (generation/modification) — `CLAUDE.md` hard rule, gated by `docs/notes/stage-gates.md`.
 
-## Current task: none — between phases
+## Current task: detailed S4 plan being built
 
-Nothing in-flight. S3 is closed; S4 is not yet open.
+Nothing executed yet. Genuinely new kind of capability — not reading (S2) or writing documentation
+(S3), but systematically checking logic against rules and reporting findings. Real open questions
+before any code gets written: which of the ~50 convention rules are actually mechanically checkable
+from IR content alone versus needing external context (an agreed equipment-ID list, the pattern
+library, a human design-intent judgment); what the findings-report format should look like; which
+block(s) to pilot against. Working through these via the same plan-mode process used for S3.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

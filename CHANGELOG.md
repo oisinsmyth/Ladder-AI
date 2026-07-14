@@ -10,6 +10,12 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Open S4 (convention review)**
+
+- Entry blocker already cleared earlier in the project (`06-lad-conventions.md` populated). No
+  work started yet - detailed plan being built the same way S3's was (plan mode, research
+  agents, explicit sign-off on real open questions before writing code).
+
 **S3 gate reviewed and signed off**
 
 - Exit criterion (an undocumented block gets useful comments end-to-end, human-approved) met three
