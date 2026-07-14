@@ -124,6 +124,124 @@ public class NormalizerTests
     }
 
     [Fact]
+    public void AreSemanticallyEquivalent_DifferingPartUId_SameTopology_ReturnsTrue()
+    {
+        // Confirmed real, 2026-07-14 (full export/convert/import/compile/re-export cycle against
+        // every SampleProject block, memory note "Part UId volatility, Normalizer gap"): TIA
+        // reassigns a Part's own UId too, not just Wire/Access. Contact(31)/Coil(32) here become
+        // Contact(50)/Coil(51) in "b", with every Wire/Access UId also renumbered around them —
+        // same topology throughout, so this must still compare equal.
+        var a = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"21\"><Symbol><Component Name=\"Sensor1\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"22\"><Symbol><Component Name=\"Output1\"/></Symbol></Access>" +
+            "<Part Name=\"Contact\" UId=\"31\"/><Part Name=\"Coil\" UId=\"32\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"41\"><Powerrail/><NameCon UId=\"31\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"42\"><IdentCon UId=\"21\"/><NameCon UId=\"31\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"43\"><NameCon UId=\"31\" Name=\"out\"/><NameCon UId=\"32\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"44\"><IdentCon UId=\"22\"/><NameCon UId=\"32\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+        var b = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"60\"><Symbol><Component Name=\"Sensor1\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"61\"><Symbol><Component Name=\"Output1\"/></Symbol></Access>" +
+            "<Part Name=\"Contact\" UId=\"50\"/><Part Name=\"Coil\" UId=\"51\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"70\"><Powerrail/><NameCon UId=\"50\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"71\"><IdentCon UId=\"60\"/><NameCon UId=\"50\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"72\"><NameCon UId=\"50\" Name=\"out\"/><NameCon UId=\"51\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"73\"><IdentCon UId=\"61\"/><NameCon UId=\"51\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+
+        Assert.True(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_TwoSameKindParts_SwappedNumbering_ReturnsTrue()
+    {
+        // The real test of graph-based identity, not just "renumbered in the same relative
+        // order": two independent Contact->Coil chains, reading different tags and writing
+        // different tags. In "b" the *numerically lower* UId now belongs to the chain that was
+        // numerically higher in "a" — a naive "match by position in document order" heuristic
+        // would get this wrong; only true topology (which Access each Contact/Coil is actually
+        // wired to) identifies them correctly.
+        var a = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"21\"><Symbol><Component Name=\"TagA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"22\"><Symbol><Component Name=\"OutA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"23\"><Symbol><Component Name=\"TagB\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"24\"><Symbol><Component Name=\"OutB\"/></Symbol></Access>" +
+            "<Part Name=\"Contact\" UId=\"31\"/><Part Name=\"Coil\" UId=\"32\"/>" +
+            "<Part Name=\"Contact\" UId=\"33\"/><Part Name=\"Coil\" UId=\"34\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"50\"><Powerrail/><NameCon UId=\"31\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"51\"><IdentCon UId=\"21\"/><NameCon UId=\"31\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"52\"><NameCon UId=\"31\" Name=\"out\"/><NameCon UId=\"32\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"53\"><IdentCon UId=\"22\"/><NameCon UId=\"32\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"54\"><Powerrail/><NameCon UId=\"33\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"55\"><IdentCon UId=\"23\"/><NameCon UId=\"33\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"56\"><NameCon UId=\"33\" Name=\"out\"/><NameCon UId=\"34\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"57\"><IdentCon UId=\"24\"/><NameCon UId=\"34\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+        var b = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"21\"><Symbol><Component Name=\"TagA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"22\"><Symbol><Component Name=\"OutA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"23\"><Symbol><Component Name=\"TagB\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"24\"><Symbol><Component Name=\"OutB\"/></Symbol></Access>" +
+            // Chain B (TagB/OutB) now gets the *lower* Part UIds (31/32); Chain A gets the higher ones (33/34) — reversed from "a".
+            "<Part Name=\"Contact\" UId=\"33\"/><Part Name=\"Coil\" UId=\"34\"/>" +
+            "<Part Name=\"Contact\" UId=\"31\"/><Part Name=\"Coil\" UId=\"32\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"50\"><Powerrail/><NameCon UId=\"33\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"51\"><IdentCon UId=\"21\"/><NameCon UId=\"33\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"52\"><NameCon UId=\"33\" Name=\"out\"/><NameCon UId=\"34\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"53\"><IdentCon UId=\"22\"/><NameCon UId=\"34\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"54\"><Powerrail/><NameCon UId=\"31\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"55\"><IdentCon UId=\"23\"/><NameCon UId=\"31\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"56\"><NameCon UId=\"31\" Name=\"out\"/><NameCon UId=\"32\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"57\"><IdentCon UId=\"24\"/><NameCon UId=\"32\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+
+        Assert.True(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_SameKindPartsDifferentWiring_ReturnsFalse()
+    {
+        // Guards against over-normalizing into a false positive: same Part kinds and count as
+        // "a", but Contact(31) is now wired to a *different* tag (TagB instead of TagA) — a real
+        // rewire, not a volatile-numbering artifact, and must still be reported as a difference.
+        var a = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"21\"><Symbol><Component Name=\"TagA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"22\"><Symbol><Component Name=\"TagB\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"23\"><Symbol><Component Name=\"Output1\"/></Symbol></Access>" +
+            "<Part Name=\"Contact\" UId=\"31\"/><Part Name=\"Coil\" UId=\"32\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"41\"><Powerrail/><NameCon UId=\"31\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"42\"><IdentCon UId=\"21\"/><NameCon UId=\"31\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"43\"><NameCon UId=\"31\" Name=\"out\"/><NameCon UId=\"32\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"44\"><IdentCon UId=\"23\"/><NameCon UId=\"32\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+        var b = XDocument.Parse(
+            "<FlgNet><Parts>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"21\"><Symbol><Component Name=\"TagA\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"22\"><Symbol><Component Name=\"TagB\"/></Symbol></Access>" +
+            "<Access Scope=\"GlobalVariable\" UId=\"23\"><Symbol><Component Name=\"Output1\"/></Symbol></Access>" +
+            "<Part Name=\"Contact\" UId=\"31\"/><Part Name=\"Coil\" UId=\"32\"/>" +
+            "</Parts><Wires>" +
+            "<Wire UId=\"41\"><Powerrail/><NameCon UId=\"31\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"42\"><IdentCon UId=\"22\"/><NameCon UId=\"31\" Name=\"operand\"/></Wire>" +
+            "<Wire UId=\"43\"><NameCon UId=\"31\" Name=\"out\"/><NameCon UId=\"32\" Name=\"in\"/></Wire>" +
+            "<Wire UId=\"44\"><IdentCon UId=\"23\"/><NameCon UId=\"32\" Name=\"operand\"/></Wire>" +
+            "</Wires></FlgNet>");
+
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
     public void Strip_RemovesOnlyVolatileElements_LeavesStructureIntact()
     {
         var element = XElement.Parse("<Block><Name>Foo</Name><ModifiedDate>x</ModifiedDate><Number>2</Number></Block>");

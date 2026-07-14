@@ -3362,3 +3362,30 @@ shape, a common "externally readable but not writable" pattern) genuinely is ind
 gate each other or it. 7 new/updated converter tests (`GlobalDbWithExternalAccessibleFalse.xml`,
 a newly-invented fixture — the real member name from `FB VSDSim` stays out of committed content,
 same discipline as every other fixture in this corpus). **366 converter tests, all green.**
+
+**`tests/golden/Normalizer` Part-UId volatility gap, closed with real graph-based identity
+matching, not a simple content-key map.** Unlike `Access` (identified by its own `Scope`+`Symbol`
+content, so a flat UId→content-key map was enough), a bare `Part` (`Contact`/`Coil`/`TON`/etc.)
+has no distinguishing content of its own — two `Contact`s in the same network can be byte-identical
+XML except for `UId`. Built `Normalizer.BuildPartContentKeyMap`: iterative structural refinement
+(Weisfeiler-Leman-style color refinement) — start each Part's own signature from its content minus
+every UId in its subtree (an `Instance` child's own UId is excluded defensively, since it isn't
+independently confirmed volatile or stable either way), then repeatedly fold in every wired
+neighbor's *current* signature (resolving through already-stable `Access` content-keys,
+`Powerrail`, `OpenCon`, or another Part's own in-progress signature) until the whole set stops
+changing. Real bug found live partway through: naively carrying each round's full descriptive
+string forward as the next round's input embeds the entire previous signature as a substring, so
+signature length grows multiplicatively and overflowed `Int32` (`ArgumentOutOfRangeException` in
+`string.Join`) on `MotorStarter` — real color refinement hashes each round down to a compact,
+fixed-size digest before reuse, not a literal running concatenation; fixed with a SHA256 hash per
+round. 3 new `NormalizerTests` (identical topology under full renumbering; the real test — two
+same-kind Parts with *swapped* relative numbering between documents, proving identity comes from
+wiring topology, not document-order heuristics; a negative case confirming genuinely different
+wiring still correctly reports non-equivalent, guarding against over-normalizing into a false
+positive). **Live-verified against all 7 real blocks originally confirmed to hit this gap**
+(`AirStarSystem`/`AnalogScale`/`EquipmentControlSystem`/`FilterUnitSystem`/`MotorFwdRevSystem`/
+`MotorStarter`/`MotorVSDSystem`) — every one now compares semantically equivalent; the full
+14-block reference corpus `RunAll` still passes cleanly too (no regression). 14 golden-harness
+tests total, all green.
+
+All three smaller flagged gaps from the earlier "what's left before S1" review are now closed.

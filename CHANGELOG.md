@@ -10,6 +10,22 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-14
 
+**Fix `Normalizer`'s Part-UId volatility gap with real graph-based identity matching**
+
+- A bare `Part` (`Contact`/`Coil`/`TON`/etc.) has no distinguishing content of its own the way
+  `Access` does via its own `Symbol` path — two `Contact`s in the same network can be
+  byte-identical XML except for `UId`, so the existing content-key-map approach couldn't
+  disambiguate them. Built `BuildPartContentKeyMap`: iterative structural refinement
+  (Weisfeiler-Leman-style color refinement) using each Part's own content plus its wired
+  neighbors' current signatures (resolved through stable `Access` content-keys, `Powerrail`,
+  `OpenCon`, or other Parts) until the whole set stabilizes. Found and fixed a real bug live: naive
+  round-to-round string concatenation grows multiplicatively and overflowed `Int32` on
+  `MotorStarter` — fixed with a SHA256 hash per round, the way color refinement is meant to work.
+  3 new tests (including the real proof: two same-kind Parts with numbering *swapped* between
+  documents, showing identity comes from topology, not document order). Live-verified against all
+  7 real blocks originally confirmed to hit this gap — all now compare equal; the full 14-block
+  reference corpus still round-trips cleanly. 14 golden-harness tests total.
+
 **Fix Sanitizer's `ExternalAccessible=False` hard-error; backfill data-boundary approval record**
 
 - `DbMember` gained `ExternalAccessible`/`ExternalVisible`/`ExternalWritable` fields (default

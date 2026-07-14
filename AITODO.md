@@ -35,8 +35,14 @@ Do not perform S2+ capabilities (explain/comment/generate/modify) — CLAUDE.md 
   surfaced a real, previously-unknown constraint: `ExternalAccessible=false` requires the other
   two false as well (`ExternalVisible=true` alongside it is rejected by TIA's own `Import()`),
   while `ExternalWritable=false` alone is independently valid. 7 new/updated tests, 366 converter
-  tests total. Full story: `docs/notes/stage-gates.md` ("Three smaller flagged gaps closed").
-  Item (3), the `Normalizer` Part-identity gap, is still open — see below.
+  tests total. (3) `tests/golden/Normalizer`'s Part-UId volatility gap fixed with real graph-based
+  identity matching (iterative structural refinement, Weisfeiler-Leman-style) — a bare Part has no
+  distinguishing content of its own the way Access does, so identity comes from wiring topology
+  instead. Found and fixed a real bug along the way (signature strings grew multiplicatively round
+  to round, overflowing Int32 on `MotorStarter` — fixed with a SHA256 hash per round). Live-verified
+  against all 7 real blocks originally confirmed affected — all now compare equal; the full 14-block
+  reference corpus still round-trips cleanly too. 14 golden-harness tests total. Full story:
+  `docs/notes/stage-gates.md` ("Three smaller flagged gaps closed").
 - **Reference corpus growth: 7 new blocks, 2026-07-14.** Project owner's own ask, after reviewing
   what's left before S1 is "done" in spirit: the committed `ir/reference/`/`simatic-ml/reference/`
   corpus only exercised ~5 of the ~24 instruction-level constructs this converter supports, with
@@ -145,12 +151,6 @@ action.
   OB-specific Interface-section quirk (`SecondaryType`/`Informative` fixed; `Output` section
   validity still open). `Main` is TIA's own auto-generated template block, not restricted content,
   and OB support was never a stated project goal. Deferred per the project owner's own call.
-- A `tests/golden/Normalizer` gap: TIA can reassign a Part's own `UId` on import/compile (not just
-  Wire/Access, as previously documented) — confirmed benign (matching Part count/kind, 0 compile
-  errors) on 7 of 47 full-cycle blocks, but `Normalizer.AreSemanticallyEquivalent` reports a false
-  "not equivalent" for them. Fixing this properly needs graph-based Part identity matching, not a
-  simple content-key map the way `Access` already has — flagged as a real, well-scoped follow-on,
-  not attempted yet.
 - **Modbus_Master/Modbus_Comm_Load's multi-instance form, considered during reference-corpus
   growth (2026-07-14) and deliberately not attempted** — unlike `WAIT`/`Jump`, this one's a closed
   engineering call, not something needing the project owner's input. Would have stacked two
@@ -162,7 +162,6 @@ action.
   Modbus multi-instance usage ever turns up.
 
 **Possible next work** (no explicit instruction yet — ask before starting):
-- Build the `Normalizer` Part-identity fix above.
 - S2 (read and explain) — the next roadmap stage once S1's gate review is formally signed off.
 
 **Sanitization maps built and kept** (`sanitization/`, gitignored): all 8 dependency FBs' own maps,

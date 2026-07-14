@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Linq;
 
 namespace GoldenHarness;
@@ -97,7 +99,7 @@ public static class Normalizer
         return XNode.DeepEquals(Strip(original.Root), Strip(reExported.Root));
     }
 
-    public static XElement Strip(XElement element) => Strip(element, BuildAccessContentKeyMap(element));
+    public static XElement Strip(XElement element) => Strip(element, BuildAccessContentKeyMap(element), new Dictionary<string, string>());
 
     // An Access element's own UId is volatile too — confirmed real, 2026-07-11 (TON grounding,
     // FC TimerSample): TIA reassigns Access UIds on its own Import()/Compile()/Export() cycle,
@@ -139,17 +141,151 @@ public static class Normalizer
         return $"tag:{scope}:{symbol?.ToString(SaveOptions.DisableFormatting)}";
     }
 
-    private static XElement Strip(XElement element, Dictionary<string, string> accessContentKeyByUId)
+    // A bare Part (Contact/Coil/TON/etc.) has no distinguishing content of its own the way Access
+    // does via its own Symbol path — two Contacts in the same network can be byte-identical XML
+    // except for UId. TIA reassigns Part UId on import/compile too (confirmed real 2026-07-14,
+    // full export/convert/import/compile/re-export cycle against every SampleProject block — 7 of
+    // 47 blocks affected), so a Part's real identity has to come from graph position: its own
+    // content (kind, DisabledENO, Version, Instance path, etc.) plus which already-stable things
+    // (Access content-keys, Powerrail, OpenCon) or other Parts it's wired to.
+    //
+    // Computed via iterative structural refinement (Weisfeiler-Leman-style color refinement):
+    // start from each Part's own content key, then repeatedly fold in every wired neighbor's
+    // *current* key into a new key, until the whole set of keys stops changing or a safety cap
+    // (bounded by the standard 1-WL result that a partition can refine at most partCount-1 times
+    // before stabilizing) is hit. Two Parts converge to the same final key only if truly
+    // interchangeable throughout the whole network's topology, not just superficially alike —
+    // and if they're *genuinely* symmetric (a true graph automorphism, no anchor distinguishes
+    // them even in principle), swapping their identities produces an equivalent graph anyway, so
+    // the comparison stays correct even without a fully unique key per Part in that edge case.
+    private static Dictionary<string, string> BuildPartContentKeyMap(XElement flgNet, IReadOnlyDictionary<string, string> accessContentKeyByUId)
+    {
+        var parts = flgNet.Elements().FirstOrDefault(e => e.Name.LocalName == "Parts")?.Elements()
+            .Where(e => e.Name.LocalName == "Part").ToList() ?? new List<XElement>();
+        if (parts.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
+
+        var wires = flgNet.Elements().FirstOrDefault(e => e.Name.LocalName == "Wires")?.Elements()
+            .Where(e => e.Name.LocalName == "Wire").ToList() ?? new List<XElement>();
+
+        // For each Part UId: every (port name, other endpoints sharing that same wire) it
+        // participates in — gathered once, reused unchanged every refinement round (only the
+        // *resolved description* of each neighbor changes round to round, not the adjacency
+        // itself).
+        var portTouches = parts
+            .Select(p => (string)p.Attribute("UId")!)
+            .ToDictionary(uid => uid, _ => new List<(string Port, List<XElement> OtherEndpoints)>());
+
+        foreach (var wire in wires)
+        {
+            var endpoints = wire.Elements().ToList();
+            foreach (var endpoint in endpoints)
+            {
+                if (endpoint.Name.LocalName != "NameCon" || (string?)endpoint.Attribute("UId") is not string partUid
+                    || !portTouches.TryGetValue(partUid, out var touches))
+                {
+                    continue;
+                }
+
+                var port = (string?)endpoint.Attribute("Name") ?? string.Empty;
+                var others = endpoints.Where(e => !ReferenceEquals(e, endpoint)).ToList();
+                touches.Add((port, others));
+            }
+        }
+
+        // Each round's signature is hashed down to a compact, fixed-length digest before it
+        // becomes the *next* round's neighbor-lookup input — real bug, found live 2026-07-14
+        // (MotorStarter, big enough to hit it): carrying the full, ever-growing descriptive
+        // string forward round to round embeds the entire previous signature as a substring of
+        // the next one, so signature length grows multiplicatively with each round and overflows
+        // Int32 (`string.Join` -> `ArgumentOutOfRangeException`, "minimumLength ... must be a
+        // non-negative value") on a real network with enough Parts/rounds. Hashing keeps every
+        // round's representation the same small size regardless of how much history it encodes —
+        // this is how color refinement is meant to work (a compact per-round "color," not a
+        // literal running concatenation), not an approximation of it.
+        var signature = parts.ToDictionary(p => (string)p.Attribute("UId")!, p => Hash(PartOwnContentKey(p)));
+
+        for (var round = 0; round < parts.Count; round++)
+        {
+            var next = new Dictionary<string, string>(signature.Count);
+            foreach (var (uid, touches) in portTouches)
+            {
+                var portDescriptions = touches
+                    .Select(t => $"{t.Port}=[{string.Join(",", t.OtherEndpoints.Select(e => DescribeEndpoint(e, accessContentKeyByUId, signature)).OrderBy(s => s, StringComparer.Ordinal))}]")
+                    .OrderBy(s => s, StringComparer.Ordinal);
+                next[uid] = Hash(signature[uid] + "||" + string.Join(";", portDescriptions));
+            }
+
+            var converged = next.All(kv => signature[kv.Key] == kv.Value);
+            signature = next;
+            if (converged)
+            {
+                break;
+            }
+        }
+
+        return signature;
+    }
+
+    // Stable across processes/runs (unlike string.GetHashCode(), which .NET deliberately
+    // randomizes per-process) — needed since AreSemanticallyEquivalent compares two independent
+    // Strip() calls (potentially different process invocations of this test suite) that must
+    // still agree on which Parts are "the same" whenever they truly are.
+    private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static string DescribeEndpoint(XElement endpoint, IReadOnlyDictionary<string, string> accessContentKeyByUId, IReadOnlyDictionary<string, string> currentPartSignature) =>
+        endpoint.Name.LocalName switch
+        {
+            "Powerrail" => "RAIL",
+            "OpenCon" => "OPEN",
+            "IdentCon" when (string?)endpoint.Attribute("UId") is string accessUid && accessContentKeyByUId.TryGetValue(accessUid, out var accessKey)
+                => $"ACCESS:{accessKey}",
+            "NameCon" when (string?)endpoint.Attribute("UId") is string partUid && currentPartSignature.TryGetValue(partUid, out var partSig)
+                => $"PART:{partSig}@{(string?)endpoint.Attribute("Name")}",
+            _ => $"UNKNOWN:{endpoint.Name.LocalName}:{(string?)endpoint.Attribute("UId")}",
+        };
+
+    // A Part's own content, excluding *every* UId in its subtree (not just its own top-level
+    // one) — not just the Part's own kind/attributes, but any child too (e.g. a TON/CALL/
+    // Modbus_Master's own <Instance>). Instance's own UId isn't independently confirmed volatile
+    // or stable either way, so it's excluded defensively rather than risking a false mismatch —
+    // Instance's real identity is its Scope+Component path, mirroring Access's own reasoning,
+    // not the arbitrary number next to it.
+    private static string PartOwnContentKey(XElement part) => StripAllUIds(part).ToString(SaveOptions.DisableFormatting);
+
+    private static XElement StripAllUIds(XElement element)
+    {
+        var attributes = element.Attributes().Where(a => a.Name.LocalName != "UId");
+        var clone = new XElement(element.Name, attributes);
+        foreach (var child in element.Elements())
+        {
+            clone.Add(StripAllUIds(child));
+        }
+
+        if (!element.HasElements)
+        {
+            clone.Value = element.Value;
+        }
+
+        return clone;
+    }
+
+    private static XElement Strip(XElement element, Dictionary<string, string> accessContentKeyByUId, Dictionary<string, string> partContentKeyByUId)
     {
         // UId numbering restarts at the beginning of every network (each <FlgNet> is its own
         // numbering scope) — the content-key map must be rebuilt per network too, not flattened
         // across the whole document, or the same number ("22", "23", ...) reused in a different
         // network silently clobbers an unrelated entry. Caught live, 2026-07-11, comparing a
         // real 3-network export (FC TimerSample) — a single-network test fixture would never
-        // have exposed this.
+        // have exposed this. Part's own map is rebuilt alongside Access's for the same reason —
+        // and depends on Access's own map already being rebuilt first, since Part identity is
+        // partly derived from which Access content-keys a Part is wired to.
         if (element.Name.LocalName == "FlgNet")
         {
             accessContentKeyByUId = BuildAccessContentKeyMap(element);
+            partContentKeyByUId = BuildPartContentKeyMap(element, accessContentKeyByUId);
         }
 
         IEnumerable<XAttribute> attributes;
@@ -157,6 +293,11 @@ public static class Normalizer
             && (string?)element.Attribute("UId") is string uid && accessContentKeyByUId.TryGetValue(uid, out var key))
         {
             attributes = element.Attributes().Select(a => a.Name.LocalName == "UId" ? new XAttribute("UId", key) : a);
+        }
+        else if ((element.Name.LocalName == "Part" || element.Name.LocalName == "NameCon")
+            && (string?)element.Attribute("UId") is string partUid && partContentKeyByUId.TryGetValue(partUid, out var partKey))
+        {
+            attributes = element.Attributes().Select(a => a.Name.LocalName == "UId" ? new XAttribute("UId", partKey) : a);
         }
         else if (ElementsWithVolatileId.TryGetValue(element.Name.LocalName, out var volatileAttrName))
         {
@@ -168,7 +309,7 @@ public static class Normalizer
         }
 
         var clone = new XElement(element.Name, attributes);
-        var children = element.Elements().Where(c => !IsVolatile(c)).Select(c => Strip(c, accessContentKeyByUId)).ToList();
+        var children = element.Elements().Where(c => !IsVolatile(c)).Select(c => Strip(c, accessContentKeyByUId, partContentKeyByUId)).ToList();
 
         // <Wire> order within <Wires>, <Access>/<Part> order within <Parts>, and an individual
         // <Wire>'s own endpoint order (<IdentCon>/<NameCon>/<Powerrail>/<OpenCon>) are all not
