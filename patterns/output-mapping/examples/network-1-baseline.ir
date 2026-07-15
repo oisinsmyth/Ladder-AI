@@ -1,0 +1,11 @@
+NETWORK 1 "DO Card 0 (PLC) Slot 0"
+  COIL DQ1 := AlwaysTrue AND DiscreteOutputs.HFLCStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[1]
+  COIL DQ2 := AlwaysTrue AND DiscreteOutputs.AirStarFCStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[2]
+  COIL DQ3 := AlwaysTrue AND DiscreteOutputs.FMCCStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[3]
+  COIL DQ4 := AlwaysTrue AND DiscreteOutputs.OverbandMagStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[4]
+  COIL DQ5 := AlwaysTrue AND DiscreteOutputs.OSDrumSepStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[5]
+  COIL DQ6 := AlwaysTrue AND DiscreteOutputs.OSECStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[6]
+  COIL DQ7 := AlwaysTrue AND DiscreteOutputs.OSRCStart AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[7]
+  COIL DQ8 := AlwaysTrue AND DiscreteOutputs.DiskSpreader1Start AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[8]
+  COIL DQ9 := AlwaysTrue AND DiscreteOutputs.DiskSpreader2Start AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[9]
+  COIL DQ10 := AlwaysTrue AND DiscreteOutputs.SFCRunFwd AND NOT DiscreteOutputs.Test[0] OR AlwaysTrue AND DiscreteOutputs.Test[10]

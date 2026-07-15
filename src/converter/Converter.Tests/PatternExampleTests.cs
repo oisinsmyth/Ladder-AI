@@ -29,6 +29,9 @@ public class PatternExampleTests
     [InlineData("chained-permissive-enable/examples/network-8-overband-magnet.ir")]
     [InlineData("chained-permissive-enable/examples/network-12-drum-separator-chainhead.ir")]
     [InlineData("motor-dol/examples/calling-network.ir")]
+    [InlineData("input-mapping/examples/network-1-baseline.ir")]
+    [InlineData("input-mapping/examples/network-2-negated-and-spare.ir")]
+    [InlineData("output-mapping/examples/network-1-baseline.ir")]
     public void NetworkOnlyExample_RoundTripsLosslessly(string relativePath)
     {
         var path = Path.Combine(RepoRoot(), "patterns", relativePath);

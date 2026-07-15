@@ -29,6 +29,11 @@ JOB9002 - Tom White Waste - Scratch Copy/
 # project folder, only the sanitized exports it produces (simatic-ml/reference/, ir/reference/)
 SampleProject/
 
+# S6 generation sandbox (2026-07-15) — a live, working TIA project used to incrementally build up
+# a real generated project via small prompted steps. Same reasoning as SampleProject/: never commit
+# the live project folder itself, only whatever gets extracted from it (e.g. patterns/<name>/).
+GenProject1/
+
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
 Siemens.Engineering*.dll
 
