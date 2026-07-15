@@ -109,6 +109,20 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     `patterns/` — any committed content (a pattern's own `.ir`, a `CALL`-site example, a rung-shape
     excerpt) is produced via `converter sanitize` (the same mechanism already used for the reference
     corpus), never copied verbatim.
+  - **2026-07-15 — genericization rule waived for `input-mapping`/`output-mapping` specifically.**
+    Project owner's own explicit call, made when these two patterns were being built: "do you
+    really need to sanitize to make a pattern from it?" — challenging the default assumption that
+    `converter sanitize` is always required before JOB9002 content commits to `patterns/`. Agreed:
+    the genericization rule above exists to strip identifying data, but `FC Inputs`/`FC Outputs`
+    content has none to strip — `DI1`-`DI94`/`DQ1`-`DQ26` are bare sequential point numbers, and
+    the function names (`HFLCRunning`, `AirStarFCRunning`, etc.) are the same generic
+    controls-engineering vocabulary already committed verbatim elsewhere (`motor-dol`,
+    `chained-permissive-enable`'s own equipment names). Scope: `patterns/input-mapping/` and
+    `patterns/output-mapping/` only — both committed with real JOB9002 tag/DB names, no
+    `converter sanitize` pass run. Not a blanket waiver of the genericization rule; any other
+    pattern (including the `DB_Inputs`/`DB_Outputs`-equivalent buffer-DB pattern started
+    2026-07-15) is still evaluated on its own content against the same test — is there anything
+    here that actually identifies the site/site — not assumed exempt by this entry.
   - **2026-07-15 — extended to mechanical review activity (S4).** Project owner's own explicit
     instruction: finish S4 properly by satisfying its own stated exit criterion (a blind
     comparison between the project owner's independent review and `converter review`'s own

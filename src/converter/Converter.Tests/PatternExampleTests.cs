@@ -66,4 +66,28 @@ public class PatternExampleTests
 
         Assert.Equal(text, reserialized);
     }
+
+    [Fact]
+    public void DbInputsBlock_RoundTripsLosslessly()
+    {
+        var path = Path.Combine(RepoRoot(), "patterns", "db-inputs", "Input.ir");
+        var text = File.ReadAllText(path);
+
+        var db = DbIrParser.ParseDb(text);
+        var reserialized = DbIrSerializer.Serialize(db);
+
+        Assert.Equal(text, reserialized);
+    }
+
+    [Fact]
+    public void DbOutputsBlock_RoundTripsLosslessly()
+    {
+        var path = Path.Combine(RepoRoot(), "patterns", "db-outputs", "Output.ir");
+        var text = File.ReadAllText(path);
+
+        var db = DbIrParser.ParseDb(text);
+        var reserialized = DbIrSerializer.Serialize(db);
+
+        Assert.Equal(text, reserialized);
+    }
 }
