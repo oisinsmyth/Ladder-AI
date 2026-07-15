@@ -23,13 +23,22 @@ internal static class Program
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
+            Console.Error.WriteLine("       converter to-xml <file> [<file> ...] --synthesize   # no real SIDECAR needed; mints a fresh one (plain COIL AND/OR/NOT chains only)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
             return 1;
         }
 
         var mode = args[0];
-        var files = args[1..];
+        var rest = args[1..];
+        var synthesize = rest.Contains("--synthesize");
+        var files = rest.Where(a => a != "--synthesize").ToArray();
+
+        if (synthesize && mode != "to-xml")
+        {
+            Console.Error.WriteLine("--synthesize is only valid with 'to-xml' — a real SimaticML export always has real sidecar data, so synthesis is meaningless for 'to-ir'.");
+            return 1;
+        }
 
         foreach (var file in files)
         {
@@ -41,10 +50,10 @@ internal static class Program
                 }
                 else
                 {
-                    ConvertToXml(file);
+                    ConvertToXml(file, synthesize);
                 }
             }
-            catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
+            catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException or UnsupportedSynthesisConstructException)
             {
                 Console.Error.WriteLine($"{file}: {ex.GetType().Name}: {ex.Message}");
                 return 1;
@@ -265,7 +274,7 @@ internal static class Program
         Console.WriteLine($"{sourcePath} -> {outPath}");
     }
 
-    private static void ConvertToXml(string sourcePath)
+    private static void ConvertToXml(string sourcePath, bool synthesize = false)
     {
         var irText = File.ReadAllText(sourcePath);
 
@@ -299,7 +308,17 @@ internal static class Program
             return;
         }
 
-        var (block, sidecars) = IrParser.ParseBlock(irText);
+        IrBlock block;
+        IReadOnlyList<NetworkSidecar> sidecars;
+        if (synthesize)
+        {
+            block = IrParser.ParseBlockWithoutSidecar(irText);
+            sidecars = SidecarSynthesizer.SynthesizeBlock(block);
+        }
+        else
+        {
+            (block, sidecars) = IrParser.ParseBlock(irText);
+        }
 
         var flgNetworks = new List<FlgNetwork>();
         var compileUnitUIds = new List<string>();

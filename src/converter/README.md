@@ -8,6 +8,7 @@ it isn't pinned to `net48`).
 ```
 converter to-ir  <file>                                   # SimaticML → IR
 converter to-xml <file>                                   # IR → SimaticML
+converter to-xml <file> --synthesize                      # IR (no SIDECAR needed) → SimaticML — see "Sidecar synthesis" below
 converter sanitize <file> --map <mapping.json> --out <path>  # SimaticML → sanitized SimaticML
 ```
 
@@ -791,6 +792,43 @@ rail-fed `Mul` genericized from the real `AirStar` shape). All 216 converter tes
 the block now progresses to the same `Access Scope="LocalConstant"` gap `MotorVSDSystem` also hits
 (unrelated, still open, not addressed here).
 
+## Member-level Comment (2026-07-15, Kestrel Shredder System build)
+
+An ordinary Static/Input/Output/DB member's own "Comment" column (as seen in TIA's interface
+editor) — distinct from `InformativeComment` above, which is OB-bare-system-parameter-only
+machinery. Came from a direct project-owner request while reviewing the Kestrel build
+(`FB_PusherControl`): network titles and comments existed, but nothing let a *member itself*
+carry a why-comment, which matters for a variable read far from where it's declared.
+
+No real donor example existed anywhere in currently-accessible Green-tier data to ground this
+against (checked `FB_MotorFwdRevSystem`, a real untouched vendor FB — none of its own Static
+members, including the HMI-tunable ones most likely to want one, carry a Comment). Grounded
+instead by reusing XML syntax *already* proven real by the `Informative` shape directly above
+(`<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText></Comment>`, confirmed live on
+`OB1 Main`'s system parameters, 2026-07-14) and testing whether it also works on an *ordinary*
+member with no `Informative` attribute at all. It does — live TIA import + block compile (0
+errors) + export round-trip all confirmed on a real Static member, first attempt.
+
+`DbMember` gained a `Comment` field. `DbInterfaceMembers.WriteMember`/`ParseMember` (the shared
+shape a DB's own top-level members and an FB/FC's own Static/Input/Output members all go
+through) read/write it; IR text is `<name> : <Type> ... COMMENT "<text>"` (`DbMemberLineFormat`),
+appended as the *last* token specifically so it can be peeled off before `StartValue`'s own
+leftmost-`" = "` search runs — free-text comment prose routinely contains `=` itself (e.g.
+referencing a Step number), which would otherwise corrupt the start-value parse.
+
+**Deliberately not extended to every member shape.** `WriteBareMember` (Temp members, and a
+structured member's own nested fields — a UDT-typed Static's inner fields, a timer instance's own
+PT/ET/IN/Q), `WriteTypeMember` (a PLC data type's own member shape), and `WriteConstantMember`
+all hard-error on a non-null `Comment` rather than silently dropping it — none of those shapes
+were part of this grounding, and this converter's own standing discipline is refuse-rather-than-
+guess on an unconfirmed XML shape, not silently lose real content. Extending to one of those is
+future work if a real need shows up, grounded the same way (try the proven shape first, let a
+live TIA response confirm or refute it) rather than assumed to just work.
+
+4 new tests (`BlockInterfaceTests.cs`): IR round-trip (plain, and a comment containing `=`
+alongside a real `StartValue`, specifically exercising the peel-order fix above), XML round-trip,
+and the nested-member hard-error guard. All pass. 463 converter tests total (up from 459).
+
 ## `Access Scope="LocalConstant"` (S1 item 21, 2026-07-12)
 
 Picked up per the project owner's own explicit choice — the last of the two real gaps S1 item 20's
@@ -1312,6 +1350,116 @@ tracked here rather than left implicit:
   identifying content (unlike e.g. `MotorDOL`'s own semantic member names), so this was
   judged equivalent to `LogicalAddress`'s own "structural, not business content" category rather
   than a data-boundary exception — flagged here explicitly rather than left silent.
+
+## Sidecar synthesis — `--synthesize` (2026-07-15, no donor XML needed)
+
+Every other capability in this file reads sidecar data (Wire/Part/Access UIds — the wiring
+topology TIA needs to reconstruct valid XML) off a real TIA export. There was no way to produce
+one for a genuinely new network that never existed in TIA before — the only workaround, hit for
+real generating a brand-new IO-mapping FC into a from-scratch project with zero existing donor
+logic, was to hand-clone a real export's sidecar text line-by-line and rename tag strings within
+it. Slow, error-prone, and not a real capability — flagged explicitly by the project owner as
+needing a proper fix.
+
+**`SidecarSynthesizer.Synthesize(IrNetwork) -> NetworkSidecar`** (`Ir/SidecarSynthesizer.cs`)
+mints a fresh, internally self-consistent sidecar directly from a network's own `Expr` tree, via
+one recursive walk with a single per-network monotonic UId counter. Safe because TIA reassigns
+every Wire/Access/Part UId on its own Import()/Compile()/Export() cycle regardless of what's
+written — confirmed independently three times for each of those three element kinds (see
+`docs/notes/stage-gates.md`): "TIA relocates/renumbers freely, only the topology matters." The one
+invariant minting order has to get right on its own (nothing here is copying it off a real
+document): `FlgNetBuilder` sorts the final Parts list by ascending UId and trusts that to already
+be TIA's own required signal-flow order (a real, quoted `Import()` validator rule) — every
+`Or`/`Not` mints its own Part UId only *after* recursing into whatever feeds it, and every
+AND-chain leaf mints in rail-to-coil order, so ascending UId already matches signal-flow order by
+construction.
+
+**Scope, v1 (2026-07-15)**: `Expr.TagRef`/`And`/`Or`/`Not` and `CoilAssignment`
+(`COIL`/`SCOIL`/`RCOIL`) only — the plain contact/OR-merge/NOT-merge chain, arbitrary nesting
+depth. Everything else hard-errored by name, never guessed at.
+
+**Scope, v2 (2026-07-15, same day — extended for the Kestrel Shredder build)**: adds
+`Expr.Compare` (as an ordinary chain position, alongside a bare tag — confirmed real, `FC
+ControlDelays`: a comparison behaves like a Contact, not an OR-merge/TON), `TON` (TON only —
+TOF/TONR hard-error, matching site convention C-406 as well as being genuinely unimplemented),
+`MOVE`, `MUL`/`ADD` (Multiply/Add only — Subtract/Divide hard-error), `CONVERT` (scoped to the
+real Real-seconds→DInt-milliseconds HMI idiom this project's `DB_Settings` convention, C-307, is
+built on — a differently-typed Convert is a separate, unimplemented case, not guessed at), and
+zero-argument FB `CALL` (a wired-argument call hard-errors — every equipment FB this project has
+built or reused exposes its interface through a caller-visible STATIC struct instead of Input/
+Output parameters, per C-115/C-118, so a zero-argument call covers every real need). Still out of
+scope, still a deliberate, named future follow-on: WAND, SWAP, ABS, LIMIT, T_SUB, T_CONV, CALC,
+MOVE_BLK_VARIANT, WAIT, FILLBLOCKI, MODBUS_MASTER/MODBUS_COMM_LOAD — hard-errors by name
+(`UnsupportedSynthesisConstructException`), same discipline as v1.
+
+Two v2-specific design notes, both in `SidecarSynthesizer.cs`'s own doc comments in full: (1) a
+Mul/Convert "EN := ENO" chained pair (the real HMI-seconds idiom, confirmed real in `MotorStarter`'s
+own "HMI Times" network) is synthesized by *index-pairing* `network.Muls[i]`/`network.Converts[i]`,
+not by batching all Muls then all Converts — batching would misattribute which Mul an ENO-chained
+Convert belongs to once a network has more than one such pair (real fixture:
+`TwoIndependentMulConvertChainsInterleaved.xml`, three in `MotorStarter`'s own real network). (2)
+Access/Constant UIds are never subject to the Parts-list flow-order constraint (confirmed by
+construction: `FlgNetwork` carries them in their own separate list, and v1's own interleaved
+contact-then-access minting already passed live TIA verification), so a Timer's own `Q` read back
+elsewhere via an ordinary Access — this synthesizer's only supported way to read a timer's output,
+never the `TimerOutputStep` direct-wire shape — needs no `EnsureTimerBuilt`-equivalent inline
+bookkeeping the way `FlgNetBuilder`'s own *read* side requires.
+
+Access `Scope` is always synthesized as `GlobalVariable`, except a TON's own multi-instance
+reference (`LocalVariable`, per C-407 — a timer inside a reusable equipment FB lives in that FB's
+own Static section) and a CALL's own instance (`GlobalVariable`, a standalone instance DB
+referenced by name — confirmed real, `FC ControlDelays`' own standalone-timer precedent: "a single
+Component naming its own instance DB directly").
+
+Two synthesis policies, both confirmed-legal real shapes, neither enforced as "the" rule by
+`GraphReducer` itself (which only ever reads whichever shape a real export happens to already
+have): one shared rail-wire UId per network, reused by every chain/branch that terminates at rail;
+a fresh Access UId at every syntactic tag reference (no tag-text dedup — two Access elements for
+one tag is already a proven-legal, previously-fixed-for real shape, `SCoil`/`RCoil` targeting one
+tag via two independent elements).
+
+**CLI**: `converter to-xml <file> --synthesize` — `<file>` is a `BLOCK`/`NETWORK` document with
+*no* `SIDECAR` section (same grammar `IrParser.ParseNetworkOnly` already parses for pattern
+excerpts, just wrapped in an ordinary block header). Explicit opt-in, not silent auto-detection —
+`IrParser.ParseBlockWithoutSidecar` errors loudly if a real `SIDECAR` section is present anyway
+(real round-trip data silently discarded in favor of synthesis is confusion, not a feature).
+Without the flag, `to-xml` is completely unchanged — same requirement, same errors, every existing
+test byte-for-byte unaffected (`IrParser.ParseBlock` itself was only ever extract-method-refactored
+to share its header/network-parsing with the new sidecar-less entry point, never rewritten).
+`FlgNetBuilder`/`FlgNetWriter`/`BlockSourceWriter`/`GraphReducer` are all completely untouched —
+confirmed by full-file audit that `FlgNetBuilder.Build` never computes a UId anywhere, only ever
+replays whatever a sidecar already contains, so a synthesized one satisfies it exactly like a real
+one would.
+
+**Tests, three tiers**:
+1. `Converter.Tests/SidecarSynthesizerTests.cs` — hand-written IR text per shape (plain AND chain,
+   the exact real OR-of-two-ANDs IO-mapping shape, nested OR, standalone NOT, negated leaf, bare
+   leaf, `TRUE` sentinel, `SCoil`/`RCoil` sharing one rail, v2: a bare comparison feeding a Coil),
+   plus hard-error cases (v2: the "still out of scope" case uses `WAND`, not TON — TON moved into
+   scope), plus a direct smoke-feed into unmodified `FlgNetBuilder.Build`.
+2. `Converter.Tests/SidecarSynthesizerFidelityTests.cs` — semantic-fidelity round trip reusing
+   **existing** fixtures (no new ones needed): reduce a real fixture, discard its real sidecar
+   entirely, synthesize a fresh one from the same `IrNetwork`, rebuild → reparse → reduce again,
+   assert the re-reduced network reads back identically. v1: 6 real fixtures (including
+   `OrMergeSharedPrefixBranches`/nested `OrMergeCoil` shapes). v2 (2026-07-15): 7 more —
+   `GtFeedsCoil` (comparison), `WithTon`/`WithTonAndQReadBack` (TON, incl. Q read back via ordinary
+   Access), `MoveFedByContact`, `MulConvertEnoChainedPair`/`TwoIndependentMulConvertChainsInterleaved`
+   (the ENO-chain index-pairing logic, including the two-independent-pairs case that would catch a
+   regression to batching), `CallBareFedByRail`. All pass unchanged — real fixtures already existed
+   for every v2 shape, none newly built for this.
+3. `tests/golden/GoldenHarness.Tests/SynthesizerLiveCheck.cs` — live-verified 2026-07-15 (v1
+   scope): a genuinely new scratch block, built at runtime from `ir/reference/
+   PerimeterSafetyAlarms.ir`'s own real Network 1 text (a 3-way OR-merge of negated contacts plus
+   five plain single-contact assignments — real tags already part of `SampleProject`'s committed
+   corpus), synthesized, imported, and compiled — 0 errors. (First attempt reused
+   `patterns/output-mapping`/`patterns/input-mapping` example content instead — a real, useful
+   finding, but about that content's own JOB9002-specific tags never having been imported into
+   `SampleProject`, not about the synthesizer: 104 "tag not defined" errors, none of them
+   wiring/topology errors.) Same "manual/live, not CI" convention as `ReferenceProjectRoundTrip`;
+   deletes its own scratch block after. **v2's own Tier 3** is the Kestrel Shredder build itself
+   (`GenProject1`) that motivated it — every new TON/MOVE/Compare/MUL/CONVERT/CALL network that
+   build writes goes through the same real import+compile gate, so a dedicated isolated v2 live
+   check was judged redundant with that real work rather than skipped.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

@@ -114,11 +114,27 @@ public static class BlockSourceWriter
     // Return: confirmed real 2026-07-10 on FCs (the standard parameterless "Ret_Val" boilerplate)
     // and confirmed absent entirely — not even an empty Section element — on every real FB
     // grounded for this item (2026-07-12, TomraControlSystem/MotorVSDSystem/AirStar, 3 independent
-    // instances). Emitted only for non-FB blocks (`block.Kind != "FB"`) rather than
-    // unconditionally as before this item — the prior unconditional emission was never actually
-    // exercised against a real FB's own Interface-section content before now, so this asymmetry
-    // went unnoticed; fixed here since it's directly in the path of what this item already
-    // extends and would otherwise regenerate an incorrect shape for every FB.
+    // instances). Originally gated `block.Kind != "FB"` (so: present for FC, absent for FB) —
+    // corrected 2026-07-15 to `block.Kind == "FC"` (present *only* for FC) once OB1 Main became
+    // the first OB this project ever wrote fresh content into: TIA Import() rejected the old
+    // FB-only exclusion just as directly as it rejected Output/InOut below ("Section 'Return' is
+    // not valid for this block") — OBs, like FBs, don't carry a Return/Ret_Val section either
+    // (an OB is system-called with no return value concept, same as an FB call). The FB-vs-FC
+    // distinction this was originally grounded on undersold its own scope: it's really an
+    // FC-only feature, not merely an FB exclusion — this hadn't surfaced before because no real
+    // OB had ever gone through this writer with content until now.
+    //
+    // Output/InOut on an OB: confirmed real, 2026-07-15 — building this project's own OB1 Main
+    // for the first time (previously always empty, so this path had never been exercised for any
+    // OB) hit a genuine TIA Import() rejection: "Section 'Output' is not valid for this block."
+    // The old code emitted Output/InOut unconditionally for every block kind (even when the
+    // underlying member list is null/empty, WriteMemberSection still regenerates an empty
+    // `<Section>` element) — harmless for FB/FC, which tolerate an empty Output/InOut section, but
+    // an OB apparently doesn't tolerate the section's mere *presence* at all, empty or not. Same
+    // "block kind changes which sections are even legal" reasoning as the Return omission above,
+    // now extended to Output/InOut for OBs specifically (System-called OBs take a fixed Input
+    // parameter set defined by the OB type itself — TemplateValue/SecondaryType — never Output/
+    // InOut in any real example seen, so this isn't just papering over the one rejection).
     private static XElement? WriteInterface(BlockSource block)
     {
         var staticMembers = block.StaticMembers;
@@ -127,7 +143,8 @@ public static class BlockSourceWriter
         var outputMembers = block.OutputMembers;
         var inOutMembers = block.InOutMembers;
         var constantMembers = block.ConstantMembers;
-        var writeReturn = block.Kind != "FB";
+        var writeReturn = block.Kind == "FC";
+        var writeOutputAndInOut = block.Kind != "OB";
 
         if (staticMembers is null && tempMembers.Count == 0 && inputMembers is null && outputMembers is null
             && inOutMembers.Count == 0 && constantMembers is null && !writeReturn)
@@ -135,12 +152,12 @@ public static class BlockSourceWriter
             return null;
         }
 
-        var sectionsChildren = new List<XElement>
+        var sectionsChildren = new List<XElement> { WriteMemberSection("Input", inputMembers) };
+        if (writeOutputAndInOut)
         {
-            WriteMemberSection("Input", inputMembers),
-            WriteMemberSection("Output", outputMembers),
-            WriteMemberSection("InOut", inOutMembers),
-        };
+            sectionsChildren.Add(WriteMemberSection("Output", outputMembers));
+            sectionsChildren.Add(WriteMemberSection("InOut", inOutMembers));
+        }
 
         if (staticMembers is not null)
         {

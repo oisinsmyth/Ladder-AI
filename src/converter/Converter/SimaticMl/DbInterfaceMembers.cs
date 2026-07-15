@@ -97,6 +97,7 @@ internal static class DbInterfaceMembers
         };
 
         var booleanAttributes = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint);
+        var comment = ParseOptionalComment(member);
 
         // Member/AttributeList/StartValue inherit the Interface namespace declared on the
         // ancestor <Sections xmlns="..."> — Element("StartValue")/Element("AttributeList")
@@ -128,7 +129,8 @@ internal static class DbInterfaceMembers
             var anonymousNestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
             return new DbMember(
                 name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: anonymousNestedMembers,
-                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
+                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
+                Comment: comment);
         }
 
         if (isStructured)
@@ -142,13 +144,26 @@ internal static class DbInterfaceMembers
             var nestedMembers = ParseNestedMembers(nestedSections!, context, name);
             return new DbMember(
                 name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
-                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
+                ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
+                Comment: comment);
         }
 
         var startValue = startValueElement?.Value;
         return new DbMember(
             name, datatype, retain, string.IsNullOrEmpty(startValue) ? null : startValue, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: null,
-            ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable);
+            ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
+            Comment: comment);
+    }
+
+    // Shared with the Informative/bare-parameter path's own Comment reading below, minus the
+    // required-not-optional throw — an ordinary member's Comment is genuinely optional (absent on
+    // the overwhelming majority of members seen), confirmed real 2026-07-15 by successfully
+    // importing/exporting a plain Static member carrying one (FB_PusherControl, this session).
+    private static string? ParseOptionalComment(XElement member)
+    {
+        var commentElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Comment");
+        var textElement = commentElement?.Elements().FirstOrDefault(e => e.Name.LocalName == "MultiLanguageText");
+        return textElement?.Value is { Length: > 0 } text ? text : null;
     }
 
     public static IReadOnlyList<DbMember> ParseNestedMembers(XElement sections, string context, string ownerMemberName)
@@ -323,6 +338,17 @@ internal static class DbInterfaceMembers
     /// </summary>
     public static XElement WriteTypeMember(DbMember member)
     {
+        // Comment (DbModel.cs's own DbMember.Comment doc comment) is confirmed real only on the
+        // ordinary WriteMember shape — a PLC data type's own member shape wasn't part of that
+        // grounding. Hard-erroring on an unconfirmed combination rather than silently dropping the
+        // text, matching this converter's own established discipline elsewhere (e.g. ParseTypeMember's
+        // <Sections> refusal just above).
+        if (member.Comment is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"Member '{member.Name}' has a Comment but is in a PLC-data-type (TYPE/UDT) member position — member comments are only confirmed on an ordinary Static/Input/Output/DB member (WriteMember), not here.");
+        }
+
         var attributeList = new XElement(
             Ns + "AttributeList",
             new XElement(Ns + "BooleanAttribute", new XAttribute("Name", "ExternalAccessible"), new XAttribute("SystemDefined", "true"), member.ExternalAccessible ? "true" : "false"),
@@ -353,6 +379,12 @@ internal static class DbInterfaceMembers
 
     public static XElement WriteConstantMember(DbMember member)
     {
+        if (member.Comment is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"Constant member '{member.Name}' has a Comment — not confirmed real on this shape, refused rather than silently dropped.");
+        }
+
         var startValue = member.StartValue
             ?? throw new SimaticMlFormatException($"Constant member '{member.Name}' has no StartValue to write — every real Constant member requires one.");
 
@@ -477,6 +509,13 @@ internal static class DbInterfaceMembers
             new XAttribute("Accessibility", "Public"),
             attributeList);
 
+        if (member.Comment is not null)
+        {
+            memberElement.Add(new XElement(
+                Ns + "Comment",
+                new XElement(Ns + "MultiLanguageText", new XAttribute("Lang", "en-US"), member.Comment)));
+        }
+
         if (isStructured && member.Datatype == "Struct")
         {
             // Anonymous struct (`FB EquipmentControlSystem`'s own `Inputs`/`Outputs`, confirmed real
@@ -508,6 +547,17 @@ internal static class DbInterfaceMembers
 
     public static XElement WriteBareMember(DbMember bare)
     {
+        // Comment (DbModel.cs's own DbMember.Comment doc comment) is confirmed real only on the
+        // ordinary WriteMember shape — Temp members and a structured member's own nested fields
+        // (both routed here) weren't part of that grounding. Hard-erroring rather than silently
+        // dropping the text if one somehow arrives here (e.g. hand-authored IR nesting a COMMENT
+        // under a UDT-typed Static member's own field).
+        if (bare.Comment is not null)
+        {
+            throw new UnsupportedConstructException(
+                $"Member '{bare.Name}' has a Comment but is in the bare-member position (a Temp member, or a structured member's own nested field) — member comments are only confirmed on an ordinary top-level Static/Input/Output/DB member (WriteMember), not here.");
+        }
+
         var element = new XElement(
             Ns + "Member",
             new XAttribute("Name", bare.Name),

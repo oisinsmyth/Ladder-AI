@@ -74,6 +74,17 @@ internal static partial class DbMemberLineFormat
             sb.Append(" = ").Append(member.StartValue);
         }
 
+        // Comment: an ordinary (non-bare) member's own "why" annotation — confirmed real
+        // 2026-07-15 (see DbModel.cs's own DbMember.Comment doc comment). Appended as the
+        // absolute last token, after StartValue, deliberately — StartValue's own extraction in
+        // ParseLine below finds its leftmost " = " assuming nothing but the value itself follows;
+        // free-text comment prose routinely contains "=" (e.g. "IO.Step = 10"), so Comment must be
+        // peeled off the end *before* that search runs, not interleaved earlier in the line.
+        if (member.Comment is not null)
+        {
+            sb.Append(" COMMENT \"").Append(EscapeString(member.Comment)).Append('"');
+        }
+
         sb.Append('\n');
     }
 
@@ -123,6 +134,17 @@ internal static partial class DbMemberLineFormat
 
         var name = content[..colonIndex];
         var rest = content[(colonIndex + 3)..];
+
+        // Comment is the last-appended token (SerializeLine, above) specifically so it can be
+        // peeled off first, here, before StartValue's own leftmost-" = "-search runs — otherwise
+        // an "=" inside free-text comment prose would be misread as the start-value separator.
+        string? comment = null;
+        var commentMatch = CommentSuffixRegex().Match(rest);
+        if (commentMatch.Success)
+        {
+            comment = UnescapeString(commentMatch.Groups["text"].Value);
+            rest = rest[..commentMatch.Index];
+        }
 
         string? startValue = null;
         var eqIndex = rest.IndexOf(" = ", StringComparison.Ordinal);
@@ -209,11 +231,15 @@ internal static partial class DbMemberLineFormat
         return new DbMember(
             name, rest, retain, startValue, version, setPoint,
             NestedMembers: null, IsBareParameter: isBareParameter, Informative: informative, InformativeComment: informativeComment,
-            ExternalAccessible: externalAccessible, ExternalVisible: externalVisible, ExternalWritable: externalWritable);
+            ExternalAccessible: externalAccessible, ExternalVisible: externalVisible, ExternalWritable: externalWritable,
+            Comment: comment);
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(" INFORMATIVE \"(?<text>.*)\"$")]
     private static partial System.Text.RegularExpressions.Regex InformativeSuffixRegex();
+
+    [System.Text.RegularExpressions.GeneratedRegex(" COMMENT \"(?<text>.*)\"$")]
+    private static partial System.Text.RegularExpressions.Regex CommentSuffixRegex();
 
     private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 

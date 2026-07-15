@@ -142,6 +142,52 @@ effort" degradation: the explicit form is exactly as lossless and exact as the r
 just more verbose. **[converter-verify]** how often the fallback actually triggers against real
 site-convention logic (ADR-0001 predicts rare, per C-101/C-114).
 
+### Statement-kind ordering within one network (confirmed real, 2026-07-15)
+
+A network mixing multiple statement kinds (`TON`, `COIL`/`SCOIL`/`RCOIL`, `MOVE`, `WAND`, `CALL`,
+`MUL`/`ADD`, `CONVERT`, ...) is **not free-form** — `IrParser.ParseNetwork` requires exactly this
+order, one contiguous run per kind:
+
+```
+TON/TONR/TOF  →  COIL/SCOIL/RCOIL  →  MOVE  →  WAND  →  CALL  →  MUL/ADD (index-paired with Convert)  →  CONVERT
+```
+
+A line out of place is a hard parse error (`Expected 'NETWORK <n> "<title>"' at line ...` — not a
+useful message, since the parser just concludes the network's content ended early and expected the
+next network header). Any kind entirely absent is fine; present kinds must stay in this relative
+order. Within one kind's own contiguous run, multiple statements execute in **listed (textual)
+order**, not an arbitrary order — confirmed by real working content that depends on it (e.g. a
+`MOVE` that resets a counter to 0 listed before the `ADD` that increments it, so a reset and a new
+count on the same scan nets to 1, not 0; two `COIL`s where the second reads the first's own
+same-scan output).
+
+**Why this matters beyond parsing — it changes runtime behavior, silently.** This order is not
+just a text-format quirk; it mirrors real top-to-bottom rung-execution order within the compiled
+network, so it determines same-scan data freshness. A statement can only read another statement's
+*this-scan* output if the producer's own kind-position (or same-kind listed position) comes
+**before** the consumer's, in the network's own text. Get this backwards and there is **no error**
+— the consumer just silently reads the producer's *previous-scan* value instead, a one-scan lag
+that can be invisible for a slow-changing signal (an HMI setting, a debounced fault latch) and a
+real bug for a fast one. Concretely: a `TON`'s own `Q` can be read by a same-network `COIL`
+(`TON` precedes `COIL`) — fresh. A `COIL`'s own output **cannot** be read by a same-network `TON`'s
+`IN` condition and be fresh (`COIL` is kind-ordered *after* `TON`) — merging a timer into the same
+network as something that *feeds* its own `IN` will read that thing stale, not fail to compile.
+
+**Practical implication for restructuring existing IR** (found doing exactly this,
+`FB_PusherControl`/`FB_ShredderSequencer`, this session): merging networks for readability/locality
+is safe and encouraged, but requires tracing every cross-reference against this ordering first —
+"does the consumer's kind-position, in the merged network, still come after the producer's" — for
+*every* statement being moved, not just the ones that seem obviously related. Getting this wrong
+doesn't announce itself; it produces a compiling block with a subtly wrong scan-timing relationship
+that only a careful trace (or a real-hardware timing bug, much later) would surface. When
+consolidating, prefer keeping a producer/consumer pair that must stay one-scan-lagged (a genuine
+pre-existing design property, not a mistake) in clearly separate, ordered networks rather than
+forcing them into one and hoping the kind-order happens to line up.
+
+Cross-network, there is no such trap: any earlier network's output is always fresh to any later
+network, regardless of which kinds either contains — this is just ordinary top-to-bottom PLC scan
+order, unaffected by the intra-network kind-ordering rule above.
+
 ### Readable form (default)
 
 Boolean/comparison/logic instructions map to native expression syntax — this *is* the vendor↔neutral

@@ -47,6 +47,65 @@ Site mantra: **simple, simple, simple** — the test for control logic is that a
 - C-115 *(warn)* — Every equipment FB exposes the **same handshake vocabulary** through its UDT (e.g. `enable` in; `ready`, `running` out), so the chain wires identically everywhere. Run-on/stop delays for material clearing are named TONs per C-406.
 - C-116 *(error)* — Bidirectional equipment has **one enable chain per direction**, each independently satisfying C-114 (the reviewer checks one acyclic graph per mode). The direction mode is explicit and mutually exclusive — never both directions, defined behaviour when neither is selected. An equipment FB takes its enable from exactly one chain at a time, selected by the mode; a rung never mixes conditions from both chains. (A belt feeding onto a bidirectional belt belongs to whichever chain(s) its material serves — chain membership follows material routing, not just belt orientation.)
 - C-117 *(error)* — Direction mode may change only when, **at minimum, all equipment in the affected section is stopped** (not-running feedback in the mode-change permissive). Whether additional conditions apply (section empty, perpendicular feeders held) is **defined per section by its material topology** and documented — an inline feeder and a perpendicular feeder have different consequences on reversal, so no blanket emptiness rule fits all layouts. No on-the-fly reversal, ever.
+- C-118 *(error)* — A stepped sequence's phase is exactly one `Step : Int` tag, living inside
+  the block's own caller-visible interface UDT (the same struct C-115 already puts
+  `enable`/`ready`/`running` in) — never a bare private Static, never a `DB_Controls`/`DB_Settings`
+  member. Nothing else stands in for "which phase are we in." A block that fails C-113's memory
+  test is an FB by construction (only Static memory survives a scan), even if called once.
+- C-119 *(error)* — Idle/home is always step `0` — free from Int's own default, and returned to
+  explicitly (C-124) on stop, fault recovery, and restart. One physical "parked" state uses one
+  step number even if reached from multiple triggers.
+- C-120 *(warn)* — Steps ascend in multiples of 10, so a later revision can insert one without
+  renumbering. One step is one one-sentence phase (C-101's test, applied to phases). The block
+  header comment (C-201) carries a step legend — number, name, one line of meaning.
+- C-121 *(error)* — Transitions are a plain Int comparison gating a `MOVE` to the target step:
+  `MOVE(EN := Step = <from> AND <condition>, IN := <to>) => Step`. Never `JMP`/`LBL` (C-102, no
+  exception). Not a new mechanism — the same `MOVE`-cascade `MotorStarter`'s own status-telemetry
+  network already uses, applied to the register that drives the sequence instead of one that only
+  reports on it. A `MOVE` that doesn't fire leaves `Step` untouched — no separate latch needed.
+  Multiple possible exits from one step are mutually exclusive by construction (lower-priority exit
+  explicitly excludes the higher-priority one), never arbitrated by network order.
+- C-122 *(error)* — A step's own maximum dwell gets a dedicated timer, multi-instance inside
+  the block's own Static section per C-407 (it belongs to this instance, not `DB_Timers`), `IN`
+  gated by `Step = <that step>` — self-resets the instant the step changes. `PT` is a
+  `DB_Settings` member (C-307 already carves out "stage/step timings" as `DB_Settings` content,
+  distinct from an ordinary instance-owned timing parameter). `Q` always drives a fault (C-123),
+  never a silent "carry on."
+- C-123 *(error)* — A **hold** and a **fault** are never the same bit. A hold is live/
+  non-latching (freezes the current step, no C-121 transition fires, clears itself the instant its
+  own condition clears, never writes `Step`). A fault is latched, cleared only by a named
+  `FaultReset`, handled by an explicit transition to a defined recovery/abort step — never a silent
+  freeze. They compose (a fault is often "this hold recurred too many times") but stay two bits.
+- C-124 *(error)* — On PLC restart (OB100, same block as C-403/C-305), `Step` and every other
+  transient run-state (`Hold`, edge-memory, in-progress event counters) force-write back to idle,
+  regardless of retentivity — mirrors C-403's own reasoning. Scoped narrowly: a genuine fault latch
+  in the same UDT (`MotorDOL`'s own `FaultActive`/`FTR`/`FTS`, already `RETAIN`) is deliberately
+  excluded — a fault needing human acknowledgement still needs it after a power cycle. *(This
+  implies a carve-out C-403's own text doesn't currently spell out for `MotorDOL`'s own admitted
+  content — worth folding back into C-403 itself later, not done here.)*
+- C-125 *(warn)* — HMI exposure is satisfied by C-118's own placement plus two things that
+  aren't automatic: the step legend (C-120), and any C-122 timeout's own fault bit living in the
+  same interface UDT, not a private Static.
+- C-126 *(warn)* — Extends C-101's "one function, one network" across a whole feature that spans
+  several statements: a timer, the fault or output it drives, and the transitions that read it are
+  positioned together — adjacent networks at minimum, merged into one network wherever
+  `ir/SPEC.md`'s statement-kind ordering allows it without changing same-scan behavior. Never batch
+  by instruction kind (a block-wide "Timers" network, a block-wide "Faults" network) separated from
+  their own consumers by unrelated content in between.
+  *Why:* project owner's own direct correction (2026-07-15, `FB_PusherControl`) — the site mantra
+  (an electrician with a multimeter and a spanner) fails the moment understanding one function
+  requires cross-referencing distant networks, even when the underlying logic is correct. Grouping
+  by kind instead of by function is itself a readability bug, not a neutral choice.
+- C-127 *(error)* — A reusable equipment FB never references another specific instance by name
+  inside its own logic — no hardcoded `iDB_<Other>` access, no `CALL` to a sibling equipment's own
+  instance. Everything an FB needs comes in through its own UDT interface (C-115), wired by its
+  caller; the FB itself never knows what else exists in the project. Deciding what wires to what
+  across multiple named instances is an orchestrating FC's job (`FC_ControlMain`, per C-109), never
+  the reusable FB's own.
+  *Why:* project owner's own direct correction (2026-07-15) — a hardcoded instance reference makes
+  the FB usable exactly once, silently defeating C-106's whole reuse premise, and hides a real
+  dependency on another piece of equipment inside logic instead of in the one place (the calling
+  FC) a reader would actually look for it.
 
 ## Commenting
 
@@ -101,4 +160,4 @@ Site mantra: **simple, simple, simple** — the test for control logic is that a
 
 ## To fill in (owner: Oisin)
 
-Stepped-sequence style rules (step representation, transitions, fault behaviour, step timeouts, restart, HMI exposure — the C-113 "yes" branch) · restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template.
+Restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template.

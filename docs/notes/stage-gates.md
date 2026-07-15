@@ -3779,3 +3779,62 @@ to reverse-engineer structure from the two existing examples. `Converter.Tests/P
 gives `patterns/` committed content the same standing round-trip regression guarantee `ir/reference/`
 already has, extensible with new `[InlineData]`/`[Fact]` entries per new pattern rather than a
 separate mechanism each time.
+
+## S6 first real proof: Kestrel Shredder System build (2026-07-15)
+
+The first genuine end-to-end exercise of the S6 workflow (`CLAUDE.md`'s own "Workflow for logic
+generation") against a real, plain-language functional description (genericized from a real
+supplied spec — `docs/13-data-boundary.md` covers the sanitization), not a synthetic exercise.
+Built out `GenProject1` from 5 blocks to a complete subsystem: `DB_Settings`/`DB_Controls`/
+`DB_Alarms`/`DB_AnalogInput`, `FB_PusherControl` + `UDT_PusherIO` + instance DB (new, C-118–C-125
+stepped sequence), `FB_MotorFwdRevSystem` (real, imported unmodified) + instance DB, wired via
+CALL-site corrections rather than FB edits (see below), `FB_ShredderSequencer` + `UDT_
+ShredderSequencerIO` + instance DB (new stepped sequence, plant-level), `FC_ControlMain` (new
+orchestration layer), `FC_AlarmsMain` (9 networks, C-501-literal alarm packing), `OB1 Main` wired
+per C-109/C-110. Every block compiles clean individually and as a whole device (0 errors, 0
+warnings) — full presentation (IR diff, intent, compile evidence) delivered per the S6 workflow's
+own step 5.
+
+**`--synthesize` grew from a narrow v1 (plain contact/coil chains only) to a genuinely broad v2**
+covering nearly every instruction kind this build needed: `Expr.Compare` (as an ordinary chain
+position), `TON`, `MOVE`, `MUL`/`ADD`, `CONVERT` (scoped to the Real-seconds→DInt-milliseconds HMI
+idiom), and zero-argument `CALL`. Five real, previously-undiscovered bugs found and fixed along the
+way, each with regression coverage: a duplicate-instance-UId collision (Timer/Call sidecars were
+double-registering their own instance reference), multi-instance TON `ET`-wiring (needs an
+`OpenConnectionSidecar`, unlike a standalone TON), a decimal-literal misparse (`1000.0` read as a
+dotted tag path), a `LocalVariable`-vs-`GlobalVariable` scoping bug covering *every* reference in a
+synthesized block (root-caused from the project owner's own "you need a `#` prefix for internal
+FB/FC variables" hint), and a `--synthesize`-produced FB's own instance DB reliably getting an
+invalid `DB0` from `create-instance-db` (worked around by hand-authoring the instance DB `.ir` with
+an explicit number — `docs/notes/openness-quirks.md` has the full story). `BlockSourceWriter` also
+gained two OB-specific fixes (Output/InOut and Return sections are invalid for an OB, previously
+emitted unconditionally) — the first time this project ever wrote *new* content into an OB rather
+than round-tripping an empty one.
+
+**A real architectural anti-pattern was caught by the project owner, not by process**: an early
+`FB_ShredderSequencer` draft hardcoded references to `iDB_PusherControl`/
+`iDB_MotorFwdRevSystem_Shredder` inside its own logic ("its not good practice to have a global iDB
+in a FB"). The standard S7 fix (InOut parameters typed to another FB) was investigated and refused
+— wired InOut call-arguments are ungrounded/unbuilt in this converter (`CallArgument`/
+`CallArgumentSidecar` only model Input/Output), and inventing that shape under time pressure was
+rejected in favor of the alternative that was actually built: strip the sequencer down to plain
+scalar IO, move every real instance name and `CALL` into a new orchestrating `FC_ControlMain` —
+matching the real `PlantAutoControl` FC's own structure in the reference project. Written up as C-127.
+
+**A genuine, still-open gap, deliberately not papered over**: the two overcurrent-level
+comparisons (`ShredderMotorCurrent > OvercurrentSetpointMedium/High`) are Real-vs-Real, which
+`BuildCompareStep`'s hardcoded `SrcType="Int"` can't handle — rather than invent an unproven
+"AutomaticTyped Compare" XML shape with no real grounding anywhere in the project's own corpus
+(unlike `Mul`, which *is* confirmed real), both conditions were wired to a permanently-false
+`NOT AlwaysTrue` placeholder, flagged loudly (on `OvercurrentTripped`'s own member comment, in the
+network comment, and in the presented compile evidence) rather than silently shipped as if it
+worked. Needs a grounded typed-Compare capability, or real hardware, before it's functional.
+
+**Two new LAD conventions came directly out of engineer review of the delivered blocks**: C-126
+(group by function — a timer, its consumer, and its transitions belong together, not batched by
+instruction kind into a block-wide "Timers" network far from what reads it) and C-127 (the
+encapsulation rule above). Both `FB_PusherControl` and `FB_ShredderSequencer` were restructured
+network-by-network to comply, verified by tracing every cross-network dependency against
+`ir/SPEC.md`'s statement-kind ordering (also newly documented this session — see its own "Statement-
+kind ordering" section) and by parsing the real re-exported TIA content back to IR text to confirm
+every original condition survived byte-for-byte.

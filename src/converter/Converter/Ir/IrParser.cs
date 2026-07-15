@@ -10,6 +10,64 @@ public static partial class IrParser
         var lines = text.Replace("\r\n", "\n").Split('\n');
         var i = 0;
 
+        var block = ParseBlockHeaderAndNetworks(lines, ref i);
+
+        if (i >= lines.Length || lines[i] != "SIDECAR")
+        {
+            throw new IrFormatException("Expected a 'SIDECAR' section after the last network.");
+        }
+
+        i++;
+
+        var sidecars = new List<NetworkSidecar>();
+        while (i < lines.Length)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]))
+            {
+                i++;
+                continue;
+            }
+
+            sidecars.Add(ParseSidecarNetwork(lines, ref i));
+        }
+
+        return (block, sidecars);
+    }
+
+    // Sidecar synthesis (2026-07-15): the same BLOCK/NETWORK grammar as ParseBlock, but for
+    // content that never had real TIA round-trip data to begin with (a genuinely new network,
+    // never exported from TIA). Shares ParseBlockHeaderAndNetworks verbatim with ParseBlock so
+    // that function's own behavior — and every existing test of it — stays byte-for-byte
+    // unchanged; this is a pure sibling entry point, not a modification.
+    public static IrBlock ParseBlockWithoutSidecar(string text)
+    {
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        var i = 0;
+
+        var block = ParseBlockHeaderAndNetworks(lines, ref i);
+
+        // A trailing SIDECAR section here means real round-trip data would be silently discarded
+        // in favor of synthesis — that's confusion, not a valid use case, so this fails loud
+        // rather than guessing which the caller actually wanted (same discipline as everywhere
+        // else in this format: report the mismatch, don't paper over it).
+        while (i < lines.Length && string.IsNullOrWhiteSpace(lines[i]))
+        {
+            i++;
+        }
+
+        if (i < lines.Length && lines[i] == "SIDECAR")
+        {
+            throw new IrFormatException(
+                "Input has a 'SIDECAR' section — use ParseBlock (or 'to-xml' without --synthesize) for " +
+                "content with real round-trip data; ParseBlockWithoutSidecar is only for genuinely new, " +
+                "sidecar-less content.");
+        }
+
+        return block;
+    }
+
+    private static IrBlock ParseBlockHeaderAndNetworks(string[] lines, ref int i)
+    {
         var blockLine = RequireLine(lines, ref i);
         var blockMatch = BlockLineRegex().Match(blockLine);
         if (!blockMatch.Success)
@@ -64,30 +122,9 @@ public static partial class IrParser
             networks.Add(ParseNetwork(lines, ref i));
         }
 
-        if (i >= lines.Length || lines[i] != "SIDECAR")
-        {
-            throw new IrFormatException("Expected a 'SIDECAR' section after the last network.");
-        }
-
-        i++;
-
-        var sidecars = new List<NetworkSidecar>();
-        while (i < lines.Length)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-            {
-                i++;
-                continue;
-            }
-
-            sidecars.Add(ParseSidecarNetwork(lines, ref i));
-        }
-
-        return (
-            new IrBlock(
-                rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title,
-                inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType),
-            sidecars);
+        return new IrBlock(
+            rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title,
+            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType);
     }
 
     // Optional — only present when the source had real Interface content (Static/Temp since S1
@@ -972,21 +1009,23 @@ public static partial class IrParser
         return true;
     }
 
-    // A literal (e.g. "T#100MS", "16#89", or a bare integer like "1"/"-1") is recognized by shape
-    // rather than by consulting the sidecar, so the IR text alone stays unambiguous to a reader.
-    // "T#" is the existing time-literal convention (confirmed real, 2026-07-11, FB MotorDOL's TON
-    // PT); a bare (optionally negative) integer is a comparison operand (FC ControlDelays); "16#"
-    // is Siemens' own hex-literal notation (confirmed real, 2026-07-12, FB VSDUpdateComs's
-    // bitwise-And input, `16#89`) — a base-N numeric literal is recognized by the presence of "#"
-    // generally (only "16#" grounded so far; other bases like "2#"/"8#" are the same IEC 61131-3
-    // family but unconfirmed in this codebase, so not specifically claimed, just not excluded by
-    // this shape check either). Safe to recognize any of these by shape since a real tag path is
-    // never purely numeric and never contains "#" (06-lad-conventions.md C-005: starts with a
-    // letter).
+    // A literal (e.g. "T#100MS", "16#89", a bare integer like "1"/"-1", or a decimal like
+    // "1000.0"/"0.5") is recognized by shape rather than by consulting the sidecar, so the IR text
+    // alone stays unambiguous to a reader. "T#" is the existing time-literal convention (confirmed
+    // real, 2026-07-11, FB MotorDOL's TON PT); a bare (optionally negative) integer or decimal is a
+    // comparison/Mul/Move/etc. operand (FC ControlDelays; MotorStarter's own "1000.0" HMI-seconds
+    // scale factor); "16#" is Siemens' own hex-literal notation (confirmed real, 2026-07-12, FB
+    // VSDUpdateComs's bitwise-And input, `16#89`) — a base-N numeric literal is recognized by the
+    // presence of "#" generally (only "16#" grounded so far; other bases like "2#"/"8#" are the
+    // same IEC 61131-3 family but unconfirmed in this codebase, so not specifically claimed, just
+    // not excluded by this shape check either). Safe to recognize any of these by shape since a
+    // real tag path is never purely numeric and never contains "#" or "." (06-lad-conventions.md
+    // C-005: starts with a letter; dotted tag *paths* are structural component separators, not
+    // part of any single component's own name).
     private static Expr ParseLeaf(string text)
     {
         text = text.Trim();
-        if (text.StartsWith("T#", StringComparison.Ordinal) || IntegerLiteralRegex().IsMatch(text) || NumericBaseLiteralRegex().IsMatch(text))
+        if (text.StartsWith("T#", StringComparison.Ordinal) || NumericLiteralRegex().IsMatch(text) || NumericBaseLiteralRegex().IsMatch(text))
         {
             return new Expr.Literal(text);
         }
@@ -2109,8 +2148,16 @@ public static partial class IrParser
     [GeneratedRegex(@"^  constant (?<value>\S+) = (?<uid>\d+) (?<type>\S+)$")]
     private static partial Regex SidecarConstantLineRegex();
 
-    [GeneratedRegex(@"^-?\d+$")]
-    private static partial Regex IntegerLiteralRegex();
+    // Integer ("1", "-1", confirmed real, FC ControlDelays) or decimal ("1000.0", "0.5") — the
+    // decimal case was never previously exercised in this (text-to-model) direction: every real
+    // fixture reaching a Real-typed literal (e.g. MotorStarter's own "1000.0" HMI-seconds scale
+    // factor) always arrived via the *other* direction (GraphReducer reading a real XML
+    // Access[Scope=LiteralConstant] element directly, never needing this shape-guess at all) —
+    // found live, 2026-07-15, hand-authoring FB_PusherControl's own "HMI Times" network for
+    // --synthesize: TIA rejected the misparsed result with a garbled tag-path error ('Tag "1000"."0"
+    // not defined'), confirming "1000.0" had fallen through to Expr.TagRef instead of Expr.Literal.
+    [GeneratedRegex(@"^-?\d+(\.\d+)?$")]
+    private static partial Regex NumericLiteralRegex();
 
     // Siemens' own <base>#<value> numeric-literal notation (e.g. "16#89") — only the "16#" (hex)
     // form is confirmed real (2026-07-12, FB VSDUpdateComs); matched generically by base-number

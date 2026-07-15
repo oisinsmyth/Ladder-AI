@@ -483,6 +483,50 @@ timings, and pass/fail, not summarized from memory). Six phases, all closed out:
 **Verdict, stated plainly: the concurrent-session feature is not the cause of instability.**
 Every scenario deliberately constructed to stress it — real two-party use, same-project refusal,
 a client killed mid-connect, five back-to-back fresh launches — behaved correctly and predictably.
+
+## OPEN, 2026-07-15 — a synthesized (`--synthesize`) FB's own instance DB sticks at "invalid number 0" on block-level compile, even though the whole-device compile is clean
+
+Found building the Kestrel Shredder System's `iDB_PusherControl` (instance of `FB_PusherControl`,
+itself imported via `converter to-xml --synthesize` — no real TIA donor XML, this session's own new
+capability). `create-instance-db` reports the new DB as `DB0` immediately after creation (expected —
+matches the same not-yet-numbered display `iDB_MotorFwdRevSystem_Shredder` also showed before its
+own first compile). But `compile --block iDB_PusherControl` fails with `Number: The block
+iDB_PusherControl DB has an invalid number 0`, **while a whole-device `compile` (no `--block`)
+reports `STATE: Success, ERRORS: 0` in the same project state** — the device-level pass evidently
+resolves/tolerates the numbering, the block-level pass does not.
+
+Tried, in order:
+1. Block-level recompile after a whole-device compile had already run — same error, unchanged.
+2. Delete + recreate the instance DB from scratch (`delete --yes` then `create-instance-db` again)
+   — same error, unchanged. Rules out a one-off transient project-state glitch from the delete
+   itself; this is reproducible against a fresh instance DB of the same FB.
+
+**Not yet root-caused.** `iDB_MotorFwdRevSystem_Shredder` — created the same way
+(`create-instance-db`), same session, same project — has never shown this problem; its own
+block-level compile settled to a normal `DB6` on the first try. The one structural difference
+between the two FBs is that `FB_MotorFwdRevSystem` was imported unmodified from a real TIA export
+(`SampleProject`), while `FB_PusherControl` was synthesized via `--synthesize` — real,
+already-compiling content either way (`FB_PusherControl` itself compiles clean, 0 errors, block-
+level — this issue is specific to *its instance DB's own* number assignment, not its logic), but
+this is the only lead so far, not confirmed. Worth checking, not done yet: whether every other
+`--synthesize`-produced FB's own instance DB shows the same symptom, or whether this is specific to
+`FB_PusherControl` for some other reason (e.g. its unusually large STATIC section).
+
+**RESOLVED, same day.** Root cause still not confirmed (see above — the `--synthesize`-vs-native
+correlation is a lead, not a proof), but a reliable **workaround** is: don't use
+`create-instance-db` for a `--synthesize`-produced FB at all — hand-author the instance DB's own
+`.ir` file directly (`DB <name> / NUMBER <n> / INSTANCEOF <FBName> / MEMBERS` mirroring the FB's own
+STATIC section verbatim — the same shape `create-instance-db` would have scaffolded, just typed out
+by hand with an explicit, chosen-non-colliding number instead of TIA's own auto-numbering), then
+`converter to-xml` + `openness-cli import` through the exact same path every other DB in this
+project already uses. Live-verified: `iDB_PusherControl` (instance of `FB_PusherControl`, the
+`--synthesize`-produced FB this bug was found on) — `create-instance-db` reproduced `DB0`/"invalid
+number 0" a 4th time (including once as a direct sanity-check re-run at the project owner's own
+request); the hand-authored `NUMBER 10` alternative imported as `DB10` and compiled clean (0
+errors) on the first try. This is now the standing recommendation for any future `--synthesize`
+FB's own instance DB, not just a one-off patch — `create-instance-db` remains correct and preferred
+for instance DBs of natively-authored/imported FBs (confirmed working normally for
+`iDB_MotorFwdRevSystem_Shredder`, never showed this symptom).
 The "sometimes won't connect at all" symptom correlates with **Portal-process accumulation**, not
 with concurrency itself: both real occurrences this session happened with several stale processes
 already piled up; a clean process list was reliable every single time it was tested today. One real

@@ -147,3 +147,19 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
   reconstructable from what's here. This entry exists so the corpus's Green-tier claim
   ("purpose-built, contains nothing identifying") has a recorded basis rather than none — see
   `tests/golden/README.md` for what was actually done to it.
+
+- **2026-07-15 — GenProject1's own functional design informed by a real supplied spec+functional
+  description ("Kestrel Shredder Systems"/JOB9003-K150 demo panel — `SpecSheet.xlsx`, `FuncDesc.docx`),
+  genericized rather than approved as Amber.** Project owner's own explicit choice, offered
+  directly against approving it the way JOB9002 was: keep GenProject1 Green throughout rather than
+  bring in a second Amber-tier real project. Both source files stay local-only
+  (`.gitignore`: `SpecSheet.xlsx`, `FuncDesc.docx`) — real company name, panel part number, and
+  model-line codes never appear in GenProject1 itself or anything committed; only the invented
+  names in `sanitization/Kestrel Shredder Systems.map.json` (also gitignored, same reasoning as every other
+  sanitization map) do. Same mechanism as the 2026-07-10 reference-project entry above (real
+  structure informs an invented artifact, mapping never committed) — noted here as a second,
+  independent instance rather than assumed covered by that one, since it's a different real
+  source. JOB9003 itself is the same project named "no longer in use" in `docs/notes/stage-gates.md`'s
+  S0 entry (superseded by JOB9002 as this project's own reference project) — this is new material
+  from it (a spec/functional-description pair, not TIA project data), used only as real-world
+  input to an invented design, not reopening JOB9003 as an active data source.

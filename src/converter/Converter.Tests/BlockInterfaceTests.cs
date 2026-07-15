@@ -164,6 +164,80 @@ public class BlockInterfaceTests
         Assert.Equal("Initial call of this OB", reparsedMember.InformativeComment);
     }
 
+    // DbMember.Comment: a member's own "why" annotation, genuinely distinct from
+    // InformativeComment above (that one is OB-bare-system-parameter-only). Confirmed real
+    // 2026-07-15 by reusing Informative's own already-proven <Comment><MultiLanguageText
+    // Lang="en-US">...</MultiLanguageText></Comment> shape on an *ordinary* Static member
+    // (FB_PusherControl, ExtendDemand's own sibling PressureHold/PumpEverDemanded/etc.) and
+    // confirming via a live TIA import + compile + export round-trip that it's accepted — see
+    // DbModel.cs's own DbMember.Comment doc comment.
+    [Fact]
+    public void IrRoundTrip_OrdinaryMemberComment_PreservesCommentText()
+    {
+        var member = new DbMember("PumpEverDemanded", "Bool", Retain: false, StartValue: null, Comment: "Cold-start guard for the run-on off-delay.");
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { member });
+
+        var ir = DbIrSerializer.Serialize(db);
+        Assert.Contains("COMMENT \"Cold-start guard for the run-on off-delay.\"", ir);
+
+        var reparsed = DbIrParser.ParseDb(ir);
+        var reparsedMember = Assert.Single(reparsed.Members);
+        Assert.Equal("Cold-start guard for the run-on off-delay.", reparsedMember.Comment);
+    }
+
+    // The IR text format appends COMMENT as the absolute last token specifically so it can be
+    // peeled off *before* StartValue's own leftmost-" = "-search runs (DbMemberLineFormat's own
+    // doc comments) — free-text comment prose routinely contains "=" itself (e.g. referencing a
+    // Step number, as here). This test exercises exactly that combination: a member with both a
+    // StartValue and a Comment whose text contains " = ", proving the peel order actually prevents
+    // the corruption it was designed to prevent, not just by inspection.
+    [Fact]
+    public void IrRoundTrip_MemberCommentContainingEqualsSign_DoesNotCorruptStartValue()
+    {
+        var member = new DbMember(
+            "OperatorPusherMode", "Int", Retain: true, StartValue: "1",
+            Comment: "Only meaningful once IO.Step = 10 - ignored otherwise.");
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { member });
+
+        var ir = DbIrSerializer.Serialize(db);
+        var reparsed = DbIrParser.ParseDb(ir);
+        var reparsedMember = Assert.Single(reparsed.Members);
+        Assert.Equal("1", reparsedMember.StartValue);
+        Assert.Equal("Only meaningful once IO.Step = 10 - ignored otherwise.", reparsedMember.Comment);
+    }
+
+    [Fact]
+    public void XmlRoundTrip_OrdinaryMemberComment_PreservesCommentText()
+    {
+        var member = new DbMember("PumpEverDemanded", "Bool", Retain: false, StartValue: null, Comment: "Cold-start guard for the run-on off-delay.");
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { member });
+
+        var xml = DbSourceWriter.Write(db);
+        Assert.Contains("Cold-start guard for the run-on off-delay.", xml.ToString());
+
+        var reparsed = DbSourceParser.Parse(xml);
+        var reparsedMember = Assert.Single(reparsed.Members);
+        Assert.Equal("Cold-start guard for the run-on off-delay.", reparsedMember.Comment);
+    }
+
+    // Comment is only confirmed real on the ordinary (top-level, non-bare) WriteMember shape —
+    // a structured member's own *nested* fields go through WriteBareMember instead, which never
+    // learned about Comment. Hard-erroring rather than silently dropping the text if one somehow
+    // arrives there (e.g. hand-authored IR nesting a COMMENT under a UDT-typed Static member's own
+    // field) — same "refused rather than guessed at" discipline as every other unconfirmed shape
+    // in this converter.
+    [Fact]
+    public void Write_CommentOnNestedStructuredMember_ThrowsUnsupportedConstructException()
+    {
+        var nestedWithComment = new DbMember("Step", "Int", Retain: false, StartValue: null, Comment: "Not supported here.");
+        var owner = new DbMember(
+            "IO", "\"UDT_PusherIO\"", Retain: true, StartValue: null, SetPoint: true,
+            NestedMembers: new[] { nestedWithComment });
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { owner });
+
+        Assert.Throws<UnsupportedConstructException>(() => DbSourceWriter.Write(db));
+    }
+
     // Repurposed from a hard-error test (S1 item 20, 2026-07-12) — same "an obsolete hard-error
     // test becomes a positive one once the real shape is modeled" pattern already used for TON's
     // direct-Q-wiring and block-level Title. The fixture's own content was also corrected to the

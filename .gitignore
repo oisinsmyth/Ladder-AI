@@ -41,6 +41,13 @@ Siemens.Engineering*.dll
 # sanitized artifact is that nothing links it back to the real source, including this
 sanitization/
 
+# Real site reference documents (Amber-tier, docs/13-data-boundary.md) — never commit. The
+# real "Kestrel Shredder Systems"/JOB9003-K150 spec + functional description used to inform GenProject1's
+# own (invented) functional design; GenProject1 itself stays Green-tier by never using these
+# real names directly (see sanitization/Kestrel Shredder Systems.map.json).
+SpecSheet.xlsx
+FuncDesc.docx
+
 # OS / editor
 Thumbs.db
 Desktop.ini

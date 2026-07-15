@@ -88,6 +88,16 @@ public sealed record DbSource(
 // (Accessible/Visible left `true` — `GlobalDbWithNonDefaultAttribute.xml`'s own shape, a common
 // "externally readable but not writable" pattern) *is* independently valid — confirmed separately.
 // So `ExternalAccessible` gates the other two; they don't gate each other or it.
+// Comment: a member's own "Comment" column in the TIA interface editor — genuinely distinct from
+// InformativeComment below (that one is OB-bare-system-parameter-only machinery, gated by
+// Informative). Confirmed real 2026-07-15 on an *ordinary* (non-bare, non-Informative) Static
+// member — grounded by reusing the exact <Comment><MultiLanguageText Lang="en-US">...</
+// MultiLanguageText></Comment> shape Informative's own handling already proved real (OB1 Main,
+// 2026-07-14), tried on a plain member, and confirmed by a live TIA import + export round-trip
+// (docs/notes/openness-quirks.md has no entry for this — it worked on the first real attempt, no
+// quirk to record). Not yet extended to a structured member's own *nested* fields (ParseBareMember/
+// WriteBareMember's shape, one level deeper — a UDT-typed member's own inner fields, or a timer
+// instance's own PT/ET/IN/Q) — only top-level Static/Input/Output/Temp/DB members carry this so far.
 public sealed record DbMember(
     string Name,
     string Datatype,
@@ -101,4 +111,5 @@ public sealed record DbMember(
     string? InformativeComment = null,
     bool ExternalAccessible = true,
     bool ExternalVisible = true,
-    bool ExternalWritable = true);
+    bool ExternalWritable = true,
+    string? Comment = null);
