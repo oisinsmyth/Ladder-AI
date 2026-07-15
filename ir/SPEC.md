@@ -655,6 +655,12 @@ NETWORK 8 "Run enable delay"
     represent "network N can transfer control to network M" — not a routine grounding-then-build
     task, and not something to decide unilaterally. Flagged for the project owner's own call
     before any code gets written; see `AITODO.md`.
+  - **A structurally similar question came up 2026-07-15, for the S6 pattern library, and was
+    resolved differently after discussion**: an early idea (a reserved `<SlotName>` sentinel for
+    unfilled template tag references) was abandoned in favor of not needing new IR syntax at all —
+    reusable logic is represented as ordinary FB/FC blocks with real interface members, reused via
+    the already-existing `CallStatement`/`CallArgument` mechanism. See
+    `docs/07-pattern-library-spec.md` for the current design; nothing about this grammar changed.
 - **`Modbus_Master`/`Modbus_Comm_Load`, built 2026-07-14 (Phase 2 Tier 4).** Grounded against `FC
   ModbusComs`. Both Instance-DB-backed like `TON`/`Call` (`Version`, no `DisabledENO`, no
   `TemplateValue` children — reuses `ParseInstanceReference` directly).

@@ -1,16 +1,21 @@
 # Pattern library
 
-Proven, parameterized LAD fragments. Spec: `docs/07-pattern-library-spec.md`. Seeded in S6 (~10 patterns: motor start/stop, valve control, debounce, alarm latch, pulse, sequence step, …).
+Proven LAD, extracted and documented from real working logic — never invented speculatively. Spec:
+`docs/07-pattern-library-spec.md`. **Starting a new pattern? Copy from `_templates/` first**, not
+from an existing pattern folder — the templates have placeholders and instructions, real patterns
+don't.
 
-One folder per pattern:
+Two kinds so far (not a closed taxonomy — see the spec for what to do if a new pattern fits
+neither):
 
-```
-patterns/<name>/
-├── pattern.md        # intent, behavior, when (not) to use, sign-off
-├── template.ir       # IR fragment with parameter slots
-├── params.yaml       # slot definitions: name, type, direction, required/optional, default
-├── tests/            # simulation test sequences (S9 format)
-└── examples/         # ≥1 real, approved instantiation
-```
+- **Equipment-instance** — a whole, proven, callable FB/FC, reused via ordinary `CALL`
+  (`docs/06-lad-conventions.md` C-106). Real example: `motor-dol/`. Template: `_templates/equipment-instance/`.
+- **Repeated rung-shape** — the same rung shape repeated many times within one sequencing/mapping
+  FC, kept inline (C-109/C-110), documented from a real annotated example rather than templated.
+  Real example: `chained-permissive-enable/`. Template: `_templates/rung-shape/`.
 
-Admission requires: proven in reviewed working logic, lossless round-trip, compiles with each example, complete doc, human sign-off. Breaking slot changes = new pattern name.
+Admission (both kinds): proven in reviewed working logic, lossless round-trip, compiles when
+instantiated (or, for a rung-shape pattern, when a new drafted instance is produced from the
+documentation), complete `pattern.md`, human sign-off. See each kind's own admission criteria in
+`docs/07-pattern-library-spec.md` — they differ in what "compiles when instantiated" means for
+each kind.

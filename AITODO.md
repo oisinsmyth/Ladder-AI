@@ -28,31 +28,43 @@ closed (embedded-newline guard; the previously-untested "edit an existing title"
 real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format), and the
 other 13 committed reference-corpus files swept afterward to confirm that bug wasn't a wider gap.
 
-**S4 — Convention review, ACTIVE, Phase 1 built and pilot-proven 2026-07-15.** Per
-`docs/02-roadmap.md`: review mode — AI checks IR against `06-lad-conventions.md`'s ~50 rules and
-emits a findings report (rule ID, location, severity, suggested fix); no auto-fix. Exit: review of
-the reference project matches the engineer's own independent review on a sample; false-positive
-rate acceptable — **not yet met** (needs an actual blind comparison against the project owner's own
-judgment; the live pilot used findings already narrated during planning, not a clean blind test).
-Phase 1 (8 of the ~50 rules): `converter review` subcommand built, tested (46 new tests, 412/412
-suite-wide), live-piloted against all 14 reference-corpus files — matched every predicted finding
-exactly. Full detail: `docs/notes/stage-gates.md`'s "S4 Phase 1" section. Project owner's call,
-2026-07-15: good enough to pause active work and move to S5 — S4 stays ACTIVE at Phase 1, not
-marked done. Do not perform S6/S7 capabilities (generation/modification) — `CLAUDE.md` hard rule,
-gated by `docs/notes/stage-gates.md`; their own entry criteria aren't met yet regardless (S6 needs
-the pattern-library spec implemented, not done).
+**S4 — Convention review, DONE — gate reviewed and signed off by the project owner, 2026-07-15.**
+Phase 1 (8 of ~50 rules) built, tested (46 new tests, 412/412 suite-wide), live-piloted against all
+14 reference-corpus files (matched every predicted finding exactly), then validated against real,
+previously-untouched JOB9002 content (`FC StatusAlarms`, station_1). Signed off on a "shown, then
+confirmed" match rather than a genuinely blind one — flagged explicitly, project owner's own
+informed call to accept it. Full history: `docs/notes/stage-gates.md`'s "S4 Phase 1" and
+"S4: real-content validation" sections.
 
-**S5 — Structured data extraction, ACTIVE**, opened 2026-07-15, in parallel with S4 (roadmap
-explicitly allows this — S5's entry is just S1 done, which it is). Per `docs/02-roadmap.md`:
-extractors for alarm lists, IO usage, and cross-references, emitting CSV/XLSX. Exit: extracted
-alarm and IO lists for the reference project verified against TIA's own cross-reference data.
+**S5 — Structured data extraction, ACTIVE**, opened 2026-07-15, in parallel with S4. Per
+`docs/02-roadmap.md`: extractors for alarm lists, IO usage, and cross-references, emitting
+CSV/XLSX. Exit: extracted alarm and IO lists for the reference project verified against TIA's own
+cross-reference data. No work started yet — deprioritized below S6-unlock work per the project
+owner's own call, 2026-07-15 ("a workable S6 is the main goal").
 
-## Current task: detailed S5 plan not yet started
+**S6 — Generation from plain language, ACTIVE**, opened 2026-07-15. Entry criteria met: S3 done;
+seed pattern library exists, redesigned around ordinary FB/FC + `CALL` (no new IR mechanism — an
+earlier `template.ir`/`<SlotName>` design was built, verified sound, then abandoned when it turned
+out to duplicate existing infrastructure and never reconciled with `06-lad-conventions.md` C-106).
+Two pattern kinds, both seeded and ADMITTED: `patterns/motor-dol/` (all 5 criteria fully met) and
+`patterns/chained-permissive-enable/` (criterion 3 accepted on partial evidence — a genuinely blind
+drafted instance is still owed, recorded as an open gap, not silently closed). Full history:
+`docs/notes/stage-gates.md`'s "S6 unlock" section. `docs/02-roadmap.md`'s "~10 patterns" is being
+treated as an approximate target the project owner explicitly chose to satisfy with two well-proven
+kinds now, growing the rest organically once S6 is actually running — not a literal blocking count.
 
-Next step: work through an S5 plan the same way S3/S4's were built (plan-mode process, research
-agents on real open questions before code gets written) — e.g. what "verified against TIA's own
-cross-reference data" concretely means as a check, which reference-corpus content has enough real
-alarm/IO content to pilot against, CSV/XLSX output shape.
+## Current task: none — ready for S6's own deliverable work
+
+S6's entry gate is closed. No in-flight work right now. Next natural step is S6's own stated
+deliverable (`docs/02-roadmap.md`: "AI composes new networks/blocks from the pattern library using
+real exported tags; automatic import+compile loop") — not started, needs its own plan when picked
+up, same rigor as every other stage.
+
+**Carried forward, not urgent:** `patterns/chained-permissive-enable`'s own genuinely-blind
+drafted-instance gap (see above) — worth closing before leaning on this pattern heavily, not
+before S6 can start. `docs/07-pattern-library-spec.md`'s pattern anatomy no longer mentions a
+`tests/`/S9 folder at all (dropped in the FB/FC redesign) — if S9 (the sim harness) ever gets
+built, revisit whether patterns want a testing hook then, not a currently-open question.
 
 ## Open question carried over from S1 (still needs the project owner's input, unrelated to S3)
 

@@ -1,0 +1,10 @@
+NETWORK 7 "Metal Collection Conveyor Automatic Control"
+  COIL MotorStarterInst3.IO.RunningFB := DiscreteInputs.FMCCRunning AND DiscreteInputs.FMCCRotSen OR DiscreteInputs.FMCCRunning AND HMIControlSignals.BypassFMCCRotSen
+  COIL MotorStarterInst3.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst3.IO.InhibitMotor := DiscreteInputs.FMCCIsoFB
+  COIL MotorStarterInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst3.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst8.IO.ShutdownComplete) AND PlantControl.MagEnable
+  COIL MotorStarterInst3.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst8.IO.ShutdownComplete) AND NOT MotorStarterInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.FMCCStart := MotorStarterInst3.IO.Run
+  CALL MotorStarter(MotorStarterInst3, EN := TRUE)

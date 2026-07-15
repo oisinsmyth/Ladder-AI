@@ -10,9 +10,9 @@ Claude Code: do not perform capabilities from stages that haven't passed their g
 | S1 — Lossless round-trip | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | ADR-0001/`ir/SPEC.md` decided; converter + `openness-cli` + golden harness support ~24 instruction-level constructs (full list: `FlgNetParser.SupportedPartNames` plus `CALL`), all live-verified against real or reference-project data at least once. **`FC PlantAutoControl` round-trips through the true TIA cycle, completely** (2026-07-14 — export → sanitize → import → block-level compile clean → re-export → `Normalizer.AreSemanticallyEquivalent` = true) against its full real dependency closure (8 dependency FBs, 26 DB/tag-table roots) — the actual Layer 1 assertion this stage exists to prove, at production scale. **Reference-project corpus grown from 7 to 14 committed artifacts** (2026-07-14, "Reference corpus growth" below) specifically to close the gap between that production-scale proof and the committed regression suite: the corpus now exercises ~20 of the ~24 supported constructs (up from ~5), not just Contact/Coil/OR-merge/TON. Three smaller flagged gaps (data-boundary doc staleness, Sanitizer `ExternalAccessible`, `Normalizer` Part-identity) also closed the same day. **Signed off with two real items deliberately still open, carried forward rather than blocking the gate**: `WAIT` (missing library dependency in `SampleProject`, needs the project owner's input) and `Jump` (genuine cross-network control flow, needs a real IR-format design decision before any code gets written) — neither is part of the committed reference corpus, so neither affects the literal exit criterion; both tracked in `AITODO.md`. All PC-side suites green at sign-off: 366 converter, 101 openness-cli, 14 golden-harness (offline) + all 14 reference-project blocks verified live together in one `RunAll` pass. See Exit-criteria evidence. |
 | S2 — Read and explain | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | Deliverables per `02-roadmap.md`: 4 real JOB9002 blocks explained in conversation (`PerimeterSafetyAlarms`, `MotorDOL`, `PlantAutoControl`, `MotorFwdRevSystem`; not committed anywhere, per `13-data-boundary.md`'s S2-kickoff entry) — 51+ networks sampled, all confirmed accurate by the project owner (2026-07-14), well past the 10-network exit bar. Explanation-quality checklist built and committed (`14-s2-explanation-checklist.md`), derived empirically from re-explaining the same real block across five subagents at varying context levels and verifying every claim against source, not invented solo (full methodology below, "S2: explanation-quality checklist built from direct comparison"). One real error did occur and was caught during that verification pass (a wrong field-uniformity count in the first `PlantAutoControl` pass) — corrected before the project owner's own sign-off; checklist item `E-01` exists specifically because of it. **Signed off with `WAIT`/`Jump` explicitly closed as not needed** (project owner's own call, 2026-07-14) — carried in S1's sign-off as open questions needing input, now resolved rather than deferred (detail in `AITODO.md`'s "Deliberately deferred" section). Modbus's own live-compile gap (same S1 finding) is untouched by this decision and stays open, unrelated to S2/S3. |
 | S3 — Comment generation | **DONE — gate reviewed and signed off by the project owner** | 2026-07-14 | Entry criteria met: S2 done, and `docs/11-review-workflow.md` explicitly agreed by the project owner (2026-07-14). Exit criterion met three times over, at increasing scale: `TimerSample` (Green-tier, title only, both block and network level), `PerimeterSafetyAlarms` (Green-tier, title + comment, both levels), and `PlantAutoControl` (real JOB9002 content — data-boundary approval explicitly extended first — title + comment, block level and all 20 networks, including replacing the original engineer's own titles). All three live-verified end-to-end (edit IR → `to-xml` → `import` → clear the known `IsConsistent` refusal via `compile` → re-export → confirm the new content is genuinely present → confirm nothing structural changed via `Normalizer`) and reviewed/approved before committing. Two real converter gaps closed along the way (embedded-newline guard in `IrSerializer`/`IrParser`; the previously-untested "edit an existing title" scenario, now covered by 4 new tests) plus one real pre-existing corpus bug found and fixed (`TimerSample.ir`'s stale sidecar format) — swept the other 13 committed reference-corpus files afterward to confirm it wasn't a wider gap; it wasn't. Full detail: "S3 first/second/third proof" sections below. |
-| S4 — Convention review | **ACTIVE** | — | Entry criteria met: `06-lad-conventions.md` populated (cleared early, well before S3 closed). Deliverables per `02-roadmap.md`: review mode — AI checks IR against the conventions and emits a findings report (rule ID, location, severity, suggested fix); no auto-fix. Exit: review of the reference project matches the engineer's own review on a sample; false-positive rate acceptable. **Phase 1 built and pilot-proven 2026-07-14/15**: 8 rules (C-003/C-005/C-201/C-301+C-501/C-406, plus C-102/C-401/C-404 labeled vacuous), `converter review` subcommand, 46 new tests, live pilot against all 14 reference-corpus files matched every predicted finding exactly. Exit criterion itself (blind false-positive validation against the engineer's own independent review) explicitly not yet met — full detail in "S4 Phase 1" section below. Project owner's call, 2026-07-15: good enough to pause active work here and move to S5, not the same as calling S4 done. |
+| S4 — Convention review | **DONE — gate reviewed and signed off by the project owner** | 2026-07-15 | Phase 1 (8 of ~50 rules: C-003/C-005/C-201/C-301+C-501/C-406, plus C-102/C-401/C-404 labeled vacuous) built and tested (46 new tests, 412/412 suite-wide). Live pilot against all 14 reference-corpus files matched every predicted finding exactly. Real-content validation against JOB9002 (`FC StatusAlarms`, station_1 — never previously touched by this project) confirmed the same finding pattern holds outside the reference corpus. **Signed off on a "shown, then confirmed" match, not a genuinely blind one** — flagged explicitly before revealing the tool's output, and again before closing the gate; project owner's own informed call to accept it anyway rather than run a stricter blind pass first. Full detail: "S4 Phase 1" and "S4: real-content validation" sections below. |
 | S5 — Data extraction | **ACTIVE** | — | Entry criteria met: S1 done (S4 not required — roadmap explicitly allows running in parallel with S3/S4). Opened 2026-07-15, in parallel with S4 (still open at Phase 1, not blocking). No work started yet — detailed plan being built, same process as S3/S4. |
-| S6 — Generation | not started | — | |
+| S6 — Generation | **ACTIVE** | 2026-07-15 | Entry criteria met: S3 done (already true); seed pattern library exists (`docs/07-pattern-library-spec.md`, two kinds — equipment-instance FB/FC via `CALL`, repeated rung-shape documented from a real example — no new IR mechanism, redesigned from an abandoned `template.ir`/`<SlotName>` approach). Seeded with `patterns/motor-dol/` (ADMITTED, all 5 criteria met) and `patterns/chained-permissive-enable/` (ADMITTED, criterion 3 accepted on partial evidence — drafted-with-prior-knowledge, not blind, gap recorded not erased). Project owner's own call: two well-proven kinds satisfies the roadmap's "~10 patterns" as an approximate target, not a literal count; the rest grows organically once S6 is running. Full detail: "S6 unlock" section below. |
 | S7 — Modify existing | not started | — | |
 | S8 — Pattern maturation | not started | — | |
 | S9 — Sim verification | not started | — | Blocked on R-07 (PLCSIM vs S7-1200 G2) |
@@ -3670,3 +3670,112 @@ flagged exactly that failure mode as this project's most-repeated documentation 
   C-409, C-504, C-507) stays genuine human judgment regardless of tooling investment. Not
   re-verified to the same rigor as the 8 rules actually built and tested this round — a starting
   point for scoping a future Phase 2, not a committed spec.
+
+## S4: real-content validation against JOB9002, `StatusAlarms` (2026-07-15)
+
+Data-boundary approval extended first (own dated entry above) to cover `converter review` against
+real JOB9002 content — a third, distinct kind of activity from S2's read/explain and S3's
+write/comment-generation. Picked `FC StatusAlarms` (station_1, `JOB9001_PLC`) specifically because
+that whole station had never come up anywhere in this project before (every prior touch — S1's
+round-trip proof, S2's four explanations, S3's `PlantAutoControl` proof — used station_2, `JOB9002_PLC`),
+so review of it is unambiguously fresh, and because it's alarm-category, the same family as
+`PerimeterSafetyAlarms` (already explained during S2) — a good stress test for the C-301/C-501 exception
+logic specifically.
+
+Exported, converted to IR, and reviewed cleanly — 8 error/4 warn findings: missing `FC_` naming
+prefix, no header comment, all networks with real logic left untitled, and three networks each
+packing multiple alarm bits into one network (C-301+C-501 both firing) rather than satisfying the
+"exactly one bit per network, network titled" exception — the same shape already seen in
+`NodeStatusAlarms`/`PerimeterSafetyAlarms` during the reference-corpus pilot.
+
+**Methodology note, stated honestly rather than glossed over:** this was not the blind comparison
+S4's own exit criterion calls for. The plan was to hold the tool's output back until the project
+owner had independently reviewed the same block and reported their own findings first; instead,
+asked to see the tool's output immediately, with their own independent judgment to follow (flagged
+this distinction explicitly before revealing, so it was a known tradeoff, not a silent one).
+Verdict: **"That's what I got to, mark that as a pass."** — real signal that the findings hold up
+against the project owner's own judgment on genuine, previously-untouched real-project content, but
+a "shown first, then confirmed" match is a weaker result than an independent match would have been
+(the standard confound: agreeing with an answer already seen is easier than reaching it
+independently) — recorded as such, not inflated into "the blind test passed." Whether this is
+sufficient to call S4's exit criterion met, or whether a genuinely blind pass is still wanted before
+that claim, was left to the project owner rather than decided here.
+
+## S6 unlock: redesigned around FB/FC + CALL, two seed patterns admitted (2026-07-15)
+
+S6 (generation from plain language) was named the project owner's own stated priority. Its entry
+needs S3 done (already true) plus a seed pattern library per `docs/07-pattern-library-spec.md`. A
+prior agent session had already started building this — a `docs/13-data-boundary.md` approval for
+JOB9002 pattern extraction, tasks #171–180 (one per the roadmap's ~10 example patterns) — before being
+stopped (confusion about parallel sessions, not a rejection of the work).
+
+**First design, built then abandoned.** Initial work built a `template.ir` file format with a
+reserved-sentinel `<SlotName>` syntax for unfilled parameter slots — a genuine open IR-format
+question (nothing in `ir/SPEC.md` could represent this before), resolved via the project owner's
+own explicit choice after being presented three options, verified collision-free against
+`IrParser.cs`'s comparison-operator grammar by direct code reading, and proven end-to-end with a
+synthetic example that round-tripped and compiled clean in `SampleProject`. All of that held up
+technically — the design itself was the problem, not the execution. The project owner pushed back:
+this project already has a complete mechanism for parameterized reusable logic
+(`CallStatement`/`CallArgument`, proven since S1, plus TIA's own compiler doing full type-checking
+on every `CALL` argument for free), and the new mechanism never reconciled with
+`06-lad-conventions.md` C-106, which already mandates FB+UDT for repeated equipment as the site's
+own pre-existing convention.
+
+**Redesign: two kinds of pattern, no new IR mechanism.** Working through it together surfaced a
+real distinction the original spec had collapsed into one shape:
+1. **Equipment-instance** — a whole, proven, callable FB/FC (e.g. `MotorDOL`, all 14 networks —
+   start/stop, fault detection, hours-totaliser, telemetry, alarm bits — not narrowed to a "start/
+   stop" slice, which would have been arbitrary micro-decomposition of what's already one coherent
+   unit at this site). Reuse = ordinary `CALL`. Nothing new to build — C-106 as already practiced.
+2. **Repeated rung-shape** — the same logical shape repeated many times within one sequencing/
+   mapping FC (e.g. `PlantAutoControl`'s per-equipment networks), kept inline rather than factored into
+   calls because C-109/C-110 want an area-Main FC to read top-to-bottom like a table of contents.
+   No template mechanism — a real, documented, sanitized example is what the AI drafts a new
+   instance from by analogy, checked by the ordinary compile gate.
+
+Explicitly **not a closed taxonomy** — plan review caught that "constructed edge-detection" (one of
+the original 10 names) is a real third kind (a cross-block micro-idiom using shared `aEdgeMem[]`
+storage, never factored into a call or concentrated in one FC), not built this round, not forced
+into either of the two seeded kinds.
+
+**Reverted cleanly**: the `<SlotName>`/`template.ir` sections in `docs/07-pattern-library-spec.md`,
+the pointer paragraph added to `ir/SPEC.md` (replaced with a short note on the design question and
+how it was actually resolved, keeping the historical record rather than deleting it), and
+`docs/13-data-boundary.md`'s mechanism wording (the underlying JOB9002-extraction approval itself was
+unchanged, just the description of what gets built from it).
+
+**Two seed patterns, both ADMITTED 2026-07-15:**
+
+- **`patterns/motor-dol/`** — all 5 admission criteria fully met. `MotorDOL`/`MotorStarter`, 8 real
+  instances. Round-trips confirmed (block, instance DB, and calling network all covered by
+  `Converter.Tests/PatternExampleTests.cs`). Compiles confirmed: discovered along the way that
+  `SampleProject` already had `MotorStarter` + 9 real instance DBs + `PlantAutoControl` (the
+  sanitized `PlantAutoControl`) sitting from earlier S1 work, all showing `IsConsistent = false` despite
+  a clean device-level compile — the exact known quirk `docs/notes/openness-quirks.md` already
+  documents (device compile doesn't clear `IsConsistent` after `Import()`; block-level compile
+  does). Cleared by compiling all 21 affected blocks individually in dependency order; whole project
+  now compiles clean, 0 errors, 0 warnings. `examples/` uses a real `CALL` site pulled directly from
+  `PlantAutoControl` (network 8, "Overband Magnet") rather than a constructed one.
+- **`patterns/chained-permissive-enable/`** — ADMITTED with criterion 3 (a newly-drafted instance)
+  accepted on partial evidence rather than fully met, recorded honestly rather than quietly
+  inflated. `examples/` has three real excerpts covering the documented variation (clean baseline,
+  richer `RunningFB` + plant-wide-flag enable source, optional pre-start latch), plus a fourth,
+  newly-drafted instance (`MotorStarterInst5`, "Drum Separator," a genuine chain-head with no
+  equipment-to-equipment dependency) explicitly labeled as composed *with* prior knowledge of the
+  real answer, not blind — the pattern's own documentation had already been read in full while
+  building it, so drafting "fresh" from the same content wasn't a fair test. A genuinely blind
+  attempt was tried first, using JOB9002's separate, untouched station_1 `PlantAutoControl` — one candidate
+  network was partially read before a line-by-line stop could catch it, and a second turned out to
+  be VSD-driven with an edge-detected `RCOIL` `FaultReset`, a real structural variant this pattern
+  doesn't document yet. Project owner's own call: accept the current evidence and move on rather
+  than chase a genuinely blind instance now — recorded in `pattern.md` as an outstanding gap, not
+  resolved.
+
+**Durable artifacts**: `patterns/_templates/` (two `pattern.md` templates, one per kind, plus a
+README on the pre-writing checklist — re-ground fresh, sanitize, verify round-trip, don't fill
+"Admission status" with optimistic guesses) — built specifically so the *next* pattern doesn't need
+to reverse-engineer structure from the two existing examples. `Converter.Tests/PatternExampleTests.cs`
+gives `patterns/` committed content the same standing round-trip regression guarantee `ir/reference/`
+already has, extensible with new `[InlineData]`/`[Fact]` entries per new pattern rather than a
+separate mechanism each time.

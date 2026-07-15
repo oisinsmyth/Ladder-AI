@@ -1,0 +1,10 @@
+NETWORK 8 "Overband Magnet Automatic Control"
+  COIL MotorStarterInst8.IO.RunningFB := DiscreteInputs.OverbandMagRunning
+  COIL MotorStarterInst8.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst8.IO.InhibitMotor := DiscreteInputs.OverbandMagIsoFB
+  COIL MotorStarterInst8.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst8.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND MotorStarterInst3.IO.UPSEnable
+  COIL MotorStarterInst8.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND NOT MotorStarterInst8.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst8.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OverbandMagStart := MotorStarterInst8.IO.Run
+  CALL MotorStarter(MotorStarterInst8, EN := TRUE)

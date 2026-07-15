@@ -93,6 +93,36 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     anything written *about* this work in `docs/notes/stage-gates.md`/`CHANGELOG.md` or any other
     committed doc — real tag names are fine to use in the real project's own IR/comment content
     itself, not in prose describing it here.
+  - **2026-07-15 — extended to pattern-library extraction (S6 prerequisite work).** Project
+    owner's own explicit choice, made mid-interview when asked which project should source the S6
+    seed pattern library (`docs/07-pattern-library-spec.md`): use JOB9002. The spec's own admission
+    criterion 1 requires each pattern be "instantiated at least once in reviewed, working logic" —
+    JOB9002 already has strong candidates (e.g. `MotorDOL`, deeply grounded during S2). Scope:
+    reading real JOB9002 blocks to identify and document proven patterns, of two kinds — whole
+    equipment-instance FB/FCs (e.g. `MotorDOL`) reused via ordinary `CALL`, and repeated rung-shapes
+    within one sequencing/mapping FC (e.g. `PlantAutoControl`'s per-equipment networks) documented as a
+    real annotated example. (Revised 2026-07-15 from an earlier "slot-parameterized template"
+    mechanism, abandoned in favor of reusing this project's existing FB/FC + `CALL` support — see
+    `docs/07-pattern-library-spec.md`; the approval itself, its scope, and the genericization rule
+    below are unchanged by that revision.) The existing genericization rule above is the operative
+    constraint and applies in full: no real JOB9002 tag/DB/equipment name is ever committed into
+    `patterns/` — any committed content (a pattern's own `.ir`, a `CALL`-site example, a rung-shape
+    excerpt) is produced via `converter sanitize` (the same mechanism already used for the reference
+    corpus), never copied verbatim.
+  - **2026-07-15 — extended to mechanical review activity (S4).** Project owner's own explicit
+    instruction: finish S4 properly by satisfying its own stated exit criterion (a blind
+    comparison between the project owner's independent review and `converter review`'s own
+    findings; `docs/02-roadmap.md`). The committed Green-tier reference corpus is fully spent for
+    this purpose — every one of its 14 files was narrated during S4 planning and then shown in
+    full in the live pilot report, so no blind comparison is possible against it anymore. Scope:
+    running `converter review` (read-only findings-report generation — no writes, no import back
+    into JOB9002, lower-risk than S3's own write-activity extension) against one or more real JOB9002
+    blocks not previously touched by any work in this project, specifically to compare the tool's
+    findings against the project owner's own independent read of the same content. Specific
+    findings, tag names, and exact wording from this stay in conversation, not committed to any
+    file, mirroring S2's own read-only-activity pattern — the existing genericization rule above
+    still applies in full to anything written *about* this work in `docs/notes/stage-gates.md`/
+    `CHANGELOG.md` or any other committed doc.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's

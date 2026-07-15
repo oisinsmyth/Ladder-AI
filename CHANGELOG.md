@@ -10,6 +10,46 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-15
 
+**Open S6 (generation from plain language) - entry criteria met, two seed patterns admitted**
+
+- Built and verified a `template.ir` + `<SlotName>` reserved-sentinel mechanism for pattern
+  parameter slots (collision-free against the IR grammar, confirmed by direct code reading;
+  synthetic example round-tripped and compiled clean) - then abandoned it. It duplicated
+  parameterization/type-checking this project's IR model and TIA's own compiler already provide via
+  ordinary FB/FC interfaces and `CALL`, and never reconciled with `06-lad-conventions.md` C-106
+  (FB+UDT for repeated equipment, already the site's own convention). Reverted cleanly: the
+  slot-syntax sections in `docs/07-pattern-library-spec.md`, the pointer added to `ir/SPEC.md`
+  (kept as a short historical note, not deleted), `docs/13-data-boundary.md`'s mechanism wording.
+- Redesigned around two pattern kinds instead, no new IR mechanism: equipment-instance (a whole
+  proven FB/FC reused via `CALL`) and repeated rung-shape (the same logical shape repeated within
+  one sequencing FC, documented from a real example, not templated). Explicitly not a closed
+  taxonomy - constructed edge-detection is a real third kind, not built this round.
+- `patterns/motor-dol/` - ADMITTED, all 5 criteria met. `MotorDOL`/`MotorStarter`, 8 real instances.
+  Along the way, found `SampleProject` already had this content plus `PlantAutoControl` sitting from
+  earlier S1 work, all `IsConsistent = false` despite a clean device compile - the known
+  device-vs-block-level-compile quirk (`docs/notes/openness-quirks.md`). Cleared by compiling 21
+  blocks individually in dependency order; whole project now compiles clean, 0 errors, 0 warnings.
+- `patterns/chained-permissive-enable/` - ADMITTED, criterion 3 (a newly-drafted instance) accepted
+  on partial evidence rather than fully met. Drafted for a genuine chain-head case
+  (`MotorStarterInst5`, "Drum Separator"), explicitly labeled as composed with prior knowledge of
+  the real answer, not blind - a genuinely blind attempt on JOB9002's separate, untouched station_1
+  `PlantAutoControl` hit a partial accidental read and a structurally-different (VSD, edge-detected
+  fault-reset) case this pattern doesn't document yet. Project owner's own call: accept and move on,
+  recorded as an outstanding gap rather than silently closed.
+- `patterns/_templates/` added (two `pattern.md` templates, one per kind) so the next pattern has a
+  real starting point. `Converter.Tests/PatternExampleTests.cs` gives `patterns/` the same standing
+  round-trip regression guarantee `ir/reference/` already has.
+- Full history: `docs/notes/stage-gates.md`'s "S6 unlock" section.
+
+**S4 gate reviewed and signed off**
+
+- Validated Phase 1 against real, previously-untouched JOB9002 content (`FC StatusAlarms`, station_1)
+  on top of the reference-corpus pilot - same finding pattern held (naming, header comment, network
+  titles, packed alarm-word bits). Signed off on a "shown, then confirmed" match rather than a
+  genuinely blind one - flagged explicitly before revealing the tool's output and again before
+  closing the gate; project owner's own informed call to accept it. Full detail:
+  `docs/notes/stage-gates.md`.
+
 **Open S5 (structured data extraction), in parallel with S4**
 
 - Roadmap explicitly allows this: S5's entry is just S1 done (S4 not required). S4 stays ACTIVE at

@@ -1,0 +1,10 @@
+NETWORK 12 "Drum Separator Automatic Control"
+  COIL MotorStarterInst5.IO.RunningFB := DiscreteInputs.OSDrumSepRunning
+  COIL MotorStarterInst5.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst5.IO.InhibitMotor := DiscreteInputs.OSDrumSepIsoFB
+  COIL MotorStarterInst5.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst5.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.DrumShutdownReady) AND PlantControl.DrumsEnable
+  COIL MotorStarterInst5.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.DrumShutdownReady) AND NOT MotorStarterInst5.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst5.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSDrumSepStart := MotorStarterInst5.IO.Run
+  CALL MotorStarter(MotorStarterInst5, EN := TRUE)

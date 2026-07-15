@@ -1,0 +1,13 @@
+NETWORK 2 "Link Conveyor Automatic Control"
+  COIL MotorStarterInst4.IO.RunningFB := DiscreteInputs.HFLCRunning AND DiscreteInputs.HFLCRotSen OR DiscreteInputs.HFLCRunning AND HMIControlSignals.BypassHFLCRotSen
+  COIL MotorStarterInst4.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst4.IO.InhibitMotor := DiscreteInputs.HFLCIsoFB
+  COIL MotorStarterInst4.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst4.IO.AutoStartSignal := (InterlockData.JOB9001Interlock AND PlantControl.Status >= 1 OR InterlockData.JOB9001Interlock AND PlantControl.Status = -1 AND NOT InterlockData.JOB9001ShutdownComplete) AND MotorVSDInst2.IO.UPSEnable
+  COIL MotorStarterInst4.IO.Shutdown := NOT (InterlockData.JOB9001Interlock AND PlantControl.Status >= 1 OR InterlockData.JOB9001Interlock AND PlantControl.Status = -1 AND NOT InterlockData.JOB9001ShutdownComplete) AND NOT MotorStarterInst4.IO.HandIntervention AND PlantControl.Status = -1
+  SCOIL PlantControl.AutoPreStart := InterlockData.JOB9001Interlock AND PlantControl.Status >= 1 AND MotorStarterInst4.IO.AutoStartSignal AND NOT PlantControl.PositiveEdgeArray[4]
+  COIL PlantControl.PositiveEdgeArray[4] := InterlockData.JOB9001Interlock AND PlantControl.Status >= 1 AND MotorStarterInst4.IO.AutoStartSignal
+  RCOIL PlantControl.AutoPreStart := DiscreteOutputs.RunPreStart
+  COIL MotorStarterInst4.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.HFLCStart := MotorStarterInst4.IO.Run
+  CALL MotorStarter(MotorStarterInst4, EN := TRUE)
