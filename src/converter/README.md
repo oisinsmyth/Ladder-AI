@@ -1461,6 +1461,32 @@ one would.
    build writes goes through the same real import+compile gate, so a dedicated isolated v2 live
    check was judged redundant with that real work rather than skipped.
 
+## `digest` — compact structural summary (2026-07-16, FI-15)
+
+`converter digest <file.ir> [<file.ir> ...] [--ignore-errors] [--json]`
+
+A deterministic, mechanically-derived orientation summary of `.ir` content — "what shape is this
+block?" at a fraction of the tokens of the full IR, per FI-15 (`docs/16-future-ideas.md`). Derived
+fresh on every run, never stored, so it cannot go stale. **Not** an explanation and **not** review
+input — a reviewer that should read every rung still reads the full IR (the S2 exhaustiveness
+lesson); this is for finding *which* file to open.
+
+- Blocks: kind/name/number/title, interface sections (`Name : Datatype`, nested-member counts),
+  CALL sites grouped by callee with distinct instance paths, per-network title + statement counts
+  (`coil:2, timer:1` — statement-level only; contacts/comparisons live inside condition
+  expressions and are deliberately not counted), and deduplicated global tag roots (first path
+  component via `AccessNode.FromDottedPath`, so `Clock_0.5Hz`-style literal-dot names stay
+  atomic).
+- DBs (`GlobalDB`/`InstanceDB` + `INSTANCEOF`), UDTs, and tag tables (name : type @ address) get
+  the corresponding member/tag listing.
+- Same batch contract as `review`: fails on the first bad file unless `--ignore-errors` records
+  it and continues; `--json` for machine use; non-zero exit only for file errors (a digest has no
+  findings). Works on both exported IR (with `SIDECAR`) and freshly hand-authored, sidecar-less
+  IR — dispatched by the section's presence, mirroring `ParseBlock`/`ParseBlockWithoutSidecar`'s
+  own contract.
+- Piloted against all 14 `ir/reference/*.ir`, a pattern example DB, and `GenProject1`'s
+  `FC_ControlMain` (calls/instances/network map/DB roots all correct at a glance).
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

@@ -10,6 +10,21 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**FI-15 implemented: `converter digest` — compact structural summaries of .ir content**
+
+- New `Digest/` (model + builder + formatter, mirroring `Review/`'s shape and batch contract):
+  blocks report kind/name/number/title, interface sections, CALL sites grouped by callee with
+  instance paths, per-network statement counts, and deduplicated tag roots (via
+  `AccessNode.FromDottedPath`, so literal-dot names like `Clock_0.5Hz` stay atomic); DBs/UDTs/tag
+  tables get member/tag listings. Works on sidecar'd and sidecar-less IR alike. 8 new tests;
+  piloted clean against all 14 `ir/reference/*.ir` plus pattern-example and `GenProject1` content.
+- Known pre-existing issue surfaced while verifying (not caused by, not fixed here):
+  `PatternExampleTests` (12 tests) fail in any *fresh* checkout because the committed
+  pattern-example `.ir` files get CRLF-normalized by git on checkout while the serializer emits
+  LF — the raw-text comparison then fails on line endings alone. Passes in the original working
+  copy (files still LF on disk there). Flagged for a deliberate fix (`.gitattributes` `*.ir eol`
+  policy or normalized comparison) rather than patched unilaterally in a side branch.
+
 **FI-16 (convention) implemented: `docs/notes/gen-telemetry.md`**
 
 - Proposed per-run telemetry format for generation projects: one append-only
