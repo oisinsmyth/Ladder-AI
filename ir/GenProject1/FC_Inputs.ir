@@ -10,10 +10,11 @@ INTERFACE
   CONSTANT
 
 NETWORK 1 "PLC1 Built-in DI (CPU 1214C)"
+  COMMENT "DI4_SYS_CycleStop is a normally-closed pushbutton: negated at this map layer so DB_Input.Cycle_Stop reads active-high (true = operator commanding stop) like every other buffer member - the input-mapping pattern's negated variant. Field polarity is absorbed here only; logic never compensates (C-304)."
   COIL DB_Input.Control_Healthy := AlwaysTrue AND NOT DB_Input.Test[0] AND DI1_SYS_ControlHealthy OR AlwaysTrue AND DB_Input.Test[1]
   COIL DB_Input.SpareDI[1] := AlwaysTrue AND NOT DB_Input.Test[0] AND DI2_SPR_1 OR AlwaysTrue AND DB_Input.Test[2]
   COIL DB_Input.Cycle_Start := AlwaysTrue AND NOT DB_Input.Test[0] AND DI3_SYS_CycleStart OR AlwaysTrue AND DB_Input.Test[3]
-  COIL DB_Input.Cycle_Stop := AlwaysTrue AND NOT DB_Input.Test[0] AND DI4_SYS_CycleStop OR AlwaysTrue AND DB_Input.Test[4]
+  COIL DB_Input.Cycle_Stop := AlwaysTrue AND NOT DB_Input.Test[0] AND NOT DI4_SYS_CycleStop OR AlwaysTrue AND DB_Input.Test[4]
   COIL DB_Input.Shredder_Run_Fwd_FB := AlwaysTrue AND NOT DB_Input.Test[0] AND DI5_SHR_RunFwdFB OR AlwaysTrue AND DB_Input.Test[5]
   COIL DB_Input.Shredder_Run_Rev_FB := AlwaysTrue AND NOT DB_Input.Test[0] AND DI6_SHR_RunRevFB OR AlwaysTrue AND DB_Input.Test[6]
   COIL DB_Input.Motor_Fault := AlwaysTrue AND NOT DB_Input.Test[0] AND DI7_SYS_MotorFault OR AlwaysTrue AND DB_Input.Test[7]
@@ -127,27 +128,27 @@ NETWORK 1
     step 0 or
       uid = 110
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 105
           operand = 21
-          operandwire = 204
+          operandwire = 203
           negated = false
-          out = 205
+          out = 204
         step 1 contact
           uid = 106
           operand = 22
-          operandwire = 206
+          operandwire = 205
           negated = true
-          out = 207
+          out = 206
         step 2 contact
           uid = 107
           operand = 23
-          operandwire = 208
+          operandwire = 207
           negated = false
-          out = 209
+          out = 208
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 108
           operand = 24
@@ -169,7 +170,7 @@ NETWORK 1
     step 0 or
       uid = 117
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 112
           operand = 27
@@ -189,7 +190,7 @@ NETWORK 1
           negated = false
           out = 221
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 115
           operand = 30
@@ -211,7 +212,7 @@ NETWORK 1
     step 0 or
       uid = 124
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 119
           operand = 33
@@ -231,7 +232,7 @@ NETWORK 1
           negated = false
           out = 233
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 122
           operand = 36
@@ -253,7 +254,7 @@ NETWORK 1
     step 0 or
       uid = 131
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 126
           operand = 39
@@ -270,10 +271,10 @@ NETWORK 1
           uid = 128
           operand = 41
           operandwire = 244
-          negated = false
+          negated = true
           out = 245
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 129
           operand = 42
@@ -295,7 +296,7 @@ NETWORK 1
     step 0 or
       uid = 138
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 133
           operand = 45
@@ -315,7 +316,7 @@ NETWORK 1
           negated = false
           out = 257
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 136
           operand = 48
@@ -337,7 +338,7 @@ NETWORK 1
     step 0 or
       uid = 145
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 140
           operand = 51
@@ -357,7 +358,7 @@ NETWORK 1
           negated = false
           out = 269
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 143
           operand = 54
@@ -379,7 +380,7 @@ NETWORK 1
     step 0 or
       uid = 152
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 147
           operand = 57
@@ -399,7 +400,7 @@ NETWORK 1
           negated = false
           out = 281
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 150
           operand = 60
@@ -421,7 +422,7 @@ NETWORK 1
     step 0 or
       uid = 159
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 154
           operand = 63
@@ -441,7 +442,7 @@ NETWORK 1
           negated = false
           out = 293
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 157
           operand = 66
@@ -463,7 +464,7 @@ NETWORK 1
     step 0 or
       uid = 166
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 161
           operand = 69
@@ -483,7 +484,7 @@ NETWORK 1
           negated = false
           out = 305
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 164
           operand = 72
@@ -505,7 +506,7 @@ NETWORK 1
     step 0 or
       uid = 173
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 168
           operand = 75
@@ -525,7 +526,7 @@ NETWORK 1
           negated = false
           out = 317
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 171
           operand = 78
@@ -547,7 +548,7 @@ NETWORK 1
     step 0 or
       uid = 180
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 175
           operand = 81
@@ -567,7 +568,7 @@ NETWORK 1
           negated = false
           out = 329
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 178
           operand = 84
@@ -589,7 +590,7 @@ NETWORK 1
     step 0 or
       uid = 187
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 182
           operand = 87
@@ -609,7 +610,7 @@ NETWORK 1
           negated = false
           out = 341
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 185
           operand = 90
@@ -631,7 +632,7 @@ NETWORK 1
     step 0 or
       uid = 194
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 189
           operand = 93
@@ -651,7 +652,7 @@ NETWORK 1
           negated = false
           out = 353
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 192
           operand = 96
@@ -673,7 +674,7 @@ NETWORK 1
     step 0 or
       uid = 201
       branch 0
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 196
           operand = 99
@@ -693,7 +694,7 @@ NETWORK 1
           negated = false
           out = 365
       branch 1
-        rail = 203
+        rail = 209
         step 0 contact
           uid = 199
           operand = 102
@@ -765,27 +766,27 @@ NETWORK 2
     step 0 or
       uid = 74
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 69
           operand = 21
-          operandwire = 126
+          operandwire = 125
           negated = false
-          out = 127
+          out = 126
         step 1 contact
           uid = 70
           operand = 22
-          operandwire = 128
+          operandwire = 127
           negated = true
-          out = 129
+          out = 128
         step 2 contact
           uid = 71
           operand = 23
-          operandwire = 130
+          operandwire = 129
           negated = false
-          out = 131
+          out = 130
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 72
           operand = 24
@@ -807,7 +808,7 @@ NETWORK 2
     step 0 or
       uid = 81
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 76
           operand = 27
@@ -827,7 +828,7 @@ NETWORK 2
           negated = false
           out = 143
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 79
           operand = 30
@@ -849,7 +850,7 @@ NETWORK 2
     step 0 or
       uid = 88
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 83
           operand = 33
@@ -869,7 +870,7 @@ NETWORK 2
           negated = false
           out = 155
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 86
           operand = 36
@@ -891,7 +892,7 @@ NETWORK 2
     step 0 or
       uid = 95
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 90
           operand = 39
@@ -911,7 +912,7 @@ NETWORK 2
           negated = false
           out = 167
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 93
           operand = 42
@@ -933,7 +934,7 @@ NETWORK 2
     step 0 or
       uid = 102
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 97
           operand = 45
@@ -953,7 +954,7 @@ NETWORK 2
           negated = false
           out = 179
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 100
           operand = 48
@@ -975,7 +976,7 @@ NETWORK 2
     step 0 or
       uid = 109
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 104
           operand = 51
@@ -995,7 +996,7 @@ NETWORK 2
           negated = false
           out = 191
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 107
           operand = 54
@@ -1017,7 +1018,7 @@ NETWORK 2
     step 0 or
       uid = 116
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 111
           operand = 57
@@ -1037,7 +1038,7 @@ NETWORK 2
           negated = false
           out = 203
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 114
           operand = 60
@@ -1059,7 +1060,7 @@ NETWORK 2
     step 0 or
       uid = 123
       branch 0
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 118
           operand = 63
@@ -1079,7 +1080,7 @@ NETWORK 2
           negated = false
           out = 215
       branch 1
-        rail = 125
+        rail = 131
         step 0 contact
           uid = 121
           operand = 66

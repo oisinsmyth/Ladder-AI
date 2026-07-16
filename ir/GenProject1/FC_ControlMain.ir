@@ -67,13 +67,14 @@ NETWORK 6 "Call Pusher"
   CALL FB_PusherControl(iDB_PusherControl, EN := TRUE)
 
 NETWORK 7 "Output Mapping"
+  COMMENT "In_Cycle lamp definition (owner ruling, 2026-07-16): on whenever any piece of equipment is running - taken from field running feedbacks (shredder fwd/rev, discharge conveyor, infeed conveyor, pusher power pack), not PLC run commands, so the lamp reflects what the machine is actually doing. This also gives Infeed_Conv_Running its consumer. iDB_ShredderSequencer.IO.InCycle is superseded by this rung and no longer wired; removing the member is deferred to the queued settings-rework request (interface change)."
   COIL DB_Output.Run_Shredder_Fwd := iDB_MotorFwdRevSystem_Shredder.IO.RunFwd
   COIL DB_Output.Run_Shredder_Rev := iDB_MotorFwdRevSystem_Shredder.IO.RunRev
   COIL DB_Output.Run_Discharge_Conv := iDB_ShredderSequencer.IO.RunDischargeConv
   COIL DB_Output.Run_Infeed_Conv := iDB_ShredderSequencer.IO.RunInfeedConv
   COIL DB_Output.Enable_Upstream := iDB_ShredderSequencer.IO.EnableUpstream
   COIL DB_Output.PreStart_Sounder := iDB_ShredderSequencer.IO.PreStartSounder
-  COIL DB_Output.In_Cycle := iDB_ShredderSequencer.IO.InCycle
+  COIL DB_Output.In_Cycle := DB_Input.Shredder_Run_Fwd_FB OR DB_Input.Shredder_Run_Rev_FB OR DB_Input.Discharge_Conv_Running OR DB_Input.Infeed_Conv_Running OR DB_Input.Pusher_PowerPack_Running
   COIL DB_Output.Motor_Fault_Reset := DB_Controls.FaultReset
   COIL DB_Output.Pusher_Extend := iDB_PusherControl.IO.Extend
   COIL DB_Output.Pusher_Retract := iDB_PusherControl.IO.Retract
@@ -105,18 +106,18 @@ NETWORK 1
   access DB_AnalogInput.ShredderMotorCurrent = 41 GlobalVariable
   access iDB_ShredderSequencer.IO.ShredderMotorCurrent = 42 GlobalVariable
   assignment 0
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 43
       operand = 21
-      operandwire = 64
+      operandwire = 63
       negated = false
-      out = 65
+      out = 64
     coil = 44
     coil operand = 22
-    coil operandwire = 66
+    coil operandwire = 65
   assignment 1
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 45
       operand = 23
@@ -127,7 +128,7 @@ NETWORK 1
     coil operand = 24
     coil operandwire = 69
   assignment 2
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 47
       operand = 25
@@ -138,7 +139,7 @@ NETWORK 1
     coil operand = 26
     coil operandwire = 72
   assignment 3
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 49
       operand = 27
@@ -149,7 +150,7 @@ NETWORK 1
     coil operand = 28
     coil operandwire = 75
   assignment 4
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 51
       operand = 29
@@ -160,7 +161,7 @@ NETWORK 1
     coil operand = 30
     coil operandwire = 78
   assignment 5
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 53
       operand = 31
@@ -171,7 +172,7 @@ NETWORK 1
     coil operand = 32
     coil operandwire = 81
   assignment 6
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 55
       operand = 33
@@ -182,7 +183,7 @@ NETWORK 1
     coil operand = 34
     coil operandwire = 84
   assignment 7
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 57
       operand = 35
@@ -193,7 +194,7 @@ NETWORK 1
     coil operand = 36
     coil operandwire = 87
   assignment 8
-    rail = 63
+    rail = 66
     step 0 contact
       uid = 59
       operand = 37
@@ -205,13 +206,13 @@ NETWORK 1
     coil operandwire = 90
   move 0
     moveuid = 61
-    rail = 63
+    rail = 66
     in tag = 39 91
     dest = 40
     destwire = 92
   move 1
     moveuid = 62
-    rail = 63
+    rail = 66
     in tag = 41 93
     dest = 42
     destwire = 94
@@ -252,18 +253,18 @@ NETWORK 3
   access iDB_ShredderSequencer.IO.MotorReverseCmd = 43 GlobalVariable
   access iDB_MotorFwdRevSystem_Shredder.IO.Reverse = 44 GlobalVariable
   assignment 0
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 45
       operand = 21
-      operandwire = 70
+      operandwire = 69
       negated = true
-      out = 71
+      out = 70
     coil = 46
     coil operand = 22
-    coil operandwire = 72
+    coil operandwire = 71
   assignment 1
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 47
       operand = 23
@@ -274,7 +275,7 @@ NETWORK 3
     coil operand = 24
     coil operandwire = 75
   assignment 2
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 49
       operand = 25
@@ -285,7 +286,7 @@ NETWORK 3
     coil operand = 26
     coil operandwire = 78
   assignment 3
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 51
       operand = 27
@@ -296,7 +297,7 @@ NETWORK 3
     coil operand = 28
     coil operandwire = 81
   assignment 4
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 53
       operand = 29
@@ -307,7 +308,7 @@ NETWORK 3
     coil operand = 30
     coil operandwire = 84
   assignment 5
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 55
       operand = 31
@@ -318,7 +319,7 @@ NETWORK 3
     coil operand = 32
     coil operandwire = 87
   assignment 6
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 57
       operand = 33
@@ -329,7 +330,7 @@ NETWORK 3
     coil operand = 34
     coil operandwire = 90
   assignment 7
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 59
       operand = 35
@@ -340,7 +341,7 @@ NETWORK 3
     coil operand = 36
     coil operandwire = 93
   assignment 8
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 61
       operand = 37
@@ -351,7 +352,7 @@ NETWORK 3
     coil operand = 38
     coil operandwire = 96
   assignment 9
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 63
       operand = 39
@@ -362,7 +363,7 @@ NETWORK 3
     coil operand = 40
     coil operandwire = 99
   assignment 10
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 65
       operand = 41
@@ -373,7 +374,7 @@ NETWORK 3
     coil operand = 42
     coil operandwire = 102
   assignment 11
-    rail = 69
+    rail = 72
     step 0 contact
       uid = 67
       operand = 43
@@ -434,18 +435,18 @@ NETWORK 5
   access DB_Settings.PressureTripCountThreshold = 57 GlobalVariable
   access iDB_PusherControl.IO.PressureTripCountThreshold = 58 GlobalVariable
   assignment 0
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 59
       operand = 21
-      operandwire = 89
+      operandwire = 88
       negated = false
-      out = 90
+      out = 89
     coil = 60
     coil operand = 22
-    coil operandwire = 91
+    coil operandwire = 90
   assignment 1
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 61
       operand = 23
@@ -456,7 +457,7 @@ NETWORK 5
     coil operand = 24
     coil operandwire = 94
   assignment 2
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 63
       operand = 25
@@ -467,7 +468,7 @@ NETWORK 5
     coil operand = 26
     coil operandwire = 97
   assignment 3
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 65
       operand = 27
@@ -478,7 +479,7 @@ NETWORK 5
     coil operand = 28
     coil operandwire = 100
   assignment 4
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 67
       operand = 29
@@ -489,7 +490,7 @@ NETWORK 5
     coil operand = 30
     coil operandwire = 103
   assignment 5
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 69
       operand = 31
@@ -500,7 +501,7 @@ NETWORK 5
     coil operand = 32
     coil operandwire = 106
   assignment 6
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 71
       operand = 33
@@ -511,7 +512,7 @@ NETWORK 5
     coil operand = 34
     coil operandwire = 109
   assignment 7
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 73
       operand = 35
@@ -522,7 +523,7 @@ NETWORK 5
     coil operand = 36
     coil operandwire = 112
   assignment 8
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 75
       operand = 37
@@ -533,7 +534,7 @@ NETWORK 5
     coil operand = 38
     coil operandwire = 115
   assignment 9
-    rail = 88
+    rail = 91
     step 0 contact
       uid = 77
       operand = 39
@@ -545,55 +546,55 @@ NETWORK 5
     coil operandwire = 118
   move 0
     moveuid = 79
-    rail = 88
+    rail = 91
     in tag = 41 119
     dest = 42
     destwire = 120
   move 1
     moveuid = 80
-    rail = 88
+    rail = 91
     in tag = 43 121
     dest = 44
     destwire = 122
   move 2
     moveuid = 81
-    rail = 88
+    rail = 91
     in tag = 45 123
     dest = 46
     destwire = 124
   move 3
     moveuid = 82
-    rail = 88
+    rail = 91
     in tag = 47 125
     dest = 48
     destwire = 126
   move 4
     moveuid = 83
-    rail = 88
+    rail = 91
     in tag = 49 127
     dest = 50
     destwire = 128
   move 5
     moveuid = 84
-    rail = 88
+    rail = 91
     in tag = 51 129
     dest = 52
     destwire = 130
   move 6
     moveuid = 85
-    rail = 88
+    rail = 91
     in tag = 53 131
     dest = 54
     destwire = 132
   move 7
     moveuid = 86
-    rail = 88
+    rail = 91
     in tag = 55 133
     dest = 56
     destwire = 134
   move 8
     moveuid = 87
-    rail = 88
+    rail = 91
     in tag = 57 135
     dest = 58
     destwire = 136
@@ -621,134 +622,175 @@ NETWORK 7
   access DB_Output.Enable_Upstream = 30 GlobalVariable
   access iDB_ShredderSequencer.IO.PreStartSounder = 31 GlobalVariable
   access DB_Output.PreStart_Sounder = 32 GlobalVariable
-  access iDB_ShredderSequencer.IO.InCycle = 33 GlobalVariable
-  access DB_Output.In_Cycle = 34 GlobalVariable
-  access DB_Controls.FaultReset = 35 GlobalVariable
-  access DB_Output.Motor_Fault_Reset = 36 GlobalVariable
-  access iDB_PusherControl.IO.Extend = 37 GlobalVariable
-  access DB_Output.Pusher_Extend = 38 GlobalVariable
-  access iDB_PusherControl.IO.Retract = 39 GlobalVariable
-  access DB_Output.Pusher_Retract = 40 GlobalVariable
-  access iDB_PusherControl.IO.RunPowerPack = 41 GlobalVariable
-  access DB_Output.Run_PowerPack = 42 GlobalVariable
+  access DB_Input.Shredder_Run_Fwd_FB = 33 GlobalVariable
+  access DB_Input.Shredder_Run_Rev_FB = 34 GlobalVariable
+  access DB_Input.Discharge_Conv_Running = 35 GlobalVariable
+  access DB_Input.Infeed_Conv_Running = 36 GlobalVariable
+  access DB_Input.Pusher_PowerPack_Running = 37 GlobalVariable
+  access DB_Output.In_Cycle = 38 GlobalVariable
+  access DB_Controls.FaultReset = 39 GlobalVariable
+  access DB_Output.Motor_Fault_Reset = 40 GlobalVariable
+  access iDB_PusherControl.IO.Extend = 41 GlobalVariable
+  access DB_Output.Pusher_Extend = 42 GlobalVariable
+  access iDB_PusherControl.IO.Retract = 43 GlobalVariable
+  access DB_Output.Pusher_Retract = 44 GlobalVariable
+  access iDB_PusherControl.IO.RunPowerPack = 45 GlobalVariable
+  access DB_Output.Run_PowerPack = 46 GlobalVariable
   assignment 0
-    rail = 65
-    step 0 contact
-      uid = 43
-      operand = 21
-      operandwire = 66
-      negated = false
-      out = 67
-    coil = 44
-    coil operand = 22
-    coil operandwire = 68
-  assignment 1
-    rail = 65
-    step 0 contact
-      uid = 45
-      operand = 23
-      operandwire = 69
-      negated = false
-      out = 70
-    coil = 46
-    coil operand = 24
-    coil operandwire = 71
-  assignment 2
-    rail = 65
+    rail = 77
     step 0 contact
       uid = 47
-      operand = 25
-      operandwire = 72
+      operand = 21
+      operandwire = 74
       negated = false
-      out = 73
+      out = 75
     coil = 48
-    coil operand = 26
-    coil operandwire = 74
-  assignment 3
-    rail = 65
+    coil operand = 22
+    coil operandwire = 76
+  assignment 1
+    rail = 77
     step 0 contact
       uid = 49
-      operand = 27
-      operandwire = 75
-      negated = false
-      out = 76
-    coil = 50
-    coil operand = 28
-    coil operandwire = 77
-  assignment 4
-    rail = 65
-    step 0 contact
-      uid = 51
-      operand = 29
+      operand = 23
       operandwire = 78
       negated = false
       out = 79
-    coil = 52
-    coil operand = 30
+    coil = 50
+    coil operand = 24
     coil operandwire = 80
-  assignment 5
-    rail = 65
+  assignment 2
+    rail = 77
     step 0 contact
-      uid = 53
-      operand = 31
+      uid = 51
+      operand = 25
       operandwire = 81
       negated = false
       out = 82
-    coil = 54
-    coil operand = 32
+    coil = 52
+    coil operand = 26
     coil operandwire = 83
-  assignment 6
-    rail = 65
+  assignment 3
+    rail = 77
     step 0 contact
-      uid = 55
-      operand = 33
+      uid = 53
+      operand = 27
       operandwire = 84
       negated = false
       out = 85
-    coil = 56
-    coil operand = 34
+    coil = 54
+    coil operand = 28
     coil operandwire = 86
-  assignment 7
-    rail = 65
+  assignment 4
+    rail = 77
     step 0 contact
-      uid = 57
-      operand = 35
+      uid = 55
+      operand = 29
       operandwire = 87
       negated = false
       out = 88
-    coil = 58
-    coil operand = 36
+    coil = 56
+    coil operand = 30
     coil operandwire = 89
-  assignment 8
-    rail = 65
+  assignment 5
+    rail = 77
     step 0 contact
-      uid = 59
-      operand = 37
+      uid = 57
+      operand = 31
       operandwire = 90
       negated = false
       out = 91
-    coil = 60
-    coil operand = 38
+    coil = 58
+    coil operand = 32
     coil operandwire = 92
-  assignment 9
-    rail = 65
+  assignment 6
+    rail = none
+    step 0 or
+      uid = 64
+      branch 0
+        rail = 77
+        step 0 contact
+          uid = 59
+          operand = 33
+          operandwire = 93
+          negated = false
+          out = 94
+      branch 1
+        rail = 77
+        step 0 contact
+          uid = 60
+          operand = 34
+          operandwire = 95
+          negated = false
+          out = 96
+      branch 2
+        rail = 77
+        step 0 contact
+          uid = 61
+          operand = 35
+          operandwire = 97
+          negated = false
+          out = 98
+      branch 3
+        rail = 77
+        step 0 contact
+          uid = 62
+          operand = 36
+          operandwire = 99
+          negated = false
+          out = 100
+      branch 4
+        rail = 77
+        step 0 contact
+          uid = 63
+          operand = 37
+          operandwire = 101
+          negated = false
+          out = 102
+      out = 103
+    coil = 65
+    coil operand = 38
+    coil operandwire = 104
+  assignment 7
+    rail = 77
     step 0 contact
-      uid = 61
+      uid = 66
       operand = 39
-      operandwire = 93
+      operandwire = 105
       negated = false
-      out = 94
-    coil = 62
+      out = 106
+    coil = 67
     coil operand = 40
-    coil operandwire = 95
-  assignment 10
-    rail = 65
+    coil operandwire = 107
+  assignment 8
+    rail = 77
     step 0 contact
-      uid = 63
+      uid = 68
       operand = 41
-      operandwire = 96
+      operandwire = 108
       negated = false
-      out = 97
-    coil = 64
+      out = 109
+    coil = 69
     coil operand = 42
-    coil operandwire = 98
+    coil operandwire = 110
+  assignment 9
+    rail = 77
+    step 0 contact
+      uid = 70
+      operand = 43
+      operandwire = 111
+      negated = false
+      out = 112
+    coil = 71
+    coil operand = 44
+    coil operandwire = 113
+  assignment 10
+    rail = 77
+    step 0 contact
+      uid = 72
+      operand = 45
+      operandwire = 114
+      negated = false
+      out = 115
+    coil = 73
+    coil operand = 46
+    coil operandwire = 116

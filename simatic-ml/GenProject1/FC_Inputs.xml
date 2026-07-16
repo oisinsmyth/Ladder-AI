@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T12:59:05.4407306Z</Created>
+    <Created>2026-07-16T15:44:27.1761837Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -795,7 +795,9 @@
     <Part Name="Contact" UId="127">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Contact" UId="128" />
+    <Part Name="Contact" UId="128">
+      <Negated Name="operand" />
+    </Part>
     <Part Name="Contact" UId="129" />
     <Part Name="Contact" UId="130" />
     <Part Name="O" UId="131">
@@ -915,6 +917,30 @@
   </Parts>
   <Wires>
     <Wire UId="203">
+      <IdentCon UId="21" />
+      <NameCon UId="105" Name="operand" />
+    </Wire>
+    <Wire UId="204">
+      <NameCon UId="105" Name="out" />
+      <NameCon UId="106" Name="in" />
+    </Wire>
+    <Wire UId="205">
+      <IdentCon UId="22" />
+      <NameCon UId="106" Name="operand" />
+    </Wire>
+    <Wire UId="206">
+      <NameCon UId="106" Name="out" />
+      <NameCon UId="107" Name="in" />
+    </Wire>
+    <Wire UId="207">
+      <IdentCon UId="23" />
+      <NameCon UId="107" Name="operand" />
+    </Wire>
+    <Wire UId="208">
+      <NameCon UId="107" Name="out" />
+      <NameCon UId="110" Name="in1" />
+    </Wire>
+    <Wire UId="209">
       <Powerrail />
       <NameCon UId="105" Name="in" />
       <NameCon UId="108" Name="in" />
@@ -944,30 +970,6 @@
       <NameCon UId="192" Name="in" />
       <NameCon UId="196" Name="in" />
       <NameCon UId="199" Name="in" />
-    </Wire>
-    <Wire UId="204">
-      <IdentCon UId="21" />
-      <NameCon UId="105" Name="operand" />
-    </Wire>
-    <Wire UId="205">
-      <NameCon UId="105" Name="out" />
-      <NameCon UId="106" Name="in" />
-    </Wire>
-    <Wire UId="206">
-      <IdentCon UId="22" />
-      <NameCon UId="106" Name="operand" />
-    </Wire>
-    <Wire UId="207">
-      <NameCon UId="106" Name="out" />
-      <NameCon UId="107" Name="in" />
-    </Wire>
-    <Wire UId="208">
-      <IdentCon UId="23" />
-      <NameCon UId="107" Name="operand" />
-    </Wire>
-    <Wire UId="209">
-      <NameCon UId="107" Name="out" />
-      <NameCon UId="110" Name="in1" />
     </Wire>
     <Wire UId="210">
       <IdentCon UId="24" />
@@ -1627,7 +1629,7 @@
               <MultilingualTextItem ID="5" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>DI4_SYS_CycleStop is a normally-closed pushbutton: negated at this map layer so DB_Input.Cycle_Stop reads active-high (true = operator commanding stop) like every other buffer member - the input-mapping pattern's negated variant. Field polarity is absorbed here only; logic never compensates (C-304).</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -2157,6 +2159,30 @@
   </Parts>
   <Wires>
     <Wire UId="125">
+      <IdentCon UId="21" />
+      <NameCon UId="69" Name="operand" />
+    </Wire>
+    <Wire UId="126">
+      <NameCon UId="69" Name="out" />
+      <NameCon UId="70" Name="in" />
+    </Wire>
+    <Wire UId="127">
+      <IdentCon UId="22" />
+      <NameCon UId="70" Name="operand" />
+    </Wire>
+    <Wire UId="128">
+      <NameCon UId="70" Name="out" />
+      <NameCon UId="71" Name="in" />
+    </Wire>
+    <Wire UId="129">
+      <IdentCon UId="23" />
+      <NameCon UId="71" Name="operand" />
+    </Wire>
+    <Wire UId="130">
+      <NameCon UId="71" Name="out" />
+      <NameCon UId="74" Name="in1" />
+    </Wire>
+    <Wire UId="131">
       <Powerrail />
       <NameCon UId="69" Name="in" />
       <NameCon UId="72" Name="in" />
@@ -2174,30 +2200,6 @@
       <NameCon UId="114" Name="in" />
       <NameCon UId="118" Name="in" />
       <NameCon UId="121" Name="in" />
-    </Wire>
-    <Wire UId="126">
-      <IdentCon UId="21" />
-      <NameCon UId="69" Name="operand" />
-    </Wire>
-    <Wire UId="127">
-      <NameCon UId="69" Name="out" />
-      <NameCon UId="70" Name="in" />
-    </Wire>
-    <Wire UId="128">
-      <IdentCon UId="22" />
-      <NameCon UId="70" Name="operand" />
-    </Wire>
-    <Wire UId="129">
-      <NameCon UId="70" Name="out" />
-      <NameCon UId="71" Name="in" />
-    </Wire>
-    <Wire UId="130">
-      <IdentCon UId="23" />
-      <NameCon UId="71" Name="operand" />
-    </Wire>
-    <Wire UId="131">
-      <NameCon UId="71" Name="out" />
-      <NameCon UId="74" Name="in1" />
     </Wire>
     <Wire UId="132">
       <IdentCon UId="24" />

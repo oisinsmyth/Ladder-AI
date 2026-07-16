@@ -4007,3 +4007,47 @@ round-trip proof (nested anonymous Struct inside a standalone `SW.Types.PlcStruc
 IR→XML cleanly with comments stripped; the live import/compile/re-export leg was still running
 when this entry was written — its result lands in the next entry. The comment gap above applies
 to *both* variants (sub-struct and separate Settings UDT) equally.
+
+## S6: owner-directed fixes — InCycle lamp and DI4 stop polarity (2026-07-16)
+
+The two tier-1 candidates from the blind review were ruled **real mistakes** by the owner, with
+definitions supplied: the In_Cycle lamp is on **whenever any piece of equipment is running**, and
+the DI4 NC polarity is **absorbed at the input map** (not in logic). Fixed as S6 sandbox
+iteration — the same established mode as the Kestrel build's own C-126/C-127 restructuring of
+already-imported blocks (GenProject1 is S6's scratch; S7's gate concerns real-project
+modification and stays untouched) — but with S7-style discipline applied anyway, as a live
+rehearsal of it:
+
+- **FC_Inputs N1**: `Cycle_Stop` rung now negates `DI4_SYS_CycleStop` per the input-mapping
+  pattern's own negated variant (`network-2-negated-and-spare` — the canonical shape, C-304:
+  polarity absorbed at the map layer only), with a network comment reconciling the tag's "(NC)"
+  documentation with the rung. Buffer stays active-high for every consumer.
+- **FC_ControlMain N7**: `DB_Output.In_Cycle` now ORs the five field running feedbacks
+  (`Shredder_Run_Fwd_FB`/`Shredder_Run_Rev_FB`/`Discharge_Conv_Running`/`Infeed_Conv_Running`/
+  `Pusher_PowerPack_Running`) — feedbacks, not PLC commands, so the lamp reflects what the
+  machine is actually doing (stated in the network comment with the owner ruling's date). This
+  also gives `Infeed_Conv_Running` its consumer, closing that dead-input finding.
+  `iDB_ShredderSequencer.IO.InCycle` is now fully unwired; member removal is deliberately
+  deferred to the queued settings-rework request (interface change — minimal-diff discipline,
+  `11-review-workflow.md`'s "no drive-by edits"; same reason N7's "Output Mapping" mistitle was
+  left for its own pass).
+- **Method**: edited readable IR → `to-xml --synthesize` (fresh sidecars) → import → block
+  compiles (both `Success`, 0 errors; the standing sandbox hardware-IO warning only) →
+  whole-device compile **Success, 0 errors, 0 warnings** → re-export → to-ir.
+- **Untouched-network invariance, proven not asserted**: pre-fix committed IR vs post-fix
+  re-export, readable parts — exactly two hunks per block (the added comment, the changed rung);
+  every other network/title/line byte-identical through the full TIA round-trip. The committed
+  git diff is larger only because synthesize+TIA regenerated sidecar UIds (the known volatility);
+  the semantic diff is those four hunks.
+- Corpus updated in place (`ir/` + `simatic-ml/`) so the committed corpus keeps matching the live
+  sandbox.
+
+The owner also confirmed the diagnosis the blind run implied: InCycle "probably should have been
+flagged at the functional description stage" — precisely `gen-spec-analysis` + `review-functional`'s
+job in docs/15, which moves that pair up the build order.
+
+Environment note: partway through this work every `Siemens.Automation.Portal.exe` instance
+disappeared from tasklist (owner closed them after the earlier housekeeping note, presumably) —
+the import job simply launched a fresh instance and completed; the still-running SampleProject
+UDT-proof job from earlier was likely orphaned by the same closure and will hit its own timeout —
+its structure result (IR→XML leg passed) stands, the live leg gets re-run in the next batch.

@@ -84,10 +84,15 @@ now in doc 06's preamble.
       `docs/notes/review-simplicity-validation-2026-07-16.md`. Caveat: blind executor, non-blind
       examiner; S4-style owner-independent comparison optional before gate-grade reliance.
 - [x] Release converter rebuilt; `review` verb confirmed present (queued item closed)
-- [ ] **OWNER: tier-1 candidates from the blind run need a ruling** — `IO.InCycle` consumed into
-      `DQ8_SYS_InCycle` but written nowhere; `DI4_SYS_CycleStop` "(NC)" comment vs non-negated
-      mapping (as wired an NC button blocks all starts); `RecentStart := AlwaysTrue` fighting the
-      motor FB's own bit management. Fixes are a future S6 request after the ruling.
+- [x] Tier-1 rulings received and **fixed** (2026-07-16): In_Cycle = OR of the five field running
+      feedbacks (owner definition: "on any time any piece of equipment is running"), computed in
+      FC_ControlMain N7 — also closes the dead Infeed_Conv_Running finding; DI4 NC polarity
+      negated at the input map per the pattern's negated variant. Compile clean (device 0/0),
+      untouched-network invariance proven (2 hunks per block), corpus updated.
+      Still open from that finding set: `RecentStart := AlwaysTrue` fighting the motor FB's own
+      bit management (needs an owner ruling on intent — hand-mode constants), and
+      `iDB_ShredderSequencer.IO.InCycle` member removal (deferred into the settings-rework
+      request; currently unwired and documented as superseded in N7's comment).
 - [ ] **OWNER: motor-dol pattern tension** — the admitted example's "HMI Times" network lacks the
       scheme comment C-126's exception now requires (and has an untitled network): update the
       pattern or waive.
