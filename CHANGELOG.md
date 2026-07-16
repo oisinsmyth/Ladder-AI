@@ -23,6 +23,9 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   pre-flight gate before Portal round trips, FI-14 compile-error→fix playbook, FI-15 generated
   block digests for cheap structural context, FI-16 per-stage token/latency telemetry. Entries
   written against ADR-0004's pipeline so they complement rather than duplicate it.
+- FI-17 added after discussion: explanation sidecars — cached AI block explanations keyed to the
+  IR hash they were derived from, orientation use only, never review input (the analysis-cache
+  counterpart to FI-15's mechanical digests).
 
 **Add `docs/16-future-ideas.md` — a durable home for candidate ideas under debate**
 
