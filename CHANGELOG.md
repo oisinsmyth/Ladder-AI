@@ -10,6 +10,14 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**FI-16 (convention) implemented: `docs/notes/gen-telemetry.md`**
+
+- Proposed per-run telemetry format for generation projects: one append-only
+  `gen/<project>/telemetry.log`, one pipe-separated line per skill/stage run (date, skill,
+  wall-clock, Portal round trips, tokens, outcome, note). Explicitly a proposal for the pipeline
+  work stream to adopt — instrumentation lands with pipeline runs, not here. Columns chosen to
+  answer the FI-12/FI-13/FI-15 sizing questions; discipline section keeps it a log, not a dashboard.
+
 **FI-14 implemented: `docs/notes/compile-error-playbook.md`**
 
 - 19 grounded error→fix entries curated from `openness-quirks.md`, `stage-gates.md`, `CHANGELOG.md`,
