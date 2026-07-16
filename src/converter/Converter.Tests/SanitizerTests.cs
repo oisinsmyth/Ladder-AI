@@ -471,4 +471,69 @@ public class SanitizerTests
         Assert.False(member.ExternalVisible);
         Assert.False(member.ExternalWritable);
     }
+
+    // A member's own Comment (DbMember.Comment, 2026-07-15) bypassed sanitization entirely until
+    // 2026-07-16 — the one comment kind (vs block/network/tag comments, all long covered) that
+    // passed real free prose through verbatim. Same established contract as every other comment:
+    // a non-empty real comment requires a map entry (Comments["<Owner>.<Member>"]) and hard-errors
+    // listing the exact missing key otherwise — never a silent pass-through.
+    [Fact]
+    public void Sanitize_MemberComment_MappedReplacedAndMissingListed()
+    {
+        var commented = new DbMember("RealFlag", "Bool", Retain: false, StartValue: null, Comment: "Real, identifying why-prose.");
+        var db = new DbSource("0", "RealDbName", 7, null, null, new[] { commented });
+
+        var mapWithoutComment = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName" },
+            Tags = new Dictionary<string, string> { ["RealDbName.RealFlag"] = "SanitizedDbName.SanitizedFlag" },
+        };
+        var ex = Assert.Throws<SanitizationMapException>(() => Sanitizer.ApplyToDb(db, mapWithoutComment));
+        Assert.Contains("Comments[\"RealDbName.RealFlag\"]", ex.Message);
+
+        var mapWithComment = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealDbName"] = "SanitizedDbName" },
+            Tags = new Dictionary<string, string> { ["RealDbName.RealFlag"] = "SanitizedDbName.SanitizedFlag" },
+            Comments = new Dictionary<string, string> { ["RealDbName.RealFlag"] = "Sanitized why-prose." },
+        };
+        var sanitized = Sanitizer.ApplyToDb(db, mapWithComment);
+        var member = Assert.Single(sanitized.Members);
+        Assert.Equal("SanitizedFlag", member.Name);
+        Assert.Equal("Sanitized why-prose.", member.Comment);
+    }
+
+    // Same treatment on the TYPE/UDT path (ApplyToType shares SanitizeMember), including a nested
+    // anonymous-Struct field: the nested *name* stays structural (never renamed), but its Comment
+    // is the same identifying prose as a top-level member's — keyed by the full dotted path
+    // ("<Owner>.<Member>.<Nested>"), the StartValues convention.
+    [Fact]
+    public void Sanitize_TypeMemberComment_Sanitized()
+    {
+        var nested = new DbMember("Flag1", "Bool", Retain: false, StartValue: null, Comment: "Real nested prose.");
+        var coms = new DbMember("Coms", "Struct", Retain: false, StartValue: null, NestedMembers: new[] { nested });
+        var run = new DbMember("Run", "Bool", Retain: false, StartValue: null, Comment: "Real, identifying member prose.");
+        var type = new PlcTypeSource("0", "RealTypeName", null, new[] { run, coms });
+
+        var map = new SanitizationMap
+        {
+            Names = new Dictionary<string, string> { ["RealTypeName"] = "SanitizedTypeName" },
+            Tags = new Dictionary<string, string>
+            {
+                ["RealTypeName.Run"] = "SanitizedTypeName.Run",
+                ["RealTypeName.Coms"] = "SanitizedTypeName.Coms",
+            },
+            Comments = new Dictionary<string, string>
+            {
+                ["RealTypeName.Run"] = "Sanitized member prose.",
+                ["RealTypeName.Coms.Flag1"] = "Sanitized nested prose.",
+            },
+        };
+
+        var sanitized = Sanitizer.ApplyToType(type, map);
+
+        Assert.Equal("Sanitized member prose.", sanitized.Members[0].Comment);
+        var sanitizedNested = Assert.Single(sanitized.Members[1].NestedMembers!);
+        Assert.Equal("Sanitized nested prose.", sanitizedNested.Comment);
+    }
 }

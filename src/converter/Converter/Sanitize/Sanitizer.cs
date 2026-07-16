@@ -248,6 +248,19 @@ public static class Sanitizer
     private static DbMember SanitizeMember(string ownerName, DbMember member, SanitizationMap map, List<string> missing)
     {
         var realPath = $"{ownerName}.{member.Name}";
+
+        // A member's own Comment (DbMember.Comment, 2026-07-15) is free "why" prose — the same
+        // identifying category as every other comment kind (block/DB/network/tag), so it gets the
+        // same SanitizeComment treatment, keyed Comments["<Owner>.<Member>"] (the shared dotted
+        // convention this method already uses for Tags/StartValues). Previously never sanitized
+        // at all — the one comment kind that bypassed the treatment, a real pass-through gap.
+        // Checked before the Tags early-return below so one run still lists *every* missing entry.
+        var sanitizedComment = SanitizeComment(
+            member.Comment,
+            map.Comments.TryGetValue(realPath, out var mappedMemberComment) ? mappedMemberComment : null,
+            $"Comments[\"{realPath}\"]",
+            missing);
+
         if (!map.Tags.TryGetValue(realPath, out var invented))
         {
             missing.Add($"Tags[\"{realPath}\"]");
@@ -275,17 +288,27 @@ public static class Sanitizer
             .Select(nested => SanitizeNestedMember(ownerName, $"{member.Name}.{nested.Name}", nested, map, missing))
             .ToList();
 
-        return member with { Name = invented[(separatorIndex + 1)..], Datatype = sanitizedDatatype, StartValue = sanitizedStartValue, NestedMembers = sanitizedNestedMembers };
+        return member with { Name = invented[(separatorIndex + 1)..], Datatype = sanitizedDatatype, StartValue = sanitizedStartValue, NestedMembers = sanitizedNestedMembers, Comment = sanitizedComment };
     }
 
     private static DbMember SanitizeNestedMember(string ownerName, string nestedPath, DbMember nested, SanitizationMap map, List<string> missing)
     {
+        // Same Comment treatment as SanitizeMember above — a nested field's *name* is structural
+        // (the reusable type's own field name, never renamed), but its Comment is exactly the
+        // same free identifying prose as a top-level member's, keyed by the full dotted path
+        // ("<Owner>.<Member>.<Nested>", arbitrarily deep) the StartValues convention already uses.
+        var sanitizedComment = SanitizeComment(
+            nested.Comment,
+            map.Comments.TryGetValue($"{ownerName}.{nestedPath}", out var mappedNestedComment) ? mappedNestedComment : null,
+            $"Comments[\"{ownerName}.{nestedPath}\"]",
+            missing);
+
         var sanitizedStartValue = SanitizeStartValue(nested.StartValue, ownerName, nestedPath, map, missing);
         var sanitizedDeeperMembers = nested.NestedMembers?
             .Select(deeper => SanitizeNestedMember(ownerName, $"{nestedPath}.{deeper.Name}", deeper, map, missing))
             .ToList();
 
-        return nested with { StartValue = sanitizedStartValue, NestedMembers = sanitizedDeeperMembers };
+        return nested with { StartValue = sanitizedStartValue, NestedMembers = sanitizedDeeperMembers, Comment = sanitizedComment };
     }
 
     // Only string-typed StartValues (Siemens single-quote literal syntax, e.g. 'Some Text') can
