@@ -515,3 +515,35 @@ freeform go-ahead of CLAUDE.md workflow step 3, or the place to refuse it.
 - [ ] Approved to proceed to `gen-alarm-design` / `gen-block-coding` — Engineer: ____________
   Date: ____________
 - Scope notes / exclusions at sign-off: ____________
+
+## Change manifests
+
+### 2026-07-16 — Functional fix wave 1 (owner rulings of 2026-07-16; phase 1, portal-free)
+
+**Touched blocks** — modified only, nothing created or deleted: `FB_ShredderSequencer` (N1/N9/
+N14 + header), `FB_PusherControl` (N1/N2/new N4/N5–N8/N10/N11/N13 + header), `FC_ControlMain`
+(N1/N3/N5 + new header comment — standing C-201 finding closed in passing since the block was
+being edited), `DB_Settings` (five start values + four documented-unconfigured member comments),
+`iDB_MotorFwdRevSystem_Shredder` (**start values only**: `FTTime` 10.0, `ReverseIgnoreFT` 12.0 —
+imported-real, logic untouched), `iDB_ShredderSequencer`/`iDB_PusherControl` (interface-copy
+mirrors). **Interface changes: YES** — `UDT_ShredderSequencerIO` gains `SystemHealthy`,
+`ShredderRunRevFB` (in) and `MotorStartArm`, `PusherParkCmd` (out); `UDT_PusherIO` gains
+`ParkCmd` (in); `FB_PusherControl` gains Statics `CycleRequest`/`JogDemand`/`ReparkRequest`/
+`LaunchRequest` (C-601 named conditions). All new UDT members carry C-605 comments.
+**Pattern or freeform:** freeform edits to already-freeform blocks (no pattern covers them);
+authorization is the owner's four explicit rulings themselves — this wave implements direction,
+it does not originate design. **REQ refs:** REQ-005/006 (reverse run on confirmed feedback),
+REQ-012/013/062 (stop bundle: sequencer `SystemHealthy` in `StopCmd`, StopCmd forces pusher mode
+0, `RecentStart` strap replaced by `MotorStartArm` press-to-arm), REQ-039/041/043/044/045 +
+NEW-4 (repark only on pre-start `PusherParkCmd` or cycle entry, all rest-to-motion starts warned
+via the generalized pre-motion warning, `Fitted` gating at the source), REQ-004/007/031/047/054/
+055/063 (timing defaults — PROPOSALS, gated on `gen/GenProject1/fix-wave-1.md` §1 sign-off).
+**Tag status:** every referenced tag exists (`DB_Input.Control_Healthy`,
+`DB_Input.Shredder_Run_Rev_FB` grep-verified; no proposed field tag referenced). This section
+8's cross-instance wiring plan gains three rows in reality: `DB_Input.Control_Healthy` →
+SEQ.`SystemHealthy`; `DB_Input.Shredder_Run_Rev_FB` → SEQ.`ShredderRunRevFB`;
+SEQ.`MotorStartArm` → motor `RecentStart` (plain-coil set, FB self-clears);
+SEQ.`PusherParkCmd` → pusher `ParkCmd`.
+**Gate:** phase 2 (import → compile → invariance → reviewers → presentation) waits on the
+settings sign-off block in `gen/GenProject1/fix-wave-1.md` §1 — pending until the engineer
+signs. — Sign-off: pending.

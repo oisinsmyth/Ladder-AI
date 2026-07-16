@@ -16,7 +16,7 @@ DB iDB_MotorFwdRevSystem_Shredder
       PreStartDone : Bool
       InhibitMotor : Bool
       FaultReset : Bool
-      FTTime : Real
+      FTTime : Real = 10.0
       EnableUPSTime : Real
       FaultActive : Bool
       RunFwd : Bool
@@ -36,7 +36,7 @@ DB iDB_MotorFwdRevSystem_Shredder
       ShutdownTime : Real
       StopMotor : Bool
       ReverseDelay : Real = 8.0
-      ReverseIgnoreFT : Real
+      ReverseIgnoreFT : Real = 12.0
       Reverse : Bool
       HandReverse : Bool
     RisingEdgeFlags : Array[0..3] of Bool

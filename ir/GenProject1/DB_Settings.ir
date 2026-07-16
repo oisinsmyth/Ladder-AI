@@ -1,27 +1,27 @@
 DB DB_Settings
   ROOTID 0
   NUMBER 3
-  COMMENT "Plant/system-level tunables (C-307) - HMI/operator writes, PLC read-only (C-308). Start values are commissioning defaults (C-309). Members with no start value shown are genuinely unconfigured pending real numbers from the project owner - see the presented build notes, not a guess."
+  COMMENT "Plant/system-level tunables (C-307) - HMI/operator writes, PLC read-only (C-308). Start values are commissioning defaults (C-309). Fix-wave-1 (2026-07-16) proposed defaults for the five formerly-unconfigured live-zero timings, pending the owner's settings sign-off (gen/GenProject1/fix-wave-1.md is the signature page). The four overcurrent members remain deliberately unconfigured - see their own member comments."
   MEMBERS
     PreStartSounderTime : Real RETAIN = 10.0
     ShredderReverseRunTime : Real RETAIN = 6.0
     InfeedRestartDelay : Real RETAIN = 5.0
     InfeedToUpstreamEnableDelay : Real RETAIN = 3.0
-    OvercurrentSetpointMedium : Real RETAIN
-    OvercurrentSetpointHigh : Real RETAIN
-    OvercurrentMediumDelay : Real RETAIN
-    OvercurrentHighDelay : Real RETAIN
+    OvercurrentSetpointMedium : Real RETAIN COMMENT "Unconfigured by design: the overcurrent family is disarmed (no AI hardware, Q-11; per-machine-type values unresolved, Q-04). No number is proposed until the detection arms - setting one now would imply protection that does not exist."
+    OvercurrentSetpointHigh : Real RETAIN COMMENT "Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04)."
+    OvercurrentMediumDelay : Real RETAIN COMMENT "Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04); no spec number exists either (Q-02)."
+    OvercurrentHighDelay : Real RETAIN COMMENT "Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04); no spec number exists either (Q-02)."
     OvercurrentSpinUpAllowance : Real RETAIN = 3.0
     ReversalRetryPauseTime : Real RETAIN = 4.0
     ReversalWindowTime : Real RETAIN = 180.0
     ReversalCountThreshold : Int RETAIN = 5
     PressureTripConfirmTime : Real RETAIN = 0.5
-    PressureClearResumeDelay : Real RETAIN
+    PressureClearResumeDelay : Real RETAIN = 5.0
     PressureTripCountThreshold : Int RETAIN = 5
-    PusherEndTravelTimeout : Real RETAIN
-    PusherParkedTimeout : Real RETAIN
+    PusherEndTravelTimeout : Real RETAIN = 60.0
+    PusherParkedTimeout : Real RETAIN = 30.0
     PusherEndTravelHoldTime : Real RETAIN = 2.0
-    PusherPumpRunOnTime : Real RETAIN
+    PusherPumpRunOnTime : Real RETAIN = 5.0
     PusherJogWarningTime : Real RETAIN = 1.0
     PusherFitted : Bool RETAIN = TRUE
-    DischargeConveyorTimeout : Real RETAIN
+    DischargeConveyorTimeout : Real RETAIN = 10.0

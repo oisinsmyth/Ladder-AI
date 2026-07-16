@@ -9,9 +9,11 @@ DB iDB_ShredderSequencer
       CycleStart : Bool
       CycleStop : Bool
       DownstreamRunning : Bool
+      SystemHealthy : Bool
       DischargeConvRunning : Bool
       HopperLevelHigh : Bool
       ShredderRunFwdFB : Bool
+      ShredderRunRevFB : Bool
       ShredderMotorCurrent : Real
       MotorFaultActive : Bool
       FaultReset : Bool
@@ -28,7 +30,9 @@ DB iDB_ShredderSequencer
       MotorReverseCmd : Bool
       MotorAutoStartCmd : Bool
       MotorPreStartDoneCmd : Bool
+      MotorStartArm : Bool
       PusherModeCmd : Int
+      PusherParkCmd : Bool
     StopCmd : Bool
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt

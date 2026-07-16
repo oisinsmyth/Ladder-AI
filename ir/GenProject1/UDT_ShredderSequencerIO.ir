@@ -4,9 +4,11 @@ TYPE UDT_ShredderSequencerIO
     CycleStart : Bool
     CycleStop : Bool
     DownstreamRunning : Bool
+    SystemHealthy : Bool COMMENT "In (FC_ControlMain, from DB_Input.Control_Healthy): safety/control circuit healthy. Loss asserts StopCmd - every step aborts to Idle and a fresh CycleStart press is required after recovery, so an E-stop reset can never self-restart the plant (REQ-062)."
     DischargeConvRunning : Bool
     HopperLevelHigh : Bool
     ShredderRunFwdFB : Bool
+    ShredderRunRevFB : Bool COMMENT "In (FC_ControlMain, from DB_Input.Shredder_Run_Rev_FB): confirmed reverse-running feedback. Step 30's ReverseRunTimer times this, not bare step dwell, so ShredderReverseRunTime buys actual reverse rotation, not a motor-off pause (REQ-005)."
     ShredderMotorCurrent : Real
     MotorFaultActive : Bool
     FaultReset : Bool
@@ -23,4 +25,6 @@ TYPE UDT_ShredderSequencerIO
     MotorReverseCmd : Bool
     MotorAutoStartCmd : Bool
     MotorPreStartDoneCmd : Bool
+    MotorStartArm : Bool COMMENT "Out: asserted through PreStart (Step 10) only - one fresh, operator-commanded start attempt arms the motor once. FC_ControlMain ORs it into the imported motor FB's RecentStart, which that FB self-clears once running or faulted (its own press-to-arm contract), so no restart happens without a new cycle start (REQ-062)."
     PusherModeCmd : Int
+    PusherParkCmd : Bool COMMENT "Out: pre-start park request to the pusher - held through the machine-start steps 20-40 (range intent per C-603: any step inserted inside the start ramp still wants the pusher home) so the pusher reparks-with-warning if off home once the siren phase completes (REQ-045)."

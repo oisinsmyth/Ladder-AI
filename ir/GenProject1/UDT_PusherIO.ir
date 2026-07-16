@@ -7,6 +7,7 @@ TYPE UDT_PusherIO
     Mode : Int
     HopperHighLevel : Bool
     ManualCycleCmd : Bool
+    ParkCmd : Bool COMMENT "In (FC_ControlMain, from the sequencer's PusherParkCmd): plant pre-start park request - while set, an idle off-home ram reparks to home after the pre-motion warning (REQ-045). With a live cycle request, one of the only two repark occasions (owner ruling 2026-07-16); jog release deliberately leaves the ram where it stopped (REQ-039)."
     JogExtendCmd : Bool
     JogRetractCmd : Bool
     HomeLimit : Bool
