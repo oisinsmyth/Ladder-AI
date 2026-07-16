@@ -16,12 +16,19 @@ nearly never). "Correct but harder to read than it needs to be" is a real findin
 may cite this ordering to recommend an optimization be deleted. Enforcement structure:
 `docs/15-generation-pipeline.md`.
 
+**Generated code answers to a stricter bar than existing site practice** (owner ruling,
+2026-07-16 — `docs/notes/genproject1-retrospective.md` §9): AI-generated logic faces harsher
+scrutiny than a human author's — one failed reading discredits the pipeline, not just the block —
+so it must survive a skeptical reader's *single* attempt to understand it. Real site blocks
+calibrate the rules below, but "the real block does the same" is never a defense for generated
+logic; reviewers err toward flagging, and "defensible" is not a pass.
+
 ## Naming
 
 - C-001 *(error)* — Tag naming is layered:
   - **Blocks/types:** `FB_`/`FC_`/`DB_`/`UDT_` prefix + PascalCase function name (`FB_ConveyorControl`, `UDT_Motor`).
   - **Equipment instances:** the frozen equipment identifier (C-004) verbatim (`iDB_Motor_FCC`).
-  - **Variables/UDT members:** short camelCase (`run`, `fltHigh`, `posOk`) — context comes from the structure, so short names are correct here. Long names are only needed where the name is the *only* context.
+  - **Variables/UDT members:** short PascalCase (`Run`, `FltHigh`, `PosOk`) — context comes from the structure, so short names are correct here. Long names are only needed where the name is the *only* context. *(Revised 2026-07-16 from camelCase, which nothing — site blocks, patterns, or generated code — actually followed; PascalCase is universal site practice. Retrospective §5.3. Underscore-free member names; the physical-IO tag format below keeps its underscores by design.)*
   - **Physical IO tags:** `<DI/DO/AI/AO><n>_<Equipment>_<Signal>` (e.g. `DI3_FCC_RunFb`).
 - C-002 *(warn)* — Block names describe function, not sequence numbers alone (`FB_ConveyorControl`, not `FB12`).
 - C-003 *(warn)* — Prefixes: `FB_`/`FC_`/`DB_`/`UDT_`; instance DBs named `iDB_<FBName>_<Instance>`.
@@ -39,7 +46,7 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
 - C-106 *(warn)* — Repeated equipment uses a standard FB + UDT interface, one call per equipment instance — never copy-pasted rung variants that drift apart. Sameness is a simplicity feature: same block, same shape, this instance's tags.
 - C-107 *(info — soft rule)* — Edge previous-scan memory may live in a dedicated bool array (e.g. `aEdgeMem[]`) where it keeps networks tidy. Elements are **statically referenced only** (no looped/indexed access) and each element is written in exactly one place — which makes C-402 directly auditable via cross-reference on the array. Drop this rule if it ever conflicts with a stronger one.
 - C-108 *(warn)* — Before writing a new block, reuse an existing site-proven block or pattern that solves the same problem. A new block for an already-solved problem needs a stated reason. (Human-side mirror of `07-pattern-library-spec.md`: proven code over fresh invention, for people and AI alike.)
-- C-109 *(warn)* — **OB1 contains only calls to area Main FCs** (`FC_ComsMain`, `FC_MapIOMain`, `FC_AlarmsMain`, `FC_ControlMain`, …); no working logic directly in OB1. Each area Main calls only its own area's blocks (one `Map` FC per IO source, one alarm FC per category, etc.). One level of dispatch — the call tree reads like a table of contents.
+- C-109 *(warn)* — **OB1 contains only calls to area Main FCs** (`FC_ComsMain`, `FC_MapIOMain`, `FC_AlarmsMain`, `FC_ControlMain`, …); no working logic directly in OB1. Each area Main calls only its own area's blocks (one `Map` FC per IO source, one alarm FC per category, etc.). One level of dispatch — the call tree reads like a table of contents. **Documented exception (2026-07-16, owner ruling — retrospective §5.4): IO mapping.** The `Map` FCs may be called directly from OB1 without an `FC_MapIOMain` wrapper — their first/last position is already pinned by C-110; wrapper FCs remain the rule for every other area.
 - C-110 *(warn)* — **Input mapping is the first call in OB1; output mapping is the last.** All logic in between sees the current scan's fresh inputs, and the field receives the current scan's final decisions. Mapping mid-sequence introduces a silent one-scan latency — usually invisible, occasionally not, always undocumented.
 - C-111 *(error)* — **Simulation mode** is implemented entirely at the mapping layer; logic blocks are untouched and unaware (possible because of C-304). `DB_PLC.Simulation` (see C-305):
   - gates the `FC_…InputMap` calls off via `-|/|-`, and enables `FC_Simulation`, which drives the input buffer DBs from the output buffers plus configured settings/event triggers;
@@ -75,10 +82,11 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
   explicitly excludes the higher-priority one), never arbitrated by network order.
 - C-122 *(error)* — A step's own maximum dwell gets a dedicated timer, multi-instance inside
   the block's own Static section per C-407 (it belongs to this instance, not `DB_Timers`), `IN`
-  gated by `Step = <that step>` — self-resets the instant the step changes. `PT` is a
-  `DB_Settings` member (C-307 already carves out "stage/step timings" as `DB_Settings` content,
-  distinct from an ordinary instance-owned timing parameter). `Q` always drives a fault (C-123),
-  never a silent "carry on."
+  gated by `Step = <that step>` — self-resets the instant the step changes. `PT` comes from a
+  settings member of the owning block's own interface UDT (C-307's per-instance scope — the
+  block's faceplate tunes its own sequence); `DB_Settings` holds a stage timing only when it is
+  genuinely plant-wide with no single owning block. *(Reworded 2026-07-16 with C-307 —
+  retrospective §5.2.)* `Q` always drives a fault (C-123), never a silent "carry on."
 - C-123 *(error)* — A **hold** and a **fault** are never the same bit. A hold is live/
   non-latching (freezes the current step, no C-121 transition fires, clears itself the instant its
   own condition clears, never writes `Step`). A fault is latched, cleared only by a named
@@ -104,6 +112,13 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
   (an electrician with a multimeter and a spanner) fails the moment understanding one function
   requires cross-referencing distant networks, even when the underlying logic is correct. Grouping
   by kind instead of by function is itself a readability bug, not a neutral choice.
+  **Documented exception (2026-07-16, owner ruling — retrospective §5.1): the block-top
+  HMI-time-conversion network** ("HMI Times" — one MUL+CONVERT pair per timer into `<Name>MS`
+  shadows; site idiom predating this project, in `MotorDOL`/`MotorFwdRev` and the `motor-dol`
+  pattern). It stays batched up front — one place to see every preset's unit conversion — on one
+  condition: the network comment states the one-pair-per-timer scheme, because the IR renders the
+  pairs kind-grouped and index-matched (`ir/SPEC.md`, statement-kind ordering) and the comment is
+  what keeps that readable in one attempt.
 - C-127 *(error)* — A reusable equipment FB never references another specific instance by name
   inside its own logic — no hardcoded `iDB_<Other>` access, no `CALL` to a sibling equipment's own
   instance. Everything an FB needs comes in through its own UDT interface (C-115), wired by its
@@ -119,19 +134,24 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
 
 - C-201 *(error)* — Every network has a title; every block has a header comment (purpose, author, revision).
 - C-202 *(warn)* — Comments say *why*, not what (the rungs already say what).
+- C-203 *(warn)* — **Titles are short; comments carry the detail.** A block or network title is a
+  short description — what this is, in a phrase. The detailed explanation (the *why*, the
+  justification, the scheme) lives in the corresponding comment, never crammed into the title.
+  *(Owner ruling, 2026-07-16 — retrospective C-606/C-607 notes, generalized. C-606/C-607 point
+  their justification text here.)*
 
 ## Data
 
 - C-301 *(error)* — No absolute addressing (%M, %DBx.DBWy) in logic; symbolic access only. **Documented exception:** slice access (`.%Xn`, `.%Bn`, …) is permitted in encode/decode contexts — alarm words (per C-501's conditions), comms mapping, and data-handling blocks (C-105) — never in equipment control logic.
 - C-302 *(warn)* — UDTs for repeated equipment structures; no parallel loose-tag families (three conveyors as `FCC_Run`/`BC1_Run`/`BC2_Run` flat-tag copies silently diverge — one `UDT_Conveyor`, three instances). Data-side counterpart of C-106.
 - C-303 *(error)* — Optimized block access on unless a comms interface requires otherwise.
-- C-304 *(error)* — **Control logic never reads physical inputs or writes physical outputs directly** — applies to all IO addressing, local and remote/Profinet alike. All physical IO passes through buffer DBs, **one buffer pair per IO source**: local PLC IO via `DB_Inputs`/`DB_Outputs` (mapped by `FC_InputMap`/`FC_OutputMap`), remote nodes via their own (`DB_Rem0Inputs`/`FC_Rem0InputMap`, …); analog IO in its own dedicated DBs. Mapping happens only in the `Map` FCs under `FC_MapIOMain`, ordered per C-110.
+- C-304 *(error)* — **Control logic never reads physical inputs or writes physical outputs directly** — applies to all IO addressing, local and remote/Profinet alike. All physical IO passes through buffer DBs, **one buffer pair per IO source**: local PLC IO via `DB_Inputs`/`DB_Outputs` (mapped by `FC_InputMap`/`FC_OutputMap`), remote nodes via their own (`DB_Rem0Inputs`/`FC_Rem0InputMap`, …); analog IO in its own dedicated DBs. Mapping happens only in the `Map` FCs (called per C-109's mapping exception / C-110's ordering).
   *Why:* logic that only touches buffer DBs is trivially simulatable (S9) and portable — swapping hardware or vendor changes the mapping layer, never the logic.
 - C-305 *(warn)* — Every project has a **`DB_PLC`** holding PLC-specific system data (system time, misc. tracked state — contents vary per project; the DB and name do not). It always contains `Simulation : Bool`, start value `FALSE`. `DB_PLC.Simulation` is **force-reset in the OB100 startup block** (the same block as C-403), regardless of retentivity — simulation mode must never survive a power cycle; start values only apply at download, not restart.
 - C-306 *(warn)* — Operator/system commands live in **`DB_Controls`**: system-level commands (typically `SystemStart`, `SystemStop`, `SystemReset` — names may vary per project) and mode selections such as direction modes (C-116). This is the HMI/operator command surface; equipment FBs consume from it, logic-internal state does not live in it.
-- C-307 *(warn)* — Plant/system-level parameters live in **`DB_Settings`** — retentive by default; non-retentive members are documented exceptions. Scope split: a setting owned by a single equipment instance lives in that instance's UDT (HMI↔PLC per C-503); `DB_Settings` holds what no single instance owns — prestart parameters, stage/step timings (when the C-113 stepped branch is in use), plant-wide setpoints. This is the home of C-403's "documented settings/parameters" exemption: settings are the one legitimately-retentive category, which is why they're exempt from the startup reset.
-- C-308 *(error)* — `DB_Settings` is written by the **HMI/operator side only; PLC logic never writes it** (read-only from logic).
-  *Why:* a logic bug that writes a retentive setting silently re-tunes the plant and *persists across restarts* — the retentive cousin of the stuck-output failure. Read-only-from-logic makes the whole class impossible and is statically checkable (cross-reference shows no logic writes).
+- C-307 *(warn)* — Plant/system-level parameters live in **`DB_Settings`** — retentive by default; non-retentive members are documented exceptions. Scope split *(sharpened 2026-07-16, owner ruling — retrospective §5.2)*: **a setting owned by a single equipment instance lives in that instance's UDT** (HMI↔PLC per C-503 — faceplates bind the UDT instance, and nearly all equipment gets a faceplate, so per-instance settings must sit where the faceplate's settings page can reach them; this includes a sequencing block's own step timings). `DB_Settings` holds only what **no single faceplate owns** — genuinely plant-wide setpoints and parameters. Commissioning defaults per C-309 then live as the owning iDB's start values. This is the home of C-403's "documented settings/parameters" exemption: settings are the one legitimately-retentive category, which is why they're exempt from the startup reset (a startup-reset generator may treat a UDT's settings members as excluded by construction).
+- C-308 *(error)* — **A settings member has exactly one writer: the HMI.** `DB_Settings` is written by the HMI/operator side only; PLC logic never writes it (read-only from logic). *(Extended 2026-07-16 — retrospective §5.2:)* the same applies to settings members inside an instance UDT (C-307's per-instance scope) — logic never writes them, **and orchestrating FCs never scan-copy values into them**: a cyclic `MOVE` from `DB_Settings` over a faceplate-written UDT member silently reverts every HMI edit one scan later (the GenProject1 `FC_ControlMain` trap — the setting *exists twice* with a copy in between, the worst of both homes).
+  *Why:* a logic bug that writes a retentive setting silently re-tunes the plant and *persists across restarts* — the retentive cousin of the stuck-output failure. One-writer makes the whole class impossible and is statically checkable (cross-reference shows no logic writes).
 - C-309 *(info)* — Settings are **not range-validated PLC-side**, by site policy: protection is HMI-side (password-protected settings screens), and operator misconfiguration is a chargeable fix. Reviewers (human or AI) should not flag missing clamps as findings. `DB_Settings` start values are maintained as the **commissioning defaults** — downloading the DB is the de facto factory reset.
 
 ## Instructions
@@ -166,6 +186,55 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
 - C-506 *(warn)* — Fixed three-class severity taxonomy, assigned by the **operator-action test** (not perceived badness): **Fault** (equipment stopped/stopping; intervention before restart), **Warning** (running degraded/approaching limit; action soon), **Info/Event** (record only). Per-alarm class assignment happens in the project alarm list at kickoff (alongside the C-004 equipment list); the classes and their HMI presentation (colours, filtering) never vary between projects — fixed container, variable contents, same move as C-305.
 - C-507 *(warn)* — Alarms **self-clear when their condition clears; no acknowledgment required** — except documented per-alarm exceptions (expected to be Class 1 faults where proof a human saw it matters, e.g. E-Stop events; each exception is documented individually regardless).
 
+## Simplicity & readability
+
+Adopted 2026-07-16 from the GenProject1 retrospective (`docs/notes/genproject1-retrospective.md`),
+owner-reviewed rule by rule. These are the written form of the priority order's tier 2 and the
+stricter-bar principle in the preamble — the rules a simplicity reviewer cites.
+
+- C-601 *(warn)* — **Name a condition used twice.** A compound condition (≥3 terms) consumed by
+  more than one network is written once to a named bit (`StopCmd`, `CycleStartOk`) and read by
+  name — never duplicated inline. One write, many reads; the name is the documentation; near-match
+  divergence (two copies differing by one term, invisible at a glance) becomes impossible.
+  *Why:* GenProject1's 7-term cycle-start condition duplicated across two networks differing only
+  in an `OR FaultReset` tail (retrospective F-1) — while the same build's own `StopCmd` shows the
+  rule done right.
+- C-602 *(warn)* — **One-sentence rungs.** C-101's test applied to a single coil: if one coil's
+  expression can't be explained in one sentence, split it into named intermediate bits or
+  restructure. Soft guide (not a hard limit): >2 OR-branches or >6 contacts in one expression is
+  the point to justify. **Documented exception (owner, 2026-07-16): one condition fanning out to
+  several coils within a single network** (e.g. interface coils) may exceed the guide rather than
+  force an intermediate bit — splitting there would create the duplication C-601 prevents. Other
+  exceptions state their reason in the network comment.
+- C-603 *(warn)* — **Step membership is enumerated, not ranged.** Conditions over a stepped
+  sequence's phase enumerate the steps they mean (`Step = 30 OR Step = 40 OR Step = 50`);
+  ordered-range predicates (`>=`, `<=`, spans) only where "every future step inserted in this span
+  belongs here too" is the stated intent (comment). `Step <> 0` and `Step = n` are always fine
+  (C-119 fixes idle = 0).
+  *Why:* C-120's insert-without-renumbering interacts with ranges silently — an inserted step 45
+  joins `>= 30 AND <= 50` with no visible decision.
+- C-604 *(error)* — **Constants and placeholders are visually distinct.** A genuinely-constant
+  block input ("not fitted", "always permitted") is wired from a named, documented source — a
+  `Fitted`/mode setting, or a commented constant — stating *why* it's constant. The
+  `NOT AlwaysTrue` idiom **with a comment naming the gap** is reserved for known-unbuilt
+  placeholders. A bare, uncommented `AlwaysTrue`-derived constant is a finding: the reader can't
+  tell design from debt, and the loud-TODO idiom only stays loud if it's *only* used for TODOs.
+- C-605 *(error)* — **Interface members carry comments.** Every member of an equipment FB's
+  interface UDT (the C-115/C-125/C-503 HMI-facing surface) carries a one-line member comment —
+  role, units where numeric, and for settings the C-307 scope. *(Severity set to error by owner,
+  2026-07-16: "this should always be true.")*
+- C-606 *(warn)* — **Justify size against the requirement.** A block whose behavior exceeds the
+  requirement's literal ask carries, in its header **comment** (title stays short, per C-203), one
+  line per extra feature saying why it exists. Unrequested capability is a complexity cost like
+  any other; the functional review (docs/15) flags logic that traces to no requirement, and this
+  rule puts the justification where a reader meets the block.
+- C-607 *(warn)* — **One problem, one policy per project.** When two blocks in one project solve
+  the same recurring problem (settings access, edge storage, time conversion), they solve it the
+  same way; a deviation states its reason in the deviating block's header **comment** (C-203).
+  *Why:* C-106's "sameness is a simplicity feature," applied to design idioms — GenProject1's two
+  sibling FBs solved settings access two different ways (retrospective F-5, resolved by
+  C-307/C-308's 2026-07-16 sharpening).
+
 ## To fill in (owner: Oisin)
 
-Restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template · **simplicity/readability rule set (planned C-6xx section)** — candidates drafted in `docs/notes/genproject1-retrospective.md`, enter here only after the owner's accept/reject pass.
+Restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template.

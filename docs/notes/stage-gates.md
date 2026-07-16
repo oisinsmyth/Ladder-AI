@@ -3838,3 +3838,172 @@ network-by-network to comply, verified by tracing every cross-network dependency
 `ir/SPEC.md`'s statement-kind ordering (also newly documented this session — see its own "Statement-
 kind ordering" section) and by parsing the real re-exported TIA content back to IR text to confirm
 every original condition survived byte-for-byte.
+
+## S6 direction adopted: staged generation pipeline + simplicity retrospective (2026-07-16)
+
+The project owner's verdict on the Kestrel build (previous section): functionally right — "it has
+worked functionally very well" — but the ladder itself overly complex and obtuse, with an explicit
+priority order stated for generated LAD: **function → readability & simplicity → efficiency**. The
+owner proposed restructuring S6 generation around skills and isolated-context agents; the analysis
+that shaped the adopted design (why the complexity happened, what the pipeline must include) and
+the owner's approval both happened in-session, then were executed as three committed units.
+
+**Adopted (ADR-0004, `docs/15-generation-pipeline.md`, commit `ab3efd2`):** a 13-skill staged
+pipeline — Analyse (`gen-spec-analysis`, `gen-pid-analysis`, `gen-io-tags`, `gen-reconcile`),
+Design (`gen-architecture`, `gen-alarm-design`), Build (`gen-block-coding`, `gen-integration`),
+Check (`review-conventions`, `review-functional`, `review-simplicity`, `audit-artifact`), Entry
+(`generate`) — handing off through committed artifacts (`gen/<project>/`), never conversation;
+reviewers run fresh-context with read-only tools and never see author reasoning (the AI form of
+the blind-review standard pattern admissions already use); a pipeline-wide tag-status rule
+(`exists`-verified-by-grep vs `proposed`; coding refuses `proposed`) so multi-stage handoff can't
+launder hard rule 3; two hard engineer gates (architecture sign-off before coding; the existing
+step-5 presentation); a scale-down rule so small requests skip stages but never gates/reviewers.
+Skills are built in leverage order (rules → reviewers → architecture → analysis → orchestrator),
+each validated before the next — nothing exists yet beyond this design; docs/15's build-order
+table is the ground truth. CLAUDE.md's 5-step S6 workflow was wrapped (now the block-coding inner
+loop), not replaced. Doc 06's preamble now carries the priority order, each tier mapped to the
+check that enforces it. ADR numbering note: 0003 left reserved — `docs/13-data-boundary.md` has
+pointed at it for the data-boundary decision since the doc suite was written.
+
+**GenProject1 became a committed corpus (commit `b14be52`):** `.gitignore` anchored to
+`/GenProject1/` (the live TIA folder stays ignored; the extracted content no longer is), then all
+17 blocks + 3 UDTs (`UDT_PusherIO`, `UDT_ShredderSequencerIO`, `MotorFwdRevIOSet` — enumerated by
+grepping the exports, since `list` can't enumerate types) + the default tag table exported to
+`simatic-ml/GenProject1/` and converted to `ir/GenProject1/` (21/21 clean `to-ir`, including OB1
+`Main` — the deferred OB quirks are on the write path, not read). Four blocks + one UDT hit the
+known `IsConsistent` export refusal ("Inconsistent blocks and PLC data types (UDT) cannot be
+exported") and cleared via the documented block-level-compile-then-retry (all compiled 0 errors;
+the only diagnostic was a device-level warning about IO points absent from the configured
+hardware — expected for a sandbox project, recorded not hidden). Data boundary verified rather
+than assumed: the corpus was scanned against `sanitization/Kestrel Shredder Systems.map.json`'s real-name
+keys (case-insensitive; word-boundary for the short model codes) — zero hits, so docs/13's
+"nothing identifying appears in GenProject1" claim now has a checked basis. This corpus is the
+durable S6 output and the standing validation corpus for reviewer skills.
+
+**Retrospective delivered (`docs/notes/genproject1-retrospective.md`) — owner pass PENDING:**
+mechanical baseline first (`converter review`, 17 findings, 16E/1W): both generated FBs are
+*clean* — every inside-a-block mechanical finding lands on the real, imported
+`FB_MotorFwdRevSystem` (TONR, packed alarm word, untitled network, no header) — while the
+generated FCs/DBs/iDBs owe C-201 header comments. The headline, stated in the doc itself: the
+owner's complexity verdict is about things **no current rule names**. Twelve findings (duplicated
+7-term cycle-start condition vs the same build's own named-`StopCmd` fix; 31 bare UDT members
+despite member-comments being an owner-requested capability; `NOT AlwaysTrue` meaning both
+"deliberate constant" and "known gap" with no visual distinction; step-range predicates that
+silently absorb future inserted steps; sibling FBs using two different settings-access policies;
+no OB100/`DB_PLC`/C-111 machinery while `Step` and latches sit RETAIN; a dead `Pusher_Local_Remote`
+input — grep-verified; buffer members in `Snake_Case` vs the pattern's `PascalCase` vs C-001's
+written `camelCase`, which nothing follows) distilled into **7 candidate C-6xx rules** (§4, each
+with severity + S4-style checkability bucket + accept/reject checkboxes) and **6 adjudications**
+(§5, existing rule-vs-practice tensions: the site's own batch "HMI Times" idiom vs C-126's letter,
+settings policy, member-case, C-109 scale-down, startup machinery scope, C-504 applicability).
+The real block is documented as the read-only contrast case calibrating the rule set — every
+candidate rule catches something in it too — and §8 records what the generated code did *right*,
+so accepted rules don't overcorrect. Converter suite green after the day's work (463/463).
+Honest status: S6's exit criterion (ten requests) is unchanged and not advanced by any of this —
+this is the workflow that future requests run through, not exit progress.
+
+## S6: retrospective owner pass folded — C-6xx live, settings policy resolved by faceplate context (2026-07-16)
+
+The project owner reviewed `docs/notes/genproject1-retrospective.md` in full and answered every
+checkbox and adjudication (recorded in the doc itself, §4/§5/§6/§9 + resolution in §10). Headline
+outcomes, all now folded into `docs/06-lad-conventions.md`:
+
+- **All seven candidate rules accepted** — C-601/C-603/C-604 as drafted, C-605 bumped to *error*
+  by the owner ("this should always be true"), C-602 with a documented within-network fan-out
+  exception (confirmed reading: C-601 owns cross-network duplication, the exception owns one
+  condition driving several coils in one network), C-606/C-607 with justification text directed to
+  the block comment. The owner's repeated "title short / comment detailed" note was generalized,
+  with explicit confirmation, into a new **C-203**. Doc 06 gains a "Simplicity & readability"
+  section holding the set.
+- **The §9 principle codified**: AI-generated code faces harsher scrutiny than a human author's —
+  one failed reading discredits the pipeline — so generated LAD must survive a skeptic's *single*
+  reading; "the real site block does the same" is never a defense. Written into doc 06's preamble
+  (reviewers err toward flagging; "defensible" is not a pass) and saved as standing agent memory.
+- **Settings adjudication (5.2) resolved by new context, against the draft proposal**: the site
+  uses HMI faceplates for nearly all equipment, and faceplates bind the UDT instance — so
+  per-instance settings (including a sequencer's own step timings) belong in the instance UDT,
+  and the draft's "plant-singleton may read DB_Settings directly" split was wrong. C-307
+  sharpened, C-308 extended to **"a settings member has exactly one writer: the HMI"** — logic
+  never writes it *and orchestrating FCs never scan-copy into it*, naming the concrete GenProject1
+  trap found during the read: `FC_ControlMain` MOVEs `DB_Settings.PusherX` over the pusher's UDT
+  settings members every scan, so any faceplate edit would silently revert one scan later (the
+  setting existed in two homes with a cyclic copy between them). C-122 reworded to match.
+  GenProject1's own settings rework is a queued S6 request, not silently done.
+- **Other rulings**: C-001 members are PascalCase (practice wins over the never-followed
+  camelCase; `Snake_Case` buffer members = legacy, renamed at next touch); C-109 gains the
+  IO-mapping direct-call exception (wrappers stay the rule elsewhere; C-304 aligned); C-126 gains
+  the HMI-Times batch exception *with* a mandatory pairing comment (the 6.1 tooling question
+  resolved as an authoring rule — grammar change and converter-emitted annotations both rejected:
+  corpus-wide diff churn / losslessness violation); startup-state machinery recorded as an
+  accepted demo-panel omission ("should ideally have, do not need to fix right now") and a
+  permanent gen-architecture checklist line; C-504 suppression carried to the future
+  alarm-design stage.
+- **Grounded along the way**: SimaticML carries `HeaderAuthor`/`HeaderVersion`/`HeaderFamily`
+  block attributes (empty/0.1 in GenProject1) that the IR currently drops entirely — queued
+  converter work item to carry them as IR header lines, which is the only path to C-201's
+  author/revision ever becoming mechanically checkable. Struct-inside-standalone-UDT round-trip
+  needs one proof before the grouped-UDT `Set` sub-struct design can be committed to (anonymous
+  Struct members are proven for FB statics via `EquipmentControlSystem`, not yet for `SW.Types.PlcStruct`).
+
+Next per the docs/15 build order: `review-simplicity`, validated against the GenProject1 corpus
+under the stricter-bar principle.
+
+## S6: review-simplicity built and blind-validated; UDT member-comment gap grounded (2026-07-16)
+
+**The skill (docs/15 build-order step 2).** `.claude/skills/review-simplicity/SKILL.md` — the
+tier-2 reviewer. Authored following the newly-installed `skill-creator` plugin's guidance
+(explain-why over bare musts, concrete recipes, exact report template, pushy trigger description):
+blindness declaration up front, the one-reading walk as pass 1 (judgment before grep — the
+retrospective showed the worst defects had no citable rule until a cold read), per-rule sweep
+recipes for C-601–C-607/C-203/C-126, calibration list (mapping rail, C-121 verbosity,
+imported-real regime, pattern-vs-rule tensions flagged never adjudicated, tier boundaries), and
+the stricter-bar disposition (err toward flagging; functional-looking discoveries reported as
+tier-1 candidates, not ruled on).
+
+**Blind validation — the docs/15 reviewer model exercised for real.** A fresh-context subagent
+got only the skill file, the binding docs, and `ir/GenProject1/` (21 files), explicitly barred
+from the retrospective (the expected-findings anchor). Result, preserved verbatim with the
+comparison in `docs/notes/review-simplicity-validation-2026-07-16.md`: **every material known
+finding independently reproduced** (duplicated cycle-start compound with the near-match diff;
+both bare UDTs; all three ranged step predicates; the four bare AlwaysTrue constants; the
+settings-access split — sharpened into a three-way table correctly identifying the *real* block
+as the C-307-compliant one; Snake_Case buffers; dead Pusher_Local_Remote; the mistitled buffer
+network), calibrations honored, format followed. Only miss: the retrospective's own
+"noted, not pressed" F-4. **Verdict: validated.** Method caveat recorded: blind executor,
+non-blind examiner (the anchor and the skill share an author-session); the S4-style
+owner-independent comparison remains available before gate-grade reliance.
+
+**The run went beyond the anchor — including two tier-1 (functional) candidates on the
+"functionally working" build:** `IO.InCycle` is consumed into physical output `DQ8_SYS_InCycle`
+but written nowhere (in-cycle lamp permanently off); `DI4_SYS_CycleStop` is commented "(NC)" in
+the tag table but mapped non-negated (as wired, an NC stop button holds StopCmd permanently true —
+either polarity or comment is wrong; the input-mapping pattern's negated variant exists for this).
+Plus: `RecentStart := AlwaysTrue` in FC_ControlMain fights the motor FB's own management of that
+bit; `HandReverse` wired to a never-read member; `DB_Input.Infeed_Conv_Running` mapped and never
+consumed; 58/98 tag-table entries are unreferenced legacy noise; the **admitted motor-dol
+pattern's own example breaches C-126's new exception condition** (no scheme comment on its "HMI
+Times" network, plus an untitled network) — flagged as a pattern-vs-rule tension for owner
+ruling, exactly per the skill's calibration rule; and suspected defects in the imported-real
+block (HandPosEdge double-write with HandNegEdge never referenced; a self-annihilating
+`Pasue AND … NOT Pasue` term; an hours-counter edge guard that reads its own memory after
+same-network update) — labeled context + verify-against-TIA, not fix demands (hard rule 7).
+
+**UDT member comments: two grounded discoveries (both queued as converter work).** (1) A
+round-trip proof of a nested-Struct UDT with member comments died immediately and *correctly*:
+`UnsupportedConstructException — member comments are only confirmed on an ordinary
+Static/Input/Output/DB member (WriteMember), not here` — **TYPE/UDT members cannot carry comments
+through the converter at all**, so C-605 (error) is currently unsatisfiable on interface UDTs
+via this toolchain, for the flat and sub-struct designs alike. (2) Grep over the fresh exports
+finds **zero member-line COMMENT tokens anywhere** — including the Static-member comments the
+Kestrel build demonstrably wrote (stage-gates' own S6 record cites OvercurrentTripped's member
+comment; the fresh export shows the member bare) — so member-comment **persistence through
+import→TIA→re-export is unverified** and possibly broken; the sequencer's two "see member
+comment" pointers now dangle. Verify persistence before relying on C-605 at all. Release
+converter rebuilt meanwhile (queued item closed): `review` verb confirmed present in the Release
+binary.
+
+**Settings sub-struct idea (owner's, this session): partially grounded.** The structure-only
+round-trip proof (nested anonymous Struct inside a standalone `SW.Types.PlcStruct`) converts
+IR→XML cleanly with comments stripped; the live import/compile/re-export leg was still running
+when this entry was written — its result lands in the next entry. The comment gap above applies
+to *both* variants (sub-struct and separate Settings UDT) equally.

@@ -53,12 +53,63 @@ drafted instance is still owed, recorded as an open gap, not silently closed). F
 treated as an approximate target the project owner explicitly chose to satisfy with two well-proven
 kinds now, growing the rest organically once S6 is actually running — not a literal blocking count.
 
-## Current task: none — ready for S6's own deliverable work
+## Current task: S6 generation-pipeline buildout (docs/15, ADR-0004) — opened 2026-07-16
 
-S6's entry gate is closed. No in-flight work right now. Next natural step is S6's own stated
-deliverable (`docs/02-roadmap.md`: "AI composes new networks/blocks from the pattern library using
-real exported tags; automatic import+compile loop") — not started, needs its own plan when picked
-up, same rigor as every other stage.
+Context: the first real S6 build (Kestrel Shredder → `GenProject1`, 2026-07-15, stage-gates "S6
+first real proof") met every hard gate but the project owner judged the output overly complex and
+obtuse. Adopted response (ADR-0004): staged skills+reviewers pipeline per
+`docs/15-generation-pipeline.md`; priority order function → readability & simplicity → efficiency
+now in doc 06's preamble.
+
+- [x] Pipeline codified: `docs/15`, ADR-0004, doc 06 preamble, CLAUDE.md workflow, 00-README
+      (commit `ab3efd2`)
+- [x] GenProject1 exported to committed corpus: `ir/GenProject1/` + `simatic-ml/GenProject1/`,
+      21 files, `.gitignore` anchored to `/GenProject1/`, data-boundary spot-check vs the
+      Kestrel Shredder Systems map = 0 hits (commit `b14be52`)
+- [x] Mechanical baseline (`converter review`, Debug build): 17 findings (16E/1W); both generated
+      FBs clean — every in-block finding is on the real `FB_MotorFwdRevSystem`
+- [x] Retrospective delivered: `docs/notes/genproject1-retrospective.md` — 12 findings, 7
+      candidate C-6xx rules (§4), 6 adjudications (§5), tooling follow-ups (§6)
+- [x] Owner pass on retrospective §4 + §5 (2026-07-16) — all 7 rules accepted (3 with changes),
+      all 6 adjudications ruled; two interpretation points confirmed via follow-up
+- [x] Folded into doc 06: new "Simplicity & readability" section (C-601–C-607), new C-203
+      (titles short / comments detailed), stricter-bar principle in preamble, amendments to
+      C-001 (PascalCase members) / C-109 (mapping direct-call exception) / C-122 / C-126
+      (HMI-Times exception + pairing comment) / C-304 / C-307 (settings → instance UDT,
+      faceplate rationale) / C-308 (one writer: the HMI; no orchestrator scan-copies);
+      retrospective §10 records the resolution
+- [x] `review-simplicity` built (`.claude/skills/review-simplicity/SKILL.md`, skill-creator
+      guidance) and **blind-validated** against the corpus via fresh subagent — every material
+      known finding reproduced + 10 new discoveries; verdict + verbatim report in
+      `docs/notes/review-simplicity-validation-2026-07-16.md`. Caveat: blind executor, non-blind
+      examiner; S4-style owner-independent comparison optional before gate-grade reliance.
+- [x] Release converter rebuilt; `review` verb confirmed present (queued item closed)
+- [ ] **OWNER: tier-1 candidates from the blind run need a ruling** — `IO.InCycle` consumed into
+      `DQ8_SYS_InCycle` but written nowhere; `DI4_SYS_CycleStop` "(NC)" comment vs non-negated
+      mapping (as wired an NC button blocks all starts); `RecentStart := AlwaysTrue` fighting the
+      motor FB's own bit management. Fixes are a future S6 request after the ruling.
+- [ ] **OWNER: motor-dol pattern tension** — the admitted example's "HMI Times" network lacks the
+      scheme comment C-126's exception now requires (and has an untitled network): update the
+      pattern or waive.
+- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass)
+- [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
+      `generate` orchestrator
+
+**Converter work queue (grew this session):** TYPE/UDT member-comment support (hard-blocked:
+`UnsupportedConstructException`; C-605 error-severity is unsatisfiable on interface UDTs until
+built — applies to flat, sub-struct, and separate-Settings-UDT designs alike); **member-comment
+persistence verification** (fresh exports show zero member comments anywhere, including ones the
+Kestrel build wrote — import→TIA→re-export survival unproven, possibly broken); Header
+author/version/family capture; SPEC.md index-pairing reader note; nested-Struct-in-UDT live
+round-trip (structure leg was in flight at last update — see stage-gates tail).
+
+**Queued from the owner pass (not blocking the reviewer skills):** Struct-inside-standalone-UDT
+round-trip proof (gates the grouped-UDT `Set` sub-struct design); converter capture of
+`HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (makes C-201's author/revision
+mechanically checkable); `ir/SPEC.md` reader note on index-paired MUL/CONVERT rendering; two
+future S6 requests on GenProject1 — settings rework (sequencer reads → UDT, delete
+`FC_ControlMain`'s nine MOVEs, shrink `DB_Settings`) and `Snake_Case` buffer-member renames;
+OB100/`DB_PLC` machinery whenever the demo-panel waiver (retrospective §5.5) is lifted.
 
 **Carried forward, not urgent:** `patterns/chained-permissive-enable`'s own genuinely-blind
 drafted-instance gap (see above) — worth closing before leaning on this pattern heavily, not

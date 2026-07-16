@@ -84,6 +84,57 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   2026-07-14), FI-05 `chained-permissive-enable` blind-draft gap (Under debate, nearest-term).
 - Indexed in `docs/00-README.md`; one cross-reference sentence added to `docs/10-non-goals.md`
   defining the boundary between the two docs.
+**review-simplicity skill built + blind-validated; UDT member-comment gap grounded**
+
+- `.claude/skills/review-simplicity/SKILL.md` - the docs/15 tier-2 reviewer (one-reading walk,
+  C-601-C-607/C-203/C-126 sweep recipes, calibration list, stricter-bar disposition). Validated
+  the way docs/15 defines reviewers to run: fresh-context subagent, skill + corpus only, barred
+  from the retrospective. Every material known finding independently reproduced; verdict +
+  verbatim report in docs/notes/review-simplicity-validation-2026-07-16.md.
+- The blind run also surfaced 10 new findings, incl. two tier-1 candidates on the "working"
+  build (IO.InCycle consumed into DQ8 but written nowhere; DI4_SYS_CycleStop "(NC)" comment vs
+  non-negated mapping) and a pattern-vs-rule tension (motor-dol's own example lacks the scheme
+  comment C-126's new exception requires). Owner rulings queued in AITODO.
+- Grounded: TYPE/UDT members cannot carry comments through the converter at all
+  (UnsupportedConstructException) - C-605 (error) unsatisfiable on interface UDTs until built;
+  and fresh exports contain zero member comments anywhere, so member-comment persistence through
+  TIA is unproven. Both queued as converter work. Release converter rebuilt (review verb present).
+- Owner's settings sub-struct idea: structure-only leg of the nested-Struct-in-UDT round-trip
+  proof passed IR->XML; live TIA leg in flight at commit time.
+
+**Retrospective owner pass folded: C-601-C-607 + C-203 live in doc 06; settings policy resolved**
+
+- All 7 candidate simplicity rules accepted (C-605 bumped to error by owner; C-602 with a
+  within-network fan-out exception; C-606/C-607 justification directed to comments) - doc 06
+  gains a "Simplicity & readability" section, plus new C-203 (titles short / comments detailed)
+  and the stricter-bar principle in the preamble (generated LAD must survive a skeptic's single
+  reading; site quirks are never a defense).
+- Owner's faceplate context resolved the settings adjudication against the draft: per-instance
+  settings live in the instance UDT (C-307 sharpened), one writer - the HMI (C-308 extended:
+  logic never writes, orchestrating FCs never scan-copy; names GenProject1's MOVE-over-UDT trap).
+  C-001 members -> PascalCase; C-109 IO-mapping direct-call exception; C-126 HMI-Times batch
+  exception with mandatory pairing comment; C-122/C-304 aligned.
+- Queued: Struct-in-UDT round-trip proof; converter HeaderAuthor/Version/Family capture;
+  SPEC.md pairing note; GenProject1 settings rework + buffer renames (future S6 requests);
+  OB100/DB_PLC when the demo-panel waiver lifts. Retrospective SS10 records the full resolution.
+
+**Adopt staged S6 generation pipeline (ADR-0004); GenProject1 corpus + simplicity retrospective**
+
+- Owner verdict on the Kestrel build: functionally right, but overly complex/obtuse; stated
+  priority order for generated LAD - function -> readability & simplicity -> efficiency. Adopted
+  response: `docs/15-generation-pipeline.md` + ADR-0004 - a 13-skill staged pipeline (analyse/
+  design/build/check/entry) with committed artifact handoffs, fresh-context read-only reviewers,
+  a tag-status (`exists`/`proposed`) anti-invention rule, two hard engineer gates, and a
+  scale-down rule. CLAUDE.md's 5-step workflow wrapped as the inner loop; doc 06 preamble carries
+  the priority order. ADR-0003 left reserved for the data-boundary decision per docs/13.
+- GenProject1 exported to a committed corpus: `.gitignore` anchored to `/GenProject1/`; all 17
+  blocks + 3 UDTs + tag table in `ir/GenProject1/` + `simatic-ml/GenProject1/` (21/21 clean
+  `to-ir`, incl. OB1). Known `IsConsistent` export refusals cleared by block-level compile
+  (0 errors). Data-boundary scan vs the Kestrel Shredder Systems map: zero real-name hits.
+- `docs/notes/genproject1-retrospective.md` delivered - mechanical baseline (17 findings; both
+  generated FBs clean, every in-block finding on the real `FB_MotorFwdRevSystem`), 12 readability
+  findings, 7 candidate C-6xx simplicity rules, 6 rule-vs-practice adjudications. **Owner
+  accept/reject pass pending - rules enter doc 06 only after it.** Converter suite 463/463.
 
 ## 2026-07-15
 
