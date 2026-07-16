@@ -253,3 +253,46 @@ REQ-005/012/013/039/043/044/045/062 to move to implemented and the settings cons
 clear; review-conventions; review-simplicity), then the docs/11 presentation. S9 sim candidates
 carried from the functional review remain open (E-stop feedback-decay race, reversal-window
 boundary, run-on continuity).
+
+## 7. Phase 2 status — BLOCKED at Portal connect (2026-07-17, engineer action needed)
+
+Everything up to the Portal is done and staged; no Portal operation has run.
+
+- **Done:** all nine import XMLs generated and staged in `scratch/fix-wave-1/`
+  (`to-xml --synthesize` for the three code blocks, plain `to-xml` for the UDTs/DB_Settings/
+  iDBs) from the signed, amended IR @ `582bdeb`.
+- **Blocked:** `openness-cli list` (the session-opening first step) timed out twice — 3 min,
+  then 7 min (`--timeout-connect 420`) — with the tool's own diagnosis: the **first-connect
+  approval dialog** waiting inside TIA Portal. The binary used was a freshly built worktree
+  `Release\net48\openness-cli.exe` (this worktree had no build), which TIA's Openness access
+  control has never seen; the previously-approved binary is the main repo's
+  `src\openness-cli\OpennessCli\bin\Debug\net48\openness-cli.exe` (built 07-15, newer than the
+  last openness-cli source change — still current).
+- **Both remedies were denied to this session by the Claude Code permission classifier** (not
+  by TIA): (1) `taskkill` of the four stale Portal instances (PIDs 17744 / 11460 / 8304 /
+  21624 — the known pileup correlate; no new process appeared during either attempt, so the
+  tool attached to one of these and waited on the dialog); (2) executing the main repo's
+  already-approved Debug exe from inside this worktree session.
+- **Engineer: any ONE of these unblocks phase 2** —
+  1. accept the Openness approval dialog waiting in one of the open Portal windows (approves
+     the new worktree binary once and for all), or
+  2. close the four stale Portal instances (then re-run; a fresh launch still needs the dialog
+     accepted once for the worktree binary), or
+  3. run the phase-2 command sequence with the already-approved Debug exe (no dialog expected),
+     or grant the session permission to do so.
+- **Ready-to-run sequence** (absolute project path
+  `C:\Users\User\Desktop\AI Ladder Project\GenProject1\GenProject1.ap20`; group verbatim
+  `S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0`; XMLs in `scratch/fix-wave-1/`):
+  1. `list` (session sanity + Path check);
+  2. `import --type UDT_ShredderSequencerIO.xml UDT_PusherIO.xml`;
+  3. `import DB_Settings.xml iDB_MotorFwdRevSystem_Shredder.xml iDB_ShredderSequencer.xml iDB_PusherControl.xml`;
+  4. `import FB_ShredderSequencer.xml FB_PusherControl.xml`;
+  5. `import FC_ControlMain.xml`;
+  6. block-compile callees→callers: DB_Settings, the three iDBs, FB_ShredderSequencer,
+     FB_PusherControl, then FC_ControlMain (playbook: import flags blocks + callers
+     IsConsistent=false; block-level compile clears it; expect only the known sandbox
+     hardware-IO warning), then whole-device compile — record STATE/ERRORS;
+  7. re-export every touched block/UDT/DB (+ the untouched closure for invariance) → `to-ir` →
+     update `ir/GenProject1/` + `simatic-ml/GenProject1/`;
+  8. invariance diffs (re-export vs drafted intent; untouched blocks vs pre-wave corpus);
+  9. telemetry row + commit + reviewer-pass handoff.
