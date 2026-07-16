@@ -132,12 +132,24 @@ now in doc 06's preamble.
 - [x] UDT member comments **live-verified** (2026-07-16): flat + nested sub-struct UDTs
       round-tripped through SampleProject byte-identically, comments intact — C-605 satisfiable
       end-to-end; sub-struct settings design fully grounded; TODO(live-verify) flags cleared
-- [ ] **GenProject1 functional-fix wave — rulings received (all four, 2026-07-16), phase 1
-      drafting launched**: commissioning-defaults table for sign-off; reverse timed from new
-      ShredderRunRevFB member; stop/E-stop bundle (SystemHealthy member, pusher Mode-0 on stop,
-      RecentStart strap removed w/ sequencer arming); spec-true jog/repark with siren on repark.
-      Scope note: settings VALUES land in current homes; the sub-struct settings migration stays
-      its own follow-up request (reviewable-diff discipline)
+- [x] **GenProject1 fix wave 1 COMPLETE (2026-07-17)** — all four rulings + two mid-wave tension
+      rulings implemented; settings table signed; 9 imports, device compile Success 0/0; all nine
+      re-exports readable-identical to signed drafts; merged 238de48; triple-reviewed blind.
+      Functional verdict now 45/7/6/10/**0 contradicted** (was 28/18/6/11/4). Record:
+      gen/GenProject1/fix-wave-1.md + fix-wave-1-reviews.md; playbook gained the UDT
+      type-consistency import-order entry (live-proven).
+- [ ] **OWNER RULINGS QUEUE v2 (from the fix-wave check stage — gen/GenProject1/
+      fix-wave-1-reviews.md has evidence + suggested fixes for every item):**
+      tier-1 candidates — simultaneous-jog dual solenoids; power-cycle auto-resume (Q-01, now
+      traced); BothSwitchesFault acts on nothing; Fitted-drop mid-cycle Step strand; reversal
+      window semantics (comment vs rung vs REQ-028 intent); EndTravelTimer-through-holds (C-504
+      candidate). Rule rulings — C-604 wording (commented-constant vs reservation clause); C-117
+      feedback terms vs FB-internal pause; C-121 named-request-bit form; C-123 alarm-only
+      ParkedTimeoutFault; C-115 applicability to stepped plants; C-502 scale-down; C-507
+      exception list; C-001 DO-vs-DQ wording. Code follow-ups — C-601 near-match in pusher
+      launch (name it once); C-605 member-comment pass (toolchain ready); C-603 intent comments
+      ×3; comment-vs-rung fixes (InfeedRunning, reversal window); C-103 FaultFB contract check;
+      converter reporter bug (C-301 count).
 - [ ] **Portal batch** (sequenced, one at a time): UDT member-comment live verify
       (`SW.Types.PlcStruct` shape + persistence), sub-struct live round-trip re-run (meaningful
       now that TypeIr recursion is fixed), then the settings-rework import wave

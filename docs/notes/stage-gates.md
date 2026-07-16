@@ -4191,3 +4191,38 @@ on interface UDTs including one level down, and the owner's sub-struct settings 
 type per equipment, mechanical one-writer checkability. TODO(live-verify) flags cleared in
 DbInterfaceMembers.cs / converter README / ir/SPEC.md. Leftovers documented: the two proof UDTs
 stay in SampleProject (no --type delete support; same status as MotorStarter_Instance).
+
+## S6: fix wave 1 complete - drafted, signed, imported, compiled, invariance-proven, triple-reviewed (2026-07-17)
+
+The full pipeline discipline applied to our own fixes, end to end. Phase 1 (worktree agent,
+Portal-free): all four owner rulings drafted into IR with static verification (synthesize +
+preflight zero-new-findings), the commissioning-defaults table produced with per-value rationale,
+two design tensions surfaced and ruled (park-at-next-pre-start stands; jog must survive downstream
+absence - implemented as the two-tier PusherModeForceOff / PusherCycleInhibitCmd split), settings
+table signed as proposed (Oisin, 2026-07-16, recorded in gen/GenProject1/fix-wave-1.md). Phase 2
+first attempt correctly stopped at the Portal boundary (unapproved fresh worktree binary hit the
+first-connect dialog; classifier denials respected, state fully staged and documented); the
+coordinator ran the staged sequence with the session's approved binary. One roundtrip lost to a
+new playbook class - "Element cannot be found / check the consistency of the type used" (UDT
+imports need compile --type before dependent iDBs; FBs before iDBs on interface changes) - now a
+playbook entry with live proof. Corrected order: 9 imports, every block compile 0 errors, whole-
+device compile Success 0/0, and all nine re-exports READABLE-IDENTICAL to the signed drafts
+(invariance proven, not asserted). Merged at 238de48.
+
+Check stage: three fresh-context blind reviewers against the merged corpus. Functional verdict
+flipped from 28/18/6/11/4-contradicted to 45 implemented / 7 partial / 6 unimplemented /
+10 disarmed / 0 contradicted - every ruled fix implemented with field-boundary evidence, all 14
+spec numbers verified into the right PTs, anti-laundering clean. Mechanical conventions baseline
+improved 17 to 16 (FC_ControlMain header cleared; both generated FBs + FC now tool-clean). The
+reviewers earned their keep against our own code: new tier-1 candidates (simultaneous-jog dual
+solenoids; power-cycle auto-resume now TRACED not hypothesized; BothSwitchesFault acts on
+nothing; Fitted-drop mid-cycle strands Step), a reintroduced C-601 near-match in the new pusher
+launch logic, a genuine C-604 rule-wording tension (commented-constant branch vs reservation
+clause), a new C-117 error-class finding (direction changes lack not-running feedback terms),
+and a converter reporter bug (C-301 count vs printed findings). Full actionable record:
+gen/GenProject1/fix-wave-1-reviews.md; owner-rulings queue updated in AITODO.
+
+Meta-lesson, recorded deliberately: the check stage found real defects in code written BY the
+pipeline's own coordinator under the pipeline's own rules, one day after the rules were written.
+That is the system working - the stricter-bar principle has teeth precisely because the reviewers
+do not care who wrote the code.

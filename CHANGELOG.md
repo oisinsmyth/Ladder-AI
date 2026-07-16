@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-17
+
+**GenProject1 fix wave 1: signed, imported, compiled 0/0, invariance-proven, triple-reviewed**
+
+- All four owner rulings + two mid-wave tension rulings implemented (reverse timed from confirmed
+  feedback via new ShredderRunRevFB member; SystemHealthy into StopCmd; stop reaches the pusher
+  via the two-tier PusherModeForceOff/CycleInhibit split - jog survives downstream absence;
+  RecentStart strap replaced by one-press-one-arm MotorStartArm handshake; spec-true jog/repark
+  with warned motion; Fitted gates everything; five commissioning defaults signed as tabled).
+- Phase 2: 9 imports in the corrected dependency order (new playbook entry: UDT type-compile
+  before dependent iDBs, FBs before iDBs on interface changes - live-proven), every block 0
+  errors, device Success 0/0, all nine re-exports readable-identical to the signed drafts.
+- Check stage (three blind reviewers vs merged corpus): functional verdict 45 implemented /
+  7 partial / 6 unimplemented / 10 disarmed / 0 contradicted (was 28/18/6/11/4); mechanical
+  conventions 17 -> 16; new tier-1 candidates and rule rulings queued (fix-wave-1-reviews.md) -
+  incl. simultaneous-jog dual solenoids, traced power-cycle auto-resume, a reintroduced C-601
+  near-match in our own new code, and a C-117 error-class finding. The reviewers work on the
+  pipeline's own output - as designed.
+
 Git doesn't generate this on its own — `git log` gives raw commit history, not a curated record
 of what changed and why. This is that record, maintained by hand. Entries are grouped by date,
 newest first, one bullet group per commit (or per uncommitted round of work, until committed).

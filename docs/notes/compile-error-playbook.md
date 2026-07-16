@@ -63,7 +63,17 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 
 ## Import stage
 
-### "The elements must be sorted according to the current flow"
+### "Element '<member>' cannot be found. Please check the consistency of the type used."
+- **Where:** import of an instance DB (or any block referencing a UDT) right after importing a new
+  version of that UDT that added/renamed members — the iDB names members TIA's type system doesn't
+  know yet.
+- **Cause:** `Import()` of a PLC data type does not update dependents' view of the type; until the
+  UDT is type-compiled, TIA resolves the OLD type version, so new members "cannot be found."
+  Import order compounds it: an iDB imported before its (interface-changed) FB hits the same class.
+- **Fix:** on interface-changing waves, the proven order is UDTs (`--type`) → `compile --type` each
+  → FBs → iDBs → callers; then block compiles callees→callers. Live-verified 2026-07-17 (fix wave
+  1: first attempt failed exactly here; corrected order ran 9 imports to a 0/0 device compile).
+- **Source:** stage-gates "fix wave" entry (2026-07-17); gen/GenProject1/fix-wave-1.md §7.
 - **Where:** import of converter-generated XML.
 - **Cause:** Part/wire order in the FlgNet doesn't match true document order — a converter bug class (two instances found and fixed generally by UId sort, 2026-07-14).
 - **Fix:** this class is fixed; a recurrence is a new converter bug — report it, never hand-patch the XML (hard rule 7).
