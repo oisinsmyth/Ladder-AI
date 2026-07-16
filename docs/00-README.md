@@ -21,6 +21,7 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 | `13-data-boundary.md` | What data may reach the AI — **draft, needs a decision (R-08)** |
 | `14-s2-explanation-checklist.md` | S2's explanation-quality checklist — **populated**, derived from real trial comparisons |
 | `15-generation-pipeline.md` | S6 generation pipeline — stages, skills, artifacts, gates (ADR-0004) |
+| `16-future-ideas.md` | Candidate ideas under debate — merits/costs, verdicts, ADR-gated promotion into the plan |
 | `adr-0000…0004` | Decision records: template, IR format (accepted), tooling languages (accepted), generation pipeline (accepted; 0003 reserved by `13` for the data-boundary decision) |
 | `audit/` | Dated audit records — stage/goals sanity checks and doc-consistency findings, run periodically, not on every change |
 | `CLAUDE.md` | The distilled operating manual Claude Code reads every session |

@@ -1461,6 +1461,68 @@ one would.
    build writes goes through the same real import+compile gate, so a dedicated isolated v2 live
    check was judged redundant with that real work rather than skipped.
 
+## `digest` — compact structural summary (2026-07-16, FI-15)
+
+`converter digest <file.ir> [<file.ir> ...] [--ignore-errors] [--json]`
+
+A deterministic, mechanically-derived orientation summary of `.ir` content — "what shape is this
+block?" at a fraction of the tokens of the full IR, per FI-15 (`docs/16-future-ideas.md`). Derived
+fresh on every run, never stored, so it cannot go stale. **Not** an explanation and **not** review
+input — a reviewer that should read every rung still reads the full IR (the S2 exhaustiveness
+lesson); this is for finding *which* file to open.
+
+- Blocks: kind/name/number/title, interface sections (`Name : Datatype`, nested-member counts),
+  CALL sites grouped by callee with distinct instance paths, per-network title + statement counts
+  (`coil:2, timer:1` — statement-level only; contacts/comparisons live inside condition
+  expressions and are deliberately not counted), and deduplicated global tag roots (first path
+  component via `AccessNode.FromDottedPath`, so `Clock_0.5Hz`-style literal-dot names stay
+  atomic).
+- DBs (`GlobalDB`/`InstanceDB` + `INSTANCEOF`), UDTs, and tag tables (name : type @ address) get
+  the corresponding member/tag listing.
+- Same batch contract as `review`: fails on the first bad file unless `--ignore-errors` records
+  it and continues; `--json` for machine use; non-zero exit only for file errors (a digest has no
+  findings). Works on both exported IR (with `SIDECAR`) and freshly hand-authored, sidecar-less
+  IR — dispatched by the section's presence, mirroring `ParseBlock`/`ParseBlockWithoutSidecar`'s
+  own contract.
+- Piloted against all 14 `ir/reference/*.ir`, a pattern example DB, and `GenProject1`'s
+  `FC_ControlMain` (calls/instances/network map/DB roots all correct at a glance).
+
+## `preflight` — static checks before any Portal round trip (2026-07-16, FI-13)
+
+`converter preflight <file.ir> [<file.ir> ...] --project <ir-dir> [--json]`
+
+A static filter in front of the compile gate, per FI-13 (`docs/16-future-ideas.md`) — catches the
+*known, recurring* import/compile error classes in milliseconds instead of a slow Portal cycle.
+**Explicitly not the compile gate** (hard rule 4): passing pre-flight proves nothing about TIA
+acceptance; the text output carries that disclaimer permanently. Composition only — no new
+analysis: real parsers, real writers, `review`'s own rules, `TagReferences` +
+`AccessNode.FromDottedPath` for resolution.
+
+Checks, per file:
+
+1. **parse** — the target parses at all (a parse failure is a finding, not a batch abort).
+2. **convert** — blocks build through `FlgNetBuilder` (sidecar'd) or `SidecarSynthesizer`
+   (sidecar-less; "not synthesizable" is a finding worth knowing before trying
+   `to-xml --synthesize`); DB/UDT/tag-table content passes its writer.
+3. **tag** — every global tag root (via `TagReferences`, roots via `FromDottedPath`) must resolve
+   to a local declaration, a project DB, a tag-table entry, or another file *in the same batch*
+   (a new block plus its new DB pre-flight together, the way they'd be imported together). One
+   finding per unresolved root. This is the pipeline's "`exists`, verified by grep" rule
+   (`docs/15-generation-pipeline.md`), mechanized.
+4. **call** — every CALL's callee resolves to a block in the project or batch.
+5. **instanceof** — an instance DB's `INSTANCEOF` target resolves to a block.
+6. **review:C-xxx** — `converter review`'s findings folded in, prefixed by rule.
+
+`--project <ir-dir>` is the current export (`ir/<project>/`), scanned non-recursively; files that
+fail to index are surfaced as `INDEX WARNING`s. Exit non-zero on any finding. Deliberately *not*
+checked in v1: UDT existence for `Datatype` strings (verbatim strings like quoted UDT names /
+`Array[…] of X` would need their own parser — scope stays at the known error classes).
+
+Piloted: all 21 `ir/GenProject1/*.ir` against their own export — zero tag/call/instanceof/convert
+findings, 17 genuine review findings; `ir/reference` blocks reproduce the S4 pilot's known
+findings (C-003 naming, the `NodeStatusAlarms` C-301/C-501 alarm-word pair, C-406 TONR/TOF) with
+zero false unresolved-tag findings.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

@@ -1,5 +1,7 @@
 using System.Xml.Linq;
+using Converter.Digest;
 using Converter.Ir;
+using Converter.Preflight;
 using Converter.Review;
 using Converter.Sanitize;
 using Converter.SimaticMl;
@@ -20,12 +22,24 @@ internal static class Program
             return RunReview(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "digest")
+        {
+            return RunDigest(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "preflight")
+        {
+            return RunPreflight(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
             Console.Error.WriteLine("       converter to-xml <file> [<file> ...] --synthesize   # no real SIDECAR needed; mints a fresh one (plain COIL AND/OR/NOT chains only)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
+            Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
+            Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
             return 1;
         }
 
@@ -199,6 +213,90 @@ internal static class Program
         var hasErrorFindings = report.Files.Any(f => f.Findings.Any(finding => finding.Severity == FindingSeverity.Error));
         var hasFileErrors = report.Files.Any(f => f.FileError is not null);
         return hasErrorFindings || hasFileErrors ? 1 : 0;
+    }
+
+    private static int RunDigest(string[] args)
+    {
+        var files = new List<string>();
+        var ignoreErrors = false;
+        var json = false;
+
+        foreach (var arg in args)
+        {
+            switch (arg)
+            {
+                case "--ignore-errors":
+                    ignoreErrors = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    files.Add(arg);
+                    break;
+            }
+        }
+
+        if (files.Count == 0)
+        {
+            Console.Error.WriteLine("Usage: converter digest <file> [<file> ...] [--ignore-errors] [--json]");
+            return 1;
+        }
+
+        DigestReport report;
+        try
+        {
+            report = DigestBuilder.DigestFiles(files, ignoreErrors);
+        }
+        catch (DigestFileException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+
+        Console.WriteLine(json ? DigestOutputFormatter.FormatJson(report) : DigestOutputFormatter.FormatText(report));
+
+        return report.Files.Any(f => f.FileError is not null) ? 1 : 0;
+    }
+
+    private static int RunPreflight(string[] args)
+    {
+        var files = new List<string>();
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    files.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (files.Count == 0 || projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter preflight <file> [<file> ...] --project <ir-dir> [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = PreflightRunner.Run(files, projectDir);
+        Console.WriteLine(json ? PreflightOutputFormatter.FormatJson(report) : PreflightOutputFormatter.FormatText(report));
+
+        return report.HasFindings ? 1 : 0;
     }
 
     private static string? RequireValue(string[] args, ref int i, string flag)
