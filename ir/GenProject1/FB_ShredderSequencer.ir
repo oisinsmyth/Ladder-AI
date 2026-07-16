@@ -3,7 +3,7 @@ ROOTID 0
 NUMBER 8
 LANGUAGE LAD
 TITLE "Shredder Plant Sequencer"
-COMMENT "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle and forces the pusher to mode 0."
+COMMENT "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available)."
 
 INTERFACE
   INPUT
@@ -37,7 +37,9 @@ INTERFACE
       MotorStartArm : Bool
       PusherModeCmd : Int
       PusherParkCmd : Bool
-    StopCmd : Bool COMMENT "Stop-all: operator CycleStop, loss of DownstreamRunning (nowhere for shredded material to go), or loss of SystemHealthy (control circuit/E-stop - REQ-062: recovery must demand a fresh start press, so the sequence may not sit in a run step through an E-stop). Read by every step's own stop transition below and by the pusher mode-0 force."
+      PusherCycleInhibitCmd : Bool
+    StopCmd : Bool COMMENT "Stop-all: operator CycleStop, loss of DownstreamRunning (nowhere for shredded material to go), or loss of SystemHealthy (control circuit/E-stop - REQ-062: recovery must demand a fresh start press, so the sequence may not sit in a run step through an E-stop). Read by every step's own stop transition below and mirrored to the pusher as PusherCycleInhibitCmd."
+    PusherModeForceOff : Bool COMMENT "Named once (C-601): the hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately NOT the full StopCmd (owner amendment 2026-07-16): downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd."
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt
     DischargeConveyorTimeoutMS : DInt
@@ -198,14 +200,16 @@ NETWORK 13 "Step 60 (OvercurrentAbort) - Timer And Transitions"
   MOVE(EN := NOT StopCmd AND OvercurrentAbortPauseTimer.Q AND NOT IO.ShredderBlockedFault AND IO.Step = 60, IN := 30) => IO.Step
 
 NETWORK 14 "Motor And Pusher Mode Commands"
-  COMMENT "MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). PusherParkCmd holds through the machine-start steps 20-40 (range intent, C-603: any step inserted inside the start ramp still wants the pusher home) - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. The mode MOVEs force the pusher to 0 (park via its Off behavior) while StopCmd is live - stop-all now reaches the pusher (REQ-012/013, mirroring the step-60 overcurrent force) - and pass the operator's mode through otherwise."
+  COMMENT "MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). PusherParkCmd holds through the machine-start steps 20-40 (range intent, C-603: any step inserted inside the start ramp still wants the pusher home) - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040)."
   COIL IO.MotorReverseCmd := IO.Step = 30
   COIL IO.MotorAutoStartCmd := IO.Step >= 30 AND IO.Step <= 50
   COIL IO.MotorPreStartDoneCmd := IO.Step >= 20
   COIL IO.MotorStartArm := IO.Step = 10
   COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40
-  MOVE(EN := StopCmd OR IO.Step = 60, IN := 0) => IO.PusherModeCmd
-  MOVE(EN := NOT (StopCmd OR IO.Step = 60), IN := IO.OperatorPusherMode) => IO.PusherModeCmd
+  COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60
+  COIL IO.PusherCycleInhibitCmd := StopCmd
+  MOVE(EN := PusherModeForceOff, IN := 0) => IO.PusherModeCmd
+  MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd
 
 NETWORK 15 "Output Commands"
   COIL IO.RunDischargeConv := IO.Step >= 20

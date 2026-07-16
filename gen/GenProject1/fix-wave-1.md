@@ -47,8 +47,14 @@ Unchanged and re-verified against spec: `PreStartSounderTime` 10.0, `ShredderRev
 
 ### Settings sign-off (gates phase 2 — nothing is imported before this is signed)
 
-- [ ] Timing defaults approved as tabled (or as amended below) — Engineer: ____________ Date: ____________
-- Amendments: ____________
+- [x] Timing defaults approved **as tabled** — Engineer: **Oisín** Date: **2026-07-16**
+  (signature relayed via the coordinator with the phase-2 go-ahead; recorded here per that
+  instruction).
+- Amendments: **none to the settings values.** Two accompanying rulings on §5's tensions,
+  received with the signature: tension 1 (Off-mode idle repark) **stands as drafted** —
+  recorded at §5.1 and as register note Q-16; tension 3 (jog while stop held) **amended** —
+  jog must stay available with downstream absent; implemented before phase 2, see §2.3's
+  amendment paragraph and §5.3.
 
 ## 2. Per-ruling design notes
 
@@ -78,11 +84,20 @@ step 40 already has, documented in the network comment. Bounded worst case ≈ 1
 StopCmd exactly as ruled: `COIL StopCmd := IO.CycleStop OR NOT IO.DownstreamRunning OR NOT
 IO.SystemHealthy` — an E-stop now aborts every step to idle, dropping all sequencer-side
 commands and `MotorPreStartDoneCmd`.
-(b) Stop reaches the pusher: seq N14's arbitration is now `MOVE(EN := StopCmd OR Step = 60,
-IN := 0)` / `MOVE(EN := NOT (StopCmd OR Step = 60), IN := OperatorPusherMode)` — StopCmd forces
-mode 0 exactly like the step-60 overcurrent force; a mid-cycle pusher retracts and parks via its
-existing Off behavior, within the same scan (sequencer runs before the pusher copy/call in
-FC_ControlMain).
+(b) Stop reaches the pusher — **as amended at sign-off (owner, 2026-07-16):** the pusher force
+is two-tier. `PusherModeForceOff := CycleStop OR NOT SystemHealthy OR Step = 60` (named per
+C-601) drives the mode arbitration: `MOVE(EN := PusherModeForceOff, IN := 0)` /
+`MOVE(EN := NOT PusherModeForceOff, IN := OperatorPusherMode)` — stop button, unhealthy circuit,
+or the overcurrent-abort step park the pusher AND block jogging, mirroring the step-60
+mechanism. Downstream absence is deliberately NOT in the mode force: it reaches the pusher as
+`PusherCycleInhibitCmd := StopCmd` → new pusher input `CycleInhibit`, which gates `CycleRequest`
+(no launch, auto or manual, into a stopped plant) and, via the named `CycleAbort := Mode = 0 OR
+CycleInhibit`, retracts-and-parks an in-flight cycle through the existing step-10/step-20 exits
+(the step-30 retract completes regardless, so an aborted cycle always ends parked) — while
+hand-jog stays available (REQ-040). Mid-cycle response is within the same scan either way
+(sequencer runs before the pusher copy/call in FC_ControlMain). Using the full `StopCmd` as the
+inhibit means every stop reason — present and future — inhibits cycles while it persists, with
+the jog exemption confined to exactly the non-hard reasons.
 (c) **RecentStart arming design** (strap removed): new sequencer output `MotorStartArm :=
 IO.Step = 10` — one operator start press = one PreStart phase = one arming. FC_ControlMain N3
 wires it as a plain-coil set-then-hand-off: `COIL IO.RecentStart := iDB_ShredderSequencer.IO.
@@ -126,17 +141,20 @@ C-601 discipline: the shared compounds are named once in the new N1 (`CycleReque
 
 ## 3. Diffs summary (readable text; sidecar removal excluded — see §4)
 
+Deltas are cumulative (rulings draft + the sign-off amendment) vs the pre-wave corpus @
+`c1c0171`.
+
 | File | Networks touched | Readable delta | Substance |
 |---|---|---|---|
-| `UDT_ShredderSequencerIO.ir` | — | +4 members | `SystemHealthy`, `ShredderRunRevFB` (in), `MotorStartArm`, `PusherParkCmd` (out) — all with C-605 comments |
-| `UDT_PusherIO.ir` | — | +1 member | `ParkCmd` (in) with C-605 comment — required by ruling 4(i): the pusher must receive the sequencer's park request through its own UDT (C-127) |
-| `FB_ShredderSequencer.ir` | header, interface, N1, N9, N14 | 20 lines (14 non-comment) | StopCmd + healthy; ReverseRunTimer on confirmed feedback; StopCmd→mode-0 force; MotorStartArm/PusherParkCmd coils. Networks 2–8, 10–13, 15 textually identical |
-| `FB_PusherControl.ir` | header, interface, N1, N2, N4(new), N5–N8, N10, N11, N13 | 77 lines (55 non-comment) | Named requests; generalized pre-motion warning; occasion-gated repark; Fitted gating of demands/pack/timers/latches. N3 (HMI times), N9 content, N12 textually identical (N5–N10 renumbered from old 4–9; old N10 absorbed into new N4) |
-| `FC_ControlMain.ir` | header(new), N1, N3, N5 | 7 lines (5 non-comment) | +SystemHealthy/+ShredderRunRevFB wiring; RecentStart strap → MotorStartArm OR-hold (+C-604 comment naming the three deliberate `NOT AlwaysTrue` constants); +ParkCmd wiring; C-201 header added (standing finding, in-scope — block being edited). N2/N4/N6/N7 textually identical |
+| `UDT_ShredderSequencerIO.ir` | — | +5 members | `SystemHealthy`, `ShredderRunRevFB` (in), `MotorStartArm`, `PusherParkCmd`, `PusherCycleInhibitCmd` (out) — all with C-605 comments |
+| `UDT_PusherIO.ir` | — | +2 members | `ParkCmd`, `CycleInhibit` (in) with C-605 comments — required by ruling 4(i) and the sign-off amendment: the pusher receives the sequencer's park request and cycle inhibit through its own UDT (C-127) |
+| `FB_ShredderSequencer.ir` | header, interface, N1, N9, N14 | 24 lines (17 non-comment) | StopCmd + healthy; ReverseRunTimer on confirmed feedback; two-tier pusher force (`PusherModeForceOff` mode-0 force + `PusherCycleInhibitCmd := StopCmd`); MotorStartArm/PusherParkCmd coils. Networks 2–8, 10–13, 15 textually identical |
+| `FB_PusherControl.ir` | header, interface, N1, N2, N4(new), N5–N11, N13 | 90 lines (67 non-comment) | Named requests + `CycleAbort`; CycleInhibit gates cycle requests, jog exempt; generalized pre-motion warning; occasion-gated repark; Fitted gating of demands/pack/timers/latches. N3 (HMI times), N12 textually identical (N5–N10 renumbered from old 4–9; old N10 absorbed into new N4; N9's exit now reads `CycleAbort` for its Off term) |
+| `FC_ControlMain.ir` | header(new), N1, N3, N5 | 8 lines (6 non-comment) | +SystemHealthy/+ShredderRunRevFB wiring; RecentStart strap → MotorStartArm OR-hold (+C-604 comment naming the three deliberate `NOT AlwaysTrue` constants); +ParkCmd/+CycleInhibit wiring; C-201 header added (standing finding, in-scope — block being edited). N2/N4/N6/N7 textually identical |
 | `DB_Settings.ir` | — | 10 lines | 5 start values (§1), 4 overcurrent member comments, header comment updated to stay accurate |
 | `iDB_MotorFwdRevSystem_Shredder.ir` | — | 2 lines | **START VALUES ONLY**: `FTTime = 10.0`, `ReverseIgnoreFT = 12.0` (⚠ imported-real iDB — nothing else touched) |
-| `iDB_ShredderSequencer.ir` | — | +4 lines | Mirror of the UDT members (iDBs carry full interface copies) |
-| `iDB_PusherControl.ir` | — | +5 lines | Mirror: `ParkCmd` + the four new named-request Statics. **Touch-list note:** this file was not in the stated allow-list but is the same mechanical mirror the list's iDB_ShredderSequencer entry anticipates — without it the instance no longer matches its FB. Flagged, not silent. |
+| `iDB_ShredderSequencer.ir` | — | +6 lines | Mirror of the UDT members + `PusherModeForceOff` Static (iDBs carry full interface copies) |
+| `iDB_PusherControl.ir` | — | +7 lines | Mirror: `ParkCmd`/`CycleInhibit` + the five named-condition Statics. **Touch-list note:** this file was not in the stated allow-list but is the same mechanical mirror the list's iDB_ShredderSequencer entry anticipates — without it the instance no longer matches its FB. Flagged, not silent. |
 
 **Sidecars:** the three edited code blocks' `SIDECAR` sections are stripped — that is the
 established edit workflow (19b2022 precedent: edited readable IR → `to-xml --synthesize` →
@@ -181,21 +199,33 @@ them; the raw-file diff's large deletion counts are this, not logic.
   the request bits read `Step` (which only leaves 0 through this scan's own request-gated
   transitions); the jog demand rungs re-check `Step = 0` fresh to close the one theoretical
   both-solenoids scan.
+- **Amendment re-verification (post-sign-off, tension-3 rework):** `to-xml --synthesize` OK on
+  all three code blocks, plain `to-xml` OK on both UDTs and both mirrored iDBs, preflight on all
+  nine files again **4 findings, all the same accepted pre-existing set, zero new**. New
+  dependencies traced: seq N14's `PusherModeForceOff` coil (reads inputs + settled Step;
+  consumed by the same network's later-kind MOVEs — fresh) and `PusherCycleInhibitCmd := StopCmd`
+  (N1 — fresh); pusher N1's `CycleAbort` (inputs only) consumed by N8/N9 (cross-network, fresh);
+  `CycleRequest`'s new `NOT IO.CycleInhibit` term reads an input (fresh). C-121 exit exclusivity
+  at step 10 preserved by generalizing the `Mode = 0` term to `CycleAbort` in all four exits.
 
 ## 5. Design tensions and observed consequences (flagged, not forced)
 
-1. **REQ-037 narrowed by ruling 4:** selecting Off with the ram idle-but-off-home no longer
-   self-parks (repark occasions are only pre-start / cycle entry, and Off has no cycle
-   requests). Mid-cycle Off still retracts and parks as before. The ram parks at the next plant
-   pre-start. If Off-must-park-immediately matters, it needs a further ruling (it would be a
-   third repark occasion — and per NEW-4 it would be a *warned* one).
+1. **REQ-037 narrowed by ruling 4 — RULED, stands as drafted (owner, 2026-07-16, at
+   sign-off):** selecting Off with the ram idle-but-off-home does not self-park; the ram parks
+   at the next plant pre-start (or cycle entry). Mid-cycle Off still retracts and parks.
+   Recorded as register note Q-16 (`gen/GenProject1/requirements.md`) with the ruling inline.
+   An Off-must-park-immediately behavior would need a further ruling and would itself be a
+   warned repark.
 2. **Momentary manual-cycle tap:** a manual cycle press shorter than the 1 s warning no longer
    launches (request released mid-warning = no motion) — the price of NEW-4, consistent with
    jog's release-before-warning behavior. Auto (hopper level) is unaffected (level persists).
-3. **Jog while stop is held:** StopCmd (stop button held, downstream absent, or unhealthy)
-   forces mode 0, so jog is unavailable for the duration — the ruling's own mechanism. Notably,
-   *downstream absent* therefore blocks jogging; if jog-for-testing must work with downstream
-   stopped, that needs a ruling amendment.
+3. **Jog while stop is held — AMENDED at sign-off (owner, 2026-07-16) and implemented:** jog
+   must stay available with downstream absent. The mode-0 force is now driven by
+   `CycleStop OR NOT SystemHealthy` (plus step 60) only; downstream loss reaches the pusher as
+   `CycleInhibit` (no cycle launches or continues — auto and manual alike — while any stop
+   reason persists; in-flight cycles retract and park), with the hand-jog path exempt. See
+   §2.3's amendment paragraph. Jog remains blocked during an operator stop or an unhealthy
+   circuit — ruled correct.
 4. **Auto cycles at plant-idle** (pre-existing, unchanged): once a stop is *released*, mode
    passes through again — auto+hopper-high or a manual press can run warned pusher cycles while
    the plant is idle, exactly as before this wave. Ruling 3(b) is a while-held force, not a
@@ -213,7 +243,8 @@ them; the raw-file diff's large deletion counts are this, not logic.
 
 ## 6. Phase-2 handoff
 
-**Phase 2 does not start until §1 is signed.** On signature (with any amendments folded in):
+**§1 was signed 2026-07-16 (as proposed) and the tension-3 amendment folded in — phase 2 is
+cleared and its results are appended below as §7.** Original handoff plan:
 import all nine files to the scratch project (`to-xml --synthesize` for the three code blocks),
 compile (hard rule 4), run the untouched-network invariance check against this wave's readable
 diffs (§3 names every touched network; everything else must prove identical), re-export →

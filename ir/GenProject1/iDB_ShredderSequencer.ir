@@ -33,7 +33,9 @@ DB iDB_ShredderSequencer
       MotorStartArm : Bool
       PusherModeCmd : Int
       PusherParkCmd : Bool
+      PusherCycleInhibitCmd : Bool
     StopCmd : Bool
+    PusherModeForceOff : Bool
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt
     DischargeConveyorTimeoutMS : DInt

@@ -3,7 +3,7 @@ ROOTID 0
 NUMBER 3
 LANGUAGE LAD
 TITLE "Pusher Control"
-COMMENT "Pusher ram sequencing (C-118-C-125). Step legend (C-120): 0=Idle (no motion; home is the HomeLimit switch, not implied by the step - after a jog release the ram may legitimately rest off home, REQ-039) - 10=DriveToEndTravel (forward stroke in progress) - 20=Hold (paused at full travel, brief settle before retracting) - 30=Retract (returning to home; also the recovery/abort target from any bad state). Mode legend: 0=Off (finish a retract already in progress, then park; no new cycle starts) - 1=Auto (hopper-high-level starts a cycle) - 2=Manual (operator button/jog starts a cycle). Motion policy (owner rulings 2026-07-16): an idle off-home ram reparks ONLY on the plant pre-start ParkCmd or on a live cycle request - never on jog release or bare mode changes - and every motion start from rest (repark, cycle launch, jog) is preceded by the JogWarningTime sounder warning (NEW-4: no unwarned pusher motion). Fitted=FALSE (REQ-042/043/044) kills every demand, the pack output, both supervision timers, and every fault latch at the source, so a disabled pusher does nothing and raises nothing."
+COMMENT "Pusher ram sequencing (C-118-C-125). Step legend (C-120): 0=Idle (no motion; home is the HomeLimit switch, not implied by the step - after a jog release the ram may legitimately rest off home, REQ-039) - 10=DriveToEndTravel (forward stroke in progress) - 20=Hold (paused at full travel, brief settle before retracting) - 30=Retract (returning to home; also the recovery/abort target from any bad state). Mode legend: 0=Off (finish a retract already in progress, then park; no new cycle starts) - 1=Auto (hopper-high-level starts a cycle) - 2=Manual (operator button/jog starts a cycle). Motion policy (owner rulings 2026-07-16): an idle off-home ram reparks ONLY on the plant pre-start ParkCmd or on a live cycle request - never on jog release or bare mode changes - and every motion start from rest (repark, cycle launch, jog) is preceded by the JogWarningTime sounder warning (NEW-4: no unwarned pusher motion). CycleInhibit (any live plant stop reason) blocks cycle launches and aborts an in-flight cycle to park, but deliberately leaves hand-jog available - only the mode-0 force (stop button/unhealthy) blocks jogging (owner amendment 2026-07-16, REQ-040). Fitted=FALSE (REQ-042/043/044) kills every demand, the pack output, both supervision timers, and every fault latch at the source, so a disabled pusher does nothing and raises nothing."
 
 INTERFACE
   INPUT
@@ -17,6 +17,7 @@ INTERFACE
       HopperHighLevel : Bool
       ManualCycleCmd : Bool
       ParkCmd : Bool
+      CycleInhibit : Bool
       JogExtendCmd : Bool
       JogRetractCmd : Bool
       HomeLimit : Bool
@@ -45,6 +46,7 @@ INTERFACE
     JogDemand : Bool COMMENT "A live jog request: either jog button held, idle, Manual mode, pusher fitted. Arms the pre-motion warning, suppresses the repark (jogging is never fought by an auto-retract), and - per direction, warning done - drives the demands. Reads Step from before this scan's transitions; the demand rungs re-check Step fresh."
     ReparkRequest : Bool COMMENT "A repark to home is wanted: the sequencer's pre-start ParkCmd (REQ-045) or a live CycleRequest, while idle off home and not jogging. One of the only two motion sources out of Step 0 (owner ruling 2026-07-16); fires the 0-to-30 transition once the pre-motion warning has sounded."
     LaunchRequest : Bool COMMENT "A cycle launch is possible: live CycleRequest, idle, ram at home. Fires the 0-to-10 transition once the pre-motion warning has sounded; the same fired condition resets PressureTripCount (per-cycle jam counting, REQ-048)."
+    CycleAbort : Bool COMMENT "Named once (C-601): abort an in-flight cycle to Retract - Off commanded mid-cycle, or the plant acquired a stop reason (CycleInhibit). Read by the Step 10 and Step 20 exits; the Step 30 retract completes regardless, so an aborted cycle always ends parked. Jog is untouched by this bit (owner amendment 2026-07-16)."
     EndTravelTimeoutMS : DInt
     ParkedTimeoutMS : DInt
     EndTravelHoldTimeMS : DInt
@@ -100,12 +102,13 @@ INTERFACE
   CONSTANT
 
 NETWORK 1 "Enable And Motion Requests"
-  COMMENT "The compound conditions every later network shares, each written once (C-601). Requests read Step as it settled last scan (the transitions run later) - safe, because Step only ever leaves 0 through this scan's own request-gated transitions; steps returning to 0 just re-arm the requests one scan late."
+  COMMENT "The compound conditions every later network shares, each written once (C-601). Requests read Step as it settled last scan (the transitions run later) - safe, because Step only ever leaves 0 through this scan's own request-gated transitions; steps returning to 0 just re-arm the requests one scan late. CycleInhibit kills cycle requests (no launch into a stopped plant) and, via CycleAbort, retracts an in-flight cycle - while JogDemand deliberately ignores it: hand-jog stays available with the plant stopped by downstream absence (owner amendment 2026-07-16, REQ-040)."
   COIL IO.Enable := IO.Fitted AND IO.Mode <> 0
-  COIL CycleRequest := (IO.Mode = 1 AND IO.HopperHighLevel OR IO.Mode = 2 AND IO.ManualCycleCmd) AND IO.Enable AND NOT IO.Blocked
+  COIL CycleRequest := (IO.Mode = 1 AND IO.HopperHighLevel OR IO.Mode = 2 AND IO.ManualCycleCmd) AND IO.Enable AND NOT IO.Blocked AND NOT IO.CycleInhibit
   COIL JogDemand := (IO.JogExtendCmd OR IO.JogRetractCmd) AND IO.Step = 0 AND IO.Mode = 2 AND IO.Fitted
   COIL ReparkRequest := (IO.Fitted AND IO.ParkCmd OR CycleRequest) AND IO.Step = 0 AND NOT IO.HomeLimit AND NOT JogDemand
   COIL LaunchRequest := CycleRequest AND IO.Step = 0 AND IO.HomeLimit
+  COIL CycleAbort := IO.Mode = 0 OR IO.CycleInhibit
 
 NETWORK 2 "Both Limit Switches Active Simultaneously"
   COMMENT "Fitted gates both the set and the hold of the latch (REQ-043/044, gate at the source): a disabled pusher raises no fault, and a fault latched while fitted clears the moment the pusher is disabled. FC_AlarmsMain reads only these already-gated bits."
@@ -153,17 +156,17 @@ NETWORK 7 "Step 0 (Idle) - Warned Repark And Launch"
   MOVE(EN := LaunchRequest AND JogPreStartTimer.Q, IN := 10) => IO.Step
 
 NETWORK 8 "Step 10 (Drive To End Travel) - Timer, Timeout Fault, And Transitions"
-  COMMENT "Every abnormal exit - Off commanded mid-stroke, or a timeout, whether or not it also trips Blocked - goes straight to Retract (30), never a bare stop; the ram is never left sitting mid-travel. Only reaching FullTravelLimit cleanly goes to Hold (20) first, per the normal cycle. Fitted gates the supervision timer (a disabled pusher looks for no switch feedback, REQ-043) and the fault latch (raises nothing, REQ-044)."
+  COMMENT "Every abnormal exit - CycleAbort (Off commanded mid-stroke, or the plant acquired a stop reason), or a timeout, whether or not it also trips Blocked - goes straight to Retract (30), never a bare stop; the ram is never left sitting mid-travel. Only reaching FullTravelLimit cleanly goes to Hold (20) first, per the normal cycle. Fitted gates the supervision timer (a disabled pusher looks for no switch feedback, REQ-043) and the fault latch (raises nothing, REQ-044)."
   TON(EndTravelTimer, IN := IO.Fitted AND IO.Step = 10, PT := EndTravelTimeoutMS)
   COIL IO.EndTravelTimeoutFault := (EndTravelTimer.Q OR IO.EndTravelTimeoutFault AND NOT IO.FaultReset) AND IO.Fitted
-  MOVE(EN := IO.Step = 10 AND IO.Mode = 0, IN := 30) => IO.Step
-  MOVE(EN := IO.Step = 10 AND IO.Mode <> 0 AND EndTravelTimer.Q, IN := 30) => IO.Step
-  MOVE(EN := IO.Step = 10 AND IO.Mode <> 0 AND NOT EndTravelTimer.Q AND IO.Blocked, IN := 30) => IO.Step
-  MOVE(EN := IO.Step = 10 AND IO.Mode <> 0 AND NOT EndTravelTimer.Q AND NOT IO.Blocked AND IO.FullTravelLimit, IN := 20) => IO.Step
+  MOVE(EN := IO.Step = 10 AND CycleAbort, IN := 30) => IO.Step
+  MOVE(EN := IO.Step = 10 AND NOT CycleAbort AND EndTravelTimer.Q, IN := 30) => IO.Step
+  MOVE(EN := IO.Step = 10 AND NOT CycleAbort AND NOT EndTravelTimer.Q AND IO.Blocked, IN := 30) => IO.Step
+  MOVE(EN := IO.Step = 10 AND NOT CycleAbort AND NOT EndTravelTimer.Q AND NOT IO.Blocked AND IO.FullTravelLimit, IN := 20) => IO.Step
 
 NETWORK 9 "Step 20 (Hold) - Timer And Transition"
   TON(HoldTimer, IN := IO.Step = 20, PT := EndTravelHoldTimeMS)
-  MOVE(EN := (HoldTimer.Q OR IO.Mode = 0) AND IO.Step = 20, IN := 30) => IO.Step
+  MOVE(EN := (HoldTimer.Q OR CycleAbort) AND IO.Step = 20, IN := 30) => IO.Step
 
 NETWORK 10 "Step 30 (Retract) - Timer, Timeout Fault, And Transition"
   COMMENT "ParkedTimer's own Q only feeds the timeout fault, not a transition - if genuinely stuck retracting there's no safer step to force (unlike Step 10, nothing here can be aborted into); alarm-only by design, awaiting a human. Fitted gates the supervision timer and the fault latch (REQ-043/044) - a disabled pusher neither watches for the home switch nor raises the fault."

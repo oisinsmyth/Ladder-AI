@@ -811,3 +811,11 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   requests hand/jog control (REQ-038…041). Is hand a fourth mode selection, or an overlay on
   manual (or available in any mode)? The answer changes the operator-facing selection semantics
   (WHAT-level), so it needs an owner/site ruling.
+- **Q-16 — Off-mode idle repark (REQ-037 vs REQ-039).** Fix-wave-1 (owner rulings, 2026-07-16)
+  narrowed the idle repark to resolve the REQ-037/REQ-039 tension: with the ram idle but off
+  home, selecting Off no longer self-parks — repark occasions are only the plant pre-start and
+  cycle entry (both pre-warned per NEW-4), and jog release stops in place per REQ-039. Mid-cycle
+  Off still retracts and parks (REQ-037's core). **Resolved — owner ruling recorded 2026-07-16
+  (fix-wave-1 sign-off): stands as drafted; the ram parks at the next pre-start. An
+  Off-must-park-immediately behavior would need a further ruling and would itself be a warned
+  repark.**

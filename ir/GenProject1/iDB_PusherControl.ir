@@ -13,6 +13,7 @@ DB iDB_PusherControl
       HopperHighLevel : Bool
       ManualCycleCmd : Bool
       ParkCmd : Bool
+      CycleInhibit : Bool
       JogExtendCmd : Bool
       JogRetractCmd : Bool
       HomeLimit : Bool
@@ -41,6 +42,7 @@ DB iDB_PusherControl
     JogDemand : Bool
     ReparkRequest : Bool
     LaunchRequest : Bool
+    CycleAbort : Bool
     EndTravelTimeoutMS : DInt
     ParkedTimeoutMS : DInt
     EndTravelHoldTimeMS : DInt

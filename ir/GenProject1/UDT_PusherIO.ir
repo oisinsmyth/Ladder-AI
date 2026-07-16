@@ -8,6 +8,7 @@ TYPE UDT_PusherIO
     HopperHighLevel : Bool
     ManualCycleCmd : Bool
     ParkCmd : Bool COMMENT "In (FC_ControlMain, from the sequencer's PusherParkCmd): plant pre-start park request - while set, an idle off-home ram reparks to home after the pre-motion warning (REQ-045). With a live cycle request, one of the only two repark occasions (owner ruling 2026-07-16); jog release deliberately leaves the ram where it stopped (REQ-039)."
+    CycleInhibit : Bool COMMENT "In (FC_ControlMain, from the sequencer's PusherCycleInhibitCmd): the plant has a live stop reason - no cycle may launch (CycleRequest gated) and an in-flight cycle aborts to Retract and parks (CycleAbort). Hand-jog is deliberately exempt (owner amendment 2026-07-16, REQ-040): only the mode-0 force (stop button/unhealthy) blocks jogging."
     JogExtendCmd : Bool
     JogRetractCmd : Bool
     HomeLimit : Bool

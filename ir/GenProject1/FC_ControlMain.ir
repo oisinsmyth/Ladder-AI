@@ -58,6 +58,7 @@ NETWORK 5 "PusherControl Wiring"
   COIL iDB_PusherControl.IO.PowerPackRunningFB := DB_Input.Pusher_PowerPack_Running
   COIL iDB_PusherControl.IO.FaultReset := DB_Controls.FaultReset
   COIL iDB_PusherControl.IO.ParkCmd := iDB_ShredderSequencer.IO.PusherParkCmd
+  COIL iDB_PusherControl.IO.CycleInhibit := iDB_ShredderSequencer.IO.PusherCycleInhibitCmd
   MOVE(EN := TRUE, IN := iDB_ShredderSequencer.IO.PusherModeCmd) => iDB_PusherControl.IO.Mode
   MOVE(EN := TRUE, IN := DB_Settings.PusherEndTravelTimeout) => iDB_PusherControl.IO.EndTravelTimeout
   MOVE(EN := TRUE, IN := DB_Settings.PusherParkedTimeout) => iDB_PusherControl.IO.ParkedTimeout
