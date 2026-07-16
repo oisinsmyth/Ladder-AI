@@ -1,0 +1,27 @@
+DB DB_Settings
+  ROOTID 0
+  NUMBER 3
+  COMMENT "Plant/system-level tunables (C-307) - HMI/operator writes, PLC read-only (C-308). Start values are commissioning defaults (C-309). Members with no start value shown are genuinely unconfigured pending real numbers from the project owner - see the presented build notes, not a guess."
+  MEMBERS
+    PreStartSounderTime : Real RETAIN = 10.0
+    ShredderReverseRunTime : Real RETAIN = 6.0
+    InfeedRestartDelay : Real RETAIN = 5.0
+    InfeedToUpstreamEnableDelay : Real RETAIN = 3.0
+    OvercurrentSetpointMedium : Real RETAIN
+    OvercurrentSetpointHigh : Real RETAIN
+    OvercurrentMediumDelay : Real RETAIN
+    OvercurrentHighDelay : Real RETAIN
+    OvercurrentSpinUpAllowance : Real RETAIN = 3.0
+    ReversalRetryPauseTime : Real RETAIN = 4.0
+    ReversalWindowTime : Real RETAIN = 180.0
+    ReversalCountThreshold : Int RETAIN = 5
+    PressureTripConfirmTime : Real RETAIN = 0.5
+    PressureClearResumeDelay : Real RETAIN
+    PressureTripCountThreshold : Int RETAIN = 5
+    PusherEndTravelTimeout : Real RETAIN
+    PusherParkedTimeout : Real RETAIN
+    PusherEndTravelHoldTime : Real RETAIN = 2.0
+    PusherPumpRunOnTime : Real RETAIN
+    PusherJogWarningTime : Real RETAIN = 1.0
+    PusherFitted : Bool RETAIN = TRUE
+    DischargeConveyorTimeout : Real RETAIN

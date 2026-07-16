@@ -1,0 +1,6 @@
+DB DB_Alarms
+  ROOTID 0
+  NUMBER 5
+  COMMENT "Category alarms packed per Word (C-501). Bits written by FC_AlarmsMain via documented slice-access exception to C-301."
+  MEMBERS
+    ShredderAlarm0 : Word

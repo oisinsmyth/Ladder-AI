@@ -1,0 +1,174 @@
+BLOCK FC FC_AlarmsMain
+ROOTID 0
+NUMBER 4
+LANGUAGE LAD
+TITLE "Alarms Main"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "Shredder Motor - Fault/Overload Tripped - Check Soft Starter"
+  COIL DB_Alarms.ShredderAlarm0.%X0 := DB_Input.Motor_Fault
+
+NETWORK 2 "Shredder Motor - Failed To Start - Check Motor/Feedback"
+  COIL DB_Alarms.ShredderAlarm0.%X1 := iDB_MotorFwdRevSystem_Shredder.IO.FTR
+
+NETWORK 3 "Shredder Motor - Failed To Stop - Check Motor/Feedback"
+  COIL DB_Alarms.ShredderAlarm0.%X2 := iDB_MotorFwdRevSystem_Shredder.IO.FTS
+
+NETWORK 4 "Pusher - Both Switches Active Simultaneously - Check Limit Switches"
+  COIL DB_Alarms.ShredderAlarm0.%X3 := iDB_PusherControl.IO.BothSwitchesFault
+
+NETWORK 5 "Pusher - Blocked, Too Many High Pressure Trips - Reset Required"
+  COIL DB_Alarms.ShredderAlarm0.%X4 := iDB_PusherControl.IO.Blocked
+
+NETWORK 6 "Pusher - Timeout Reaching End Travel - Check Mechanism"
+  COIL DB_Alarms.ShredderAlarm0.%X5 := iDB_PusherControl.IO.EndTravelTimeoutFault
+
+NETWORK 7 "Pusher - Timeout Reaching Parked - Check Mechanism"
+  COIL DB_Alarms.ShredderAlarm0.%X6 := iDB_PusherControl.IO.ParkedTimeoutFault
+
+NETWORK 8 "Shredder - Blocked, Too Many Reversals - Reset Required"
+  COIL DB_Alarms.ShredderAlarm0.%X7 := iDB_ShredderSequencer.IO.ShredderBlockedFault
+
+NETWORK 9 "Discharge Conveyor - Timeout Starting - Check Conveyor/Feedback"
+  COIL DB_Alarms.ShredderAlarm0.%X8 := iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access DB_Input.Motor_Fault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X0 = 22 GlobalVariable
+  assignment 0
+    rail = 28
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 25
+      negated = false
+      out = 26
+    coil = 24
+    coil operand = 22
+    coil operandwire = 27
+NETWORK 2
+  compileunit = 8
+  access iDB_MotorFwdRevSystem_Shredder.IO.FTR = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X1 = 22 GlobalVariable
+  assignment 0
+    rail = 28
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 25
+      negated = false
+      out = 26
+    coil = 24
+    coil operand = 22
+    coil operandwire = 27
+NETWORK 3
+  compileunit = D
+  access iDB_MotorFwdRevSystem_Shredder.IO.FTS = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X2 = 22 GlobalVariable
+  assignment 0
+    rail = 28
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 25
+      negated = false
+      out = 26
+    coil = 24
+    coil operand = 22
+    coil operandwire = 27
+NETWORK 4
+  compileunit = 12
+  access iDB_PusherControl.IO.BothSwitchesFault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X3 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 5
+  compileunit = 17
+  access iDB_PusherControl.IO.Blocked = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X4 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 6
+  compileunit = 1C
+  access iDB_PusherControl.IO.EndTravelTimeoutFault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X5 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 7
+  compileunit = 21
+  access iDB_PusherControl.IO.ParkedTimeoutFault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X6 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 8
+  compileunit = 26
+  access iDB_ShredderSequencer.IO.ShredderBlockedFault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X7 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 9
+  compileunit = 2B
+  access iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault = 21 GlobalVariable
+  access DB_Alarms.ShredderAlarm0.%X8 = 22 GlobalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28

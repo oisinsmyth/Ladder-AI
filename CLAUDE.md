@@ -40,11 +40,13 @@ dotnet test                         # PC-side tests (openness-cli, converter, te
 
 ## Workflow for logic generation (Stage S6+)
 
-1. Confirm the request names a target block/network and the relevant equipment tags exist in `ir/<project>/`.
+Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract. The per-block inner loop:
+
+1. Confirm the request names a target block/network and the relevant equipment tags exist in `ir/<project>/` (pipeline-wide: every tag in an artifact is `exists` — verified by grep against the current export — or `proposed`; never code against `proposed`).
 2. Select patterns from `patterns/` covering the request; map real tags to slots; type-check.
 3. If >20% of the request needs freeform (non-pattern) rungs, say so and get explicit go-ahead before writing them.
 4. Write IR → convert → import to scratch → compile → iterate until clean.
-5. Present: IR diff + one-paragraph intent statement + compile evidence. Stop; the engineer takes it from there (`docs/11-review-workflow.md`).
+5. Present: IR diff + one-paragraph intent statement + compile evidence + reviewer findings. Stop; the engineer takes it from there (`docs/11-review-workflow.md`).
 
 ## Workflow for modifying existing logic (Stage S7+)
 

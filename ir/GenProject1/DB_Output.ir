@@ -1,0 +1,17 @@
+DB DB_Output
+  ROOTID 0
+  NUMBER 2
+  MEMBERS
+    Test : Array[0..18] of Bool
+    SpareDQ : Array[1..7] of Bool
+    Run_Shredder_Fwd : Bool
+    Run_Shredder_Rev : Bool
+    Run_PowerPack : Bool
+    Run_Infeed_Conv : Bool
+    Run_Discharge_Conv : Bool
+    Pusher_Extend : Bool
+    Pusher_Retract : Bool
+    In_Cycle : Bool
+    Enable_Upstream : Bool
+    PreStart_Sounder : Bool
+    Motor_Fault_Reset : Bool

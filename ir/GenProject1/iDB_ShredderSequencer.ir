@@ -1,0 +1,97 @@
+DB iDB_ShredderSequencer
+  ROOTID 0
+  NUMBER 11
+  INSTANCEOF FB_ShredderSequencer
+  INPUT
+  OUTPUT
+  MEMBERS
+    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT
+      CycleStart : Bool
+      CycleStop : Bool
+      DownstreamRunning : Bool
+      DischargeConvRunning : Bool
+      HopperLevelHigh : Bool
+      ShredderRunFwdFB : Bool
+      ShredderMotorCurrent : Real
+      MotorFaultActive : Bool
+      FaultReset : Bool
+      OperatorPusherMode : Int
+      PusherJogPreStartSounder : Bool
+      Step : Int
+      DischargeConveyorTimeoutFault : Bool
+      ShredderBlockedFault : Bool
+      RunDischargeConv : Bool
+      RunInfeedConv : Bool
+      EnableUpstream : Bool
+      PreStartSounder : Bool
+      InCycle : Bool
+      MotorReverseCmd : Bool
+      MotorAutoStartCmd : Bool
+      MotorPreStartDoneCmd : Bool
+      PusherModeCmd : Int
+    StopCmd : Bool
+    ReversalWindowTimeMS : DInt
+    PreStartSounderTimeMS : DInt
+    DischargeConveyorTimeoutMS : DInt
+    ShredderReverseRunTimeMS : DInt
+    InfeedRestartDelayMS : DInt
+    InfeedToUpstreamEnableDelayMS : DInt
+    OvercurrentSpinUpAllowanceMS : DInt
+    OvercurrentMediumDelayMS : DInt
+    OvercurrentHighDelayMS : DInt
+    ReversalRetryPauseTimeMS : DInt
+    ReversalWindowTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ReversalStepEdge : Bool
+    ReversalStepEdgeMem : Bool
+    ReversalCount : Int
+    PreStartTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    DischargeStartTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ReverseRunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InfeedRestartTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    UpstreamEnableTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InfeedRunning : Bool
+    SpinUpTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    OvercurrentMediumTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    OvercurrentHighTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    OvercurrentTripped : Bool
+    OvercurrentAbortPauseTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

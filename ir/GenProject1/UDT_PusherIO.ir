@@ -1,0 +1,33 @@
+TYPE UDT_PusherIO
+  ROOTID 0
+  MEMBERS
+    Step : Int
+    Fitted : Bool
+    Enable : Bool
+    Mode : Int
+    HopperHighLevel : Bool
+    ManualCycleCmd : Bool
+    JogExtendCmd : Bool
+    JogRetractCmd : Bool
+    HomeLimit : Bool
+    FullTravelLimit : Bool
+    HighPressure : Bool
+    PowerPackRunningFB : Bool
+    FaultReset : Bool
+    EndTravelTimeout : Real
+    ParkedTimeout : Real
+    EndTravelHoldTime : Real
+    PumpRunOnTime : Real
+    JogWarningTime : Real
+    PressureTripConfirmTime : Real
+    PressureClearResumeDelay : Real
+    PressureTripCountThreshold : Int
+    Cycling : Bool
+    Blocked : Bool
+    EndTravelTimeoutFault : Bool
+    ParkedTimeoutFault : Bool
+    BothSwitchesFault : Bool
+    RunPowerPack : Bool
+    Extend : Bool
+    Retract : Bool
+    JogPreStartSounder : Bool

@@ -10,7 +10,7 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
-**Add `docs/15-future-ideas.md` — a durable home for candidate ideas under debate**
+**Add `docs/16-future-ideas.md` — a durable home for candidate ideas under debate**
 
 - New doc fills the gap between `AITODO.md` (in-flight, ephemeral), `02-roadmap.md` (committed),
   and `10-non-goals.md` (excluded): ideas get an `FI-xx` ID, a merits/costs analysis, and a

@@ -8,6 +8,14 @@ Every rule gets an ID (`C-xxx`) so review findings can cite it, plus a severity:
 
 Site mantra: **simple, simple, simple** — the test for control logic is that an electrician with a multimeter and a spanner can look at a rung and get a rough idea of what's going on. Reuse is achieved at the *block* level (standard FBs, UDTs, the pattern library), never through cleverness inside rungs.
 
+**Priority order** (adopted 2026-07-16, ADR-0004): LAD is judged in this order — **1. Function**
+(it does what the requirement says: compile gate + functional review, later S9 sim), **2.
+Readability & simplicity** (the mantra above: simplicity review against written rules), **3.
+Efficiency** (only on a *measured* scan-time/memory problem — on an S7-1200 running plant logic,
+nearly never). "Correct but harder to read than it needs to be" is a real finding, and a reviewer
+may cite this ordering to recommend an optimization be deleted. Enforcement structure:
+`docs/15-generation-pipeline.md`.
+
 ## Naming
 
 - C-001 *(error)* — Tag naming is layered:
@@ -160,4 +168,4 @@ Site mantra: **simple, simple, simple** — the test for control logic is that a
 
 ## To fill in (owner: Oisin)
 
-Restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template.
+Restart/first-scan behaviour beyond C-403/C-305 (full OB100 contents) · reserved OB usage · alarm ack exception list template · **simplicity/readability rule set (planned C-6xx section)** — candidates drafted in `docs/notes/genproject1-retrospective.md`, enter here only after the owner's accept/reject pass.

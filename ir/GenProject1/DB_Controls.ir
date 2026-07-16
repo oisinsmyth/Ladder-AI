@@ -1,0 +1,10 @@
+DB DB_Controls
+  ROOTID 0
+  NUMBER 4
+  COMMENT "Operator/HMI command surface (C-306). Written by HMI, consumed by equipment FBs and the sequencer - not logic-internal state."
+  MEMBERS
+    PusherMode : Int
+    PusherManualCycleCmd : Bool
+    PusherJogExtendCmd : Bool
+    PusherJogRetractCmd : Bool
+    FaultReset : Bool
