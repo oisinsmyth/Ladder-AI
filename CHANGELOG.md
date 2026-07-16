@@ -10,6 +10,19 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**FI-13 implemented: `converter preflight` — static checks before any Portal round trip**
+
+- New `Preflight/` (model + project index + runner + formatter): parse/convert checks (real
+  writers — `FlgNetBuilder`/`SidecarSynthesizer`), unresolved-tag-root resolution against locals +
+  the project export dir + the batch itself, CALL-callee and `INSTANCEOF` resolution, and
+  `converter review` findings folded in (`review:C-xxx`). Explicitly labeled not-the-compile-gate
+  in every text report (hard rule 4). 9 new tests (477 green; the 12 pre-existing CRLF
+  `PatternExampleTests` failures unchanged).
+- Piloted with zero false positives: all 21 GenProject1 files resolve clean against their own
+  export (17 genuine review findings only); reference-corpus blocks reproduce the S4 pilot's known
+  findings exactly. A fixture attempt with placeholder sidecars was correctly rejected by the
+  convert check — the check catching its own test's invalid content before TIA would have.
+
 **FI-15 implemented: `converter digest` — compact structural summaries of .ir content**
 
 - New `Digest/` (model + builder + formatter, mirroring `Review/`'s shape and batch contract):
