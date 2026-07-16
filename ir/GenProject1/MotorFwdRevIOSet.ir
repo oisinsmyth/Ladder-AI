@@ -1,0 +1,36 @@
+TYPE MotorFwdRevIOSet
+  ROOTID 0
+  MEMBERS
+    InHand : Bool
+    AutoStartSignal : Bool
+    HandStartSignal : Bool
+    RunningFBFwd : Bool
+    RunningFBRev : Bool
+    FaultFB : Bool
+    SystemHealthy : Bool
+    PreStartDone : Bool
+    InhibitMotor : Bool
+    FaultReset : Bool
+    FTTime : Real
+    EnableUPSTime : Real
+    FaultActive : Bool
+    RunFwd : Bool
+    RunRev : Bool
+    UPSEnable : Bool
+    FTR : Bool
+    FTS : Bool
+    HrsRun : UDInt
+    Telemetry : Int
+    Alarm : Word
+    Name : String
+    HandIntervention : Bool
+    RecentStart : Bool
+    TryRunMotor : Bool
+    Shutdown : Bool
+    ShutdownComplete : Bool
+    ShutdownTime : Real
+    StopMotor : Bool
+    ReverseDelay : Real
+    ReverseIgnoreFT : Real
+    Reverse : Bool
+    HandReverse : Bool

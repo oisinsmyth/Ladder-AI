@@ -1,0 +1,104 @@
+DB iDB_MotorFwdRevSystem_Shredder
+  ROOTID 0
+  NUMBER 6
+  INSTANCEOF FB_MotorFwdRevSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    IO : "MotorFwdRevIOSet" RETAIN
+      InHand : Bool
+      AutoStartSignal : Bool
+      HandStartSignal : Bool
+      RunningFBFwd : Bool
+      RunningFBRev : Bool
+      FaultFB : Bool
+      SystemHealthy : Bool
+      PreStartDone : Bool
+      InhibitMotor : Bool
+      FaultReset : Bool
+      FTTime : Real
+      EnableUPSTime : Real
+      FaultActive : Bool
+      RunFwd : Bool
+      RunRev : Bool
+      UPSEnable : Bool
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm : Word
+      Name : String
+      HandIntervention : Bool
+      RecentStart : Bool
+      TryRunMotor : Bool
+      Shutdown : Bool
+      ShutdownComplete : Bool
+      ShutdownTime : Real
+      StopMotor : Bool
+      ReverseDelay : Real = 8.0
+      ReverseIgnoreFT : Real
+      Reverse : Bool
+      HandReverse : Bool
+    RisingEdgeFlags : Array[0..3] of Bool
+    NegitiveSignalEdge : Array[0..2] of Bool
+    Pasue : Bool
+    HrTotaliserTimerReset : Bool
+    EnableUPSTimeMS : DInt
+    ShutdownTimeMS : DInt
+    FTTimeMS : DInt
+    PauseTimeMS : DInt
+    ReverseIgnoreFTTimeMS : DInt
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    CycleDelayReset : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ReversalPauseTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ReversalIgnoreFTTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PreStartMemory : Bool SETPOINT
+    HandPosEdge : Bool
+    HandNegEdge : Bool
+    CycleDelay : Bool

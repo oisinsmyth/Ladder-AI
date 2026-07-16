@@ -1,0 +1,21 @@
+DB DB_Input
+  ROOTID 0
+  NUMBER 1
+  MEMBERS
+    Test : Array[0..22] of Bool
+    SpareDI : Array[1..7] of Bool
+    Control_Healthy : Bool
+    Cycle_Start : Bool
+    Cycle_Stop : Bool
+    Shredder_Run_Fwd_FB : Bool
+    Shredder_Run_Rev_FB : Bool
+    Motor_Fault : Bool
+    Hopper_Level_High : Bool
+    Infeed_Conv_Running : Bool
+    Discharge_Conv_Running : Bool
+    Pusher_PowerPack_Running : Bool
+    Pusher_Home_Limit : Bool
+    Pusher_Full_Travel_Limit : Bool
+    Pusher_High_Pressure : Bool
+    Downstream_Running : Bool
+    Pusher_Local_Remote : Bool

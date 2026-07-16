@@ -1,0 +1,26 @@
+TYPE UDT_ShredderSequencerIO
+  ROOTID 0
+  MEMBERS
+    CycleStart : Bool
+    CycleStop : Bool
+    DownstreamRunning : Bool
+    DischargeConvRunning : Bool
+    HopperLevelHigh : Bool
+    ShredderRunFwdFB : Bool
+    ShredderMotorCurrent : Real
+    MotorFaultActive : Bool
+    FaultReset : Bool
+    OperatorPusherMode : Int
+    PusherJogPreStartSounder : Bool
+    Step : Int
+    DischargeConveyorTimeoutFault : Bool
+    ShredderBlockedFault : Bool
+    RunDischargeConv : Bool
+    RunInfeedConv : Bool
+    EnableUpstream : Bool
+    PreStartSounder : Bool
+    InCycle : Bool
+    MotorReverseCmd : Bool
+    MotorAutoStartCmd : Bool
+    MotorPreStartDoneCmd : Bool
+    PusherModeCmd : Int

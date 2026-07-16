@@ -1,0 +1,754 @@
+BLOCK FC FC_ControlMain
+ROOTID 0
+NUMBER 3
+LANGUAGE LAD
+TITLE "Control Main"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "Sequencer Input Wiring"
+  COIL iDB_ShredderSequencer.IO.CycleStart := DB_Input.Cycle_Start
+  COIL iDB_ShredderSequencer.IO.CycleStop := DB_Input.Cycle_Stop
+  COIL iDB_ShredderSequencer.IO.DownstreamRunning := DB_Input.Downstream_Running
+  COIL iDB_ShredderSequencer.IO.DischargeConvRunning := DB_Input.Discharge_Conv_Running
+  COIL iDB_ShredderSequencer.IO.HopperLevelHigh := DB_Input.Hopper_Level_High
+  COIL iDB_ShredderSequencer.IO.ShredderRunFwdFB := DB_Input.Shredder_Run_Fwd_FB
+  COIL iDB_ShredderSequencer.IO.MotorFaultActive := iDB_MotorFwdRevSystem_Shredder.IO.FaultActive
+  COIL iDB_ShredderSequencer.IO.FaultReset := DB_Controls.FaultReset
+  COIL iDB_ShredderSequencer.IO.PusherJogPreStartSounder := iDB_PusherControl.IO.JogPreStartSounder
+  MOVE(EN := TRUE, IN := DB_Controls.PusherMode) => iDB_ShredderSequencer.IO.OperatorPusherMode
+  MOVE(EN := TRUE, IN := DB_AnalogInput.ShredderMotorCurrent) => iDB_ShredderSequencer.IO.ShredderMotorCurrent
+
+NETWORK 2 "Call Sequencer"
+  CALL FB_ShredderSequencer(iDB_ShredderSequencer, EN := TRUE)
+
+NETWORK 3 "MotorFwdRevSystem Wiring"
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.InHand := NOT AlwaysTrue
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.RecentStart := AlwaysTrue
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.SystemHealthy := DB_Input.Control_Healthy
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.RunningFBFwd := DB_Input.Shredder_Run_Fwd_FB
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.RunningFBRev := DB_Input.Shredder_Run_Rev_FB
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.FaultFB := DB_Input.Motor_Fault
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.FaultReset := DB_Controls.FaultReset
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.InhibitMotor := NOT AlwaysTrue
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.HandReverse := NOT AlwaysTrue
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.PreStartDone := iDB_ShredderSequencer.IO.MotorPreStartDoneCmd
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.AutoStartSignal := iDB_ShredderSequencer.IO.MotorAutoStartCmd
+  COIL iDB_MotorFwdRevSystem_Shredder.IO.Reverse := iDB_ShredderSequencer.IO.MotorReverseCmd
+
+NETWORK 4 "Call Shredder Motor"
+  CALL FB_MotorFwdRevSystem(iDB_MotorFwdRevSystem_Shredder, EN := TRUE)
+
+NETWORK 5 "PusherControl Wiring"
+  COIL iDB_PusherControl.IO.Fitted := DB_Settings.PusherFitted
+  COIL iDB_PusherControl.IO.HopperHighLevel := DB_Input.Hopper_Level_High
+  COIL iDB_PusherControl.IO.ManualCycleCmd := DB_Controls.PusherManualCycleCmd
+  COIL iDB_PusherControl.IO.JogExtendCmd := DB_Controls.PusherJogExtendCmd
+  COIL iDB_PusherControl.IO.JogRetractCmd := DB_Controls.PusherJogRetractCmd
+  COIL iDB_PusherControl.IO.HomeLimit := DB_Input.Pusher_Home_Limit
+  COIL iDB_PusherControl.IO.FullTravelLimit := DB_Input.Pusher_Full_Travel_Limit
+  COIL iDB_PusherControl.IO.HighPressure := DB_Input.Pusher_High_Pressure
+  COIL iDB_PusherControl.IO.PowerPackRunningFB := DB_Input.Pusher_PowerPack_Running
+  COIL iDB_PusherControl.IO.FaultReset := DB_Controls.FaultReset
+  MOVE(EN := TRUE, IN := iDB_ShredderSequencer.IO.PusherModeCmd) => iDB_PusherControl.IO.Mode
+  MOVE(EN := TRUE, IN := DB_Settings.PusherEndTravelTimeout) => iDB_PusherControl.IO.EndTravelTimeout
+  MOVE(EN := TRUE, IN := DB_Settings.PusherParkedTimeout) => iDB_PusherControl.IO.ParkedTimeout
+  MOVE(EN := TRUE, IN := DB_Settings.PusherEndTravelHoldTime) => iDB_PusherControl.IO.EndTravelHoldTime
+  MOVE(EN := TRUE, IN := DB_Settings.PusherPumpRunOnTime) => iDB_PusherControl.IO.PumpRunOnTime
+  MOVE(EN := TRUE, IN := DB_Settings.PusherJogWarningTime) => iDB_PusherControl.IO.JogWarningTime
+  MOVE(EN := TRUE, IN := DB_Settings.PressureTripConfirmTime) => iDB_PusherControl.IO.PressureTripConfirmTime
+  MOVE(EN := TRUE, IN := DB_Settings.PressureClearResumeDelay) => iDB_PusherControl.IO.PressureClearResumeDelay
+  MOVE(EN := TRUE, IN := DB_Settings.PressureTripCountThreshold) => iDB_PusherControl.IO.PressureTripCountThreshold
+
+NETWORK 6 "Call Pusher"
+  CALL FB_PusherControl(iDB_PusherControl, EN := TRUE)
+
+NETWORK 7 "Output Mapping"
+  COIL DB_Output.Run_Shredder_Fwd := iDB_MotorFwdRevSystem_Shredder.IO.RunFwd
+  COIL DB_Output.Run_Shredder_Rev := iDB_MotorFwdRevSystem_Shredder.IO.RunRev
+  COIL DB_Output.Run_Discharge_Conv := iDB_ShredderSequencer.IO.RunDischargeConv
+  COIL DB_Output.Run_Infeed_Conv := iDB_ShredderSequencer.IO.RunInfeedConv
+  COIL DB_Output.Enable_Upstream := iDB_ShredderSequencer.IO.EnableUpstream
+  COIL DB_Output.PreStart_Sounder := iDB_ShredderSequencer.IO.PreStartSounder
+  COIL DB_Output.In_Cycle := iDB_ShredderSequencer.IO.InCycle
+  COIL DB_Output.Motor_Fault_Reset := DB_Controls.FaultReset
+  COIL DB_Output.Pusher_Extend := iDB_PusherControl.IO.Extend
+  COIL DB_Output.Pusher_Retract := iDB_PusherControl.IO.Retract
+  COIL DB_Output.Run_PowerPack := iDB_PusherControl.IO.RunPowerPack
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access DB_Input.Cycle_Start = 21 GlobalVariable
+  access iDB_ShredderSequencer.IO.CycleStart = 22 GlobalVariable
+  access DB_Input.Cycle_Stop = 23 GlobalVariable
+  access iDB_ShredderSequencer.IO.CycleStop = 24 GlobalVariable
+  access DB_Input.Downstream_Running = 25 GlobalVariable
+  access iDB_ShredderSequencer.IO.DownstreamRunning = 26 GlobalVariable
+  access DB_Input.Discharge_Conv_Running = 27 GlobalVariable
+  access iDB_ShredderSequencer.IO.DischargeConvRunning = 28 GlobalVariable
+  access DB_Input.Hopper_Level_High = 29 GlobalVariable
+  access iDB_ShredderSequencer.IO.HopperLevelHigh = 30 GlobalVariable
+  access DB_Input.Shredder_Run_Fwd_FB = 31 GlobalVariable
+  access iDB_ShredderSequencer.IO.ShredderRunFwdFB = 32 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.FaultActive = 33 GlobalVariable
+  access iDB_ShredderSequencer.IO.MotorFaultActive = 34 GlobalVariable
+  access DB_Controls.FaultReset = 35 GlobalVariable
+  access iDB_ShredderSequencer.IO.FaultReset = 36 GlobalVariable
+  access iDB_PusherControl.IO.JogPreStartSounder = 37 GlobalVariable
+  access iDB_ShredderSequencer.IO.PusherJogPreStartSounder = 38 GlobalVariable
+  access DB_Controls.PusherMode = 39 GlobalVariable
+  access iDB_ShredderSequencer.IO.OperatorPusherMode = 40 GlobalVariable
+  access DB_AnalogInput.ShredderMotorCurrent = 41 GlobalVariable
+  access iDB_ShredderSequencer.IO.ShredderMotorCurrent = 42 GlobalVariable
+  assignment 0
+    rail = 63
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 64
+      negated = false
+      out = 65
+    coil = 44
+    coil operand = 22
+    coil operandwire = 66
+  assignment 1
+    rail = 63
+    step 0 contact
+      uid = 45
+      operand = 23
+      operandwire = 67
+      negated = false
+      out = 68
+    coil = 46
+    coil operand = 24
+    coil operandwire = 69
+  assignment 2
+    rail = 63
+    step 0 contact
+      uid = 47
+      operand = 25
+      operandwire = 70
+      negated = false
+      out = 71
+    coil = 48
+    coil operand = 26
+    coil operandwire = 72
+  assignment 3
+    rail = 63
+    step 0 contact
+      uid = 49
+      operand = 27
+      operandwire = 73
+      negated = false
+      out = 74
+    coil = 50
+    coil operand = 28
+    coil operandwire = 75
+  assignment 4
+    rail = 63
+    step 0 contact
+      uid = 51
+      operand = 29
+      operandwire = 76
+      negated = false
+      out = 77
+    coil = 52
+    coil operand = 30
+    coil operandwire = 78
+  assignment 5
+    rail = 63
+    step 0 contact
+      uid = 53
+      operand = 31
+      operandwire = 79
+      negated = false
+      out = 80
+    coil = 54
+    coil operand = 32
+    coil operandwire = 81
+  assignment 6
+    rail = 63
+    step 0 contact
+      uid = 55
+      operand = 33
+      operandwire = 82
+      negated = false
+      out = 83
+    coil = 56
+    coil operand = 34
+    coil operandwire = 84
+  assignment 7
+    rail = 63
+    step 0 contact
+      uid = 57
+      operand = 35
+      operandwire = 85
+      negated = false
+      out = 86
+    coil = 58
+    coil operand = 36
+    coil operandwire = 87
+  assignment 8
+    rail = 63
+    step 0 contact
+      uid = 59
+      operand = 37
+      operandwire = 88
+      negated = false
+      out = 89
+    coil = 60
+    coil operand = 38
+    coil operandwire = 90
+  move 0
+    moveuid = 61
+    rail = 63
+    in tag = 39 91
+    dest = 40
+    destwire = 92
+  move 1
+    moveuid = 62
+    rail = 63
+    in tag = 41 93
+    dest = 42
+    destwire = 94
+NETWORK 2
+  compileunit = 8
+  call 0
+    calluid = 21
+    blockname = FB_ShredderSequencer
+    blocktype = FB
+    rail = 23
+    instanceuid = 22
+    instancescope = GlobalVariable
+    instancepath = iDB_ShredderSequencer
+NETWORK 3
+  compileunit = D
+  access AlwaysTrue = 21 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.InHand = 22 GlobalVariable
+  access AlwaysTrue = 23 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.RecentStart = 24 GlobalVariable
+  access DB_Input.Control_Healthy = 25 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.SystemHealthy = 26 GlobalVariable
+  access DB_Input.Shredder_Run_Fwd_FB = 27 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.RunningFBFwd = 28 GlobalVariable
+  access DB_Input.Shredder_Run_Rev_FB = 29 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.RunningFBRev = 30 GlobalVariable
+  access DB_Input.Motor_Fault = 31 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.FaultFB = 32 GlobalVariable
+  access DB_Controls.FaultReset = 33 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.FaultReset = 34 GlobalVariable
+  access AlwaysTrue = 35 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.InhibitMotor = 36 GlobalVariable
+  access AlwaysTrue = 37 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.HandReverse = 38 GlobalVariable
+  access iDB_ShredderSequencer.IO.MotorPreStartDoneCmd = 39 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.PreStartDone = 40 GlobalVariable
+  access iDB_ShredderSequencer.IO.MotorAutoStartCmd = 41 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.AutoStartSignal = 42 GlobalVariable
+  access iDB_ShredderSequencer.IO.MotorReverseCmd = 43 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.Reverse = 44 GlobalVariable
+  assignment 0
+    rail = 69
+    step 0 contact
+      uid = 45
+      operand = 21
+      operandwire = 70
+      negated = true
+      out = 71
+    coil = 46
+    coil operand = 22
+    coil operandwire = 72
+  assignment 1
+    rail = 69
+    step 0 contact
+      uid = 47
+      operand = 23
+      operandwire = 73
+      negated = false
+      out = 74
+    coil = 48
+    coil operand = 24
+    coil operandwire = 75
+  assignment 2
+    rail = 69
+    step 0 contact
+      uid = 49
+      operand = 25
+      operandwire = 76
+      negated = false
+      out = 77
+    coil = 50
+    coil operand = 26
+    coil operandwire = 78
+  assignment 3
+    rail = 69
+    step 0 contact
+      uid = 51
+      operand = 27
+      operandwire = 79
+      negated = false
+      out = 80
+    coil = 52
+    coil operand = 28
+    coil operandwire = 81
+  assignment 4
+    rail = 69
+    step 0 contact
+      uid = 53
+      operand = 29
+      operandwire = 82
+      negated = false
+      out = 83
+    coil = 54
+    coil operand = 30
+    coil operandwire = 84
+  assignment 5
+    rail = 69
+    step 0 contact
+      uid = 55
+      operand = 31
+      operandwire = 85
+      negated = false
+      out = 86
+    coil = 56
+    coil operand = 32
+    coil operandwire = 87
+  assignment 6
+    rail = 69
+    step 0 contact
+      uid = 57
+      operand = 33
+      operandwire = 88
+      negated = false
+      out = 89
+    coil = 58
+    coil operand = 34
+    coil operandwire = 90
+  assignment 7
+    rail = 69
+    step 0 contact
+      uid = 59
+      operand = 35
+      operandwire = 91
+      negated = true
+      out = 92
+    coil = 60
+    coil operand = 36
+    coil operandwire = 93
+  assignment 8
+    rail = 69
+    step 0 contact
+      uid = 61
+      operand = 37
+      operandwire = 94
+      negated = true
+      out = 95
+    coil = 62
+    coil operand = 38
+    coil operandwire = 96
+  assignment 9
+    rail = 69
+    step 0 contact
+      uid = 63
+      operand = 39
+      operandwire = 97
+      negated = false
+      out = 98
+    coil = 64
+    coil operand = 40
+    coil operandwire = 99
+  assignment 10
+    rail = 69
+    step 0 contact
+      uid = 65
+      operand = 41
+      operandwire = 100
+      negated = false
+      out = 101
+    coil = 66
+    coil operand = 42
+    coil operandwire = 102
+  assignment 11
+    rail = 69
+    step 0 contact
+      uid = 67
+      operand = 43
+      operandwire = 103
+      negated = false
+      out = 104
+    coil = 68
+    coil operand = 44
+    coil operandwire = 105
+NETWORK 4
+  compileunit = 12
+  call 0
+    calluid = 21
+    blockname = FB_MotorFwdRevSystem
+    blocktype = FB
+    rail = 23
+    instanceuid = 22
+    instancescope = GlobalVariable
+    instancepath = iDB_MotorFwdRevSystem_Shredder
+NETWORK 5
+  compileunit = 17
+  access DB_Settings.PusherFitted = 21 GlobalVariable
+  access iDB_PusherControl.IO.Fitted = 22 GlobalVariable
+  access DB_Input.Hopper_Level_High = 23 GlobalVariable
+  access iDB_PusherControl.IO.HopperHighLevel = 24 GlobalVariable
+  access DB_Controls.PusherManualCycleCmd = 25 GlobalVariable
+  access iDB_PusherControl.IO.ManualCycleCmd = 26 GlobalVariable
+  access DB_Controls.PusherJogExtendCmd = 27 GlobalVariable
+  access iDB_PusherControl.IO.JogExtendCmd = 28 GlobalVariable
+  access DB_Controls.PusherJogRetractCmd = 29 GlobalVariable
+  access iDB_PusherControl.IO.JogRetractCmd = 30 GlobalVariable
+  access DB_Input.Pusher_Home_Limit = 31 GlobalVariable
+  access iDB_PusherControl.IO.HomeLimit = 32 GlobalVariable
+  access DB_Input.Pusher_Full_Travel_Limit = 33 GlobalVariable
+  access iDB_PusherControl.IO.FullTravelLimit = 34 GlobalVariable
+  access DB_Input.Pusher_High_Pressure = 35 GlobalVariable
+  access iDB_PusherControl.IO.HighPressure = 36 GlobalVariable
+  access DB_Input.Pusher_PowerPack_Running = 37 GlobalVariable
+  access iDB_PusherControl.IO.PowerPackRunningFB = 38 GlobalVariable
+  access DB_Controls.FaultReset = 39 GlobalVariable
+  access iDB_PusherControl.IO.FaultReset = 40 GlobalVariable
+  access iDB_ShredderSequencer.IO.PusherModeCmd = 41 GlobalVariable
+  access iDB_PusherControl.IO.Mode = 42 GlobalVariable
+  access DB_Settings.PusherEndTravelTimeout = 43 GlobalVariable
+  access iDB_PusherControl.IO.EndTravelTimeout = 44 GlobalVariable
+  access DB_Settings.PusherParkedTimeout = 45 GlobalVariable
+  access iDB_PusherControl.IO.ParkedTimeout = 46 GlobalVariable
+  access DB_Settings.PusherEndTravelHoldTime = 47 GlobalVariable
+  access iDB_PusherControl.IO.EndTravelHoldTime = 48 GlobalVariable
+  access DB_Settings.PusherPumpRunOnTime = 49 GlobalVariable
+  access iDB_PusherControl.IO.PumpRunOnTime = 50 GlobalVariable
+  access DB_Settings.PusherJogWarningTime = 51 GlobalVariable
+  access iDB_PusherControl.IO.JogWarningTime = 52 GlobalVariable
+  access DB_Settings.PressureTripConfirmTime = 53 GlobalVariable
+  access iDB_PusherControl.IO.PressureTripConfirmTime = 54 GlobalVariable
+  access DB_Settings.PressureClearResumeDelay = 55 GlobalVariable
+  access iDB_PusherControl.IO.PressureClearResumeDelay = 56 GlobalVariable
+  access DB_Settings.PressureTripCountThreshold = 57 GlobalVariable
+  access iDB_PusherControl.IO.PressureTripCountThreshold = 58 GlobalVariable
+  assignment 0
+    rail = 88
+    step 0 contact
+      uid = 59
+      operand = 21
+      operandwire = 89
+      negated = false
+      out = 90
+    coil = 60
+    coil operand = 22
+    coil operandwire = 91
+  assignment 1
+    rail = 88
+    step 0 contact
+      uid = 61
+      operand = 23
+      operandwire = 92
+      negated = false
+      out = 93
+    coil = 62
+    coil operand = 24
+    coil operandwire = 94
+  assignment 2
+    rail = 88
+    step 0 contact
+      uid = 63
+      operand = 25
+      operandwire = 95
+      negated = false
+      out = 96
+    coil = 64
+    coil operand = 26
+    coil operandwire = 97
+  assignment 3
+    rail = 88
+    step 0 contact
+      uid = 65
+      operand = 27
+      operandwire = 98
+      negated = false
+      out = 99
+    coil = 66
+    coil operand = 28
+    coil operandwire = 100
+  assignment 4
+    rail = 88
+    step 0 contact
+      uid = 67
+      operand = 29
+      operandwire = 101
+      negated = false
+      out = 102
+    coil = 68
+    coil operand = 30
+    coil operandwire = 103
+  assignment 5
+    rail = 88
+    step 0 contact
+      uid = 69
+      operand = 31
+      operandwire = 104
+      negated = false
+      out = 105
+    coil = 70
+    coil operand = 32
+    coil operandwire = 106
+  assignment 6
+    rail = 88
+    step 0 contact
+      uid = 71
+      operand = 33
+      operandwire = 107
+      negated = false
+      out = 108
+    coil = 72
+    coil operand = 34
+    coil operandwire = 109
+  assignment 7
+    rail = 88
+    step 0 contact
+      uid = 73
+      operand = 35
+      operandwire = 110
+      negated = false
+      out = 111
+    coil = 74
+    coil operand = 36
+    coil operandwire = 112
+  assignment 8
+    rail = 88
+    step 0 contact
+      uid = 75
+      operand = 37
+      operandwire = 113
+      negated = false
+      out = 114
+    coil = 76
+    coil operand = 38
+    coil operandwire = 115
+  assignment 9
+    rail = 88
+    step 0 contact
+      uid = 77
+      operand = 39
+      operandwire = 116
+      negated = false
+      out = 117
+    coil = 78
+    coil operand = 40
+    coil operandwire = 118
+  move 0
+    moveuid = 79
+    rail = 88
+    in tag = 41 119
+    dest = 42
+    destwire = 120
+  move 1
+    moveuid = 80
+    rail = 88
+    in tag = 43 121
+    dest = 44
+    destwire = 122
+  move 2
+    moveuid = 81
+    rail = 88
+    in tag = 45 123
+    dest = 46
+    destwire = 124
+  move 3
+    moveuid = 82
+    rail = 88
+    in tag = 47 125
+    dest = 48
+    destwire = 126
+  move 4
+    moveuid = 83
+    rail = 88
+    in tag = 49 127
+    dest = 50
+    destwire = 128
+  move 5
+    moveuid = 84
+    rail = 88
+    in tag = 51 129
+    dest = 52
+    destwire = 130
+  move 6
+    moveuid = 85
+    rail = 88
+    in tag = 53 131
+    dest = 54
+    destwire = 132
+  move 7
+    moveuid = 86
+    rail = 88
+    in tag = 55 133
+    dest = 56
+    destwire = 134
+  move 8
+    moveuid = 87
+    rail = 88
+    in tag = 57 135
+    dest = 58
+    destwire = 136
+NETWORK 6
+  compileunit = 1C
+  call 0
+    calluid = 21
+    blockname = FB_PusherControl
+    blocktype = FB
+    rail = 23
+    instanceuid = 22
+    instancescope = GlobalVariable
+    instancepath = iDB_PusherControl
+NETWORK 7
+  compileunit = 21
+  access iDB_MotorFwdRevSystem_Shredder.IO.RunFwd = 21 GlobalVariable
+  access DB_Output.Run_Shredder_Fwd = 22 GlobalVariable
+  access iDB_MotorFwdRevSystem_Shredder.IO.RunRev = 23 GlobalVariable
+  access DB_Output.Run_Shredder_Rev = 24 GlobalVariable
+  access iDB_ShredderSequencer.IO.RunDischargeConv = 25 GlobalVariable
+  access DB_Output.Run_Discharge_Conv = 26 GlobalVariable
+  access iDB_ShredderSequencer.IO.RunInfeedConv = 27 GlobalVariable
+  access DB_Output.Run_Infeed_Conv = 28 GlobalVariable
+  access iDB_ShredderSequencer.IO.EnableUpstream = 29 GlobalVariable
+  access DB_Output.Enable_Upstream = 30 GlobalVariable
+  access iDB_ShredderSequencer.IO.PreStartSounder = 31 GlobalVariable
+  access DB_Output.PreStart_Sounder = 32 GlobalVariable
+  access iDB_ShredderSequencer.IO.InCycle = 33 GlobalVariable
+  access DB_Output.In_Cycle = 34 GlobalVariable
+  access DB_Controls.FaultReset = 35 GlobalVariable
+  access DB_Output.Motor_Fault_Reset = 36 GlobalVariable
+  access iDB_PusherControl.IO.Extend = 37 GlobalVariable
+  access DB_Output.Pusher_Extend = 38 GlobalVariable
+  access iDB_PusherControl.IO.Retract = 39 GlobalVariable
+  access DB_Output.Pusher_Retract = 40 GlobalVariable
+  access iDB_PusherControl.IO.RunPowerPack = 41 GlobalVariable
+  access DB_Output.Run_PowerPack = 42 GlobalVariable
+  assignment 0
+    rail = 65
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 22
+    coil operandwire = 68
+  assignment 1
+    rail = 65
+    step 0 contact
+      uid = 45
+      operand = 23
+      operandwire = 69
+      negated = false
+      out = 70
+    coil = 46
+    coil operand = 24
+    coil operandwire = 71
+  assignment 2
+    rail = 65
+    step 0 contact
+      uid = 47
+      operand = 25
+      operandwire = 72
+      negated = false
+      out = 73
+    coil = 48
+    coil operand = 26
+    coil operandwire = 74
+  assignment 3
+    rail = 65
+    step 0 contact
+      uid = 49
+      operand = 27
+      operandwire = 75
+      negated = false
+      out = 76
+    coil = 50
+    coil operand = 28
+    coil operandwire = 77
+  assignment 4
+    rail = 65
+    step 0 contact
+      uid = 51
+      operand = 29
+      operandwire = 78
+      negated = false
+      out = 79
+    coil = 52
+    coil operand = 30
+    coil operandwire = 80
+  assignment 5
+    rail = 65
+    step 0 contact
+      uid = 53
+      operand = 31
+      operandwire = 81
+      negated = false
+      out = 82
+    coil = 54
+    coil operand = 32
+    coil operandwire = 83
+  assignment 6
+    rail = 65
+    step 0 contact
+      uid = 55
+      operand = 33
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 56
+    coil operand = 34
+    coil operandwire = 86
+  assignment 7
+    rail = 65
+    step 0 contact
+      uid = 57
+      operand = 35
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 58
+    coil operand = 36
+    coil operandwire = 89
+  assignment 8
+    rail = 65
+    step 0 contact
+      uid = 59
+      operand = 37
+      operandwire = 90
+      negated = false
+      out = 91
+    coil = 60
+    coil operand = 38
+    coil operandwire = 92
+  assignment 9
+    rail = 65
+    step 0 contact
+      uid = 61
+      operand = 39
+      operandwire = 93
+      negated = false
+      out = 94
+    coil = 62
+    coil operand = 40
+    coil operandwire = 95
+  assignment 10
+    rail = 65
+    step 0 contact
+      uid = 63
+      operand = 41
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 64
+    coil operand = 42
+    coil operandwire = 98

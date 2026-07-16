@@ -1,0 +1,6 @@
+DB DB_AnalogInput
+  ROOTID 0
+  NUMBER 9
+  COMMENT "Analog local IO buffer - separate from DB_Input per C-304 (analog IO in its own dedicated DBs). No physical channel exists yet for ShredderMotorCurrent - no AI module in the hardware table this project was built from; stays unmapped (no FC_AnalogInputMap yet) until real hardware is confirmed, per the project owner's own 'genuine analog current feedback' decision."
+  MEMBERS
+    ShredderMotorCurrent : Real

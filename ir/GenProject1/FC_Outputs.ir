@@ -1,0 +1,902 @@
+BLOCK FC FC_Outputs
+ROOTID 0
+NUMBER 2
+LANGUAGE LAD
+TITLE "Output Map"
+
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "PLC1 Built-in DQ (CPU 1214C)"
+  COIL DQ1_SHR_RunFwd := AlwaysTrue AND DB_Output.Run_Shredder_Fwd AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[1]
+  COIL DQ2_SHR_RunRev := AlwaysTrue AND DB_Output.Run_Shredder_Rev AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[2]
+  COIL DQ3_PSH_RunPowerPack := AlwaysTrue AND DB_Output.Run_PowerPack AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[3]
+  COIL DQ4_IFC_Run := AlwaysTrue AND DB_Output.Run_Infeed_Conv AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[4]
+  COIL DQ5_DIS_Run := AlwaysTrue AND DB_Output.Run_Discharge_Conv AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[5]
+  COIL DQ6_PSH_Extend := AlwaysTrue AND DB_Output.Pusher_Extend AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[6]
+  COIL DQ7_PSH_Retract := AlwaysTrue AND DB_Output.Pusher_Retract AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[7]
+  COIL DQ8_SYS_InCycle := AlwaysTrue AND DB_Output.In_Cycle AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[8]
+  COIL DQ9_SYS_EnableUpstream := AlwaysTrue AND DB_Output.Enable_Upstream AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[9]
+  COIL DQ10_SYS_PreStartSounder := AlwaysTrue AND DB_Output.PreStart_Sounder AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[10]
+
+NETWORK 2 "PLC1.1 SM1223 DQ Relay"
+  COIL DQ11_SHR_FaultReset := AlwaysTrue AND DB_Output.Motor_Fault_Reset AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[11]
+  COIL DQ12_SPR_1 := AlwaysTrue AND DB_Output.SpareDQ[1] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[12]
+  COIL DQ13_SPR_2 := AlwaysTrue AND DB_Output.SpareDQ[2] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[13]
+  COIL DQ14_SPR_3 := AlwaysTrue AND DB_Output.SpareDQ[3] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[14]
+  COIL DQ15_SPR_4 := AlwaysTrue AND DB_Output.SpareDQ[4] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[15]
+  COIL DQ16_SPR_5 := AlwaysTrue AND DB_Output.SpareDQ[5] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[16]
+  COIL DQ17_SPR_6 := AlwaysTrue AND DB_Output.SpareDQ[6] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[17]
+  COIL DQ18_SPR_7 := AlwaysTrue AND DB_Output.SpareDQ[7] AND NOT DB_Output.Test[0] OR AlwaysTrue AND DB_Output.Test[18]
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access DB_Output.Test[0] = 23 GlobalVariable
+  access DB_Output.Run_Shredder_Fwd = 22 GlobalVariable
+  access AlwaysTrue = 21 GlobalVariable
+  access DB_Output.Test[1] = 25 GlobalVariable
+  access AlwaysTrue = 24 GlobalVariable
+  access DQ1_SHR_RunFwd = 26 GlobalVariable
+  access DB_Output.Test[0] = 29 GlobalVariable
+  access DB_Output.Run_Shredder_Rev = 28 GlobalVariable
+  access AlwaysTrue = 27 GlobalVariable
+  access DB_Output.Test[2] = 31 GlobalVariable
+  access AlwaysTrue = 30 GlobalVariable
+  access DQ2_SHR_RunRev = 32 GlobalVariable
+  access DB_Output.Test[0] = 35 GlobalVariable
+  access DB_Output.Run_PowerPack = 34 GlobalVariable
+  access AlwaysTrue = 33 GlobalVariable
+  access DB_Output.Test[3] = 37 GlobalVariable
+  access AlwaysTrue = 36 GlobalVariable
+  access DQ3_PSH_RunPowerPack = 38 GlobalVariable
+  access DB_Output.Test[0] = 41 GlobalVariable
+  access DB_Output.Run_Infeed_Conv = 40 GlobalVariable
+  access AlwaysTrue = 39 GlobalVariable
+  access DB_Output.Test[4] = 43 GlobalVariable
+  access AlwaysTrue = 42 GlobalVariable
+  access DQ4_IFC_Run = 44 GlobalVariable
+  access DB_Output.Test[0] = 47 GlobalVariable
+  access DB_Output.Run_Discharge_Conv = 46 GlobalVariable
+  access AlwaysTrue = 45 GlobalVariable
+  access DB_Output.Test[5] = 49 GlobalVariable
+  access AlwaysTrue = 48 GlobalVariable
+  access DQ5_DIS_Run = 50 GlobalVariable
+  access DB_Output.Test[0] = 53 GlobalVariable
+  access DB_Output.Pusher_Extend = 52 GlobalVariable
+  access AlwaysTrue = 51 GlobalVariable
+  access DB_Output.Test[6] = 55 GlobalVariable
+  access AlwaysTrue = 54 GlobalVariable
+  access DQ6_PSH_Extend = 56 GlobalVariable
+  access DB_Output.Test[0] = 59 GlobalVariable
+  access DB_Output.Pusher_Retract = 58 GlobalVariable
+  access AlwaysTrue = 57 GlobalVariable
+  access DB_Output.Test[7] = 61 GlobalVariable
+  access AlwaysTrue = 60 GlobalVariable
+  access DQ7_PSH_Retract = 62 GlobalVariable
+  access DB_Output.Test[0] = 65 GlobalVariable
+  access DB_Output.In_Cycle = 64 GlobalVariable
+  access AlwaysTrue = 63 GlobalVariable
+  access DB_Output.Test[8] = 67 GlobalVariable
+  access AlwaysTrue = 66 GlobalVariable
+  access DQ8_SYS_InCycle = 68 GlobalVariable
+  access DB_Output.Test[0] = 71 GlobalVariable
+  access DB_Output.Enable_Upstream = 70 GlobalVariable
+  access AlwaysTrue = 69 GlobalVariable
+  access DB_Output.Test[9] = 73 GlobalVariable
+  access AlwaysTrue = 72 GlobalVariable
+  access DQ9_SYS_EnableUpstream = 74 GlobalVariable
+  access DB_Output.Test[0] = 77 GlobalVariable
+  access DB_Output.PreStart_Sounder = 76 GlobalVariable
+  access AlwaysTrue = 75 GlobalVariable
+  access DB_Output.Test[10] = 79 GlobalVariable
+  access AlwaysTrue = 78 GlobalVariable
+  access DQ10_SYS_PreStartSounder = 80 GlobalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 86
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 81
+          operand = 21
+          operandwire = 152
+          negated = false
+          out = 153
+        step 1 contact
+          uid = 82
+          operand = 22
+          operandwire = 154
+          negated = false
+          out = 155
+        step 2 contact
+          uid = 83
+          operand = 23
+          operandwire = 156
+          negated = true
+          out = 157
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 84
+          operand = 24
+          operandwire = 158
+          negated = false
+          out = 159
+        step 1 contact
+          uid = 85
+          operand = 25
+          operandwire = 160
+          negated = false
+          out = 161
+      out = 162
+    coil = 87
+    coil operand = 26
+    coil operandwire = 163
+  assignment 1
+    rail = none
+    step 0 or
+      uid = 93
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 88
+          operand = 27
+          operandwire = 164
+          negated = false
+          out = 165
+        step 1 contact
+          uid = 89
+          operand = 28
+          operandwire = 166
+          negated = false
+          out = 167
+        step 2 contact
+          uid = 90
+          operand = 29
+          operandwire = 168
+          negated = true
+          out = 169
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 91
+          operand = 30
+          operandwire = 170
+          negated = false
+          out = 171
+        step 1 contact
+          uid = 92
+          operand = 31
+          operandwire = 172
+          negated = false
+          out = 173
+      out = 174
+    coil = 94
+    coil operand = 32
+    coil operandwire = 175
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 100
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 95
+          operand = 33
+          operandwire = 176
+          negated = false
+          out = 177
+        step 1 contact
+          uid = 96
+          operand = 34
+          operandwire = 178
+          negated = false
+          out = 179
+        step 2 contact
+          uid = 97
+          operand = 35
+          operandwire = 180
+          negated = true
+          out = 181
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 98
+          operand = 36
+          operandwire = 182
+          negated = false
+          out = 183
+        step 1 contact
+          uid = 99
+          operand = 37
+          operandwire = 184
+          negated = false
+          out = 185
+      out = 186
+    coil = 101
+    coil operand = 38
+    coil operandwire = 187
+  assignment 3
+    rail = none
+    step 0 or
+      uid = 107
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 102
+          operand = 39
+          operandwire = 188
+          negated = false
+          out = 189
+        step 1 contact
+          uid = 103
+          operand = 40
+          operandwire = 190
+          negated = false
+          out = 191
+        step 2 contact
+          uid = 104
+          operand = 41
+          operandwire = 192
+          negated = true
+          out = 193
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 105
+          operand = 42
+          operandwire = 194
+          negated = false
+          out = 195
+        step 1 contact
+          uid = 106
+          operand = 43
+          operandwire = 196
+          negated = false
+          out = 197
+      out = 198
+    coil = 108
+    coil operand = 44
+    coil operandwire = 199
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 114
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 109
+          operand = 45
+          operandwire = 200
+          negated = false
+          out = 201
+        step 1 contact
+          uid = 110
+          operand = 46
+          operandwire = 202
+          negated = false
+          out = 203
+        step 2 contact
+          uid = 111
+          operand = 47
+          operandwire = 204
+          negated = true
+          out = 205
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 112
+          operand = 48
+          operandwire = 206
+          negated = false
+          out = 207
+        step 1 contact
+          uid = 113
+          operand = 49
+          operandwire = 208
+          negated = false
+          out = 209
+      out = 210
+    coil = 115
+    coil operand = 50
+    coil operandwire = 211
+  assignment 5
+    rail = none
+    step 0 or
+      uid = 121
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 116
+          operand = 51
+          operandwire = 212
+          negated = false
+          out = 213
+        step 1 contact
+          uid = 117
+          operand = 52
+          operandwire = 214
+          negated = false
+          out = 215
+        step 2 contact
+          uid = 118
+          operand = 53
+          operandwire = 216
+          negated = true
+          out = 217
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 119
+          operand = 54
+          operandwire = 218
+          negated = false
+          out = 219
+        step 1 contact
+          uid = 120
+          operand = 55
+          operandwire = 220
+          negated = false
+          out = 221
+      out = 222
+    coil = 122
+    coil operand = 56
+    coil operandwire = 223
+  assignment 6
+    rail = none
+    step 0 or
+      uid = 128
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 123
+          operand = 57
+          operandwire = 224
+          negated = false
+          out = 225
+        step 1 contact
+          uid = 124
+          operand = 58
+          operandwire = 226
+          negated = false
+          out = 227
+        step 2 contact
+          uid = 125
+          operand = 59
+          operandwire = 228
+          negated = true
+          out = 229
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 126
+          operand = 60
+          operandwire = 230
+          negated = false
+          out = 231
+        step 1 contact
+          uid = 127
+          operand = 61
+          operandwire = 232
+          negated = false
+          out = 233
+      out = 234
+    coil = 129
+    coil operand = 62
+    coil operandwire = 235
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 135
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 130
+          operand = 63
+          operandwire = 236
+          negated = false
+          out = 237
+        step 1 contact
+          uid = 131
+          operand = 64
+          operandwire = 238
+          negated = false
+          out = 239
+        step 2 contact
+          uid = 132
+          operand = 65
+          operandwire = 240
+          negated = true
+          out = 241
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 133
+          operand = 66
+          operandwire = 242
+          negated = false
+          out = 243
+        step 1 contact
+          uid = 134
+          operand = 67
+          operandwire = 244
+          negated = false
+          out = 245
+      out = 246
+    coil = 136
+    coil operand = 68
+    coil operandwire = 247
+  assignment 8
+    rail = none
+    step 0 or
+      uid = 142
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 137
+          operand = 69
+          operandwire = 248
+          negated = false
+          out = 249
+        step 1 contact
+          uid = 138
+          operand = 70
+          operandwire = 250
+          negated = false
+          out = 251
+        step 2 contact
+          uid = 139
+          operand = 71
+          operandwire = 252
+          negated = true
+          out = 253
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 140
+          operand = 72
+          operandwire = 254
+          negated = false
+          out = 255
+        step 1 contact
+          uid = 141
+          operand = 73
+          operandwire = 256
+          negated = false
+          out = 257
+      out = 258
+    coil = 143
+    coil operand = 74
+    coil operandwire = 259
+  assignment 9
+    rail = none
+    step 0 or
+      uid = 149
+      branch 0
+        rail = 151
+        step 0 contact
+          uid = 144
+          operand = 75
+          operandwire = 260
+          negated = false
+          out = 261
+        step 1 contact
+          uid = 145
+          operand = 76
+          operandwire = 262
+          negated = false
+          out = 263
+        step 2 contact
+          uid = 146
+          operand = 77
+          operandwire = 264
+          negated = true
+          out = 265
+      branch 1
+        rail = 151
+        step 0 contact
+          uid = 147
+          operand = 78
+          operandwire = 266
+          negated = false
+          out = 267
+        step 1 contact
+          uid = 148
+          operand = 79
+          operandwire = 268
+          negated = false
+          out = 269
+      out = 270
+    coil = 150
+    coil operand = 80
+    coil operandwire = 271
+NETWORK 2
+  compileunit = 8
+  access DB_Output.Test[0] = 23 GlobalVariable
+  access DB_Output.Motor_Fault_Reset = 22 GlobalVariable
+  access AlwaysTrue = 21 GlobalVariable
+  access DB_Output.Test[11] = 25 GlobalVariable
+  access AlwaysTrue = 24 GlobalVariable
+  access DQ11_SHR_FaultReset = 26 GlobalVariable
+  access DB_Output.Test[0] = 29 GlobalVariable
+  access DB_Output.SpareDQ[1] = 28 GlobalVariable
+  access AlwaysTrue = 27 GlobalVariable
+  access DB_Output.Test[12] = 31 GlobalVariable
+  access AlwaysTrue = 30 GlobalVariable
+  access DQ12_SPR_1 = 32 GlobalVariable
+  access DB_Output.Test[0] = 35 GlobalVariable
+  access DB_Output.SpareDQ[2] = 34 GlobalVariable
+  access AlwaysTrue = 33 GlobalVariable
+  access DB_Output.Test[13] = 37 GlobalVariable
+  access AlwaysTrue = 36 GlobalVariable
+  access DQ13_SPR_2 = 38 GlobalVariable
+  access DB_Output.Test[0] = 41 GlobalVariable
+  access DB_Output.SpareDQ[3] = 40 GlobalVariable
+  access AlwaysTrue = 39 GlobalVariable
+  access DB_Output.Test[14] = 43 GlobalVariable
+  access AlwaysTrue = 42 GlobalVariable
+  access DQ14_SPR_3 = 44 GlobalVariable
+  access DB_Output.Test[0] = 47 GlobalVariable
+  access DB_Output.SpareDQ[4] = 46 GlobalVariable
+  access AlwaysTrue = 45 GlobalVariable
+  access DB_Output.Test[15] = 49 GlobalVariable
+  access AlwaysTrue = 48 GlobalVariable
+  access DQ15_SPR_4 = 50 GlobalVariable
+  access DB_Output.Test[0] = 53 GlobalVariable
+  access DB_Output.SpareDQ[5] = 52 GlobalVariable
+  access AlwaysTrue = 51 GlobalVariable
+  access DB_Output.Test[16] = 55 GlobalVariable
+  access AlwaysTrue = 54 GlobalVariable
+  access DQ16_SPR_5 = 56 GlobalVariable
+  access DB_Output.Test[0] = 59 GlobalVariable
+  access DB_Output.SpareDQ[6] = 58 GlobalVariable
+  access AlwaysTrue = 57 GlobalVariable
+  access DB_Output.Test[17] = 61 GlobalVariable
+  access AlwaysTrue = 60 GlobalVariable
+  access DQ17_SPR_6 = 62 GlobalVariable
+  access DB_Output.Test[0] = 65 GlobalVariable
+  access DB_Output.SpareDQ[7] = 64 GlobalVariable
+  access AlwaysTrue = 63 GlobalVariable
+  access DB_Output.Test[18] = 67 GlobalVariable
+  access AlwaysTrue = 66 GlobalVariable
+  access DQ18_SPR_7 = 68 GlobalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 74
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 69
+          operand = 21
+          operandwire = 126
+          negated = false
+          out = 127
+        step 1 contact
+          uid = 70
+          operand = 22
+          operandwire = 128
+          negated = false
+          out = 129
+        step 2 contact
+          uid = 71
+          operand = 23
+          operandwire = 130
+          negated = true
+          out = 131
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 72
+          operand = 24
+          operandwire = 132
+          negated = false
+          out = 133
+        step 1 contact
+          uid = 73
+          operand = 25
+          operandwire = 134
+          negated = false
+          out = 135
+      out = 136
+    coil = 75
+    coil operand = 26
+    coil operandwire = 137
+  assignment 1
+    rail = none
+    step 0 or
+      uid = 81
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 76
+          operand = 27
+          operandwire = 138
+          negated = false
+          out = 139
+        step 1 contact
+          uid = 77
+          operand = 28
+          operandwire = 140
+          negated = false
+          out = 141
+        step 2 contact
+          uid = 78
+          operand = 29
+          operandwire = 142
+          negated = true
+          out = 143
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 79
+          operand = 30
+          operandwire = 144
+          negated = false
+          out = 145
+        step 1 contact
+          uid = 80
+          operand = 31
+          operandwire = 146
+          negated = false
+          out = 147
+      out = 148
+    coil = 82
+    coil operand = 32
+    coil operandwire = 149
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 88
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 83
+          operand = 33
+          operandwire = 150
+          negated = false
+          out = 151
+        step 1 contact
+          uid = 84
+          operand = 34
+          operandwire = 152
+          negated = false
+          out = 153
+        step 2 contact
+          uid = 85
+          operand = 35
+          operandwire = 154
+          negated = true
+          out = 155
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 86
+          operand = 36
+          operandwire = 156
+          negated = false
+          out = 157
+        step 1 contact
+          uid = 87
+          operand = 37
+          operandwire = 158
+          negated = false
+          out = 159
+      out = 160
+    coil = 89
+    coil operand = 38
+    coil operandwire = 161
+  assignment 3
+    rail = none
+    step 0 or
+      uid = 95
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 90
+          operand = 39
+          operandwire = 162
+          negated = false
+          out = 163
+        step 1 contact
+          uid = 91
+          operand = 40
+          operandwire = 164
+          negated = false
+          out = 165
+        step 2 contact
+          uid = 92
+          operand = 41
+          operandwire = 166
+          negated = true
+          out = 167
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 93
+          operand = 42
+          operandwire = 168
+          negated = false
+          out = 169
+        step 1 contact
+          uid = 94
+          operand = 43
+          operandwire = 170
+          negated = false
+          out = 171
+      out = 172
+    coil = 96
+    coil operand = 44
+    coil operandwire = 173
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 102
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 97
+          operand = 45
+          operandwire = 174
+          negated = false
+          out = 175
+        step 1 contact
+          uid = 98
+          operand = 46
+          operandwire = 176
+          negated = false
+          out = 177
+        step 2 contact
+          uid = 99
+          operand = 47
+          operandwire = 178
+          negated = true
+          out = 179
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 100
+          operand = 48
+          operandwire = 180
+          negated = false
+          out = 181
+        step 1 contact
+          uid = 101
+          operand = 49
+          operandwire = 182
+          negated = false
+          out = 183
+      out = 184
+    coil = 103
+    coil operand = 50
+    coil operandwire = 185
+  assignment 5
+    rail = none
+    step 0 or
+      uid = 109
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 104
+          operand = 51
+          operandwire = 186
+          negated = false
+          out = 187
+        step 1 contact
+          uid = 105
+          operand = 52
+          operandwire = 188
+          negated = false
+          out = 189
+        step 2 contact
+          uid = 106
+          operand = 53
+          operandwire = 190
+          negated = true
+          out = 191
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 107
+          operand = 54
+          operandwire = 192
+          negated = false
+          out = 193
+        step 1 contact
+          uid = 108
+          operand = 55
+          operandwire = 194
+          negated = false
+          out = 195
+      out = 196
+    coil = 110
+    coil operand = 56
+    coil operandwire = 197
+  assignment 6
+    rail = none
+    step 0 or
+      uid = 116
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 111
+          operand = 57
+          operandwire = 198
+          negated = false
+          out = 199
+        step 1 contact
+          uid = 112
+          operand = 58
+          operandwire = 200
+          negated = false
+          out = 201
+        step 2 contact
+          uid = 113
+          operand = 59
+          operandwire = 202
+          negated = true
+          out = 203
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 114
+          operand = 60
+          operandwire = 204
+          negated = false
+          out = 205
+        step 1 contact
+          uid = 115
+          operand = 61
+          operandwire = 206
+          negated = false
+          out = 207
+      out = 208
+    coil = 117
+    coil operand = 62
+    coil operandwire = 209
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 123
+      branch 0
+        rail = 125
+        step 0 contact
+          uid = 118
+          operand = 63
+          operandwire = 210
+          negated = false
+          out = 211
+        step 1 contact
+          uid = 119
+          operand = 64
+          operandwire = 212
+          negated = false
+          out = 213
+        step 2 contact
+          uid = 120
+          operand = 65
+          operandwire = 214
+          negated = true
+          out = 215
+      branch 1
+        rail = 125
+        step 0 contact
+          uid = 121
+          operand = 66
+          operandwire = 216
+          negated = false
+          out = 217
+        step 1 contact
+          uid = 122
+          operand = 67
+          operandwire = 218
+          negated = false
+          out = 219
+      out = 220
+    coil = 124
+    coil operand = 68
+    coil operandwire = 221
