@@ -4081,3 +4081,98 @@ CLAUDE.md's command block also gained `converter review` alongside the two new v
 never been listed there despite existing since S4; the operating manual now names every converter
 verb that exists. FI entries in docs/16 updated with adoption pointers per that doc's lifecycle.
 FI-07 (Portal janitor) remains the next new build, pending the owner's go-ahead.
+
+## S6: four-stream parallel batch — reviewer suite complete, corpus corrected, plant-level findings (2026-07-16)
+
+Owner-directed batch: FI-07 parked (owner's call — trust stays user-side at prototype stage;
+docs/16 carries the reasoning + revisit trigger), and the parallel-safe work identified and run as
+**four plan agents → owner approval → four executor agents in isolated worktrees**, zero Portal
+anywhere, shared housekeeping centralized into this consolidation. Transient API errors
+interrupted three runs; all resumed from transcript with no work lost. The auto-mode permission
+classifier twice paused launches pending visible owner sign-off (site-doc access; admitted-
+pattern edits) — the owner's explicit "I approve of these agents" message resolved both, a
+correct-shaped check worth remembering when orchestrating.
+
+**Stream A — `review-conventions` (pipeline skill #9): built + blind-validated.** Wraps
+`converter review` verbatim (anti-drift contract: the tool's findings are embedded never
+re-derived; disagreement = converter bug report — the blind run correctly filed one: C-003's
+`iDB_<FBName>_<Instance>` sub-clause is unenforced) + a four-group AI pass (bucket-A grep sweeps
+with self-retiring NotApplicable-gap hand-checks, bucket-B cross-block tables, bucket-C judgment
+items, standing declines). Validation: fresh-context run over both corpora — **drift check passed
+byte-identically (46/46 findings, 315/315 rule-status lines)**, all nine must-finds + both
+should-finds found, all four negative controls held. `docs/notes/review-conventions-validation-
+2026-07-16.md`. New tier-1 candidates from its run: `FaultFB` COIL-vs-RCOIL conflict, step-40
+missing dwell timer, unset motor timing start values.
+
+**Stream B — requirements register + `review-functional` (pipeline skills #1-output + #10): built
++ two-phase-validated.** `gen/GenProject1/requirements.md` — the first pipeline artifact ever —
+69 REQs + 15 open questions from the genericized Kestrel spec (`manual:gen-spec-analysis`;
+contamination rule enforced: REQ text only from sources, corpus touched for tag-status greps
+only; both commits gated by the real-name scan — 0 hits/14 keys, counts-only evidence). First
+telemetry rows live in `gen/GenProject1/telemetry.log`. Validation phase 1 ran against the
+**pre-fix corpus** (19b2022~1): both owner-ruled bugs independently rediscovered blind (In_Cycle
+`unimplemented`, DI4 `contradicted` with the exact inversion mechanism) — the arc catches what it
+was built to catch. Phase 2 (current corpus): both fixes regression-positive. `docs/notes/
+review-functional-validation-2026-07-16.md`.
+
+**The functional review's plant-level verdict (69 REQs: 28 implemented / 18 partial / 11 disarmed
+/ 7 unimplemented / 4 contradicted / 1 out-of-scope confirmed), all statically traced — owner
+rulings queued in AITODO:** the build as committed **cannot start** (nine unconfigured
+`DB_Settings` zeros are live: `DischargeConveyorTimeout`=0 aborts the start sequence at step 20;
+the imported iDB's own `FTTime`=0 latches fail-to-run one scan into any motor start — a source
+the register's Q-02 didn't cover); the shredder **can never run in reverse** (the generated 6 s
+step-30 window sits entirely inside the imported FB's 8 s rising-edge reversal pause — structural,
+survives any Q-02 configuration; also hollows the overcurrent retry's jam-clearing); **E-stop
+recovery auto-restarts the plant** siren-less (no healthy member in the sequencer UDT +
+`RecentStart := AlwaysTrue` strap defeating the imported FB's press-to-arm semantics); the
+**pusher is exempt from the stop command** (no stop/healthy input in its UDT — a mid-cycle stroke
+completes after a stop press); jog release **auto-retracts** instead of stopping in place; a
+**disabled pusher still runs its power pack and raises faults** (`Fitted` gates only cycle
+launches). Six new owner questions (NEW-1…NEW-6) recorded in the validation note.
+
+**Stream C — TYPE/UDT member comments + recursive `TypeIr` (converter): built, 11 new tests,
+491/491.** `WriteTypeMember` now emits comments via the same helper as the proven `WriteMember`
+shape (TODO(live-verify): no `SW.Types.PlcStruct` member-comment example exists in any committed
+export — a later Portal task proves or loudly refutes it); two silent-corruption bugs fixed
+(`ParseTypeMember` dropped comments; `TypeIr` flattened nested members — **which also proves the
+earlier "sub-struct structure converts cleanly" note was a false pass**: output was structurally
+wrong, and the orphaned live leg would have caught it); sanitizer extended to member comments;
+`ir/SPEC.md` gains the TYPE/STATIC COMMENT grammar + the index-paired MUL/CONVERT subsection
+(closing C-126's dangling pointer, `SidecarSynthesizer` claim verified in code).
+
+**Correction to this file's own 2026-07-16 "member comments absent from ALL fresh exports —
+persistence unproven, possibly broken" claim: wrong, and withdrawn.** Stream C proved the
+committed FB XML exports carried all five member comments per FB the whole time (TIA persisted
+them fine), and no converter drop path exists in current code — the committed corpus `.ir` was
+stale because the original corpus conversion ran with the then-outdated **Release** binary (the
+same stale binary that lacked the `review` verb), which predated member-comment support and
+silently ignored the elements. Corpus repaired by regenerating both FB `.ir` files from their
+committed XMLs (commit `a11c6c4`; the only delta: 5 COMMENT tokens per FB; mechanical review
+count unchanged at 17). This also **resolves the blind simplicity run's "dangling member-comment
+pointers" finding: the pointers were valid; the medium was lying.** What remains genuinely open
+for the Portal batch is only the UDT-position (`SW.Types.PlcStruct`) shape + persistence.
+
+**Stream D — motor-dol pattern C-126/C-201 fix: complete, after a textbook stop.** The stream's
+own pre-edit provenance gate refused to proceed: the committed `MotorStarter.xml` twin was never
+`to-xml` output — it was a `converter sanitize` product preserving TIA's document order (proven
+by building the converter at the twin's own admission commit: byte-identical emission to today's;
+UId multisets identical; a pure document-order permutation). Owner ruling: regenerate the twin as
+its own reviewed commit (`05996de`) making `to-xml` the canonical provenance permanently; the
+rerun then landed the 2-line edit exactly as predicted (`fb9f583`: N4 titled, N6 scheme comment;
+.xml diff exactly the two MultilingualText values; full-cycle fixed point; review delta exactly
+one finding cleared; pattern.md "Post-admission changes" records the sign-off).
+
+**Batch-wide environment fix (owner-approved):** fresh worktrees materialized `*.ir`/`*.xml` as
+CRLF (system `core.autocrlf=true`), failing all 12 byte-comparing pattern tests in any fresh
+worktree and biting master during the Stream D merge. `.gitattributes` now pins both to `eol=lf`
+(`f737fb9`); index content was already LF everywhere.
+
+**State after consolidation:** all four reviewer-adjacent skills exist (`explain-plc-block`,
+`review-simplicity`, `review-conventions`, `review-functional`); docs/15 build-order steps 0–4
+done; suites green (converter 491/491, openness-cli 101/101, golden 14/14). Next: owner rulings
+on the functional-findings wave → a GenProject1 fix request (the settings zeros + structural
+items are S6 sandbox iteration with the now-standing invariance discipline); `gen-architecture`
+(build-order step 5); the deferred Portal batch (UDT member-comment live verify + sub-struct
+re-run, now meaningful post-TypeIr-fix). The blind-run independence caveat stands batch-wide:
+blind executors, non-blind examiners — the S4-style owner-independent comparison remains the
+stronger form if wanted before gate-grade reliance.

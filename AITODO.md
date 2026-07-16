@@ -100,12 +100,34 @@ now in doc 06's preamble.
       playbook first-lookup on compile failures, digest policy per stage (reviewers full-IR
       always), telemetry line per stage run — CLAUDE.md + docs/15 + docs/16 pointers; both new
       verbs verified live against the corpus first. Release converter rebuilt post-merge.
-- [ ] FI-07 `openness-cli cleanup` (Portal-instance janitor) — next new build, owner go-ahead
-      pending from the priority-list discussion; FI-05 (blind-draft gap) scheduled as its own
-      session after
-- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass)
-- [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
-      `generate` orchestrator
+- [x] FI-07: **Parked** by owner (2026-07-16) — trust stays user-side at prototype stage; revisit
+      trigger in docs/16
+- [x] **Four-stream parallel batch complete (2026-07-16)** — plan agents → owner approval →
+      worktree executors; all merged, suites green (converter 491/491, cli 101/101, golden 14/14).
+      Full record: stage-gates "four-stream parallel batch" entry. Delivered: `review-conventions`
+      (blind-validated, drift check byte-identical), `review-functional` + the 69-REQ requirements
+      register (`gen/GenProject1/`, first pipeline artifacts + telemetry rows; two-phase validation
+      incl. the pre-fix-corpus regression that blindly re-caught both known bugs), converter
+      TYPE/UDT member comments + recursive TypeIr + sanitizer coverage + SPEC pairing note,
+      motor-dol pattern C-126/C-201 fix (after the twin-provenance stop → owner-ruled regeneration
+      `05996de`), `.gitattributes` eol=lf pin, corpus repair `a11c6c4` (stale-binary member-comment
+      loss — stage-gates persistence claim corrected/withdrawn)
+- [ ] **OWNER RULINGS QUEUE — the functional-findings wave** (evidence:
+      `docs/notes/review-functional-validation-2026-07-16.md` §2 + the register's Q-01…Q-15 +
+      NEW-1…NEW-6; also `review-conventions-validation-2026-07-16.md` §2 follow-ups):
+      (1) the nine live-zero settings incl. imported iDB `FTTime`/`ReverseIgnoreFT` — plant cannot
+      start as committed; (2) reverse-run ownership: 6 s step window vs 8 s motor pause — reverse
+      never runs (structural); (3) E-stop recovery auto-restart + the `RecentStart := AlwaysTrue`
+      strap; (4) pusher exempt from stop-all; (5) jog-release auto-retract vs stop-in-place;
+      (6) disabled-pusher power-pack/fault contradictions; (7) restart posture (RETAIN Step, no
+      OB100 — ties to the standing demo-panel waiver); (8) smaller items: FaultFB reset conflict,
+      step-40 dwell, jog-while-Blocked, unwarned pusher motion, C-502 scale-down
+- [ ] After rulings: **GenProject1 functional-fix request** (S6 sandbox iteration; invariance
+      discipline as per the InCycle/DI4 precedent; settings rework + InCycle member removal fold in)
+- [ ] `gen-architecture` (docs/15 build-order step 5 — next skill build)
+- [ ] **Portal batch** (sequenced, one at a time): UDT member-comment live verify
+      (`SW.Types.PlcStruct` shape + persistence), sub-struct live round-trip re-run (meaningful
+      now that TypeIr recursion is fixed), then the settings-rework import wave
 
 **Converter work queue (grew this session):** TYPE/UDT member-comment support (hard-blocked:
 `UnsupportedConstructException`; C-605 error-severity is unsatisfiable on interface UDTs until

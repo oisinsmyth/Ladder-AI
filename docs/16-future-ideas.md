@@ -99,7 +99,11 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — a natural candidate for the first S8 harvest that touches edge-detected logic.
 
 ### FI-07 — `openness-cli cleanup`: a Portal-instance janitor
-- **Status:** Raised
+- **Status:** Parked (owner, 2026-07-16) — "trust is user-side" for now (the manual tasklist
+  mitigation stands); the project is at prototype stage, and further CLI/Portal churn could
+  invalidate careful janitor testing while fresh test subjects are scarce. **Revisit trigger:**
+  post-prototype — when the Portal-session tooling stabilizes (e.g. FI-12's fate is decided) and
+  real generation work is producing enough Portal sessions to test against.
 - **Raised:** 2026-07-16 · **Source:** CLAUDE.md environment notes — stale Portal-process pileup is the confirmed correlate of "second instance won't connect" (2026-07-14 stability audit), with a manual `tasklist`-and-close mitigation.
 **Merits:** `LaunchedInstanceRegistry` already knows which processes the tool launched, so a command that lists/closes only its own idle instances automates the standing mitigation without ever touching a human's window.
 **Costs / risks:** Process-killing is the CLI's second irreversible operation; needs the same `--yes` dry-run/confirm pattern as `delete`. "Idle" needs a safe definition — a Portal mid-compile must never be killed.

@@ -10,6 +10,24 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**Four-stream parallel batch: reviewer suite complete; corpus corrected; plant-level findings**
+
+- Ran as plan agents -> owner approval -> four executor agents in isolated worktrees (zero
+  Portal). Delivered: `review-conventions` skill (blind-validated; drift check byte-identical);
+  `review-functional` skill + the first pipeline artifacts (gen/GenProject1/: 69-REQ requirements
+  register + telemetry rows; two-phase validation - the pre-fix-corpus phase blindly re-caught
+  both known bugs); converter TYPE/UDT member-comment support + recursive TypeIr (two silent-loss
+  bugs fixed) + sanitizer coverage + SPEC pairing note (491/491); motor-dol pattern C-126/C-201
+  fix, landed after its provenance gate exposed that the committed twin was a sanitize product -
+  owner-ruled regeneration (05996de) made to-xml canonical.
+- Corrections: stage-gates' member-comment "persistence possibly broken" claim withdrawn - TIA
+  persisted them; the corpus .ir was stale from the outdated Release binary; both FB .ir files
+  regenerated (a11c6c4). CRLF worktree materialization pinned via .gitattributes eol=lf (f737fb9).
+- The functional review's plant-level verdict on the "working" build (28/18/11/7/4/1 over 69
+  REQs): cannot start as committed (live-zero settings), reverse never runs (6s window inside the
+  8s motor pause), E-stop recovery auto-restarts, pusher exempt from stop-all, disabled-pusher
+  contradictions. Owner-rulings queue in AITODO. FI-07 parked (owner) with revisit trigger.
+
 **Tier-1 FI adoption: preflight/playbook/digest/telemetry wired into the S6 loop (docs-only)**
 
 - CLAUDE.md workflow step 4: `converter preflight` mandatory before every import (zero-findings
