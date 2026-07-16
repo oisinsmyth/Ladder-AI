@@ -10,6 +10,20 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**Future-ideas doc: renumber 15 → 16 (master claimed 15 for the generation pipeline); add FI-06…FI-16**
+
+- Renumbered to `docs/16-future-ideas.md` after `docs/15-generation-pipeline.md` (ADR-0004) landed
+  on master; index row and `10-non-goals.md` cross-reference updated to match.
+- Eleven new entries, all awaiting owner review. From conversation suggestions: FI-06 constructed
+  edge-detection as a fourth pattern kind, FI-07 `openness-cli cleanup` Portal-instance janitor,
+  FI-08 engineer-side approval path for proposed tags, FI-09 convention rules Phase 2, FI-10
+  HMI-importable alarm exports from S5, FI-11 presentation-bundling tool (largely absorbed by
+  pipeline skill 13 — recorded with that noted). On generation/token-usage/response-speed: FI-12
+  persistent Portal session or batch mode for the import–compile inner loop, FI-13 static
+  pre-flight gate before Portal round trips, FI-14 compile-error→fix playbook, FI-15 generated
+  block digests for cheap structural context, FI-16 per-stage token/latency telemetry. Entries
+  written against ADR-0004's pipeline so they complement rather than duplicate it.
+
 **Add `docs/16-future-ideas.md` — a durable home for candidate ideas under debate**
 
 - New doc fills the gap between `AITODO.md` (in-flight, ephemeral), `02-roadmap.md` (committed),
