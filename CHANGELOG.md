@@ -10,6 +10,14 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**FI-14 implemented: `docs/notes/compile-error-playbook.md`**
+
+- 19 grounded error→fix entries curated from `openness-quirks.md`, `stage-gates.md`, `CHANGELOG.md`,
+  and CLAUDE.md's environment notes, keyed by verbatim message fragment (or symptom), grouped by
+  cycle stage (compile / import / connect-open-export). Every entry cites its dated source; header
+  states the discipline — entries are hypotheses to verify in context, and only proven fixes get
+  recorded. No existing file modified; curation only.
+
 **Future-ideas doc: renumber 15 → 16 (master claimed 15 for the generation pipeline); add FI-06…FI-16**
 
 - Renumbered to `docs/16-future-ideas.md` after `docs/15-generation-pipeline.md` (ADR-0004) landed
