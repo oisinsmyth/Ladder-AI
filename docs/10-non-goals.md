@@ -1,6 +1,6 @@
 # 10 — Non-Goals & Hard Exclusions
 
-Explicit list of what this project will not do. "Permanent" items are never revisited; "not now" items may become goals later by conscious decision (with an ADR), never by drift.
+Explicit list of what this project will not do. "Permanent" items are never revisited; "not now" items may become goals later by conscious decision (with an ADR), never by drift. Ideas still under debate — not yet decided enough to be a "not now" — live in `15-future-ideas.md`; a future idea rejected as a "never" lands here, via ADR.
 
 ## Permanent exclusions
 

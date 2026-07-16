@@ -8,6 +8,22 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-16
+
+**Add `docs/15-future-ideas.md` — a durable home for candidate ideas under debate**
+
+- New doc fills the gap between `AITODO.md` (in-flight, ephemeral), `02-roadmap.md` (committed),
+  and `10-non-goals.md` (excluded): ideas get an `FI-xx` ID, a merits/costs analysis, and a
+  lifecycle (Raised → Under debate → Accepted | Rejected | Parked). Promotion into the plan is
+  ADR-gated, consistent with `10-non-goals.md`'s existing "revisit only via ADR" rule; Parked
+  entries must carry an explicit revisit trigger; ideas are never silently deleted.
+- Seeded with five entries already parked around the repo (sources linked, nothing moved or
+  deleted from `AITODO.md`): FI-01 pattern testing hook (S9), FI-02 `Main`/OB1 round-trip,
+  FI-03 Modbus multi-instance form, FI-04 `WAIT`/`Jump` (Rejected — not needed, owner's call
+  2026-07-14), FI-05 `chained-permissive-enable` blind-draft gap (Under debate, nearest-term).
+- Indexed in `docs/00-README.md`; one cross-reference sentence added to `docs/10-non-goals.md`
+  defining the boundary between the two docs.
+
 ## 2026-07-15
 
 **Open S6 (generation from plain language) - entry criteria met, two seed patterns admitted**
