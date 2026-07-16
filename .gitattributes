@@ -1,8 +1,7 @@
-# Normalize line endings; IR and docs diff as text
-* text=auto
-*.md text
-*.ir text
-*.xml text
-*.cs text
-*.py text
-*.yaml text
+# Tool-written text formats byte-compared by tests (PatternExampleTests etc.):
+# always materialize LF regardless of core.autocrlf, so fresh checkouts and
+# worktrees match the converter's own 
+ output.
+# Owner-approved 2026-07-16 (batch finding, Stream D).
+*.ir text eol=lf
+*.xml text eol=lf
