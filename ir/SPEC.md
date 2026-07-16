@@ -877,13 +877,12 @@ hard-errors on either rather than guessing". Both halves needed correcting:
   the flag silently vanishes crossing to XML. A documented silent edge on hand-authored IR only,
   not a hard error. Don't author it.
 - **Member comments are supported (2026-07-16)** — the `COMMENT "<text>"` token in the grammar
-  above, at any depth, same last-token rule as a `STATIC` member line. One caveat: the *XML*
-  shape for a `SW.Types.PlcStruct` member `<Comment>` is mirrored from the proven ordinary-
-  Static-member shape (live-verified 2026-07-15; present in the committed `FB_PusherControl`/
-  `FB_ShredderSequencer` re-exports) — no genuine TIA export of a *UDT* with member comments
-  exists anywhere in the repo yet, so it is **not yet live-verified for TYPE** (pending Portal
-  task, `src/converter/README.md` "Member-level Comment"; failure mode is a loud TIA `Import()`
-  rejection, never silent loss).
+  above, at any depth, same last-token rule as a `STATIC` member line. The *XML* shape for a
+  `SW.Types.PlcStruct` member `<Comment>` mirrors the proven ordinary-Static-member shape and is
+  **live-verified for TYPE (2026-07-16, same-day)**: commented flat and nested-sub-struct UDTs
+  imported, type-compiled, and re-exported from `SampleProject` round-tripped to byte-identical
+  IR with comments intact — flat and nested positions both (`src/converter/README.md`,
+  "Member-level Comment", has the full record).
 
 This is a standalone
 top-level construct (its own exportable/importable `SW.Types.PlcStruct` file), genuinely separate

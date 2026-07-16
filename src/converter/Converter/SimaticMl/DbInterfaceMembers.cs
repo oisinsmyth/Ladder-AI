@@ -367,13 +367,11 @@ internal static class DbInterfaceMembers
             attributeList);
 
         // Comment position (after </AttributeList>, before nested Members/<StartValue>) is
-        // mirrored from the proven WriteMember shape — genuine TIA re-exports carrying Member-level
-        // Comments exist only for the ordinary Static-member position (FB_PusherControl/
-        // FB_ShredderSequencer, committed 2026-07-16, simatic-ml/GenProject1/). NOT yet proven on
-        // SW.Types.PlcStruct by a live TIA import — no committed real example anywhere has a UDT
-        // member Comment. TODO(live-verify): src/converter/README.md, "Member-level Comment",
-        // records the pending Portal task; the failure mode if TIA disagrees is a loud Import()
-        // rejection, never silent loss.
+        // mirrored from the proven WriteMember shape (FB_PusherControl/FB_ShredderSequencer,
+        // committed 2026-07-16, simatic-ml/GenProject1/). LIVE-VERIFIED on SW.Types.PlcStruct
+        // 2026-07-16: commented flat and nested-sub-struct UDTs imported, type-compiled,
+        // re-exported from SampleProject and round-tripped to-ir byte-identically, comments
+        // intact (stage-gates, "UDT member comments live-verified").
         AddCommentElement(memberElement, member);
 
         if (member.NestedMembers is not null)

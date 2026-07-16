@@ -4176,3 +4176,18 @@ items are S6 sandbox iteration with the now-standing invariance discipline); `ge
 re-run, now meaningful post-TypeIr-fix). The blind-run independence caveat stands batch-wide:
 blind executors, non-blind examiners — the S4-style owner-independent comparison remains the
 stronger form if wanted before gate-grade reliance.
+
+## S6: UDT member comments live-verified; sub-struct settings design fully grounded (2026-07-16)
+
+The Portal task recorded hours earlier ran same-day against SampleProject: a commented flat UDT
+(UDT_CommentProof) and a commented nested-sub-struct UDT (UDT_NestProof2) were authored in IR,
+converted, imported (--type), type-compiled, re-exported, and converted back. Both round-tripped
+to byte-identical IR with comments intact, flat and nested positions alike. Three things proven at
+once: TIA Import() accepts the mirrored SW.Types.PlcStruct member-Comment shape; TIA persists UDT
+member comments through a full round trip; Stream C's recursive TypeIr path holds live (the
+earlier false-pass is now genuinely passed). Consequences: C-605 (error) is satisfiable end-to-end
+on interface UDTs including one level down, and the owner's sub-struct settings variant
+(UDT.Set.X) is fully grounded for the coming settings rework - single faceplate binding, one
+type per equipment, mechanical one-writer checkability. TODO(live-verify) flags cleared in
+DbInterfaceMembers.cs / converter README / ir/SPEC.md. Leftovers documented: the two proof UDTs
+stay in SampleProject (no --type delete support; same status as MotorStarter_Instance).

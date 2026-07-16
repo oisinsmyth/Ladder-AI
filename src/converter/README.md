@@ -826,18 +826,19 @@ error), and the old write-side guard then made the surviving direction asymmetri
 `AddCommentElement` helper now serves `WriteMember` and `WriteTypeMember`, so both emit the
 identical proven shape rather than two hand-kept copies.
 
-**TYPE-side caveat — XML shape mirrored, not yet live-proven.** The Member-level `<Comment>`
-shape is proven by live TIA import + compile + re-export only for the ordinary Static-member
+**TYPE-side shape: LIVE-VERIFIED (2026-07-16, the recorded Portal task executed same-day).**
+The Member-level `<Comment>` shape was originally proven only for the ordinary Static-member
 position (2026-07-15, plus five Member-level instances in each committed genuine re-export,
-`simatic-ml/GenProject1/FB_PusherControl.xml`/`FB_ShredderSequencer.xml`). **No committed
-`SW.Types.PlcStruct` export anywhere carries a member `<Comment>`**, so `WriteTypeMember`'s
-placement (after `</AttributeList>`, before nested `Member`s/`<StartValue>` — mirroring
-`WriteMember` exactly) is an informed mirror, not a grounded fact. **LATER (Portal task, owner
-machine):** import a commented TYPE into the scratch project → compile → re-export → `to-ir` →
-grep `COMMENT` — proves (or loudly refutes: the failure mode is a TIA `Import()` rejection, never
-silent loss) both the shape *and* whether TIA persists UDT member comments across a round trip.
-(FB-Static-member persistence is already proven — the committed re-exports themselves carry the
-comments back out; see the adjacent finding below.)
+`simatic-ml/GenProject1/FB_PusherControl.xml`/`FB_ShredderSequencer.xml`); `WriteTypeMember`'s
+placement was an informed mirror. The live proof then ran against `SampleProject`: a commented
+flat UDT (`UDT_CommentProof`) **and** a commented nested-sub-struct UDT (`UDT_NestProof2`) were
+imported (`--type`), type-compiled, re-exported, and converted back — **both round-tripped to
+byte-identical IR, comments intact** (2 COMMENT tokens each, flat and nested positions). So the
+mirrored shape is accepted by TIA `Import()`, TIA persists UDT member comments through a full
+round trip, and the recursive `TypeIr` path holds up live. C-605 is satisfiable end-to-end on
+interface UDTs, including one level down (the sub-struct settings design). The two proof UDTs
+remain in `SampleProject` (no `--type` delete support; same documented-leftover status as
+`MotorStarter_Instance`).
 
 **Still hard-erroring, deliberately:** `WriteBareMember` (Temp members, and a *UDT-typed/
 SFB-instance* structured member's own nested fields — a UDT-typed Static's inner fields take
