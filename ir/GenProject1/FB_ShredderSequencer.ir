@@ -9,7 +9,7 @@ INTERFACE
   INPUT
   OUTPUT
   STATIC
-    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT
+    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface (C-115) - FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
       CycleStart : Bool
       CycleStop : Bool
       DownstreamRunning : Bool
@@ -33,7 +33,7 @@ INTERFACE
       MotorAutoStartCmd : Bool
       MotorPreStartDoneCmd : Bool
       PusherModeCmd : Int
-    StopCmd : Bool
+    StopCmd : Bool COMMENT "Loss of DownstreamRunning stops the shredder too, not just an operator CycleStop - nowhere for shredded material to go otherwise. Read by every step's own stop transition below."
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt
     DischargeConveyorTimeoutMS : DInt
@@ -51,7 +51,7 @@ INTERFACE
       Q : Bool
     ReversalStepEdge : Bool
     ReversalStepEdgeMem : Bool
-    ReversalCount : Int
+    ReversalCount : Int COMMENT "Reversals since the window last re-armed (not per-cycle, unlike the pusher's own PressureTripCount) - ReversalWindowTimer restarts the window every time this is above zero, so ReversalCountThreshold reversals must occur within one ReversalWindowTime of each other to raise ShredderBlockedFault, not just ReversalCountThreshold times ever."
     PreStartTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
@@ -77,7 +77,7 @@ INTERFACE
       ET : Time
       IN : Bool
       Q : Bool
-    InfeedRunning : Bool
+    InfeedRunning : Bool COMMENT "Latched once InfeedRestartTimer has timed out from the last hopper-clear - drives RunInfeedConv directly and (after a further UpstreamEnableTimer delay) EnableUpstream."
     SpinUpTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
@@ -93,7 +93,7 @@ INTERFACE
       ET : Time
       IN : Bool
       Q : Bool
-    OvercurrentTripped : Bool
+    OvercurrentTripped : Bool COMMENT "KNOWN GAP, not wired to real current yet: both timers below are gated 'AND NOT AlwaysTrue' (permanently false placeholders) because DB_AnalogInput.ShredderMotorCurrent > DB_Settings.OvercurrentSetpointMedium/High is a genuine Real-vs-Real comparison this converter's synthesizer can't type correctly yet (hardcodes Int) - flagged and deferred rather than guessed at. This bit, and Step 50's own overcurrent-abort transition, are dead code until that's built."
     OvercurrentAbortPauseTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
