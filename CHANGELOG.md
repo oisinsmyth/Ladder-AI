@@ -10,6 +10,24 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**review-simplicity skill built + blind-validated; UDT member-comment gap grounded**
+
+- `.claude/skills/review-simplicity/SKILL.md` - the docs/15 tier-2 reviewer (one-reading walk,
+  C-601-C-607/C-203/C-126 sweep recipes, calibration list, stricter-bar disposition). Validated
+  the way docs/15 defines reviewers to run: fresh-context subagent, skill + corpus only, barred
+  from the retrospective. Every material known finding independently reproduced; verdict +
+  verbatim report in docs/notes/review-simplicity-validation-2026-07-16.md.
+- The blind run also surfaced 10 new findings, incl. two tier-1 candidates on the "working"
+  build (IO.InCycle consumed into DQ8 but written nowhere; DI4_SYS_CycleStop "(NC)" comment vs
+  non-negated mapping) and a pattern-vs-rule tension (motor-dol's own example lacks the scheme
+  comment C-126's new exception requires). Owner rulings queued in AITODO.
+- Grounded: TYPE/UDT members cannot carry comments through the converter at all
+  (UnsupportedConstructException) - C-605 (error) unsatisfiable on interface UDTs until built;
+  and fresh exports contain zero member comments anywhere, so member-comment persistence through
+  TIA is unproven. Both queued as converter work. Release converter rebuilt (review verb present).
+- Owner's settings sub-struct idea: structure-only leg of the nested-Struct-in-UDT round-trip
+  proof passed IR->XML; live TIA leg in flight at commit time.
+
 **Retrospective owner pass folded: C-601-C-607 + C-203 live in doc 06; settings policy resolved**
 
 - All 7 candidate simplicity rules accepted (C-605 bumped to error by owner; C-602 with a

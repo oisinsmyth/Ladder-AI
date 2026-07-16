@@ -78,13 +78,30 @@ now in doc 06's preamble.
       (HMI-Times exception + pairing comment) / C-304 / C-307 (settings → instance UDT,
       faceplate rationale) / C-308 (one writer: the HMI; no orchestrator scan-copies);
       retrospective §10 records the resolution
-- [ ] Build `review-simplicity` skill; validate against the GenProject1 corpus (it must
-      independently find the accepted-rule violations, incl. the real block's — and per the
-      stricter-bar principle, acceptance is asymmetric: generated code held above site practice)
-- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass; rebuild Release
-      converter first, its binary predates `review`)
+- [x] `review-simplicity` built (`.claude/skills/review-simplicity/SKILL.md`, skill-creator
+      guidance) and **blind-validated** against the corpus via fresh subagent — every material
+      known finding reproduced + 10 new discoveries; verdict + verbatim report in
+      `docs/notes/review-simplicity-validation-2026-07-16.md`. Caveat: blind executor, non-blind
+      examiner; S4-style owner-independent comparison optional before gate-grade reliance.
+- [x] Release converter rebuilt; `review` verb confirmed present (queued item closed)
+- [ ] **OWNER: tier-1 candidates from the blind run need a ruling** — `IO.InCycle` consumed into
+      `DQ8_SYS_InCycle` but written nowhere; `DI4_SYS_CycleStop` "(NC)" comment vs non-negated
+      mapping (as wired an NC button blocks all starts); `RecentStart := AlwaysTrue` fighting the
+      motor FB's own bit management. Fixes are a future S6 request after the ruling.
+- [ ] **OWNER: motor-dol pattern tension** — the admitted example's "HMI Times" network lacks the
+      scheme comment C-126's exception now requires (and has an untitled network): update the
+      pattern or waive.
+- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass)
 - [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
       `generate` orchestrator
+
+**Converter work queue (grew this session):** TYPE/UDT member-comment support (hard-blocked:
+`UnsupportedConstructException`; C-605 error-severity is unsatisfiable on interface UDTs until
+built — applies to flat, sub-struct, and separate-Settings-UDT designs alike); **member-comment
+persistence verification** (fresh exports show zero member comments anywhere, including ones the
+Kestrel build wrote — import→TIA→re-export survival unproven, possibly broken); Header
+author/version/family capture; SPEC.md index-pairing reader note; nested-Struct-in-UDT live
+round-trip (structure leg was in flight at last update — see stage-gates tail).
 
 **Queued from the owner pass (not blocking the reviewer skills):** Struct-inside-standalone-UDT
 round-trip proof (gates the grouped-UDT `Set` sub-struct design); converter capture of

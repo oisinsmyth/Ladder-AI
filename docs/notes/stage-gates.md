@@ -3947,3 +3947,63 @@ outcomes, all now folded into `docs/06-lad-conventions.md`:
 
 Next per the docs/15 build order: `review-simplicity`, validated against the GenProject1 corpus
 under the stricter-bar principle.
+
+## S6: review-simplicity built and blind-validated; UDT member-comment gap grounded (2026-07-16)
+
+**The skill (docs/15 build-order step 2).** `.claude/skills/review-simplicity/SKILL.md` — the
+tier-2 reviewer. Authored following the newly-installed `skill-creator` plugin's guidance
+(explain-why over bare musts, concrete recipes, exact report template, pushy trigger description):
+blindness declaration up front, the one-reading walk as pass 1 (judgment before grep — the
+retrospective showed the worst defects had no citable rule until a cold read), per-rule sweep
+recipes for C-601–C-607/C-203/C-126, calibration list (mapping rail, C-121 verbosity,
+imported-real regime, pattern-vs-rule tensions flagged never adjudicated, tier boundaries), and
+the stricter-bar disposition (err toward flagging; functional-looking discoveries reported as
+tier-1 candidates, not ruled on).
+
+**Blind validation — the docs/15 reviewer model exercised for real.** A fresh-context subagent
+got only the skill file, the binding docs, and `ir/GenProject1/` (21 files), explicitly barred
+from the retrospective (the expected-findings anchor). Result, preserved verbatim with the
+comparison in `docs/notes/review-simplicity-validation-2026-07-16.md`: **every material known
+finding independently reproduced** (duplicated cycle-start compound with the near-match diff;
+both bare UDTs; all three ranged step predicates; the four bare AlwaysTrue constants; the
+settings-access split — sharpened into a three-way table correctly identifying the *real* block
+as the C-307-compliant one; Snake_Case buffers; dead Pusher_Local_Remote; the mistitled buffer
+network), calibrations honored, format followed. Only miss: the retrospective's own
+"noted, not pressed" F-4. **Verdict: validated.** Method caveat recorded: blind executor,
+non-blind examiner (the anchor and the skill share an author-session); the S4-style
+owner-independent comparison remains available before gate-grade reliance.
+
+**The run went beyond the anchor — including two tier-1 (functional) candidates on the
+"functionally working" build:** `IO.InCycle` is consumed into physical output `DQ8_SYS_InCycle`
+but written nowhere (in-cycle lamp permanently off); `DI4_SYS_CycleStop` is commented "(NC)" in
+the tag table but mapped non-negated (as wired, an NC stop button holds StopCmd permanently true —
+either polarity or comment is wrong; the input-mapping pattern's negated variant exists for this).
+Plus: `RecentStart := AlwaysTrue` in FC_ControlMain fights the motor FB's own management of that
+bit; `HandReverse` wired to a never-read member; `DB_Input.Infeed_Conv_Running` mapped and never
+consumed; 58/98 tag-table entries are unreferenced legacy noise; the **admitted motor-dol
+pattern's own example breaches C-126's new exception condition** (no scheme comment on its "HMI
+Times" network, plus an untitled network) — flagged as a pattern-vs-rule tension for owner
+ruling, exactly per the skill's calibration rule; and suspected defects in the imported-real
+block (HandPosEdge double-write with HandNegEdge never referenced; a self-annihilating
+`Pasue AND … NOT Pasue` term; an hours-counter edge guard that reads its own memory after
+same-network update) — labeled context + verify-against-TIA, not fix demands (hard rule 7).
+
+**UDT member comments: two grounded discoveries (both queued as converter work).** (1) A
+round-trip proof of a nested-Struct UDT with member comments died immediately and *correctly*:
+`UnsupportedConstructException — member comments are only confirmed on an ordinary
+Static/Input/Output/DB member (WriteMember), not here` — **TYPE/UDT members cannot carry comments
+through the converter at all**, so C-605 (error) is currently unsatisfiable on interface UDTs
+via this toolchain, for the flat and sub-struct designs alike. (2) Grep over the fresh exports
+finds **zero member-line COMMENT tokens anywhere** — including the Static-member comments the
+Kestrel build demonstrably wrote (stage-gates' own S6 record cites OvercurrentTripped's member
+comment; the fresh export shows the member bare) — so member-comment **persistence through
+import→TIA→re-export is unverified** and possibly broken; the sequencer's two "see member
+comment" pointers now dangle. Verify persistence before relying on C-605 at all. Release
+converter rebuilt meanwhile (queued item closed): `review` verb confirmed present in the Release
+binary.
+
+**Settings sub-struct idea (owner's, this session): partially grounded.** The structure-only
+round-trip proof (nested anonymous Struct inside a standalone `SW.Types.PlcStruct`) converts
+IR→XML cleanly with comments stripped; the live import/compile/re-export leg was still running
+when this entry was written — its result lands in the next entry. The comment gap above applies
+to *both* variants (sub-struct and separate Settings UDT) equally.
