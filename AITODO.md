@@ -53,12 +53,31 @@ drafted instance is still owed, recorded as an open gap, not silently closed). F
 treated as an approximate target the project owner explicitly chose to satisfy with two well-proven
 kinds now, growing the rest organically once S6 is actually running — not a literal blocking count.
 
-## Current task: none — ready for S6's own deliverable work
+## Current task: S6 generation-pipeline buildout (docs/15, ADR-0004) — opened 2026-07-16
 
-S6's entry gate is closed. No in-flight work right now. Next natural step is S6's own stated
-deliverable (`docs/02-roadmap.md`: "AI composes new networks/blocks from the pattern library using
-real exported tags; automatic import+compile loop") — not started, needs its own plan when picked
-up, same rigor as every other stage.
+Context: the first real S6 build (Kestrel Shredder → `GenProject1`, 2026-07-15, stage-gates "S6
+first real proof") met every hard gate but the project owner judged the output overly complex and
+obtuse. Adopted response (ADR-0004): staged skills+reviewers pipeline per
+`docs/15-generation-pipeline.md`; priority order function → readability & simplicity → efficiency
+now in doc 06's preamble.
+
+- [x] Pipeline codified: `docs/15`, ADR-0004, doc 06 preamble, CLAUDE.md workflow, 00-README
+      (commit `ab3efd2`)
+- [x] GenProject1 exported to committed corpus: `ir/GenProject1/` + `simatic-ml/GenProject1/`,
+      21 files, `.gitignore` anchored to `/GenProject1/`, data-boundary spot-check vs the
+      Kestrel Shredder Systems map = 0 hits (commit `b14be52`)
+- [x] Mechanical baseline (`converter review`, Debug build): 17 findings (16E/1W); both generated
+      FBs clean — every in-block finding is on the real `FB_MotorFwdRevSystem`
+- [x] Retrospective delivered: `docs/notes/genproject1-retrospective.md` — 12 findings, 7
+      candidate C-6xx rules (§4), 6 adjudications (§5), tooling follow-ups (§6)
+- [ ] **OWNER: accept/reject pass on retrospective §4 + §5 — blocks everything below**
+- [ ] Fold accepted rules into doc 06 as the C-6xx "Simplicity & readability" section
+- [ ] Build `review-simplicity` skill; validate against the GenProject1 corpus (it must
+      independently find the accepted-rule violations, incl. the real block's)
+- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass — independent of the
+      rules pass; rebuild Release converter first, its binary predates `review`)
+- [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
+      `generate` orchestrator
 
 **Carried forward, not urgent:** `patterns/chained-permissive-enable`'s own genuinely-blind
 drafted-instance gap (see above) — worth closing before leaning on this pattern heavily, not

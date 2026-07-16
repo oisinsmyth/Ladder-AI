@@ -8,6 +8,26 @@ For the detailed story behind any entry — the investigation, the evidence, the
 results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/openness-quirks.md`
 (TIA/Openness findings). This doc is the short index; those are the record.
 
+## 2026-07-16
+
+**Adopt staged S6 generation pipeline (ADR-0004); GenProject1 corpus + simplicity retrospective**
+
+- Owner verdict on the Kestrel build: functionally right, but overly complex/obtuse; stated
+  priority order for generated LAD - function -> readability & simplicity -> efficiency. Adopted
+  response: `docs/15-generation-pipeline.md` + ADR-0004 - a 13-skill staged pipeline (analyse/
+  design/build/check/entry) with committed artifact handoffs, fresh-context read-only reviewers,
+  a tag-status (`exists`/`proposed`) anti-invention rule, two hard engineer gates, and a
+  scale-down rule. CLAUDE.md's 5-step workflow wrapped as the inner loop; doc 06 preamble carries
+  the priority order. ADR-0003 left reserved for the data-boundary decision per docs/13.
+- GenProject1 exported to a committed corpus: `.gitignore` anchored to `/GenProject1/`; all 17
+  blocks + 3 UDTs + tag table in `ir/GenProject1/` + `simatic-ml/GenProject1/` (21/21 clean
+  `to-ir`, incl. OB1). Known `IsConsistent` export refusals cleared by block-level compile
+  (0 errors). Data-boundary scan vs the Kestrel Shredder Systems map: zero real-name hits.
+- `docs/notes/genproject1-retrospective.md` delivered - mechanical baseline (17 findings; both
+  generated FBs clean, every in-block finding on the real `FB_MotorFwdRevSystem`), 12 readability
+  findings, 7 candidate C-6xx simplicity rules, 6 rule-vs-practice adjudications. **Owner
+  accept/reject pass pending - rules enter doc 06 only after it.** Converter suite 463/463.
+
 ## 2026-07-15
 
 **Open S6 (generation from plain language) - entry criteria met, two seed patterns admitted**

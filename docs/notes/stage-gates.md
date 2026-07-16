@@ -3838,3 +3838,66 @@ network-by-network to comply, verified by tracing every cross-network dependency
 `ir/SPEC.md`'s statement-kind ordering (also newly documented this session — see its own "Statement-
 kind ordering" section) and by parsing the real re-exported TIA content back to IR text to confirm
 every original condition survived byte-for-byte.
+
+## S6 direction adopted: staged generation pipeline + simplicity retrospective (2026-07-16)
+
+The project owner's verdict on the Kestrel build (previous section): functionally right — "it has
+worked functionally very well" — but the ladder itself overly complex and obtuse, with an explicit
+priority order stated for generated LAD: **function → readability & simplicity → efficiency**. The
+owner proposed restructuring S6 generation around skills and isolated-context agents; the analysis
+that shaped the adopted design (why the complexity happened, what the pipeline must include) and
+the owner's approval both happened in-session, then were executed as three committed units.
+
+**Adopted (ADR-0004, `docs/15-generation-pipeline.md`, commit `ab3efd2`):** a 13-skill staged
+pipeline — Analyse (`gen-spec-analysis`, `gen-pid-analysis`, `gen-io-tags`, `gen-reconcile`),
+Design (`gen-architecture`, `gen-alarm-design`), Build (`gen-block-coding`, `gen-integration`),
+Check (`review-conventions`, `review-functional`, `review-simplicity`, `audit-artifact`), Entry
+(`generate`) — handing off through committed artifacts (`gen/<project>/`), never conversation;
+reviewers run fresh-context with read-only tools and never see author reasoning (the AI form of
+the blind-review standard pattern admissions already use); a pipeline-wide tag-status rule
+(`exists`-verified-by-grep vs `proposed`; coding refuses `proposed`) so multi-stage handoff can't
+launder hard rule 3; two hard engineer gates (architecture sign-off before coding; the existing
+step-5 presentation); a scale-down rule so small requests skip stages but never gates/reviewers.
+Skills are built in leverage order (rules → reviewers → architecture → analysis → orchestrator),
+each validated before the next — nothing exists yet beyond this design; docs/15's build-order
+table is the ground truth. CLAUDE.md's 5-step S6 workflow was wrapped (now the block-coding inner
+loop), not replaced. Doc 06's preamble now carries the priority order, each tier mapped to the
+check that enforces it. ADR numbering note: 0003 left reserved — `docs/13-data-boundary.md` has
+pointed at it for the data-boundary decision since the doc suite was written.
+
+**GenProject1 became a committed corpus (commit `b14be52`):** `.gitignore` anchored to
+`/GenProject1/` (the live TIA folder stays ignored; the extracted content no longer is), then all
+17 blocks + 3 UDTs (`UDT_PusherIO`, `UDT_ShredderSequencerIO`, `MotorFwdRevIOSet` — enumerated by
+grepping the exports, since `list` can't enumerate types) + the default tag table exported to
+`simatic-ml/GenProject1/` and converted to `ir/GenProject1/` (21/21 clean `to-ir`, including OB1
+`Main` — the deferred OB quirks are on the write path, not read). Four blocks + one UDT hit the
+known `IsConsistent` export refusal ("Inconsistent blocks and PLC data types (UDT) cannot be
+exported") and cleared via the documented block-level-compile-then-retry (all compiled 0 errors;
+the only diagnostic was a device-level warning about IO points absent from the configured
+hardware — expected for a sandbox project, recorded not hidden). Data boundary verified rather
+than assumed: the corpus was scanned against `sanitization/Kestrel Shredder Systems.map.json`'s real-name
+keys (case-insensitive; word-boundary for the short model codes) — zero hits, so docs/13's
+"nothing identifying appears in GenProject1" claim now has a checked basis. This corpus is the
+durable S6 output and the standing validation corpus for reviewer skills.
+
+**Retrospective delivered (`docs/notes/genproject1-retrospective.md`) — owner pass PENDING:**
+mechanical baseline first (`converter review`, 17 findings, 16E/1W): both generated FBs are
+*clean* — every inside-a-block mechanical finding lands on the real, imported
+`FB_MotorFwdRevSystem` (TONR, packed alarm word, untitled network, no header) — while the
+generated FCs/DBs/iDBs owe C-201 header comments. The headline, stated in the doc itself: the
+owner's complexity verdict is about things **no current rule names**. Twelve findings (duplicated
+7-term cycle-start condition vs the same build's own named-`StopCmd` fix; 31 bare UDT members
+despite member-comments being an owner-requested capability; `NOT AlwaysTrue` meaning both
+"deliberate constant" and "known gap" with no visual distinction; step-range predicates that
+silently absorb future inserted steps; sibling FBs using two different settings-access policies;
+no OB100/`DB_PLC`/C-111 machinery while `Step` and latches sit RETAIN; a dead `Pusher_Local_Remote`
+input — grep-verified; buffer members in `Snake_Case` vs the pattern's `PascalCase` vs C-001's
+written `camelCase`, which nothing follows) distilled into **7 candidate C-6xx rules** (§4, each
+with severity + S4-style checkability bucket + accept/reject checkboxes) and **6 adjudications**
+(§5, existing rule-vs-practice tensions: the site's own batch "HMI Times" idiom vs C-126's letter,
+settings policy, member-case, C-109 scale-down, startup machinery scope, C-504 applicability).
+The real block is documented as the read-only contrast case calibrating the rule set — every
+candidate rule catches something in it too — and §8 records what the generated code did *right*,
+so accepted rules don't overcorrect. Converter suite green after the day's work (463/463).
+Honest status: S6's exit criterion (ten requests) is unchanged and not advanced by any of this —
+this is the workflow that future requests run through, not exit progress.
