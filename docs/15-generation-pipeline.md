@@ -173,7 +173,7 @@ corpus: a reviewer skill that doesn't independently find the known problems isn'
 | 2 | `review-simplicity` (validated against GenProject1) | **Built + blind-validated** 2026-07-16 (`docs/notes/review-simplicity-validation-2026-07-16.md`) |
 | 3 | `review-conventions` (independent of step 1) | **Built + blind-validated** 2026-07-16 (drift check byte-identical; `docs/notes/review-conventions-validation-2026-07-16.md`) |
 | 4 | `review-functional` + `requirements.md` format definition | **Built + two-phase-validated** 2026-07-16 (format's defining instance: `gen/GenProject1/requirements.md`, 69 REQs; historical-regression phase caught both known bugs blind; `docs/notes/review-functional-validation-2026-07-16.md`) |
-| 5 | `gen-architecture` | Not built — **next** |
+| 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/GenProject1/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`) |
 | 6 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
 | 7 | `gen-pid-analysis`, `audit-artifact`, `gen-block-coding`/`gen-integration` formalization (the current 5-step loop is the working seed) | Not built |
 | 8 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |

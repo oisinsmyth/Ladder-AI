@@ -124,7 +124,20 @@ now in doc 06's preamble.
       step-40 dwell, jog-while-Blocked, unwarned pusher motion, C-502 scale-down
 - [ ] After rulings: **GenProject1 functional-fix request** (S6 sandbox iteration; invariance
       discipline as per the InCycle/DI4 precedent; settings rework + InCycle member removal fold in)
-- [ ] `gen-architecture` (docs/15 build-order step 5 — next skill build)
+- [x] `gen-architecture` built + validated (2026-07-16, parallel with the live comment test) —
+      retroactive GenProject1 baseline `gen/GenProject1/architecture.md` (33 items, 69/69 REQs,
+      honest 78%-freeform flag); validation by independent reconvergence (design locked before
+      findings read; converged on the post-review InCycle fix from register text alone); five
+      skill gaps recorded in its validation note
+- [x] UDT member comments **live-verified** (2026-07-16): flat + nested sub-struct UDTs
+      round-tripped through SampleProject byte-identically, comments intact — C-605 satisfiable
+      end-to-end; sub-struct settings design fully grounded; TODO(live-verify) flags cleared
+- [ ] **GenProject1 functional-fix wave — rulings received (all four, 2026-07-16), phase 1
+      drafting launched**: commissioning-defaults table for sign-off; reverse timed from new
+      ShredderRunRevFB member; stop/E-stop bundle (SystemHealthy member, pusher Mode-0 on stop,
+      RecentStart strap removed w/ sequencer arming); spec-true jog/repark with siren on repark.
+      Scope note: settings VALUES land in current homes; the sub-struct settings migration stays
+      its own follow-up request (reviewable-diff discipline)
 - [ ] **Portal batch** (sequenced, one at a time): UDT member-comment live verify
       (`SW.Types.PlcStruct` shape + persistence), sub-struct live round-trip re-run (meaningful
       now that TypeIr recursion is fixed), then the settings-rework import wave
