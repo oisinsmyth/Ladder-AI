@@ -97,6 +97,7 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   2026-07-14), FI-05 `chained-permissive-enable` blind-draft gap (Under debate, nearest-term).
 - Indexed in `docs/00-README.md`; one cross-reference sentence added to `docs/10-non-goals.md`
   defining the boundary between the two docs.
+
 **review-simplicity skill built + blind-validated; UDT member-comment gap grounded**
 
 - `.claude/skills/review-simplicity/SKILL.md` - the docs/15 tier-2 reviewer (one-reading walk,
