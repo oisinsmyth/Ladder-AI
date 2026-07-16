@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T12:58:46.2842904Z</Created>
+    <Created>2026-07-16T23:20:26.4494536Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -104,6 +104,9 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Unconfigured by design: the overcurrent family is disarmed (no AI hardware, Q-11; per-machine-type values unresolved, Q-04). No number is proposed until the detection arms - setting one now would imply protection that does not exist.</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="OvercurrentSetpointHigh" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -112,6 +115,9 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04).</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="OvercurrentMediumDelay" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -120,6 +126,9 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04); no spec number exists either (Q-02).</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="OvercurrentHighDelay" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -128,6 +137,9 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Unconfigured by design - same basis as OvercurrentSetpointMedium (Q-11/Q-04); no spec number exists either (Q-02).</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="OvercurrentSpinUpAllowance" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -181,6 +193,7 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <StartValue>5.0</StartValue>
     </Member>
     <Member Name="PressureTripCountThreshold" Datatype="Int" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -198,6 +211,7 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <StartValue>60.0</StartValue>
     </Member>
     <Member Name="PusherParkedTimeout" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -206,6 +220,7 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <StartValue>30.0</StartValue>
     </Member>
     <Member Name="PusherEndTravelHoldTime" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -223,6 +238,7 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <StartValue>5.0</StartValue>
     </Member>
     <Member Name="PusherJogWarningTime" Datatype="Real" Remanence="Retain" Accessibility="Public">
       <AttributeList>
@@ -249,6 +265,7 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <StartValue>10.0</StartValue>
     </Member>
   </Section>
 </Sections></Interface>
@@ -268,7 +285,7 @@
           <MultilingualTextItem ID="2" CompositionName="Items">
             <AttributeList>
               <Culture>en-US</Culture>
-              <Text>Plant/system-level tunables (C-307) - HMI/operator writes, PLC read-only (C-308). Start values are commissioning defaults (C-309). Members with no start value shown are genuinely unconfigured pending real numbers from the project owner - see the presented build notes, not a guess.</Text>
+              <Text>Plant/system-level tunables (C-307) - HMI/operator writes, PLC read-only (C-308). Start values are commissioning defaults (C-309). Fix-wave-1 (2026-07-16) proposed defaults for the five formerly-unconfigured live-zero timings, pending the owner's settings sign-off (gen/GenProject1/fix-wave-1.md is the signature page). The four overcurrent members remain deliberately unconfigured - see their own member comments.</Text>
             </AttributeList>
           </MultilingualTextItem>
         </ObjectList>

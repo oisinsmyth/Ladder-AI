@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T13:01:12.0889928Z</Created>
+    <Created>2026-07-16T23:20:25.8190038Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -102,6 +102,28 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+    </Member>
+    <Member Name="ParkCmd" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">In (FC_ControlMain, from the sequencer's PusherParkCmd): plant pre-start park request - while set, an idle off-home ram reparks to home after the pre-motion warning (REQ-045). With a live cycle request, one of the only two repark occasions (owner ruling 2026-07-16); jog release deliberately leaves the ram where it stopped (REQ-039).</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="CycleInhibit" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">In (FC_ControlMain, from the sequencer's PusherCycleInhibitCmd): the plant has a live stop reason - no cycle may launch (CycleRequest gated) and an in-flight cycle aborts to Retract and parks (CycleAbort). Hand-jog is deliberately exempt (owner amendment 2026-07-16, REQ-040): only the mode-0 force (stop button/unhealthy) blocks jogging.</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="JogExtendCmd" Datatype="Bool">
       <AttributeList>

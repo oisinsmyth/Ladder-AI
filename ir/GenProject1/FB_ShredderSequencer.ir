@@ -215,3 +215,1551 @@ NETWORK 15 "Output Commands"
   COIL IO.RunDischargeConv := IO.Step >= 20
   COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder
 
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access IO.CycleStop = 21 LocalVariable
+  access IO.DownstreamRunning = 22 LocalVariable
+  access IO.SystemHealthy = 23 LocalVariable
+  access StopCmd = 24 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 28
+      branch 0
+        rail = 32
+        step 0 contact
+          uid = 25
+          operand = 21
+          operandwire = 30
+          negated = false
+          out = 31
+      branch 1
+        rail = 32
+        step 0 contact
+          uid = 26
+          operand = 22
+          operandwire = 33
+          negated = true
+          out = 34
+      branch 2
+        rail = 32
+        step 0 contact
+          uid = 27
+          operand = 23
+          operandwire = 35
+          negated = true
+          out = 36
+      out = 37
+    coil = 29
+    coil operand = 24
+    coil operandwire = 38
+NETWORK 2
+  compileunit = 8
+  access DB_Settings.ReversalWindowTime = 21 GlobalVariable
+  access Time = 22 LocalVariable
+  access DB_Settings.PreStartSounderTime = 25 GlobalVariable
+  access Time = 26 LocalVariable
+  access DB_Settings.DischargeConveyorTimeout = 29 GlobalVariable
+  access Time = 30 LocalVariable
+  access DB_Settings.ShredderReverseRunTime = 33 GlobalVariable
+  access Time = 34 LocalVariable
+  access DB_Settings.InfeedRestartDelay = 37 GlobalVariable
+  access Time = 38 LocalVariable
+  access DB_Settings.InfeedToUpstreamEnableDelay = 41 GlobalVariable
+  access Time = 42 LocalVariable
+  access DB_Settings.OvercurrentSpinUpAllowance = 45 GlobalVariable
+  access Time = 46 LocalVariable
+  access DB_Settings.OvercurrentMediumDelay = 49 GlobalVariable
+  access Time = 50 LocalVariable
+  access DB_Settings.OvercurrentHighDelay = 53 GlobalVariable
+  access Time = 54 LocalVariable
+  access DB_Settings.ReversalRetryPauseTime = 57 GlobalVariable
+  access Time = 58 LocalVariable
+  access Time = 23 LocalVariable
+  access ReversalWindowTimeMS = 24 LocalVariable
+  access Time = 27 LocalVariable
+  access PreStartSounderTimeMS = 28 LocalVariable
+  access Time = 31 LocalVariable
+  access DischargeConveyorTimeoutMS = 32 LocalVariable
+  access Time = 35 LocalVariable
+  access ShredderReverseRunTimeMS = 36 LocalVariable
+  access Time = 39 LocalVariable
+  access InfeedRestartDelayMS = 40 LocalVariable
+  access Time = 43 LocalVariable
+  access InfeedToUpstreamEnableDelayMS = 44 LocalVariable
+  access Time = 47 LocalVariable
+  access OvercurrentSpinUpAllowanceMS = 48 LocalVariable
+  access Time = 51 LocalVariable
+  access OvercurrentMediumDelayMS = 52 LocalVariable
+  access Time = 55 LocalVariable
+  access OvercurrentHighDelayMS = 56 LocalVariable
+  access Time = 59 LocalVariable
+  access ReversalRetryPauseTimeMS = 60 LocalVariable
+  constant 1000.0 = 61 Real
+  constant 1000.0 = 62 Real
+  constant 1000.0 = 63 Real
+  constant 1000.0 = 64 Real
+  constant 1000.0 = 65 Real
+  constant 1000.0 = 66 Real
+  constant 1000.0 = 67 Real
+  constant 1000.0 = 68 Real
+  constant 1000.0 = 69 Real
+  constant 1000.0 = 70 Real
+  mul 0
+    muluid = 71
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 21 92
+    input 1 literal = 61 93
+    dest = 22
+    destwire = 94
+  mul 1
+    muluid = 73
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 25 95
+    input 1 literal = 62 96
+    dest = 26
+    destwire = 97
+  mul 2
+    muluid = 75
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 29 98
+    input 1 literal = 63 99
+    dest = 30
+    destwire = 100
+  mul 3
+    muluid = 77
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 33 101
+    input 1 literal = 64 102
+    dest = 34
+    destwire = 103
+  mul 4
+    muluid = 79
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 37 104
+    input 1 literal = 65 105
+    dest = 38
+    destwire = 106
+  mul 5
+    muluid = 81
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 41 107
+    input 1 literal = 66 108
+    dest = 42
+    destwire = 109
+  mul 6
+    muluid = 83
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 45 110
+    input 1 literal = 67 111
+    dest = 46
+    destwire = 112
+  mul 7
+    muluid = 85
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 49 113
+    input 1 literal = 68 114
+    dest = 50
+    destwire = 115
+  mul 8
+    muluid = 87
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 53 116
+    input 1 literal = 69 117
+    dest = 54
+    destwire = 118
+  mul 9
+    muluid = 89
+    kind = mul
+    en = condition
+      rail = 91
+    input 0 tag = 57 119
+    input 1 literal = 70 120
+    dest = 58
+    destwire = 121
+  convert 0
+    convertuid = 72
+    en = eno 71 122
+    in tag = 23 123
+    srctype = Real
+    desttype = DInt
+    dest = 24
+    destwire = 124
+  convert 1
+    convertuid = 74
+    en = eno 73 125
+    in tag = 27 126
+    srctype = Real
+    desttype = DInt
+    dest = 28
+    destwire = 127
+  convert 2
+    convertuid = 76
+    en = eno 75 128
+    in tag = 31 129
+    srctype = Real
+    desttype = DInt
+    dest = 32
+    destwire = 130
+  convert 3
+    convertuid = 78
+    en = eno 77 131
+    in tag = 35 132
+    srctype = Real
+    desttype = DInt
+    dest = 36
+    destwire = 133
+  convert 4
+    convertuid = 80
+    en = eno 79 134
+    in tag = 39 135
+    srctype = Real
+    desttype = DInt
+    dest = 40
+    destwire = 136
+  convert 5
+    convertuid = 82
+    en = eno 81 137
+    in tag = 43 138
+    srctype = Real
+    desttype = DInt
+    dest = 44
+    destwire = 139
+  convert 6
+    convertuid = 84
+    en = eno 83 140
+    in tag = 47 141
+    srctype = Real
+    desttype = DInt
+    dest = 48
+    destwire = 142
+  convert 7
+    convertuid = 86
+    en = eno 85 143
+    in tag = 51 144
+    srctype = Real
+    desttype = DInt
+    dest = 52
+    destwire = 145
+  convert 8
+    convertuid = 88
+    en = eno 87 146
+    in tag = 55 147
+    srctype = Real
+    desttype = DInt
+    dest = 56
+    destwire = 148
+  convert 9
+    convertuid = 90
+    en = eno 89 149
+    in tag = 59 150
+    srctype = Real
+    desttype = DInt
+    dest = 60
+    destwire = 151
+NETWORK 3
+  compileunit = D
+  access ReversalCount = 21 LocalVariable
+  access ReversalWindowTimeMS = 22 LocalVariable
+  constant 0 = 23 Int
+  timer 0
+    tonpartuid = 25
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 26
+    instancescope = LocalVariable
+    instancepath = ReversalWindowTimer
+    rail = 33
+    step 0 compare
+      partname = Gt
+      uid = 24
+      srctype = Int
+      left tag = 21 28
+      right literal = 23 29
+      out = 30
+    preset tag = 22 31
+    et = 32 27
+NETWORK 4
+  compileunit = 12
+  access ReversalStepEdgeMem = 22 LocalVariable
+  access IO.Step = 21 LocalVariable
+  access ReversalStepEdge = 23 LocalVariable
+  access IO.Step = 24 LocalVariable
+  access ReversalStepEdgeMem = 25 LocalVariable
+  access ReversalWindowTimer.Q = 26 LocalVariable
+  access IO.FaultReset = 27 LocalVariable
+  access ReversalCount = 28 LocalVariable
+  access ReversalStepEdge = 29 LocalVariable
+  access ReversalCount = 30 LocalVariable
+  access ReversalCount = 31 LocalVariable
+  constant 60 = 32 Int
+  constant 60 = 33 Int
+  constant 0 = 34 Int
+  constant 1 = 35 Int
+  assignment 0
+    rail = 53
+    step 0 compare
+      partname = Eq
+      uid = 36
+      srctype = Int
+      left tag = 21 47
+      right literal = 32 48
+      out = 49
+    step 1 contact
+      uid = 37
+      operand = 22
+      operandwire = 50
+      negated = true
+      out = 51
+    coil = 38
+    coil operand = 23
+    coil operandwire = 52
+  assignment 1
+    rail = 53
+    step 0 compare
+      partname = Eq
+      uid = 39
+      srctype = Int
+      left tag = 24 54
+      right literal = 33 55
+      out = 56
+    coil = 40
+    coil operand = 25
+    coil operandwire = 57
+  move 0
+    moveuid = 44
+    rail = none
+    step 0 or
+      uid = 43
+      branch 0
+        rail = 53
+        step 0 contact
+          uid = 41
+          operand = 26
+          operandwire = 58
+          negated = false
+          out = 59
+      branch 1
+        rail = 53
+        step 0 contact
+          uid = 42
+          operand = 27
+          operandwire = 60
+          negated = false
+          out = 61
+      out = 62
+    in literal = 34 63
+    dest = 28
+    destwire = 64
+  mul 0
+    muluid = 46
+    kind = add
+    en = condition
+      rail = 53
+      step 0 contact
+        uid = 45
+        operand = 29
+        operandwire = 65
+        negated = false
+        out = 66
+    input 0 literal = 35 67
+    input 1 tag = 30 68
+    dest = 31
+    destwire = 69
+NETWORK 5
+  compileunit = 17
+  access ReversalCount = 21 LocalVariable
+  access DB_Settings.ReversalCountThreshold = 22 GlobalVariable
+  access IO.FaultReset = 24 LocalVariable
+  access IO.ShredderBlockedFault = 23 LocalVariable
+  access IO.ShredderBlockedFault = 25 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 29
+      branch 0
+        rail = 34
+        step 0 compare
+          partname = Ge
+          uid = 26
+          srctype = Int
+          left tag = 21 31
+          right tag = 22 32
+          out = 33
+      branch 1
+        rail = 34
+        step 0 contact
+          uid = 27
+          operand = 23
+          operandwire = 35
+          negated = false
+          out = 36
+        step 1 contact
+          uid = 28
+          operand = 24
+          operandwire = 37
+          negated = true
+          out = 38
+      out = 39
+    coil = 30
+    coil operand = 25
+    coil operandwire = 40
+NETWORK 6
+  compileunit = 1C
+  access IO.Step = 25 LocalVariable
+  access IO.DownstreamRunning = 24 LocalVariable
+  access IO.CycleStart = 23 LocalVariable
+  access IO.ShredderBlockedFault = 22 LocalVariable
+  access StopCmd = 21 LocalVariable
+  access IO.Step = 26 LocalVariable
+  constant 0 = 27 Int
+  constant 10 = 28 Int
+  move 0
+    moveuid = 34
+    rail = 48
+    step 0 contact
+      uid = 29
+      operand = 21
+      operandwire = 35
+      negated = true
+      out = 36
+    step 1 contact
+      uid = 30
+      operand = 22
+      operandwire = 37
+      negated = true
+      out = 38
+    step 2 contact
+      uid = 31
+      operand = 23
+      operandwire = 39
+      negated = false
+      out = 40
+    step 3 contact
+      uid = 32
+      operand = 24
+      operandwire = 41
+      negated = false
+      out = 42
+    step 4 compare
+      partname = Eq
+      uid = 33
+      srctype = Int
+      left tag = 25 43
+      right literal = 27 44
+      out = 45
+    in literal = 28 46
+    dest = 26
+    destwire = 47
+NETWORK 7
+  compileunit = 21
+  access IO.Step = 21 LocalVariable
+  access PreStartSounderTimeMS = 22 LocalVariable
+  access IO.Step = 24 LocalVariable
+  access StopCmd = 23 LocalVariable
+  access IO.Step = 25 LocalVariable
+  access IO.Step = 28 LocalVariable
+  access PreStartTimer.Q = 27 LocalVariable
+  access StopCmd = 26 LocalVariable
+  access IO.Step = 29 LocalVariable
+  constant 10 = 30 Int
+  constant 10 = 31 Int
+  constant 0 = 32 Int
+  constant 10 = 33 Int
+  constant 20 = 34 Int
+  timer 0
+    tonpartuid = 36
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 37
+    instancescope = LocalVariable
+    instancepath = PreStartTimer
+    rail = 53
+    step 0 compare
+      partname = Eq
+      uid = 35
+      srctype = Int
+      left tag = 21 63
+      right literal = 30 64
+      out = 65
+    preset tag = 22 66
+    et = 67 45
+  move 0
+    moveuid = 40
+    rail = 53
+    step 0 contact
+      uid = 38
+      operand = 23
+      operandwire = 46
+      negated = false
+      out = 47
+    step 1 compare
+      partname = Eq
+      uid = 39
+      srctype = Int
+      left tag = 24 48
+      right literal = 31 49
+      out = 50
+    in literal = 32 51
+    dest = 25
+    destwire = 52
+  move 1
+    moveuid = 44
+    rail = 53
+    step 0 contact
+      uid = 41
+      operand = 26
+      operandwire = 54
+      negated = true
+      out = 55
+    step 1 contact
+      uid = 42
+      operand = 27
+      operandwire = 56
+      negated = false
+      out = 57
+    step 2 compare
+      partname = Eq
+      uid = 43
+      srctype = Int
+      left tag = 28 58
+      right literal = 33 59
+      out = 60
+    in literal = 34 61
+    dest = 29
+    destwire = 62
+NETWORK 8
+  compileunit = 26
+  access IO.Step = 25 LocalVariable
+  access DischargeConveyorTimeoutMS = 26 LocalVariable
+  access DischargeStartTimer.Q = 21 LocalVariable
+  access IO.FaultReset = 23 LocalVariable
+  access IO.DischargeConveyorTimeoutFault = 22 LocalVariable
+  access IO.DischargeConveyorTimeoutFault = 24 LocalVariable
+  access IO.Step = 28 LocalVariable
+  access StopCmd = 27 LocalVariable
+  access IO.Step = 29 LocalVariable
+  access IO.Step = 32 LocalVariable
+  access DischargeStartTimer.Q = 31 LocalVariable
+  access StopCmd = 30 LocalVariable
+  access IO.Step = 33 LocalVariable
+  access IO.Step = 37 LocalVariable
+  access IO.DischargeConvRunning = 36 LocalVariable
+  access DischargeStartTimer.Q = 35 LocalVariable
+  access StopCmd = 34 LocalVariable
+  access IO.Step = 38 LocalVariable
+  constant 20 = 39 Int
+  constant 20 = 40 Int
+  constant 0 = 41 Int
+  constant 20 = 42 Int
+  constant 0 = 43 Int
+  constant 20 = 44 Int
+  constant 30 = 45 Int
+  timer 0
+    tonpartuid = 52
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 53
+    instancescope = LocalVariable
+    instancepath = DischargeStartTimer
+    rail = 69
+    step 0 compare
+      partname = Eq
+      uid = 51
+      srctype = Int
+      left tag = 25 103
+      right literal = 39 104
+      out = 105
+    preset tag = 26 106
+    et = 107 66
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 49
+      branch 0
+        rail = 69
+        step 0 contact
+          uid = 46
+          operand = 21
+          operandwire = 67
+          negated = false
+          out = 68
+      branch 1
+        rail = 69
+        step 0 contact
+          uid = 47
+          operand = 22
+          operandwire = 70
+          negated = false
+          out = 71
+        step 1 contact
+          uid = 48
+          operand = 23
+          operandwire = 72
+          negated = true
+          out = 73
+      out = 74
+    coil = 50
+    coil operand = 24
+    coil operandwire = 75
+  move 0
+    moveuid = 56
+    rail = 69
+    step 0 contact
+      uid = 54
+      operand = 27
+      operandwire = 76
+      negated = false
+      out = 77
+    step 1 compare
+      partname = Eq
+      uid = 55
+      srctype = Int
+      left tag = 28 78
+      right literal = 40 79
+      out = 80
+    in literal = 41 81
+    dest = 29
+    destwire = 82
+  move 1
+    moveuid = 60
+    rail = 69
+    step 0 contact
+      uid = 57
+      operand = 30
+      operandwire = 83
+      negated = true
+      out = 84
+    step 1 contact
+      uid = 58
+      operand = 31
+      operandwire = 85
+      negated = false
+      out = 86
+    step 2 compare
+      partname = Eq
+      uid = 59
+      srctype = Int
+      left tag = 32 87
+      right literal = 42 88
+      out = 89
+    in literal = 43 90
+    dest = 33
+    destwire = 91
+  move 2
+    moveuid = 65
+    rail = 69
+    step 0 contact
+      uid = 61
+      operand = 34
+      operandwire = 92
+      negated = true
+      out = 93
+    step 1 contact
+      uid = 62
+      operand = 35
+      operandwire = 94
+      negated = true
+      out = 95
+    step 2 contact
+      uid = 63
+      operand = 36
+      operandwire = 96
+      negated = false
+      out = 97
+    step 3 compare
+      partname = Eq
+      uid = 64
+      srctype = Int
+      left tag = 37 98
+      right literal = 44 99
+      out = 100
+    in literal = 45 101
+    dest = 38
+    destwire = 102
+NETWORK 9
+  compileunit = 2B
+  access IO.ShredderRunRevFB = 22 LocalVariable
+  access IO.Step = 21 LocalVariable
+  access ShredderReverseRunTimeMS = 23 LocalVariable
+  access IO.Step = 25 LocalVariable
+  access StopCmd = 24 LocalVariable
+  access IO.Step = 26 LocalVariable
+  access IO.Step = 29 LocalVariable
+  access IO.MotorFaultActive = 28 LocalVariable
+  access StopCmd = 27 LocalVariable
+  access IO.Step = 30 LocalVariable
+  access IO.Step = 34 LocalVariable
+  access ReverseRunTimer.Q = 33 LocalVariable
+  access IO.MotorFaultActive = 32 LocalVariable
+  access StopCmd = 31 LocalVariable
+  access IO.Step = 35 LocalVariable
+  constant 30 = 36 Int
+  constant 30 = 37 Int
+  constant 0 = 38 Int
+  constant 30 = 39 Int
+  constant 0 = 40 Int
+  constant 30 = 41 Int
+  constant 40 = 42 Int
+  timer 0
+    tonpartuid = 45
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 46
+    instancescope = LocalVariable
+    instancepath = ReverseRunTimer
+    rail = 67
+    step 0 compare
+      partname = Eq
+      uid = 43
+      srctype = Int
+      left tag = 21 88
+      right literal = 36 89
+      out = 90
+    step 1 contact
+      uid = 44
+      operand = 22
+      operandwire = 91
+      negated = false
+      out = 92
+    preset tag = 23 93
+    et = 94 59
+  move 0
+    moveuid = 49
+    rail = 67
+    step 0 contact
+      uid = 47
+      operand = 24
+      operandwire = 60
+      negated = false
+      out = 61
+    step 1 compare
+      partname = Eq
+      uid = 48
+      srctype = Int
+      left tag = 25 62
+      right literal = 37 63
+      out = 64
+    in literal = 38 65
+    dest = 26
+    destwire = 66
+  move 1
+    moveuid = 53
+    rail = 67
+    step 0 contact
+      uid = 50
+      operand = 27
+      operandwire = 68
+      negated = true
+      out = 69
+    step 1 contact
+      uid = 51
+      operand = 28
+      operandwire = 70
+      negated = false
+      out = 71
+    step 2 compare
+      partname = Eq
+      uid = 52
+      srctype = Int
+      left tag = 29 72
+      right literal = 39 73
+      out = 74
+    in literal = 40 75
+    dest = 30
+    destwire = 76
+  move 2
+    moveuid = 58
+    rail = 67
+    step 0 contact
+      uid = 54
+      operand = 31
+      operandwire = 77
+      negated = true
+      out = 78
+    step 1 contact
+      uid = 55
+      operand = 32
+      operandwire = 79
+      negated = true
+      out = 80
+    step 2 contact
+      uid = 56
+      operand = 33
+      operandwire = 81
+      negated = false
+      out = 82
+    step 3 compare
+      partname = Eq
+      uid = 57
+      srctype = Int
+      left tag = 34 83
+      right literal = 41 84
+      out = 85
+    in literal = 42 86
+    dest = 35
+    destwire = 87
+NETWORK 10
+  compileunit = 30
+  access IO.Step = 22 LocalVariable
+  access StopCmd = 21 LocalVariable
+  access IO.Step = 23 LocalVariable
+  access IO.Step = 26 LocalVariable
+  access IO.MotorFaultActive = 25 LocalVariable
+  access StopCmd = 24 LocalVariable
+  access IO.Step = 27 LocalVariable
+  access IO.Step = 31 LocalVariable
+  access IO.ShredderRunFwdFB = 30 LocalVariable
+  access IO.MotorFaultActive = 29 LocalVariable
+  access StopCmd = 28 LocalVariable
+  access IO.Step = 32 LocalVariable
+  constant 40 = 33 Int
+  constant 0 = 34 Int
+  constant 40 = 35 Int
+  constant 0 = 36 Int
+  constant 40 = 37 Int
+  constant 50 = 38 Int
+  move 0
+    moveuid = 41
+    rail = 58
+    step 0 contact
+      uid = 39
+      operand = 21
+      operandwire = 51
+      negated = false
+      out = 52
+    step 1 compare
+      partname = Eq
+      uid = 40
+      srctype = Int
+      left tag = 22 53
+      right literal = 33 54
+      out = 55
+    in literal = 34 56
+    dest = 23
+    destwire = 57
+  move 1
+    moveuid = 45
+    rail = 58
+    step 0 contact
+      uid = 42
+      operand = 24
+      operandwire = 59
+      negated = true
+      out = 60
+    step 1 contact
+      uid = 43
+      operand = 25
+      operandwire = 61
+      negated = false
+      out = 62
+    step 2 compare
+      partname = Eq
+      uid = 44
+      srctype = Int
+      left tag = 26 63
+      right literal = 35 64
+      out = 65
+    in literal = 36 66
+    dest = 27
+    destwire = 67
+  move 2
+    moveuid = 50
+    rail = 58
+    step 0 contact
+      uid = 46
+      operand = 28
+      operandwire = 68
+      negated = true
+      out = 69
+    step 1 contact
+      uid = 47
+      operand = 29
+      operandwire = 70
+      negated = true
+      out = 71
+    step 2 contact
+      uid = 48
+      operand = 30
+      operandwire = 72
+      negated = false
+      out = 73
+    step 3 compare
+      partname = Eq
+      uid = 49
+      srctype = Int
+      left tag = 31 74
+      right literal = 37 75
+      out = 76
+    in literal = 38 77
+    dest = 32
+    destwire = 78
+NETWORK 11
+  compileunit = 35
+  access IO.HopperLevelHigh = 28 LocalVariable
+  access IO.Step = 27 LocalVariable
+  access InfeedRestartDelayMS = 29 LocalVariable
+  access InfeedRunning = 30 LocalVariable
+  access InfeedToUpstreamEnableDelayMS = 31 LocalVariable
+  access InfeedRestartTimer.Q = 21 LocalVariable
+  access InfeedRunning = 22 LocalVariable
+  access UpstreamEnableTimer.Q = 23 LocalVariable
+  access IO.EnableUpstream = 24 LocalVariable
+  access InfeedRunning = 25 LocalVariable
+  access IO.RunInfeedConv = 26 LocalVariable
+  constant 50 = 32 Int
+  timer 0
+    tonpartuid = 41
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 42
+    instancescope = LocalVariable
+    instancepath = InfeedRestartTimer
+    rail = 51
+    step 0 compare
+      partname = Eq
+      uid = 39
+      srctype = Int
+      left tag = 27 58
+      right literal = 32 59
+      out = 60
+    step 1 contact
+      uid = 40
+      operand = 28
+      operandwire = 61
+      negated = true
+      out = 62
+    preset tag = 29 63
+    et = 64 46
+  timer 1
+    tonpartuid = 44
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 45
+    instancescope = LocalVariable
+    instancepath = UpstreamEnableTimer
+    rail = 51
+    step 0 contact
+      uid = 43
+      operand = 30
+      operandwire = 65
+      negated = false
+      out = 66
+    preset tag = 31 67
+    et = 68 47
+  assignment 0
+    rail = 51
+    step 0 contact
+      uid = 33
+      operand = 21
+      operandwire = 48
+      negated = false
+      out = 49
+    coil = 34
+    coil operand = 22
+    coil operandwire = 50
+  assignment 1
+    rail = 51
+    step 0 contact
+      uid = 35
+      operand = 23
+      operandwire = 52
+      negated = false
+      out = 53
+    coil = 36
+    coil operand = 24
+    coil operandwire = 54
+  assignment 2
+    rail = 51
+    step 0 contact
+      uid = 37
+      operand = 25
+      operandwire = 55
+      negated = false
+      out = 56
+    coil = 38
+    coil operand = 26
+    coil operandwire = 57
+NETWORK 12
+  compileunit = 3A
+  access IO.Step = 24 LocalVariable
+  access OvercurrentSpinUpAllowanceMS = 25 LocalVariable
+  access AlwaysTrue = 28 GlobalVariable
+  access SpinUpTimer.Q = 27 LocalVariable
+  access IO.Step = 26 LocalVariable
+  access OvercurrentMediumDelayMS = 29 LocalVariable
+  access AlwaysTrue = 32 GlobalVariable
+  access SpinUpTimer.Q = 31 LocalVariable
+  access IO.Step = 30 LocalVariable
+  access OvercurrentHighDelayMS = 33 LocalVariable
+  access OvercurrentMediumTimer.Q = 21 LocalVariable
+  access OvercurrentHighTimer.Q = 22 LocalVariable
+  access OvercurrentTripped = 23 LocalVariable
+  access IO.Step = 35 LocalVariable
+  access StopCmd = 34 LocalVariable
+  access IO.Step = 36 LocalVariable
+  access IO.Step = 39 LocalVariable
+  access IO.MotorFaultActive = 38 LocalVariable
+  access StopCmd = 37 LocalVariable
+  access IO.Step = 40 LocalVariable
+  access IO.Step = 44 LocalVariable
+  access OvercurrentTripped = 43 LocalVariable
+  access IO.MotorFaultActive = 42 LocalVariable
+  access StopCmd = 41 LocalVariable
+  access IO.Step = 45 LocalVariable
+  constant 50 = 46 Int
+  constant 50 = 47 Int
+  constant 50 = 48 Int
+  constant 50 = 49 Int
+  constant 0 = 50 Int
+  constant 50 = 51 Int
+  constant 0 = 52 Int
+  constant 50 = 53 Int
+  constant 60 = 54 Int
+  timer 0
+    tonpartuid = 60
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 61
+    instancescope = LocalVariable
+    instancepath = SpinUpTimer
+    rail = 89
+    step 0 compare
+      partname = Eq
+      uid = 59
+      srctype = Int
+      left tag = 24 121
+      right literal = 46 122
+      out = 123
+    preset tag = 25 124
+    et = 125 84
+  timer 1
+    tonpartuid = 65
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 66
+    instancescope = LocalVariable
+    instancepath = OvercurrentMediumTimer
+    rail = 89
+    step 0 compare
+      partname = Eq
+      uid = 62
+      srctype = Int
+      left tag = 26 126
+      right literal = 47 127
+      out = 128
+    step 1 contact
+      uid = 63
+      operand = 27
+      operandwire = 129
+      negated = false
+      out = 130
+    step 2 contact
+      uid = 64
+      operand = 28
+      operandwire = 131
+      negated = true
+      out = 132
+    preset tag = 29 133
+    et = 134 85
+  timer 2
+    tonpartuid = 70
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 71
+    instancescope = LocalVariable
+    instancepath = OvercurrentHighTimer
+    rail = 89
+    step 0 compare
+      partname = Eq
+      uid = 67
+      srctype = Int
+      left tag = 30 135
+      right literal = 48 136
+      out = 137
+    step 1 contact
+      uid = 68
+      operand = 31
+      operandwire = 138
+      negated = false
+      out = 139
+    step 2 contact
+      uid = 69
+      operand = 32
+      operandwire = 140
+      negated = true
+      out = 141
+    preset tag = 33 142
+    et = 143 86
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 57
+      branch 0
+        rail = 89
+        step 0 contact
+          uid = 55
+          operand = 21
+          operandwire = 87
+          negated = false
+          out = 88
+      branch 1
+        rail = 89
+        step 0 contact
+          uid = 56
+          operand = 22
+          operandwire = 90
+          negated = false
+          out = 91
+      out = 92
+    coil = 58
+    coil operand = 23
+    coil operandwire = 93
+  move 0
+    moveuid = 74
+    rail = 89
+    step 0 contact
+      uid = 72
+      operand = 34
+      operandwire = 94
+      negated = false
+      out = 95
+    step 1 compare
+      partname = Eq
+      uid = 73
+      srctype = Int
+      left tag = 35 96
+      right literal = 49 97
+      out = 98
+    in literal = 50 99
+    dest = 36
+    destwire = 100
+  move 1
+    moveuid = 78
+    rail = 89
+    step 0 contact
+      uid = 75
+      operand = 37
+      operandwire = 101
+      negated = true
+      out = 102
+    step 1 contact
+      uid = 76
+      operand = 38
+      operandwire = 103
+      negated = false
+      out = 104
+    step 2 compare
+      partname = Eq
+      uid = 77
+      srctype = Int
+      left tag = 39 105
+      right literal = 51 106
+      out = 107
+    in literal = 52 108
+    dest = 40
+    destwire = 109
+  move 2
+    moveuid = 83
+    rail = 89
+    step 0 contact
+      uid = 79
+      operand = 41
+      operandwire = 110
+      negated = true
+      out = 111
+    step 1 contact
+      uid = 80
+      operand = 42
+      operandwire = 112
+      negated = true
+      out = 113
+    step 2 contact
+      uid = 81
+      operand = 43
+      operandwire = 114
+      negated = false
+      out = 115
+    step 3 compare
+      partname = Eq
+      uid = 82
+      srctype = Int
+      left tag = 44 116
+      right literal = 53 117
+      out = 118
+    in literal = 54 119
+    dest = 45
+    destwire = 120
+NETWORK 13
+  compileunit = 3F
+  access IO.Step = 21 LocalVariable
+  access ReversalRetryPauseTimeMS = 22 LocalVariable
+  access IO.Step = 24 LocalVariable
+  access StopCmd = 23 LocalVariable
+  access IO.Step = 25 LocalVariable
+  access IO.Step = 29 LocalVariable
+  access IO.ShredderBlockedFault = 28 LocalVariable
+  access OvercurrentAbortPauseTimer.Q = 27 LocalVariable
+  access StopCmd = 26 LocalVariable
+  access IO.Step = 30 LocalVariable
+  access IO.Step = 34 LocalVariable
+  access IO.ShredderBlockedFault = 33 LocalVariable
+  access OvercurrentAbortPauseTimer.Q = 32 LocalVariable
+  access StopCmd = 31 LocalVariable
+  access IO.Step = 35 LocalVariable
+  constant 60 = 36 Int
+  constant 60 = 37 Int
+  constant 0 = 38 Int
+  constant 60 = 39 Int
+  constant 0 = 40 Int
+  constant 60 = 41 Int
+  constant 30 = 42 Int
+  timer 0
+    tonpartuid = 44
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 45
+    instancescope = LocalVariable
+    instancepath = OvercurrentAbortPauseTimer
+    rail = 67
+    step 0 compare
+      partname = Eq
+      uid = 43
+      srctype = Int
+      left tag = 21 90
+      right literal = 36 91
+      out = 92
+    preset tag = 22 93
+    et = 94 59
+  move 0
+    moveuid = 48
+    rail = 67
+    step 0 contact
+      uid = 46
+      operand = 23
+      operandwire = 60
+      negated = false
+      out = 61
+    step 1 compare
+      partname = Eq
+      uid = 47
+      srctype = Int
+      left tag = 24 62
+      right literal = 37 63
+      out = 64
+    in literal = 38 65
+    dest = 25
+    destwire = 66
+  move 1
+    moveuid = 53
+    rail = 67
+    step 0 contact
+      uid = 49
+      operand = 26
+      operandwire = 68
+      negated = true
+      out = 69
+    step 1 contact
+      uid = 50
+      operand = 27
+      operandwire = 70
+      negated = false
+      out = 71
+    step 2 contact
+      uid = 51
+      operand = 28
+      operandwire = 72
+      negated = false
+      out = 73
+    step 3 compare
+      partname = Eq
+      uid = 52
+      srctype = Int
+      left tag = 29 74
+      right literal = 39 75
+      out = 76
+    in literal = 40 77
+    dest = 30
+    destwire = 78
+  move 2
+    moveuid = 58
+    rail = 67
+    step 0 contact
+      uid = 54
+      operand = 31
+      operandwire = 79
+      negated = true
+      out = 80
+    step 1 contact
+      uid = 55
+      operand = 32
+      operandwire = 81
+      negated = false
+      out = 82
+    step 2 contact
+      uid = 56
+      operand = 33
+      operandwire = 83
+      negated = true
+      out = 84
+    step 3 compare
+      partname = Eq
+      uid = 57
+      srctype = Int
+      left tag = 34 85
+      right literal = 41 86
+      out = 87
+    in literal = 42 88
+    dest = 35
+    destwire = 89
+NETWORK 14
+  compileunit = 44
+  access IO.Step = 21 LocalVariable
+  access IO.MotorReverseCmd = 22 LocalVariable
+  access IO.Step = 24 LocalVariable
+  access IO.Step = 23 LocalVariable
+  access IO.MotorAutoStartCmd = 25 LocalVariable
+  access IO.Step = 26 LocalVariable
+  access IO.MotorPreStartDoneCmd = 27 LocalVariable
+  access IO.Step = 28 LocalVariable
+  access IO.MotorStartArm = 29 LocalVariable
+  access IO.Step = 31 LocalVariable
+  access IO.Step = 30 LocalVariable
+  access IO.PusherParkCmd = 32 LocalVariable
+  access IO.CycleStop = 33 LocalVariable
+  access IO.SystemHealthy = 34 LocalVariable
+  access IO.Step = 35 LocalVariable
+  access PusherModeForceOff = 36 LocalVariable
+  access StopCmd = 37 LocalVariable
+  access IO.PusherCycleInhibitCmd = 38 LocalVariable
+  access PusherModeForceOff = 39 LocalVariable
+  access IO.PusherModeCmd = 40 LocalVariable
+  access PusherModeForceOff = 41 LocalVariable
+  access IO.OperatorPusherMode = 42 LocalVariable
+  access IO.PusherModeCmd = 43 LocalVariable
+  constant 30 = 44 Int
+  constant 50 = 46 Int
+  constant 30 = 45 Int
+  constant 20 = 47 Int
+  constant 10 = 48 Int
+  constant 40 = 50 Int
+  constant 20 = 49 Int
+  constant 60 = 51 Int
+  constant 0 = 52 Int
+  assignment 0
+    rail = 80
+    step 0 compare
+      partname = Eq
+      uid = 53
+      srctype = Int
+      left tag = 21 76
+      right literal = 44 77
+      out = 78
+    coil = 54
+    coil operand = 22
+    coil operandwire = 79
+  assignment 1
+    rail = 80
+    step 0 compare
+      partname = Ge
+      uid = 55
+      srctype = Int
+      left tag = 23 81
+      right literal = 45 82
+      out = 83
+    step 1 compare
+      partname = Le
+      uid = 56
+      srctype = Int
+      left tag = 24 84
+      right literal = 46 85
+      out = 86
+    coil = 57
+    coil operand = 25
+    coil operandwire = 87
+  assignment 2
+    rail = 80
+    step 0 compare
+      partname = Ge
+      uid = 58
+      srctype = Int
+      left tag = 26 88
+      right literal = 47 89
+      out = 90
+    coil = 59
+    coil operand = 27
+    coil operandwire = 91
+  assignment 3
+    rail = 80
+    step 0 compare
+      partname = Eq
+      uid = 60
+      srctype = Int
+      left tag = 28 92
+      right literal = 48 93
+      out = 94
+    coil = 61
+    coil operand = 29
+    coil operandwire = 95
+  assignment 4
+    rail = 80
+    step 0 compare
+      partname = Ge
+      uid = 62
+      srctype = Int
+      left tag = 30 96
+      right literal = 49 97
+      out = 98
+    step 1 compare
+      partname = Le
+      uid = 63
+      srctype = Int
+      left tag = 31 99
+      right literal = 50 100
+      out = 101
+    coil = 64
+    coil operand = 32
+    coil operandwire = 102
+  assignment 5
+    rail = none
+    step 0 or
+      uid = 68
+      branch 0
+        rail = 80
+        step 0 contact
+          uid = 65
+          operand = 33
+          operandwire = 103
+          negated = false
+          out = 104
+      branch 1
+        rail = 80
+        step 0 contact
+          uid = 66
+          operand = 34
+          operandwire = 105
+          negated = true
+          out = 106
+      branch 2
+        rail = 80
+        step 0 compare
+          partname = Eq
+          uid = 67
+          srctype = Int
+          left tag = 35 107
+          right literal = 51 108
+          out = 109
+      out = 110
+    coil = 69
+    coil operand = 36
+    coil operandwire = 111
+  assignment 6
+    rail = 80
+    step 0 contact
+      uid = 70
+      operand = 37
+      operandwire = 112
+      negated = false
+      out = 113
+    coil = 71
+    coil operand = 38
+    coil operandwire = 114
+  move 0
+    moveuid = 73
+    rail = 80
+    step 0 contact
+      uid = 72
+      operand = 39
+      operandwire = 115
+      negated = false
+      out = 116
+    in literal = 52 117
+    dest = 40
+    destwire = 118
+  move 1
+    moveuid = 75
+    rail = 80
+    step 0 contact
+      uid = 74
+      operand = 41
+      operandwire = 119
+      negated = true
+      out = 120
+    in tag = 42 121
+    dest = 43
+    destwire = 122
+NETWORK 15
+  compileunit = 49
+  access IO.Step = 21 LocalVariable
+  access IO.RunDischargeConv = 22 LocalVariable
+  access IO.Step = 23 LocalVariable
+  access IO.PusherJogPreStartSounder = 24 LocalVariable
+  access IO.PreStartSounder = 25 LocalVariable
+  constant 20 = 26 Int
+  constant 10 = 27 Int
+  assignment 0
+    rail = 38
+    step 0 compare
+      partname = Ge
+      uid = 28
+      srctype = Int
+      left tag = 21 34
+      right literal = 26 35
+      out = 36
+    coil = 29
+    coil operand = 22
+    coil operandwire = 37
+  assignment 1
+    rail = none
+    step 0 or
+      uid = 32
+      branch 0
+        rail = 38
+        step 0 compare
+          partname = Eq
+          uid = 30
+          srctype = Int
+          left tag = 23 39
+          right literal = 27 40
+          out = 41
+      branch 1
+        rail = 38
+        step 0 contact
+          uid = 31
+          operand = 24
+          operandwire = 42
+          negated = false
+          out = 43
+      out = 44
+    coil = 33
+    coil operand = 25
+    coil operandwire = 45

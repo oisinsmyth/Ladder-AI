@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T12:58:49.2530127Z</Created>
+    <Created>2026-07-16T23:20:27.074812Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -85,7 +85,9 @@
           <Member Name="PreStartDone" Datatype="Bool" />
           <Member Name="InhibitMotor" Datatype="Bool" />
           <Member Name="FaultReset" Datatype="Bool" />
-          <Member Name="FTTime" Datatype="Real" />
+          <Member Name="FTTime" Datatype="Real">
+            <StartValue>10.0</StartValue>
+          </Member>
           <Member Name="EnableUPSTime" Datatype="Real" />
           <Member Name="FaultActive" Datatype="Bool" />
           <Member Name="RunFwd" Datatype="Bool" />
@@ -107,7 +109,9 @@
           <Member Name="ReverseDelay" Datatype="Real">
             <StartValue>8.0</StartValue>
           </Member>
-          <Member Name="ReverseIgnoreFT" Datatype="Real" />
+          <Member Name="ReverseIgnoreFT" Datatype="Real">
+            <StartValue>12.0</StartValue>
+          </Member>
           <Member Name="Reverse" Datatype="Bool" />
           <Member Name="HandReverse" Datatype="Bool" />
         </Section>

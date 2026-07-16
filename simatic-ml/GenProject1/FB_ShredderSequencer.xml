@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T12:59:02.3506962Z</Created>
+    <Created>2026-07-16T23:20:29.4058233Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -78,9 +78,11 @@
           <Member Name="CycleStart" Datatype="Bool" />
           <Member Name="CycleStop" Datatype="Bool" />
           <Member Name="DownstreamRunning" Datatype="Bool" />
+          <Member Name="SystemHealthy" Datatype="Bool" />
           <Member Name="DischargeConvRunning" Datatype="Bool" />
           <Member Name="HopperLevelHigh" Datatype="Bool" />
           <Member Name="ShredderRunFwdFB" Datatype="Bool" />
+          <Member Name="ShredderRunRevFB" Datatype="Bool" />
           <Member Name="ShredderMotorCurrent" Datatype="Real" />
           <Member Name="MotorFaultActive" Datatype="Bool" />
           <Member Name="FaultReset" Datatype="Bool" />
@@ -97,7 +99,10 @@
           <Member Name="MotorReverseCmd" Datatype="Bool" />
           <Member Name="MotorAutoStartCmd" Datatype="Bool" />
           <Member Name="MotorPreStartDoneCmd" Datatype="Bool" />
+          <Member Name="MotorStartArm" Datatype="Bool" />
           <Member Name="PusherModeCmd" Datatype="Int" />
+          <Member Name="PusherParkCmd" Datatype="Bool" />
+          <Member Name="PusherCycleInhibitCmd" Datatype="Bool" />
         </Section>
       </Sections>
     </Member>
@@ -109,7 +114,18 @@
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
       <Comment>
-        <MultiLanguageText Lang="en-US">Loss of DownstreamRunning stops the shredder too, not just an operator CycleStop - nowhere for shredded material to go otherwise. Read by every step's own stop transition below.</MultiLanguageText>
+        <MultiLanguageText Lang="en-US">Stop-all: operator CycleStop, loss of DownstreamRunning (nowhere for shredded material to go), or loss of SystemHealthy (control circuit/E-stop - REQ-062: recovery must demand a fresh start press, so the sequence may not sit in a run step through an E-stop). Read by every step's own stop transition below and mirrored to the pusher as PusherCycleInhibitCmd.</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="PusherModeForceOff" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Named once (C-601): the hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately NOT the full StopCmd (owner amendment 2026-07-16): downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd.</MultiLanguageText>
       </Comment>
     </Member>
     <Member Name="ReversalWindowTimeMS" Datatype="DInt" Remanence="NonRetain" Accessibility="Public">
@@ -425,7 +441,7 @@
           <MultilingualTextItem ID="2" CompositionName="Items">
             <AttributeList>
               <Culture>en-US</Culture>
-              <Text>Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (shredder commanded reverse - see FB_MotorFwdRevSystem's own pause/reversal handling) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals).</Text>
+              <Text>Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).</Text>
             </AttributeList>
           </MultilingualTextItem>
         </ObjectList>
@@ -448,47 +464,65 @@
     </Access>
     <Access Scope="LocalVariable" UId="23">
       <Symbol>
+        <Component Name="IO" />
+        <Component Name="SystemHealthy" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="24">
+      <Symbol>
         <Component Name="StopCmd" />
       </Symbol>
     </Access>
-    <Part Name="Contact" UId="24" />
-    <Part Name="Contact" UId="25">
+    <Part Name="Contact" UId="25" />
+    <Part Name="Contact" UId="26">
       <Negated Name="operand" />
     </Part>
-    <Part Name="O" UId="26">
-      <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+    <Part Name="Contact" UId="27">
+      <Negated Name="operand" />
     </Part>
-    <Part Name="Coil" UId="27" />
+    <Part Name="O" UId="28">
+      <TemplateValue Name="Card" Type="Cardinality">3</TemplateValue>
+    </Part>
+    <Part Name="Coil" UId="29" />
   </Parts>
   <Wires>
-    <Wire UId="28">
-      <IdentCon UId="21" />
-      <NameCon UId="24" Name="operand" />
-    </Wire>
-    <Wire UId="29">
-      <NameCon UId="24" Name="out" />
-      <NameCon UId="26" Name="in1" />
-    </Wire>
     <Wire UId="30">
-      <Powerrail />
-      <NameCon UId="24" Name="in" />
-      <NameCon UId="25" Name="in" />
-    </Wire>
-    <Wire UId="31">
-      <IdentCon UId="22" />
+      <IdentCon UId="21" />
       <NameCon UId="25" Name="operand" />
     </Wire>
-    <Wire UId="32">
+    <Wire UId="31">
       <NameCon UId="25" Name="out" />
-      <NameCon UId="26" Name="in2" />
+      <NameCon UId="28" Name="in1" />
     </Wire>
-    <Wire UId="33">
-      <NameCon UId="26" Name="out" />
+    <Wire UId="32">
+      <Powerrail />
+      <NameCon UId="25" Name="in" />
+      <NameCon UId="26" Name="in" />
       <NameCon UId="27" Name="in" />
     </Wire>
+    <Wire UId="33">
+      <IdentCon UId="22" />
+      <NameCon UId="26" Name="operand" />
+    </Wire>
     <Wire UId="34">
+      <NameCon UId="26" Name="out" />
+      <NameCon UId="28" Name="in2" />
+    </Wire>
+    <Wire UId="35">
       <IdentCon UId="23" />
       <NameCon UId="27" Name="operand" />
+    </Wire>
+    <Wire UId="36">
+      <NameCon UId="27" Name="out" />
+      <NameCon UId="28" Name="in3" />
+    </Wire>
+    <Wire UId="37">
+      <NameCon UId="28" Name="out" />
+      <NameCon UId="29" Name="in" />
+    </Wire>
+    <Wire UId="38">
+      <IdentCon UId="24" />
+      <NameCon UId="29" Name="operand" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -2373,18 +2407,18 @@
     </Access>
     <Access Scope="LocalVariable" UId="22">
       <Symbol>
-        <Component Name="ShredderReverseRunTimeMS" />
+        <Component Name="IO" />
+        <Component Name="ShredderRunRevFB" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="23">
       <Symbol>
-        <Component Name="StopCmd" />
+        <Component Name="ShredderReverseRunTimeMS" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="24">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="Step" />
+        <Component Name="StopCmd" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="25">
@@ -2395,19 +2429,19 @@
     </Access>
     <Access Scope="LocalVariable" UId="26">
       <Symbol>
-        <Component Name="StopCmd" />
+        <Component Name="IO" />
+        <Component Name="Step" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="27">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="MotorFaultActive" />
+        <Component Name="StopCmd" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="28">
       <Symbol>
         <Component Name="IO" />
-        <Component Name="Step" />
+        <Component Name="MotorFaultActive" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="29">
@@ -2418,25 +2452,25 @@
     </Access>
     <Access Scope="LocalVariable" UId="30">
       <Symbol>
-        <Component Name="StopCmd" />
+        <Component Name="IO" />
+        <Component Name="Step" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="31">
+      <Symbol>
+        <Component Name="StopCmd" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="32">
       <Symbol>
         <Component Name="IO" />
         <Component Name="MotorFaultActive" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="32">
+    <Access Scope="LocalVariable" UId="33">
       <Symbol>
         <Component Name="ReverseRunTimer" />
         <Component Name="Q" />
-      </Symbol>
-    </Access>
-    <Access Scope="LocalVariable" UId="33">
-      <Symbol>
-        <Component Name="IO" />
-        <Component Name="Step" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="34">
@@ -2445,11 +2479,11 @@
         <Component Name="Step" />
       </Symbol>
     </Access>
-    <Access Scope="LiteralConstant" UId="35">
-      <Constant>
-        <ConstantType>Int</ConstantType>
-        <ConstantValue>30</ConstantValue>
-      </Constant>
+    <Access Scope="LocalVariable" UId="35">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="Step" />
+      </Symbol>
     </Access>
     <Access Scope="LiteralConstant" UId="36">
       <Constant>
@@ -2460,208 +2494,223 @@
     <Access Scope="LiteralConstant" UId="37">
       <Constant>
         <ConstantType>Int</ConstantType>
-        <ConstantValue>0</ConstantValue>
+        <ConstantValue>30</ConstantValue>
       </Constant>
     </Access>
     <Access Scope="LiteralConstant" UId="38">
       <Constant>
         <ConstantType>Int</ConstantType>
-        <ConstantValue>30</ConstantValue>
+        <ConstantValue>0</ConstantValue>
       </Constant>
     </Access>
     <Access Scope="LiteralConstant" UId="39">
       <Constant>
         <ConstantType>Int</ConstantType>
-        <ConstantValue>0</ConstantValue>
+        <ConstantValue>30</ConstantValue>
       </Constant>
     </Access>
     <Access Scope="LiteralConstant" UId="40">
       <Constant>
         <ConstantType>Int</ConstantType>
-        <ConstantValue>30</ConstantValue>
+        <ConstantValue>0</ConstantValue>
       </Constant>
     </Access>
     <Access Scope="LiteralConstant" UId="41">
       <Constant>
         <ConstantType>Int</ConstantType>
+        <ConstantValue>30</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="LiteralConstant" UId="42">
+      <Constant>
+        <ConstantType>Int</ConstantType>
         <ConstantValue>40</ConstantValue>
       </Constant>
     </Access>
-    <Part Name="Eq" UId="42">
+    <Part Name="Eq" UId="43">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="TON" Version="1.0" UId="43">
-      <Instance Scope="LocalVariable" UId="44">
+    <Part Name="Contact" UId="44" />
+    <Part Name="TON" Version="1.0" UId="45">
+      <Instance Scope="LocalVariable" UId="46">
         <Component Name="ReverseRunTimer" />
       </Instance>
       <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
     </Part>
-    <Part Name="Contact" UId="45" />
-    <Part Name="Eq" UId="46">
+    <Part Name="Contact" UId="47" />
+    <Part Name="Eq" UId="48">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Move" UId="47" DisabledENO="true">
+    <Part Name="Move" UId="49" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
-    <Part Name="Contact" UId="48">
+    <Part Name="Contact" UId="50">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Contact" UId="49" />
-    <Part Name="Eq" UId="50">
+    <Part Name="Contact" UId="51" />
+    <Part Name="Eq" UId="52">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Move" UId="51" DisabledENO="true">
+    <Part Name="Move" UId="53" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
-    <Part Name="Contact" UId="52">
+    <Part Name="Contact" UId="54">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Contact" UId="53">
+    <Part Name="Contact" UId="55">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Contact" UId="54" />
-    <Part Name="Eq" UId="55">
+    <Part Name="Contact" UId="56" />
+    <Part Name="Eq" UId="57">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Move" UId="56" DisabledENO="true">
+    <Part Name="Move" UId="58" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
   </Parts>
   <Wires>
-    <Wire UId="58">
-      <IdentCon UId="23" />
-      <NameCon UId="45" Name="operand" />
-    </Wire>
-    <Wire UId="59">
-      <NameCon UId="45" Name="out" />
-      <NameCon UId="46" Name="pre" />
-    </Wire>
     <Wire UId="60">
       <IdentCon UId="24" />
-      <NameCon UId="46" Name="in1" />
+      <NameCon UId="47" Name="operand" />
     </Wire>
     <Wire UId="61">
-      <IdentCon UId="36" />
-      <NameCon UId="46" Name="in2" />
+      <NameCon UId="47" Name="out" />
+      <NameCon UId="48" Name="pre" />
     </Wire>
     <Wire UId="62">
-      <NameCon UId="46" Name="out" />
-      <NameCon UId="47" Name="en" />
+      <IdentCon UId="25" />
+      <NameCon UId="48" Name="in1" />
     </Wire>
     <Wire UId="63">
       <IdentCon UId="37" />
-      <NameCon UId="47" Name="in" />
+      <NameCon UId="48" Name="in2" />
     </Wire>
     <Wire UId="64">
-      <NameCon UId="47" Name="out1" />
-      <IdentCon UId="25" />
+      <NameCon UId="48" Name="out" />
+      <NameCon UId="49" Name="en" />
     </Wire>
     <Wire UId="65">
-      <Powerrail />
-      <NameCon UId="42" Name="pre" />
-      <NameCon UId="45" Name="in" />
-      <NameCon UId="48" Name="in" />
-      <NameCon UId="52" Name="in" />
+      <IdentCon UId="38" />
+      <NameCon UId="49" Name="in" />
     </Wire>
     <Wire UId="66">
+      <NameCon UId="49" Name="out1" />
       <IdentCon UId="26" />
-      <NameCon UId="48" Name="operand" />
     </Wire>
     <Wire UId="67">
-      <NameCon UId="48" Name="out" />
-      <NameCon UId="49" Name="in" />
+      <Powerrail />
+      <NameCon UId="43" Name="pre" />
+      <NameCon UId="47" Name="in" />
+      <NameCon UId="50" Name="in" />
+      <NameCon UId="54" Name="in" />
     </Wire>
     <Wire UId="68">
       <IdentCon UId="27" />
-      <NameCon UId="49" Name="operand" />
+      <NameCon UId="50" Name="operand" />
     </Wire>
     <Wire UId="69">
-      <NameCon UId="49" Name="out" />
-      <NameCon UId="50" Name="pre" />
+      <NameCon UId="50" Name="out" />
+      <NameCon UId="51" Name="in" />
     </Wire>
     <Wire UId="70">
       <IdentCon UId="28" />
-      <NameCon UId="50" Name="in1" />
+      <NameCon UId="51" Name="operand" />
     </Wire>
     <Wire UId="71">
-      <IdentCon UId="38" />
-      <NameCon UId="50" Name="in2" />
+      <NameCon UId="51" Name="out" />
+      <NameCon UId="52" Name="pre" />
     </Wire>
     <Wire UId="72">
-      <NameCon UId="50" Name="out" />
-      <NameCon UId="51" Name="en" />
+      <IdentCon UId="29" />
+      <NameCon UId="52" Name="in1" />
     </Wire>
     <Wire UId="73">
       <IdentCon UId="39" />
-      <NameCon UId="51" Name="in" />
+      <NameCon UId="52" Name="in2" />
     </Wire>
     <Wire UId="74">
-      <NameCon UId="51" Name="out1" />
-      <IdentCon UId="29" />
+      <NameCon UId="52" Name="out" />
+      <NameCon UId="53" Name="en" />
     </Wire>
     <Wire UId="75">
-      <IdentCon UId="30" />
-      <NameCon UId="52" Name="operand" />
+      <IdentCon UId="40" />
+      <NameCon UId="53" Name="in" />
     </Wire>
     <Wire UId="76">
-      <NameCon UId="52" Name="out" />
-      <NameCon UId="53" Name="in" />
+      <NameCon UId="53" Name="out1" />
+      <IdentCon UId="30" />
     </Wire>
     <Wire UId="77">
       <IdentCon UId="31" />
-      <NameCon UId="53" Name="operand" />
+      <NameCon UId="54" Name="operand" />
     </Wire>
     <Wire UId="78">
-      <NameCon UId="53" Name="out" />
-      <NameCon UId="54" Name="in" />
+      <NameCon UId="54" Name="out" />
+      <NameCon UId="55" Name="in" />
     </Wire>
     <Wire UId="79">
       <IdentCon UId="32" />
-      <NameCon UId="54" Name="operand" />
+      <NameCon UId="55" Name="operand" />
     </Wire>
     <Wire UId="80">
-      <NameCon UId="54" Name="out" />
-      <NameCon UId="55" Name="pre" />
+      <NameCon UId="55" Name="out" />
+      <NameCon UId="56" Name="in" />
     </Wire>
     <Wire UId="81">
       <IdentCon UId="33" />
-      <NameCon UId="55" Name="in1" />
+      <NameCon UId="56" Name="operand" />
     </Wire>
     <Wire UId="82">
-      <IdentCon UId="40" />
-      <NameCon UId="55" Name="in2" />
+      <NameCon UId="56" Name="out" />
+      <NameCon UId="57" Name="pre" />
     </Wire>
     <Wire UId="83">
-      <NameCon UId="55" Name="out" />
-      <NameCon UId="56" Name="en" />
+      <IdentCon UId="34" />
+      <NameCon UId="57" Name="in1" />
     </Wire>
     <Wire UId="84">
       <IdentCon UId="41" />
-      <NameCon UId="56" Name="in" />
+      <NameCon UId="57" Name="in2" />
     </Wire>
     <Wire UId="85">
-      <NameCon UId="56" Name="out1" />
-      <IdentCon UId="34" />
+      <NameCon UId="57" Name="out" />
+      <NameCon UId="58" Name="en" />
     </Wire>
     <Wire UId="86">
-      <IdentCon UId="21" />
-      <NameCon UId="42" Name="in1" />
+      <IdentCon UId="42" />
+      <NameCon UId="58" Name="in" />
     </Wire>
     <Wire UId="87">
+      <NameCon UId="58" Name="out1" />
       <IdentCon UId="35" />
-      <NameCon UId="42" Name="in2" />
     </Wire>
     <Wire UId="88">
-      <NameCon UId="42" Name="out" />
-      <NameCon UId="43" Name="IN" />
+      <IdentCon UId="21" />
+      <NameCon UId="43" Name="in1" />
     </Wire>
     <Wire UId="89">
-      <IdentCon UId="22" />
-      <NameCon UId="43" Name="PT" />
+      <IdentCon UId="36" />
+      <NameCon UId="43" Name="in2" />
     </Wire>
     <Wire UId="90">
-      <NameCon UId="43" Name="ET" />
-      <OpenCon UId="57" />
+      <NameCon UId="43" Name="out" />
+      <NameCon UId="44" Name="in" />
+    </Wire>
+    <Wire UId="91">
+      <IdentCon UId="22" />
+      <NameCon UId="44" Name="operand" />
+    </Wire>
+    <Wire UId="92">
+      <NameCon UId="44" Name="out" />
+      <NameCon UId="45" Name="IN" />
+    </Wire>
+    <Wire UId="93">
+      <IdentCon UId="23" />
+      <NameCon UId="45" Name="PT" />
+    </Wire>
+    <Wire UId="94">
+      <NameCon UId="45" Name="ET" />
+      <OpenCon UId="59" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -2673,7 +2722,7 @@
               <MultilingualTextItem ID="2D" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>ReverseRunTimer counts only while reverse is CONFIRMED running (ShredderRunRevFB), so the spec's 6 s (REQ-005) buys 6 s of actual rotation - the motor FB's 8 s ReverseDelay entry pause no longer eats the window, and a feedback dropout restarts the count. The commanded-but-no-feedback dwell is deliberately NOT re-timed here (C-409, one interval one place; step 40 already relies on the same mechanism): the motor FB's own fail-to-run window (FTTime, after its ReverseIgnoreFT masking) latches FTR, and the MotorFaultActive exit below aborts the step - bounded dwell, latched fault, C-122's substance without a duplicate timer.</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -4117,7 +4166,7 @@
     <Access Scope="LocalVariable" UId="29">
       <Symbol>
         <Component Name="IO" />
-        <Component Name="PusherModeCmd" />
+        <Component Name="MotorStartArm" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="30">
@@ -4129,193 +4178,379 @@
     <Access Scope="LocalVariable" UId="31">
       <Symbol>
         <Component Name="IO" />
-        <Component Name="OperatorPusherMode" />
+        <Component Name="Step" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="32">
       <Symbol>
         <Component Name="IO" />
+        <Component Name="PusherParkCmd" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="33">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="CycleStop" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="34">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="SystemHealthy" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="35">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="Step" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="36">
+      <Symbol>
+        <Component Name="PusherModeForceOff" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="37">
+      <Symbol>
+        <Component Name="StopCmd" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="38">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="PusherCycleInhibitCmd" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="39">
+      <Symbol>
+        <Component Name="PusherModeForceOff" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="40">
+      <Symbol>
+        <Component Name="IO" />
         <Component Name="PusherModeCmd" />
       </Symbol>
     </Access>
-    <Access Scope="LiteralConstant" UId="33">
+    <Access Scope="LocalVariable" UId="41">
+      <Symbol>
+        <Component Name="PusherModeForceOff" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="42">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="OperatorPusherMode" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="43">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="PusherModeCmd" />
+      </Symbol>
+    </Access>
+    <Access Scope="LiteralConstant" UId="44">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>30</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="34">
+    <Access Scope="LiteralConstant" UId="45">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>30</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="35">
+    <Access Scope="LiteralConstant" UId="46">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>50</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="36">
+    <Access Scope="LiteralConstant" UId="47">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>20</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="37">
+    <Access Scope="LiteralConstant" UId="48">
+      <Constant>
+        <ConstantType>Int</ConstantType>
+        <ConstantValue>10</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="LiteralConstant" UId="49">
+      <Constant>
+        <ConstantType>Int</ConstantType>
+        <ConstantValue>20</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="LiteralConstant" UId="50">
+      <Constant>
+        <ConstantType>Int</ConstantType>
+        <ConstantValue>40</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="LiteralConstant" UId="51">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>60</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="38">
+    <Access Scope="LiteralConstant" UId="52">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>0</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="39">
-      <Constant>
-        <ConstantType>Int</ConstantType>
-        <ConstantValue>60</ConstantValue>
-      </Constant>
-    </Access>
-    <Part Name="Eq" UId="40">
+    <Part Name="Eq" UId="53">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Coil" UId="41" />
-    <Part Name="Ge" UId="42">
+    <Part Name="Coil" UId="54" />
+    <Part Name="Ge" UId="55">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Le" UId="43">
+    <Part Name="Le" UId="56">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Coil" UId="44" />
-    <Part Name="Ge" UId="45">
+    <Part Name="Coil" UId="57" />
+    <Part Name="Ge" UId="58">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Coil" UId="46" />
-    <Part Name="Eq" UId="47">
+    <Part Name="Coil" UId="59" />
+    <Part Name="Eq" UId="60">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Move" UId="48" DisabledENO="true">
+    <Part Name="Coil" UId="61" />
+    <Part Name="Ge" UId="62">
+      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    </Part>
+    <Part Name="Le" UId="63">
+      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    </Part>
+    <Part Name="Coil" UId="64" />
+    <Part Name="Contact" UId="65" />
+    <Part Name="Contact" UId="66">
+      <Negated Name="operand" />
+    </Part>
+    <Part Name="Eq" UId="67">
+      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    </Part>
+    <Part Name="O" UId="68">
+      <TemplateValue Name="Card" Type="Cardinality">3</TemplateValue>
+    </Part>
+    <Part Name="Coil" UId="69" />
+    <Part Name="Contact" UId="70" />
+    <Part Name="Coil" UId="71" />
+    <Part Name="Contact" UId="72" />
+    <Part Name="Move" UId="73" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
-    <Part Name="Ne" UId="49">
-      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    <Part Name="Contact" UId="74">
+      <Negated Name="operand" />
     </Part>
-    <Part Name="Move" UId="50" DisabledENO="true">
+    <Part Name="Move" UId="75" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
   </Parts>
   <Wires>
-    <Wire UId="51">
-      <IdentCon UId="21" />
-      <NameCon UId="40" Name="in1" />
-    </Wire>
-    <Wire UId="52">
-      <IdentCon UId="33" />
-      <NameCon UId="40" Name="in2" />
-    </Wire>
-    <Wire UId="53">
-      <NameCon UId="40" Name="out" />
-      <NameCon UId="41" Name="in" />
-    </Wire>
-    <Wire UId="54">
-      <IdentCon UId="22" />
-      <NameCon UId="41" Name="operand" />
-    </Wire>
-    <Wire UId="55">
-      <Powerrail />
-      <NameCon UId="40" Name="pre" />
-      <NameCon UId="42" Name="pre" />
-      <NameCon UId="45" Name="pre" />
-      <NameCon UId="47" Name="pre" />
-      <NameCon UId="49" Name="pre" />
-    </Wire>
-    <Wire UId="56">
-      <IdentCon UId="23" />
-      <NameCon UId="42" Name="in1" />
-    </Wire>
-    <Wire UId="57">
-      <IdentCon UId="34" />
-      <NameCon UId="42" Name="in2" />
-    </Wire>
-    <Wire UId="58">
-      <NameCon UId="42" Name="out" />
-      <NameCon UId="43" Name="pre" />
-    </Wire>
-    <Wire UId="59">
-      <IdentCon UId="24" />
-      <NameCon UId="43" Name="in1" />
-    </Wire>
-    <Wire UId="60">
-      <IdentCon UId="35" />
-      <NameCon UId="43" Name="in2" />
-    </Wire>
-    <Wire UId="61">
-      <NameCon UId="43" Name="out" />
-      <NameCon UId="44" Name="in" />
-    </Wire>
-    <Wire UId="62">
-      <IdentCon UId="25" />
-      <NameCon UId="44" Name="operand" />
-    </Wire>
-    <Wire UId="63">
-      <IdentCon UId="26" />
-      <NameCon UId="45" Name="in1" />
-    </Wire>
-    <Wire UId="64">
-      <IdentCon UId="36" />
-      <NameCon UId="45" Name="in2" />
-    </Wire>
-    <Wire UId="65">
-      <NameCon UId="45" Name="out" />
-      <NameCon UId="46" Name="in" />
-    </Wire>
-    <Wire UId="66">
-      <IdentCon UId="27" />
-      <NameCon UId="46" Name="operand" />
-    </Wire>
-    <Wire UId="67">
-      <IdentCon UId="28" />
-      <NameCon UId="47" Name="in1" />
-    </Wire>
-    <Wire UId="68">
-      <IdentCon UId="37" />
-      <NameCon UId="47" Name="in2" />
-    </Wire>
-    <Wire UId="69">
-      <NameCon UId="47" Name="out" />
-      <NameCon UId="48" Name="en" />
-    </Wire>
-    <Wire UId="70">
-      <IdentCon UId="38" />
-      <NameCon UId="48" Name="in" />
-    </Wire>
-    <Wire UId="71">
-      <NameCon UId="48" Name="out1" />
-      <IdentCon UId="29" />
-    </Wire>
-    <Wire UId="72">
-      <IdentCon UId="30" />
-      <NameCon UId="49" Name="in1" />
-    </Wire>
-    <Wire UId="73">
-      <IdentCon UId="39" />
-      <NameCon UId="49" Name="in2" />
-    </Wire>
-    <Wire UId="74">
-      <NameCon UId="49" Name="out" />
-      <NameCon UId="50" Name="en" />
-    </Wire>
-    <Wire UId="75">
-      <IdentCon UId="31" />
-      <NameCon UId="50" Name="in" />
-    </Wire>
     <Wire UId="76">
-      <NameCon UId="50" Name="out1" />
+      <IdentCon UId="21" />
+      <NameCon UId="53" Name="in1" />
+    </Wire>
+    <Wire UId="77">
+      <IdentCon UId="44" />
+      <NameCon UId="53" Name="in2" />
+    </Wire>
+    <Wire UId="78">
+      <NameCon UId="53" Name="out" />
+      <NameCon UId="54" Name="in" />
+    </Wire>
+    <Wire UId="79">
+      <IdentCon UId="22" />
+      <NameCon UId="54" Name="operand" />
+    </Wire>
+    <Wire UId="80">
+      <Powerrail />
+      <NameCon UId="53" Name="pre" />
+      <NameCon UId="55" Name="pre" />
+      <NameCon UId="58" Name="pre" />
+      <NameCon UId="60" Name="pre" />
+      <NameCon UId="62" Name="pre" />
+      <NameCon UId="65" Name="in" />
+      <NameCon UId="66" Name="in" />
+      <NameCon UId="67" Name="pre" />
+      <NameCon UId="70" Name="in" />
+      <NameCon UId="72" Name="in" />
+      <NameCon UId="74" Name="in" />
+    </Wire>
+    <Wire UId="81">
+      <IdentCon UId="23" />
+      <NameCon UId="55" Name="in1" />
+    </Wire>
+    <Wire UId="82">
+      <IdentCon UId="45" />
+      <NameCon UId="55" Name="in2" />
+    </Wire>
+    <Wire UId="83">
+      <NameCon UId="55" Name="out" />
+      <NameCon UId="56" Name="pre" />
+    </Wire>
+    <Wire UId="84">
+      <IdentCon UId="24" />
+      <NameCon UId="56" Name="in1" />
+    </Wire>
+    <Wire UId="85">
+      <IdentCon UId="46" />
+      <NameCon UId="56" Name="in2" />
+    </Wire>
+    <Wire UId="86">
+      <NameCon UId="56" Name="out" />
+      <NameCon UId="57" Name="in" />
+    </Wire>
+    <Wire UId="87">
+      <IdentCon UId="25" />
+      <NameCon UId="57" Name="operand" />
+    </Wire>
+    <Wire UId="88">
+      <IdentCon UId="26" />
+      <NameCon UId="58" Name="in1" />
+    </Wire>
+    <Wire UId="89">
+      <IdentCon UId="47" />
+      <NameCon UId="58" Name="in2" />
+    </Wire>
+    <Wire UId="90">
+      <NameCon UId="58" Name="out" />
+      <NameCon UId="59" Name="in" />
+    </Wire>
+    <Wire UId="91">
+      <IdentCon UId="27" />
+      <NameCon UId="59" Name="operand" />
+    </Wire>
+    <Wire UId="92">
+      <IdentCon UId="28" />
+      <NameCon UId="60" Name="in1" />
+    </Wire>
+    <Wire UId="93">
+      <IdentCon UId="48" />
+      <NameCon UId="60" Name="in2" />
+    </Wire>
+    <Wire UId="94">
+      <NameCon UId="60" Name="out" />
+      <NameCon UId="61" Name="in" />
+    </Wire>
+    <Wire UId="95">
+      <IdentCon UId="29" />
+      <NameCon UId="61" Name="operand" />
+    </Wire>
+    <Wire UId="96">
+      <IdentCon UId="30" />
+      <NameCon UId="62" Name="in1" />
+    </Wire>
+    <Wire UId="97">
+      <IdentCon UId="49" />
+      <NameCon UId="62" Name="in2" />
+    </Wire>
+    <Wire UId="98">
+      <NameCon UId="62" Name="out" />
+      <NameCon UId="63" Name="pre" />
+    </Wire>
+    <Wire UId="99">
+      <IdentCon UId="31" />
+      <NameCon UId="63" Name="in1" />
+    </Wire>
+    <Wire UId="100">
+      <IdentCon UId="50" />
+      <NameCon UId="63" Name="in2" />
+    </Wire>
+    <Wire UId="101">
+      <NameCon UId="63" Name="out" />
+      <NameCon UId="64" Name="in" />
+    </Wire>
+    <Wire UId="102">
       <IdentCon UId="32" />
+      <NameCon UId="64" Name="operand" />
+    </Wire>
+    <Wire UId="103">
+      <IdentCon UId="33" />
+      <NameCon UId="65" Name="operand" />
+    </Wire>
+    <Wire UId="104">
+      <NameCon UId="65" Name="out" />
+      <NameCon UId="68" Name="in1" />
+    </Wire>
+    <Wire UId="105">
+      <IdentCon UId="34" />
+      <NameCon UId="66" Name="operand" />
+    </Wire>
+    <Wire UId="106">
+      <NameCon UId="66" Name="out" />
+      <NameCon UId="68" Name="in2" />
+    </Wire>
+    <Wire UId="107">
+      <IdentCon UId="35" />
+      <NameCon UId="67" Name="in1" />
+    </Wire>
+    <Wire UId="108">
+      <IdentCon UId="51" />
+      <NameCon UId="67" Name="in2" />
+    </Wire>
+    <Wire UId="109">
+      <NameCon UId="67" Name="out" />
+      <NameCon UId="68" Name="in3" />
+    </Wire>
+    <Wire UId="110">
+      <NameCon UId="68" Name="out" />
+      <NameCon UId="69" Name="in" />
+    </Wire>
+    <Wire UId="111">
+      <IdentCon UId="36" />
+      <NameCon UId="69" Name="operand" />
+    </Wire>
+    <Wire UId="112">
+      <IdentCon UId="37" />
+      <NameCon UId="70" Name="operand" />
+    </Wire>
+    <Wire UId="113">
+      <NameCon UId="70" Name="out" />
+      <NameCon UId="71" Name="in" />
+    </Wire>
+    <Wire UId="114">
+      <IdentCon UId="38" />
+      <NameCon UId="71" Name="operand" />
+    </Wire>
+    <Wire UId="115">
+      <IdentCon UId="39" />
+      <NameCon UId="72" Name="operand" />
+    </Wire>
+    <Wire UId="116">
+      <NameCon UId="72" Name="out" />
+      <NameCon UId="73" Name="en" />
+    </Wire>
+    <Wire UId="117">
+      <IdentCon UId="52" />
+      <NameCon UId="73" Name="in" />
+    </Wire>
+    <Wire UId="118">
+      <NameCon UId="73" Name="out1" />
+      <IdentCon UId="40" />
+    </Wire>
+    <Wire UId="119">
+      <IdentCon UId="41" />
+      <NameCon UId="74" Name="operand" />
+    </Wire>
+    <Wire UId="120">
+      <NameCon UId="74" Name="out" />
+      <NameCon UId="75" Name="en" />
+    </Wire>
+    <Wire UId="121">
+      <IdentCon UId="42" />
+      <NameCon UId="75" Name="in" />
+    </Wire>
+    <Wire UId="122">
+      <NameCon UId="75" Name="out1" />
+      <IdentCon UId="43" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -4327,7 +4562,7 @@
               <MultilingualTextItem ID="46" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). PusherParkCmd holds through the machine-start steps 20-40 (range intent, C-603: any step inserted inside the start ramp still wants the pusher home) - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040).</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>

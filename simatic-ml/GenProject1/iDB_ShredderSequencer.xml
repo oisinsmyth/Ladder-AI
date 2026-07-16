@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T12:58:50.6487407Z</Created>
+    <Created>2026-07-16T23:20:27.6628462Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -78,9 +78,11 @@
           <Member Name="CycleStart" Datatype="Bool" />
           <Member Name="CycleStop" Datatype="Bool" />
           <Member Name="DownstreamRunning" Datatype="Bool" />
+          <Member Name="SystemHealthy" Datatype="Bool" />
           <Member Name="DischargeConvRunning" Datatype="Bool" />
           <Member Name="HopperLevelHigh" Datatype="Bool" />
           <Member Name="ShredderRunFwdFB" Datatype="Bool" />
+          <Member Name="ShredderRunRevFB" Datatype="Bool" />
           <Member Name="ShredderMotorCurrent" Datatype="Real" />
           <Member Name="MotorFaultActive" Datatype="Bool" />
           <Member Name="FaultReset" Datatype="Bool" />
@@ -97,11 +99,22 @@
           <Member Name="MotorReverseCmd" Datatype="Bool" />
           <Member Name="MotorAutoStartCmd" Datatype="Bool" />
           <Member Name="MotorPreStartDoneCmd" Datatype="Bool" />
+          <Member Name="MotorStartArm" Datatype="Bool" />
           <Member Name="PusherModeCmd" Datatype="Int" />
+          <Member Name="PusherParkCmd" Datatype="Bool" />
+          <Member Name="PusherCycleInhibitCmd" Datatype="Bool" />
         </Section>
       </Sections>
     </Member>
     <Member Name="StopCmd" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="PusherModeForceOff" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
       <AttributeList>
         <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>

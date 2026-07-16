@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T13:01:12.9350839Z</Created>
+    <Created>2026-07-16T23:20:25.2670372Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -79,6 +79,17 @@
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
     </Member>
+    <Member Name="SystemHealthy" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">In (FC_ControlMain, from DB_Input.Control_Healthy): safety/control circuit healthy. Loss asserts StopCmd - every step aborts to Idle and a fresh CycleStart press is required after recovery, so an E-stop reset can never self-restart the plant (REQ-062).</MultiLanguageText>
+      </Comment>
+    </Member>
     <Member Name="DischargeConvRunning" Datatype="Bool">
       <AttributeList>
         <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
@@ -102,6 +113,17 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+    </Member>
+    <Member Name="ShredderRunRevFB" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">In (FC_ControlMain, from DB_Input.Shredder_Run_Rev_FB): confirmed reverse-running feedback. Step 30's ReverseRunTimer times this, not bare step dwell, so ShredderReverseRunTime buys actual reverse rotation, not a motor-off pause (REQ-005).</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="ShredderMotorCurrent" Datatype="Real">
       <AttributeList>
@@ -231,6 +253,17 @@
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
     </Member>
+    <Member Name="MotorStartArm" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Out: asserted through PreStart (Step 10) only - one fresh, operator-commanded start attempt arms the motor once. FC_ControlMain ORs it into the imported motor FB's RecentStart, which that FB self-clears once running or faulted (its own press-to-arm contract), so no restart happens without a new cycle start (REQ-062).</MultiLanguageText>
+      </Comment>
+    </Member>
     <Member Name="PusherModeCmd" Datatype="Int">
       <AttributeList>
         <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
@@ -238,6 +271,28 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+    </Member>
+    <Member Name="PusherParkCmd" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Out: pre-start park request to the pusher - held through the machine-start steps 20-40 (range intent per C-603: any step inserted inside the start ramp still wants the pusher home) so the pusher reparks-with-warning if off home once the siren phase completes (REQ-045).</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="PusherCycleInhibitCmd" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Out: mirrors StopCmd - while the plant has any live stop reason (stop button, downstream lost, circuit unhealthy) the pusher must not launch or continue a cycle into the stopped plant (owner amendment 2026-07-16). Unlike the mode-0 force, this leaves hand-jog available: jog is blocked only by the stop button or an unhealthy circuit, never by downstream absence (REQ-040).</MultiLanguageText>
+      </Comment>
     </Member>
   </Section>
 </Sections></Interface>
