@@ -816,18 +816,58 @@ appended as the *last* token specifically so it can be peeled off before `StartV
 leftmost-`" = "` search runs — free-text comment prose routinely contains `=` itself (e.g.
 referencing a Step number), which would otherwise corrupt the start-value parse.
 
-**Deliberately not extended to every member shape.** `WriteBareMember` (Temp members, and a
-structured member's own nested fields — a UDT-typed Static's inner fields, a timer instance's own
-PT/ET/IN/Q), `WriteTypeMember` (a PLC data type's own member shape), and `WriteConstantMember`
-all hard-error on a non-null `Comment` rather than silently dropping it — none of those shapes
-were part of this grounding, and this converter's own standing discipline is refuse-rather-than-
-guess on an unconfirmed XML shape, not silently lose real content. Extending to one of those is
-future work if a real need shows up, grounded the same way (try the proven shape first, let a
-live TIA response confirm or refute it) rather than assumed to just work.
+**Positions supported, revised 2026-07-16 (was: ordinary `WriteMember` position only).**
+`WriteTypeMember` — a PLC data type's own members at any depth, plus an *anonymous-`Struct`*
+member's nested fields (block/DB Static and standalone TYPE both route those through the same
+method) — now writes/parses `Comment` too, instead of hard-erroring. Motivation was a real
+silent-loss pair found while planning the extension: `ParseTypeMember` never read a Member-level
+`<Comment>` at all (a commented UDT/anonymous-struct member lost its text crossing `to-ir`, no
+error), and the old write-side guard then made the surviving direction asymmetric. One shared
+`AddCommentElement` helper now serves `WriteMember` and `WriteTypeMember`, so both emit the
+identical proven shape rather than two hand-kept copies.
 
-4 new tests (`BlockInterfaceTests.cs`): IR round-trip (plain, and a comment containing `=`
-alongside a real `StartValue`, specifically exercising the peel-order fix above), XML round-trip,
-and the nested-member hard-error guard. All pass. 463 converter tests total (up from 459).
+**TYPE-side caveat — XML shape mirrored, not yet live-proven.** The Member-level `<Comment>`
+shape is proven by live TIA import + compile + re-export only for the ordinary Static-member
+position (2026-07-15, plus five Member-level instances in each committed genuine re-export,
+`simatic-ml/GenProject1/FB_PusherControl.xml`/`FB_ShredderSequencer.xml`). **No committed
+`SW.Types.PlcStruct` export anywhere carries a member `<Comment>`**, so `WriteTypeMember`'s
+placement (after `</AttributeList>`, before nested `Member`s/`<StartValue>` — mirroring
+`WriteMember` exactly) is an informed mirror, not a grounded fact. **LATER (Portal task, owner
+machine):** import a commented TYPE into the scratch project → compile → re-export → `to-ir` →
+grep `COMMENT` — proves (or loudly refutes: the failure mode is a TIA `Import()` rejection, never
+silent loss) both the shape *and* whether TIA persists UDT member comments across a round trip.
+(FB-Static-member persistence is already proven — the committed re-exports themselves carry the
+comments back out; see the adjacent finding below.)
+
+**Still hard-erroring, deliberately:** `WriteBareMember` (Temp members, and a *UDT-typed/
+SFB-instance* structured member's own nested fields — a UDT-typed Static's inner fields take
+their comments from the TYPE definition itself, per use site would be a contradiction; and the
+bare `Name`/`Datatype`/`StartValue` XML shape has never been seen carrying one) and
+`WriteConstantMember` (no real Constant member has ever shown one). Same
+refuse-rather-than-silently-drop discipline as before; extending either needs its own grounding.
+
+**Adjacent finding (2026-07-16, drop-path chase):** the five member comments in each committed
+GenProject1 FB re-export are *absent* from the committed `.ir` corpus files — that is **stale
+data, not a converter drop**: running the current `to-ir` on the exact committed re-exports
+reproduces the committed IR byte-for-byte *except* the member-comment tokens, which come through
+correctly. `ir/GenProject1/FB_PusherControl.ir`/`FB_ShredderSequencer.ir` need regenerating from
+their committed XMLs (coordinator item — outside this change's file boundary).
+
+4 tests from the original 2026-07-15 slice (`BlockInterfaceTests.cs`: IR round-trip plain and
+with `=`-containing prose alongside a real `StartValue`, XML round-trip, the still-kept
+`WriteBareMember` hard-error guard), plus 11 more 2026-07-16 (`PlcTypeTests.cs`: write-shape
+element order, parse drop-regression, XML/IR/full round trips incl. a new
+`PlcTypeWithMemberComments.xml` fixture, nested-struct recursion, the flat-parser
+indent-mangling regression; `BlockInterfaceTests.cs`: anonymous-struct nested-comment XML round
+trip; `SanitizerTests.cs`: see below). 491 converter tests total.
+
+**Sanitizer (same change):** `DbMember.Comment` was the one comment kind that bypassed
+sanitization entirely — real member why-prose passed through verbatim. `SanitizeMember`/
+`SanitizeNestedMember` now give it the standard `SanitizeComment` treatment, keyed
+`Comments["<Owner>.<Member>"]` (nested: `"<Owner>.<Member>.<Nested>"`, the `StartValues` dotted
+convention). Contract effect: a commented member requires a map entry and hard-errors listing the
+exact missing key otherwise — the established behavior of every other comment kind; zero effect
+on comment-free flows.
 
 ## `Access Scope="LocalConstant"` (S1 item 21, 2026-07-12)
 
@@ -1190,8 +1230,13 @@ differences from `DbSourceParser`'s own shape, not assumed from the surface simi
 - `ObjectList` carries **both** Comment and Title `MultilingualText` elements — a DB's own only
   carries Comment; a UDT's own Title element is present (empty), not absent.
 - Members reuse `DbMember` directly (`Name`/`Datatype`/`StartValue`/`SetPoint` — `Retain`/
-  `Version`/`NestedMembers` all default/absent, since no real UDT member has shown any of them
-  yet; a nested/structured UDT member is refused, not guessed at, if ever encountered).
+  `Version` default/absent, since no real UDT member has shown either yet). *Updated 2026-07-16:*
+  nested anonymous-`Struct` members and member `COMMENT`s are now supported end-to-end — the XML
+  side (`ParseTypeMember`/`WriteTypeMember`) had recursed since 2026-07-14, and `TypeIr` now
+  recurses too (`SerializeMemberRecursive`/`ParseMemberRecursive`, the same shared helpers a DB's
+  own `MEMBERS` section uses) instead of flat-parsing — the flat parser silently dropped
+  `NestedMembers` on serialize and mangled a nested line's indent into the member name on parse.
+  See "Member-level Comment" below for the TYPE-side comment caveat.
 
 **New files**: `SimaticMl/PlcTypeModel.cs` (`PlcTypeSource`), `PlcTypeSourceParser.cs`/
 `PlcTypeSourceWriter.cs` (mirror `DbSourceParser.cs`/`DbSourceWriter.cs` closely), `Ir/TypeIr.cs`
