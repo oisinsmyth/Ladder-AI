@@ -96,6 +96,13 @@ now in doc 06's preamble.
 - [ ] **OWNER: motor-dol pattern tension** — the admitted example's "HMI Times" network lacks the
       scheme comment C-126's exception now requires (and has an untitled network): update the
       pattern or waive.
+- [x] Tier-1 FI adoption (2026-07-16): preflight mandatory pre-import (zero-findings bar),
+      playbook first-lookup on compile failures, digest policy per stage (reviewers full-IR
+      always), telemetry line per stage run — CLAUDE.md + docs/15 + docs/16 pointers; both new
+      verbs verified live against the corpus first. Release converter rebuilt post-merge.
+- [ ] FI-07 `openness-cli cleanup` (Portal-instance janitor) — next new build, owner go-ahead
+      pending from the priority-list discussion; FI-05 (blind-draft gap) scheduled as its own
+      session after
 - [ ] Build `review-conventions` skill (wraps `converter review` + AI pass)
 - [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
       `generate` orchestrator

@@ -33,6 +33,9 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, compa
                                     # MUL/CONVERT/ADD/SUB/DIV; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
                                     # this slice is a correct hard error, not a bug — see docs/notes/stage-gates.md for exactly what's covered.
 converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
+converter review    <file...> [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs
+converter digest    <file...> [--ignore-errors] [--json]      # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR)
+converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 
@@ -40,12 +43,12 @@ dotnet test                         # PC-side tests (openness-cli, converter, te
 
 ## Workflow for logic generation (Stage S6+)
 
-Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract. The per-block inner loop:
+Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract — and every stage run, manual or skill-driven, appends one telemetry line per `docs/notes/gen-telemetry.md` when it ends. The per-block inner loop:
 
 1. Confirm the request names a target block/network and the relevant equipment tags exist in `ir/<project>/` (pipeline-wide: every tag in an artifact is `exists` — verified by grep against the current export — or `proposed`; never code against `proposed`).
 2. Select patterns from `patterns/` covering the request; map real tags to slots; type-check.
 3. If >20% of the request needs freeform (non-pattern) rungs, say so and get explicit go-ahead before writing them.
-4. Write IR → convert → import to scratch → compile → iterate until clean.
+4. Write IR → `converter preflight` against the current `ir/<project>/` export (must pass with zero findings; a consciously-accepted finding needs the engineer's explicit OK recorded — it is a filter before the compile gate, never a substitute) → convert → import to scratch → compile → iterate until clean. On any compile failure, check `docs/notes/compile-error-playbook.md` first — entries are grounded hypotheses to verify, not answers to trust.
 5. Present: IR diff + one-paragraph intent statement + compile evidence + reviewer findings. Stop; the engineer takes it from there (`docs/11-review-workflow.md`).
 
 ## Workflow for modifying existing logic (Stage S7+)

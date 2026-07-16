@@ -10,6 +10,18 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**Tier-1 FI adoption: preflight/playbook/digest/telemetry wired into the S6 loop (docs-only)**
+
+- CLAUDE.md workflow step 4: `converter preflight` mandatory before every import (zero-findings
+  bar; filter before the compile gate, never a substitute - hard rule 4); compile-error playbook
+  is the first lookup on any compile failure; every stage run appends a telemetry line.
+- docs/15: new "Inner-loop tooling" section; digest-vs-full-IR policy in the isolation model
+  (reviewers always full IR); telemetry.log added to gen/<project>/ artifacts.
+- docs/16: FI-13/14/15/16 status lines gain adoption pointers. CLAUDE.md command block now lists
+  review/digest/preflight (review had never been listed despite existing since S4).
+- Release converter rebuilt post-merge (pre-merge binary lacked the new verbs); both commands
+  verified live against the corpus before documenting (preflight pass + findings cases, digest).
+
 **Fix InCycle lamp + DI4 stop polarity (owner-ruled tier-1 bugs from the blind review)**
 
 - FC_ControlMain N7: DB_Output.In_Cycle = OR of the five field running feedbacks (owner

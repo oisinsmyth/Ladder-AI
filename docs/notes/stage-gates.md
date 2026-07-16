@@ -4051,3 +4051,33 @@ disappeared from tasklist (owner closed them after the earlier housekeeping note
 the import job simply launched a fresh instance and completed; the still-running SampleProject
 UDT-proof job from earlier was likely orphaned by the same closure and will hit its own timeout —
 its structure result (IR→XML leg passed) stands, the live leg gets re-run in the next batch.
+
+## S6: Tier-1 adoption — preflight/playbook/digest/telemetry wired into the loop (2026-07-16)
+
+The four already-built FI items from the merged worktree branch (FI-13/14/15/16) are now adopted
+pipeline behavior, not just available tooling — docs-only batch, no code changes (one Release
+rebuild, since the pre-merge binary predated the new verbs; both commands then verified live
+against the corpus before being documented: `preflight FB_PusherControl` → CLEAN exit 0,
+`preflight FC_ControlMain` → its known C-201 finding, exit 1, disclaimer line present; `digest`
+output sane).
+
+- **FI-13 preflight**: mandatory before every import (CLAUDE.md step 4 + docs/15 "Inner-loop
+  tooling"). Bar set at **zero findings** — a consciously-accepted finding needs the engineer's
+  explicit recorded OK. Rationale: the stricter-bar principle (generated content imports clean of
+  known findings); legacy blocks are unaffected because only content about to be imported gets
+  pre-flighted. Framed everywhere as a filter before the compile gate, never a substitute (hard
+  rule 4 — the tool prints that disclaimer itself).
+- **FI-14 playbook**: first lookup on any compile failure; entries are grounded hypotheses to
+  verify; proven new error→fix pairs harvest back.
+- **FI-15 digest**: per-stage policy decided in docs/15's isolation model — reviewers always full
+  IR (S2 exhaustiveness lesson; the tool's own contract agrees), analysis/design/entry may digest
+  for orientation, build stages read full IR of what they touch; digests derived fresh, never
+  stored.
+- **FI-16 telemetry**: one line per stage run (incl. `manual:<stage>` and abandoned) in
+  `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`; no backfill — first rows come
+  from the next real generation run. This log is what settles FI-12 with data.
+
+CLAUDE.md's command block also gained `converter review` alongside the two new verbs — it had
+never been listed there despite existing since S4; the operating manual now names every converter
+verb that exists. FI entries in docs/16 updated with adoption pointers per that doc's lifecycle.
+FI-07 (Portal janitor) remains the next new build, pending the owner's go-ahead.

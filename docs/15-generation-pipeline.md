@@ -73,7 +73,8 @@ exists for.
 
 - Pipeline artifacts for a generation project live in **`gen/<project>/`** (created on first use),
   committed and diffable like everything else the engineer reviews. Exported IR stays in
-  `ir/<project>/` as today.
+  `ir/<project>/` as today. `gen/<project>/telemetry.log` (one line per stage run,
+  `docs/notes/gen-telemetry.md`) lives alongside the stage artifacts.
 - **Each stage works from artifacts on disk, not from conversation.** An artifact must be complete
   enough for the next stage to proceed from it alone — if it isn't, that's a defect in the
   artifact, found early, exactly like an underspecified engineering document.
@@ -98,6 +99,13 @@ exists for.
     into design and coding contexts.
 - CLAUDE.md's hard rules bind every agent regardless; each skill additionally restates the ones it
   is most likely to trip (e.g. `gen-io-tags`: never invent addresses).
+- **Digest vs full IR (decided 2026-07-16 — FI-15):** the reviewers (skills 9–12) always read
+  **full IR** — a digest is never review input (the S2 lesson: exhaustiveness, not summaries,
+  caught the real bugs; `converter digest`'s own contract says the same). Analysis (1–2), design
+  (5–6), and the `generate` entry skill may use `converter digest` for orientation and
+  cross-block indexing — "which block do I need to open?" — and the build skills (7–8) read the
+  full IR of anything they touch. Digests are derived fresh on every run and never stored, so
+  they cannot go stale by construction.
 
 ## Gates
 
@@ -114,6 +122,23 @@ Two hard gates, engineer-owned, never skipped:
 full chain is for greenfield; "add one motor to the existing project" needs roughly stages 5 (mini),
 7, 8, and the checks. What is never scaled away: the two gates, the compile gate, the tag-status
 rule, and the reviewers.
+
+## Inner-loop tooling (adopted 2026-07-16 — FI-13/14/16, `docs/16-future-ideas.md`)
+
+- **`converter preflight` runs before every import** (`<files> --project ir/<project>/`): parse,
+  convert, tag/call/instanceof resolution — the tag-status rule's "exists, verified by grep",
+  mechanized — plus `review` findings folded in. The bar is **zero findings**; a consciously
+  accepted finding needs the engineer's explicit OK recorded (stricter-bar principle: generated
+  content imports clean of known findings). Pre-flight is a filter in front of the compile gate,
+  never a substitute for it (hard rule 4 — the tool's own output says so on every run).
+- **On any compile failure, `docs/notes/compile-error-playbook.md` is the first lookup.** Entries
+  are grounded hypotheses to verify against the actual error, never answers to trust blindly; new
+  error→fix pairs proven during a run are harvested back into the playbook.
+- **Every stage run appends one telemetry line** to `gen/<project>/telemetry.log` per
+  `docs/notes/gen-telemetry.md` — including `manual:<stage>` runs and abandoned runs (the most
+  informative rows). Never backfilled; a missing row beats an invented one. This log is what
+  eventually settles FI-12 (batch/persistent Portal) and per-stage isolation choices with data
+  instead of judgment.
 
 ## After approval: harvest (S8)
 
