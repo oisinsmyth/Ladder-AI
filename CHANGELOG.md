@@ -10,6 +10,22 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
 
 ## 2026-07-16
 
+**Retrospective owner pass folded: C-601-C-607 + C-203 live in doc 06; settings policy resolved**
+
+- All 7 candidate simplicity rules accepted (C-605 bumped to error by owner; C-602 with a
+  within-network fan-out exception; C-606/C-607 justification directed to comments) - doc 06
+  gains a "Simplicity & readability" section, plus new C-203 (titles short / comments detailed)
+  and the stricter-bar principle in the preamble (generated LAD must survive a skeptic's single
+  reading; site quirks are never a defense).
+- Owner's faceplate context resolved the settings adjudication against the draft: per-instance
+  settings live in the instance UDT (C-307 sharpened), one writer - the HMI (C-308 extended:
+  logic never writes, orchestrating FCs never scan-copy; names GenProject1's MOVE-over-UDT trap).
+  C-001 members -> PascalCase; C-109 IO-mapping direct-call exception; C-126 HMI-Times batch
+  exception with mandatory pairing comment; C-122/C-304 aligned.
+- Queued: Struct-in-UDT round-trip proof; converter HeaderAuthor/Version/Family capture;
+  SPEC.md pairing note; GenProject1 settings rework + buffer renames (future S6 requests);
+  OB100/DB_PLC when the demo-panel waiver lifts. Retrospective SS10 records the full resolution.
+
 **Adopt staged S6 generation pipeline (ADR-0004); GenProject1 corpus + simplicity retrospective**
 
 - Owner verdict on the Kestrel build: functionally right, but overly complex/obtuse; stated

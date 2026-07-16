@@ -70,14 +70,29 @@ now in doc 06's preamble.
       FBs clean — every in-block finding is on the real `FB_MotorFwdRevSystem`
 - [x] Retrospective delivered: `docs/notes/genproject1-retrospective.md` — 12 findings, 7
       candidate C-6xx rules (§4), 6 adjudications (§5), tooling follow-ups (§6)
-- [ ] **OWNER: accept/reject pass on retrospective §4 + §5 — blocks everything below**
-- [ ] Fold accepted rules into doc 06 as the C-6xx "Simplicity & readability" section
+- [x] Owner pass on retrospective §4 + §5 (2026-07-16) — all 7 rules accepted (3 with changes),
+      all 6 adjudications ruled; two interpretation points confirmed via follow-up
+- [x] Folded into doc 06: new "Simplicity & readability" section (C-601–C-607), new C-203
+      (titles short / comments detailed), stricter-bar principle in preamble, amendments to
+      C-001 (PascalCase members) / C-109 (mapping direct-call exception) / C-122 / C-126
+      (HMI-Times exception + pairing comment) / C-304 / C-307 (settings → instance UDT,
+      faceplate rationale) / C-308 (one writer: the HMI; no orchestrator scan-copies);
+      retrospective §10 records the resolution
 - [ ] Build `review-simplicity` skill; validate against the GenProject1 corpus (it must
-      independently find the accepted-rule violations, incl. the real block's)
-- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass — independent of the
-      rules pass; rebuild Release converter first, its binary predates `review`)
+      independently find the accepted-rule violations, incl. the real block's — and per the
+      stricter-bar principle, acceptance is asymmetric: generated code held above site practice)
+- [ ] Build `review-conventions` skill (wraps `converter review` + AI pass; rebuild Release
+      converter first, its binary predates `review`)
 - [ ] Then per docs/15 build order: `review-functional` → `gen-architecture` → analysis skills →
       `generate` orchestrator
+
+**Queued from the owner pass (not blocking the reviewer skills):** Struct-inside-standalone-UDT
+round-trip proof (gates the grouped-UDT `Set` sub-struct design); converter capture of
+`HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (makes C-201's author/revision
+mechanically checkable); `ir/SPEC.md` reader note on index-paired MUL/CONVERT rendering; two
+future S6 requests on GenProject1 — settings rework (sequencer reads → UDT, delete
+`FC_ControlMain`'s nine MOVEs, shrink `DB_Settings`) and `Snake_Case` buffer-member renames;
+OB100/`DB_PLC` machinery whenever the demo-panel waiver (retrospective §5.5) is lifted.
 
 **Carried forward, not urgent:** `patterns/chained-permissive-enable`'s own genuinely-blind
 drafted-instance gap (see above) — worth closing before leaning on this pattern heavily, not

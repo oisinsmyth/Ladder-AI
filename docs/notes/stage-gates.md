@@ -3901,3 +3901,49 @@ candidate rule catches something in it too — and §8 records what the generate
 so accepted rules don't overcorrect. Converter suite green after the day's work (463/463).
 Honest status: S6's exit criterion (ten requests) is unchanged and not advanced by any of this —
 this is the workflow that future requests run through, not exit progress.
+
+## S6: retrospective owner pass folded — C-6xx live, settings policy resolved by faceplate context (2026-07-16)
+
+The project owner reviewed `docs/notes/genproject1-retrospective.md` in full and answered every
+checkbox and adjudication (recorded in the doc itself, §4/§5/§6/§9 + resolution in §10). Headline
+outcomes, all now folded into `docs/06-lad-conventions.md`:
+
+- **All seven candidate rules accepted** — C-601/C-603/C-604 as drafted, C-605 bumped to *error*
+  by the owner ("this should always be true"), C-602 with a documented within-network fan-out
+  exception (confirmed reading: C-601 owns cross-network duplication, the exception owns one
+  condition driving several coils in one network), C-606/C-607 with justification text directed to
+  the block comment. The owner's repeated "title short / comment detailed" note was generalized,
+  with explicit confirmation, into a new **C-203**. Doc 06 gains a "Simplicity & readability"
+  section holding the set.
+- **The §9 principle codified**: AI-generated code faces harsher scrutiny than a human author's —
+  one failed reading discredits the pipeline — so generated LAD must survive a skeptic's *single*
+  reading; "the real site block does the same" is never a defense. Written into doc 06's preamble
+  (reviewers err toward flagging; "defensible" is not a pass) and saved as standing agent memory.
+- **Settings adjudication (5.2) resolved by new context, against the draft proposal**: the site
+  uses HMI faceplates for nearly all equipment, and faceplates bind the UDT instance — so
+  per-instance settings (including a sequencer's own step timings) belong in the instance UDT,
+  and the draft's "plant-singleton may read DB_Settings directly" split was wrong. C-307
+  sharpened, C-308 extended to **"a settings member has exactly one writer: the HMI"** — logic
+  never writes it *and orchestrating FCs never scan-copy into it*, naming the concrete GenProject1
+  trap found during the read: `FC_ControlMain` MOVEs `DB_Settings.PusherX` over the pusher's UDT
+  settings members every scan, so any faceplate edit would silently revert one scan later (the
+  setting existed in two homes with a cyclic copy between them). C-122 reworded to match.
+  GenProject1's own settings rework is a queued S6 request, not silently done.
+- **Other rulings**: C-001 members are PascalCase (practice wins over the never-followed
+  camelCase; `Snake_Case` buffer members = legacy, renamed at next touch); C-109 gains the
+  IO-mapping direct-call exception (wrappers stay the rule elsewhere; C-304 aligned); C-126 gains
+  the HMI-Times batch exception *with* a mandatory pairing comment (the 6.1 tooling question
+  resolved as an authoring rule — grammar change and converter-emitted annotations both rejected:
+  corpus-wide diff churn / losslessness violation); startup-state machinery recorded as an
+  accepted demo-panel omission ("should ideally have, do not need to fix right now") and a
+  permanent gen-architecture checklist line; C-504 suppression carried to the future
+  alarm-design stage.
+- **Grounded along the way**: SimaticML carries `HeaderAuthor`/`HeaderVersion`/`HeaderFamily`
+  block attributes (empty/0.1 in GenProject1) that the IR currently drops entirely — queued
+  converter work item to carry them as IR header lines, which is the only path to C-201's
+  author/revision ever becoming mechanically checkable. Struct-inside-standalone-UDT round-trip
+  needs one proof before the grouped-UDT `Set` sub-struct design can be committed to (anonymous
+  Struct members are proven for FB statics via `EquipmentControlSystem`, not yet for `SW.Types.PlcStruct`).
+
+Next per the docs/15 build order: `review-simplicity`, validated against the GenProject1 corpus
+under the stricter-bar principle.
