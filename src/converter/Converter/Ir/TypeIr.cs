@@ -20,13 +20,24 @@ namespace Converter.Ir;
 ///     &lt;member&gt; : &lt;Datatype&gt; = &lt;start value&gt;
 ///     &lt;member&gt; : &lt;Datatype&gt; SETPOINT   # present only when the source's own SetPoint
 ///                                          # BooleanAttribute is true
+///     &lt;member&gt; : &lt;Datatype&gt; COMMENT "&lt;text&gt;"   # optional, always the last token —
+///                                          # peeled before StartValue's " = " search, same rule
+///                                          # as a DB/STATIC member line (2026-07-16)
+///     &lt;member&gt; : Struct                  # anonymous inline struct — nested fields two spaces
+///       &lt;nested member&gt; : &lt;Datatype&gt;     # deeper, same line grammar, arbitrary depth
 /// ```
 ///
 /// Member-line grammar is exactly <see cref="DbMemberLineFormat"/>'s own — same delimiters, same
-/// fixed trailing-token order. No `RETAIN`/`VERSION` lines or nested members are ever emitted
-/// here: a UDT member is never Retain-flagged and never structured (confirmed real for `TypeDOL`;
-/// a nested/structured UDT member would hard-error at parse time before reaching this far — see
-/// <see cref="PlcTypeSourceParser"/>).
+/// fixed trailing-token order, same <c>SerializeMemberRecursive</c>/<c>ParseMemberRecursive</c>
+/// indent recursion a DB's own MEMBERS section uses. Until 2026-07-16 this layer was flat while
+/// the XML side (<see cref="Converter.SimaticMl.DbInterfaceMembers"/>'s ParseTypeMember/
+/// WriteTypeMember) had recursed since 2026-07-14 — a real silent-loss gap, not a hard error as
+/// this header used to claim: serialize dropped <see cref="DbMember.NestedMembers"/> entirely,
+/// and parse mangled a nested line into a top-level member whose name began with the extra
+/// indent. No `RETAIN`/`VERSION` line is ever *emitted* here (a real UDT member's XML carries no
+/// `Remanence`/`Version` attribute at all, confirmed for `TypeDOL`); note the shared line grammar
+/// would still *accept* a hand-authored ` RETAIN`, which the XML writer then has nowhere to put —
+/// see `ir/SPEC.md`'s TYPE section for that documented edge.
 /// </summary>
 public static class TypeIrSerializer
 {
@@ -44,7 +55,7 @@ public static class TypeIrSerializer
         sb.Append("  MEMBERS\n");
         foreach (var member in type.Members)
         {
-            DbMemberLineFormat.SerializeLine(sb, "    ", member);
+            DbMemberLineFormat.SerializeMemberRecursive(sb, "    ", member);
         }
 
         return sb.ToString();
@@ -84,11 +95,13 @@ public static class TypeIrParser
 
         i++;
 
+        // Top-of-loop guard mirrors DbIrParser.ParseDb's MEMBERS loop exactly: only a 4-space
+        // (not 6-space) line starts a new top-level member; ParseMemberRecursive consumes each
+        // member's own deeper-indented nested lines itself.
         var members = new List<DbMember>();
-        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal))
+        while (i < lines.Length && lines[i].StartsWith("    ", StringComparison.Ordinal) && !lines[i].StartsWith("      ", StringComparison.Ordinal))
         {
-            members.Add(DbMemberLineFormat.ParseLine(lines[i], "    "));
-            i++;
+            members.Add(DbMemberLineFormat.ParseMemberRecursive(lines, ref i, "    "));
         }
 
         return new PlcTypeSource(rootUId, name, comment, members);

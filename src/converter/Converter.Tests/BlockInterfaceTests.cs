@@ -220,12 +220,12 @@ public class BlockInterfaceTests
         Assert.Equal("Cold-start guard for the run-on off-delay.", reparsedMember.Comment);
     }
 
-    // Comment is only confirmed real on the ordinary (top-level, non-bare) WriteMember shape —
-    // a structured member's own *nested* fields go through WriteBareMember instead, which never
-    // learned about Comment. Hard-erroring rather than silently dropping the text if one somehow
-    // arrives there (e.g. hand-authored IR nesting a COMMENT under a UDT-typed Static member's own
-    // field) — same "refused rather than guessed at" discipline as every other unconfirmed shape
-    // in this converter.
+    // A *UDT-typed* structured member's own nested fields go through WriteBareMember, which
+    // still hard-errors on a Comment (their comments belong on the TYPE definition itself, and
+    // the bare Name/Datatype/StartValue XML shape has never been seen carrying one) — deliberately
+    // unchanged by the 2026-07-16 WriteTypeMember extension, which covers the *anonymous-Struct*
+    // nested position instead (next test). Same "refused rather than guessed at" discipline as
+    // every other unconfirmed shape in this converter.
     [Fact]
     public void Write_CommentOnNestedStructuredMember_ThrowsUnsupportedConstructException()
     {
@@ -236,6 +236,29 @@ public class BlockInterfaceTests
         var db = new DbSource("0", "SomeDb", 1, null, null, new[] { owner });
 
         Assert.Throws<UnsupportedConstructException>(() => DbSourceWriter.Write(db));
+    }
+
+    // An *anonymous-Struct* member's nested fields are the WriteTypeMember/ParseTypeMember shape
+    // (each nested field carries its own full AttributeList — `FB EquipmentControlSystem`'s confirmed shape),
+    // which supports Comment as of 2026-07-16. Exercised through the DB public surface, same
+    // pattern as the bare-parameter tests above: WriteMember routes an anonymous Struct's nested
+    // fields to WriteTypeMember, ParseMember routes them to ParseTypeMember — the exact pair the
+    // silent to-ir drop lived in.
+    [Fact]
+    public void XmlRoundTrip_AnonymousStructNestedMemberComment_PreservesCommentText()
+    {
+        var nestedWithComment = new DbMember("Flag1", "Bool", Retain: false, StartValue: null, Comment: "Handshake bit - see the coms network.");
+        var owner = new DbMember(
+            "ComsByte", "Struct", Retain: false, StartValue: null,
+            NestedMembers: new[] { nestedWithComment });
+        var db = new DbSource("0", "SomeDb", 1, null, null, new[] { owner });
+
+        var xml = DbSourceWriter.Write(db);
+        var reparsed = DbSourceParser.Parse(xml);
+
+        var reparsedOwner = Assert.Single(reparsed.Members);
+        var reparsedNested = Assert.Single(reparsedOwner.NestedMembers!);
+        Assert.Equal("Handshake bit - see the coms network.", reparsedNested.Comment);
     }
 
     // Repurposed from a hard-error test (S1 item 20, 2026-07-12) — same "an obsolete hard-error

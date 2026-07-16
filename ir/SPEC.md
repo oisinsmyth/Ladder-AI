@@ -44,9 +44,13 @@ BLOCK <FB|FC|OB> <Name>
     INOUT                           # always shown when non-empty; never seen absent or populated in any real block
       <name> : <Type>[ RETAIN]
     STATIC                          # FB only — absent entirely for an FC, not just empty (S1 item 7 Phase B)
-      <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ EXTERNALACCESSIBLE=FALSE][ EXTERNALVISIBLE=FALSE][ EXTERNALWRITABLE=FALSE][ = <start value>]
+      <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ EXTERNALACCESSIBLE=FALSE][ EXTERNALVISIBLE=FALSE][ EXTERNALWRITABLE=FALSE][ = <start value>][ COMMENT "<text>"]
                                      # the three EXTERNAL* markers default true, shown only when false — confirmed
-                                     # real 2026-07-14, `FB VSDSim`'s own `SpeedCalcArray` (ExternalAccessible=false)
+                                     # real 2026-07-14, `FB VSDSim`'s own `SpeedCalcArray` (ExternalAccessible=false).
+                                     # COMMENT (the member's own why-prose, proven live 2026-07-15: Static member,
+                                     # TIA import + compile + re-export) is always the LAST token — peeled off before
+                                     # the " = " start-value search runs, so '='-containing prose can't corrupt
+                                     # StartValue parsing
         <nested member>             # one level deeper — UDT-typed or SFB-instance-typed members only
     TEMP                            # always shown when non-empty
       <name> : <Type>
@@ -187,6 +191,21 @@ forcing them into one and hoping the kind-order happens to line up.
 Cross-network, there is no such trap: any earlier network's output is always fresh to any later
 network, regardless of which kinds either contains — this is just ordinary top-to-bottom PLC scan
 order, unaffected by the intra-network kind-ordering rule above.
+
+#### Index-paired `MUL`/`CONVERT` batches (the "HMI Times" idiom)
+
+A network holding several `EN := ENO` unit-conversion pairs (Real-seconds → DInt-milliseconds HMI
+shadows — one `MUL` × 1000 feeding one `CONVERT` per timer preset) renders **kind-grouped, not
+pair-adjacent**: the kind order above puts every `MUL` in one contiguous run, then every `CONVERT`
+in the next. Pairing is **by index within each kind's run** — the *i*-th `CONVERT`'s `EN := ENO`
+is gated by the *i*-th `MUL`, **not** by the textually preceding line (for every `CONVERT` after
+the first, the preceding line is another `CONVERT`). Correctness never depends on reading it
+right: sidecar'd IR carries the exact source Part UId being chained from, and sidecar-less
+synthesis (`--synthesize`) wires by the same index pairing (`SidecarSynthesizer`,
+`network.Muls[i]` ↔ `network.Converts[i]`). A *reader*, though, has only the text order — which is
+why C-126's documented exception for the block-top "HMI Times" network requires the network
+comment to state the one-pair-per-timer scheme (`docs/06-lad-conventions.md`): the comment is what
+keeps the kind-grouped, index-matched rendering readable in one attempt.
 
 ### Readable form (default)
 
@@ -790,6 +809,12 @@ TYPE <Name>
     <member> : <Type> = <start value>
     <member> : <Type> SETPOINT            # present only when the source's own SetPoint
                                            # BooleanAttribute is true
+    <member> : <Type> COMMENT "<text>"    # optional member why-prose (2026-07-16) — always the
+                                           # LAST token, peeled before the " = " start-value
+                                           # search, same rule as a STATIC member line
+    <member> : Struct                     # anonymous inline struct — nested fields two spaces
+      <nested member> : <Type>            # deeper, same line grammar, arbitrary depth
+                                           # (2026-07-16; XML side supported since 2026-07-14)
 
 DB <Name>
   ROOTID <id>
@@ -829,9 +854,38 @@ section (`Name`/`Datatype`/optional `StartValue`/`SETPOINT`) — but the real *s
 in two confirmed ways from a DB/FB Static member: the section is named `"None"`, not `"Static"`,
 and each `<Member>` carries no `Remanence`/`Accessibility` attribute on the tag itself (only its
 own `AttributeList`'s four `BooleanAttribute`s — `ExternalAccessible`/`ExternalVisible`/
-`ExternalWritable`/`SetPoint` — which do match exactly). No real example has shown `RETAIN` or a
-nested/structured member on a type's own member yet — the converter hard-errors on either rather
-than guessing (`docs/notes/stage-gates.md`, "UDT/PLC data type support"). This is a standalone
+`ExternalWritable`/`SetPoint` — which do match exactly).
+
+**Correction (2026-07-16)** — an earlier revision of this paragraph claimed "no real example has
+shown `RETAIN` or a nested/structured member on a type's own member yet — the converter
+hard-errors on either rather than guessing". Both halves needed correcting:
+
+- **Nested members are now supported end-to-end**, anonymous inline `Struct` only, arbitrary
+  depth (grammar above): the XML side (`ParseTypeMember`/`WriteTypeMember`, direct `<Member>`
+  children, each with its own full `AttributeList`) has recursed since 2026-07-14 — grounded on
+  `FB ShredderControlSystem`'s own `ComsOutByte501`, an anonymous-`Struct` *block-Static* member, which
+  uses this exact member shape — and the `TYPE` IR text layer caught up 2026-07-16 (it was flat
+  while the XML side recursed: serialize silently dropped nested members, parse mangled a nested
+  line into a top-level member with a corrupted space-prefixed name — a real silent-loss gap, not
+  the hard error claimed here). A `<Sections>`-wrapped nested member (the UDT-typed/SFB-instance
+  shape a DB/FB Static member uses) is still refused on a type's own member — never seen there.
+- **`RETAIN` never hard-errored** — the claim was simply inaccurate. True behavior: no real
+  example still; the XML side neither reads nor writes a `Remanence` attribute on this member
+  shape (a real type member's XML carries none at all), so a `RETAIN`-flagged type member can
+  never *arrive* from a real export — but the shared member-line grammar does **accept** a
+  hand-authored ` RETAIN` token on a `TYPE` member line, and `to-xml` then has nowhere to put it:
+  the flag silently vanishes crossing to XML. A documented silent edge on hand-authored IR only,
+  not a hard error. Don't author it.
+- **Member comments are supported (2026-07-16)** — the `COMMENT "<text>"` token in the grammar
+  above, at any depth, same last-token rule as a `STATIC` member line. One caveat: the *XML*
+  shape for a `SW.Types.PlcStruct` member `<Comment>` is mirrored from the proven ordinary-
+  Static-member shape (live-verified 2026-07-15; present in the committed `FB_PusherControl`/
+  `FB_ShredderSequencer` re-exports) — no genuine TIA export of a *UDT* with member comments
+  exists anywhere in the repo yet, so it is **not yet live-verified for TYPE** (pending Portal
+  task, `src/converter/README.md` "Member-level Comment"; failure mode is a loud TIA `Import()`
+  rejection, never silent loss).
+
+This is a standalone
 top-level construct (its own exportable/importable `SW.Types.PlcStruct` file), genuinely separate
 from — and does not yet replace — the inline structured-member representation a DB/FB's own
 `Static` section still uses (below); see that section's own note on why reference-by-name was

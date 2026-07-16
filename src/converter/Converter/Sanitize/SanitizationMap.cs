@@ -15,7 +15,14 @@ public sealed class SanitizationMap
     /// <summary>Keyed by real block or DB name -> invented name.</summary>
     public Dictionary<string, string> Names { get; set; } = new();
 
-    /// <summary>Keyed by real block or DB name -> invented comment text. Only needs an entry when the source comment is non-empty.</summary>
+    /// <summary>
+    /// Keyed by the real comment owner -> invented comment text. Owners: a block/DB/UDT/tag-table
+    /// name (its own header comment), a tag's bare name, or — for a *member's* own comment
+    /// (DbMember.Comment, sanitized since 2026-07-16) — the dotted "&lt;Owner&gt;.&lt;Member&gt;"
+    /// path (nested fields extend it, "&lt;Owner&gt;.&lt;Member&gt;.&lt;Nested&gt;", arbitrarily
+    /// deep — same convention as StartValues). Only needs an entry when the source comment is
+    /// non-empty.
+    /// </summary>
     public Dictionary<string, string> Comments { get; set; } = new();
 
     /// <summary>
