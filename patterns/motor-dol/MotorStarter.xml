@@ -1300,7 +1300,7 @@
               <MultilingualTextItem ID="100019" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>Hand Selector Edges And Prestart Timeout</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -1677,7 +1677,7 @@
               <MultilingualTextItem ID="100025" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>HMI-set times on the IO struct are Real seconds for operator legibility; the HMI-tunable timers below need their PT in DInt ms - one MUL+CONVERT pair per preset, in order: ShutdownTime to ShutdownTimeMS, EnableUPSTime to EnableUPSTimeMS, FTTime to FTTimeMS (one preset, shared by both Fail To Run and Fail To Stop). Kept as one block up front rather than repeated at each timer, so the x1000 idiom is visibly consistent and only ever done once (C-126 documented exception).</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>

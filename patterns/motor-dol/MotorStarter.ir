@@ -103,7 +103,7 @@ NETWORK 3 "Start Signal After Inhibit/Fault"
   COIL IO.RecentStart := IO.RecentStart AND NOT IO.Run AND PreStartMemory AND NOT IO.FaultActive
   RCOIL IO.HandStartSignal := GeneralDelayTimer.Q
 
-NETWORK 4 ""
+NETWORK 4 "Hand Selector Edges And Prestart Timeout"
   TON(InHandReqPreStart, IN := PreStartMemory AND NOT IO.PreStartDone AND IO.InHand, PT := T#30S)
   COIL HandPosEdge := IO.InHand AND NOT RisingEdgeFlags[3]
   COIL RisingEdgeFlags[3] := IO.InHand
@@ -114,6 +114,7 @@ NETWORK 5 "Prestart Hold On Until Motor Run Signal"
   COIL PreStartMemory := IO.PreStartDone OR PreStartMemory AND NOT IO.FaultActive AND NOT IO.Run AND NOT InHandReqPreStart.Q AND NOT HandPosEdge AND NOT HandNegEdge
 
 NETWORK 6 "HMI Times"
+  COMMENT "HMI-set times on the IO struct are Real seconds for operator legibility; the HMI-tunable timers below need their PT in DInt ms - one MUL+CONVERT pair per preset, in order: ShutdownTime to ShutdownTimeMS, EnableUPSTime to EnableUPSTimeMS, FTTime to FTTimeMS (one preset, shared by both Fail To Run and Fail To Stop). Kept as one block up front rather than repeated at each timer, so the x1000 idiom is visibly consistent and only ever done once (C-126 documented exception)."
   MUL(EN := TRUE, IN1 := IO.ShutdownTime, IN2 := 1000.0) => Time
   MUL(EN := TRUE, IN1 := IO.EnableUPSTime, IN2 := 1000.0) => Time
   MUL(EN := TRUE, IN1 := IO.FTTime, IN2 := 1000.0) => Time

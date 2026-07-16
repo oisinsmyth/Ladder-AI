@@ -104,3 +104,27 @@ not just described:
    same whole-project proof.
 4. `pattern.md` complete — reviewed and accepted, Oisín, 2026-07-15.
 5. Human sign-off — **Oisín, 2026-07-15.**
+
+## Post-admission changes
+
+**2026-07-16 — C-126 exception condition + C-201 title (documentation fields only; logic untouched).**
+A blind review-simplicity validation run (2026-07-16, `docs/notes/review-simplicity-validation-2026-07-16.md`,
+finding 6) flagged a pattern-vs-rule tension: `docs/06-lad-conventions.md` C-126's documented
+exception (added 2026-07-16) admits the block-top "HMI Times" batch only if the network comment
+states the one-pair-per-timer scheme — which network 6 didn't carry — and network 4 was untitled
+(C-201). A generation copying the admitted example verbatim would have breached doc 06. Owner
+ruling: update the pattern, not waive the rule. Changes: network 6 gained the scheme comment
+(modeled on the generated blocks' own proven text — `FB_PusherControl` N3 / `FB_ShredderSequencer`
+N2 — adapted to this block's three name-matched pairs); network 4 gained the title "Hand Selector
+Edges And Prestart Timeout". Risk class: titles/comments through the IR layer, the S3-proven
+lowest-risk write class (cannot change logic — `docs/notes/stage-gates.md`, S3 proofs, verified
+live end-to-end three times including real JOB9002 content). `MotorStarter.xml` regenerated from the
+edited IR via `converter to-xml` (diff: exactly the two MultilingualText `<Text>` values; sidecar
+and all wiring UIds byte-identical); `dotnet test` green including `MotorDolBlock_RoundTripsLosslessly`;
+full `to-xml`/`to-ir` cycle is a fixed point. Live TIA re-import re-verification deliberately
+deferred for this change class per the S3 precedent — the admission's compile evidence (criterion 3)
+covers the unchanged logic. Note: the committed pattern now intentionally carries richer
+documentation than the real source block (`MotorDOL` is itself untitled at N4 and comment-less at
+N6 — `sanitization/MotorDOL.map.json` reflects the source), so a future re-sanitization from a
+fresh export would need these two fields re-applied. Change re-affirmed under the admission's
+sign-off discipline: Oisín, 2026-07-16.
