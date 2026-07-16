@@ -24,6 +24,30 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 **Verdict / revisit trigger:** the outcome, or what reopens the debate.
 ```
 
+## Prioritization snapshot — 2026-07-16
+
+A point-in-time ranking, not a living order: it reflects the entries and project state as of this date and is not maintained as verdicts land. Method: each idea was ranked twice (ease of implementation; logical implementation order given dependencies and leverage), score = sum of the two positions, lowest first, ties broken by logic position. An idea hard-gated by another FI is nested under its gate instead of holding its own slot; external gates (stages/events) are noted inline. FI-04 excluded (Rejected).
+
+1. **FI-16** telemetry — 1+1 = **2**
+   - ⛓ **FI-12(a)** batch import/compile — 7+6 = **13**: build only once FI-16's data shows project-open cost dominates
+     - ⛓ **FI-12(b)** Portal daemon — 15+13 = **28**: only if the bottleneck survives batch mode
+2. **FI-14** compile-error playbook — 2+2 = **4**
+3. **FI-13** static pre-flight gate — 4+4 = **8**
+4. **FI-07** Portal-instance janitor — 5+5 = **10**
+5. **FI-05** blind-draft gap — 9+3 = **12**
+6. **FI-15** block digests — 6+8 = **14**
+   - ⛓ **FI-17** explanation sidecars — 3+9 = **12**: scores better than its gate, but building the analysis cache before FI-15 settles the derived-file hygiene rules would invent them twice
+7. **FI-09** convention rules Phase 2 — 12+7 = **19** · external gate: `review-conventions` in real use
+8. **FI-08** proposed-tags approval path — 10+10 = **20** · external gate: first real S6 tag-proposal loop
+9. **FI-11** presentation bundler — 8+12 = **20** · external gate: `generate` orchestrator design
+10. **FI-06** edge-detection pattern kind — 11+11 = **22** · external gate: grounded example (S8 harvest)
+11. **FI-10** HMI alarm exports — 13+14 = **27** · external gate: S5 extractors verified
+12. **FI-02** OB1 round-trip — 14+16 = **30** · external gate: real production OB content
+13. **FI-01** pattern testing hook — 16+15 = **31** · external gate: S9 opens (R-07)
+14. **FI-03** Modbus multi-instance — 17+17 = **34** · external gate: grounded example
+
+**Parallel-safe subset (same date).** With the S6 pipeline build-out active (GenProject1 retrospective, C-6xx rules, reviewer skills — `15-generation-pipeline.md` build order), the items implementable *now* without touching that work stream or its live resources: **FI-14** (new notes file, curation only), **FI-16** (format/convention definition; instrumentation itself happens in pipeline runs and lands with them), **FI-13** and **FI-15** (purely static converter tooling, verifiable against the committed `ir/reference/` corpus with no Portal session — additive code, low merge risk). Excluded despite good scores: **FI-07** and **FI-12(a)** (meaningful verification manipulates live Portal processes/projects — the single shared resource), **FI-05** (works the same patterns and validation corpus the S6 stream is actively using).
+
 ## Ideas
 
 ### FI-01 — Pattern testing hook (S9 sim harness)
