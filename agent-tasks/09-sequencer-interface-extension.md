@@ -2,7 +2,7 @@
 task: 09-sequencer-interface-extension
 source: owner-questions C-5 (doc 06 C-115)
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: done (2026-07-17) — mini-manifest signed off, built and compiled clean; see gen/GenProject1/fix-wave-1-reviews.md C-5
+status: done (2026-07-17, resolution 2 — reuse existing members) — a concurrent worktree session ran this same gate independently and got a different sign-off (resolution a); owner's final word switched to resolution 2 on being shown the conflict ("switch to reuse please that was my mistake"); see gen/GenProject1/fix-wave-1-reviews.md C-5 and gen/GenProject1/architecture.md's 2026-07-17 change manifest
 queue-order: 8
 ---
 

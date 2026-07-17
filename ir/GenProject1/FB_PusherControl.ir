@@ -35,8 +35,6 @@ INTERFACE
       PressureClearResumeDelay : Real
       PressureTripCountThreshold : Int
       Cycling : Bool
-      UPSEnable : Bool
-      Run : Bool
       Blocked : Bool
       EndTravelTimeoutFault : Bool
       ParkedTimeoutFault : Bool

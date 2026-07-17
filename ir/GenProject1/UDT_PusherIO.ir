@@ -3,8 +3,8 @@ TYPE UDT_PusherIO
   MEMBERS
     Step : Int
     Fitted : Bool
-    Enable : Bool COMMENT "Internal permissive (Fitted AND Mode <> 0) gating this pusher's own cycle acceptance - not the C-115 chain-enable vocabulary. See AutoStartSignal below for that; two same-family names, different concepts (this one predates the site's chained-permissive naming, added 2026-07-17 alongside it - not renamed, to avoid touching a proven interface member just to apply a doc-06 rule)."
-    AutoStartSignal : Bool COMMENT "C-115 handshake vocabulary (enable in), added 2026-07-17 owner ruling (C-5) - every equipment FB carries this, stepped or not, even where the caller has nothing to wire it from yet. Unwired by FC_ControlMain for now; distinct from Enable above."
+    Enable : Bool
+    AutoStartSignal : Bool COMMENT "In: C-115 handshake vocabulary (owner ruling 2026-07-17, task 09, resolution 2) - external run permission, caller-asserted, named after the site's real chained-permissive pattern (FB_MotorFwdRevSystem.IO.AutoStartSignal), not doc 06's illustrative name. Unwired by FC_ControlMain for now - no established caller need for this integration; C-115 requires the member regardless. Distinct from Enable above (FB-computed, Fitted AND Mode<>0) - that's this block's own internal readiness gate, not the external permission this member carries."
     Mode : Int
     HopperHighLevel : Bool
     ManualCycleCmd : Bool
@@ -25,9 +25,7 @@ TYPE UDT_PusherIO
     PressureTripConfirmTime : Real
     PressureClearResumeDelay : Real
     PressureTripCountThreshold : Int
-    Cycling : Bool
-    UPSEnable : Bool COMMENT "C-115 handshake vocabulary (ready out), added 2026-07-17 owner ruling (C-5) - what a downstream instance would chain off, per the site's admitted chained-permissive-enable pattern. Unwired by FC_ControlMain for now (this pusher has nothing downstream of it in the material chain)."
-    Run : Bool COMMENT "C-115 handshake vocabulary (running out), added 2026-07-17 owner ruling (C-5) - the site's real member name for this concept (patterns/motor-dol, patterns/chained-permissive-enable), not doc 06's illustrative 'running'. Unwired by FC_ControlMain for now; distinct from Cycling above (Cycling is this block's own in-cycle status, not the site's standard handshake name)."
+    Cycling : Bool COMMENT "Out: this block's C-115 running-equivalent (owner ruling 2026-07-17, task 09 resolution 2) - Step <> 0. Already wired (NETWORK 13); recognized as satisfying C-115's running slot under this block's own established name rather than duplicated under the generic vocabulary."
     Blocked : Bool
     EndTravelTimeoutFault : Bool
     ParkedTimeoutFault : Bool

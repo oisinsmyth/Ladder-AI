@@ -92,7 +92,10 @@ answered — see F-3 below), startup machinery (OB100 + DB_PLC + C-111 — **no 
 below**), the overcurrent family (disarmed pending Q-11/Q-04 — Q-11 resolved 2026-07-17, still
 disarmed for this prototype panel, see `requirements.md`; Q-04's setpoint numbers deferred, see
 `docs/notes/deferred-items.md`), header-comment pass for the seven generated files, buffer
-renames, InCycle member removal.
+renames. **`InCycle` member removal dropped from this queue (2026-07-17, task 09/C-5, resolution
+2):** wired instead of removed (`IO.InCycle := IO.Step <> 0`, `FB_ShredderSequencer` Network 15) —
+it now serves double duty as the sequencer's C-115 running-equivalent, closing the standing
+dead-signal finding rather than deleting the member.
 
 ## F-3 — `DB_Settings` empty-end-state: resolved
 
@@ -251,24 +254,34 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   Verified 2026-07-17 (grep-confirmed against the current committed IR): Network 10 reads
   `MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0) => IO.Step`,
   exactly the drafted fix. No separate Portal round trip needed for this entry specifically.
-- **C-5 (C-115) — BUILT AND COMPILED CLEAN, 2026-07-17** (`agent-tasks/09-sequencer-interface-
-  extension.md`). Owner: "They should expose that also, Always, just ignore when not needed." A
-  mini-manifest was presented and signed off (2026-07-17: "Go with (a), just document the
-  distinction") before coding, per docs/15 hard gate 1 (interface change). Added the site's real
-  C-115 vocabulary — `AutoStartSignal` (enable in), `UPSEnable` (ready out), `Run` (running out),
-  taken from `patterns/chained-permissive-enable`/`FB_MotorFwdRevSystem`'s own interface, not doc
-  06's illustrative names — to both `UDT_PusherIO` and `UDT_ShredderSequencerIO`. Deliberately
-  **unwired** by `FC_ControlMain` (interface-only, no behavior change, per the task's own scope).
-  Both UDTs already had same-family, differently-scoped members in the way
-  (`UDT_PusherIO.Enable` — an internal cycle-acceptance permissive, not the chain-enable concept;
-  `UDT_ShredderSequencerIO.EnableUpstream` — this plant's own upstream-conveyor output, not the
-  generic ready-out name) — kept as-is per the sign-off, each new member's comment states the
-  distinction explicitly rather than renaming a proven existing member just to apply a doc-06 rule.
+- **C-5 (C-115) — BUILT AND COMPILED CLEAN, 2026-07-17, resolution 2** (`agent-tasks/09-sequencer-
+  interface-extension.md`). Owner: "They should expose that also, Always, just ignore when not
+  needed." A mini-manifest was presented and signed off before coding, per docs/15 hard gate 1
+  (interface change) — **two concurrent sessions ran this gate independently and got two different
+  sign-offs from the owner without either side knowing**: resolution (a) (add `AutoStartSignal`/
+  `UPSEnable`/`Run` as three brand-new members alongside the existing ones) was built and compiled
+  first; resolution 2 (reuse existing same-role members under their own names, add only the
+  genuinely-missing `AutoStartSignal`) was drafted independently in a separate worktree and left
+  incomplete. **Owner's final word (2026-07-17, on being shown the conflict): "switch to reuse
+  please that was my mistake"** — resolution 2 stands, resolution (a) has been reverted.
+  Built: `AutoStartSignal : Bool` (enable in, new) added to both `UDT_PusherIO` and
+  `UDT_ShredderSequencerIO` — unwired by `FC_ControlMain`, no established caller need yet.
+  `UDT_PusherIO.Cycling` and `UDT_ShredderSequencerIO.EnableUpstream`/`InCycle` recognized as
+  already serving the running/ready/running roles under this project's own established names
+  (comments added stating the C-115 role each satisfies) rather than duplicated under generic
+  names. `IO.InCycle` — previously an unwritten dead member (standing finding since the
+  2026-07-16 blind simplicity review, now C-610) — got wired
+  (`COIL IO.InCycle := IO.Step <> 0`, `FB_ShredderSequencer` Network 15) as part of recognizing it
+  for the running slot, closing that dead-signal finding as a side effect. The other worktree hit
+  D-6 trying to wire exactly this and backed it out; this pass used the proven whole-file
+  strip-and-`--synthesize` workaround instead and completed it.
   Compiled clean: both `--type` compiles succeeded, whole-device 0/0, the Import()-cascade to
-  `FB_ShredderSequencer`/`FB_PusherControl`/their iDBs/`FC_ControlMain`/`OB100` cleared via
-  block-level compile (same known playbook pattern). Re-export diffed byte-identical against the
-  authored UDTs; both FBs' own network logic confirmed untouched (only their inline UDT-shape
-  reflection picked up the three new members, no logic changed). This was the last item in the
+  `FB_ShredderSequencer`/`FB_PusherControl`/their iDBs/`FC_ControlMain`/`OB100`/`FC_AlarmsMain`
+  cleared via block-level compile. Re-export diffed byte-identical against the authored UDTs;
+  `FB_ShredderSequencer`'s diff against pre-edit `HEAD` showed exactly the intended two changes
+  (dropped stale `UPSEnable`/`Run` inline reflection, added the `InCycle` wiring) — task 06's
+  re-arm fix and everything else in that file confirmed untouched; `FB_PusherControl` showed only
+  the same stale-reflection drop, task 07's fix untouched. This was the last item in the
   agent-tasks Portal queue — it's now empty/complete.
 - **C-7 (C-507) — closed, no rule or code change needed.** Owner's clarification (recorded
   verbatim in doc 06 C-507) resolves the apparent tension: GenProject1's latched,

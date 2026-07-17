@@ -2,7 +2,7 @@ TYPE UDT_ShredderSequencerIO
   ROOTID 0
   MEMBERS
     CycleStart : Bool
-    AutoStartSignal : Bool COMMENT "C-115 handshake vocabulary (enable in), added 2026-07-17 owner ruling (C-5) - every equipment FB carries this, stepped or not, even where the caller has nothing to wire it from yet. Distinct from CycleStart above: CycleStart is this plant's own operator start command (REQ-001), not the site's generic chain-enable name. Unwired by FC_ControlMain for now."
+    AutoStartSignal : Bool COMMENT "In: C-115 handshake vocabulary (owner ruling 2026-07-17, task 09, resolution 2) - external run permission, caller-asserted, named after the site's real chained-permissive pattern (FB_MotorFwdRevSystem.IO.AutoStartSignal), not doc 06's illustrative name. Unwired by FC_ControlMain for now - CycleStart/CycleStop already carry this sequencer's actual start/stop triggering; C-115 requires the vocabulary member regardless of whether this integration uses it."
     CycleStop : Bool
     DownstreamRunning : Bool
     SystemHealthy : Bool COMMENT "In (FC_ControlMain, from DB_Input.Control_Healthy): safety/control circuit healthy. Loss asserts StopCmd - every step aborts to Idle and a fresh CycleStart press is required after recovery, so an E-stop reset can never self-restart the plant (REQ-062)."
@@ -20,11 +20,9 @@ TYPE UDT_ShredderSequencerIO
     ShredderBlockedFault : Bool
     RunDischargeConv : Bool
     RunInfeedConv : Bool
-    EnableUpstream : Bool
-    UPSEnable : Bool COMMENT "C-115 handshake vocabulary (ready out), added 2026-07-17 owner ruling (C-5) - what a downstream instance would chain off, per the site's admitted chained-permissive-enable pattern. Distinct from EnableUpstream above: that's this plant's own upstream-conveyor enable output (REQ-011, wired to DQ9_SYS_EnableUpstream), not the site's generic ready-out name. Unwired by FC_ControlMain for now."
-    Run : Bool COMMENT "C-115 handshake vocabulary (running out), added 2026-07-17 owner ruling (C-5) - the site's real member name for this concept (patterns/motor-dol, patterns/chained-permissive-enable), not doc 06's illustrative 'running'. Unwired by FC_ControlMain for now; distinct from InCycle below (InCycle is this block's own in-cycle status, not the site's standard handshake name)."
+    EnableUpstream : Bool COMMENT "Out: this sequencer's C-115 ready-equivalent (owner ruling 2026-07-17, task 09 resolution 2) - asserted once Step 50 (Running) has held long enough (UpstreamEnableTimer, NETWORK 11) that whatever's downstream may enable. Same role as FB_MotorFwdRevSystem.IO.UPSEnable under this project's own established name for this signal - not duplicated under the generic vocabulary name."
     PreStartSounder : Bool
-    InCycle : Bool
+    InCycle : Bool COMMENT "Out: this sequencer's C-115 running-equivalent (owner ruling 2026-07-17, task 09 resolution 2) - Step <> 0 (NETWORK 15), same shape as the pusher's own Cycling. Was previously an unwritten dead member (standing C-610 finding); wiring it to satisfy C-115's running slot closes that finding too."
     MotorReverseCmd : Bool
     MotorAutoStartCmd : Bool
     MotorPreStartDoneCmd : Bool

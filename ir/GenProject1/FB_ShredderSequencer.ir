@@ -30,8 +30,6 @@ INTERFACE
       RunDischargeConv : Bool
       RunInfeedConv : Bool
       EnableUpstream : Bool
-      UPSEnable : Bool
-      Run : Bool
       PreStartSounder : Bool
       InCycle : Bool
       MotorReverseCmd : Bool
@@ -218,6 +216,7 @@ NETWORK 14 "Motor And Pusher Mode Commands"
 NETWORK 15 "Output Commands"
   COIL IO.RunDischargeConv := IO.Step >= 20
   COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder
+  COIL IO.InCycle := IO.Step <> 0
 
 SIDECAR
 NETWORK 1
@@ -1748,42 +1747,57 @@ NETWORK 15
   access IO.Step = 23 LocalVariable
   access IO.PusherJogPreStartSounder = 24 LocalVariable
   access IO.PreStartSounder = 25 LocalVariable
-  constant 20 = 26 Int
-  constant 10 = 27 Int
+  access IO.Step = 26 LocalVariable
+  access IO.InCycle = 27 LocalVariable
+  constant 20 = 28 Int
+  constant 10 = 29 Int
+  constant 0 = 30 Int
   assignment 0
-    rail = 38
+    rail = 43
     step 0 compare
       partname = Ge
-      uid = 28
+      uid = 31
       srctype = Int
-      left tag = 21 34
-      right literal = 26 35
-      out = 36
-    coil = 29
+      left tag = 21 39
+      right literal = 28 40
+      out = 41
+    coil = 32
     coil operand = 22
-    coil operandwire = 37
+    coil operandwire = 42
   assignment 1
     rail = none
     step 0 or
-      uid = 32
+      uid = 35
       branch 0
-        rail = 38
+        rail = 43
         step 0 compare
           partname = Eq
-          uid = 30
+          uid = 33
           srctype = Int
-          left tag = 23 39
-          right literal = 27 40
-          out = 41
+          left tag = 23 44
+          right literal = 29 45
+          out = 46
       branch 1
-        rail = 38
+        rail = 43
         step 0 contact
-          uid = 31
+          uid = 34
           operand = 24
-          operandwire = 42
+          operandwire = 47
           negated = false
-          out = 43
-      out = 44
-    coil = 33
+          out = 48
+      out = 49
+    coil = 36
     coil operand = 25
-    coil operandwire = 45
+    coil operandwire = 50
+  assignment 2
+    rail = 43
+    step 0 compare
+      partname = Ne
+      uid = 37
+      srctype = Int
+      left tag = 26 51
+      right literal = 30 52
+      out = 53
+    coil = 38
+    coil operand = 27
+    coil operandwire = 54

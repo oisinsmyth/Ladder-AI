@@ -547,3 +547,32 @@ SEQ.`PusherParkCmd` → pusher `ParkCmd`.
 **Gate:** phase 2 (import → compile → invariance → reviewers → presentation) waits on the
 settings sign-off block in `gen/GenProject1/fix-wave-1.md` §1 — pending until the engineer
 signs. — Sign-off: pending.
+
+### 2026-07-17 — C-115 handshake vocabulary (owner-questions C-5, `agent-tasks/09-sequencer-
+interface-extension.md`)
+
+**Touched blocks** — modified only, nothing created or deleted: `UDT_PusherIO`, `UDT_ShredderSequencerIO`
+(interface changes), `FB_ShredderSequencer` (Network 15 — `IO.InCycle` wired), `FB_PusherControl`
+(interface reflection only, no logic change). **Interface changes: YES.** `AutoStartSignal : Bool`
+(enable in, genuinely new) added to both UDTs. `UDT_PusherIO.Cycling` and
+`UDT_ShredderSequencerIO.EnableUpstream`/`InCycle` recognized under comment as already serving the
+running/ready/running roles — not duplicated under generic names.
+**Two conflicting sign-offs, reconciled:** this gate ran twice, independently, in two concurrent
+sessions, and got two different answers from the owner without either side knowing. Resolution (a)
+(three brand-new members: `AutoStartSignal`/`UPSEnable`/`Run`) was built and compiled first;
+resolution 2 (reuse existing members, add only `AutoStartSignal`) was drafted independently and
+left incomplete (blocked on the D-6 converter gap wiring `InCycle`). Owner's final word, on being
+shown the conflict: **"switch to reuse please that was my mistake."** Resolution 2 is what's built;
+resolution (a) was fully reverted. **Pattern or freeform:** interface-only, no pattern applies.
+**REQ refs:** none directly — this is a doc-06 rule application (C-115), not requirement-driven.
+**Tag status:** `AutoStartSignal` is `proposed` in both UDTs (new, `FC_ControlMain` doesn't wire
+it); every reused member (`Cycling`, `EnableUpstream`, `InCycle`) already `exists`.
+**Gate:** mini-manifest presented and signed off before coding (docs/15 hard gate 1) — see the
+conflict note above; the owner's final answer is authoritative. — Sign-off: **received** (2026-07-17,
+"switch to reuse please that was my mistake").
+**Compile evidence:** whole-device 0 errors/0 warnings; both `--type` compiles clean; Import()
+cascade to `FB_ShredderSequencer`/`FB_PusherControl`/their iDBs/`FC_ControlMain`/`OB100`/
+`FC_AlarmsMain` cleared via block-level compile; re-export byte-identical against authored UDTs;
+`FB_ShredderSequencer` diff against pre-edit `HEAD` showed exactly the intended two changes
+(dropped stale `UPSEnable`/`Run` reflection from the reverted resolution (a), added the `InCycle`
+wiring) — task 06's re-arm fix and everything else confirmed untouched.
