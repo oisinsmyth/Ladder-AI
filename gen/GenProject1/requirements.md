@@ -78,7 +78,8 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Class:** control
 - **Source:** FuncDesc §"Start sequence" — "Press Start button"
 - **Notes:** `DI3_SYS_CycleStart` exists ("Cycle start pushbutton (local/remote)"). SpecSheet's
-  typical sequence says "Press and hold Start Button" — momentary vs hold is Q-06.
+  typical sequence says "Press and hold Start Button" — momentary vs hold resolved as momentary,
+  see Q-06.
 
 ### REQ-002 — Downstream confirmed before start
 - **Text:** The start sequence proceeds only with downstream confirmed running / available.
@@ -809,8 +810,11 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   `gen-architecture`'s reuse-first pass (owner-questions A-1) if/when this is built — a
   motor-starter FB per motor is the likely tier-(a)/(b) shape. Still unresolved: does the demo
   machine have two motors to instrument, or do REQ-020/057 scale down for the demo?
-- **Q-06 — Start button action.** FuncDesc: "Press Start button" (momentary). SpecSheet typical
-  sequence: "Press and hold Start Button". Which applies to the demo?
+- **Q-06 — Start button action. RESOLVED (owner ruling, 2026-07-17): "Ok momentary, this the
+  default in most systems."** FuncDesc's reading (momentary press) stands over SpecSheet's
+  "press and hold" typical-sequence narrative — REQ-001 confirmed accordingly. `DI3_SYS_CycleStart`
+  is read as a momentary pushbutton, not a maintained contact; the start sequence latches on its
+  own once triggered (no separate "held" behavior to implement).
 - **Q-07 — Upstream enable delay. RESOLVED (owner ruling, 2026-07-17): "Confirm."** 3 s after
   infeed start, as a separate `DQ9_SYS_EnableUpstream` output — FuncDesc's reading stands over
   SpecSheet's conflated 6 s/loading-light narrative. `DB_Settings.InfeedToUpstreamEnableDelay` =
