@@ -165,12 +165,18 @@ proceed without re-litigating intent.
   clean (whole-device 0/0, block + all flagged-inconsistent callers cleared); re-export diffed
   against pre-edit `HEAD` — only Network 3 (the `TON` line + new comment) and Network 4's comment
   changed, every other network byte-identical.
-- **B-6 — `EndTravelTimer` runs through pressure holds. Ruling: add suppression.** Owner: "If
-  another fault or expected event can explain why the pusher isn't fully extended, then interrupt
-  that timer." Resolution: gate/hold `EndTravelTimer` during a recognized pressure-hold (REQ-046)
-  or other named fault condition — C-504-style cause→consequence suppression, not a deliberate
-  escalation. A long jam should raise the pressure/jam alarm alone, not stack a travel-timeout
-  alarm on top.
+- **B-6 — `EndTravelTimer` runs through pressure holds. FIXED 2026-07-17**
+  (`agent-tasks/07-endtraveltimer-suppression.md`). Owner: "If another fault or expected event can
+  explain why the pusher isn't fully extended, then interrupt that timer." Built:
+  `FB_PusherControl` Network 8's `TON(EndTravelTimer, ...)` gained `AND NOT PressureHold` on its
+  `IN` — same shape as the existing `IO.Fitted` gate on the same timer, so a confirmed jam resets
+  the timeout allowance (not merely pauses it, consistent with how the timer already behaves when
+  `Fitted` drops) rather than stacking a travel-timeout alarm on top of the jam alarm. `PressureHold`
+  is defined in Network 5 (before Network 8), so no cross-network staleness. Compiled clean
+  (whole-device 0/0; block plus the three Import()-cascaded blocks — `iDB_PusherControl`,
+  `FC_ControlMain`, `OB100` — cleared via block-level compile); re-export diffed against pre-edit
+  `HEAD` (which already carried task 05's Network 14): only Network 8's comment and `TON` line
+  changed, everything else — including task 05's own addition — byte-identical.
 
 **Startup-machinery waiver withdrawn (2026-07-17):** the demo-panel OB100/`DB_PLC` omission
 (D-1's prior waiver) is superseded by B-2's confirmed-fault ruling and the new C-128 rule.

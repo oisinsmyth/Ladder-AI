@@ -2,7 +2,7 @@
 task: 07-endtraveltimer-suppression
 source: owner-questions B-6
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: ready
+status: done (2026-07-17) — see gen/GenProject1/fix-wave-1-reviews.md B-6 for the built shape
 queue-order: 6
 ---
 
