@@ -4226,3 +4226,46 @@ Meta-lesson, recorded deliberately: the check stage found real defects in code w
 pipeline's own coordinator under the pipeline's own rules, one day after the rules were written.
 That is the system working - the stricter-bar principle has teeth precisely because the reviewers
 do not care who wrote the code.
+
+## S6/S7 direction reset + session close: owner-questions gate, S7-first path proposed (2026-07-17)
+
+**The owner called a course correction, and it stands as the session's most important output.**
+Points raised, in the owner's own framing: (1) the pipeline "got ahead of itself" - three coding
+waves ran manual-to-contract while gen-block-coding sat unbuilt at build-order step 7; (2)
+gen-architecture was intended as a REUSE-FIRST carving algorithm - identify whole library blocks,
+then pattern-composed blocks, then modified library blocks, then new/freeform, in that order,
+handing the compiled list to the programming skill(s) - where the built skill derives blocks from
+REQs and maps patterns afterwards; (3) programming should be two or three skills: New Block
+creation / Modify block for new purpose / Modify block for fix; (4) the library is PURPOSELY thin
+- organic growth via S8 harvest, never a library campaign; and (5) **S7 is the rush** - safe
+modification is the capability that takes production load off the owner, freeing time to develop
+this app (the project's bootstrapping loop, now stated explicitly).
+
+**Coordinator's concession, recorded:** the criticism is correct. Manual-to-contract was written
+for the exception and became the norm; the deferred-coding-skill priority was never revisited as
+coding volume grew; and the fix wave's own defects (the reintroduced C-601 near-match, the C-604
+tension) are exactly what a coding skill's write-time checklist would have prevented rather than
+reviewers catching after. The reuse-first point is structurally right because decomposition
+boundaries ARE reuse decisions - a carving blind to the library can make reuse impossible in ways
+no after-the-fact mapping repairs - with one composition rule preserved: REQs stay the
+correctness spine (each tier candidate held against the REQ set it claims; the almost-fits trap
+guarded by traceability). The 3-skill split maps cleanly: gen-block-new (S6), and the modify pair
+as S7's own deliverable shape (roadmap S7 verbatim: targeted edits + invariance + before/after
+diff), sandbox-scoped until S7's gate formally opens.
+
+**Everything now gates on `docs/notes/owner-questions.md`** (created this session at the owner's
+request; priority-ordered A-F): A-1..A-4 direction rulings (carving model; skill split; bounding
+manual coding; the S7-first ordering - converter diff tooling, modify pair vs the B-docket, D-4
+then S6's ten requests, A-1 in passing), the B-docket (six tier-1 defect candidates from fix wave
+1's check stage), C rule-book rulings, D project-scope decisions, E register questions, F tooling.
+AITODO pruned to a lean recovery doc pointing there; superseded queues deleted per its own
+discipline.
+
+**Session-close housekeeping:** all six agent worktrees removed and branches deleted (every one
+verified fully merged; master is the only branch); working tree clean; suites green (converter
+491/491, openness-cli 101/101, golden 14/14). Persistent agent memory updated so the next session
+starts with the owner's priorities even with this conversation cleared: the stricter-bar
+principle, the S7-rush/thin-library economics, the build-order-drift lesson, and the environment
+facts (classifier wants visible owner approval for site-data/admitted-content agent launches;
+fresh worktree openness-cli binaries hit TIA's first-connect approval dialog - use the session's
+approved binary for Portal work).

@@ -2,6 +2,21 @@
 
 ## 2026-07-17
 
+**Direction reset (owner) + session-close housekeeping: owner-questions gate, S7-first path**
+
+- Owner course-correction recorded (stage-gates has the full entry): gen-architecture is meant to
+  carve reuse-first (library-whole -> pattern-composed -> library-modified -> freeform);
+  programming splits into three skills (new / modify-for-purpose / modify-for-fix, the modify
+  pair being S7's deliverable shape); the library is purposely thin (organic S8 growth); and S7
+  is the rush - it takes production load off the owner. Coordinator conceded the
+  manual-to-contract drift with evidence.
+- docs/notes/owner-questions.md created (priority-ordered A-F: direction rulings, the fix-wave
+  defect docket, rule-book rulings, scope decisions, register questions, tooling) - the single
+  gate for all next work. AITODO pruned to a lean recovery doc pointing at it.
+- Workspace cleaned: six agent worktrees removed, branches deleted (all verified fully merged);
+  suites green (converter 491/491, cli 101/101, golden 14/14). Agent memory updated for session
+  clearance (stricter-bar, S7-rush/thin-library, drift lesson, environment facts).
+
 **GenProject1 fix wave 1: signed, imported, compiled 0/0, invariance-proven, triple-reviewed**
 
 - All four owner rulings + two mid-wave tension rulings implemented (reverse timed from confirmed
