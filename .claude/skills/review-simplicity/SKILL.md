@@ -162,6 +162,6 @@ note it as a candidate rule gap, because that's how C-601–C-607 themselves wer
 committed doc (a skill-validation record, a kept gate review), split it at write time: any large
 verbatim block — e.g. a full blind-run transcript from validating this skill — goes in
 `docs/evidence/<name>.md`; the saved note keeps the findings summary, verdict, and a link. Large
-raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or `docs/notes/stage-gates.md`
-(the standing FI-19/FI-20 convention, `docs/16-future-ideas.md`) — born in the right shape, not
-split by hand later.
+raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or `docs/notes/stage-gates.md` —
+the split convention, stated in `docs/15-generation-pipeline.md` ("Artifacts"), origin FI-19/FI-20
+in `docs/16-future-ideas.md`. Born in the right shape, not split by hand later.

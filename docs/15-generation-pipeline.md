@@ -97,6 +97,15 @@ exists for.
   `proposed` tag; promotion to `exists` happens only via
   a fresh export showing it. A pipeline must never let "proposed in stage 1" mutate into "assumed
   real by stage 7".
+- **Verbatim evidence lives in `docs/evidence/`, not inline (the split convention).** A persisted
+  reviewer or skill-validation record is split at write time: the large verbatim block — a
+  `converter review` mechanical dump, a full blind-run transcript, a long per-REQ trace — goes in
+  `docs/evidence/<name>.md`; the record in `docs/notes/` (or a `docs/notes/stage-gates.md` entry)
+  keeps only the analysis, verdict, and a link to it. This keeps the constantly-read notes and the
+  `stage-gates.md` status index lean while preserving every line of raw evidence verbatim — the
+  property that makes it usable for drift checks and blind-review transparency. Born in the right
+  shape, not split by hand later. The three reviewer skills (9–12) instruct this in their
+  Report-structure sections; origin and rationale: `docs/16-future-ideas.md` FI-19/FI-20.
 
 ## Isolation model
 
