@@ -69,7 +69,7 @@ if it's still open, your IR draft + preflight will very likely hit the same wall
 | 1 | [`02-startup-machinery.md`](02-startup-machinery.md) | **done** | - | yes |
 | 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | done | - | yes |
 | 3 | [`04-bothswitchesfault-alarm-wiring.md`](04-bothswitchesfault-alarm-wiring.md) | **done** (not applicable — already wired, task doc was based on a mis-transcribed finding) | - | yes |
-| 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | in-progress | main session, 2026-07-17 | yes |
+| 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | in-progress — IR drafted, preflight-clean, `to-xml --synthesize` verified (D-6 doesn't apply: no existing network body touched) | main session, 2026-07-17 | yes |
 | 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | ready (⚠ likely hits D-6) | - | yes |
 | 6 | [`07-endtraveltimer-suppression.md`](07-endtraveltimer-suppression.md) | ready (⚠ likely hits D-6) | - | yes |
 | 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | **done** (carried through by task 03's whole-file round trip; see `fix-wave-1-reviews.md` C-4) | - | conditional (see file) |

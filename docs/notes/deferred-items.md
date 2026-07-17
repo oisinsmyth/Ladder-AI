@@ -44,13 +44,12 @@ the proposed shape, not attempted).
 
 **Revisit trigger:** blocks essentially every queued S7/B-C-docket task that adds logic to an
 already-exported network, not just task 08 — `03-jog-interlock.md`, `04-bothswitchesfault-alarm-
-wiring.md`, `05-fitted-live-drop.md`, `06-reversal-window-rearm-fix.md`,
-`07-endtraveltimer-suppression.md`, `09-sequencer-interface-extension.md` (`agent-tasks/`) all
-modify an existing network the same way and will likely hit the identical
-`IrFormatException`. Worth prioritizing as soon as any of those tasks is picked up, rather than
-waiting for task 08 specifically. See `gen/GenProject1/fix-wave-1-reviews.md` C-4 entry for the
-concrete case and the drafted (unconverted) IR fix sitting in `ir/GenProject1/FB_PusherControl.ir`
-Network 10.
+wiring.md`, `06-reversal-window-rearm-fix.md`, `07-endtraveltimer-suppression.md`,
+`09-sequencer-interface-extension.md` (`agent-tasks/`) all modify an existing network the same way
+and will likely hit the identical `IrFormatException` if they skip the whole-file-strip workaround
+below. Worth prioritizing as soon as any of those tasks is picked up, rather than waiting for task
+08 specifically. See `gen/GenProject1/fix-wave-1-reviews.md` C-4 entry for the concrete case and
+the drafted (unconverted) IR fix sitting in `ir/GenProject1/FB_PusherControl.ir` Network 10.
 
 **Update (task 03, 2026-07-17): the whole-file workaround still works and is not itself blocked.**
 Task 03 hit the identical wall the naive way at first (touch one network, leave the rest of the
@@ -65,6 +64,13 @@ So this doesn't block anything that's willing to do the whole-file strip (mildly
 temporarily loses every other network's real sidecar until the post-compile re-export, and any
 other in-flight uncommitted edit to the same file has to be reconciled first) — task 08's own
 C-4/queue entries haven't been touched by this update; that's task 08's call to close out.
+
+**Update (task 05, 2026-07-17): confirmed clear, and an even simpler case than task 03's.** Task
+05's fix (`FB_PusherControl.ir` `NETWORK 14`, a standalone `Step <> 0`-keyed force-to-idle
+transition) never touches any existing network's own statements at all, so it doesn't even need
+task 03's "rebase onto in-flight sidecar-stripped drafts" step — the whole-file strip +
+`to-xml --synthesize` ran clean on the first try, verified directly (not just `preflight`). Not yet
+imported/compiled (still waiting on its own queue slot), but D-6 is not what's blocking it.
 
 ## Q-04 (GenProject1) — Per-type overcurrent setpoint numbers
 
