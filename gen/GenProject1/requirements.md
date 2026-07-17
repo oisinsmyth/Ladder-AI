@@ -100,8 +100,9 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Class:** control
 - **Source:** FuncDesc §"Start sequence" — "Start discharge conveyor & confirm running"
 - **Notes:** `DQ5_DIS_Run`, `DI10_DIS_Running` exist. Setting `DB_Settings.DischargeConveyorTimeout`
-  exists but is unconfigured (no start value) — Q-02. The confirm-window duration is not stated in
-  either source.
+  = 10.0 (fix-wave-1 proposed default, signed off 2026-07-16 — Q-02 resolved). The confirm-window
+  duration is not stated in either source; 10 s is a site-practice generous DOL start-confirm
+  window (`gen/GenProject1/fix-wave-1.md` §1).
 
 ### REQ-005 — Shredder reverse run at start
 - **Text:** The shredder starts in reverse and runs for 6 s.
@@ -335,8 +336,8 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Class:** timing
 - **Source:** FuncDesc §"Shredder Pusher" — "Have a run on so the Hyd motor doesn't stop when
   transitioning from push to retract"
-- **Notes:** Setting `DB_Settings.PusherPumpRunOnTime` exists, unconfigured (no spec number
-  either) — Q-02.
+- **Notes:** Setting `DB_Settings.PusherPumpRunOnTime` = 5.0 (fix-wave-1 proposed default, signed
+  off 2026-07-16 — Q-02 resolved; no spec number stated in either source).
 
 ### REQ-032 — Pusher cycle definition
 - **Text:** One pusher cycle: start from parked, transition to the end-travel limit, hold a short
@@ -467,8 +468,8 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Class:** control
 - **Source:** FuncDesc §"Sequence:" — "When pressure is not high level + 5s time delay, restart
   pushing from existing position and continue sequence"
-- **Notes:** Setting `DB_Settings.PressureClearResumeDelay` exists but is **unconfigured despite
-  the source stating 5 s** — Q-02 (the one unconfigured member with a spec-stated number).
+- **Notes:** Setting `DB_Settings.PressureClearResumeDelay` = 5.0 (fix-wave-1 proposed default,
+  signed off 2026-07-16 — Q-02 resolved), matching the source's stated 5 s exactly.
 
 ### REQ-048 — Pressure-trip count: return and fault
 - **Text:** If high pressure activates 5 times on the same cycle, the pusher returns to parked
@@ -525,7 +526,7 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Source:** FuncDesc §"Pusher Faults:" — "Pusher taking too long to reach parked or end
   switch"; also §"Faults to include..." — "Pusher taking too long to reach end switch"
 - **Notes:** Annunciation bit exists (grep-verified). Setting `DB_Settings.PusherEndTravelTimeout`
-  exists, unconfigured — Q-02.
+  = 60.0 (fix-wave-1 proposed default, signed off 2026-07-16 — Q-02 resolved).
 
 ### REQ-055 — Fault: parked timeout
 - **Text:** The pusher taking too long to reach the parked switch is a fault.
@@ -533,7 +534,8 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Source:** FuncDesc §"Pusher Faults:" — "Pusher taking too long to reach parked or end switch"
 - **Notes:** The display-faults list (§"Faults to include...") names only the end switch; the
   Pusher Faults list names both — recorded as stated, both faults required. Annunciation bit
-  exists (grep-verified). Setting `DB_Settings.PusherParkedTimeout` exists, unconfigured — Q-02.
+  exists (grep-verified). Setting `DB_Settings.PusherParkedTimeout` = 30.0 (fix-wave-1 proposed
+  default, signed off 2026-07-16 — Q-02 resolved).
 
 ### Faults on the text display
 
@@ -752,15 +754,15 @@ be slightly different") is carried here: drawing names may differ slightly from 
 | `ReversalWindowTime` | 180.0 | 3 minutes | REQ-028 |
 | `ReversalCountThreshold` | 5 | 5 events | REQ-028 |
 | `PressureTripConfirmTime` | 0.5 | 0.5 s | REQ-046 |
-| `PressureClearResumeDelay` | **unconfigured** | **5 s stated** | REQ-047 |
+| `PressureClearResumeDelay` | 5.0 (Q-02) | **5 s stated** | REQ-047 |
 | `PressureTripCountThreshold` | 5 | 5 trips | REQ-048 |
-| `PusherEndTravelTimeout` | **unconfigured** | none stated | REQ-054 |
-| `PusherParkedTimeout` | **unconfigured** | none stated | REQ-055 |
+| `PusherEndTravelTimeout` | 60.0 (Q-02) | none stated | REQ-054 |
+| `PusherParkedTimeout` | 30.0 (Q-02) | none stated | REQ-055 |
 | `PusherEndTravelHoldTime` | 2.0 | approx. 2 s | REQ-032 |
-| `PusherPumpRunOnTime` | **unconfigured** | none stated | REQ-031 |
+| `PusherPumpRunOnTime` | 5.0 (Q-02) | none stated | REQ-031 |
 | `PusherJogWarningTime` | 1.0 | 1 s | REQ-041 |
 | `PusherFitted : Bool` | TRUE | — | REQ-042 |
-| `DischargeConveyorTimeout` | **unconfigured** | none stated | REQ-004 |
+| `DischargeConveyorTimeout` | 10.0 (Q-02) | none stated | REQ-004 |
 
 (The 8 s spin-down pause of REQ-006 has no `DB_Settings` member; see REQ-006 notes and Q-09.)
 
@@ -781,11 +783,18 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   project (whole-device 0 errors/0 warnings; both blocks individually consistent; re-export
   readable-identical to the signed IR). See `gen/GenProject1/fix-wave-1-reviews.md` B-2 for the
   scope note (C-111 full simulation-mode gating deliberately not included in this pass).
-- **Q-02 — Unconfigured settings.** Nine `DB_Settings` members have no start value (see the
-  settings table): the four overcurrent setpoints/delays, `PressureClearResumeDelay` (the only
-  one with a spec-stated number — 5 s, REQ-047), `PusherEndTravelTimeout`, `PusherParkedTimeout`,
-  `PusherPumpRunOnTime`, `DischargeConveyorTimeout`. Owner numbers needed; commissioning defaults
-  are C-309's factory-reset surface, so "unset" is a real gap, not a style note.
+- **Q-02 — Unconfigured settings. RESOLVED for 5 of 9 (already implemented, register was just
+  stale) — 4 of 9 deliberately deferred (see Q-04).** Found while answering this: the owner
+  already signed off on 5 of the 9 originally-unconfigured members back on **2026-07-16**
+  (`gen/GenProject1/fix-wave-1.md` §1, "§1 was signed 2026-07-16 (as proposed)") and they've been
+  in the live `DB_Settings.ir` ever since — `PressureClearResumeDelay` = 5.0 (matches REQ-047's
+  stated number exactly), `DischargeConveyorTimeout` = 10.0, `PusherEndTravelTimeout` = 60.0,
+  `PusherParkedTimeout` = 30.0, `PusherPumpRunOnTime` = 5.0 (rationale for each site-practice
+  number is in fix-wave-1.md §1's own table). This register and `DB_Settings.ir`'s own header
+  comment just hadn't been updated to say so — fixed here. The remaining four
+  (`OvercurrentSetpointMedium`/`High`, `OvercurrentMediumDelay`/`HighDelay`) stay genuinely
+  unconfigured by design — disarmed pending Q-11/Q-04, tracked in `docs/notes/deferred-items.md`,
+  not part of this resolution.
 - **Q-03 — Local/remote selector semantics. Still open** — owner's 2026-07-17 response didn't
   settle the selector's own semantics; instead it raised a process idea worth tracking separately:
   "These are HMI features, Perhaps we should do a HMI Interface creation skill so we can fully
