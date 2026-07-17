@@ -15,8 +15,8 @@ someone may have already run this conversation.
 ## The original question (D-4)
 
 Roadmap exit criterion for S6 (`docs/02-roadmap.md` line 51): *"Ten plain-language requests
-produce compiling, human-approved LAD with zero invented tags."* Do the fix waves (bug-fix
-iteration work, e.g. `gen/GenProject1/fix-wave-1.md`) count toward that ten, or only fresh
+produce compiling, human-approved LAD with zero invented tags."* Do fix waves (bug-fix iteration
+work against the `test-project001` scratch project) count toward that ten, or only fresh
 feature/generation requests? Does the owner want a running tally kept somewhere (stage-gates?
 AITODO? a dedicated counter)?
 

@@ -15,7 +15,7 @@ Work through `agent-tasks/<TASK FILE(S)>` in the Ladder-AI project
    tags/addresses, compile gate before "done," never import outside the scratch project, IR only.
 2. **`agent-tasks/README.md`** next, in full. This is the concurrency contract: other agents may
    be working on this project right now. It explains what's actually exclusive (only the
-   `openness-cli import`/`compile` step against GenProject1's Portal scratch project — drafting
+   `openness-cli import`/`compile` step against the shared Portal scratch project — drafting
    IR and running `converter preflight` is safe any time), the queue-table claim/release protocol,
    and what to do if you find a row already claimed. Follow it exactly, including updating the
    table yourself at claim and release time — don't skip this because it feels like overhead.

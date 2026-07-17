@@ -39,7 +39,8 @@ how this interacts with closing out S6's exit criterion. That's A-4.
 (a) `converter diff` tooling now, in parallel — S7's entry requirement, formalizes the invariance
 proofs already being done by hand.
 (b) The modify-skill pair (`gen-block-modify-purpose`, `gen-block-modify-fix`) built and exercised
-against the B-docket (six owner-ruled tier-1 defects, `gen/GenProject1/fix-wave-1-reviews.md`).
+against the B-docket (six owner-ruled tier-1 defects against the `test-project001` scratch
+project — all since closed, see `docs/notes/stage-gates.md`'s tool-lessons entries).
 (c) D-4 ruling (S6 exit-criterion tally — see the separate D-4 briefing,
 `agent-tasks/discussion-d4-stage-gates-review.md`), then close S6's ten requests via small deliberate
 asks — brings `gen-block-new` up; each approval feeds S8 harvest.
@@ -69,7 +70,7 @@ unlock.
 4. **Dependency on D-4:** does closing S6's ten-request exit criterion actually block starting S7
    work, or can S7 (modify skills) develop in parallel with S6 still open? The roadmap's exact
    S6→S7 gate wording is worth re-reading together (`docs/02-roadmap.md`).
-5. **Horizon item, not urgent:** S7 on private engineering projects (vs. GenProject1's sandbox) needs a
+5. **Horizon item, not urgent:** S7 on private engineering projects (vs. `test-project001`'s sandbox) needs a
    `docs/13-data-boundary.md` approval extension — a new activity class. Worth flagging even if
    not resolved this session.
 
