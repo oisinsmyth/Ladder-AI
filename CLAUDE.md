@@ -63,6 +63,8 @@ LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like
 
 Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perform capabilities from stages that haven't passed their gate — e.g. no logic generation while the project is still in S1–S5, even if asked casually; point to the roadmap instead.
 
+**Direction rulings pending (`docs/notes/owner-questions.md`, section A).** The S6 pipeline description above (docs/15, 13 skills) is the last-adopted design, but the owner has an open course-correction in flight — carving model, the skill split, and S7-vs-S6 sequencing are unsettled. Don't author new pipeline/generation skills against the current docs/15 shape until those rulings land; check owner-questions.md first.
+
 ## Environment notes
 
 - TIA Portal V20, Openness API, S7-1200 G2 target. Windows engineering PC.
