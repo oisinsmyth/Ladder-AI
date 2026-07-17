@@ -175,12 +175,27 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   closing the specific N7 finding, confirm by grep that the named bit never reads true without
   `Step = 0` also true — if confirmed, no fix needed; if the bit is only an approximation, it
   still needs the inline form.
-- **C-4 (C-123) — closed, verify-and-fix if missing.** Owner: "All faults must by reset by
-  FaultReset." Doc 06 C-123 now states `FaultReset AND <fault> → step 0` satisfies the
-  explicit-recovery-transition requirement even with no safer intermediate step. Action: confirm
-  `ParkedTimeoutFault` actually has this `FaultReset → step 0` transition wired (via the block's
-  general fault-reset handling or a dedicated one) — add it if missing, alongside the B-docket fix
-  pass.
+- **C-4 (C-123) — verified missing, fix drafted, blocked on a converter gap (task 08).** Owner:
+  "All faults must by reset by FaultReset." Doc 06 C-123 now states `FaultReset AND <fault> →
+  step 0` satisfies the explicit-recovery-transition requirement even with no safer intermediate
+  step. Phase 1 (grep-confirmed): no fault in `FB_PusherControl` forces a step-0 transition on
+  `FaultReset` today — `ParkedTimeoutFault`/`BothSwitchesFault` are alarm-only latches cleared only
+  by `NOT FaultReset` in their own coil, and `Blocked` merely gates `CycleRequest` re-entry (network
+  1); none of the 7 `IO.Step` writes in the block are keyed off `FaultReset`. Network 10's own
+  comment said so explicitly ("alarm-only by design, awaiting a human") — genuinely missing, not
+  an oversight to just double-check.
+  IR fix drafted: `MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0)
+  => IO.Step` added to Network 10 (title/comment updated to match), touching only that network.
+  **Blocked before Portal**: `converter preflight`/`to-xml` reject it —
+  `IrFormatException: Network 10: IR has 2 move(s) but the sidecar records 1`. The converter has
+  no supported path for "add one new statement to a network that already carries real sidecar
+  data from a prior export" — only whole-file `--synthesize` for genuinely new, sidecar-less
+  networks (which itself hard-errors if a real `SIDECAR` section is present). Per CLAUDE.md hard
+  rule 7 this is a converter limitation to report, not a sidecar to hand-patch. Full writeup:
+  `docs/notes/deferred-items.md` D-6. **This blocks every other queued B/C-docket task that adds
+  logic to an already-exported network** (03/04/05/06/07/09), not just this one — flagged in
+  `agent-tasks/README.md`. IR diff is ready to convert/import/compile the moment the converter
+  gains this capability; no Portal queue slot claimed.
 - **C-5 (C-115) — closed, design change queued.** Owner: "They should expose that also, Always,
   just ignore when not needed." `FB_ShredderSequencer`'s and `FB_PusherControl`'s interface UDTs
   need `enable`/`ready`/`running`-equivalent members added (per doc 06 C-115's new clarification)

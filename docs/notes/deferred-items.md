@@ -22,6 +22,36 @@ now."
 **Revisit trigger:** none specified; owner's call to restart. Full detail preserved in
 `gen/GenProject1/fix-wave-1-reviews.md`'s standing queue and `docs/notes/owner-questions.md` D-2.
 
+## D-6 — Converter can't add a new statement to an already-exported network
+
+**What:** `converter to-xml`/`preflight` have no supported path for "add one new statement to a
+network that already carries real sidecar data from a prior TIA export." Hit concretely on task
+08 (`agent-tasks/08-parkedtimeoutfault-recovery.md`): adding one `MOVE` to
+`FB_PusherControl.ir`'s Network 10 (which already has a real sidecar for its existing `TON`/
+`COIL`/`MOVE`) fails with `IrFormatException: Network 10: IR has 2 move(s) but the sidecar
+records 1`. The only existing new-content path is `converter to-xml --synthesize`
+(`docs/15-generation-pipeline.md`, "Sidecar synthesis"), which mints a whole fresh sidecar for a
+genuinely new, sidecar-less network — and `IrParser.ParseBlockWithoutSidecar` deliberately
+hard-errors if a real `SIDECAR` section is already present, so it can't be pointed at a
+part-real/part-new network either. The sidecar is machine-owned (`ir/SPEC.md` "Sidecar" section)
+— hand-authoring the missing entry is explicitly against that rule (CLAUDE.md hard rule 7: report
+converter gaps, don't hand-patch).
+
+**Why deferred:** owner ruling, 2026-07-17 — asked to log this as a blocker rather than build the
+converter fix immediately (a `SidecarSynthesizer`-style scoped merge — keep every existing Part/
+Wire/Access UId as-is, mint fresh collision-safe UIds only for the newly-added statements — was
+the proposed shape, not attempted).
+
+**Revisit trigger:** blocks essentially every queued S7/B-C-docket task that adds logic to an
+already-exported network, not just task 08 — `03-jog-interlock.md`, `04-bothswitchesfault-alarm-
+wiring.md`, `05-fitted-live-drop.md`, `06-reversal-window-rearm-fix.md`,
+`07-endtraveltimer-suppression.md`, `09-sequencer-interface-extension.md` (`agent-tasks/`) all
+modify an existing network the same way and will likely hit the identical
+`IrFormatException`. Worth prioritizing as soon as any of those tasks is picked up, rather than
+waiting for task 08 specifically. See `gen/GenProject1/fix-wave-1-reviews.md` C-4 entry for the
+concrete case and the drafted (unconverted) IR fix sitting in `ir/GenProject1/FB_PusherControl.ir`
+Network 10.
+
 ## Q-04 (GenProject1) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,

@@ -55,16 +55,25 @@ processes (CLAUDE.md's existing guidance) and check this table for a stale `in-p
 
 ### Queue
 
+**Known blocker (2026-07-17, found by task 08):** the converter has no supported way to add a new
+statement to a network that already has real sidecar data from a prior export (`converter
+preflight`/`to-xml` throw `IrFormatException: Network N: IR has X move(s) but the sidecar records
+Y`). Every row below except 02 modifies an already-exported network the same way task 08 did —
+expect the identical error before you ever reach the Portal step. Full writeup:
+`docs/notes/deferred-items.md` D-6; concrete case: `gen/GenProject1/fix-wave-1-reviews.md` C-4.
+Check whether D-6 has been picked up before sinking time into drafting IR for 03/04/05/06/07/09 —
+if it's still open, your IR draft + preflight will very likely hit the same wall task 08 did.
+
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
 | 1 | [`02-startup-machinery.md`](02-startup-machinery.md) | in-progress | main session, 2026-07-17 | yes |
-| 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | ready | - | yes |
-| 3 | [`04-bothswitchesfault-alarm-wiring.md`](04-bothswitchesfault-alarm-wiring.md) | ready | - | yes |
-| 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | ready | - | yes |
-| 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | ready | - | yes |
-| 6 | [`07-endtraveltimer-suppression.md`](07-endtraveltimer-suppression.md) | ready | - | yes |
-| 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | ready | - | conditional (see file) |
-| 8 | [`09-sequencer-interface-extension.md`](09-sequencer-interface-extension.md) | ready | - | yes |
+| 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | ready (⚠ likely hits D-6) | - | yes |
+| 3 | [`04-bothswitchesfault-alarm-wiring.md`](04-bothswitchesfault-alarm-wiring.md) | ready (⚠ likely hits D-6) | - | yes |
+| 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | ready (⚠ likely hits D-6) | - | yes |
+| 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | ready (⚠ likely hits D-6) | - | yes |
+| 6 | [`07-endtraveltimer-suppression.md`](07-endtraveltimer-suppression.md) | ready (⚠ likely hits D-6) | - | yes |
+| 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | blocked — D-6 (converter gap); IR fix drafted in `ir/GenProject1/FB_PusherControl.ir` Network 10, unconverted | - | conditional (see file) |
+| 8 | [`09-sequencer-interface-extension.md`](09-sequencer-interface-extension.md) | ready (⚠ likely hits D-6) | - | yes |
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**
 

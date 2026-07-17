@@ -168,11 +168,12 @@ NETWORK 9 "Step 20 (Hold) - Timer And Transition"
   TON(HoldTimer, IN := IO.Step = 20, PT := EndTravelHoldTimeMS)
   MOVE(EN := (HoldTimer.Q OR CycleAbort) AND IO.Step = 20, IN := 30) => IO.Step
 
-NETWORK 10 "Step 30 (Retract) - Timer, Timeout Fault, And Transition"
-  COMMENT "ParkedTimer's own Q only feeds the timeout fault, not a transition - if genuinely stuck retracting there's no safer step to force (unlike Step 10, nothing here can be aborted into); alarm-only by design, awaiting a human. Fitted gates the supervision timer and the fault latch (REQ-043/044) - a disabled pusher neither watches for the home switch nor raises the fault."
+NETWORK 10 "Step 30 (Retract) - Timer, Timeout Fault, And Transitions"
+  COMMENT "ParkedTimer's own Q feeds the fault latch; genuinely stuck retracting has no safer intermediate step to abort into (unlike Step 10), so the recovery transition is FaultReset AND ParkedTimeoutFault straight to Step 0 (idle) - C-123's universal FaultReset-recovery rule: a fault is never left with no transition, even when 'back to idle' is the only option. Fitted gates the supervision timer and the fault latch (REQ-043/044) - a disabled pusher neither watches for the home switch nor raises the fault."
   TON(ParkedTimer, IN := IO.Fitted AND IO.Step = 30, PT := ParkedTimeoutMS)
   COIL IO.ParkedTimeoutFault := (ParkedTimer.Q OR IO.ParkedTimeoutFault AND NOT IO.FaultReset) AND IO.Fitted
   MOVE(EN := IO.Step = 30 AND IO.HomeLimit, IN := 0) => IO.Step
+  MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0) => IO.Step
 
 NETWORK 11 "Extend And Retract Demand"
   COMMENT "PressureHold gates ExtendDemand so a confirmed jam holds the ram in place rather than continuing to push (a hold per C-123, not a fault - it clears and driving resumes the instant pressure has cleared). Jog demand arms only after the pre-motion warning (JogPreStartTimer.Q via NETWORK 4) and re-checks Step = 0 fresh: JogDemand was computed before this scan's transitions, so a same-scan launch or repark must still kill the jog demand rather than drive both solenoids for a scan. Every term is Fitted-gated (REQ-043: a disabled pusher never demands motion) - the cycle terms explicitly, the jog terms through JogDemand's own gate."
