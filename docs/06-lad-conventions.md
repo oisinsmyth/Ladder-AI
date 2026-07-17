@@ -17,7 +17,7 @@ may cite this ordering to recommend an optimization be deleted. Enforcement stru
 `docs/15-generation-pipeline.md`.
 
 **Generated code answers to a stricter bar than existing site practice** (owner ruling,
-2026-07-16 — `docs/notes/genproject1-retrospective.md` §9): AI-generated logic faces harsher
+2026-07-16 — `docs/notes/test-project001-retrospective.md` §9): AI-generated logic faces harsher
 scrutiny than a human author's — one failed reading discredits the pipeline, not just the block —
 so it must survive a skeptical reader's *single* attempt to understand it. Real site blocks
 calibrate the rules below, but "the real block does the same" is never a defense for generated
@@ -204,7 +204,7 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 - C-305 *(warn)* — Every project has a **`DB_PLC`** holding PLC-specific system data (system time, misc. tracked state — contents vary per project; the DB and name do not). It always contains `Simulation : Bool`, start value `FALSE`. `DB_PLC.Simulation` is **force-reset in the OB100 startup block** (the same block as C-403), regardless of retentivity — simulation mode must never survive a power cycle; start values only apply at download, not restart.
 - C-306 *(warn)* — Operator/system commands live in **`DB_Controls`**: system-level commands (typically `SystemStart`, `SystemStop`, `SystemReset` — names may vary per project) and mode selections such as direction modes (C-116). This is the HMI/operator command surface; equipment FBs consume from it, logic-internal state does not live in it.
 - C-307 *(warn)* — Plant/system-level parameters live in **`DB_Settings`** — retentive by default; non-retentive members are documented exceptions. Scope split *(sharpened 2026-07-16, owner ruling — retrospective §5.2)*: **a setting owned by a single equipment instance lives in that instance's UDT** (HMI↔PLC per C-503 — faceplates bind the UDT instance, and nearly all equipment gets a faceplate, so per-instance settings must sit where the faceplate's settings page can reach them; this includes a sequencing block's own step timings). `DB_Settings` holds only what **no single faceplate owns** — genuinely plant-wide setpoints and parameters. Commissioning defaults per C-309 then live as the owning iDB's start values. This is the home of C-403's "documented settings/parameters" exemption: settings are the one legitimately-retentive category, which is why they're exempt from the startup reset (a startup-reset generator may treat a UDT's settings members as excluded by construction).
-- C-308 *(error)* — **A settings member has exactly one writer: the HMI.** `DB_Settings` is written by the HMI/operator side only; PLC logic never writes it (read-only from logic). *(Extended 2026-07-16 — retrospective §5.2:)* the same applies to settings members inside an instance UDT (C-307's per-instance scope) — logic never writes them, **and orchestrating FCs never scan-copy values into them**: a cyclic `MOVE` from `DB_Settings` over a faceplate-written UDT member silently reverts every HMI edit one scan later (the GenProject1 `FC_ControlMain` trap — the setting *exists twice* with a copy in between, the worst of both homes).
+- C-308 *(error)* — **A settings member has exactly one writer: the HMI.** `DB_Settings` is written by the HMI/operator side only; PLC logic never writes it (read-only from logic). *(Extended 2026-07-16 — retrospective §5.2:)* the same applies to settings members inside an instance UDT (C-307's per-instance scope) — logic never writes them, **and orchestrating FCs never scan-copy values into them**: a cyclic `MOVE` from `DB_Settings` over a faceplate-written UDT member silently reverts every HMI edit one scan later (the test-project001 `FC_ControlMain` trap — the setting *exists twice* with a copy in between, the worst of both homes).
   *Why:* a logic bug that writes a retentive setting silently re-tunes the plant and *persists across restarts* — the retentive cousin of the stuck-output failure. One-writer makes the whole class impossible and is statically checkable (cross-reference shows no logic writes).
 - C-309 *(info)* — Settings are **not range-validated PLC-side**, by site policy: protection is HMI-side (password-protected settings screens), and operator misconfiguration is a chargeable fix. Reviewers (human or AI) should not flag missing clamps as findings. `DB_Settings` start values are maintained as the **commissioning defaults** — downloading the DB is the de facto factory reset.
 
@@ -247,7 +247,7 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   - **HMI-side alarm acknowledgment** (this rule) — WinCC's own ack feature, genuinely optional
     per-alarm. Because the underlying fault already demands an explicit human action
     (`FaultReset`) to clear, a *second* HMI acknowledgment gesture is redundant for most alarms —
-    C-507's no-ack-required default is correct as written and GenProject1's latched,
+    C-507's no-ack-required default is correct as written and test-project001's latched,
     `FaultReset`-cleared X1–X8 bits are **not** a C-507 exception case merely for latching.
   - **Optional, separate:** a project may still want a timestamped *record* of when an operator
     first saw an alarm (view-time) distinct from when it appeared and when it was fixed — that is
@@ -256,7 +256,7 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 
 ## Simplicity & readability
 
-Adopted 2026-07-16 from the GenProject1 retrospective (`docs/notes/genproject1-retrospective.md`),
+Adopted 2026-07-16 from the test-project001 retrospective (`docs/notes/test-project001-retrospective.md`),
 owner-reviewed rule by rule. These are the written form of the priority order's tier 2 and the
 stricter-bar principle in the preamble — the rules a simplicity reviewer cites.
 
@@ -264,7 +264,7 @@ stricter-bar principle in the preamble — the rules a simplicity reviewer cites
   more than one network is written once to a named bit (`StopCmd`, `CycleStartOk`) and read by
   name — never duplicated inline. One write, many reads; the name is the documentation; near-match
   divergence (two copies differing by one term, invisible at a glance) becomes impossible.
-  *Why:* GenProject1's 7-term cycle-start condition duplicated across two networks differing only
+  *Why:* test-project001's 7-term cycle-start condition duplicated across two networks differing only
   in an `OR FaultReset` tail (retrospective F-1) — while the same build's own `StopCmd` shows the
   rule done right.
 - C-602 *(warn)* — **One-sentence rungs.** C-101's test applied to a single coil: if one coil's
@@ -313,7 +313,7 @@ stricter-bar principle in the preamble — the rules a simplicity reviewer cites
 - C-607 *(warn)* — **One problem, one policy per project.** When two blocks in one project solve
   the same recurring problem (settings access, edge storage, time conversion), they solve it the
   same way; a deviation states its reason in the deviating block's header **comment** (C-203).
-  *Why:* C-106's "sameness is a simplicity feature," applied to design idioms — GenProject1's two
+  *Why:* C-106's "sameness is a simplicity feature," applied to design idioms — test-project001's two
   sibling FBs solved settings access two different ways (retrospective F-5, resolved by
   C-307/C-308's 2026-07-16 sharpening).
 
@@ -340,7 +340,7 @@ candidate rule gaps `review-simplicity`'s blind validation run surfaced against 
   mapping/declaration point — the same discipline C-604 requires for constants, extended to
   signals. Absent that comment, a dead signal is indistinguishable from a wiring mistake and is a
   defect finding, not context.
-  *Why:* GenProject1 shipped an unwritten `IO.InCycle` (a permanently-off in-cycle lamp) and two
+  *Why:* test-project001 shipped an unwritten `IO.InCycle` (a permanently-off in-cycle lamp) and two
   mapped-but-unconsumed inputs (`Pusher_Local_Remote`, `Infeed_Conv_Running`) with no gap comment
   anywhere in the corpus.
 - C-611 *(warn)* — **A C-601-named bit lives with what it names.** When a repeated condition is

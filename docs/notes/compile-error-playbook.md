@@ -73,7 +73,7 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 - **Fix:** on interface-changing waves, the proven order is UDTs (`--type`) → `compile --type` each
   → FBs → iDBs → callers; then block compiles callees→callers. Live-verified 2026-07-17 (fix wave
   1: first attempt failed exactly here; corrected order ran 9 imports to a 0/0 device compile).
-- **Source:** stage-gates "fix wave" entry (2026-07-17); gen/GenProject1/fix-wave-1.md §7.
+- **Source:** stage-gates "fix wave" entry (2026-07-17).
 - **Where:** import of converter-generated XML.
 - **Cause:** Part/wire order in the FlgNet doesn't match true document order — a converter bug class (two instances found and fixed generally by UId sort, 2026-07-14).
 - **Fix:** this class is fixed; a recurrence is a new converter bug — report it, never hand-patch the XML (hard rule 7).

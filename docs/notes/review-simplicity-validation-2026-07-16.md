@@ -1,10 +1,10 @@
-# review-simplicity skill — blind validation against the GenProject1 corpus (2026-07-16)
+# review-simplicity skill — blind validation against the test-project001 corpus (2026-07-16)
 
 **What this is.** Step 2 of `docs/15-generation-pipeline.md`'s build order: the
 `.claude/skills/review-simplicity/SKILL.md` reviewer, validated the way docs/15 defines reviewers
 to run — a **fresh-context subagent** given only the skill file, the binding docs, and
-`ir/GenProject1/` (all 21 files), explicitly barred from reading
-`docs/notes/genproject1-retrospective.md` (the expected-findings anchor). The agent had no
+`ir/test-project001/` (all 21 files), explicitly barred from reading
+`docs/notes/test-project001-retrospective.md` (the expected-findings anchor). The agent had no
 authoring context and no conversation history about this code. Its full report is preserved
 verbatim in §3; §1 is the comparison against the known findings, §2 the verdict.
 
@@ -82,9 +82,9 @@ The full report as returned by the fresh-context agent, unedited:
 
 ---
 
-# Simplicity review — ir/GenProject1/ complete corpus, 21 files (2026-07-16)
+# Simplicity review — ir/test-project001/ complete corpus, 21 files (2026-07-16)
 
-**Blindness:** blind — I did not author or restructure any of this code, and this session contains no author reasoning. Two unavoidable caveats, declared for honesty: (1) doc 06's own rule rationales (C-601, C-607) cite examples drawn from this corpus's history, and the stage-gates section I was directed to for regime labels contains a one-paragraph summary of earlier finding categories; (2) I did **not** open `docs/notes/genproject1-retrospective.md`. Every finding below was independently re-derived from the IR text with quoted evidence, not copied from those summaries.
+**Blindness:** blind — I did not author or restructure any of this code, and this session contains no author reasoning. Two unavoidable caveats, declared for honesty: (1) doc 06's own rule rationales (C-601, C-607) cite examples drawn from this corpus's history, and the stage-gates section I was directed to for regime labels contains a one-paragraph summary of earlier finding categories; (2) I did **not** open `docs/notes/test-project001-retrospective.md`. Every finding below was independently re-derived from the IR text with quoted evidence, not copied from those summaries.
 
 **Blocks reviewed:**
 - `Main` (OB1) — generated

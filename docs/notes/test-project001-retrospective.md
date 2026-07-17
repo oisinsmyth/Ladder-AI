@@ -1,4 +1,4 @@
-# GenProject1 readability retrospective — candidate simplicity rules (2026-07-16)
+# test-project001 readability retrospective — candidate simplicity rules (2026-07-16)
 
 **Purpose.** Step 0 of the `docs/15-generation-pipeline.md` build order: walk the delivered
 Kestrel Shredder build block-by-block, name what reads obtuse and why, and turn it into a
@@ -6,7 +6,7 @@ candidate C-6xx simplicity rule set for `docs/06-lad-conventions.md`. **Rules en
 after the project owner's accept/reject pass below** — until then nothing here is citable in a
 review. This doc is also the working description of the standing reviewer-validation corpus.
 
-**Inputs.** `ir/GenProject1/` at commit `b14be52` (21 files, exported+converted 2026-07-16);
+**Inputs.** `ir/test-project001/` at commit `b14be52` (21 files, exported+converted 2026-07-16);
 mechanical baseline `converter review \*.ir` (17 findings: 16 error, 1 warn — summarized in §2);
 `docs/06-lad-conventions.md`; the S6 build record in `stage-gates.md`; patterns
 `motor-dol`, `input-mapping`/`output-mapping`, `db-inputs`/`db-outputs`.
@@ -142,7 +142,7 @@ Reads as the right scale-down; §5.4 asks whether C-109's text should say so exp
 `output-mapping`/`db-inputs`/`db-outputs` patterns faithfully (Test/force array, spare points,
 `AlwaysTrue` rail prefix — all site-real shapes). Two deviations:
 
-* **F-11 (→ §5.3).** Buffer member naming: GenProject1 invented `Snake\_Case` members
+* **F-11 (→ §5.3).** Buffer member naming: test-project001 invented `Snake\_Case` members
 (`Cycle\_Start`, `Pusher\_Home\_Limit`) where the pattern's real example uses `PascalCase`
 (`HFLCRunning`, `IFCIsoFB`) — and doc 06 C-001 says UDT/variable members are **camelCase**
 (`run`, `fltHigh`), which *neither* the patterns, the real site blocks, nor the generated code
@@ -289,8 +289,8 @@ stating which kind it is.
 ### 5.3 Member naming: C-001's camelCase vs universal PascalCase practice
 
 C-001 says members are `camelCase` (`run`, `fltHigh`); the real site blocks, all admitted
-patterns, and GenProject1 all use `PascalCase` (`RunFwd`, `HFLCRunning`, `HopperHighLevel`) —
-and GenProject1 additionally invented `Snake\_Case` buffer members (`Cycle\_Start`) unlike the
+patterns, and test-project001 all use `PascalCase` (`RunFwd`, `HFLCRunning`, `HopperHighLevel`) —
+and test-project001 additionally invented `Snake\_Case` buffer members (`Cycle\_Start`) unlike the
 pattern's own `PascalCase` example. Two calls: (1) revise C-001 to match practice (PascalCase
 members)? (2) is `Snake\_Case` in buffer DBs a deviation to fix at the next project, or an
 accepted local style?
@@ -308,7 +308,7 @@ when there are ≥2 callees" so this stops being a judgment call.
 
 No OB100 reset block, no `DB\_PLC`, no C-111 simulation gating — with retentive `Step`+latches.
 
-* \[ ] Build it for GenProject1 (next S6 request)  - \[ Yes ] Document as accepted demo-panel omission
+* \[ ] Build it for test-project001 (next S6 request)  - \[ Yes ] Document as accepted demo-panel omission
 Owner: Should Ideally have but do not need to fix right now.
 
 ### 5.6 FC\_AlarmsMain suppression (C-504)
@@ -373,10 +373,10 @@ pairing comment is now a requirement of the exception). 5.2 → the owner's face
 (faceplates bind the UDT instance, nearly all equipment gets one) resolved the settings question
 *against* the draft proposal's singleton exemption: per-instance settings live in the instance UDT
 (C-307 sharpened), with **exactly one writer, the HMI** (C-308 extended — logic never writes them
-and orchestrating FCs never scan-copy into them; GenProject1's `FC_ControlMain` MOVE-over-UDT trap
-is named in the rule). C-122's step-timing home reworded to match. GenProject1's own rework
+and orchestrating FCs never scan-copy into them; test-project001's `FC_ControlMain` MOVE-over-UDT trap
+is named in the rule). C-122's step-timing home reworded to match. test-project001's own rework
 (sequencer reads → UDT, delete the nine MOVEs, shrink `DB_Settings`) is a queued future S6
-request, not done here. 5.3 → C-001 members are now **PascalCase** (practice wins); GenProject1's
+request, not done here. 5.3 → C-001 members are now **PascalCase** (practice wins); test-project001's
 `Snake_Case` buffer members are legacy, to be renamed at next touch of those blocks as its own
 request (renames ripple through `FC_Inputs` and consumers). 5.4 → C-109 amended: IO-mapping FCs
 are the named direct-call exception; wrappers stay the rule elsewhere (C-304's wording aligned).
@@ -389,7 +389,7 @@ annotations both rejected: corpus-wide diff churn / losslessness violation); res
 authoring-comment requirement now living in C-126's exception text, plus a queued `ir/SPEC.md`
 reader note; per-pair temps rejected to keep generated code shaped like the pattern. C-201
 author/revision — grounded: SimaticML carries `HeaderAuthor`/`HeaderVersion`/`HeaderFamily`
-(empty/0.1 in GenProject1) and the IR drops them; queued converter work item to carry them as IR
+(empty/0.1 in test-project001) and the IR drops them; queued converter work item to carry them as IR
 header lines, making author/revision mechanically checkable; comment-text convention stands until
 then. Release converter rebuild still owed.
 
@@ -398,5 +398,5 @@ codified in doc 06's preamble as the stricter-bar principle and saved as standin
 
 **Newly queued work items out of this pass:** Struct-inside-standalone-UDT round-trip proof (gates
 the grouped-UDT `Set` sub-struct design); converter Header-fields capture; `ir/SPEC.md` reader
-note; GenProject1 settings rework + buffer-member renames (two future S6 requests); OB100/`DB_PLC`
+note; test-project001 settings rework + buffer-member renames (two future S6 requests); OB100/`DB_PLC`
 machinery whenever the demo-panel waiver is lifted.

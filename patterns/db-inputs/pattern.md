@@ -71,7 +71,7 @@ array, in the real instance's own order — see above, not the canonical order).
    `dotnet test` green).
 3. A newly-drafted instance, following the canonical shape above (`Test`, `SpareDI`, named points,
    in that order, with matching array bounds) rather than the real instance's own order/sizing
-   quirks, compiles clean — **not started**. Natural candidate: `GenProject1`'s own IO-assignment
+   quirks, compiles clean — **not started**. Natural candidate: `test-project001`'s own IO-assignment
    work once that's underway. Needs the project owner's explicit go-ahead before drafting, same as
    every other pattern.
 4. `pattern.md` complete — this document; pending review.

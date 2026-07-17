@@ -829,7 +829,7 @@ identical proven shape rather than two hand-kept copies.
 **TYPE-side shape: LIVE-VERIFIED (2026-07-16, the recorded Portal task executed same-day).**
 The Member-level `<Comment>` shape was originally proven only for the ordinary Static-member
 position (2026-07-15, plus five Member-level instances in each committed genuine re-export,
-`simatic-ml/GenProject1/FB_PusherControl.xml`/`FB_ShredderSequencer.xml`); `WriteTypeMember`'s
+`simatic-ml/test-project001/FB_PusherControl.xml`/`FB_ShredderSequencer.xml`); `WriteTypeMember`'s
 placement was an informed mirror. The live proof then ran against `SampleProject`: a commented
 flat UDT (`UDT_CommentProof`) **and** a commented nested-sub-struct UDT (`UDT_NestProof2`) were
 imported (`--type`), type-compiled, re-exported, and converted back — **both round-tripped to
@@ -848,10 +848,10 @@ bare `Name`/`Datatype`/`StartValue` XML shape has never been seen carrying one) 
 refuse-rather-than-silently-drop discipline as before; extending either needs its own grounding.
 
 **Adjacent finding (2026-07-16, drop-path chase):** the five member comments in each committed
-GenProject1 FB re-export are *absent* from the committed `.ir` corpus files — that is **stale
+test-project001 FB re-export are *absent* from the committed `.ir` corpus files — that is **stale
 data, not a converter drop**: running the current `to-ir` on the exact committed re-exports
 reproduces the committed IR byte-for-byte *except* the member-comment tokens, which come through
-correctly. `ir/GenProject1/FB_PusherControl.ir`/`FB_ShredderSequencer.ir` need regenerating from
+correctly. `ir/test-project001/FB_PusherControl.ir`/`FB_ShredderSequencer.ir` need regenerating from
 their committed XMLs (coordinator item — outside this change's file boundary).
 
 4 tests from the original 2026-07-15 slice (`BlockInterfaceTests.cs`: IR round-trip plain and
@@ -1503,7 +1503,7 @@ one would.
    `SampleProject`, not about the synthesizer: 104 "tag not defined" errors, none of them
    wiring/topology errors.) Same "manual/live, not CI" convention as `ReferenceProjectRoundTrip`;
    deletes its own scratch block after. **v2's own Tier 3** is the Kestrel Shredder build itself
-   (`GenProject1`) that motivated it — every new TON/MOVE/Compare/MUL/CONVERT/CALL network that
+   (`test-project001`) that motivated it — every new TON/MOVE/Compare/MUL/CONVERT/CALL network that
    build writes goes through the same real import+compile gate, so a dedicated isolated v2 live
    check was judged redundant with that real work rather than skipped.
 
@@ -1530,7 +1530,7 @@ lesson); this is for finding *which* file to open.
   findings). Works on both exported IR (with `SIDECAR`) and freshly hand-authored, sidecar-less
   IR — dispatched by the section's presence, mirroring `ParseBlock`/`ParseBlockWithoutSidecar`'s
   own contract.
-- Piloted against all 14 `ir/reference/*.ir`, a pattern example DB, and `GenProject1`'s
+- Piloted against all 14 `ir/reference/*.ir`, a pattern example DB, and `test-project001`'s
   `FC_ControlMain` (calls/instances/network map/DB roots all correct at a glance).
 
 ## `preflight` — static checks before any Portal round trip (2026-07-16, FI-13)
@@ -1564,7 +1564,7 @@ fail to index are surfaced as `INDEX WARNING`s. Exit non-zero on any finding. De
 checked in v1: UDT existence for `Datatype` strings (verbatim strings like quoted UDT names /
 `Array[…] of X` would need their own parser — scope stays at the known error classes).
 
-Piloted: all 21 `ir/GenProject1/*.ir` against their own export — zero tag/call/instanceof/convert
+Piloted: all 21 `ir/test-project001/*.ir` against their own export — zero tag/call/instanceof/convert
 findings, 17 genuine review findings; `ir/reference` blocks reproduce the S4 pilot's known
 findings (C-003 naming, the `NodeStatusAlarms` C-301/C-501 alarm-word pair, C-406 TONR/TOF) with
 zero false unresolved-tag findings.

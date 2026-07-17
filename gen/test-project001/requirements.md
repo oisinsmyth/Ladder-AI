@@ -1,17 +1,17 @@
-# GenProject1 — Requirements Register
+# test-project001 — Requirements Register
 
-The numbered functional-requirements register for GenProject1 (the Kestrel Shredder Systems K150
+The numbered functional-requirements register for test-project001 (the Kestrel Shredder Systems K150
 demo panel build). Produced by `docs/15-generation-pipeline.md`'s `gen-spec-analysis` stage
 (performed manually — the skill does not exist yet). This is the input artifact for the
 `review-functional` check stage and the eventual S9 sim tests; REQ IDs below are stable forever.
 
 ## Provenance
 
-- **Produced:** 2026-07-16, `manual:gen-spec-analysis` — **retroactive**: the GenProject1 corpus
-  (`ir/GenProject1/`, built 2026-07-15) predates this register. See the method note below for what
+- **Produced:** 2026-07-16, `manual:gen-spec-analysis` — **retroactive**: the test-project001 corpus
+  (`ir/test-project001/`, built 2026-07-15) predates this register. See the method note below for what
   that means and how contamination was avoided.
 - **Primary source:** the supplied functional description (`FuncDesc.docx` — local-only,
-  gitignored per `docs/13-data-boundary.md`'s 2026-07-15 GenProject1 entry). Identity anchors so a
+  gitignored per `docs/13-data-boundary.md`'s 2026-07-15 test-project001 entry). Identity anchors so a
   later run can prove it read the same document: sha256 prefix `91a1184d00a5af02`, file date
   2026-03-19, 22,071 bytes. Text extracted in-memory (unzip + de-tag); never written to disk.
 - **Supporting source:** the supplied specification sheet (`SpecSheet.xlsx` — local-only,
@@ -23,7 +23,7 @@ demo panel build). Produced by `docs/15-generation-pipeline.md`'s `gen-spec-anal
   name from the project's local (gitignored, never-committed) sanitization map, per the
   data-boundary entry above. This file was scanned against every real-name key in that map before
   commit: zero hits. No real identifying name, job number, part number, or model code appears here.
-- **Tag-status verification corpus:** `ir/GenProject1/` as of commit `19b2022` (the last commit
+- **Tag-status verification corpus:** `ir/test-project001/` as of commit `19b2022` (the last commit
   touching it at write time). Every `exists` mark below was grep-verified against that corpus when
   this register was written, per docs/15's anti-laundering rule.
 - **Method note (retroactive-run honesty):** register content — the requirement texts, classes,
@@ -64,7 +64,7 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
   no block/network content, no logic shapes. Tag-status marks are the one sanctioned contact with
   the corpus.
 - **Tag status:** every tag or DB member named in this register is marked `exists`
-  (grep-verified in `ir/GenProject1/` at write time) or `proposed` (a named gap; the engineer
+  (grep-verified in `ir/test-project001/` at write time) or `proposed` (a named gap; the engineer
   creates tags — CLAUDE.md hard rule 3). Nothing may be coded against a `proposed` tag.
 - **Open questions:** `Q-nn`, in their own section. Any pipeline stage may append; none may
   silently resolve one — resolution is a recorded owner answer, noted at the question.
@@ -102,7 +102,7 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 - **Notes:** `DQ5_DIS_Run`, `DI10_DIS_Running` exist. Setting `DB_Settings.DischargeConveyorTimeout`
   = 10.0 (fix-wave-1 proposed default, signed off 2026-07-16 — Q-02 resolved). The confirm-window
   duration is not stated in either source; 10 s is a site-practice generous DOL start-confirm
-  window (`gen/GenProject1/fix-wave-1.md` §1).
+  window (fix-wave-1 §1, signed 2026-07-16).
 
 ### REQ-005 — Shredder reverse run at start
 - **Text:** The shredder starts in reverse and runs for 6 s.
@@ -308,8 +308,8 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
   than 180 s apart, however long that run lasts in total. `ReversalWindowTime` stays the tunable
   span (adjustable, per C-307). Fix wave 1's implementation used the wrong semantics (one fixed
   180 s window from the first reversal only) — a genuine functional defect. **Fixed and compiled
-  clean 2026-07-17** (`agent-tasks/06-reversal-window-rearm-fix.md`) — see
-  `gen/GenProject1/fix-wave-1-reviews.md` B-5 for the built shape.
+  clean 2026-07-17** (reversal window rearm fix; built-shape detail was in the retired
+  fix-wave-1-reviews.md B-5 entry).
 
 ### REQ-029 — Spin-up overcurrent suppression
 - **Text:** Overcurrent is ignored for approximately 2–3 s at shredder startup so the motor can
@@ -683,7 +683,7 @@ This is a classification of the requirement, not a design.
 
 Signals from the as-built panel export (`DefaultTagTable`), operator commands (`DB_Controls`),
 and settings (`DB_Settings`), plus named gaps. Status: `exists` = grep-verified in
-`ir/GenProject1/` at write time; `proposed` = named gap, engineer creates tags (hard rule 3).
+`ir/test-project001/` at write time; `proposed` = named gap, engineer creates tags (hard rule 3).
 The pusher-component terminology note in the functional description ("terminology in drawings may
 be slightly different") is carried here: drawing names may differ slightly from these tag names.
 
@@ -777,20 +777,21 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   fresh, explicit start command always re-runs the **full** start-up sequence from the top; no
   mid-sequence resume. This makes the demo-panel OB100/`DB_PLC` omission (previously waived) a
   real gap, not a style choice — B-2's traced auto-resume is the concrete evidence. **Machinery
-  built 2026-07-17** (`agent-tasks/02-startup-machinery.md`): `DB_PLC.Simulation` + `OB100` (force
+  built 2026-07-17** (startup machinery task): `DB_PLC.Simulation` + `OB100` (force
   Step to idle on both stepped sequencers, clear the transient/S/R-driven state named in C-124/
-  C-403, force `Simulation` off) imported and compiled clean against the GenProject1 scratch
+  C-403, force `Simulation` off) imported and compiled clean against the test-project001 scratch
   project (whole-device 0 errors/0 warnings; both blocks individually consistent; re-export
-  readable-identical to the signed IR). See `gen/GenProject1/fix-wave-1-reviews.md` B-2 for the
-  scope note (C-111 full simulation-mode gating deliberately not included in this pass).
+  readable-identical to the signed IR). Scope note (C-111 full simulation-mode gating deliberately
+  not included in this pass) was in the retired fix-wave-1-reviews.md B-2 entry.
 - **Q-02 — Unconfigured settings. RESOLVED for 5 of 9 (already implemented, register was just
   stale) — 4 of 9 deliberately deferred (see Q-04).** Found while answering this: the owner
   already signed off on 5 of the 9 originally-unconfigured members back on **2026-07-16**
-  (`gen/GenProject1/fix-wave-1.md` §1, "§1 was signed 2026-07-16 (as proposed)") and they've been
+  (fix-wave-1 §1, "§1 was signed 2026-07-16 (as proposed)") and they've been
   in the live `DB_Settings.ir` ever since — `PressureClearResumeDelay` = 5.0 (matches REQ-047's
   stated number exactly), `DischargeConveyorTimeout` = 10.0, `PusherEndTravelTimeout` = 60.0,
   `PusherParkedTimeout` = 30.0, `PusherPumpRunOnTime` = 5.0 (rationale for each site-practice
-  number is in fix-wave-1.md §1's own table). This register and `DB_Settings.ir`'s own header
+  number was in fix-wave-1 §1's own table, retired in the test-project001 declutter). This
+  register and `DB_Settings.ir`'s own header
   comment just hadn't been updated to say so — fixed here. The remaining four
   (`OvercurrentSetpointMedium`/`High`, `OvercurrentMediumDelay`/`HighDelay`) stay genuinely
   unconfigured by design — disarmed pending Q-11/Q-04, tracked in `docs/notes/deferred-items.md`,
@@ -854,7 +855,7 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
 - **Q-11 — Analog current feedback hardware. RESOLVED (owner ruling, 2026-07-17 — ties to
   owner-questions D-3).** "Their is real AI hardware, this was a proto type run want to confirm
   with just bool signals." Reading: real AI hardware exists (for production panels); this
-  GenProject1 build is a prototype run, and the owner confirms proceeding with bool-signal-only
+  test-project001 build is a prototype run, and the owner confirms proceeding with bool-signal-only
   overcurrent detection for it — the overcurrent family (REQ-017…022) stays disarmed pending an
   actual AI-hardware build, not because hardware doesn't exist in general, but because this
   prototype's own panel doesn't carry the AI channel. No tags to propose from this ruling alone.

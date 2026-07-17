@@ -148,13 +148,13 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
   ("purpose-built, contains nothing identifying") has a recorded basis rather than none — see
   `tests/golden/README.md` for what was actually done to it.
 
-- **2026-07-15 — GenProject1's own functional design informed by a real supplied spec+functional
+- **2026-07-15 — test-project001's own functional design informed by a real supplied spec+functional
   description ("Kestrel Shredder Systems"/JOB9003-K150 demo panel — `SpecSheet.xlsx`, `FuncDesc.docx`),
   genericized rather than approved as Amber.** Project owner's own explicit choice, offered
-  directly against approving it the way JOB9002 was: keep GenProject1 Green throughout rather than
+  directly against approving it the way JOB9002 was: keep test-project001 Green throughout rather than
   bring in a second Amber-tier real project. Both source files stay local-only
   (`.gitignore`: `SpecSheet.xlsx`, `FuncDesc.docx`) — real company name, panel part number, and
-  model-line codes never appear in GenProject1 itself or anything committed; only the invented
+  model-line codes never appear in test-project001 itself or anything committed; only the invented
   names in `sanitization/Kestrel Shredder Systems.map.json` (also gitignored, same reasoning as every other
   sanitization map) do. Same mechanism as the 2026-07-10 reference-project entry above (real
   structure informs an invented artifact, mapping never committed) — noted here as a second,

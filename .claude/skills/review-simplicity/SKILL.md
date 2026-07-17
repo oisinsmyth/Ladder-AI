@@ -44,7 +44,7 @@ From doc 06's preamble — quote it in spirit, apply it literally:
 3. Real/imported legacy blocks get the same rules applied but a different disposition: their
    findings are **documented context** (calibration, cross-reference risk), not demands to fix a
    block the engineer owns. Label every block you review as `generated` or `imported-real` —
-   check `docs/notes/stage-gates.md` / `docs/notes/genproject1-retrospective.md` if unsure, and
+   check `docs/notes/stage-gates.md` / `docs/notes/test-project001-retrospective.md` if unsure, and
    say which regime you applied.
 4. Tier 3 never beats tier 2: any efficiency-motivated obscurity gets flagged with a
    recommendation to delete the optimization (the preamble explicitly licenses this).

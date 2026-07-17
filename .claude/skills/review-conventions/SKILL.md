@@ -49,7 +49,7 @@ reasoning, or another review's report of the same content — not the tool, not 
    flagging; "defensible" is not a pass; "the real site block does the same" is never a defense
    for generated content.
 3. Label every block `generated` or `imported-real` (check `docs/notes/stage-gates.md` /
-   `docs/notes/genproject1-retrospective.md` if unsure, and say which regime you applied).
+   `docs/notes/test-project001-retrospective.md` if unsure, and say which regime you applied).
    Imported-real findings are **documented context** — calibration and cross-reference risk,
    never demands to fix a block the engineer owns.
 4. A pattern that appears to breach a rule (or a rule that appears to outlaw an admitted pattern)
@@ -188,7 +188,7 @@ this scope" line instead.
   targeting `DB_Settings.*` in any block; (b) any logic write targeting an instance-UDT
   *settings* member (from an orchestrator: `=> iDB_<X>.<…><setting>`; from inside the owning FB:
   `=> IO.<setting>`); (c) **cyclic scan-copies** from `DB_Settings` into instance-UDT settings
-  members — doc 06 names the GenProject1 `FC_ControlMain` shape as the trap: the setting exists
+  members — doc 06 names the test-project001 `FC_ControlMain` shape as the trap: the setting exists
   twice with a copy in between, and every faceplate edit silently reverts one scan later.
 - **C-307 (warn) — settings home.** Table every settings member: where it lives × who owns it.
   A setting owned by a single equipment instance (including a sequencing block's own step

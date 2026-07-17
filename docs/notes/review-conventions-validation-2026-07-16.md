@@ -1,12 +1,12 @@
-# review-conventions skill — blind validation against GenProject1 + reference corpora (2026-07-16)
+# review-conventions skill — blind validation against test-project001 + reference corpora (2026-07-16)
 
 **What this is.** Step 3 of `docs/15-generation-pipeline.md`'s build order: the
 `.claude/skills/review-conventions/SKILL.md` reviewer (pipeline skill #9, the "Check" phase's
 conventions stage — mechanical `converter review` wrapped by an AI pass), validated the way
 docs/15 defines reviewers to run — a **fresh-context subagent** given only the skill file, the
 binding docs (CLAUDE.md, `docs/06-lad-conventions.md`, the stage-gates "S4 Phase 1" pointer,
-`ir/SPEC.md`, `patterns/`), and both corpora (`ir/GenProject1/`, all 21 files;
-`ir/reference/`, all 14 files), explicitly barred from `docs/notes/genproject1-retrospective.md`,
+`ir/SPEC.md`, `patterns/`), and both corpora (`ir/test-project001/`, all 21 files;
+`ir/reference/`, all 14 files), explicitly barred from `docs/notes/test-project001-retrospective.md`,
 the prior validation note (`docs/notes/review-simplicity-validation-2026-07-16.md`, and any
 `docs/notes/*validation*.md`), git history, and this note's own expected-findings anchor. The
 agent had no authoring context and no conversation history about this code. Its full report is
@@ -23,7 +23,7 @@ tool binary was built fresh in this worktree (Release, net8.0) from the current 
 The executor's own two baseline runs, done before the blind run:
 
 ```
-$ ./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/GenProject1/*.ir --ignore-errors
+$ ./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/test-project001/*.ir --ignore-errors
 …
 SUMMARY: 21 file(s), 17 finding(s) (16 error, 1 warn)
 
@@ -33,7 +33,7 @@ SUMMARY: 14 file(s), 29 finding(s) (14 error, 15 warn)
 ```
 
 Both match the pinned baselines exactly (the reference figure is also the S4 pilot record's
-29/14/15). GenProject1 breakdown confirmed: C-201 header errors ×11, C-201 network-5 title error,
+29/14/15). test-project001 breakdown confirmed: C-201 header errors ×11, C-201 network-5 title error,
 C-301 error N15 + C-501 warn N15, C-406 error N13 + C-406 declaration errors ×2 (FB Static + iDB).
 
 The blind run invoked the tool itself (one 35-file command, `SUMMARY: 35 file(s), 46 finding(s)
@@ -44,7 +44,7 @@ per-file and sorted: **all 46 findings identical** (severity, rule ID, location,
 **all 315 per-rule status lines identical**. No re-derivation, paraphrase, or re-severitying
 anywhere — the anti-drift contract held.
 
-### Expected AI findings (GenProject1)
+### Expected AI findings (test-project001)
 
 | Expected (must-find) | Blind run result |
 |---|---|
@@ -61,7 +61,7 @@ anywhere — the anti-drift contract held.
 | Expected (should-find, context) | Blind run result |
 |---|---|
 | C-402: `HandPosEdge` written twice, `HandNegEdge` declared and never referenced (imported-real) | **Found** — exact evidence, context regime, plus the `NOT HandPosEdge AND NOT HandPosEdge` duplicate |
-| C-407 clean/n-a declaration for GenProject1 | **Found** — clean (all FB timers multi-instance, no standalone timers, no DB_Timers needed), plus a context C-407 finding on the *reference* corpus's `FBTimers` second home |
+| C-407 clean/n-a declaration for test-project001 | **Found** — clean (all FB timers multi-instance, no standalone timers, no DB_Timers needed), plus a context C-407 finding on the *reference* corpus's `FBTimers` second home |
 
 Expected-clean rules — C-127, C-109/C-110, C-304, C-408, C-105, C-306, C-118/119/120/121,
 C-501-residual packing — **all declared clean with enumerated evidence** (e.g. all 18 sequencer
@@ -172,28 +172,28 @@ The full report as returned by the fresh-context agent, unedited:
 
 ---
 
-# Conventions review — ir/GenProject1/ (21 files) + ir/reference/ (14 files) (2026-07-16)
+# Conventions review — ir/test-project001/ (21 files) + ir/reference/ (14 files) (2026-07-16)
 
-Blindness: **informed, not blind — declared in full.** This is a fresh-context run: none of the reviewed code was authored in this session, no author reasoning is in context, and the fenced files were not opened (docs/notes/genproject1-retrospective.md, docs/notes/review-simplicity-validation-2026-07-16.md, no `*validation*.md`, no gen/, no git history). Per the skill's inputs I read this run: `docs/06-lad-conventions.md` in full (all six convention sections + preamble + Simplicity section — its rule rationales cite corpus examples, including C-308's naming of the GenProject1 `FC_ControlMain` trap and C-126/C-127's origin notes); `docs/notes/stage-gates.md` — the "S4 Phase 1" section (checkability grounding, CheckedVacuous labels, severity-vs-checkability mismatches) **plus** the surrounding S3→S6 entries (~lines 3540–4040), which I needed for regime labels. Those S6 entries summarize prior reviews of this same corpus (retrospective distillations, the simplicity-validation highlights, owner rulings), so on the "another review's report of the same content" axis this run is informed, not blind. Every AI-pass finding below is re-derived from the IR read this run, with its own quoted evidence (grep/read), never from a rationale's or summary's claim. `converter review` was run as the mechanical half by design — not contamination. Also read as sanctioned inputs: `ir/SPEC.md` (file shape, statement-kind ordering, DB/TYPE/TAGTABLE grammar), `patterns/README.md`, and `patterns/{motor-dol,chained-permissive-enable,input-mapping,db-inputs}/pattern.md`. **If this report feeds a gate decision, recommend a rerun with stage-gates access fenced to the S4 Phase 1 section only and regime labels supplied externally.** No F-/safety block was encountered anywhere in scope (`PerimeterSafetyAlarms`/`EquipmentStatus` monitor safety *status tags* through the standard program; no F-internals present) — hard rule 2 not triggered.
+Blindness: **informed, not blind — declared in full.** This is a fresh-context run: none of the reviewed code was authored in this session, no author reasoning is in context, and the fenced files were not opened (docs/notes/test-project001-retrospective.md, docs/notes/review-simplicity-validation-2026-07-16.md, no `*validation*.md`, no gen/, no git history). Per the skill's inputs I read this run: `docs/06-lad-conventions.md` in full (all six convention sections + preamble + Simplicity section — its rule rationales cite corpus examples, including C-308's naming of the test-project001 `FC_ControlMain` trap and C-126/C-127's origin notes); `docs/notes/stage-gates.md` — the "S4 Phase 1" section (checkability grounding, CheckedVacuous labels, severity-vs-checkability mismatches) **plus** the surrounding S3→S6 entries (~lines 3540–4040), which I needed for regime labels. Those S6 entries summarize prior reviews of this same corpus (retrospective distillations, the simplicity-validation highlights, owner rulings), so on the "another review's report of the same content" axis this run is informed, not blind. Every AI-pass finding below is re-derived from the IR read this run, with its own quoted evidence (grep/read), never from a rationale's or summary's claim. `converter review` was run as the mechanical half by design — not contamination. Also read as sanctioned inputs: `ir/SPEC.md` (file shape, statement-kind ordering, DB/TYPE/TAGTABLE grammar), `patterns/README.md`, and `patterns/{motor-dol,chained-permissive-enable,input-mapping,db-inputs}/pattern.md`. **If this report feeds a gate decision, recommend a rerun with stage-gates access fenced to the S4 Phase 1 section only and regime labels supplied externally.** No F-/safety block was encountered anywhere in scope (`PerimeterSafetyAlarms`/`EquipmentStatus` monitor safety *status tags* through the standard program; no F-internals present) — hard rule 2 not triggered.
 
-Tool: `./src/converter/Converter/bin/Release/net8.0/converter.exe` — invocation: `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/GenProject1/*.ir ir/reference/*.ir --ignore-errors` (single command over all 35 files, from the repo root; exit code 1 = findings present). Its full-scope output exceeded the shell harness's 30,000-character display limit and was truncated mid-stream in display only, so the identical tool was re-run in four batches (each a single command, no chaining, no pipes) to capture every line verbatim:
-1. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/GenProject1/DB_Alarms.ir ir/GenProject1/DB_AnalogInput.ir ir/GenProject1/DB_Controls.ir ir/GenProject1/DB_Input.ir ir/GenProject1/DB_Output.ir ir/GenProject1/DB_Settings.ir ir/GenProject1/DefaultTagTable.ir ir/GenProject1/MotorFwdRevIOSet.ir ir/GenProject1/UDT_PusherIO.ir ir/GenProject1/UDT_ShredderSequencerIO.ir ir/GenProject1/iDB_MotorFwdRevSystem_Shredder.ir ir/GenProject1/iDB_PusherControl.ir ir/GenProject1/iDB_ShredderSequencer.ir --ignore-errors`
-2. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/GenProject1/FB_MotorFwdRevSystem.ir ir/GenProject1/FB_PusherControl.ir ir/GenProject1/FB_ShredderSequencer.ir ir/GenProject1/FC_AlarmsMain.ir ir/GenProject1/FC_ControlMain.ir ir/GenProject1/FC_Inputs.ir ir/GenProject1/FC_Outputs.ir ir/GenProject1/Main.ir --ignore-errors`
+Tool: `./src/converter/Converter/bin/Release/net8.0/converter.exe` — invocation: `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/test-project001/*.ir ir/reference/*.ir --ignore-errors` (single command over all 35 files, from the repo root; exit code 1 = findings present). Its full-scope output exceeded the shell harness's 30,000-character display limit and was truncated mid-stream in display only, so the identical tool was re-run in four batches (each a single command, no chaining, no pipes) to capture every line verbatim:
+1. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/test-project001/DB_Alarms.ir ir/test-project001/DB_AnalogInput.ir ir/test-project001/DB_Controls.ir ir/test-project001/DB_Input.ir ir/test-project001/DB_Output.ir ir/test-project001/DB_Settings.ir ir/test-project001/DefaultTagTable.ir ir/test-project001/MotorFwdRevIOSet.ir ir/test-project001/UDT_PusherIO.ir ir/test-project001/UDT_ShredderSequencerIO.ir ir/test-project001/iDB_MotorFwdRevSystem_Shredder.ir ir/test-project001/iDB_PusherControl.ir ir/test-project001/iDB_ShredderSequencer.ir --ignore-errors`
+2. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/test-project001/FB_MotorFwdRevSystem.ir ir/test-project001/FB_PusherControl.ir ir/test-project001/FB_ShredderSequencer.ir ir/test-project001/FC_AlarmsMain.ir ir/test-project001/FC_ControlMain.ir ir/test-project001/FC_Inputs.ir ir/test-project001/FC_Outputs.ir ir/test-project001/Main.ir --ignore-errors`
 3. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/reference/AlarmWords.ir ir/reference/BooleanExtras.ir ir/reference/CommsProcessData.ir ir/reference/DataHandling.ir ir/reference/DB_Timers.ir ir/reference/EquipmentStatus.ir ir/reference/FBTimers.ir --ignore-errors`
 4. `./src/converter/Converter/bin/Release/net8.0/converter.exe review ir/reference/NodeStatusAlarms.ir ir/reference/PerimeterSafetyAlarms.ir ir/reference/ScaleValue.ir ir/reference/SignalConditioning.ir ir/reference/ThresholdAlarms.ir ir/reference/TimerSample.ir ir/reference/TimingAndCalls.ir --ignore-errors`
 
 The full-scope run's own SUMMARY line, captured before truncation: `SUMMARY: 35 file(s), 46 finding(s) (30 error, 16 warn)`. Batch totals reconcile exactly: 6+11+13+16 = 46 findings; 6+10+7+7 = 30 error; 0+1+6+9 = 16 warn.
 
 Blocks reviewed (regime source: stage-gates S6 entries, declared above):
-- ir/GenProject1: `Main` (OB1), `FC_Inputs`, `FC_Outputs`, `FC_ControlMain`, `FC_AlarmsMain`, `FB_PusherControl`, `FB_ShredderSequencer`, `UDT_PusherIO`, `UDT_ShredderSequencerIO`, `iDB_PusherControl`, `iDB_ShredderSequencer`, `iDB_MotorFwdRevSystem_Shredder` (scaffolding authored for this project), `DB_Input`, `DB_Output`, `DB_Settings`, `DB_Controls`, `DB_Alarms`, `DB_AnalogInput`, `DefaultTagTable` (project tag surface; contains pre-existing sandbox leftovers) — all **generated**. `FB_MotorFwdRevSystem`, `MotorFwdRevIOSet` — **imported-real** (imported unmodified).
+- ir/test-project001: `Main` (OB1), `FC_Inputs`, `FC_Outputs`, `FC_ControlMain`, `FC_AlarmsMain`, `FB_PusherControl`, `FB_ShredderSequencer`, `UDT_PusherIO`, `UDT_ShredderSequencerIO`, `iDB_PusherControl`, `iDB_ShredderSequencer`, `iDB_MotorFwdRevSystem_Shredder` (scaffolding authored for this project), `DB_Input`, `DB_Output`, `DB_Settings`, `DB_Controls`, `DB_Alarms`, `DB_AnalogInput`, `DefaultTagTable` (project tag surface; contains pre-existing sandbox leftovers) — all **generated**. `FB_MotorFwdRevSystem`, `MotorFwdRevIOSet` — **imported-real** (imported unmodified).
 - ir/reference (all 14): `AlarmWords`, `BooleanExtras`, `CommsProcessData`, `DataHandling`, `DB_Timers`, `EquipmentStatus`, `FBTimers`, `NodeStatusAlarms`, `PerimeterSafetyAlarms`, `ScaleValue`, `SignalConditioning`, `ThresholdAlarms`, `TimerSample`, `TimingAndCalls` — **imported-real** (Green-tier reference corpus; `PerimeterSafetyAlarms`' title/comment and `TimerSample`'s title were added by earlier S3 AI work per stage-gates). Imported-real findings below are documented context/calibration, never fix demands.
 
 ## Mechanical findings (converter review — verbatim, not re-derived)
 
-**Batch 1 (GenProject1 data/type files):**
+**Batch 1 (test-project001 data/type files):**
 
 ```
-FILE: ir/GenProject1/DB_Alarms.ir
+FILE: ir/test-project001/DB_Alarms.ir
   BLOCK: DB_Alarms
 
   C-003: checked, clean
@@ -207,7 +207,7 @@ FILE: ir/GenProject1/DB_Alarms.ir
   C-404: not applicable (DB-kind file has no networks/instructions)
 
 
-FILE: ir/GenProject1/DB_AnalogInput.ir
+FILE: ir/test-project001/DB_AnalogInput.ir
   BLOCK: DB_AnalogInput
 
   C-003: checked, clean
@@ -221,7 +221,7 @@ FILE: ir/GenProject1/DB_AnalogInput.ir
   C-404: not applicable (DB-kind file has no networks/instructions)
 
 
-FILE: ir/GenProject1/DB_Controls.ir
+FILE: ir/test-project001/DB_Controls.ir
   BLOCK: DB_Controls
 
   C-003: checked, clean
@@ -235,7 +235,7 @@ FILE: ir/GenProject1/DB_Controls.ir
   C-404: not applicable (DB-kind file has no networks/instructions)
 
 
-FILE: ir/GenProject1/DB_Input.ir
+FILE: ir/test-project001/DB_Input.ir
   BLOCK: DB_Input
 
   C-003: checked, clean
@@ -252,7 +252,7 @@ FILE: ir/GenProject1/DB_Input.ir
     'DB_Input' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/DB_Output.ir
+FILE: ir/test-project001/DB_Output.ir
   BLOCK: DB_Output
 
   C-003: checked, clean
@@ -269,7 +269,7 @@ FILE: ir/GenProject1/DB_Output.ir
     'DB_Output' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/DB_Settings.ir
+FILE: ir/test-project001/DB_Settings.ir
   BLOCK: DB_Settings
 
   C-003: checked, clean
@@ -283,7 +283,7 @@ FILE: ir/GenProject1/DB_Settings.ir
   C-404: not applicable (DB-kind file has no networks/instructions)
 
 
-FILE: ir/GenProject1/DefaultTagTable.ir
+FILE: ir/test-project001/DefaultTagTable.ir
   BLOCK: 
 
   C-003: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
@@ -297,7 +297,7 @@ FILE: ir/GenProject1/DefaultTagTable.ir
   C-404: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
 
 
-FILE: ir/GenProject1/MotorFwdRevIOSet.ir
+FILE: ir/test-project001/MotorFwdRevIOSet.ir
   BLOCK: 
 
   C-003: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
@@ -311,7 +311,7 @@ FILE: ir/GenProject1/MotorFwdRevIOSet.ir
   C-404: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
 
 
-FILE: ir/GenProject1/UDT_PusherIO.ir
+FILE: ir/test-project001/UDT_PusherIO.ir
   BLOCK: 
 
   C-003: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
@@ -325,7 +325,7 @@ FILE: ir/GenProject1/UDT_PusherIO.ir
   C-404: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
 
 
-FILE: ir/GenProject1/UDT_ShredderSequencerIO.ir
+FILE: ir/test-project001/UDT_ShredderSequencerIO.ir
   BLOCK: 
 
   C-003: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
@@ -339,7 +339,7 @@ FILE: ir/GenProject1/UDT_ShredderSequencerIO.ir
   C-404: not applicable (TYPE/TAGTABLE rule support not implemented in Phase 1)
 
 
-FILE: ir/GenProject1/iDB_MotorFwdRevSystem_Shredder.ir
+FILE: ir/test-project001/iDB_MotorFwdRevSystem_Shredder.ir
   BLOCK: iDB_MotorFwdRevSystem_Shredder
 
   C-003: checked, clean
@@ -359,7 +359,7 @@ FILE: ir/GenProject1/iDB_MotorFwdRevSystem_Shredder.ir
     Member 'HrTotaliserTimer' is declared as TONR_TIME - only TON_TIME is permitted.
     fix: Replace with a TON_TIME instance plus explicit inversion/edge logic per C-406.
 
-FILE: ir/GenProject1/iDB_PusherControl.ir
+FILE: ir/test-project001/iDB_PusherControl.ir
   BLOCK: iDB_PusherControl
 
   C-003: checked, clean
@@ -376,7 +376,7 @@ FILE: ir/GenProject1/iDB_PusherControl.ir
     'iDB_PusherControl' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/iDB_ShredderSequencer.ir
+FILE: ir/test-project001/iDB_ShredderSequencer.ir
   BLOCK: iDB_ShredderSequencer
 
   C-003: checked, clean
@@ -396,10 +396,10 @@ FILE: ir/GenProject1/iDB_ShredderSequencer.ir
 SUMMARY: 13 file(s), 6 finding(s) (6 error, 0 warn)
 ```
 
-**Batch 2 (GenProject1 code blocks):**
+**Batch 2 (test-project001 code blocks):**
 
 ```
-FILE: ir/GenProject1/FB_MotorFwdRevSystem.ir
+FILE: ir/test-project001/FB_MotorFwdRevSystem.ir
   BLOCK: FB_MotorFwdRevSystem
 
   C-003: checked, clean
@@ -431,7 +431,7 @@ FILE: ir/GenProject1/FB_MotorFwdRevSystem.ir
     Member 'HrTotaliserTimer' is declared as TONR_TIME - only TON_TIME is permitted.
     fix: Replace with a TON_TIME instance plus explicit inversion/edge logic per C-406.
 
-FILE: ir/GenProject1/FB_PusherControl.ir
+FILE: ir/test-project001/FB_PusherControl.ir
   BLOCK: FB_PusherControl
 
   C-003: checked, clean
@@ -445,7 +445,7 @@ FILE: ir/GenProject1/FB_PusherControl.ir
   C-404: checked, vacuous (cannot fire against current IR capability)
 
 
-FILE: ir/GenProject1/FB_ShredderSequencer.ir
+FILE: ir/test-project001/FB_ShredderSequencer.ir
   BLOCK: FB_ShredderSequencer
 
   C-003: checked, clean
@@ -459,7 +459,7 @@ FILE: ir/GenProject1/FB_ShredderSequencer.ir
   C-404: checked, vacuous (cannot fire against current IR capability)
 
 
-FILE: ir/GenProject1/FC_AlarmsMain.ir
+FILE: ir/test-project001/FC_AlarmsMain.ir
   BLOCK: FC_AlarmsMain
 
   C-003: checked, clean
@@ -476,7 +476,7 @@ FILE: ir/GenProject1/FC_AlarmsMain.ir
     'FC_AlarmsMain' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/FC_ControlMain.ir
+FILE: ir/test-project001/FC_ControlMain.ir
   BLOCK: FC_ControlMain
 
   C-003: checked, clean
@@ -493,7 +493,7 @@ FILE: ir/GenProject1/FC_ControlMain.ir
     'FC_ControlMain' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/FC_Inputs.ir
+FILE: ir/test-project001/FC_Inputs.ir
   BLOCK: FC_Inputs
 
   C-003: checked, clean
@@ -510,7 +510,7 @@ FILE: ir/GenProject1/FC_Inputs.ir
     'FC_Inputs' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/FC_Outputs.ir
+FILE: ir/test-project001/FC_Outputs.ir
   BLOCK: FC_Outputs
 
   C-003: checked, clean
@@ -527,7 +527,7 @@ FILE: ir/GenProject1/FC_Outputs.ir
     'FC_Outputs' has no header comment.
     fix: Add a COMMENT stating the block's purpose (and, per C-201, author/revision - not captured by this IR extraction; flagged as a known gap, not silently assumed satisfied).
 
-FILE: ir/GenProject1/Main.ir
+FILE: ir/test-project001/Main.ir
   BLOCK: Main
 
   C-003: checked, clean
@@ -852,7 +852,7 @@ Notes on the mechanical pass (my words, the verbatim output above stands as what
 
 - [C-308, error, bucket B] Network 5 ("PusherControl Wiring"): cyclic scan-copies from `DB_Settings` into `iDB_PusherControl`'s instance-UDT settings members — eight `MOVE`s plus one `COIL`, every scan. This is the exact shape doc 06 names as the trap: each setting exists in two homes with a copy in between, so any faceplate edit of the pusher's own UDT settings silently reverts one scan later.
   Evidence: `MOVE(EN := TRUE, IN := DB_Settings.PusherEndTravelTimeout) => iDB_PusherControl.IO.EndTravelTimeout` (line 57; likewise lines 58–64 for `ParkedTimeout`, `EndTravelHoldTime`, `PumpRunOnTime`, `JogWarningTime`, `PressureTripConfirmTime`, `PressureClearResumeDelay`, `PressureTripCountThreshold`) and `COIL iDB_PusherControl.IO.Fitted := DB_Settings.PusherFitted` (line 46).
-  Rule text basis: C-308 — "the same applies to settings members inside an instance UDT … logic never writes them, **and orchestrating FCs never scan-copy values into them**: a cyclic `MOVE` from `DB_Settings` over a faceplate-written UDT member silently reverts every HMI edit one scan later (the GenProject1 `FC_ControlMain` trap — the setting *exists twice* with a copy in between, the worst of both homes)."
+  Rule text basis: C-308 — "the same applies to settings members inside an instance UDT … logic never writes them, **and orchestrating FCs never scan-copy values into them**: a cyclic `MOVE` from `DB_Settings` over a faceplate-written UDT member silently reverts every HMI edit one scan later (the test-project001 `FC_ControlMain` trap — the setting *exists twice* with a copy in between, the worst of both homes)."
   Suggested fix: delete the nine copies; make the instance UDT the single home (C-307), with commissioning defaults as iDB start values (C-309), and remove the duplicated `DB_Settings.Pusher*/Pressure*` members. (Stage-gates records this rework as a queued S6 request — context, not a resolution.)
 - [C-103, warn, bucket B] Network 3, `IO.FaultFB` cross-block writer conflict: this FC plain-COILs `iDB_MotorFwdRevSystem_Shredder.IO.FaultFB` from the field buffer every scan while the FB `RCOIL`s the same bit on `FaultReset` (FB network 11) — a reset coil with no paired set coil anywhere, its target rewritten each scan by a different block.
   Evidence: `COIL iDB_MotorFwdRevSystem_Shredder.IO.FaultFB := DB_Input.Motor_Fault` (FC_ControlMain line 34) vs `RCOIL IO.FaultFB := IO.FaultReset` (FB_MotorFwdRevSystem line 184); grep confirms no `SCOIL` targets `FaultFB` anywhere.
@@ -898,7 +898,7 @@ Notes on the mechanical pass (my words, the verbatim output above stands as what
 - [C-402, error, bucket A — context] `HandPosEdge` has **two** writers serving two different signals: line 147 computes InHand's rising edge, line 149 computes InHand's *falling* edge into the same bit (the second, later coil wins each scan). `HandNegEdge` is declared (Static line 105) and never written or read — the falling-edge write looks intended for it. Cross-reference risk to generated code: none (grep — no block outside this FB reads `HandPosEdge`).
   Evidence: `COIL HandPosEdge := IO.InHand AND NOT RisingEdgeFlags[3]` (147) then `COIL HandPosEdge := (IO.InHand OR NegitiveSignalEdge[2]) AND NOT IO.InHand` (149); network 6 consumes `… AND NOT HandPosEdge AND NOT HandPosEdge` (153 — the same term twice).
   Rule text basis: C-402 — "Edge memory bits are dedicated, never reused."
-- [C-103, warn, bucket A — context] Reset-only S/R bits: `IO.HandIntervention` (RCOIL line 136) and `IO.HandStartSignal` (RCOILs lines 137, 143) have no set side in the PLC — the network comments document the HMI as setter ("Must Have Set Bit (#IO.HandIntervention) On Hand Control Buttons Press/Release On HMI"), a real HMI-wiring contract the motor-dol pattern also records. In GenProject1 no HMI exists and `InHand` is wired constant-false, so these paths are dormant. `IO.FaultFB`'s reset-only status is the FC_ControlMain finding above. In-block pairs are clean and adjacent: `Pasue` S(116,119)/R(122,124), `StartTimer` S(117,120)/R(125), `CycleDelay` S(123)/R(126,127), `IO.StopMotor` S(169)/R(172).
+- [C-103, warn, bucket A — context] Reset-only S/R bits: `IO.HandIntervention` (RCOIL line 136) and `IO.HandStartSignal` (RCOILs lines 137, 143) have no set side in the PLC — the network comments document the HMI as setter ("Must Have Set Bit (#IO.HandIntervention) On Hand Control Buttons Press/Release On HMI"), a real HMI-wiring contract the motor-dol pattern also records. In test-project001 no HMI exists and `InHand` is wired constant-false, so these paths are dormant. `IO.FaultFB`'s reset-only status is the FC_ControlMain finding above. In-block pairs are clean and adjacent: `Pasue` S(116,119)/R(122,124), `StartTimer` S(117,120)/R(125), `CycleDelay` S(123)/R(126,127), `IO.StopMotor` S(169)/R(172).
   Rule text basis: C-103 — "Set/Reset pairs in the same block, ideally adjacent networks."
 - [C-403, error, bucket B — context feeding a project-scope finding] Complete S/R-written-bit inventory for this block: `Pasue`, `StartTimer` (TEMP), `CycleDelay`, `IO.HandIntervention`, `IO.HandStartSignal`, `IO.StopMotor`, `IO.FaultFB`. None appears in a dedicated startup-reset block because **no such block exists in the project** — that absence is filed against the generated integration (Cross-block tables), not against this block; its own S/R usage stays context. Also RETAIN context: the whole `IO` struct and `HrTotaliserTimer` are RETAIN (iDB lines 8, 86).
   Rule text basis: C-403 — "Every bit written by any S/R mechanism (except documented settings/parameters) must also appear in the dedicated startup-reset block … executed once at PLC startup."
@@ -919,7 +919,7 @@ Notes on the mechanical pass (my words, the verbatim output above stands as what
 
 ### FC_AlarmsMain (generated)
 
-- [C-502, warn, bucket B] `FC_AlarmsMain` contains the nine alarm rungs directly instead of calling one monitoring FC per category, and `FC_GeneralAlarms`/`FC_EStopAlarms` do not exist anywhere in the export (Glob/grep over `ir/GenProject1/`). Per the skill this is flagged as an **owner scale-down question** for a small scratch project, not adjudicated here — noting also that this IO set contains no E-Stop input for an `FC_EStopAlarms` to monitor.
+- [C-502, warn, bucket B] `FC_AlarmsMain` contains the nine alarm rungs directly instead of calling one monitoring FC per category, and `FC_GeneralAlarms`/`FC_EStopAlarms` do not exist anywhere in the export (Glob/grep over `ir/test-project001/`). Per the skill this is flagged as an **owner scale-down question** for a small scratch project, not adjudicated here — noting also that this IO set contains no E-Stop input for an `FC_EStopAlarms` to monitor.
   Evidence: networks 1–9 are all `COIL DB_Alarms.ShredderAlarm0.%Xn := <fault>`; no `CALL` statements.
   Rule text basis: C-502 — "`FC_AlarmsMain` … calls one monitoring FC per monitored function/category. Categories vary per project, but `FC_GeneralAlarms` (catch-all) and `FC_EStopAlarms` always exist."
   Suggested fix (if the owner holds the letter): move rungs into `FC_GeneralAlarms` (or per-equipment FCs) called from here; otherwise record the scale-down.
@@ -959,7 +959,7 @@ Notes on the mechanical pass (my words, the verbatim output above stands as what
 
 All items **hand-checked — tool reports NotApplicable for this content kind.**
 
-- [C-001, error, bucket A, hand-checked] 52 legacy `Tag_1`…`Tag_54` entries plus `AirStarWord0IN/2IN/0OUT/2OUT` follow no naming layer of C-001 (neither the physical-IO format nor meaningful PascalCase names), sit at addresses outside this project's IO (`%I50x`, `%IW6x`, `%Q50x`), and are referenced by **no block** (grep over all GenProject1 bodies: zero hits). Housekeeping-grade: dead sandbox inventory in the committed corpus.
+- [C-001, error, bucket A, hand-checked] 52 legacy `Tag_1`…`Tag_54` entries plus `AirStarWord0IN/2IN/0OUT/2OUT` follow no naming layer of C-001 (neither the physical-IO format nor meaningful PascalCase names), sit at addresses outside this project's IO (`%I50x`, `%IW6x`, `%Q50x`), and are referenced by **no block** (grep over all test-project001 bodies: zero hits). Housekeeping-grade: dead sandbox inventory in the committed corpus.
   Rule text basis: C-001 — "Tag naming is layered: … Physical IO tags: `<DI/DO/AI/AO><n>_<Equipment>_<Signal>`."
   Suggested fix: delete the unreferenced legacy tags (engineer action in TIA).
 - [C-005 tension, owner ruling, hand-checked] `Clock_0.5Hz` contains a literal dot — a C-005 breach on its face, but it is Siemens' own clock-memory default name: recorded per the skill's calibration as a **tension for the owner** (rename vs tolerate the vendor default), never a fix demand. The table's own name "Default tag table" (spaces) is the same vendor-default class.
@@ -979,7 +979,7 @@ All items **hand-checked — tool reports NotApplicable for this content kind.**
 
 ## Cross-block tables
 
-**C-308 — the one-writer table (three sweeps, GenProject1 scope):**
+**C-308 — the one-writer table (three sweeps, test-project001 scope):**
 
 | Sweep | Result |
 |---|---|
@@ -1028,7 +1028,7 @@ Checked as one unit, whole-project grep (`Simulation|DB_PLC|OB100` → zero hits
 - No dedicated startup-reset block (no OB100-class block anywhere; `FirstScan` tag exists, referenced by nothing): the project contains S/R-written bits (the FB_MotorFwdRevSystem inventory above) and RETAIN run-state (`IO` structs RETAIN in all three iDBs — `Step`, `RunFwd/RunRev`, holds, latched faults, edge memory persist a power cycle) → **C-403 (error) finding**; `Step`, holds, edge memory and in-progress counters (`PressureTripCount`, `ReversalCount`, `HrsRun` context) are not force-reset at restart → **C-124 (error) finding**. C-124's carve-out honored: the genuine fault latches needing human acknowledgement (`FaultActive`/`FTR`/`FTS`, `Blocked`, `ShredderBlockedFault`, timeout faults) are *deliberately not* flagged for exclusion from a future reset block.
 - All four filed against the generated integration; the imported block's own S/R usage stays context. Stage-gates records the owner's prior acceptance of this omission for the demo panel ("should ideally have, do not need to fix right now") — carried as context in the Judgment section; the facts stand.
 
-**C-407 — timer homes:** All timers inside the three equipment/sequencing FBs are multi-instance Statics in their own iDBs (Pusher 8, Sequencer 10, Motor 10 — verified in the iDB files) ✓. GenProject1 has no standalone timers, so no `DB_Timers` is needed ✓ clean. Reference corpus: `DB_Timers` ✓ vs `FBTimers` scattered second home — context row (see reference entries).
+**C-407 — timer homes:** All timers inside the three equipment/sequencing FBs are multi-instance Statics in their own iDBs (Pusher 8, Sequencer 10, Motor 10 — verified in the iDB files) ✓. test-project001 has no standalone timers, so no `DB_Timers` is needed ✓ clean. Reference corpus: `DB_Timers` ✓ vs `FBTimers` scattered second home — context row (see reference entries).
 
 **OB1 shape — C-109/C-110 (both warn):** verified clean.
 
@@ -1059,7 +1059,7 @@ OB1 contains only calls ✓ — reads as a table of contents.
 
 ## Clean declarations
 
-- **Project-wide (GenProject1 + reference):** C-408 — no `.ET` appears in any expression (grep `\.ET\b`: only TON-instance member declarations); C-105 — no variable array index anywhere (grep `\[[A-Za-z_#]`: zero hits in IR bodies; every index literal; the `Test[n]` arrays are pattern-sanctioned); no `SET_BF`/`RESET_BF` anywhere; C-006 — everything English (imported-real typos recorded as context, not findings).
+- **Project-wide (test-project001 + reference):** C-408 — no `.ET` appears in any expression (grep `\.ET\b`: only TON-instance member declarations); C-105 — no variable array index anywhere (grep `\[[A-Za-z_#]`: zero hits in IR bodies; every index literal; the `Test[n]` arrays are pattern-sanctioned); no `SET_BF`/`RESET_BF` anywhere; C-006 — everything English (imported-real typos recorded as context, not findings).
 - **Main (OB1):** C-109, C-110 (shape table above); C-102/C-401/C-404 per tool (vacuous — reported as such, not as verified-clean).
 - **FC_ControlMain:** C-127-consistent role (an orchestrating FC referencing iDBs is the rule's *intended* home for cross-instance wiring); C-304 (buffers only); C-105; C-408.
 - **FB_PusherControl:** C-118, C-119 (stop/fault legs), C-120, C-121 (all 8 writes enumerated), C-125, C-402/C-107 (dedicated edge pair, one writer each), C-403 (no S/R in-block), C-127 (no `iDB_`/`CALL` — grep), C-304, C-409 (each timer times a distinct fact; run-on built from TON+inversion per C-406, which the tool reports clean), C-113's presence sub-clause.
@@ -1109,11 +1109,11 @@ OB1 contains only calls ✓ — reads as a table of contents.
 
 - **C-112 (error):** needs the WinCC HMI artifact — structurally out of this pipeline's reach (stage-gates S4); an error-severity rule this review can never validate. Said exactly that.
 - **C-303 (error):** optimized-vs-standard block access is a TIA block property the IR medium does not carry.
-- **C-506 (warn):** severity-class assignment needs the project alarm list (none exists for GenProject1).
+- **C-506 (warn):** severity-class assignment needs the project alarm list (none exists for test-project001).
 - **HMI-side halves:** C-503 (faceplate binding), C-505 (actual alarm texts — titles checked as proxy only), C-125 (what the HMI displays), C-307 (settings pages) — not in this medium.
 - **C-114's material-flow half:** needs a process-topology artifact; the in-PLC enable edges were tabled and are acyclic, but flow-direction consistency is asserted only as commentary.
 - **C-004's compliance half:** needs the frozen equipment-identifier list — not provided; only the consistency half was checked (clean, with the "Shredder Motor" vs "Shredder" observation noted as commentary).
 - **C-201's author/revision half:** not capturable in this IR extraction (block header attributes are dropped by the exporter) — stated for every header finding rather than assumed satisfied or violated.
 - **`AlwaysTrue`/`FirstScan`/`Clock_0.5Hz` semantics:** depend on the CPU's system/clock memory-byte hardware configuration, which the IR medium does not carry — every mapping rung's correctness is conditional on that config being enabled.
-- **Reference-corpus scope limit:** `ir/reference/` is a reference collection, not a whole project export — `TimerSample`'s `TempControlBools`/`TempControlDInt` DBs are absent, no OB1 exists, and no alarm-category architecture exists to check C-502/C-109/C-110/C-111/C-305/C-403 against; those Group 2 rules are checkable only at GenProject1 scope and are declared n/a (not silently passed) for the reference corpus.
+- **Reference-corpus scope limit:** `ir/reference/` is a reference collection, not a whole project export — `TimerSample`'s `TempControlBools`/`TempControlDInt` DBs are absent, no OB1 exists, and no alarm-category architecture exists to check C-502/C-109/C-110/C-111/C-305/C-403 against; those Group 2 rules are checkable only at test-project001 scope and are declared n/a (not silently passed) for the reference corpus.
 - **C-102/C-401/C-404:** the tool reports these `checked, vacuous` (cannot fire against current IR capability) — carried exactly as the tool states them, not as verified-clean.

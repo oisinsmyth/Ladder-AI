@@ -1,8 +1,8 @@
-# review-functional skill — two-phase blind validation against the GenProject1 corpus (2026-07-16)
+# review-functional skill — two-phase blind validation against the test-project001 corpus (2026-07-16)
 
 **What this is.** Build-order step 4 of `docs/15-generation-pipeline.md`: the
 `.claude/skills/review-functional/SKILL.md` reviewer plus the first requirements register
-(`gen/GenProject1/requirements.md` — the `requirements.md` format's defining instance), validated
+(`gen/test-project001/requirements.md` — the `requirements.md` format's defining instance), validated
 with **two** fresh-context blind runs the way docs/15 defines reviewers to run — read-only,
 given only the skill file, the register (@ `2295c64`), their corpus path, doc 06, `CLAUDE.md`,
 and regime labels; explicitly barred from `docs/notes/` (the retrospective, stage-gates, all
@@ -131,10 +131,10 @@ each report's own `# Functional review` heading are omitted.
 
 ---
 
-# Functional review — GenProject1 full corpus, scratch/prefix-corpus snapshot (2026-07-16)
+# Functional review — test-project001 full corpus, scratch/prefix-corpus snapshot (2026-07-16)
 Blindness: blind — fresh-context run; no authoring involvement with this corpus in this session. Per the skill's expected caveat: I read the register's own notes and doc 06's rule rationales (both cite historical examples from this project); every verdict below is re-derived from the IR itself, not from any note's summary. Regime labels supplied by the invoker.
-Register: gen/GenProject1/requirements.md @ 2295c64
-Corpus: scratch/prefix-corpus/ir/GenProject1 @ 4903780
+Register: gen/test-project001/requirements.md @ 2295c64
+Corpus: scratch/prefix-corpus/ir/test-project001 @ 4903780
 Blocks read (all 21 files, full readable content, sidecars excluded): Main (generated), FC_Inputs (generated), FC_Outputs (generated), FC_ControlMain (generated), FC_AlarmsMain (generated), FB_ShredderSequencer (generated), FB_PusherControl (generated), FB_MotorFwdRevSystem (imported-real), UDT_ShredderSequencerIO (generated), UDT_PusherIO (generated), MotorFwdRevIOSet (imported-real), iDB_ShredderSequencer (generated), iDB_PusherControl (generated), iDB_MotorFwdRevSystem_Shredder (imported-real), DB_Input (generated), DB_Output (generated), DB_Settings (generated), DB_Controls (generated), DB_Alarms (generated), DB_AnalogInput (generated), DefaultTagTable (generated). No F-/safety-block content was encountered anywhere in the corpus.
 
 Verdict totals: 26 implemented, 16 partial, 8 unimplemented, 11 disarmed, 7 contradicted, 1 out-of-scope. No REQ is withdrawn in the register.
@@ -587,11 +587,11 @@ Partial (16, one line each):
 
 ---
 
-# Functional review — GenProject1 (`ir/GenProject1/`, all 21 files) vs `gen/GenProject1/requirements.md` (2026-07-16)
+# Functional review — test-project001 (`ir/test-project001/`, all 21 files) vs `gen/test-project001/requirements.md` (2026-07-16)
 
 Blindness: **blind** — fresh-context session; no authoring context for this corpus and no author rationale in the conversation. Expected caveat, declared per the skill: I read the register's own notes/tag-status marks and doc 06's rule rationales (both cite this corpus's history, e.g. C-308's "FC_ControlMain trap", C-126's HMI-times exception); every verdict below was re-derived from the IR itself, never taken from a note's summary.
-Register: gen/GenProject1/requirements.md @ 2295c64
-Corpus: ir/GenProject1/ @ 19b2022
+Register: gen/test-project001/requirements.md @ 2295c64
+Corpus: ir/test-project001/ @ 19b2022
 Blocks read: Main (generated), FC_Inputs (generated), FC_Outputs (generated), FC_ControlMain (generated), FC_AlarmsMain (generated), FB_ShredderSequencer (generated), FB_PusherControl (generated), UDT_ShredderSequencerIO (generated), UDT_PusherIO (generated), iDB_ShredderSequencer (generated), iDB_PusherControl (generated), DB_Input (generated), DB_Output (generated), DB_AnalogInput (generated), DB_Controls (generated), DB_Settings (generated), DB_Alarms (generated), DefaultTagTable (generated), FB_MotorFwdRevSystem (imported-real), MotorFwdRevIOSet (imported-real), iDB_MotorFwdRevSystem_Shredder (imported-real). Read-only throughout; `.ir` content read only above each file's `SIDECAR` line. No F-/safety-block content was encountered.
 
 **Systemic reachability note (cited by several verdicts below):** with the committed start values, the plant start sequence cannot pass step 20 — `DB_Settings.DischargeConveyorTimeout` has no start value (= 0.0), so `DischargeStartTimer` (PT = 0 ms) fires the instant step 20 is entered, latching the timeout fault and aborting to idle before the discharge conveyor is even commanded for one scan. Behind that gate sit two further blockers: the imported iDB's `FTTime` (= 0.0, no start value) latches a fail-to-run fault one scan into any motor start, and the pusher's unconfigured `PusherEndTravelTimeout`/`PusherParkedTimeout` (= 0.0) abort/fault every pusher stroke instantly. Verdicts below judge each REQ's own chain; this note is the shared as-committed context (Q-02 + NEW-1).

@@ -3880,7 +3880,7 @@ keys (case-insensitive; word-boundary for the short model codes) — zero hits, 
 "nothing identifying appears in test-project001" claim now has a checked basis. This corpus is the
 durable S6 output and the standing validation corpus for reviewer skills.
 
-**Retrospective delivered (`docs/notes/genproject1-retrospective.md`) — owner pass PENDING:**
+**Retrospective delivered (`docs/notes/test-project001-retrospective.md`) — owner pass PENDING:**
 mechanical baseline first (`converter review`, 17 findings, 16E/1W): both generated FBs are
 *clean* — every inside-a-block mechanical finding lands on the real, imported
 `FB_MotorFwdRevSystem` (TONR, packed alarm word, untitled network, no header) — while the
@@ -3904,7 +3904,7 @@ this is the workflow that future requests run through, not exit progress.
 
 ## S6: retrospective owner pass folded — C-6xx live, settings policy resolved by faceplate context (2026-07-16)
 
-The project owner reviewed `docs/notes/genproject1-retrospective.md` in full and answered every
+The project owner reviewed `docs/notes/test-project001-retrospective.md` in full and answered every
 checkbox and adjudication (recorded in the doc itself, §4/§5/§6/§9 + resolution in §10). Headline
 outcomes, all now folded into `docs/06-lad-conventions.md`:
 

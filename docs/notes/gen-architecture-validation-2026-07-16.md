@@ -1,8 +1,8 @@
-# gen-architecture skill — retroactive validation against GenProject1 (2026-07-16)
+# gen-architecture skill — retroactive validation against test-project001 (2026-07-16)
 
 **What this is.** Build-order step 5 of `docs/15-generation-pipeline.md`: the
 `.claude/skills/gen-architecture/SKILL.md` Design-stage skill, validated by performing its own
-procedure retroactively on GenProject1 — producing `gen/GenProject1/architecture.md` as the
+procedure retroactively on test-project001 — producing `gen/test-project001/architecture.md` as the
 as-SHOULD-BE design from the 69-REQ register alone (greenfield posture), then comparing it
 against the as-built corpus and the functional review's independently-established findings
 (`docs/notes/review-functional-validation-2026-07-16.md`). The validation signal is
@@ -14,7 +14,7 @@ without copying the findings.
 
 - **Inline run, not a subagent** — the build brief left the choice open. Reason: a fresh-context
   agent would read the same required inputs (doc 06, docs/15, the sibling skills) whose rule
-  rationales already cite GenProject1 history, so its marginal blindness gain is small; the real
+  rationales already cite test-project001 history, so its marginal blindness gain is small; the real
   defense is structural (below). Recorded as the weaker form deliberately chosen.
 - **Ordering, provable from git:** skill committed (`f4bf3bb`) → design derived from the register
   and written → `architecture.md` committed (`1d338d9`) → only then were
@@ -45,7 +45,7 @@ without copying the findings.
 
 Grounding: functional-review findings from
 `docs/notes/review-functional-validation-2026-07-16.md` (its §1/§2 and the embedded blind
-reports); as-built quotes verified directly in `ir/GenProject1/` after `1d338d9`.
+reports); as-built quotes verified directly in `ir/test-project001/` after `1d338d9`.
 
 | Finding (as-built, per the functional review) | As-should-be design element that forbids it | Forced by (the derivation the claim rests on) |
 |---|---|---|
@@ -140,7 +140,7 @@ comparison is skill-build work, not a pipeline stage run.
 
 ## 3. The artifact
 
-The design itself: `gen/GenProject1/architecture.md` @ `1d338d9` — 33 manifest items, 69/69
+The design itself: `gen/test-project001/architecture.md` @ `1d338d9` — 33 manifest items, 69/69
 REQs traced (9 BLOCKED on carried register questions, 1 out-of-scope), freeform ~78% with the
 gate-1 opt-in flag raised, five new AQ-nn questions. Not duplicated here; it ends with the
 pending gate-1 sign-off block, which is where its life as a proposal actually starts.

@@ -1,12 +1,12 @@
 # 15 — Generation Pipeline (S6): Stages, Skills, and Artifacts
 
-**Status: ADOPTED 2026-07-16 (ADR-0004).** How S6 generation is organized from GenProject1 onward.
+**Status: ADOPTED 2026-07-16 (ADR-0004).** How S6 generation is organized from test-project001 onward.
 The individual skills are built incrementally — the "Build order & status" table at the bottom is
 the ground truth for what exists vs. what is still design.
 
 ## Why this exists
 
-S6's first real build (GenProject1 / Kestrel Shredder, 2026-07-15 — `docs/notes/stage-gates.md`)
+S6's first real build (test-project001 / Kestrel Shredder, 2026-07-15 — `docs/notes/stage-gates.md`)
 was functionally correct and compile-clean, and the project owner judged it overly complex and
 obtuse. The record shows why, and none of it was a compile-gate failure:
 
@@ -178,18 +178,18 @@ freeform surface the next build needs.
 
 ## Build order & status
 
-Skills are built in leverage order, each validated before the next starts — GenProject1 (obtuse
+Skills are built in leverage order, each validated before the next starts — test-project001 (obtuse
 but functionally correct, with an owner who knows what's wrong with it) is the standing validation
 corpus: a reviewer skill that doesn't independently find the known problems isn't ready.
 
 | Step | What | Status |
 |------|------|--------|
-| 0 | GenProject1 retrospective → candidate simplicity rules (`docs/notes/genproject1-retrospective.md`) | Done 2026-07-16 |
+| 0 | test-project001 retrospective → candidate simplicity rules (`docs/notes/test-project001-retrospective.md`) | Done 2026-07-16 |
 | 1 | Owner accept/reject pass → C-6xx section in `06-lad-conventions.md` | Done 2026-07-16 (all 7 accepted; + C-203) |
-| 2 | `review-simplicity` (validated against GenProject1) | **Built + blind-validated** 2026-07-16 (`docs/notes/review-simplicity-validation-2026-07-16.md`) |
+| 2 | `review-simplicity` (validated against test-project001) | **Built + blind-validated** 2026-07-16 (`docs/notes/review-simplicity-validation-2026-07-16.md`) |
 | 3 | `review-conventions` (independent of step 1) | **Built + blind-validated** 2026-07-16 (drift check byte-identical; `docs/notes/review-conventions-validation-2026-07-16.md`) |
-| 4 | `review-functional` + `requirements.md` format definition | **Built + two-phase-validated** 2026-07-16 (format's defining instance: `gen/GenProject1/requirements.md`, 69 REQs; historical-regression phase caught both known bugs blind; `docs/notes/review-functional-validation-2026-07-16.md`) |
-| 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/GenProject1/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`); reuse-first Method rewrite (A-1) landed 2026-07-17 |
+| 4 | `review-functional` + `requirements.md` format definition | **Built + two-phase-validated** 2026-07-16 (format's defining instance: `gen/test-project001/requirements.md`, 69 REQs; historical-regression phase caught both known bugs blind; `docs/notes/review-functional-validation-2026-07-16.md`) |
+| 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/test-project001/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`); reuse-first Method rewrite (A-1) landed 2026-07-17 |
 | 6 | `gen-block-new`, `gen-block-modify-purpose`, `gen-block-modify-fix` formalization (+ shared modification-choreography reference) — **pulled forward** ahead of the remaining analysis skills (owner ruling 2026-07-17, A-2/A-3: three coding waves ran manual-to-contract while this sat unbuilt at the old step 7) | Not built. The current 5-step manual loop (CLAUDE.md) is the working seed. Exact internal sequencing — `converter diff` tooling first, which of the three skills builds first, S7-gate timing — awaits owner-questions **A-4** (still under discussion, not yet ruled) |
 | 7 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
 | 8 | `gen-pid-analysis`, `audit-artifact`, `gen-integration` formalization | Not built |

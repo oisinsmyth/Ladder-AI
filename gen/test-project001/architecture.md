@@ -1,6 +1,6 @@
-# GenProject1 — Architecture (block manifest for gate 1)
+# test-project001 — Architecture (block manifest for gate 1)
 
-The Design-stage artifact for GenProject1 (Kestrel Shredder Systems K150 demo panel), produced by
+The Design-stage artifact for test-project001 (Kestrel Shredder Systems K150 demo panel), produced by
 the `gen-architecture` skill (docs/15 pipeline skill #5). This is the **as-SHOULD-BE design derived
 from the requirements register alone** — a retroactive validation run performed in greenfield
 posture (the skill's own validation, docs/15 build-order step 5): the as-built corpus predates this
@@ -11,12 +11,12 @@ gate-1 sign-off block at the end is signed.
 
 - **Produced:** 2026-07-16, `gen-architecture` (retroactive validation run — see method note).
 - **Inputs consumed:**
-  - `gen/GenProject1/requirements.md` @ `2295c64` — the 69-REQ register: REQUIRED input, sole
+  - `gen/test-project001/requirements.md` @ `2295c64` — the 69-REQ register: REQUIRED input, sole
     requirements source. Its C-113 classification table and open questions are consumed below.
   - `docs/06-lad-conventions.md` @ `c582829` — all rule citations read fresh this run.
   - `patterns/` @ `fb9f583` + `docs/07-pattern-library-spec.md` @ `749abba` — composition
     vocabulary (admission status read per pattern).
-  - `ir/GenProject1/` @ `a11c6c4` — **tag-status verification only** (see method note).
+  - `ir/test-project001/` @ `a11c6c4` — **tag-status verification only** (see method note).
 - **Designed without `process-topology.md`** — the following decisions are provisional on it:
   material-flow direction in section 4 (inferred from register text), the interlock inventory,
   and any chain-membership statement.
@@ -30,7 +30,7 @@ gate-1 sign-off block at the end is signed.
   before any corpus contact; corpus contact was then grep-for-existence only (tag table, DB member
   names) — **no as-built block logic was opened before this artifact was committed**. Honesty
   notes: (1) the build brief for this validation run named expected as-built findings, and doc 06
-  / the sibling skills themselves cite GenProject1 history in rule rationales — every design
+  / the sibling skills themselves cite test-project001 history in rule rationales — every design
   element below therefore cites the REQ or C-rule it derives from, so its basis is checkable
   independently of that exposure; (2) block-name convergence with the as-built (e.g.
   `FB_ShredderSequencer`, `FC_ControlMain`) is expected, not copied: those names appear verbatim
@@ -447,7 +447,7 @@ hosts its TONs.
 
 ## 9. Tag status
 
-Grep-verified 2026-07-16 against `ir/GenProject1/` @ `a11c6c4` (verification files: tag table +
+Grep-verified 2026-07-16 against `ir/test-project001/` @ `a11c6c4` (verification files: tag table +
 DB member names only — no block logic opened; see Provenance).
 
 **exists** — all 26 named physical IO tags of the register's inventory (`DI1_SYS_ControlHealthy`
@@ -537,7 +537,8 @@ REQ-012/013/062 (stop bundle: sequencer `SystemHealthy` in `StopCmd`, StopCmd fo
 0, `RecentStart` strap replaced by `MotorStartArm` press-to-arm), REQ-039/041/043/044/045 +
 NEW-4 (repark only on pre-start `PusherParkCmd` or cycle entry, all rest-to-motion starts warned
 via the generalized pre-motion warning, `Fitted` gating at the source), REQ-004/007/031/047/054/
-055/063 (timing defaults — PROPOSALS, gated on `gen/GenProject1/fix-wave-1.md` §1 sign-off).
+055/063 (timing defaults — PROPOSALS, gated on the settings sign-off tracked as D-2 in
+`docs/notes/deferred-items.md`).
 **Tag status:** every referenced tag exists (`DB_Input.Control_Healthy`,
 `DB_Input.Shredder_Run_Rev_FB` grep-verified; no proposed field tag referenced). This section
 8's cross-instance wiring plan gains three rows in reality: `DB_Input.Control_Healthy` →
@@ -545,11 +546,10 @@ SEQ.`SystemHealthy`; `DB_Input.Shredder_Run_Rev_FB` → SEQ.`ShredderRunRevFB`;
 SEQ.`MotorStartArm` → motor `RecentStart` (plain-coil set, FB self-clears);
 SEQ.`PusherParkCmd` → pusher `ParkCmd`.
 **Gate:** phase 2 (import → compile → invariance → reviewers → presentation) waits on the
-settings sign-off block in `gen/GenProject1/fix-wave-1.md` §1 — pending until the engineer
+settings sign-off tracked as D-2 in `docs/notes/deferred-items.md` — pending until the engineer
 signs. — Sign-off: pending.
 
-### 2026-07-17 — C-115 handshake vocabulary (owner-questions C-5, `agent-tasks/09-sequencer-
-interface-extension.md`)
+### 2026-07-17 — C-115 handshake vocabulary (owner-questions C-5, sequencer interface extension)
 
 **Touched blocks** — modified only, nothing created or deleted: `UDT_PusherIO`, `UDT_ShredderSequencerIO`
 (interface changes), `FB_ShredderSequencer` (Network 15 — `IO.InCycle` wired), `FB_PusherControl`

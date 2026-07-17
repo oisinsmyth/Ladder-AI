@@ -19,14 +19,15 @@ shrink-to-empty question, `InCycle` member removal, a C-605 member-comment pass,
 **Why deferred:** owner ruling, 2026-07-17 (`docs/notes/owner-questions.md` D-2) — "Hold-Off for
 now."
 
-**Revisit trigger:** none specified; owner's call to restart. Full detail preserved in
-`gen/GenProject1/fix-wave-1-reviews.md`'s standing queue and `docs/notes/owner-questions.md` D-2.
+**Revisit trigger:** none specified; owner's call to restart. Fuller queue detail lived in
+`fix-wave-1-reviews.md`, retired in the 2026-07-17 test-project001 declutter; `docs/notes/owner-questions.md`
+D-2 remains the ruling record.
 
 ## D-6 — Converter can't add a new statement to an already-exported network
 
 **What:** `converter to-xml`/`preflight` have no supported path for "add one new statement to a
-network that already carries real sidecar data from a prior TIA export." Hit concretely on task
-08 (`agent-tasks/08-parkedtimeoutfault-recovery.md`): adding one `MOVE` to
+network that already carries real sidecar data from a prior TIA export." Hit concretely during
+the 2026-07-17 fix-wave/agent-tasks build-out: adding one `MOVE` to
 `FB_PusherControl.ir`'s Network 10 (which already has a real sidecar for its existing `TON`/
 `COIL`/`MOVE`) fails with `IrFormatException: Network 10: IR has 2 move(s) but the sidecar
 records 1`. The only existing new-content path is `converter to-xml --synthesize`
@@ -42,14 +43,12 @@ converter fix immediately (a `SidecarSynthesizer`-style scoped merge — keep ev
 Wire/Access UId as-is, mint fresh collision-safe UIds only for the newly-added statements — was
 the proposed shape, not attempted).
 
-**Revisit trigger:** blocks essentially every queued S7/B-C-docket task that adds logic to an
-already-exported network, not just task 08 — `03-jog-interlock.md`, `04-bothswitchesfault-alarm-
-wiring.md`, `06-reversal-window-rearm-fix.md`, `07-endtraveltimer-suppression.md`,
-`09-sequencer-interface-extension.md` (`agent-tasks/`) all modify an existing network the same way
-and will likely hit the identical `IrFormatException` if they skip the whole-file-strip workaround
-below. Worth prioritizing as soon as any of those tasks is picked up, rather than waiting for task
-08 specifically. See `gen/GenProject1/fix-wave-1-reviews.md` C-4 entry for the concrete case and
-the drafted (unconverted) IR fix sitting in `ir/GenProject1/FB_PusherControl.ir` Network 10.
+**Revisit trigger:** this is a general converter limitation, not tied to any one task — it will
+resurface any time new logic needs to be added to an already-exported network. The 2026-07-17
+fix-wave/agent-tasks queue hit it repeatedly across several tasks (all since closed) and confirmed
+the whole-file-strip workaround below handles every case tried. Concrete-case detail (the C-4
+entry) lived in `fix-wave-1-reviews.md`, retired in the test-project001 declutter; the drafted IR
+itself is in `ir/test-project001/FB_PusherControl.ir` Network 10.
 
 **Update (task 03, 2026-07-17): the whole-file workaround still works and is not itself blocked.**
 Task 03 hit the identical wall the naive way at first (touch one network, leave the rest of the
@@ -72,14 +71,14 @@ task 03's "rebase onto in-flight sidecar-stripped drafts" step — the whole-fil
 `to-xml --synthesize` ran clean on the first try, verified directly (not just `preflight`). Not yet
 imported/compiled (still waiting on its own queue slot), but D-6 is not what's blocking it.
 
-## Q-04 (GenProject1) — Per-type overcurrent setpoint numbers
+## Q-04 (test-project001) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,
 `OvercurrentSetpointHigh`, and by extension the per-type delays `OvercurrentMediumDelay`/
 `OvercurrentHighDelay`, REQ-021/022) for each of the three machine types (K75/K100/K150, Q-04's
 type-count question — resolved). No numbers exist yet.
 
-**Why deferred:** owner ruling, 2026-07-17 (`gen/GenProject1/requirements.md` Q-04) — "I dont
+**Why deferred:** owner ruling, 2026-07-17 (`gen/test-project001/requirements.md` Q-04) — "I dont
 have those at the min, leave 0 add to deferred." In the meantime the relevant `DB_Settings`
 members get an explicit `0` start value as a deliberate placeholder (C-604 convention) rather
 than staying unset.
