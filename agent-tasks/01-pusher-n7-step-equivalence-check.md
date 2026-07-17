@@ -2,7 +2,7 @@
 task: 01-pusher-n7-step-equivalence-check
 source: owner-questions C-3 (doc 06 C-121)
 portal: no — pure grep/read, no Portal contact, no compile gate
-status: ready
+status: done (2026-07-17) — confirmed genuine equivalents, no fix needed; see gen/GenProject1/fix-wave-1-reviews.md C-3
 ---
 
 # Task 01 — Confirm pusher N7's named bit is a true `Step = 0` equivalent

@@ -83,7 +83,7 @@ two discussion tasks below have no further action pending here.
 
 | Task | Status | Notes |
 |---|---|---|
-| [`01-pusher-n7-step-equivalence-check.md`](01-pusher-n7-step-equivalence-check.md) | ready | Pure grep/read; may feed into task 8 if it fails |
+| [`01-pusher-n7-step-equivalence-check.md`](01-pusher-n7-step-equivalence-check.md) | **done** | Confirmed genuine equivalents, no fix needed |
 | [`discussion-a4-s7-ordering.md`](discussion-a4-s7-ordering.md) | ready | Conversation with the owner, not code |
 | [`discussion-d4-stage-gates-review.md`](discussion-d4-stage-gates-review.md) | ready | Conversation with the owner, not code |
 

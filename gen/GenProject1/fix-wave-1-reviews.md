@@ -222,11 +222,20 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   reason to duplicate elsewhere." The sequencer's direction-change transitions rely on
   `FB_MotorFwdRevSystem`'s own internal ~8s reversal pause; that satisfies C-117 for this
   integration (see doc 06 C-117's new clarification). No `NOT RunFwdFB/RevFB` terms added.
-- **C-3 (C-121) — closed pending a grep-confirm.** Owner: reuse the named request bit in pusher
-  N7 if it's a true equivalent of `Step = 0`. Doc 06 C-121 now states this explicitly. Before
-  closing the specific N7 finding, confirm by grep that the named bit never reads true without
-  `Step = 0` also true — if confirmed, no fix needed; if the bit is only an approximation, it
-  still needs the inline form.
+- **C-3 (C-121) — GREP-CONFIRMED, no fix needed (2026-07-17, `agent-tasks/01-pusher-n7-step-
+  equivalence-check.md`).** Owner: reuse the named request bit in pusher N7 if it's a true
+  equivalent of `Step = 0`. Doc 06 C-121 now states this explicitly. Current location:
+  `FB_PusherControl` Network 7 "Step 0 (Idle) - Warned Repark And Launch" (network numbering
+  unchanged since the original finding), both exits:
+  `MOVE(EN := ReparkRequest AND JogPreStartTimer.Q, IN := 30) => IO.Step` and
+  `MOVE(EN := LaunchRequest AND JogPreStartTimer.Q, IN := 10) => IO.Step`. Traced both named bits
+  to their own definitions (Network 1 "Enable And Motion Requests"):
+  `COIL ReparkRequest := (IO.Fitted AND IO.ParkCmd OR CycleRequest) AND IO.Step = 0 AND NOT
+  IO.HomeLimit AND NOT JogDemand` and `COIL LaunchRequest := CycleRequest AND IO.Step = 0 AND
+  IO.HomeLimit` — both literally AND in `IO.Step = 0` as one of their own terms, so neither can
+  ever read true without `Step = 0` also being true, and each is true in every case its own
+  remaining terms hold with `Step = 0`. Genuine equivalents by construction, not approximations —
+  C-121 is satisfied as written; no inline rewrite needed.
 - **C-4 (C-123) — DONE (closed 2026-07-17, compiled clean via task 03's whole-file round trip).**
   Owner:
   "All faults must by reset by FaultReset." Doc 06 C-123 now states `FaultReset AND <fault> →
