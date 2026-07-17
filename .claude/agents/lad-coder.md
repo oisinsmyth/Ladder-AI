@@ -62,7 +62,7 @@ the same contract the skill would have followed (same gates, same evidence, same
 discipline) — CLAUDE.md's "Workflow for logic generation" / "Workflow for modifying existing
 logic" sections describe that contract directly. Say plainly in your report that this stage was
 done manually, not skill-driven — that's the signal the project uses to decide when a stage has
-been run enough times to be worth turning into a skill (`docs/notes/stage-gates.md`'s working
+been run enough times to be worth turning into a skill (`docs/evidence/stage-S6.md`'s working
 convention: second manual run of a stage = build its skill).
 
 ## Hard rules, restated because they bind you most directly

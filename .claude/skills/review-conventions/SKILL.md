@@ -30,7 +30,7 @@ This review is designed to run **without the author's reasoning** (docs/15 isola
 AI form of blind review). If you wrote or restructured the code under review earlier in this same
 session, or the conversation contains the author's design rationale or a prior review report of
 the same content, say so at the top of your report: your review is then "informed, not blind,"
-which the project treats as weaker evidence (see stage-gates' S4 methodology notes). Recommend a
+which the project treats as weaker evidence (see `docs/evidence/stage-S4.md`'s methodology notes). Recommend a
 fresh-session/subagent run when blindness matters — e.g., for a gate decision. Two expected,
 non-contaminating caveats: (1) **running `converter review` is not contamination** — it is the
 mechanical half of this review by design; embedding its output is the job, not a leak.
@@ -48,7 +48,7 @@ reasoning, or another review's report of the same content — not the tool, not 
 2. **Generated code answers to a stricter bar than site practice** (doc 06 preamble): err toward
    flagging; "defensible" is not a pass; "the real site block does the same" is never a defense
    for generated content.
-3. Label every block `generated` or `imported-real` (check `docs/notes/stage-gates.md` /
+3. Label every block `generated` or `imported-real` (check `docs/evidence/stage-S6.md` /
    `docs/notes/test-project001-retrospective.md` if unsure, and say which regime you applied).
    Imported-real findings are **documented context** — calibration and cross-reference risk,
    never demands to fix a block the engineer owns.
@@ -72,7 +72,7 @@ reasoning, or another review's report of the same content — not the tool, not 
   passed.
 - `docs/06-lad-conventions.md` — the preamble and all six convention sections (Naming,
   Structure, Commenting, Data, Instructions, Alarms), read before your first finding.
-- `docs/notes/stage-gates.md`, "S4 Phase 1" section — the checkability grounding: which rules
+- `docs/evidence/stage-S4.md`, "S4 Phase 1" section — the checkability grounding: which rules
   the tool really checks, the CheckedVacuous honesty labels, and the severity-vs-checkability
   mismatches.
 - The block's interface UDT files and instance DBs — several rules live there (C-118, C-122,
@@ -282,7 +282,7 @@ this scope" line instead.
 ### Group 4 — standing declines (state these every run, each with its reason)
 
 - **C-112 (error):** needs the WinCC HMI artifact — structurally out of this pipeline's reach
-  (stage-gates S4), so an error-severity rule this review can never validate; say exactly that.
+  (`docs/evidence/stage-S4.md`), so an error-severity rule this review can never validate; say exactly that.
 - **C-303 (error):** optimized-vs-standard block access is a TIA block property the IR medium
   does not carry — not checkable here.
 - **C-506 (warn):** severity-class assignment needs the project alarm list.

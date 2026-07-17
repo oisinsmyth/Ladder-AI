@@ -11,7 +11,7 @@
 S6's first real end-to-end build (test-project001 / Kestrel Shredder, 2026-07-15) met every hard gate —
 compile-clean, zero invented tags, pattern-grounded where patterns existed — and the project owner
 judged the resulting ladder functionally right but **overly complex and obtuse**. The build record
-(`docs/notes/stage-gates.md`, "S6 first real proof") localizes the causes: architecture-stage
+(`docs/evidence/stage-S6.md`, "S6 first real proof") localizes the causes: architecture-stage
 mistakes caught only at end-of-line review by the owner personally (C-126 and C-127 were created
 *from* that review), a simplicity bar that existed only in the owner's head rather than as citable
 rules, thin pattern coverage forcing conventions-grounded freeform, and a single presentation

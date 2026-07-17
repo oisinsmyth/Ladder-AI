@@ -35,7 +35,7 @@ openness-cli create-instance-db <project> --group <device>/<path> --name <name> 
 openness-cli sanity-check  <project>                                       # block-consistency + compile health — run this first if export/import/compile misbehave
 converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, comparisons (Eq/Ge/Lt/Ne/Gt/Le), TON/TONR/TOF, MOVE, WAND, CALL, SWAP, SCoil/RCoil,
                                     # MUL/CONVERT/ADD/SUB/DIV; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
-                                    # this slice is a correct hard error, not a bug — see docs/notes/stage-gates.md for exactly what's covered.
+                                    # this slice is a correct hard error, not a bug — see docs/evidence/stage-S1.md for exactly what's covered.
 converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
 converter review    <file...> [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs
 converter digest    <file...> [--ignore-errors] [--json]      # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR)

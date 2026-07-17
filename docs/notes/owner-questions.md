@@ -32,7 +32,7 @@ owner answers) is fully resolved. Where things landed:
 - Still-unanswered items with no clarification blocking them: register questions Q-02/Q-06/Q-09
   stay tracked in `gen/test-project001/requirements.md`'s own Open Questions section (their canonical
   home); the C-003 tooling-enforcement backlog item stays in `AITODO.md`'s small/tooling queue.
-- Full dated history of every ruling in this batch: `docs/notes/stage-gates.md`'s "owner-questions
+- Full dated history of every ruling in this batch: `docs/evidence/stage-S6.md`'s "owner-questions
   batch pass" / "round 2" / "round 3" entries (2026-07-17).
 
 ---

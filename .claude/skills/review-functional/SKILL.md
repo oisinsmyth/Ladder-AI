@@ -52,7 +52,7 @@ your blindness note and re-derive every verdict from the IR itself, never from a
 - `docs/06-lad-conventions.md` — read C-113/C-118 (sequence paradigms) and C-604/C-606 before
   your first finding so you cite current rule text, not memory of it.
 - Regime labels for every block: `generated` or `imported-real` — from the invoker, or
-  `docs/notes/stage-gates.md` if unlabeled. Say which regime you applied to each block.
+  `docs/evidence/stage-S6.md` if unlabeled. Say which regime you applied to each block.
 
 ## Method
 

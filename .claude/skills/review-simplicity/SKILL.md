@@ -25,7 +25,7 @@ This review is designed to run **without the author's reasoning** (docs/15 isola
 AI form of blind review). If you wrote or restructured the code under review earlier in this same
 session, or the conversation contains the author's design rationale, say so at the top of your
 report: your review is then "informed, not blind," which the project treats as weaker evidence
-(see stage-gates' S4 methodology notes). Recommend a fresh-session/subagent run when blindness
+(see `docs/evidence/stage-S4.md`'s methodology notes). Recommend a fresh-session/subagent run when blindness
 matters — e.g., for a gate decision. One expected, non-contaminating caveat: doc 06's rule
 rationales cite historical examples from this project's own corpus — reading them is required and
 fine; declare it in your blindness note and re-derive every finding from the IR itself rather
@@ -44,7 +44,7 @@ From doc 06's preamble — quote it in spirit, apply it literally:
 3. Real/imported legacy blocks get the same rules applied but a different disposition: their
    findings are **documented context** (calibration, cross-reference risk), not demands to fix a
    block the engineer owns. Label every block you review as `generated` or `imported-real` —
-   check `docs/notes/stage-gates.md` / `docs/notes/test-project001-retrospective.md` if unsure, and
+   check `docs/evidence/stage-S6.md` / `docs/notes/test-project001-retrospective.md` if unsure, and
    say which regime you applied.
 4. Tier 3 never beats tier 2: any efficiency-motivated obscurity gets flagged with a
    recommendation to delete the optimization (the preamble explicitly licenses this).

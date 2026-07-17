@@ -3,16 +3,19 @@
 **Purpose:** this project's context can get interrupted (session limits, restarts). This doc is
 the recovery point — read it first after any gap, before trusting your own memory of "what I was
 doing." Keep it up to date as you work: update the checklist as items close, don't wait for a
-clean stopping point. `docs/notes/stage-gates.md` is the permanent, narrative record of *closed*
-work; this doc is the scratchpad for *in-flight* work only. When a task here finishes and is
+clean stopping point. `docs/notes/stage-gates.md` is the slim status index of *closed* work (the
+full per-stage narrative lives in `docs/evidence/stage-SN.md`, split out 2026-07-18 per FI-20);
+this doc is the scratchpad for *in-flight* work only. When a task here finishes and is
 documented/committed, delete it from this file rather than letting it accumulate.
 
 ## Recovery procedure (do this first)
 
 1. `git status` / `git diff --stat` in the repo root — uncommitted changes are the ground truth of
    in-flight work, more reliable than any narrative.
-2. Read `docs/notes/stage-gates.md`'s tail (most recent entries) — the authoritative record of
-   what's actually *closed*, with dates and evidence.
+2. Read `docs/notes/stage-gates.md`'s status table (which stage is active, what's signed off);
+   for recent detailed history, read the tail of the active stage's evidence doc
+   (`docs/evidence/stage-S6.md` while S6 is active) — the authoritative record of what's actually
+   *closed*, with dates and evidence.
 3. Read this file's "Current task" section below.
 4. Cross-check: does the code in the diff match what this doc claims is done? If not, trust the
    code/diff and fix this doc.
@@ -20,8 +23,8 @@ documented/committed, delete it from this file rather than letting it accumulate
 ## Project stage
 
 **S3 — Comment generation, DONE — gate reviewed and signed off by the project owner, 2026-07-14.**
-Full history in `docs/notes/stage-gates.md`'s status table and its "S3 first/second/third proof"
-sections: exit criterion met three times over (`TimerSample`, `PerimeterSafetyAlarms` — Green-tier
+Full history in `docs/notes/stage-gates.md`'s status table and `docs/evidence/stage-S3.md`'s "S3
+first/second/third proof" sections: exit criterion met three times over (`TimerSample`, `PerimeterSafetyAlarms` — Green-tier
 reference corpus; `PlantAutoControl` — real JOB9002 content at full 20-network scale), the JOB9002
 data-boundary approval explicitly extended to cover write activity first, two real converter gaps
 closed (embedded-newline guard; the previously-untested "edit an existing title" scenario), one
@@ -30,8 +33,8 @@ other 13 committed reference-corpus files swept afterward to confirm that bug wa
 
 **S4 — Convention review, DONE — gate reviewed and signed off by the project owner, 2026-07-15.**
 Phase 1 (8 of ~50 rules) built, tested, live-piloted against the reference corpus, validated
-against real untouched JOB9002 content. Full history: stage-gates "S4 Phase 1" and "S4:
-real-content validation" sections.
+against real untouched JOB9002 content. Full history: `docs/evidence/stage-S4.md` ("S4 Phase 1"
+and "S4: real-content validation" sections).
 
 **S5 — Structured data extraction, ACTIVE**, opened 2026-07-15, no work started — deprioritized
 below S6/S7 per the owner (2026-07-15 "a workable S6 is the main goal"; 2026-07-17 "S7 is the
@@ -46,13 +49,13 @@ architecture baseline, telemetry); test-project001's functional verdict stands a
 45 implemented / 7 partial / 6 unimplemented / 10 disarmed / **0 contradicted** after fix wave 1
 (2026-07-17, device compile 0/0, invariance proven, triple-reviewed). Exit criterion (ten
 approved requests) not yet closed — counting rule awaits the owner (owner-questions D-4). Full
-history: stage-gates entries 2026-07-16 → 2026-07-17.
+history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
 
 ## Current task: none
 
 The 2026-07-17 owner-questions batch, the agent-tasks dispatch board it spawned, and the
-GenProject1 -> test-project001 codename cleanup are all closed and documented (`docs/notes/
-stage-gates.md`'s dated entries; `docs/notes/owner-questions.md` is back to empty per its own
+GenProject1 -> test-project001 codename cleanup are all closed and documented
+(`docs/evidence/stage-S6.md`'s dated entries; `docs/notes/owner-questions.md` is back to empty per its own
 reusable-template policy; `agent-tasks/` is back to a template folder). Nothing in-flight right
 now.
 
