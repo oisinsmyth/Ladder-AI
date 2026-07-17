@@ -62,12 +62,12 @@ Y`). Every row below except 02 modifies an already-exported network the same way
 expect the identical error before you ever reach the Portal step. Full writeup:
 `docs/notes/deferred-items.md` D-6; concrete case: `gen/GenProject1/fix-wave-1-reviews.md` C-4.
 Check whether D-6 has been picked up before sinking time into drafting IR for 03/04/05/06/07/09 —
-if it's still open, your IR draft + preflight will very likely hit the same wall task 08 did.
+if it's still open, your IR draft + preflight will very likely hit the same wall task 08 did. **Update (task 03):** the whole-file strip-and-`--synthesize` workaround (fix-wave-1 precedent) still resolves this cleanly — confirmed via a full Portal round trip that also carried task 08's own Network 10 fix through to a clean compile. See `docs/notes/deferred-items.md` D-6's update note before assuming you're blocked.
 
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
 | 1 | [`02-startup-machinery.md`](02-startup-machinery.md) | **done** | - | yes |
-| 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | ready (⚠ likely hits D-6) | - | yes |
+| 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | done | - | yes |
 | 3 | [`04-bothswitchesfault-alarm-wiring.md`](04-bothswitchesfault-alarm-wiring.md) | ready (⚠ likely hits D-6) | - | yes |
 | 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | ready (⚠ likely hits D-6) | - | yes |
 | 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | ready (⚠ likely hits D-6) | - | yes |

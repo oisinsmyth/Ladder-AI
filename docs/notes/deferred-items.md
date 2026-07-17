@@ -52,6 +52,20 @@ waiting for task 08 specifically. See `gen/GenProject1/fix-wave-1-reviews.md` C-
 concrete case and the drafted (unconverted) IR fix sitting in `ir/GenProject1/FB_PusherControl.ir`
 Network 10.
 
+**Update (task 03, 2026-07-17): the whole-file workaround still works and is not itself blocked.**
+Task 03 hit the identical wall the naive way at first (touch one network, leave the rest of the
+file's real sidecar in place) but the established fix-wave-1 edit workflow — strip the file's
+*entire* `SIDECAR` section, edit the readable IR, `to-xml --synthesize` the whole file, import,
+compile, re-export, `to-ir` to restore real sidecars for every network — went through clean (0
+errors) on the exact file this entry describes, *including* task 08's still-uncompiled Network 10
+`MOVE` (task 03 had to rebase its own Network 11 change onto task 08's already-committed draft).
+Re-exported readable IR diffed byte-identical against pre-edit HEAD everywhere except task 03's
+own Network 11 — task 08's Network 10 addition survived the round-trip untouched and now compiles.
+So this doesn't block anything that's willing to do the whole-file strip (mildly more disruptive —
+temporarily loses every other network's real sidecar until the post-compile re-export, and any
+other in-flight uncommitted edit to the same file has to be reconciled first) — task 08's own
+C-4/queue entries haven't been touched by this update; that's task 08's call to close out.
+
 ## Q-04 (GenProject1) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,

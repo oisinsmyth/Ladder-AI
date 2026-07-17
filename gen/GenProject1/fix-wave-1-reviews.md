@@ -108,9 +108,17 @@ This is the accepted defect docket — validation corpus for `gen-block-modify-f
 (owner-questions A-4). No code changed by this pass; rulings recorded so implementation can
 proceed without re-litigating intent.
 
-- **B-1 — Simultaneous jog buttons drive both solenoids. Confirmed fault.** Owner: "This is a
-  fault." Candidate fix stands: mutual `NOT` terms on the jog paths
-  (`ExtendDemand := ... AND NOT RetractDemand`-shape, and symmetric).
+- **B-1 — Simultaneous jog buttons drive both solenoids. Confirmed fault. DONE (task 03,
+  2026-07-17).** Owner: "This is a fault." Fix shape used: each jog demand term in
+  `FB_PusherControl` NETWORK 11 now also excludes the opposite jog command in place
+  (`ExtendDemand`'s jog term gained `AND NOT IO.JogRetractCmd`, `RetractDemand`'s gained
+  `AND NOT IO.JogExtendCmd`) rather than naming a separate reused bit — each exclusion term is
+  used exactly once, so C-601 doesn't call for a named intermediate. Holding both buttons now
+  demands neither direction. Imported, block-compiled and whole-device-compiled clean (0 errors);
+  untouched-network invariance confirmed (only NETWORK 11 differs from pre-edit HEAD across the
+  whole file, including task 08's already-committed Network 10 draft, which survived the same
+  round trip). Full IR diff, compile evidence, and the D-6 workaround finding: `agent-tasks/
+  03-jog-interlock.md`'s exit and `docs/notes/deferred-items.md` D-6's update note.
 - **B-2 — Power-cycle mid-run auto-resume. Confirmed fault. FIXED 2026-07-17.** Owner: "Needs
   addressed, is a fault." Ties to new doc-06 rule **C-128** and `requirements.md` Q-01 (both
   resolved this pass). Fix required the OB100/`DB_PLC` startup machinery this wave's fix left

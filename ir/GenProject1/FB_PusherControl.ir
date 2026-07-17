@@ -176,9 +176,9 @@ NETWORK 10 "Step 30 (Retract) - Timer, Timeout Fault, And Transitions"
   MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0) => IO.Step
 
 NETWORK 11 "Extend And Retract Demand"
-  COMMENT "PressureHold gates ExtendDemand so a confirmed jam holds the ram in place rather than continuing to push (a hold per C-123, not a fault - it clears and driving resumes the instant pressure has cleared). Jog demand arms only after the pre-motion warning (JogPreStartTimer.Q via NETWORK 4) and re-checks Step = 0 fresh: JogDemand was computed before this scan's transitions, so a same-scan launch or repark must still kill the jog demand rather than drive both solenoids for a scan. Every term is Fitted-gated (REQ-043: a disabled pusher never demands motion) - the cycle terms explicitly, the jog terms through JogDemand's own gate."
-  COIL ExtendDemand := IO.Fitted AND IO.Step = 10 AND NOT PressureHold OR JogDemand AND IO.JogExtendCmd AND JogPreStartTimer.Q AND IO.Step = 0
-  COIL RetractDemand := IO.Fitted AND IO.Step = 30 OR JogDemand AND IO.JogRetractCmd AND JogPreStartTimer.Q AND IO.Step = 0
+  COMMENT "PressureHold gates ExtendDemand so a confirmed jam holds the ram in place rather than continuing to push (a hold per C-123, not a fault - it clears and driving resumes the instant pressure has cleared). Jog demand arms only after the pre-motion warning (JogPreStartTimer.Q via NETWORK 4) and re-checks Step = 0 fresh: JogDemand was computed before this scan's transitions, so a same-scan launch or repark must still kill the jog demand rather than drive both solenoids for a scan. Every term is Fitted-gated (REQ-043: a disabled pusher never demands motion) - the cycle terms explicitly, the jog terms through JogDemand's own gate. Each jog term also excludes the opposite jog command (owner ruling 2026-07-17, B-1): holding both jog buttons is a fault, not a last-one-wins race, so it demands neither direction rather than both."
+  COIL ExtendDemand := IO.Fitted AND IO.Step = 10 AND NOT PressureHold OR JogDemand AND IO.JogExtendCmd AND NOT IO.JogRetractCmd AND JogPreStartTimer.Q AND IO.Step = 0
+  COIL RetractDemand := IO.Fitted AND IO.Step = 30 OR JogDemand AND IO.JogRetractCmd AND NOT IO.JogExtendCmd AND JogPreStartTimer.Q AND IO.Step = 0
 
 NETWORK 12 "Pump Demand"
   COIL PumpDemand := ExtendDemand OR RetractDemand
@@ -1288,215 +1288,260 @@ NETWORK 10
   access IO.HomeLimit = 30 LocalVariable
   access IO.Step = 29 LocalVariable
   access IO.Step = 31 LocalVariable
-  constant 30 = 32 Int
-  constant 30 = 33 Int
-  constant 0 = 34 Int
+  access IO.FaultReset = 34 LocalVariable
+  access IO.ParkedTimeoutFault = 33 LocalVariable
+  access IO.Step = 32 LocalVariable
+  access IO.Step = 35 LocalVariable
+  constant 30 = 36 Int
+  constant 30 = 37 Int
+  constant 0 = 38 Int
+  constant 30 = 39 Int
+  constant 0 = 40 Int
   timer 0
-    tonpartuid = 43
+    tonpartuid = 49
     kind = ton
     version = 1.0
     timetype = Time
-    instanceuid = 44
+    instanceuid = 50
     instancescope = LocalVariable
     instancepath = ParkedTimer
-    rail = 51
+    rail = 61
     step 0 contact
-      uid = 41
+      uid = 47
       operand = 26
-      operandwire = 67
+      operandwire = 86
       negated = false
-      out = 68
+      out = 87
     step 1 compare
       partname = Eq
-      uid = 42
+      uid = 48
       srctype = Int
-      left tag = 27 69
-      right literal = 32 70
-      out = 71
-    preset tag = 28 72
-    et = 73 48
+      left tag = 27 88
+      right literal = 36 89
+      out = 90
+    preset tag = 28 91
+    et = 92 58
   assignment 0
     rail = none
     step 0 or
-      uid = 38
+      uid = 44
       branch 0
-        rail = 51
+        rail = 61
         step 0 contact
-          uid = 35
+          uid = 41
           operand = 21
-          operandwire = 49
+          operandwire = 59
           negated = false
-          out = 50
+          out = 60
       branch 1
-        rail = 51
+        rail = 61
         step 0 contact
-          uid = 36
+          uid = 42
           operand = 22
-          operandwire = 52
+          operandwire = 62
           negated = false
-          out = 53
+          out = 63
         step 1 contact
-          uid = 37
+          uid = 43
           operand = 23
-          operandwire = 54
+          operandwire = 64
           negated = true
-          out = 55
-      out = 56
+          out = 65
+      out = 66
     step 1 contact
-      uid = 39
+      uid = 45
       operand = 24
-      operandwire = 57
+      operandwire = 67
       negated = false
-      out = 58
-    coil = 40
+      out = 68
+    coil = 46
     coil operand = 25
-    coil operandwire = 59
+    coil operandwire = 69
   move 0
-    moveuid = 47
-    rail = 51
+    moveuid = 53
+    rail = 61
     step 0 compare
       partname = Eq
-      uid = 45
+      uid = 51
       srctype = Int
-      left tag = 29 60
-      right literal = 33 61
-      out = 62
+      left tag = 29 70
+      right literal = 37 71
+      out = 72
     step 1 contact
-      uid = 46
+      uid = 52
       operand = 30
-      operandwire = 63
+      operandwire = 73
       negated = false
-      out = 64
-    in literal = 34 65
+      out = 74
+    in literal = 38 75
     dest = 31
-    destwire = 66
+    destwire = 76
+  move 1
+    moveuid = 57
+    rail = 61
+    step 0 compare
+      partname = Eq
+      uid = 54
+      srctype = Int
+      left tag = 32 77
+      right literal = 39 78
+      out = 79
+    step 1 contact
+      uid = 55
+      operand = 33
+      operandwire = 80
+      negated = false
+      out = 81
+    step 2 contact
+      uid = 56
+      operand = 34
+      operandwire = 82
+      negated = false
+      out = 83
+    in literal = 40 84
+    dest = 35
+    destwire = 85
 NETWORK 11
   compileunit = 35
   access PressureHold = 23 LocalVariable
   access IO.Step = 22 LocalVariable
   access IO.Fitted = 21 LocalVariable
-  access IO.Step = 27 LocalVariable
-  access JogPreStartTimer.Q = 26 LocalVariable
+  access IO.Step = 28 LocalVariable
+  access JogPreStartTimer.Q = 27 LocalVariable
+  access IO.JogRetractCmd = 26 LocalVariable
   access IO.JogExtendCmd = 25 LocalVariable
   access JogDemand = 24 LocalVariable
-  access ExtendDemand = 28 LocalVariable
-  access IO.Step = 30 LocalVariable
-  access IO.Fitted = 29 LocalVariable
-  access IO.Step = 34 LocalVariable
-  access JogPreStartTimer.Q = 33 LocalVariable
-  access IO.JogRetractCmd = 32 LocalVariable
-  access JogDemand = 31 LocalVariable
-  access RetractDemand = 35 LocalVariable
-  constant 10 = 36 Int
-  constant 0 = 37 Int
-  constant 30 = 38 Int
+  access ExtendDemand = 29 LocalVariable
+  access IO.Step = 31 LocalVariable
+  access IO.Fitted = 30 LocalVariable
+  access IO.Step = 36 LocalVariable
+  access JogPreStartTimer.Q = 35 LocalVariable
+  access IO.JogExtendCmd = 34 LocalVariable
+  access IO.JogRetractCmd = 33 LocalVariable
+  access JogDemand = 32 LocalVariable
+  access RetractDemand = 37 LocalVariable
+  constant 10 = 38 Int
   constant 0 = 39 Int
+  constant 30 = 40 Int
+  constant 0 = 41 Int
   assignment 0
     rail = none
     step 0 or
-      uid = 47
+      uid = 50
       branch 0
-        rail = 64
+        rail = 68
         step 0 contact
-          uid = 40
+          uid = 42
           operand = 21
-          operandwire = 57
+          operandwire = 61
           negated = false
-          out = 58
+          out = 62
         step 1 compare
           partname = Eq
-          uid = 41
-          srctype = Int
-          left tag = 22 59
-          right literal = 36 60
-          out = 61
-        step 2 contact
-          uid = 42
-          operand = 23
-          operandwire = 62
-          negated = true
-          out = 63
-      branch 1
-        rail = 64
-        step 0 contact
           uid = 43
-          operand = 24
-          operandwire = 65
-          negated = false
-          out = 66
-        step 1 contact
-          uid = 44
-          operand = 25
-          operandwire = 67
-          negated = false
-          out = 68
+          srctype = Int
+          left tag = 22 63
+          right literal = 38 64
+          out = 65
         step 2 contact
+          uid = 44
+          operand = 23
+          operandwire = 66
+          negated = true
+          out = 67
+      branch 1
+        rail = 68
+        step 0 contact
           uid = 45
-          operand = 26
+          operand = 24
           operandwire = 69
           negated = false
           out = 70
-        step 3 compare
-          partname = Eq
+        step 1 contact
           uid = 46
+          operand = 25
+          operandwire = 71
+          negated = false
+          out = 72
+        step 2 contact
+          uid = 47
+          operand = 26
+          operandwire = 73
+          negated = true
+          out = 74
+        step 3 contact
+          uid = 48
+          operand = 27
+          operandwire = 75
+          negated = false
+          out = 76
+        step 4 compare
+          partname = Eq
+          uid = 49
           srctype = Int
-          left tag = 27 71
-          right literal = 37 72
-          out = 73
-      out = 74
-    coil = 48
-    coil operand = 28
-    coil operandwire = 75
+          left tag = 28 77
+          right literal = 39 78
+          out = 79
+      out = 80
+    coil = 51
+    coil operand = 29
+    coil operandwire = 81
   assignment 1
     rail = none
     step 0 or
-      uid = 55
+      uid = 59
       branch 0
-        rail = 64
+        rail = 68
         step 0 contact
-          uid = 49
-          operand = 29
-          operandwire = 76
+          uid = 52
+          operand = 30
+          operandwire = 82
           negated = false
-          out = 77
+          out = 83
         step 1 compare
           partname = Eq
-          uid = 50
-          srctype = Int
-          left tag = 30 78
-          right literal = 38 79
-          out = 80
-      branch 1
-        rail = 64
-        step 0 contact
-          uid = 51
-          operand = 31
-          operandwire = 81
-          negated = false
-          out = 82
-        step 1 contact
-          uid = 52
-          operand = 32
-          operandwire = 83
-          negated = false
-          out = 84
-        step 2 contact
           uid = 53
-          operand = 33
-          operandwire = 85
-          negated = false
-          out = 86
-        step 3 compare
-          partname = Eq
-          uid = 54
           srctype = Int
-          left tag = 34 87
-          right literal = 39 88
-          out = 89
-      out = 90
-    coil = 56
-    coil operand = 35
-    coil operandwire = 91
+          left tag = 31 84
+          right literal = 40 85
+          out = 86
+      branch 1
+        rail = 68
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 87
+          negated = false
+          out = 88
+        step 1 contact
+          uid = 55
+          operand = 33
+          operandwire = 89
+          negated = false
+          out = 90
+        step 2 contact
+          uid = 56
+          operand = 34
+          operandwire = 91
+          negated = true
+          out = 92
+        step 3 contact
+          uid = 57
+          operand = 35
+          operandwire = 93
+          negated = false
+          out = 94
+        step 4 compare
+          partname = Eq
+          uid = 58
+          srctype = Int
+          left tag = 36 95
+          right literal = 41 96
+          out = 97
+      out = 98
+    coil = 60
+    coil operand = 37
+    coil operandwire = 99
 NETWORK 12
   compileunit = 3A
   access ExtendDemand = 21 LocalVariable
