@@ -4413,3 +4413,22 @@ of them touch existing, already-exported networks). Full writeup: `docs/notes/de
 D-6; concrete case: `gen/GenProject1/fix-wave-1-reviews.md` C-4 / `agent-tasks/08-
 parkedtimeoutfault-recovery.md`. Per hard rule 7, this is a converter gap to report, not something
 to hand-patch around - tasks 03/04/05/06/07/09 are blocked on it, flagged in `agent-tasks/README.md`.
+
+## S6/S7: agent-tasks Portal queue fully closed (2026-07-17)
+
+All 8 queued tasks (02-09) closed same day, two sessions working the queue concurrently exactly as
+designed - no Portal collisions, no clobbered work. D-6 turned out not to be a real blocker in
+practice: the whole-file strip-and-`--synthesize` workaround (proven by task 03, reused by 06/07/09)
+handled every case, at the cost of a larger diff each time (full sidecar regeneration). B-1 through
+B-6 (the full defect docket) and C-4/C-5 are now built and compiled clean against GenProject1 -
+full detail in `gen/GenProject1/fix-wave-1-reviews.md`'s per-item entries and the `agent-tasks/`
+commit history. Task 09 (C-115 handshake vocabulary, C-5) needed and got a real gate-1 mini-manifest
+sign-off before coding, per docs/15's hard gate for interface changes - the queue's only task that
+actually exercised that gate.
+
+**`FC_AlarmsMain`'s standing inconsistency also closed out** (was flagged pre-existing/not-mine
+throughout the queue work, `list`/`sanity-check` showing it `INCONSISTENT` from the very first
+Portal touch this session, unrelated to any block this session edited): a plain block-level
+`compile --block FC_AlarmsMain` cleared it in one call, the same known playbook pattern used
+throughout the queue - not a content defect, never was. `sanity-check` now reports
+`OVERALL: HEALTHY, INCONSISTENT: 0` for the whole device.
