@@ -368,7 +368,7 @@ internal static class DbInterfaceMembers
 
         // Comment position (after </AttributeList>, before nested Members/<StartValue>) is
         // mirrored from the proven WriteMember shape (FB_PusherControl/FB_ShredderSequencer,
-        // committed 2026-07-16, simatic-ml/GenProject1/). LIVE-VERIFIED on SW.Types.PlcStruct
+        // committed 2026-07-16, simatic-ml/test-project001/). LIVE-VERIFIED on SW.Types.PlcStruct
         // 2026-07-16: commented flat and nested-sub-struct UDTs imported, type-compiled,
         // re-exported from SampleProject and round-tripped to-ir byte-identically, comments
         // intact (stage-gates, "UDT member comments live-verified").
@@ -392,7 +392,7 @@ internal static class DbInterfaceMembers
     // The one proven Member-level Comment shape (<Comment><MultiLanguageText Lang="en-US">…
     // </MultiLanguageText></Comment>, directly after </AttributeList>) — confirmed by live TIA
     // import + compile + re-export on an ordinary Static member 2026-07-15, and present verbatim
-    // in the committed genuine re-exports (simatic-ml/GenProject1/FB_PusherControl.xml, 5
+    // in the committed genuine re-exports (simatic-ml/test-project001/FB_PusherControl.xml, 5
     // Member-level instances). Shared by WriteMember and WriteTypeMember so both positions emit
     // the identical shape rather than two hand-kept copies.
     private static void AddCommentElement(XElement memberElement, DbMember member)
