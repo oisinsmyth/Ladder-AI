@@ -5,6 +5,9 @@ obj/
 *.suo
 .vs/
 
+# Per-machine benchmark output (tools/bench-machine.ps1) — not shared, only compared locally
+tools/bench-results/
+
 # Python
 __pycache__/
 *.pyc
