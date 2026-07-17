@@ -20,6 +20,15 @@ of these questions in AITODO/register/review notes point here from now on.
 - **A-3. Bounding "manual to contract".** Three coding waves have now run without a coding
   skill (InCycle/DI4 fix, fix wave 1 phases 1–2). Proposal: once `gen-block-new` exists, manual
   coding is no longer acceptable except by explicit per-case owner waiver. Yes/no?
+- **A-4. Adopt the S7-first ordering? (owner context 2026-07-17: the library is purposely thin —
+  organic growth via S8 harvest — and S7 is the rush, to take production load off the owner.)**
+  Proposed critical path: (a) `converter diff` tooling now, in parallel (S7's entry requirement;
+  formalizes the practiced invariance proofs); (b) modification-choreography reference +
+  `gen-block-modify-fix` then `gen-block-modify-purpose`, sandbox-scoped, exercised against the
+  B-item defect docket; (c) D-4 ruling then close S6's ten requests with small deliberate asks
+  (brings `gen-block-new` up; each approval = S8 harvest candidate); (d) `gen-architecture`
+  reuse-first rewrite (A-1) demoted to a cheap in-passing edit. Also flagged for the horizon:
+  S7 on private engineering projects needs a docs/13 approval extension (new activity class).
 
 ## B. Functional defect candidates from fix wave 1's check stage (tier-1 — each needs
    verify-intent or fix; evidence + suggested fixes: `gen/GenProject1/fix-wave-1-reviews.md`)
