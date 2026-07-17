@@ -2,7 +2,7 @@
 task: 04-bothswitchesfault-alarm-wiring
 source: owner-questions B-3
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: ready
+status: done (2026-07-17) — NOT APPLICABLE, the wiring already existed; see gen/GenProject1/fix-wave-1-reviews.md B-3 for the mis-transcription this traces to
 queue-order: 3
 ---
 

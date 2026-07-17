@@ -128,11 +128,20 @@ proceed without re-litigating intent.
   deliberately left out of this pass (scoped down per the task doc's own permission — the traced
   auto-resume defect only needed the C-124/C-403/C-305 restart-safety half); flagged as a
   follow-up, not silently dropped.
-- **B-3 — `BothSwitchesFault` acts on nothing. Ruling: annunciate only, don't gate.** Owner:
-  "Should be assigned to an alarm bit in DB_Alarms for HMI to pick up." Resolution: wire it into a
-  `DB_Alarms` category-word bit per C-501 so the HMI sees it; the owner did **not** ask for it to
-  block launch/jog/cycle — annunciation-only is the intended behavior, closing the "acts on
-  nothing" concern as a wiring gap, not a missing interlock.
+- **B-3 — `BothSwitchesFault` acts on nothing. CORRECTED 2026-07-17: already satisfied, no fix
+  needed.** Owner: "Should be assigned to an alarm bit in DB_Alarms for HMI to pick up." When this
+  ruling was first recorded (round 1 of the owner-questions batch pass), it was summarized as "no
+  HMI-visible alarm bit" — **that summary was wrong.** The original fix-wave-1 finding this traces
+  to actually read "latched, alarmed **(X3)**, but no transition/demand reads it" — the `(X3)`
+  citation means the alarm-word wiring already existed at finding time.
+  `FC_AlarmsMain` Network 4 ("Pusher - Both Switches Active Simultaneously - Check Limit
+  Switches") already writes `DB_Alarms.ShredderAlarm0.%X3 := iDB_PusherControl.IO.BothSwitchesFault`
+  — grep-confirmed 2026-07-17, real sidecar present (already imported/compiled). The actual
+  content of the finding — no transition or demand *reads* the fault, so it doesn't gate
+  launch/jog/cycle — is exactly what the owner's ruling says is correct: annunciation-only,
+  explicitly not an interlock. **There was nothing to build.** `agent-tasks/04-bothswitchesfault-
+  alarm-wiring.md` closed as not-applicable; flagging the mis-transcription here rather than
+  quietly dropping it, since it's the kind of error that could recur.
 - **B-4 — `Fitted` dropped mid-cycle strands `Step`. Design ruling recorded.** Owner: "'Fitted'
   should really not change during machine operation, but if it is turned off all related
   processes should stop, if turned on again it shouldn't start unless called for." Reading:
