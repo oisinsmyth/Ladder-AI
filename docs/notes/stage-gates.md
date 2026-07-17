@@ -3780,12 +3780,12 @@ gives `patterns/` committed content the same standing round-trip regression guar
 already has, extensible with new `[InlineData]`/`[Fact]` entries per new pattern rather than a
 separate mechanism each time.
 
-## S6 first real proof: Kestrel Shredder System build (2026-07-15)
+## S6 first real proof: test-project001 build (2026-07-15)
 
 The first genuine end-to-end exercise of the S6 workflow (`CLAUDE.md`'s own "Workflow for logic
 generation") against a real, plain-language functional description (genericized from a real
 supplied spec — `docs/13-data-boundary.md` covers the sanitization), not a synthetic exercise.
-Built out `GenProject1` from 5 blocks to a complete subsystem: `DB_Settings`/`DB_Controls`/
+Built out `test-project001` from 5 blocks to a complete subsystem: `DB_Settings`/`DB_Controls`/
 `DB_Alarms`/`DB_AnalogInput`, `FB_PusherControl` + `UDT_PusherIO` + instance DB (new, C-118–C-125
 stepped sequence), `FB_MotorFwdRevSystem` (real, imported unmodified) + instance DB, wired via
 CALL-site corrections rather than FB edits (see below), `FB_ShredderSequencer` + `UDT_
@@ -3841,7 +3841,7 @@ every original condition survived byte-for-byte.
 
 ## S6 direction adopted: staged generation pipeline + simplicity retrospective (2026-07-16)
 
-The project owner's verdict on the Kestrel build (previous section): functionally right — "it has
+The project owner's verdict on the test-project001 build (previous section): functionally right — "it has
 worked functionally very well" — but the ladder itself overly complex and obtuse, with an explicit
 priority order stated for generated LAD: **function → readability & simplicity → efficiency**. The
 owner proposed restructuring S6 generation around skills and isolated-context agents; the analysis
@@ -3865,11 +3865,11 @@ loop), not replaced. Doc 06's preamble now carries the priority order, each tier
 check that enforces it. ADR numbering note: 0003 left reserved — `docs/13-data-boundary.md` has
 pointed at it for the data-boundary decision since the doc suite was written.
 
-**GenProject1 became a committed corpus (commit `b14be52`):** `.gitignore` anchored to
-`/GenProject1/` (the live TIA folder stays ignored; the extracted content no longer is), then all
+**test-project001 became a committed corpus (commit `b14be52`):** `.gitignore` anchored to
+`/test-project001/` (the live TIA folder stays ignored; the extracted content no longer is), then all
 17 blocks + 3 UDTs (`UDT_PusherIO`, `UDT_ShredderSequencerIO`, `MotorFwdRevIOSet` — enumerated by
 grepping the exports, since `list` can't enumerate types) + the default tag table exported to
-`simatic-ml/GenProject1/` and converted to `ir/GenProject1/` (21/21 clean `to-ir`, including OB1
+`simatic-ml/test-project001/` and converted to `ir/test-project001/` (21/21 clean `to-ir`, including OB1
 `Main` — the deferred OB quirks are on the write path, not read). Four blocks + one UDT hit the
 known `IsConsistent` export refusal ("Inconsistent blocks and PLC data types (UDT) cannot be
 exported") and cleared via the documented block-level-compile-then-retry (all compiled 0 errors;
@@ -3877,7 +3877,7 @@ the only diagnostic was a device-level warning about IO points absent from the c
 hardware — expected for a sandbox project, recorded not hidden). Data boundary verified rather
 than assumed: the corpus was scanned against `sanitization/Kestrel Shredder Systems.map.json`'s real-name
 keys (case-insensitive; word-boundary for the short model codes) — zero hits, so docs/13's
-"nothing identifying appears in GenProject1" claim now has a checked basis. This corpus is the
+"nothing identifying appears in test-project001" claim now has a checked basis. This corpus is the
 durable S6 output and the standing validation corpus for reviewer skills.
 
 **Retrospective delivered (`docs/notes/genproject1-retrospective.md`) — owner pass PENDING:**
@@ -3924,11 +3924,11 @@ outcomes, all now folded into `docs/06-lad-conventions.md`:
   per-instance settings (including a sequencer's own step timings) belong in the instance UDT,
   and the draft's "plant-singleton may read DB_Settings directly" split was wrong. C-307
   sharpened, C-308 extended to **"a settings member has exactly one writer: the HMI"** — logic
-  never writes it *and orchestrating FCs never scan-copy into it*, naming the concrete GenProject1
+  never writes it *and orchestrating FCs never scan-copy into it*, naming the concrete test-project001
   trap found during the read: `FC_ControlMain` MOVEs `DB_Settings.PusherX` over the pusher's UDT
   settings members every scan, so any faceplate edit would silently revert one scan later (the
   setting existed in two homes with a cyclic copy between them). C-122 reworded to match.
-  GenProject1's own settings rework is a queued S6 request, not silently done.
+  test-project001's own settings rework is a queued S6 request, not silently done.
 - **Other rulings**: C-001 members are PascalCase (practice wins over the never-followed
   camelCase; `Snake_Case` buffer members = legacy, renamed at next touch); C-109 gains the
   IO-mapping direct-call exception (wrappers stay the rule elsewhere; C-304 aligned); C-126 gains
@@ -3939,13 +3939,13 @@ outcomes, all now folded into `docs/06-lad-conventions.md`:
   permanent gen-architecture checklist line; C-504 suppression carried to the future
   alarm-design stage.
 - **Grounded along the way**: SimaticML carries `HeaderAuthor`/`HeaderVersion`/`HeaderFamily`
-  block attributes (empty/0.1 in GenProject1) that the IR currently drops entirely — queued
+  block attributes (empty/0.1 in test-project001) that the IR currently drops entirely — queued
   converter work item to carry them as IR header lines, which is the only path to C-201's
   author/revision ever becoming mechanically checkable. Struct-inside-standalone-UDT round-trip
   needs one proof before the grouped-UDT `Set` sub-struct design can be committed to (anonymous
   Struct members are proven for FB statics via `EquipmentControlSystem`, not yet for `SW.Types.PlcStruct`).
 
-Next per the docs/15 build order: `review-simplicity`, validated against the GenProject1 corpus
+Next per the docs/15 build order: `review-simplicity`, validated against the test-project001 corpus
 under the stricter-bar principle.
 
 ## S6: review-simplicity built and blind-validated; UDT member-comment gap grounded (2026-07-16)
@@ -3961,7 +3961,7 @@ the stricter-bar disposition (err toward flagging; functional-looking discoverie
 tier-1 candidates, not ruled on).
 
 **Blind validation — the docs/15 reviewer model exercised for real.** A fresh-context subagent
-got only the skill file, the binding docs, and `ir/GenProject1/` (21 files), explicitly barred
+got only the skill file, the binding docs, and `ir/test-project001/` (21 files), explicitly barred
 from the retrospective (the expected-findings anchor). Result, preserved verbatim with the
 comparison in `docs/notes/review-simplicity-validation-2026-07-16.md`: **every material known
 finding independently reproduced** (duplicated cycle-start compound with the near-match diff;
@@ -3995,7 +3995,7 @@ Static/Input/Output/DB member (WriteMember), not here` — **TYPE/UDT members ca
 through the converter at all**, so C-605 (error) is currently unsatisfiable on interface UDTs
 via this toolchain, for the flat and sub-struct designs alike. (2) Grep over the fresh exports
 finds **zero member-line COMMENT tokens anywhere** — including the Static-member comments the
-Kestrel build demonstrably wrote (stage-gates' own S6 record cites OvercurrentTripped's member
+test-project001 build demonstrably wrote (stage-gates' own S6 record cites OvercurrentTripped's member
 comment; the fresh export shows the member bare) — so member-comment **persistence through
 import→TIA→re-export is unverified** and possibly broken; the sequencer's two "see member
 comment" pointers now dangle. Verify persistence before relying on C-605 at all. Release
@@ -4013,8 +4013,8 @@ to *both* variants (sub-struct and separate Settings UDT) equally.
 The two tier-1 candidates from the blind review were ruled **real mistakes** by the owner, with
 definitions supplied: the In_Cycle lamp is on **whenever any piece of equipment is running**, and
 the DI4 NC polarity is **absorbed at the input map** (not in logic). Fixed as S6 sandbox
-iteration — the same established mode as the Kestrel build's own C-126/C-127 restructuring of
-already-imported blocks (GenProject1 is S6's scratch; S7's gate concerns real-project
+iteration — the same established mode as the test-project001 build's own C-126/C-127 restructuring of
+already-imported blocks (test-project001 is S6's scratch; S7's gate concerns real-project
 modification and stays untouched) — but with S7-style discipline applied anyway, as a live
 rehearsal of it:
 
@@ -4105,11 +4105,11 @@ should-finds found, all four negative controls held. `docs/notes/review-conventi
 missing dwell timer, unset motor timing start values.
 
 **Stream B — requirements register + `review-functional` (pipeline skills #1-output + #10): built
-+ two-phase-validated.** `gen/GenProject1/requirements.md` — the first pipeline artifact ever —
-69 REQs + 15 open questions from the genericized Kestrel spec (`manual:gen-spec-analysis`;
++ two-phase-validated.** `gen/test-project001/requirements.md` — the first pipeline artifact ever —
+69 REQs + 15 open questions from the genericized supplied spec (`manual:gen-spec-analysis`;
 contamination rule enforced: REQ text only from sources, corpus touched for tag-status greps
 only; both commits gated by the real-name scan — 0 hits/14 keys, counts-only evidence). First
-telemetry rows live in `gen/GenProject1/telemetry.log`. Validation phase 1 ran against the
+telemetry rows live in `gen/test-project001/telemetry.log`. Validation phase 1 ran against the
 **pre-fix corpus** (19b2022~1): both owner-ruled bugs independently rediscovered blind (In_Cycle
 `unimplemented`, DI4 `contradicted` with the exact inversion mechanism) — the arc catches what it
 was built to catch. Phase 2 (current corpus): both fixes regression-positive. `docs/notes/
@@ -4170,7 +4170,7 @@ worktree and biting master during the Stream D merge. `.gitattributes` now pins 
 **State after consolidation:** all four reviewer-adjacent skills exist (`explain-plc-block`,
 `review-simplicity`, `review-conventions`, `review-functional`); docs/15 build-order steps 0–4
 done; suites green (converter 491/491, openness-cli 101/101, golden 14/14). Next: owner rulings
-on the functional-findings wave → a GenProject1 fix request (the settings zeros + structural
+on the functional-findings wave → a test-project001 fix request (the settings zeros + structural
 items are S6 sandbox iteration with the now-standing invariance discipline); `gen-architecture`
 (build-order step 5); the deferred Portal batch (UDT member-comment live verify + sub-struct
 re-run, now meaningful post-TypeIr-fix). The blind-run independence caveat stands batch-wide:
@@ -4192,243 +4192,82 @@ type per equipment, mechanical one-writer checkability. TODO(live-verify) flags 
 DbInterfaceMembers.cs / converter README / ir/SPEC.md. Leftovers documented: the two proof UDTs
 stay in SampleProject (no --type delete support; same status as MotorStarter_Instance).
 
-## S6: fix wave 1 complete - drafted, signed, imported, compiled, invariance-proven, triple-reviewed (2026-07-17)
+## S6: fix wave 1 - full pipeline discipline exercised end to end on our own fixes (2026-07-17)
 
-The full pipeline discipline applied to our own fixes, end to end. Phase 1 (worktree agent,
-Portal-free): all four owner rulings drafted into IR with static verification (synthesize +
-preflight zero-new-findings), the commissioning-defaults table produced with per-value rationale,
-two design tensions surfaced and ruled (park-at-next-pre-start stands; jog must survive downstream
-absence - implemented as the two-tier PusherModeForceOff / PusherCycleInhibitCmd split), settings
-table signed as proposed (Oisin, 2026-07-16, recorded in gen/GenProject1/fix-wave-1.md). Phase 2
-first attempt correctly stopped at the Portal boundary (unapproved fresh worktree binary hit the
-first-connect dialog; classifier denials respected, state fully staged and documented); the
-coordinator ran the staged sequence with the session's approved binary. One roundtrip lost to a
-new playbook class - "Element cannot be found / check the consistency of the type used" (UDT
-imports need compile --type before dependent iDBs; FBs before iDBs on interface changes) - now a
-playbook entry with live proof. Corrected order: 9 imports, every block compile 0 errors, whole-
-device compile Success 0/0, and all nine re-exports READABLE-IDENTICAL to the signed drafts
-(invariance proven, not asserted). Merged at 238de48.
+A batch of owner-ruled fixes against `test-project001` (drafted, signed off, imported, compiled,
+invariance-proven, then run through all three check-stage reviewers) — project-specific detail
+condensed out; two things worth keeping. First, a genuine playbook addition: "Element cannot be
+found / check the consistency of the type used" on import means an interface dependency wasn't
+compiled in the right order — UDT types need `compile --type` before their dependent iDBs, and
+FBs before their iDBs, whenever an interface changed; fixed by re-sequencing the import order, not
+by touching content. Second, the meta-lesson worth recording deliberately: the check-stage
+reviewers found real defects in code written by the same session that had just finished writing
+the rules those defects broke — one day old. That's the system working as intended; the
+stricter-bar principle (`docs/06-lad-conventions.md` preamble) has teeth precisely because the
+reviewers don't care who wrote the code or how recently the rule was adopted.
 
-Check stage: three fresh-context blind reviewers against the merged corpus. Functional verdict
-flipped from 28/18/6/11/4-contradicted to 45 implemented / 7 partial / 6 unimplemented /
-10 disarmed / 0 contradicted - every ruled fix implemented with field-boundary evidence, all 14
-spec numbers verified into the right PTs, anti-laundering clean. Mechanical conventions baseline
-improved 17 to 16 (FC_ControlMain header cleared; both generated FBs + FC now tool-clean). The
-reviewers earned their keep against our own code: new tier-1 candidates (simultaneous-jog dual
-solenoids; power-cycle auto-resume now TRACED not hypothesized; BothSwitchesFault acts on
-nothing; Fitted-drop mid-cycle strands Step), a reintroduced C-601 near-match in the new pusher
-launch logic, a genuine C-604 rule-wording tension (commented-constant branch vs reservation
-clause), a new C-117 error-class finding (direction changes lack not-running feedback terms),
-and a converter reporter bug (C-301 count vs printed findings). Full actionable record:
-gen/GenProject1/fix-wave-1-reviews.md; owner-rulings queue updated in AITODO.
+## S6/S7: pipeline-design correction — reuse-first carving, bounded manual coding (2026-07-17)
 
-Meta-lesson, recorded deliberately: the check stage found real defects in code written BY the
-pipeline's own coordinator under the pipeline's own rules, one day after the rules were written.
-That is the system working - the stricter-bar principle has teeth precisely because the reviewers
-do not care who wrote the code.
+**A course correction to the pipeline design itself, the durable part of a long owner-questions
+exchange otherwise stripped from this log as project-specific bookkeeping (2026-07-17; the
+full per-item ruling history lived here briefly and is now redundant with `docs/06-lad-
+conventions.md`, where every rule's own clarified text is the permanent record).**
 
-## S6/S7 direction reset + session close: owner-questions gate, S7-first path proposed (2026-07-17)
+Two genuine methodology lessons came out of it:
 
-**The owner called a course correction, and it stands as the session's most important output.**
-Points raised, in the owner's own framing: (1) the pipeline "got ahead of itself" - three coding
-waves ran manual-to-contract while gen-block-coding sat unbuilt at build-order step 7; (2)
-gen-architecture was intended as a REUSE-FIRST carving algorithm - identify whole library blocks,
-then pattern-composed blocks, then modified library blocks, then new/freeform, in that order,
-handing the compiled list to the programming skill(s) - where the built skill derives blocks from
-REQs and maps patterns afterwards; (3) programming should be two or three skills: New Block
-creation / Modify block for new purpose / Modify block for fix; (4) the library is PURPOSELY thin
-- organic growth via S8 harvest, never a library campaign; and (5) **S7 is the rush** - safe
-modification is the capability that takes production load off the owner, freeing time to develop
-this app (the project's bootstrapping loop, now stated explicitly).
+1. **Decomposition order matters because carving IS a reuse decision.** `gen-architecture` had
+   drifted into deriving blocks from requirements first and mapping patterns onto them afterward —
+   plausible, but a carving blind to the existing library can make reuse structurally impossible in
+   ways no after-the-fact mapping repairs. Corrected to reuse-first: identify whole
+   already-proven blocks first, then pattern-composed blocks, then modified library blocks, only
+   then new/freeform — with REQ traceability kept as the correctness spine throughout, so a
+   reuse candidate that only *almost* fits its REQs doesn't get force-fitted.
+2. **A capability that isn't built stays theoretical no matter how many times it's needed.** Manual
+   coding was written into the workflow for the exception case and quietly became the norm as
+   volume grew — the deferred build-order priority for an actual coding skill was never revisited.
+   Concrete cost: defects a coding skill's own write-time checklist would have caught (a
+   reintroduced near-match duplicate condition, a placeholder-constant rule tension) instead
+   reached review. Bounded going forward: once a real coding skill exists, ad hoc manual coding
+   needs an explicit per-case waiver, not a default.
 
-**Coordinator's concession, recorded:** the criticism is correct. Manual-to-contract was written
-for the exception and became the norm; the deferred-coding-skill priority was never revisited as
-coding volume grew; and the fix wave's own defects (the reintroduced C-601 near-match, the C-604
-tension) are exactly what a coding skill's write-time checklist would have prevented rather than
-reviewers catching after. The reuse-first point is structurally right because decomposition
-boundaries ARE reuse decisions - a carving blind to the library can make reuse impossible in ways
-no after-the-fact mapping repairs - with one composition rule preserved: REQs stay the
-correctness spine (each tier candidate held against the REQ set it claims; the almost-fits trap
-guarded by traceability). The 3-skill split maps cleanly: gen-block-new (S6), and the modify pair
-as S7's own deliverable shape (roadmap S7 verbatim: targeted edits + invariance + before/after
-diff), sandbox-scoped until S7's gate formally opens.
+Also from this pass: `docs/notes/owner-questions.md` was adopted as a reusable pattern —
+consolidate a large batch of accumulated questions into one priority-ordered doc, resolve each
+into its permanent home (a rule, a register entry, a deferred-items note), then clear the batch
+doc back to empty rather than let it grow forever. `docs/notes/deferred-items.md` was split out the
+same way, for decisions already made in principle where only timing is open.
 
-**Everything now gates on `docs/notes/owner-questions.md`** (created this session at the owner's
-request; priority-ordered A-F): A-1..A-4 direction rulings (carving model; skill split; bounding
-manual coding; the S7-first ordering - converter diff tooling, modify pair vs the B-docket, D-4
-then S6's ten requests, A-1 in passing), the B-docket (six tier-1 defect candidates from fix wave
-1's check stage), C rule-book rulings, D project-scope decisions, E register questions, F tooling.
-AITODO pruned to a lean recovery doc pointing there; superseded queues deleted per its own
-discipline.
+## S6/S7: agent-tasks dispatch board — first proven OB write path, a real converter gap found and worked around (2026-07-17)
 
-**Session-close housekeeping:** all six agent worktrees removed and branches deleted (every one
-verified fully merged; master is the only branch); working tree clean; suites green (converter
-491/491, openness-cli 101/101, golden 14/14). Persistent agent memory updated so the next session
-starts with the owner's priorities even with this conversation cleared: the stricter-bar
-principle, the S7-rush/thin-library economics, the build-order-drift lesson, and the environment
-facts (classifier wants visible owner approval for site-data/admitted-content agent launches;
-fresh worktree openness-cli binaries hit TIA's first-connect approval dialog - use the session's
-approved binary for Portal work).
+The B-docket/C-item work this exchange produced (six tier-1 defects plus several rule
+clarifications, all against the `test-project001` scratch project) was dispatched through
+`agent-tasks/` — see that folder's own README for the concurrency pattern and what it taught about
+multi-agent coordination specifically. Two tool-level findings from actually running it, worth
+keeping independent of the project they were found against:
 
-## S6: owner-questions batch pass - rulings applied, three items deliberately held (2026-07-17)
-
-The owner answered `docs/notes/owner-questions.md` in full; this entry is the dated ruling record
-the doc's own "never silently" rule requires. Every clear answer was written into its home
-document rather than left narrative-only:
-
-- **A-1/A-2/A-3 (direction) applied.** `gen-architecture`'s Method rewritten for reuse-first
-  carving (library-whole -> pattern-composed -> library-modified -> freeform, matched against
-  cached per-run library/pattern summaries, extra capability on a whole-reuse item explicitly not
-  a finding). `docs/15-generation-pipeline.md` now carries the 3-skill Build-phase split
-  (`gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix` + a shared
-  modification-choreography reference), pulled forward to build-order step 6, and A-3's
-  manual-coding bound (per-case owner waiver required once `gen-block-new` exists). **A-4 (the
-  S7-first ordering) was explicitly NOT ruled** - the owner wants a fuller discussion before
-  committing to the internal sequencing; it stays open.
-- **B-docket verdicts recorded**, not yet coded - `gen/GenProject1/fix-wave-1-reviews.md`'s new
-  "Owner verdicts on the B-docket" section covers B-1 through B-6. B-2's ruling withdraws the
-  demo-panel OB100/`DB_PLC` startup-machinery waiver. B-5 surfaced a mismatch between the question
-  asked and the answer given - recorded honestly as partially answered, not forced to a verdict.
-- **C rulings applied to `docs/06-lad-conventions.md`:** C-8's `<DI/DO/AI/AO>` typo fixed to
-  `<DI/DQ/AI/AQ>`; new C-007 (vendor-default-name exception); C-502 gets a confirming note (no
-  project-scale-down, per C-6); new **C-128** (no automatic restart after E-Stop or a power
-  event, except a documented exception - closes D-1/Q-01/B-2 together); F-5's four candidate
-  rules adopted as **C-608-C-611** (comment-vs-rung contradiction, unexplained redundant terms,
-  undocumented dead signals, C-601-named-bit scope - the last one's precise origin wasn't located
-  in this session's source material, flagged for confirmation). **C-1 was not resolved** - the
-  owner's proposed placeholder-naming convention needs a clarifying round-trip.
-- **D applied/recorded:** D-1 -> C-128. D-3 -> `requirements.md` Q-11 resolved (real AI hardware
-  exists generally; this prototype panel stays bool-signal-only by choice, not by hardware gap).
-  **D-2 (settings rework) deliberately deferred** - owner's own call, documented as a live AITODO
-  entry rather than actioned. **D-4 (S6 exit tally, stage-gates size) explicitly not ruled** - the
-  owner wants a separate agent conversation about this doc's own bloat before deciding gate
-  structure; flagged, not resolved by this pass.
-- **E register resolved in `gen/GenProject1/requirements.md`:** Q-01 (new C-128), Q-08 (manual
-  restart always required), Q-10 (overcurrent and overload stay distinct, not merged), Q-11 (see
-  D-3), Q-12 (partial - `HrsRun` confirmed as the hour-clock's home, zeroable-reset behavior still
-  open). Q-03 and Q-05 got owner context without closing (an HMI-boundary skill idea filed as
-  `docs/16-future-ideas.md` FI-18; a motor-starter-FB hint noted for the reuse-first pass).
-- **F applied:** F-1 (converter reporter bug) confirmed real by the owner, ticketed. F-5 -> the
-  C-608-C-611 rules above.
-- **Held open, by the owner's own words, not this pass's choice:** A-4, D-2 (deferred), D-4
-  (routed to a separate conversation), C-1/C-2/C-3/C-4/C-5/C-7/C-10, D-5, F-2/F-3/F-4, and register
-  Q-02/Q-04/Q-06/Q-07/Q-09/Q-13/Q-14/Q-15 - each is a case where the owner asked for further
-  explanation/context before ruling, or explicitly asked that the topic wait. `owner-questions.md`
-  itself was updated to mark resolved items with a pointer here and keep the rest listed as open.
-
-## S6: owner-questions round 2 - remaining rule-book items ruled, two briefing docs prepared (2026-07-17)
-
-Same day, second pass: the clarification-needed items from round 1 came back answered.
-
-- **C-1 confirmed** - the `placeholder_<Var Name>` constant convention resolves C-604's
-  wording conflict; written in. **C-2** - an interlock already inside a called FB satisfies
-  C-117, no caller-side duplication needed; closes the sequencer's direction-change finding.
-  **C-3** - a named bit that's a genuine equivalent of `Step = <from>` may be reused, satisfying
-  C-121 (grep-confirm before treating pusher N7 as closed). **C-4** - `FaultReset -> step 0` is
-  itself the recovery transition C-123 requires, even with no safer intermediate step; queues a
-  verify-and-fix for `ParkedTimeoutFault`. **C-5** - C-115's handshake vocabulary applies to
-  stepped-sequence FBs too, always, even if a given integration leaves it unwired; queues an
-  interface-extension item (needs `gen-block-modify-purpose`, not a fix). **C-7** - resolved the
-  actual confusion: PLC fault-latch/`FaultReset` (C-123) and HMI alarm acknowledgment (C-507) are
-  different mechanisms; GenProject1's latched X1-X8 bits were never a C-507 exception case, no
-  change needed. **C-10** - tentatively accepted as context (owner: "I dont know this is all
-  vibes"), not turned into a rule. **F-2** - the `FaultFB` cross-block split is the FB's intended
-  contract (deliberate external set, per-instance isolation); documented as a named C-103
-  exception pattern. **F-3/F-4** - "all AI code need commented" generalizes C-605 to
-  `DB_Settings` members too (F-4 folds in); F-3's literal empty-end-state sub-question stayed
-  unanswered, still open. All written into `docs/06-lad-conventions.md` (C-103/C-115/C-117/
-  C-121/C-123/C-507/C-604/C-605) and `gen/GenProject1/fix-wave-1-reviews.md`'s "Round 2" section.
-- **Register resolved:** Q-04 partial (three types confirmed, FuncDesc primary - setpoint
-  numbers still needed; the owner separately noted this kind of source disagreement should be
-  flagged for a ruling as soon as found, not carried as a long-open question). Q-07 (3s upstream
-  delay confirmed), Q-13 (reversal display is HMI-side, fault lamp is PLC-driven - now proposed),
-  Q-14 (`FaultReset` is the only precondition, no separate control-on step), Q-15 (Hand is always
-  an overlay on Manual, not a fourth mode) all closed in `gen/GenProject1/requirements.md`.
-- **B-5 still open, and honestly so.** The owner's round-2 answer confirmed REQ-027's
-  reverse-then-continue step design (already correct as built) but addressed a different question
-  than the one asked - the REQ-028 counting-window semantics (does the 3-minute window re-arm on
-  every reversal, or run once fixed from the first?) remain unresolved. Re-asked with a concrete
-  worked numeric example rather than guessed at.
-- **D-5 now resolved as deferred** (round 1 had it as needing clarification); at the owner's own
-  suggestion, a new `docs/notes/deferred-items.md` was created to hold genuinely-deferred (not
-  merely under-debate) work, and D-2 moved there alongside it.
-- **A-4 and D-4 briefing docs prepared** (`docs/notes/a4-s7-ordering-briefing.md`,
-  `docs/notes/d4-stage-gates-review-briefing.md`) per the owner's request - context, what's
-  already landed, and concrete decision points for whichever agent/conversation the owner directs
-  there. Neither A-4 nor D-4 is ruled; the docs are prep, not a ruling by proxy. Notably, D-4's
-  briefing surfaces that `docs/02-roadmap.md`'s S7 entry criterion ("S6 done") is in tension with
-  the owner's S7-rush framing - flagged for that conversation, not resolved here.
-- **Still genuinely open after round 2:** A-4, D-2 (deferred), D-4, B-5 (re-asked), F-3's
-  empty-end-state sub-question, and register Q-02/Q-06/Q-09. `owner-questions.md` updated
-  throughout with round-2 pointers.
-
-## S6: owner-questions round 3 - B-5 resolved as a real defect, not a comment fix (2026-07-17)
-
-Third pass, same day. **B-5 resolved:** the REQ-028 reversal-count window is re-arming - the
-count clears only after 180s with no new reversal, every reversal restarts the clock - the
-opposite of fix wave 1's actual fixed-window-from-first-reversal implementation. This upgrades
-B-5 from "comment mismatch" to a genuine functional defect, queued in the B-docket
-(`gen/GenProject1/fix-wave-1-reviews.md`, `requirements.md` REQ-028). **F-3 resolved:**
-`DB_Settings` is allowed to end up empty after the settings rework - not forced to keep content.
-**Q-04 fully resolved:** per-type overcurrent setpoint numbers deferred (owner doesn't have them
-yet) - moved to `docs/notes/deferred-items.md`, affected `DB_Settings` members get an explicit
-`0` placeholder start value per the C-604 convention in the meantime.
-
-Every item raised in `docs/notes/owner-questions.md` is now either closed (with a pointer) or
-deliberately deferred/routed to a separate conversation - A-4, D-2, D-4, D-5 (deferred, tracked
-in `docs/notes/deferred-items.md`), F-3(b) (unprioritized tooling backlog), and register
-Q-02/Q-06/Q-09 (simply unanswered) are what remains.
-
-## S6/S7: agent-tasks dispatch board opened; B-2 (startup machinery) closed, first proven OB write-path round trip (2026-07-17)
-
-`agent-tasks/` created as the live dispatch board for the B-docket/C-item work the owner-questions
-batch surfaced - one file per task, a Portal-queue gating protocol for GenProject1's single-writer
-scratch project, explicit multi-agent-awareness in every task doc. Two agents worked it
-concurrently this session (as designed): one on task 08 (`ParkedTimeoutFault`, C-4), one on task
-02 (`02-startup-machinery.md`, B-2/D-1/Q-01/C-128).
-
-**Task 02 closed - `DB_PLC` + `OB100` built, imported, compiled clean.** `DB_PLC.Simulation`
-(C-305) plus `OB100` (`SECONDARYTYPE Startup`) forcing `Step` to idle on both stepped sequencers
-and clearing the S/R-driven/transient state named in C-124/C-403 (fault latches - `FaultActive`/
-`FTR`/`FTS` and the pusher/sequencer fault bits - deliberately excluded per C-124's carve-out).
-Whole-device compile 0 errors/0 warnings; both new blocks individually consistent (the known
-"Inconsistent blocks... cannot be exported" playbook entry applied and cleared exactly as
-documented); re-export readable-identical to the signed IR. One real content bug caught by the
-compile gate itself, not by review: `StartTimer` in the imported `FB_MotorFwdRevSystem` turned out
-to be a `TEMP` (scan-scoped, no persistence, not externally addressable), not a `Static` - a
-misread from static grep alone; the block-level compile error ("Tag ... StartTimer not defined")
-caught it immediately, removed from OB100's reset set. **New grounding for the project itself:**
-AITODO's "OB1 write-path never proven" note was specifically about `Main`'s own template quirks -
-narrowed now that a hand-authored, non-`Main` OB has round-tripped clean; `converter to-xml
---synthesize` handles a sidecar-less OB correctly, and TIA's own `Import()` silently corrects an
-OB's system-input parameter set to the real one for its `SecondaryType` (caught via re-export
-diff: my authored `Initial_Call`/`Remanence` - copied from OB1 - got replaced with OB100's actual
-`LostRetentive`/`LostRTC`). C-111 full simulation-mode gating deliberately scoped out of this pass
-(the traced B-2 defect only needed the restart-safety half); flagged as a follow-up.
-
-**Task 08 found a real converter gap (D-6), not yet resolved.** Modifying a network that already
-has real (non-synthesized) sidecar data from a prior export hits `IrFormatException: Network N:
-IR has X move(s) but the sidecar records Y` - affects every remaining queued task except 02 (all
-of them touch existing, already-exported networks). Full writeup: `docs/notes/deferred-items.md`
-D-6; concrete case: `gen/GenProject1/fix-wave-1-reviews.md` C-4 / `agent-tasks/08-
-parkedtimeoutfault-recovery.md`. Per hard rule 7, this is a converter gap to report, not something
-to hand-patch around - tasks 03/04/05/06/07/09 are blocked on it, flagged in `agent-tasks/README.md`.
-
-## S6/S7: agent-tasks Portal queue fully closed (2026-07-17)
-
-All 8 queued tasks (02-09) closed same day, two sessions working the queue concurrently exactly as
-designed - no Portal collisions, no clobbered work. D-6 turned out not to be a real blocker in
-practice: the whole-file strip-and-`--synthesize` workaround (proven by task 03, reused by 06/07/09)
-handled every case, at the cost of a larger diff each time (full sidecar regeneration). B-1 through
-B-6 (the full defect docket) and C-4/C-5 are now built and compiled clean against GenProject1 -
-full detail in `gen/GenProject1/fix-wave-1-reviews.md`'s per-item entries and the `agent-tasks/`
-commit history. Task 09 (C-115 handshake vocabulary, C-5) needed and got a real gate-1 mini-manifest
-sign-off before coding, per docs/15's hard gate for interface changes - the queue's only task that
-actually exercised that gate.
-
-**`FC_AlarmsMain`'s standing inconsistency also closed out** (was flagged pre-existing/not-mine
-throughout the queue work, `list`/`sanity-check` showing it `INCONSISTENT` from the very first
-Portal touch this session, unrelated to any block this session edited): a plain block-level
-`compile --block FC_AlarmsMain` cleared it in one call, the same known playbook pattern used
-throughout the queue - not a content defect, never was. `sanity-check` now reports
-`OVERALL: HEALTHY, INCONSISTENT: 0` for the whole device.
+- **First proven OB *write* path.** Every prior OB round-trip proof was read-only (export/convert
+  an existing OB); this run hand-authored a new `OB100` (`SECONDARYTYPE Startup`) from scratch,
+  `to-xml --synthesize`'d it, and imported it clean. One genuine discovery along the way: TIA's own
+  `Import()` silently corrects an OB's system-input parameter set to the real one for its declared
+  `SecondaryType` — an authored OB100 that (wrongly) copied OB1's `Initial_Call`/`Remanence` pair
+  came back from re-export with the actually-correct `LostRetentive`/`LostRTC` pair instead. Trust
+  the re-export over a hand-copied assumption about system parameters.
+- **A real converter gap (logged as D-6), and a workaround that held up under repeated use.** The
+  converter has no supported path for adding one new statement to a network that already carries
+  real sidecar data from a prior TIA export — `IrFormatException: Network N: IR has X move(s) but
+  the sidecar records Y`. Per hard rule 7 (report converter gaps, never hand-patch the sidecar),
+  the standing workaround is a whole-file cycle: strip the file's entire `SIDECAR` section, edit
+  the readable IR, `to-xml --synthesize` the whole file, import, compile, re-export, `to-ir` to
+  restore real sidecars for every network. Confirmed working every time it was tried, at the
+  consistent cost of a much larger diff per use (full sidecar regeneration, not just the changed
+  lines) — worth a real converter fix if this pattern recurs often, since a workaround that always
+  works is easy to mistake for "not actually a gap."
+- **The compile gate catches what static reading misses.** A reset-block draft assumed a member
+  was a `Static` (visible via grep) when it was actually a `TEMP` (scan-scoped, no persistence,
+  not externally addressable) — the block-level compile error ("Tag ... not defined") caught it
+  immediately, before it could ship as a silent no-op. Grep tells you a name exists; only the
+  compiler tells you what kind of thing it actually is.
+- **`IsConsistent` staying `true` device-wide doesn't mean every block actually is** — the
+  standing playbook pattern (device-level compile reports Success without clearing a stale
+  per-block flag; `compile --block <name>` clears it) held for every block touched across this
+  whole run, including one flagged inconsistent from the very first Portal touch and never
+  actually edited — a pre-existing condition, not a regression, cleared the same way.
