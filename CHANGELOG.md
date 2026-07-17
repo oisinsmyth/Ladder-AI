@@ -209,7 +209,7 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   blocks + 3 UDTs + tag table in `ir/GenProject1/` + `simatic-ml/GenProject1/` (21/21 clean
   `to-ir`, incl. OB1). Known `IsConsistent` export refusals cleared by block-level compile
   (0 errors). Data-boundary scan vs the Kestrel Shredder Systems map: zero real-name hits.
-- `docs/notes/genproject1-retrospective.md` delivered - mechanical baseline (17 findings; both
+- `docs/notes/test-project001-retrospective.md` (delivered as `genproject1-retrospective.md`, since renamed) - mechanical baseline (17 findings; both
   generated FBs clean, every in-block finding on the real `FB_MotorFwdRevSystem`), 12 readability
   findings, 7 candidate C-6xx simplicity rules, 6 rule-vs-practice adjudications. **Owner
   accept/reject pass pending - rules enter doc 06 only after it.** Converter suite 463/463.
