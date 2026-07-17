@@ -2,7 +2,7 @@
 task: 05-fitted-live-drop
 source: owner-questions B-4
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: ready
+status: done (2026-07-17) — drafted by another concurrent session, verified compiled clean via task 07's round trip on the same file; see gen/GenProject1/fix-wave-1-reviews.md B-4
 queue-order: 4
 ---
 

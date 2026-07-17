@@ -142,14 +142,19 @@ proceed without re-litigating intent.
   explicitly not an interlock. **There was nothing to build.** `agent-tasks/04-bothswitchesfault-
   alarm-wiring.md` closed as not-applicable; flagging the mis-transcription here rather than
   quietly dropping it, since it's the kind of error that could recur.
-- **B-4 — `Fitted` dropped mid-cycle strands `Step`. Design ruling recorded.** Owner: "'Fitted'
-  should really not change during machine operation, but if it is turned off all related
-  processes should stop, if turned on again it shouldn't start unless called for." Reading:
-  `Fitted` is an engineering-time setting, not meant for live toggling — but the logic must still
-  handle a live drop defensively: an immediate `Fitted` clear stops every Fitted-gated process at
-  once (not just freezes `Step`); re-enabling `Fitted` is never itself a start condition — a fresh
-  normal call (cycle trigger) is required afterward, consistent with the new **C-128** no-auto-
-  restart rule.
+- **B-4 — `Fitted` dropped mid-cycle strands `Step`. FIXED, compiled clean (2026-07-17,
+  `agent-tasks/05-fitted-live-drop.md`).** Owner: "'Fitted' should really not change during machine
+  operation, but if it is turned off all related processes should stop, if turned on again it
+  shouldn't start unless called for." Reading: `Fitted` is an engineering-time setting, not meant
+  for live toggling — but the logic must still handle a live drop defensively: an immediate
+  `Fitted` clear stops every Fitted-gated process at once (not just freezes `Step`); re-enabling
+  `Fitted` is never itself a start condition — a fresh normal call (cycle trigger) is required
+  afterward, consistent with the new **C-128** no-auto-restart rule. Built:
+  `FB_PusherControl` Network 14 "Fitted Removed Mid-Cycle - Force Idle" —
+  `MOVE(EN := IO.Step <> 0 AND NOT IO.Fitted, IN := 0) => IO.Step`. **Verified compiled clean via
+  task 07's whole-file round trip** on the same file (re-export diff showed Network 14
+  byte-identical, carried through untouched exactly as task 03 carried task 08's fix) — no separate
+  Portal round trip needed to close this out.
 - **B-5 — Reversal-window semantics. FIXED 2026-07-17** (`agent-tasks/06-reversal-window-rearm-fix.md`).
   Owner: "May nor understand 100% but I can make a educated guess, you are looking to know if its
   ok to reuse the same reversal logic plus timer for overload events and yes that is ok." Reading:
