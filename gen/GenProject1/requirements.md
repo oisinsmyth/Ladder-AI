@@ -772,8 +772,13 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   **C-128** (new rule) — a PLC power cycle is treated the same as an E-Stop for this purpose. A
   fresh, explicit start command always re-runs the **full** start-up sequence from the top; no
   mid-sequence resume. This makes the demo-panel OB100/`DB_PLC` omission (previously waived) a
-  real gap, not a style choice — B-2's traced auto-resume is the concrete evidence. Building the
-  startup machinery is queued in the B-docket (see `gen/GenProject1/fix-wave-1-reviews.md`).
+  real gap, not a style choice — B-2's traced auto-resume is the concrete evidence. **Machinery
+  built 2026-07-17** (`agent-tasks/02-startup-machinery.md`): `DB_PLC.Simulation` + `OB100` (force
+  Step to idle on both stepped sequencers, clear the transient/S/R-driven state named in C-124/
+  C-403, force `Simulation` off) imported and compiled clean against the GenProject1 scratch
+  project (whole-device 0 errors/0 warnings; both blocks individually consistent; re-export
+  readable-identical to the signed IR). See `gen/GenProject1/fix-wave-1-reviews.md` B-2 for the
+  scope note (C-111 full simulation-mode gating deliberately not included in this pass).
 - **Q-02 — Unconfigured settings.** Nine `DB_Settings` members have no start value (see the
   settings table): the four overcurrent setpoints/delays, `PressureClearResumeDelay` (the only
   one with a spec-stated number — 5 s, REQ-047), `PusherEndTravelTimeout`, `PusherParkedTimeout`,

@@ -100,7 +100,11 @@ opens.
 
 **Deliberately deferred, not a bug to chase:**
 - `Main` (OB1) full round-trip (write path) — TIA's own template block; OB support never a goal;
-  owner's call. (Read path works: OB1 exports/converts fine, proven 2026-07-16.)
+  owner's call. (Read path works: OB1 exports/converts fine, proven 2026-07-16.) **Narrowed
+  2026-07-17:** this is now specifically about `Main`'s own template quirks, not "OB write support"
+  generally — a hand-authored, non-`Main` OB (`OB100`, `SECONDARYTYPE Startup`) round-tripped clean
+  end-to-end (`agent-tasks/02-startup-machinery.md`: `converter to-xml --synthesize`,
+  `openness-cli import`/`compile`, re-export readable-identical). `Main` itself stays deferred.
 - Modbus multi-instance form — revisit only on a real grounded example.
 - `WAIT`/`Jump` — closed as not needed (owner, 2026-07-14); grounding preserved in `ir/SPEC.md`.
 

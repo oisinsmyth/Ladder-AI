@@ -111,10 +111,15 @@ proceed without re-litigating intent.
 - **B-1 — Simultaneous jog buttons drive both solenoids. Confirmed fault.** Owner: "This is a
   fault." Candidate fix stands: mutual `NOT` terms on the jog paths
   (`ExtendDemand := ... AND NOT RetractDemand`-shape, and symmetric).
-- **B-2 — Power-cycle mid-run auto-resume. Confirmed fault.** Owner: "Needs addressed, is a
-  fault." Ties to new doc-06 rule **C-128** and `requirements.md` Q-01 (both resolved this pass).
-  Fix requires the OB100/`DB_PLC` startup machinery this wave's fix left waived — the waiver is
-  now withdrawn (see below).
+- **B-2 — Power-cycle mid-run auto-resume. Confirmed fault. FIXED 2026-07-17.** Owner: "Needs
+  addressed, is a fault." Ties to new doc-06 rule **C-128** and `requirements.md` Q-01 (both
+  resolved this pass). Fix required the OB100/`DB_PLC` startup machinery this wave's fix left
+  waived — the waiver is withdrawn (see below) and the machinery is now built, imported, and
+  compiled clean (`agent-tasks/02-startup-machinery.md`; whole-device 0/0, both new blocks
+  individually consistent, re-export readable-identical). C-111 full simulation-mode gating was
+  deliberately left out of this pass (scoped down per the task doc's own permission — the traced
+  auto-resume defect only needed the C-124/C-403/C-305 restart-safety half); flagged as a
+  follow-up, not silently dropped.
 - **B-3 — `BothSwitchesFault` acts on nothing. Ruling: annunciate only, don't gate.** Owner:
   "Should be assigned to an alarm bit in DB_Alarms for HMI to pick up." Resolution: wire it into a
   `DB_Alarms` category-word bit per C-501 so the HMI sees it; the owner did **not** ask for it to
@@ -145,9 +150,19 @@ proceed without re-litigating intent.
   alarm on top.
 
 **Startup-machinery waiver withdrawn (2026-07-17):** the demo-panel OB100/`DB_PLC` omission
-(D-1's prior waiver) is superseded by B-2's confirmed-fault ruling and the new C-128 rule. Building
-OB100 + `DB_PLC` + C-111 simulation gating is no longer optional for this project — queued
-alongside the B-docket fixes.
+(D-1's prior waiver) is superseded by B-2's confirmed-fault ruling and the new C-128 rule.
+**Built same day** (`agent-tasks/02-startup-machinery.md`): `DB_PLC` (`NUMBER 7`, `Simulation :
+Bool RETAIN = FALSE`) and `OB100` (`NUMBER 100`, `SECONDARYTYPE Startup`) imported and compiled
+clean. Notable finding for the project's own grounding: this is the **first proven OB write-path
+round trip** (`AITODO.md`'s "deliberately deferred" note previously said only OB1's *read* path
+was proven) — `converter to-xml --synthesize` and `openness-cli import`/`compile` both handled a
+hand-authored `SECONDARYTYPE Startup` OB correctly; TIA's own `Import()` silently corrected the
+system-input parameter set from the (wrongly copied, OB1-shaped) `Initial_Call`/`Remanence` pair
+to the real OB100 pair `LostRetentive`/`LostRTC`, and the committed IR now reflects that
+re-exported truth. Also newly proven: the known "Inconsistent blocks... cannot be exported"
+playbook entry (block-level `compile --block <name>`, callees before callers) applies to fresh
+OB/DB creation, not just modification. C-111 full simulation-mode gating scoped out of this pass
+(see B-2 above).
 
 ## C-11 — `RecentStart` two-writer handshake: marked as a temporary exception
 

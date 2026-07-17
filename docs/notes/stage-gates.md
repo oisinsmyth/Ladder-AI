@@ -4378,3 +4378,38 @@ Every item raised in `docs/notes/owner-questions.md` is now either closed (with 
 deliberately deferred/routed to a separate conversation - A-4, D-2, D-4, D-5 (deferred, tracked
 in `docs/notes/deferred-items.md`), F-3(b) (unprioritized tooling backlog), and register
 Q-02/Q-06/Q-09 (simply unanswered) are what remains.
+
+## S6/S7: agent-tasks dispatch board opened; B-2 (startup machinery) closed, first proven OB write-path round trip (2026-07-17)
+
+`agent-tasks/` created as the live dispatch board for the B-docket/C-item work the owner-questions
+batch surfaced - one file per task, a Portal-queue gating protocol for GenProject1's single-writer
+scratch project, explicit multi-agent-awareness in every task doc. Two agents worked it
+concurrently this session (as designed): one on task 08 (`ParkedTimeoutFault`, C-4), one on task
+02 (`02-startup-machinery.md`, B-2/D-1/Q-01/C-128).
+
+**Task 02 closed - `DB_PLC` + `OB100` built, imported, compiled clean.** `DB_PLC.Simulation`
+(C-305) plus `OB100` (`SECONDARYTYPE Startup`) forcing `Step` to idle on both stepped sequencers
+and clearing the S/R-driven/transient state named in C-124/C-403 (fault latches - `FaultActive`/
+`FTR`/`FTS` and the pusher/sequencer fault bits - deliberately excluded per C-124's carve-out).
+Whole-device compile 0 errors/0 warnings; both new blocks individually consistent (the known
+"Inconsistent blocks... cannot be exported" playbook entry applied and cleared exactly as
+documented); re-export readable-identical to the signed IR. One real content bug caught by the
+compile gate itself, not by review: `StartTimer` in the imported `FB_MotorFwdRevSystem` turned out
+to be a `TEMP` (scan-scoped, no persistence, not externally addressable), not a `Static` - a
+misread from static grep alone; the block-level compile error ("Tag ... StartTimer not defined")
+caught it immediately, removed from OB100's reset set. **New grounding for the project itself:**
+AITODO's "OB1 write-path never proven" note was specifically about `Main`'s own template quirks -
+narrowed now that a hand-authored, non-`Main` OB has round-tripped clean; `converter to-xml
+--synthesize` handles a sidecar-less OB correctly, and TIA's own `Import()` silently corrects an
+OB's system-input parameter set to the real one for its `SecondaryType` (caught via re-export
+diff: my authored `Initial_Call`/`Remanence` - copied from OB1 - got replaced with OB100's actual
+`LostRetentive`/`LostRTC`). C-111 full simulation-mode gating deliberately scoped out of this pass
+(the traced B-2 defect only needed the restart-safety half); flagged as a follow-up.
+
+**Task 08 found a real converter gap (D-6), not yet resolved.** Modifying a network that already
+has real (non-synthesized) sidecar data from a prior export hits `IrFormatException: Network N:
+IR has X move(s) but the sidecar records Y` - affects every remaining queued task except 02 (all
+of them touch existing, already-exported networks). Full writeup: `docs/notes/deferred-items.md`
+D-6; concrete case: `gen/GenProject1/fix-wave-1-reviews.md` C-4 / `agent-tasks/08-
+parkedtimeoutfault-recovery.md`. Per hard rule 7, this is a converter gap to report, not something
+to hand-patch around - tasks 03/04/05/06/07/09 are blocked on it, flagged in `agent-tasks/README.md`.

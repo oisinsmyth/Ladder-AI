@@ -66,7 +66,7 @@ if it's still open, your IR draft + preflight will very likely hit the same wall
 
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
-| 1 | [`02-startup-machinery.md`](02-startup-machinery.md) | in-progress | main session, 2026-07-17 | yes |
+| 1 | [`02-startup-machinery.md`](02-startup-machinery.md) | **done** | - | yes |
 | 2 | [`03-jog-interlock.md`](03-jog-interlock.md) | ready (⚠ likely hits D-6) | - | yes |
 | 3 | [`04-bothswitchesfault-alarm-wiring.md`](04-bothswitchesfault-alarm-wiring.md) | ready (⚠ likely hits D-6) | - | yes |
 | 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | ready (⚠ likely hits D-6) | - | yes |

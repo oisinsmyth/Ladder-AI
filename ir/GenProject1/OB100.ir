@@ -8,8 +8,8 @@ COMMENT "Dedicated startup-reset block (C-124/C-305/C-403), run once by the CPU 
 
 INTERFACE
   INPUT
-    Initial_Call : Bool BAREPARAM INFORMATIVE "Initial call of this OB"
-    Remanence : Bool BAREPARAM INFORMATIVE "=True, if remanent data are available"
+    LostRetentive : Bool BAREPARAM INFORMATIVE "True if retentive data are lost"
+    LostRTC : Bool BAREPARAM INFORMATIVE "True if date and time are lost"
   CONSTANT
 
 NETWORK 1 "Shredder sequencer - force Step idle, clear transient state (C-124)"
@@ -27,7 +27,6 @@ NETWORK 2 "Pusher control - force Step idle, clear transient state (C-124)"
 
 NETWORK 3 "Motor FB - clear S/R-driven and transient bits (C-403), fault latches excluded"
   RCOIL iDB_MotorFwdRevSystem_Shredder.Pasue := AlwaysTrue
-  RCOIL iDB_MotorFwdRevSystem_Shredder.StartTimer := AlwaysTrue
   RCOIL iDB_MotorFwdRevSystem_Shredder.CycleDelay := AlwaysTrue
   RCOIL iDB_MotorFwdRevSystem_Shredder.IO.HandIntervention := AlwaysTrue
   RCOIL iDB_MotorFwdRevSystem_Shredder.IO.HandStartSignal := AlwaysTrue

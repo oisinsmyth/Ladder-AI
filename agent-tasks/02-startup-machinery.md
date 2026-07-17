@@ -2,7 +2,7 @@
 task: 02-startup-machinery
 source: owner-questions B-2 / D-1 / Q-01 (doc 06 C-128, C-124, C-403, C-305)
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: ready
+status: done (2026-07-17) — see gen/GenProject1/fix-wave-1-reviews.md B-2 and requirements.md Q-01 for the outcome
 queue-order: 1
 ---
 
