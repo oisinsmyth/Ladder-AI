@@ -819,9 +819,15 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   always always require a manual restart unless their is a documented exception." Not
   configurable/automatic — manual restart only, consistent with the new C-128 rule and Q-01's
   resolution.
-- **Q-09 — Home of the 8 s spin-down pause.** No `DB_Settings` member exists for REQ-006's 8 s
-  pause; a per-instance `ReverseDelay = 8.0` exists on the motor instance. Confirm that is the
-  intended tunable (C-307 per-instance home) or direct a named setting.
+- **Q-09 — Home of the 8 s spin-down pause. RESOLVED by verification (2026-07-17) — no owner
+  input needed, this was answerable from existing evidence.** Grep-confirmed:
+  `MotorFwdRevIOSet.ReverseDelay : Real` (the motor FB's own interface UDT, genuinely
+  per-instance) is actually consumed inside `FB_MotorFwdRevSystem` — feeds the standard
+  HMI-time-conversion pair (`Time`/`PauseTimeMS`) that drives the FB's own `ReversalPauseTimer` —
+  and `iDB_MotorFwdRevSystem_Shredder`'s own start value is `8.0`, an exact match to REQ-006's
+  stated 8 s. This is precisely C-307's per-instance-setting shape (owned by the one instance that
+  uses it, commissioning default as the iDB start value) — no `DB_Settings` member is needed or
+  would be architecturally correct here. No fix required; the existing home was already right.
 - **Q-10 — Overload annunciation. RESOLVED (owner ruling, 2026-07-17).** "No, these are
   different. Their is Software overload and their is hardware overload, the trip is both hardware
   overcurrent or overload, while the software is in the effort of catching the overload before
