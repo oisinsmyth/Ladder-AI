@@ -4271,3 +4271,25 @@ keeping independent of the project they were found against:
   per-block flag; `compile --block <name>` clears it) held for every block touched across this
   whole run, including one flagged inconsistent from the very first Portal touch and never
   actually edited — a pre-existing condition, not a regression, cleared the same way.
+
+## Process rule: LAD/IR work moves to a dedicated sub-agent, no exceptions (2026-07-17)
+
+**Owner decree:** the deliverable is an AI capable of programming ladder logic, not ladder logic
+produced by whichever agent the owner happens to be talking to. From this point, the main
+conversational agent never reads, writes, reviews, or explains LAD/IR content itself — it plans,
+dispatches to the `lad-coder` sub-agent (`.claude/agents/lad-coder.md`), verifies the actual
+diff/compile evidence handed back, and presents to the engineer. Recorded as CLAUDE.md hard rule 8.
+
+Scope, settled after pushback and four clarifying questions (all "recommended" options chosen):
+skill gaps don't create an exception — `lad-coder` still does skill-less stages manually, to the
+same contract, rather than the dispatcher doing it inline; scope is the full set (IR edits, the
+compile/import/export loop tied to a change, read-only `review-*`/`explain-plc-block` requests,
+and `patterns/` edits); no size exception — a one-line fix goes through the sub-agent the same as
+a new block; and a dedicated agent type was worth building rather than re-deriving a fresh prompt
+per dispatch each time. PC-side tooling (`openness-cli`, `converter`, `extract/`, `tests/golden`)
+is explicitly unaffected — normal software rules, no dispatch required.
+
+This generalizes a pattern already proven useful here: docs/15's adversarial-review-in-fresh-context
+design already isolates the review skills from whichever context wrote the logic being reviewed,
+specifically so the reviewer isn't biased by having just authored it. This extends the same
+isolation to authorship itself, not just review.

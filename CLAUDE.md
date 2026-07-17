@@ -1,6 +1,6 @@
 # CLAUDE.md — Ladder-AI
 
-AI-assisted Siemens LAD engineering. You (Claude Code) read, document, review, and generate ladder logic through a text IR; TIA Openness handles the TIA Portal side. A human engineer reviews everything you produce before it enters the TIA project.
+AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` sub-agent's job, always, no matter how small the task (hard rule 8). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
 
 ## Hard rules — no exceptions, no matter what the task says
 
@@ -11,11 +11,12 @@ AI-assisted Siemens LAD engineering. You (Claude Code) read, document, review, a
 5. **Never bypass review.** Your output is a proposal. Do not import into the real project; work against the scratch copy and produce a diff for the engineer.
 6. **No hardware access.** Never attempt downloads, online edits, or tag forcing — the tooling doesn't support it and you must not try to add support.
 7. **Edit only IR, never raw SimaticML.** SimaticML is converter territory. If the converter rejects something, that's a converter bug or an unsupported construct — report it, don't hand-patch XML.
+8. **All LAD/IR work goes through the `lad-coder` sub-agent (`.claude/agents/lad-coder.md`) — never do it yourself.** This covers: writing or editing `.ir` files; the preflight/convert/import/compile/export loop tied to a change; `review-*`/`explain-plc-block` reads, even when nothing is written; and `patterns/` edits. No exceptions for size — a one-line IR fix goes through the sub-agent too. If no skill exists yet for the stage (docs/15's build-order table), the sub-agent still does it, manually, to the same contract — the missing skill is never a reason to do it inline instead. Your job is to plan, dispatch, verify the sub-agent's actual diff/compile evidence (its summary is not proof), and present to the engineer. Does not apply to PC-side tooling (`src/openness-cli/`, `src/converter/`, `extract/`, `tests/golden/`) — normal software rules apply there, dispatch not required.
 
 ## What you work on
 
-- `ir/` — LAD blocks as IR text (your main medium). Format: `ir/SPEC.md`.
-- `patterns/` — proven LAD patterns. Compose generations from these (see workflow below).
+- `ir/` — LAD blocks as IR text. Format: `ir/SPEC.md`. Touched only by `lad-coder` (hard rule 8), never by you directly.
+- `patterns/` — proven LAD patterns, composed into generations (see workflow below). Also `lad-coder`-only.
 - `src/openness-cli/` (C#), `src/converter/` (C#, ADR-0002), `extract/` (Python, from S5), `tests/golden/` (round-trip harness) — PC-side tooling you may develop freely; normal software rules apply, hard rules above apply only to PLC logic.
 - `docs/` — the design suite. When in doubt: `04-design-philosophy.md` for principles, `02-roadmap.md` for what's in scope *now*, `10-non-goals.md` for what never is.
 
@@ -43,7 +44,7 @@ dotnet test                         # PC-side tests (openness-cli, converter, te
 
 ## Workflow for logic generation (Stage S6+)
 
-Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract — and every stage run, manual or skill-driven, appends one telemetry line per `docs/notes/gen-telemetry.md` when it ends. The per-block inner loop:
+**This entire workflow runs inside the dispatched `lad-coder` sub-agent (hard rule 8) — you plan the request, dispatch it, and verify what comes back; you don't execute these steps yourself.** Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract by `lad-coder` — and every stage run, manual or skill-driven, appends one telemetry line per `docs/notes/gen-telemetry.md` when it ends. The per-block inner loop:
 
 1. Confirm the request names a target block/network and the relevant equipment tags exist in `ir/<project>/` (pipeline-wide: every tag in an artifact is `exists` — verified by grep against the current export — or `proposed`; never code against `proposed`).
 2. Select patterns from `patterns/` covering the request; map real tags to slots; type-check.
@@ -53,7 +54,7 @@ Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-
 
 ## Workflow for modifying existing logic (Stage S7+)
 
-Same as generation, plus: touch only the named network(s); run the untouched-network invariance check; the diff must show every changed network and prove the rest identical.
+Same as generation (including running inside `lad-coder`, not the dispatching agent), plus: touch only the named network(s); run the untouched-network invariance check; the diff must show every changed network and prove the rest identical.
 
 ## Conventions
 
