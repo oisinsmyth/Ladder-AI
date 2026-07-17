@@ -41,47 +41,32 @@ rush").
 pipeline (docs/15, ADR-0004) was adopted 2026-07-16 and largely built through 2026-07-17: all
 four reviewer-adjacent skills exist and are blind-validated (`review-simplicity`,
 `review-conventions`, `review-functional`, `gen-architecture`, alongside `explain-plc-block`);
-the first pipeline artifacts live in `gen/GenProject1/` (69-REQ requirements register,
-architecture baseline, fix-wave records, telemetry); GenProject1's functional verdict stands at
+the first pipeline artifacts live in `gen/test-project001/` (69-REQ requirements register,
+architecture baseline, telemetry); test-project001's functional verdict stands at
 45 implemented / 7 partial / 6 unimplemented / 10 disarmed / **0 contradicted** after fix wave 1
 (2026-07-17, device compile 0/0, invariance proven, triple-reviewed). Exit criterion (ten
 approved requests) not yet closed — counting rule awaits the owner (owner-questions D-4). Full
 history: stage-gates entries 2026-07-16 → 2026-07-17.
 
-## Current task: owner-questions batch fully resolved (2026-07-17); work dispatched to agent-tasks/
+## Current task: none
 
-`docs/notes/owner-questions.md`'s 2026-07-17 batch (~50 items, three same-day rounds) is fully
-resolved and the doc has been cleared back to empty (it's a reusable batch-questions doc, not a
-permanent log — see its own purpose note). Everything that came out of it now lives in its proper
-permanent home:
+The 2026-07-17 owner-questions batch, the agent-tasks dispatch board it spawned, and the
+GenProject1 -> test-project001 codename cleanup are all closed and documented (`docs/notes/
+stage-gates.md`'s dated entries; `docs/notes/owner-questions.md` is back to empty per its own
+reusable-template policy; `agent-tasks/` is back to a template folder). Nothing in-flight right
+now.
 
-- **Rule/design changes** — `docs/06-lad-conventions.md` (new C-007/C-128/C-608–C-611, clarified
-  C-103/C-115/C-117/C-121/C-123/C-507/C-604/C-605), `.claude/skills/gen-architecture/SKILL.md`
-  (reuse-first carving, A-1), `docs/15-generation-pipeline.md` (3-skill Build-phase split pulled
-  to build-order step 6, A-2/A-3).
-- **Register resolutions** — `gen/GenProject1/requirements.md` (Q-01/07/08/10/11/12(partial)/13/
-  14/15 closed, Q-04 partial+deferred-numbers, REQ-028 semantics fixed).
-- **Actionable work, dispatched** — **`agent-tasks/`** is now the live dispatch board: nine
-  self-contained task docs (the B-docket fixes + C-3/C-4/C-5 items) with a Portal-queue gating
-  protocol for GenProject1's scratch project (see `agent-tasks/README.md`), plus two discussion
-  tasks (A-4 S7-ordering, D-4 stage-gates review) prepped for whenever the owner wants to walk an
-  agent through them. **Point agents at files in that folder for any of this work.**
-- **Deferred (decided, timing only)** — `docs/notes/deferred-items.md` (D-2 settings rework, D-5
-  pattern blind-draft gap, Q-04's setpoint numbers).
-- **Full dated history** — `docs/notes/stage-gates.md`'s three "owner-questions batch pass" /
-  "round 2" / "round 3" entries (2026-07-17).
-
-**Still genuinely open, no action pending from this session:**
+**Open backlog (non-blocking):**
 - Register questions with no clarification blocking them, just unanswered — `Q-02` (5 settings
   numbers), `Q-03` (local/remote selector semantics), `Q-05` (motor count), `Q-06` (start button
   action), `Q-09` (spin-down pause home), `Q-12` residual (zeroable-clock reset behavior) — all
-  tracked in `gen/GenProject1/requirements.md`'s Open Questions section.
-- `F-3(b)` (C-003 enforcement) and the two pre-existing tooling items below — non-blocking backlog.
-
-**Small/tooling queue (non-blocking):** converter reporter bug (F-1, confirmed real — C-301 count
-vs printed findings); converter capture of `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR
-header lines (would make C-201's author/revision mechanically checkable — still unbuilt); C-003's
-`iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`.
+  tracked in `gen/test-project001/requirements.md`'s Open Questions section.
+- `F-3(b)` (C-003 enforcement).
+- Converter reporter bug (F-1, confirmed real — C-301 count vs printed findings); converter
+  capture of `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's
+  author/revision mechanically checkable — still unbuilt); C-003's `iDB_<FBName>_<Instance>`
+  sub-clause unenforced in `converter review`.
+- Deferred items (decided in principle, timing only): `docs/notes/deferred-items.md`.
 
 `docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever
 opens.
@@ -103,7 +88,7 @@ opens.
   owner's call. (Read path works: OB1 exports/converts fine, proven 2026-07-16.) **Narrowed
   2026-07-17:** this is now specifically about `Main`'s own template quirks, not "OB write support"
   generally — a hand-authored, non-`Main` OB (`OB100`, `SECONDARYTYPE Startup`) round-tripped clean
-  end-to-end (`agent-tasks/02-startup-machinery.md`: `converter to-xml --synthesize`,
+  end-to-end (startup machinery task, 2026-07-17: `converter to-xml --synthesize`,
   `openness-cli import`/`compile`, re-export readable-identical). `Main` itself stays deferred.
 - Modbus multi-instance form — revisit only on a real grounded example.
 - `WAIT`/`Jump` — closed as not needed (owner, 2026-07-14); grounding preserved in `ir/SPEC.md`.
