@@ -305,8 +305,9 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
   restarts the 180 s clock; the count keeps accumulating across any run of reversals each less
   than 180 s apart, however long that run lasts in total. `ReversalWindowTime` stays the tunable
   span (adjustable, per C-307). Fix wave 1's implementation used the wrong semantics (one fixed
-  180 s window from the first reversal only) — a genuine functional defect, queued in the
-  B-docket (`gen/GenProject1/fix-wave-1-reviews.md`) for `gen-block-modify-fix`.
+  180 s window from the first reversal only) — a genuine functional defect. **Fixed and compiled
+  clean 2026-07-17** (`agent-tasks/06-reversal-window-rearm-fix.md`) — see
+  `gen/GenProject1/fix-wave-1-reviews.md` B-5 for the built shape.
 
 ### REQ-029 — Spin-up overcurrent suppression
 - **Text:** Overcurrent is ignored for approximately 2–3 s at shredder startup so the motor can

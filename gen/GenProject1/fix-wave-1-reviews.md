@@ -150,15 +150,21 @@ proceed without re-litigating intent.
   once (not just freezes `Step`); re-enabling `Fitted` is never itself a start condition — a fresh
   normal call (cycle trigger) is required afterward, consistent with the new **C-128** no-auto-
   restart rule.
-- **B-5 — Reversal-window semantics. Partially answered — see open item below.** Owner: "May nor
-  understand 100% but I can make a educated guess, you are looking to know if its ok to reuse the
-  same reversal logic plus timer for overload events and yes that is ok." Reading: this confirms
-  the REQ-028 "5 in 3 minutes" reversal-count mechanism (timer + counter) is a **single shared
-  piece of logic used regardless of what triggers a reversal** (jam-clear reversal or an
-  overcurrent-triggered reversal alike) — no separate counting family needed per cause. **Not yet
-  answered:** the original question — does the 3-minute window re-trigger on every new reversal
-  (re-arming) or run once fixed from the first reversal? The rung currently implements the fixed
-  form; the comment claims re-arming. Carried to the consolidated clarification list.
+- **B-5 — Reversal-window semantics. FIXED 2026-07-17** (`agent-tasks/06-reversal-window-rearm-fix.md`).
+  Owner: "May nor understand 100% but I can make a educated guess, you are looking to know if its
+  ok to reuse the same reversal logic plus timer for overload events and yes that is ok." Reading:
+  this confirms the REQ-028 "5 in 3 minutes" reversal-count mechanism (timer + counter) is a
+  **single shared piece of logic used regardless of what triggers a reversal** (jam-clear reversal
+  or an overcurrent-triggered reversal alike) — no separate counting family needed per cause.
+  **The window-semantics question itself was resolved separately, round 3 of the owner-questions
+  batch pass** ("it has to run clean for 180 second before reset" — re-arming, not fixed; see
+  `requirements.md` REQ-028). Built: `FB_ShredderSequencer` Network 3's `TON` now reads
+  `IN := NOT (IO.Step = 60 AND NOT ReversalStepEdgeMem) AND ReversalCount > 0` — IN drops false
+  the scan a new reversal is detected (edge-tested against `ReversalStepEdgeMem`'s own
+  previous-scan value, no cross-network staleness), resetting `ET`/`Q`, then re-arms. Compiled
+  clean (whole-device 0/0, block + all flagged-inconsistent callers cleared); re-export diffed
+  against pre-edit `HEAD` — only Network 3 (the `TON` line + new comment) and Network 4's comment
+  changed, every other network byte-identical.
 - **B-6 — `EndTravelTimer` runs through pressure holds. Ruling: add suppression.** Owner: "If
   another fault or expected event can explain why the pusher isn't fully extended, then interrupt
   that timer." Resolution: gate/hold `EndTravelTimer` during a recognized pressure-hold (REQ-046)

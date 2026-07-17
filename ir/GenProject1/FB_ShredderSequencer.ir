@@ -136,10 +136,11 @@ NETWORK 2 "HMI Time Conversions"
   CONVERT(EN := ENO, IN := Time) => ReversalRetryPauseTimeMS
 
 NETWORK 3 "Reversal Re-Arm Window Timer"
-  TON(ReversalWindowTimer, IN := ReversalCount > 0, PT := ReversalWindowTimeMS)
+  COMMENT "Retriggerable on-delay built from TON+edge (C-406/C-404 - no TONR/TOF exists to do this natively). IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true. Fixed 2026-07-17 (owner ruling, B-5/REQ-028): the prior rung read IN := ReversalCount > 0 alone, a level condition that only ever ran once from the first reversal - a fixed window, not the re-arming one this network's own title always claimed (C-608)."
+  TON(ReversalWindowTimer, IN := NOT (IO.Step = 60 AND NOT ReversalStepEdgeMem) AND ReversalCount > 0, PT := ReversalWindowTimeMS)
 
 NETWORK 4 "Reversal Counter"
-  COMMENT "Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-). Resets on ReversalWindowTimer.Q (the window elapsed with nothing new) or a fault reset - see ReversalCount's own comment for why this is a re-arming window, not a per-cycle count."
+  COMMENT "Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-; ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction). Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset."
   COIL ReversalStepEdge := IO.Step = 60 AND NOT ReversalStepEdgeMem
   COIL ReversalStepEdgeMem := IO.Step = 60
   MOVE(EN := ReversalWindowTimer.Q OR IO.FaultReset, IN := 0) => ReversalCount
@@ -478,27 +479,47 @@ NETWORK 2
     destwire = 151
 NETWORK 3
   compileunit = D
-  access ReversalCount = 21 LocalVariable
-  access ReversalWindowTimeMS = 22 LocalVariable
-  constant 0 = 23 Int
+  access ReversalCount = 23 LocalVariable
+  access ReversalStepEdgeMem = 22 LocalVariable
+  access IO.Step = 21 LocalVariable
+  access ReversalWindowTimeMS = 24 LocalVariable
+  constant 0 = 26 Int
+  constant 60 = 25 Int
   timer 0
-    tonpartuid = 25
+    tonpartuid = 31
     kind = ton
     version = 1.0
     timetype = Time
-    instanceuid = 26
+    instanceuid = 32
     instancescope = LocalVariable
     instancepath = ReversalWindowTimer
-    rail = 33
-    step 0 compare
+    rail = none
+    step 0 not
+      uid = 29
+      rail = 39
+      step 0 compare
+        partname = Eq
+        uid = 27
+        srctype = Int
+        left tag = 21 34
+        right literal = 25 35
+        out = 36
+      step 1 contact
+        uid = 28
+        operand = 22
+        operandwire = 37
+        negated = true
+        out = 38
+      out = 40
+    step 1 compare
       partname = Gt
-      uid = 24
+      uid = 30
       srctype = Int
-      left tag = 21 28
-      right literal = 23 29
-      out = 30
-    preset tag = 22 31
-    et = 32 27
+      left tag = 23 41
+      right literal = 26 42
+      out = 43
+    preset tag = 24 44
+    et = 45 33
 NETWORK 4
   compileunit = 12
   access ReversalStepEdgeMem = 22 LocalVariable
