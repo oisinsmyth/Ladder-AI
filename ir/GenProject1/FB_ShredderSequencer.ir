@@ -11,6 +11,7 @@ INTERFACE
   STATIC
     IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface (C-115) - FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
       CycleStart : Bool
+      AutoStartSignal : Bool
       CycleStop : Bool
       DownstreamRunning : Bool
       SystemHealthy : Bool
@@ -29,6 +30,8 @@ INTERFACE
       RunDischargeConv : Bool
       RunInfeedConv : Bool
       EnableUpstream : Bool
+      UPSEnable : Bool
+      Run : Bool
       PreStartSounder : Bool
       InCycle : Bool
       MotorReverseCmd : Bool

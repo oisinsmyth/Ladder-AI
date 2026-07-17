@@ -2,7 +2,7 @@
 task: 09-sequencer-interface-extension
 source: owner-questions C-5 (doc 06 C-115)
 portal: yes — GenProject1 scratch project (see agent-tasks/README.md queue before importing)
-status: ready
+status: done (2026-07-17) — mini-manifest signed off, built and compiled clean; see gen/GenProject1/fix-wave-1-reviews.md C-5
 queue-order: 8
 ---
 

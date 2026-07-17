@@ -2,6 +2,7 @@ TYPE UDT_ShredderSequencerIO
   ROOTID 0
   MEMBERS
     CycleStart : Bool
+    AutoStartSignal : Bool COMMENT "C-115 handshake vocabulary (enable in), added 2026-07-17 owner ruling (C-5) - every equipment FB carries this, stepped or not, even where the caller has nothing to wire it from yet. Distinct from CycleStart above: CycleStart is this plant's own operator start command (REQ-001), not the site's generic chain-enable name. Unwired by FC_ControlMain for now."
     CycleStop : Bool
     DownstreamRunning : Bool
     SystemHealthy : Bool COMMENT "In (FC_ControlMain, from DB_Input.Control_Healthy): safety/control circuit healthy. Loss asserts StopCmd - every step aborts to Idle and a fresh CycleStart press is required after recovery, so an E-stop reset can never self-restart the plant (REQ-062)."
@@ -20,6 +21,8 @@ TYPE UDT_ShredderSequencerIO
     RunDischargeConv : Bool
     RunInfeedConv : Bool
     EnableUpstream : Bool
+    UPSEnable : Bool COMMENT "C-115 handshake vocabulary (ready out), added 2026-07-17 owner ruling (C-5) - what a downstream instance would chain off, per the site's admitted chained-permissive-enable pattern. Distinct from EnableUpstream above: that's this plant's own upstream-conveyor enable output (REQ-011, wired to DQ9_SYS_EnableUpstream), not the site's generic ready-out name. Unwired by FC_ControlMain for now."
+    Run : Bool COMMENT "C-115 handshake vocabulary (running out), added 2026-07-17 owner ruling (C-5) - the site's real member name for this concept (patterns/motor-dol, patterns/chained-permissive-enable), not doc 06's illustrative 'running'. Unwired by FC_ControlMain for now; distinct from InCycle below (InCycle is this block's own in-cycle status, not the site's standard handshake name)."
     PreStartSounder : Bool
     InCycle : Bool
     MotorReverseCmd : Bool

@@ -251,12 +251,25 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   Verified 2026-07-17 (grep-confirmed against the current committed IR): Network 10 reads
   `MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0) => IO.Step`,
   exactly the drafted fix. No separate Portal round trip needed for this entry specifically.
-- **C-5 (C-115) — closed, design change queued.** Owner: "They should expose that also, Always,
-  just ignore when not needed." `FB_ShredderSequencer`'s and `FB_PusherControl`'s interface UDTs
-  need `enable`/`ready`/`running`-equivalent members added (per doc 06 C-115's new clarification)
-  even though this integration may not wire them yet. Queued as an interface-extension item
-  alongside the B-docket work — an interface change, so it needs `gen-block-modify-purpose`
-  (A-2/A-4) rather than `gen-block-modify-fix`.
+- **C-5 (C-115) — BUILT AND COMPILED CLEAN, 2026-07-17** (`agent-tasks/09-sequencer-interface-
+  extension.md`). Owner: "They should expose that also, Always, just ignore when not needed." A
+  mini-manifest was presented and signed off (2026-07-17: "Go with (a), just document the
+  distinction") before coding, per docs/15 hard gate 1 (interface change). Added the site's real
+  C-115 vocabulary — `AutoStartSignal` (enable in), `UPSEnable` (ready out), `Run` (running out),
+  taken from `patterns/chained-permissive-enable`/`FB_MotorFwdRevSystem`'s own interface, not doc
+  06's illustrative names — to both `UDT_PusherIO` and `UDT_ShredderSequencerIO`. Deliberately
+  **unwired** by `FC_ControlMain` (interface-only, no behavior change, per the task's own scope).
+  Both UDTs already had same-family, differently-scoped members in the way
+  (`UDT_PusherIO.Enable` — an internal cycle-acceptance permissive, not the chain-enable concept;
+  `UDT_ShredderSequencerIO.EnableUpstream` — this plant's own upstream-conveyor output, not the
+  generic ready-out name) — kept as-is per the sign-off, each new member's comment states the
+  distinction explicitly rather than renaming a proven existing member just to apply a doc-06 rule.
+  Compiled clean: both `--type` compiles succeeded, whole-device 0/0, the Import()-cascade to
+  `FB_ShredderSequencer`/`FB_PusherControl`/their iDBs/`FC_ControlMain`/`OB100` cleared via
+  block-level compile (same known playbook pattern). Re-export diffed byte-identical against the
+  authored UDTs; both FBs' own network logic confirmed untouched (only their inline UDT-shape
+  reflection picked up the three new members, no logic changed). This was the last item in the
+  agent-tasks Portal queue — it's now empty/complete.
 - **C-7 (C-507) — closed, no rule or code change needed.** Owner's clarification (recorded
   verbatim in doc 06 C-507) resolves the apparent tension: GenProject1's latched,
   `FaultReset`-cleared X1–X8 alarm bits were never actually a C-507 exception case — PLC fault

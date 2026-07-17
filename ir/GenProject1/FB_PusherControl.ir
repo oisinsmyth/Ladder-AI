@@ -13,6 +13,7 @@ INTERFACE
       Step : Int
       Fitted : Bool
       Enable : Bool
+      AutoStartSignal : Bool
       Mode : Int
       HopperHighLevel : Bool
       ManualCycleCmd : Bool
@@ -34,6 +35,8 @@ INTERFACE
       PressureClearResumeDelay : Real
       PressureTripCountThreshold : Int
       Cycling : Bool
+      UPSEnable : Bool
+      Run : Bool
       Blocked : Bool
       EndTravelTimeoutFault : Bool
       ParkedTimeoutFault : Bool

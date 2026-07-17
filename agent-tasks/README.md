@@ -73,7 +73,11 @@ if it's still open, your IR draft + preflight will very likely hit the same wall
 | 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | **done** | - | yes |
 | 6 | [`07-endtraveltimer-suppression.md`](07-endtraveltimer-suppression.md) | **done** | - | yes |
 | 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | **done** (carried through by task 03's whole-file round trip; see `fix-wave-1-reviews.md` C-4) | - | conditional (see file) |
-| 8 | [`09-sequencer-interface-extension.md`](09-sequencer-interface-extension.md) | in-progress | dispatch-session-09-c5ext, 2026-07-17 | yes |
+| 8 | [`09-sequencer-interface-extension.md`](09-sequencer-interface-extension.md) | **done** | - | yes |
+
+**Portal queue empty — all 8 tasks closed as of 2026-07-17.** See each row above and
+`gen/GenProject1/fix-wave-1-reviews.md` for what landed. Only the `01` grep-confirm task and the
+two discussion tasks below have no further action pending here.
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**
 
