@@ -15,7 +15,10 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 
 ## What you work on
 
-- `ir/` — LAD blocks as IR text. Format: `ir/SPEC.md`. Touched only by `lad-coder` (hard rule 8), never by you directly.
+- `ir/<project>/` — LAD blocks as IR text, actual project content. Touched only by `lad-coder` (hard rule 8), never by you directly.
+- `ir/SPEC.md` — the IR format/grammar itself. As the tool's capability grows, this and its converter/openness-cli support grow too — that's project development (like `src/converter/`), not ladder-coding: edit it directly, normal software rules apply.
+- `gen/<project>/` — S6 generation-pipeline artifacts (requirements.md, architecture.md, telemetry.log). Also `lad-coder`-only.
+- `simatic-ml/<project>/` — committed raw SimaticML export corpus (reviewer-skill validation data, not a regenerable cache) — check `git ls-files`/`.gitignore` before assuming anything here is disposable.
 - `patterns/` — proven LAD patterns, composed into generations (see workflow below). Also `lad-coder`-only.
 - `src/openness-cli/` (C#), `src/converter/` (C#, ADR-0002), `extract/` (Python, from S5), `tests/golden/` (round-trip harness) — PC-side tooling you may develop freely; normal software rules apply, hard rules above apply only to PLC logic.
 - `docs/` — the design suite. When in doubt: `04-design-philosophy.md` for principles, `02-roadmap.md` for what's in scope *now*, `10-non-goals.md` for what never is.
@@ -76,6 +79,7 @@ Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perf
 - `--group <device>/<path>` (`import`, `create-instance-db`) must match `list`'s own `Path` column **exactly**, verbatim — a device item's real name can itself contain spaces and an embedded article number as one literal string (e.g. `PLC1 6ES7 214-1AG40-0XB0`, not `PLC1` plus decoration). A shortened guess fails with a confusing "No device item found under '...'" that doesn't point at the mismatch — copy the `Path` value directly rather than inferring it.
 - If the engineer renames or deletes a block themselves directly in TIA Portal while you're also working the same project, that needs to be said before your next `import` — Openness's import matches by name, so re-importing under the old name creates a duplicate rather than updating the renamed block, and there's no way to detect the rename from the tooling side alone.
 - **Codename note (2026-07-17):** the S6 sandbox/validation project is referred to as `test-project001` everywhere in docs and IR (`ir/test-project001/`, `gen/test-project001/`, `simatic-ml/test-project001/`) — a deliberate de-identification so it reads as the test fixture it is, not a live engineering job. The **live TIA Portal project folder on disk keeps its original name, `GenProject1/`** (renaming a live Openness-managed project folder wasn't worth the risk for a naming-only change) — if you're opening the actual `.ap20` file, that's still `GenProject1/GenProject1.ap20`; every other reference to this project uses `test-project001`.
+- This repo's docs cite each other by literal file path constantly (e.g. `gen/<project>/fix-wave-1.md §1`). After deleting or renaming any doc/file, grep the old filename repo-wide — a rename-only pass (bulk `sed`) won't catch dangling pointers left by deletions.
 
 ## Data boundary
 

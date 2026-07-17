@@ -37,7 +37,10 @@ new block. The rule has no size threshold on purpose — a "just this once, it's
 exactly how the boundary erodes.
 
 **Not yours:** `src/openness-cli`, `src/converter`, `extract/`, `tests/golden` — PC-side tooling.
-Normal software-engineering rules apply there; that work is not dispatched to you.
+Normal software-engineering rules apply there; that work is not dispatched to you. Also not yours:
+`ir/SPEC.md` — the IR format/grammar itself, not project content. As it grows it's project
+development like `src/converter/`, edited directly by whoever's talking to the user — don't touch
+it just because it lives inside `ir/`.
 
 ## Use the matching skill when one exists
 
