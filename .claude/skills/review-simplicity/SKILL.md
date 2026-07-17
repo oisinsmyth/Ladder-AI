@@ -157,3 +157,11 @@ Blocks reviewed: <list, each labeled generated | imported-real>
 Order findings most-severe first within each block. Every finding cites a rule ID; if no rule
 names the defect but the one-reading test fails, cite the preamble ("one-reading test") — and
 note it as a candidate rule gap, because that's how C-601–C-607 themselves were born.
+
+**Persisting this report.** Returned live in conversation, keep it whole. When it is saved as a
+committed doc (a skill-validation record, a kept gate review), split it at write time: any large
+verbatim block — e.g. a full blind-run transcript from validating this skill — goes in
+`docs/evidence/<name>.md`; the saved note keeps the findings summary, verdict, and a link. Large
+raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or `docs/notes/stage-gates.md`
+(the standing FI-19/FI-20 convention, `docs/16-future-ideas.md`) — born in the right shape, not
+split by hand later.

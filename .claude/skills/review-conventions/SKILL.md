@@ -367,6 +367,14 @@ Order findings most-severe first within each block. Every finding cites a rule I
 C-0xx–C-5xx rule names cites the section principle it offends and is marked **"candidate rule
 gap"** — that's how new rules get born here.
 
+**Persisting this report.** Returned live in conversation, keep it whole. When it is saved as a
+committed doc (a skill-validation record, a kept gate review), split it at write time: the large
+verbatim block — the `## Mechanical findings` `converter review` dump, plus any full blind-run
+transcript — goes in `docs/evidence/<name>.md`; the saved note keeps only the AI findings, tables,
+verdict, and a link to it. Large raw dumps live in `docs/evidence/`, never inline in `docs/notes/`
+or `docs/notes/stage-gates.md` (the standing FI-19/FI-20 convention, `docs/16-future-ideas.md`) —
+born in the right shape, not split by hand later.
+
 ## Cost & scoping
 
 A full-corpus run is **gate-review-sized**: the sibling simplicity review measured ~20 minutes /

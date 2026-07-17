@@ -188,3 +188,11 @@ Take the register and corpus git hashes from the invoker if provided (`git log -
 <path>` is the source of truth); write `unknown` rather than guessing. Order the per-REQ trace in
 register order — the register's numbering is the report's spine. Every non-`implemented` verdict
 must be findable in a rollup section; nothing material lives only in the trace table.
+
+**Persisting this report.** Returned live in conversation, keep it whole. When it is saved as a
+committed doc (a skill-validation record, a kept gate review), split it at write time: any large
+verbatim block — a full blind-run transcript, or the complete per-REQ trace when it runs long —
+goes in `docs/evidence/<name>.md`; the saved note keeps the rollup sections, verdict, and a link.
+Large raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or
+`docs/notes/stage-gates.md` (the standing FI-19/FI-20 convention, `docs/16-future-ideas.md`) —
+born in the right shape, not split by hand later.
