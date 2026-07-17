@@ -1,0 +1,672 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V20" />
+  <SW.Blocks.OB ID="0">
+    <AttributeList>
+      <Interface>
+        <Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+          <Section Name="Input">
+            <Member Name="Initial_Call" Datatype="Bool" Accessibility="Public" Informative="true">
+              <Comment>
+                <MultiLanguageText Lang="en-US">Initial call of this OB</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="Remanence" Datatype="Bool" Accessibility="Public" Informative="true">
+              <Comment>
+                <MultiLanguageText Lang="en-US">=True, if remanent data are available</MultiLanguageText>
+              </Comment>
+            </Member>
+          </Section>
+          <Section Name="Temp" />
+          <Section Name="Constant" />
+        </Sections>
+      </Interface>
+      <Name>OB100</Name>
+      <Namespace />
+      <Number>100</Number>
+      <ProgrammingLanguage>LAD</ProgrammingLanguage>
+      <SecondaryType>Startup</SecondaryType>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="100000" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="100001" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text>Dedicated startup-reset block (C-124/C-305/C-403), run once by the CPU on every restart (warm or cold), regardless of retentivity - non-retentivity is never relied on to clear state. Forces Step back to idle (C-118/C-119) on every stepped sequencer, clears every S/R-driven and transient-run-state bit named in the fix-wave-1 B-2 finding, and force-resets DB_PLC.Simulation (C-305). Genuine fault latches - iDB_MotorFwdRevSystem_Shredder.IO.FaultActive/FTR/FTS, iDB_PusherControl.IO.Blocked/EndTravelTimeoutFault/ParkedTimeoutFault/BothSwitchesFault, iDB_ShredderSequencer.IO.ShredderBlockedFault/DischargeConveyorTimeoutFault - are deliberately excluded per C-124's carve-out: a fault needing human acknowledgement (FaultReset) still needs it after a power cycle. Closes owner-questions B-2/D-1/Q-01 and doc 06 C-128 (no automatic restart after a stop or power event).</Text>
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="100002" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="100003" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text>Startup Reset</Text>
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <SW.Blocks.CompileUnit ID="1" CompositionName="CompileUnits">
+        <AttributeList>
+          <NetworkSource>
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Access Scope="GlobalVariable" UId="3">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="7">
+                  <Symbol>
+                    <Component Name="iDB_ShredderSequencer" />
+                    <Component Name="ReversalStepEdge" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="10">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="14">
+                  <Symbol>
+                    <Component Name="iDB_ShredderSequencer" />
+                    <Component Name="ReversalStepEdgeMem" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="19">
+                  <Symbol>
+                    <Component Name="iDB_ShredderSequencer" />
+                    <Component Name="IO" />
+                    <Component Name="Step" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="24">
+                  <Symbol>
+                    <Component Name="iDB_ShredderSequencer" />
+                    <Component Name="ReversalCount" />
+                  </Symbol>
+                </Access>
+                <Access Scope="LiteralConstant" UId="17">
+                  <Constant>
+                    <ConstantType>Int</ConstantType>
+                    <ConstantValue>0</ConstantValue>
+                  </Constant>
+                </Access>
+                <Access Scope="LiteralConstant" UId="22">
+                  <Constant>
+                    <ConstantType>Int</ConstantType>
+                    <ConstantValue>0</ConstantValue>
+                  </Constant>
+                </Access>
+                <Part Name="Contact" UId="2" />
+                <Part Name="RCoil" UId="6" />
+                <Part Name="Contact" UId="9" />
+                <Part Name="RCoil" UId="13" />
+                <Part Name="Move" UId="16" DisabledENO="true">
+                  <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
+                </Part>
+                <Part Name="Move" UId="21" DisabledENO="true">
+                  <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
+                </Part>
+              </Parts>
+              <Wires>
+                <Wire UId="4">
+                  <NameCon UId="2" Name="operand" />
+                  <IdentCon UId="3" />
+                </Wire>
+                <Wire UId="5">
+                  <NameCon UId="2" Name="out" />
+                  <NameCon UId="6" Name="in" />
+                </Wire>
+                <Wire UId="8">
+                  <NameCon UId="6" Name="operand" />
+                  <IdentCon UId="7" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                  <NameCon UId="9" Name="in" />
+                  <NameCon UId="16" Name="en" />
+                  <NameCon UId="21" Name="en" />
+                </Wire>
+                <Wire UId="11">
+                  <NameCon UId="9" Name="operand" />
+                  <IdentCon UId="10" />
+                </Wire>
+                <Wire UId="12">
+                  <NameCon UId="9" Name="out" />
+                  <NameCon UId="13" Name="in" />
+                </Wire>
+                <Wire UId="15">
+                  <NameCon UId="13" Name="operand" />
+                  <IdentCon UId="14" />
+                </Wire>
+                <Wire UId="18">
+                  <NameCon UId="16" Name="in" />
+                  <IdentCon UId="17" />
+                </Wire>
+                <Wire UId="20">
+                  <NameCon UId="16" Name="out1" />
+                  <IdentCon UId="19" />
+                </Wire>
+                <Wire UId="23">
+                  <NameCon UId="21" Name="in" />
+                  <IdentCon UId="22" />
+                </Wire>
+                <Wire UId="25">
+                  <NameCon UId="21" Name="out1" />
+                  <IdentCon UId="24" />
+                </Wire>
+              </Wires>
+            </FlgNet>
+          </NetworkSource>
+          <ProgrammingLanguage>LAD</ProgrammingLanguage>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="100004" CompositionName="Comment">
+            <ObjectList>
+              <MultilingualTextItem ID="100005" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text />
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+          <MultilingualText ID="100006" CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem ID="100007" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>Shredder sequencer - force Step idle, clear transient state (C-124)</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Blocks.CompileUnit>
+      <SW.Blocks.CompileUnit ID="2" CompositionName="CompileUnits">
+        <AttributeList>
+          <NetworkSource>
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Access Scope="GlobalVariable" UId="3">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="7">
+                  <Symbol>
+                    <Component Name="iDB_PusherControl" />
+                    <Component Name="PressureHold" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="10">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="14">
+                  <Symbol>
+                    <Component Name="iDB_PusherControl" />
+                    <Component Name="PressureConfirmEdge" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="17">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="21">
+                  <Symbol>
+                    <Component Name="iDB_PusherControl" />
+                    <Component Name="PressureConfirmEdgeMem" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="26">
+                  <Symbol>
+                    <Component Name="iDB_PusherControl" />
+                    <Component Name="IO" />
+                    <Component Name="Step" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="31">
+                  <Symbol>
+                    <Component Name="iDB_PusherControl" />
+                    <Component Name="PressureTripCount" />
+                  </Symbol>
+                </Access>
+                <Access Scope="LiteralConstant" UId="24">
+                  <Constant>
+                    <ConstantType>Int</ConstantType>
+                    <ConstantValue>0</ConstantValue>
+                  </Constant>
+                </Access>
+                <Access Scope="LiteralConstant" UId="29">
+                  <Constant>
+                    <ConstantType>Int</ConstantType>
+                    <ConstantValue>0</ConstantValue>
+                  </Constant>
+                </Access>
+                <Part Name="Contact" UId="2" />
+                <Part Name="RCoil" UId="6" />
+                <Part Name="Contact" UId="9" />
+                <Part Name="RCoil" UId="13" />
+                <Part Name="Contact" UId="16" />
+                <Part Name="RCoil" UId="20" />
+                <Part Name="Move" UId="23" DisabledENO="true">
+                  <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
+                </Part>
+                <Part Name="Move" UId="28" DisabledENO="true">
+                  <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
+                </Part>
+              </Parts>
+              <Wires>
+                <Wire UId="4">
+                  <NameCon UId="2" Name="operand" />
+                  <IdentCon UId="3" />
+                </Wire>
+                <Wire UId="5">
+                  <NameCon UId="2" Name="out" />
+                  <NameCon UId="6" Name="in" />
+                </Wire>
+                <Wire UId="8">
+                  <NameCon UId="6" Name="operand" />
+                  <IdentCon UId="7" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                  <NameCon UId="9" Name="in" />
+                  <NameCon UId="16" Name="in" />
+                  <NameCon UId="23" Name="en" />
+                  <NameCon UId="28" Name="en" />
+                </Wire>
+                <Wire UId="11">
+                  <NameCon UId="9" Name="operand" />
+                  <IdentCon UId="10" />
+                </Wire>
+                <Wire UId="12">
+                  <NameCon UId="9" Name="out" />
+                  <NameCon UId="13" Name="in" />
+                </Wire>
+                <Wire UId="15">
+                  <NameCon UId="13" Name="operand" />
+                  <IdentCon UId="14" />
+                </Wire>
+                <Wire UId="18">
+                  <NameCon UId="16" Name="operand" />
+                  <IdentCon UId="17" />
+                </Wire>
+                <Wire UId="19">
+                  <NameCon UId="16" Name="out" />
+                  <NameCon UId="20" Name="in" />
+                </Wire>
+                <Wire UId="22">
+                  <NameCon UId="20" Name="operand" />
+                  <IdentCon UId="21" />
+                </Wire>
+                <Wire UId="25">
+                  <NameCon UId="23" Name="in" />
+                  <IdentCon UId="24" />
+                </Wire>
+                <Wire UId="27">
+                  <NameCon UId="23" Name="out1" />
+                  <IdentCon UId="26" />
+                </Wire>
+                <Wire UId="30">
+                  <NameCon UId="28" Name="in" />
+                  <IdentCon UId="29" />
+                </Wire>
+                <Wire UId="32">
+                  <NameCon UId="28" Name="out1" />
+                  <IdentCon UId="31" />
+                </Wire>
+              </Wires>
+            </FlgNet>
+          </NetworkSource>
+          <ProgrammingLanguage>LAD</ProgrammingLanguage>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="100008" CompositionName="Comment">
+            <ObjectList>
+              <MultilingualTextItem ID="100009" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text />
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+          <MultilingualText ID="100010" CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem ID="100011" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>Pusher control - force Step idle, clear transient state (C-124)</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Blocks.CompileUnit>
+      <SW.Blocks.CompileUnit ID="3" CompositionName="CompileUnits">
+        <AttributeList>
+          <NetworkSource>
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Access Scope="GlobalVariable" UId="3">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="7">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="Pasue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="10">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="14">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="StartTimer" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="17">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="21">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="CycleDelay" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="24">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="28">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="IO" />
+                    <Component Name="HandIntervention" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="31">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="35">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="IO" />
+                    <Component Name="HandStartSignal" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="38">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="42">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="IO" />
+                    <Component Name="StopMotor" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="45">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="49">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="IO" />
+                    <Component Name="FaultFB" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="52">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="56">
+                  <Symbol>
+                    <Component Name="iDB_MotorFwdRevSystem_Shredder" />
+                    <Component Name="IO" />
+                    <Component Name="RecentStart" />
+                  </Symbol>
+                </Access>
+                <Part Name="Contact" UId="2" />
+                <Part Name="RCoil" UId="6" />
+                <Part Name="Contact" UId="9" />
+                <Part Name="RCoil" UId="13" />
+                <Part Name="Contact" UId="16" />
+                <Part Name="RCoil" UId="20" />
+                <Part Name="Contact" UId="23" />
+                <Part Name="RCoil" UId="27" />
+                <Part Name="Contact" UId="30" />
+                <Part Name="RCoil" UId="34" />
+                <Part Name="Contact" UId="37" />
+                <Part Name="RCoil" UId="41" />
+                <Part Name="Contact" UId="44" />
+                <Part Name="RCoil" UId="48" />
+                <Part Name="Contact" UId="51" />
+                <Part Name="RCoil" UId="55" />
+              </Parts>
+              <Wires>
+                <Wire UId="4">
+                  <NameCon UId="2" Name="operand" />
+                  <IdentCon UId="3" />
+                </Wire>
+                <Wire UId="5">
+                  <NameCon UId="2" Name="out" />
+                  <NameCon UId="6" Name="in" />
+                </Wire>
+                <Wire UId="8">
+                  <NameCon UId="6" Name="operand" />
+                  <IdentCon UId="7" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                  <NameCon UId="9" Name="in" />
+                  <NameCon UId="16" Name="in" />
+                  <NameCon UId="23" Name="in" />
+                  <NameCon UId="30" Name="in" />
+                  <NameCon UId="37" Name="in" />
+                  <NameCon UId="44" Name="in" />
+                  <NameCon UId="51" Name="in" />
+                </Wire>
+                <Wire UId="11">
+                  <NameCon UId="9" Name="operand" />
+                  <IdentCon UId="10" />
+                </Wire>
+                <Wire UId="12">
+                  <NameCon UId="9" Name="out" />
+                  <NameCon UId="13" Name="in" />
+                </Wire>
+                <Wire UId="15">
+                  <NameCon UId="13" Name="operand" />
+                  <IdentCon UId="14" />
+                </Wire>
+                <Wire UId="18">
+                  <NameCon UId="16" Name="operand" />
+                  <IdentCon UId="17" />
+                </Wire>
+                <Wire UId="19">
+                  <NameCon UId="16" Name="out" />
+                  <NameCon UId="20" Name="in" />
+                </Wire>
+                <Wire UId="22">
+                  <NameCon UId="20" Name="operand" />
+                  <IdentCon UId="21" />
+                </Wire>
+                <Wire UId="25">
+                  <NameCon UId="23" Name="operand" />
+                  <IdentCon UId="24" />
+                </Wire>
+                <Wire UId="26">
+                  <NameCon UId="23" Name="out" />
+                  <NameCon UId="27" Name="in" />
+                </Wire>
+                <Wire UId="29">
+                  <NameCon UId="27" Name="operand" />
+                  <IdentCon UId="28" />
+                </Wire>
+                <Wire UId="32">
+                  <NameCon UId="30" Name="operand" />
+                  <IdentCon UId="31" />
+                </Wire>
+                <Wire UId="33">
+                  <NameCon UId="30" Name="out" />
+                  <NameCon UId="34" Name="in" />
+                </Wire>
+                <Wire UId="36">
+                  <NameCon UId="34" Name="operand" />
+                  <IdentCon UId="35" />
+                </Wire>
+                <Wire UId="39">
+                  <NameCon UId="37" Name="operand" />
+                  <IdentCon UId="38" />
+                </Wire>
+                <Wire UId="40">
+                  <NameCon UId="37" Name="out" />
+                  <NameCon UId="41" Name="in" />
+                </Wire>
+                <Wire UId="43">
+                  <NameCon UId="41" Name="operand" />
+                  <IdentCon UId="42" />
+                </Wire>
+                <Wire UId="46">
+                  <NameCon UId="44" Name="operand" />
+                  <IdentCon UId="45" />
+                </Wire>
+                <Wire UId="47">
+                  <NameCon UId="44" Name="out" />
+                  <NameCon UId="48" Name="in" />
+                </Wire>
+                <Wire UId="50">
+                  <NameCon UId="48" Name="operand" />
+                  <IdentCon UId="49" />
+                </Wire>
+                <Wire UId="53">
+                  <NameCon UId="51" Name="operand" />
+                  <IdentCon UId="52" />
+                </Wire>
+                <Wire UId="54">
+                  <NameCon UId="51" Name="out" />
+                  <NameCon UId="55" Name="in" />
+                </Wire>
+                <Wire UId="57">
+                  <NameCon UId="55" Name="operand" />
+                  <IdentCon UId="56" />
+                </Wire>
+              </Wires>
+            </FlgNet>
+          </NetworkSource>
+          <ProgrammingLanguage>LAD</ProgrammingLanguage>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="100012" CompositionName="Comment">
+            <ObjectList>
+              <MultilingualTextItem ID="100013" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text />
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+          <MultilingualText ID="100014" CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem ID="100015" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>Motor FB - clear S/R-driven and transient bits (C-403), fault latches excluded</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Blocks.CompileUnit>
+      <SW.Blocks.CompileUnit ID="4" CompositionName="CompileUnits">
+        <AttributeList>
+          <NetworkSource>
+            <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+              <Parts>
+                <Access Scope="GlobalVariable" UId="3">
+                  <Symbol>
+                    <Component Name="AlwaysTrue" />
+                  </Symbol>
+                </Access>
+                <Access Scope="GlobalVariable" UId="7">
+                  <Symbol>
+                    <Component Name="DB_PLC" />
+                    <Component Name="Simulation" />
+                  </Symbol>
+                </Access>
+                <Part Name="Contact" UId="2" />
+                <Part Name="RCoil" UId="6" />
+              </Parts>
+              <Wires>
+                <Wire UId="4">
+                  <NameCon UId="2" Name="operand" />
+                  <IdentCon UId="3" />
+                </Wire>
+                <Wire UId="5">
+                  <NameCon UId="2" Name="out" />
+                  <NameCon UId="6" Name="in" />
+                </Wire>
+                <Wire UId="8">
+                  <NameCon UId="6" Name="operand" />
+                  <IdentCon UId="7" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                </Wire>
+              </Wires>
+            </FlgNet>
+          </NetworkSource>
+          <ProgrammingLanguage>LAD</ProgrammingLanguage>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="100016" CompositionName="Comment">
+            <ObjectList>
+              <MultilingualTextItem ID="100017" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text />
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+          <MultilingualText ID="100018" CompositionName="Title">
+            <ObjectList>
+              <MultilingualTextItem ID="100019" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text>Simulation mode off at every startup (C-305)</Text>
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Blocks.CompileUnit>
+    </ObjectList>
+  </SW.Blocks.OB>
+</Document>

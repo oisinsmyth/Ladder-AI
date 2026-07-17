@@ -63,7 +63,7 @@ LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like
 
 Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perform capabilities from stages that haven't passed their gate — e.g. no logic generation while the project is still in S1–S5, even if asked casually; point to the roadmap instead.
 
-**Direction rulings pending (`docs/notes/owner-questions.md`, section A).** The S6 pipeline description above (docs/15, 13 skills) is the last-adopted design, but the owner has an open course-correction in flight — carving model, the skill split, and S7-vs-S6 sequencing are unsettled. Don't author new pipeline/generation skills against the current docs/15 shape until those rulings land; check owner-questions.md first.
+**S7-vs-S6 sequencing still unsettled.** The carving model and the coding-skill split are ruled and reflected in `docs/15-generation-pipeline.md` (15 skills; reuse-first `gen-architecture`; the `gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix` split, pulled forward to build-order step 6). What's still open is the *internal* build/exercise order among those three skills and their relationship to closing S6's exit criterion — see `agent-tasks/discussion-a4-s7-ordering.md` (prepared for the owner to walk through with an agent when ready) and `agent-tasks/discussion-d4-stage-gates-review.md` (related: S6/S7 gate wording). `agent-tasks/README.md` is the live dispatch board for queued work (task docs, Portal-queue gating for GenProject1); `docs/notes/owner-questions.md` is a reusable batch-questions doc, cleared when empty — check it first if it's non-empty; if empty, there's no open batch blocking anything.
 
 ## Environment notes
 

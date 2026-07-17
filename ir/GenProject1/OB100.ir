@@ -1,0 +1,39 @@
+BLOCK OB OB100
+ROOTID 0
+NUMBER 100
+LANGUAGE LAD
+SECONDARYTYPE Startup
+TITLE "Startup Reset"
+COMMENT "Dedicated startup-reset block (C-124/C-305/C-403), run once by the CPU on every restart (warm or cold), regardless of retentivity - non-retentivity is never relied on to clear state. Forces Step back to idle (C-118/C-119) on every stepped sequencer, clears every S/R-driven and transient-run-state bit named in the fix-wave-1 B-2 finding, and force-resets DB_PLC.Simulation (C-305). Genuine fault latches - iDB_MotorFwdRevSystem_Shredder.IO.FaultActive/FTR/FTS, iDB_PusherControl.IO.Blocked/EndTravelTimeoutFault/ParkedTimeoutFault/BothSwitchesFault, iDB_ShredderSequencer.IO.ShredderBlockedFault/DischargeConveyorTimeoutFault - are deliberately excluded per C-124's carve-out: a fault needing human acknowledgement (FaultReset) still needs it after a power cycle. Closes owner-questions B-2/D-1/Q-01 and doc 06 C-128 (no automatic restart after a stop or power event)."
+
+INTERFACE
+  INPUT
+    Initial_Call : Bool BAREPARAM INFORMATIVE "Initial call of this OB"
+    Remanence : Bool BAREPARAM INFORMATIVE "=True, if remanent data are available"
+  CONSTANT
+
+NETWORK 1 "Shredder sequencer - force Step idle, clear transient state (C-124)"
+  RCOIL iDB_ShredderSequencer.ReversalStepEdge := AlwaysTrue
+  RCOIL iDB_ShredderSequencer.ReversalStepEdgeMem := AlwaysTrue
+  MOVE(EN := TRUE, IN := 0) => iDB_ShredderSequencer.IO.Step
+  MOVE(EN := TRUE, IN := 0) => iDB_ShredderSequencer.ReversalCount
+
+NETWORK 2 "Pusher control - force Step idle, clear transient state (C-124)"
+  RCOIL iDB_PusherControl.PressureHold := AlwaysTrue
+  RCOIL iDB_PusherControl.PressureConfirmEdge := AlwaysTrue
+  RCOIL iDB_PusherControl.PressureConfirmEdgeMem := AlwaysTrue
+  MOVE(EN := TRUE, IN := 0) => iDB_PusherControl.IO.Step
+  MOVE(EN := TRUE, IN := 0) => iDB_PusherControl.PressureTripCount
+
+NETWORK 3 "Motor FB - clear S/R-driven and transient bits (C-403), fault latches excluded"
+  RCOIL iDB_MotorFwdRevSystem_Shredder.Pasue := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.StartTimer := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.CycleDelay := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.IO.HandIntervention := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.IO.HandStartSignal := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.IO.StopMotor := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.IO.FaultFB := AlwaysTrue
+  RCOIL iDB_MotorFwdRevSystem_Shredder.IO.RecentStart := AlwaysTrue
+
+NETWORK 4 "Simulation mode off at every startup (C-305)"
+  RCOIL DB_PLC.Simulation := AlwaysTrue

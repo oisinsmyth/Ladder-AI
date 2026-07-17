@@ -48,41 +48,43 @@ architecture baseline, fix-wave records, telemetry); GenProject1's functional ve
 approved requests) not yet closed — counting rule awaits the owner (owner-questions D-4). Full
 history: stage-gates entries 2026-07-16 → 2026-07-17.
 
-## Current task: AWAITING OWNER RULINGS — `docs/notes/owner-questions.md` is the single gate
+## Current task: owner-questions batch fully resolved (2026-07-17); work dispatched to agent-tasks/
 
-State as of session close 2026-07-17: working tree clean on `master`; no worktrees or side
-branches; suites green (converter 491/491, openness-cli 101/101, golden 14/14); no in-flight
-code. Everything actionable is blocked on, or sequenced behind, the consolidated question list in
-**`docs/notes/owner-questions.md`** (priority-ordered A–F; superseded queues formerly in this
-file all point there now).
+`docs/notes/owner-questions.md`'s 2026-07-17 batch (~50 items, three same-day rounds) is fully
+resolved and the doc has been cleared back to empty (it's a reusable batch-questions doc, not a
+permanent log — see its own purpose note). Everything that came out of it now lives in its proper
+permanent home:
 
-The headline decisions (section A of that doc, raised 2026-07-17):
-- **A-1** gen-architecture's carving model → owner's reuse-first waterfall (library-whole →
-  pattern-composed → library-modified → freeform), costed as a cheap in-passing skill edit.
-- **A-2** split programming into three skills: `gen-block-new`, `gen-block-modify-purpose`,
-  `gen-block-modify-fix` (+ one shared modification-choreography reference); the modify pair is
-  S7's deliverable shape, sandbox-scoped until S7's gate opens.
-- **A-3** bound "manual to contract": once `gen-block-new` exists, manual coding needs a per-case
-  owner waiver.
-- **A-4** adopt the **S7-first ordering** (owner context: library purposely thin — organic S8
-  growth; S7 is the rush to take production load off the owner): (a) `converter diff` tooling
-  (S7's entry requirement — formalizes the practiced readable-part invariance proofs), (b) the
-  modify-skill pair exercised against the B-item defect docket, (c) D-4 ruling then close S6's
-  ten requests via small deliberate asks (brings `gen-block-new` up; approvals feed S8 harvest),
-  (d) A-1 rewrite in passing. Horizon: S7 on private engineering projects needs a docs/13 approval
-  extension (new activity class).
+- **Rule/design changes** — `docs/06-lad-conventions.md` (new C-007/C-128/C-608–C-611, clarified
+  C-103/C-115/C-117/C-121/C-123/C-507/C-604/C-605), `.claude/skills/gen-architecture/SKILL.md`
+  (reuse-first carving, A-1), `docs/15-generation-pipeline.md` (3-skill Build-phase split pulled
+  to build-order step 6, A-2/A-3).
+- **Register resolutions** — `gen/GenProject1/requirements.md` (Q-01/07/08/10/11/12(partial)/13/
+  14/15 closed, Q-04 partial+deferred-numbers, REQ-028 semantics fixed).
+- **Actionable work, dispatched** — **`agent-tasks/`** is now the live dispatch board: nine
+  self-contained task docs (the B-docket fixes + C-3/C-4/C-5 items) with a Portal-queue gating
+  protocol for GenProject1's scratch project (see `agent-tasks/README.md`), plus two discussion
+  tasks (A-4 S7-ordering, D-4 stage-gates review) prepped for whenever the owner wants to walk an
+  agent through them. **Point agents at files in that folder for any of this work.**
+- **Deferred (decided, timing only)** — `docs/notes/deferred-items.md` (D-2 settings rework, D-5
+  pattern blind-draft gap, Q-04's setpoint numbers).
+- **Full dated history** — `docs/notes/stage-gates.md`'s three "owner-questions batch pass" /
+  "round 2" / "round 3" entries (2026-07-17).
 
-On rulings received: execute per the answered items — the B-docket (six tier-1 defect candidates)
-is the ready-made validation corpus for `gen-block-modify-fix`.
+**Still genuinely open, no action pending from this session:**
+- Register questions with no clarification blocking them, just unanswered — `Q-02` (5 settings
+  numbers), `Q-03` (local/remote selector semantics), `Q-05` (motor count), `Q-06` (start button
+  action), `Q-09` (spin-down pause home), `Q-12` residual (zeroable-clock reset behavior) — all
+  tracked in `gen/GenProject1/requirements.md`'s Open Questions section.
+- `F-3(b)` (C-003 enforcement) and the two pre-existing tooling items below — non-blocking backlog.
 
-**Small/tooling queue (non-blocking, see owner-questions §F):** converter reporter bug (C-301
-count vs printed findings); converter capture of `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as
-IR header lines (would make C-201's author/revision mechanically checkable — still unbuilt);
-C-003's `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`.
+**Small/tooling queue (non-blocking):** converter reporter bug (F-1, confirmed real — C-301 count
+vs printed findings); converter capture of `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR
+header lines (would make C-201's author/revision mechanically checkable — still unbuilt); C-003's
+`iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`.
 
-**Carried forward, not urgent:** `patterns/chained-permissive-enable`'s genuinely-blind
-drafted-instance gap (FI-05 / owner-questions D-5). `docs/07-pattern-library-spec.md` no longer
-mentions a `tests/`/S9 hook — revisit if S9 ever opens.
+`docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever
+opens.
 
 ## Open question carried over from S1 (still needs the project owner's input)
 

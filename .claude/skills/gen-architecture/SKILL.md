@@ -92,17 +92,39 @@ beautifully and still misses requirements, because the trace was fitted, not der
    sequence the register missed by applying C-113's memory test yourself — and if you *disagree*
    with a register classification, that is an open question for the owner, never a silent
    override.
-3. Derive the block set from the groups: equipment FBs per C-106/C-108 (site-proven block or
-   admitted pattern before fresh invention — a new block for a solved problem needs a stated
-   reason), area FCs per C-109, the data landscape per C-30x.
-4. Design interfaces per C-115 (one handshake vocabulary — take it from the admitted equipment
+3. **Reuse-first carving pass (owner ruling, 2026-07-17 — owner-questions A-1).** Before drafting
+   a block set, build a per-run summary of what's reusable — every site-proven FB/UDT and every
+   admitted pattern in `patterns/` (via `converter digest` plus each pattern's own `pattern.md`;
+   computed fresh this run, never persisted to disk, per FI-15's digest policy) — and hold each
+   REQ group against it **in this order**:
+   - **(a) Whole library block.** An existing site-proven block or admitted pattern instance
+     already covers the group's REQ functionality as-is. Accept it even if it also does *more*
+     than the group asks — extra capability an already-admitted block happens to carry is
+     **ignored, not flagged**, as long as every REQ in the group is satisfied by what the block
+     does. (This is a deliberate exception to C-606 for whole-reuse: C-606's
+     justify-the-extra-capability duty applies to freeform/new content the design itself is
+     choosing to add, not to accepting a proven block's existing shape wholesale.)
+   - **(b) Pattern-composed.** No single whole block covers the group, but two or more
+     `patterns/` entries compose to cover it.
+   - **(c) Modified library block.** An existing block covers most of the group with a stated,
+     scoped deviation — flag it for `gen-block-modify-purpose` (S7); do not design the
+     modification here, only name it.
+   - **(d) New/freeform.** Only when (a)–(c) don't cover the group.
+   Record which tier each manifest item was carved from — section 6 (Pattern mapping) reports it.
+   This pass decides the block set; REQ groups stay the correctness spine (a tier-(a)/(b) fit is
+   only valid if it actually satisfies the group's REQs — an almost-fits block is a tier-(c) or
+   (d) item, never forced).
+4. Derive the block set from the groups, carved per step 3: equipment FBs per C-106/C-108, area
+   FCs per C-109, the data landscape per C-30x.
+5. Design interfaces per C-115 (one handshake vocabulary — take it from the admitted equipment
    pattern's real members, not doc 06's illustrative names), C-118/C-125 (Step and its faults in
    the interface UDT), C-307 (each setting homed with its owner), C-503 (per-instance alarm
    surface).
-5. Wire on paper: the command-flow/enable graph (C-114/C-116), all cross-instance facts in the
+6. Wire on paper: the command-flow/enable graph (C-114/C-116), all cross-instance facts in the
    orchestrating FC (C-127), OB1 order (C-110).
-6. Map every manifest item to a pattern or `freeform`; compute the freeform share; trace every
-   REQ to its item(s); grep every named tag; collect open questions.
+7. Map every manifest item to its step-3 tier — (a)/(b) pattern, (c) modify-candidate, or (d)
+   `freeform`; compute the freeform share; trace every REQ to its item(s); grep every named tag;
+   collect open questions.
 
 **Digest policy (docs/15, FI-15):** on a brownfield corpus, orient with `converter digest`
 ("which blocks exist, which do I need to open?") — derived fresh, never stored. Anything the
@@ -161,12 +183,15 @@ Method requires one. Then exactly these sections:
    rather than forcing a permissive-chain shape onto it.
 5. **OB1 call order.** Per C-110: input mapping first, output mapping last, area Mains between;
    C-111's simulation gating positions stated. OB100's own call list too.
-6. **Pattern mapping.** Each manifest item → pattern name (kind, admission status) or
-   `freeform`. Compute and state the **freeform %** (state the counting basis — planned networks
-   is the default). If >20%: the loud flag that gate-1 sign-off is also the CLAUDE.md
-   workflow-step-3 freeform go-ahead decision. Freeform items name which doc 06 rules structure
-   them (C-118..C-125 for sequencers, C-501/C-504 shapes for alarm FCs, …) — freeform never
-   means convention-free.
+6. **Pattern mapping.** Each manifest item → its Method step-3 carving tier: **(a)** whole
+   library block/pattern (name it; note any extra capability it carries beyond the REQ group,
+   per C-606's whole-reuse exception — not a finding), **(b)** pattern-composed (name the
+   composed patterns), **(c)** modified library block (name the base block and the scoped
+   deviation, flagged for `gen-block-modify-purpose`), or **(d)** `freeform`. Compute and state
+   the **freeform %** (tier (d) only; state the counting basis — planned networks is the
+   default). If >20%: the loud flag that gate-1 sign-off is also the CLAUDE.md workflow-step-3
+   freeform go-ahead decision. Freeform items name which doc 06 rules structure them (C-118..C-125
+   for sequencers, C-501/C-504 shapes for alarm FCs, …) — freeform never means convention-free.
 7. **REQ→block traceability.** Every register REQ mapped to the manifest item(s) that will
    implement it. **An unmapped REQ is a named gap with its blocking question — never dropped.**
    `out-of-scope` REQs map to "no PLC logic, by design". This table is how the functional review

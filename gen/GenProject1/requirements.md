@@ -299,7 +299,14 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
   minutes, stop the system and alarm"
 - **Notes:** Settings `DB_Settings.ReversalCountThreshold` (= 5) and `ReversalWindowTime`
   (= 180.0) exist (match). The annunciation is REQ-058. SpecSheet corroborates ("If shredder
-  reverses 5 times within 3 minutes Trip fault occurs").
+  reverses 5 times within 3 minutes Trip fault occurs"). **Window semantics RESOLVED (owner
+  ruling, 2026-07-17 — owner-questions B-5):** re-arming, not fixed-from-first. The count only
+  clears after the plant runs **clean for the full 180 s with no new reversal** — every reversal
+  restarts the 180 s clock; the count keeps accumulating across any run of reversals each less
+  than 180 s apart, however long that run lasts in total. `ReversalWindowTime` stays the tunable
+  span (adjustable, per C-307). Fix wave 1's implementation used the wrong semantics (one fixed
+  180 s window from the first reversal only) — a genuine functional defect, queued in the
+  B-docket (`gen/GenProject1/fix-wave-1-reviews.md`) for `gen-block-modify-fix`.
 
 ### REQ-029 — Spin-up overcurrent suppression
 - **Text:** Overcurrent is ignored for approximately 2–3 s at shredder startup so the motor can
@@ -759,58 +766,94 @@ be slightly different") is carried here: drawing names may differ slightly from 
 
 Never silently resolved; resolution is a recorded owner answer noted at the question.
 
-- **Q-01 — Restart/first-scan behavior.** Both sources are silent on what the plant does after a
-  PLC power cycle mid-cycle (resume, safe-stop, require fresh start?). Doc 06 C-124 governs the
-  mechanism; the *required plant behavior* needs an owner statement.
+- **Q-01 — Restart/first-scan behavior. RESOLVED (owner ruling, 2026-07-17 —
+  `docs/notes/owner-questions.md` D-1/B-2).** No auto-restart, ever: "Equipment should never
+  restart after an E-Stop! (Except specifically documented exceptions)." Generalized into doc 06
+  **C-128** (new rule) — a PLC power cycle is treated the same as an E-Stop for this purpose. A
+  fresh, explicit start command always re-runs the **full** start-up sequence from the top; no
+  mid-sequence resume. This makes the demo-panel OB100/`DB_PLC` omission (previously waived) a
+  real gap, not a style choice — B-2's traced auto-resume is the concrete evidence. Building the
+  startup machinery is queued in the B-docket (see `gen/GenProject1/fix-wave-1-reviews.md`).
 - **Q-02 — Unconfigured settings.** Nine `DB_Settings` members have no start value (see the
   settings table): the four overcurrent setpoints/delays, `PressureClearResumeDelay` (the only
   one with a spec-stated number — 5 s, REQ-047), `PusherEndTravelTimeout`, `PusherParkedTimeout`,
   `PusherPumpRunOnTime`, `DischargeConveyorTimeout`. Owner numbers needed; commissioning defaults
   are C-309's factory-reset surface, so "unset" is a real gap, not a style note.
-- **Q-03 — Local/remote selector semantics.** `DI16_PSH_LocalRemote` exists in the panel but no
-  source text defines its behavior, and the remote manual-cycle pushbutton REQ-036 has no digital
-  input of its own. Is the selector meant to choose between the HMI button (local) and a remote
-  button (remote)? Which input is the remote button wired to?
-- **Q-04 — Machine-type selection structure and values.** REQ-018 (three types) vs REQ-067's
-  changeover row (two types) disagree on the type count; no selection tags exist; no per-type
-  overcurrent setpoint values are stated anywhere (REQ-019). Owner ruling + numbers needed.
-- **Q-05 — Motor count / per-motor identification.** REQ-020 ("either motor") and REQ-057
-  ("identify which motor") imply two instrumented motors; the as-built panel instruments one
-  motor system (one current member, one combined fault input, one feedback pair). Does the demo
-  machine have two motors to instrument, or do these REQs scale down for the demo?
+- **Q-03 — Local/remote selector semantics. Still open** — owner's 2026-07-17 response didn't
+  settle the selector's own semantics; instead it raised a process idea worth tracking separately:
+  "These are HMI features, Perhaps we should do a HMI Interface creation skill so we can fully
+  define the PLC boundary which the system will squarely work in." Logged as a future-idea
+  candidate (`docs/16-future-ideas.md`). The original question — is the selector meant to choose
+  between the HMI button (local) and a remote button (remote), and which input is the remote
+  button wired to? — still needs an owner answer.
+- **Q-04 — Machine-type selection structure and values. RESOLVED (owner ruling, 2026-07-17).**
+  "FuncDesc is [primary], this disparity should have been flagged at an earlier stage." Type
+  count: **three types (K75/K100/K150)** per REQ-018/FuncDesc, consistent with this register's
+  own stated source-precedence rule (FuncDesc over SpecSheet on disagreement) — REQ-067's
+  two-type changeover row is the SpecSheet disagreement, formally overridden. Selection tags: no
+  selection tags exist yet — stays **proposed** (engineer creates, hard rule 3). Per-type
+  overcurrent setpoint numbers: **deferred** (round 3, 2026-07-17 — "I dont have those at the min,
+  leave 0 add to deferred"). Moved to `docs/notes/deferred-items.md`; `OvercurrentSetpointMedium`/
+  `OvercurrentSetpointHigh` (REQ-019, currently unconfigured, no start value) get an explicit `0`
+  start value as a deliberate placeholder (per the new C-604 placeholder convention) rather than
+  staying unset, until real numbers land.
+- **Q-05 — Motor count / per-motor identification. Still open** — owner's 2026-07-17 response was
+  a design hint, not a headcount answer: "This isn't a full question, going off limited context,
+  it may be a good idea to use motor starter type FBs for each motor." Noted for
+  `gen-architecture`'s reuse-first pass (owner-questions A-1) if/when this is built — a
+  motor-starter FB per motor is the likely tier-(a)/(b) shape. Still unresolved: does the demo
+  machine have two motors to instrument, or do REQ-020/057 scale down for the demo?
 - **Q-06 — Start button action.** FuncDesc: "Press Start button" (momentary). SpecSheet typical
   sequence: "Press and hold Start Button". Which applies to the demo?
-- **Q-07 — Upstream enable delay.** FuncDesc: 3 s after infeed start, separate upstream-enable
-  output. SpecSheet typical: "After 6 secs Up-stream signal activated", conflating the upstream
-  signal with the infeed/loading light. FuncDesc taken as primary (and the panel provides separate
-  outputs) — confirm 3 s and the separate-output reading.
-- **Q-08 — Downstream recovery behavior.** FuncDesc: loss of downstream available stops all
-  (REQ-013). SpecSheet typical adds: on blockage clear, "start-up sequence automatically/manual
-  dependent on set-up". Does the demo auto-restart when downstream returns, and is that a
-  configurable option?
+- **Q-07 — Upstream enable delay. RESOLVED (owner ruling, 2026-07-17): "Confirm."** 3 s after
+  infeed start, as a separate `DQ9_SYS_EnableUpstream` output — FuncDesc's reading stands over
+  SpecSheet's conflated 6 s/loading-light narrative. `DB_Settings.InfeedToUpstreamEnableDelay` =
+  3.0 is correct as-is (REQ-011/016).
+- **Q-08 — Downstream recovery behavior. RESOLVED (owner ruling, 2026-07-17).** "Yes always
+  always always require a manual restart unless their is a documented exception." Not
+  configurable/automatic — manual restart only, consistent with the new C-128 rule and Q-01's
+  resolution.
 - **Q-09 — Home of the 8 s spin-down pause.** No `DB_Settings` member exists for REQ-006's 8 s
   pause; a per-instance `ReverseDelay = 8.0` exists on the motor instance. Confirm that is the
   intended tunable (C-307 per-instance home) or direct a named setting.
-- **Q-10 — Overload annunciation.** Overcurrent ≠ overload (REQ-017), but the panel's single
-  `DI7_SYS_MotorFault` (soft-start fault relay) input is the only motor-protection input. Is a
-  separate overload fault (REQ-059) distinguishable/required on this hardware, or does the
-  tripped-input fault (REQ-056) cover it for the demo?
-- **Q-11 — Analog current feedback hardware.** No AI channel/module exists in the as-built
-  export; the buffer member exists per the owner's genuine-analog-current decision (recorded in
-  the corpus buffer DB header). Overcurrent detection (REQ-017…022) cannot arm until real
-  hardware is confirmed and tags exist.
-- **Q-12 — Zeroable hour clock.** REQ-066 has no corpus counterpart (grep-verified). Where should
-  it live and what resets it (HMI command? engineering?)?
-- **Q-13 — Reversal display outside panel + flashing fault lamp.** REQ-060's outside-panel
-  display and flashing motor-fault light have no output tags. HMI-only on the demo, or panel
-  hardware to be added (then: proposed tags needed)?
-- **Q-14 — "Control On" step.** SpecSheet typical startup begins "Press Fault Reset/Control On";
-  FuncDesc's start sequence has no such step. Does the demo require a control-on/reset action
-  before REQ-001's start press? (`DB_Controls.FaultReset` and `DQ11_SHR_FaultReset` exist.)
-- **Q-15 — Hand control vs mode structure.** FuncDesc names three modes (REQ-033) and separately
-  requests hand/jog control (REQ-038…041). Is hand a fourth mode selection, or an overlay on
-  manual (or available in any mode)? The answer changes the operator-facing selection semantics
-  (WHAT-level), so it needs an owner/site ruling.
+- **Q-10 — Overload annunciation. RESOLVED (owner ruling, 2026-07-17).** "No, these are
+  different. Their is Software overload and their is hardware overload, the trip is both hardware
+  overcurrent or overload, while the software is in the effort of catching the overload before
+  hardware trip so no manual intervention is needed, reduces strain on motor, etc." Reading: the
+  single `DI7_SYS_MotorFault` hardware input (REQ-056) is the last-resort trip and covers hardware
+  overcurrent *or* hardware overload together — it cannot be split on this hardware, and that's
+  accepted. The PLC-side software overcurrent chain (REQ-017–029) is a genuinely separate,
+  distinct protective function — not a duplicate/mergeable alarm — that exists specifically to
+  catch a developing overload *before* it reaches the hardware trip. REQ-059's overload alarm
+  stays its own annunciation, distinct from REQ-056. Do not merge REQ-056/059 into one alarm bit.
+- **Q-11 — Analog current feedback hardware. RESOLVED (owner ruling, 2026-07-17 — ties to
+  owner-questions D-3).** "Their is real AI hardware, this was a proto type run want to confirm
+  with just bool signals." Reading: real AI hardware exists (for production panels); this
+  GenProject1 build is a prototype run, and the owner confirms proceeding with bool-signal-only
+  overcurrent detection for it — the overcurrent family (REQ-017…022) stays disarmed pending an
+  actual AI-hardware build, not because hardware doesn't exist in general, but because this
+  prototype's own panel doesn't carry the AI channel. No tags to propose from this ruling alone.
+- **Q-12 — Zeroable hour clock. Partially resolved (owner ruling, 2026-07-17).** "Already
+  implemented via Fwd/Rev Block, the clock is shredder specific." Read as answering REQ-065 (the
+  overall hour clock) — its home is the motor instance's own `HrsRun` member, confirmed. Still
+  open: REQ-066 specifically asked about a *zeroable* clock for different applications (resettable
+  job/trial hours) — `HrsRun` has no reset command in the corpus (grep-verified at register write
+  time). Whether `HrsRun` itself should gain a reset, or a second value is wanted, needs a
+  follow-up owner confirmation.
+- **Q-13 — Reversal display outside panel + flashing fault lamp. RESOLVED (owner ruling,
+  2026-07-17).** "reversal display shown on HMI, fault flashing lamp is PLC Driven." Split
+  resolution: the outside-panel reversal-count **display** is HMI-side — no PLC output tag needed,
+  bind the existing `ReversalCount` value (already `exists`, REQ-060 notes). The **flashing
+  motor-fault lamp** is PLC-driven — promote from "proposed if PLC-driven" to definitely
+  **proposed**: a new output tag is needed (equipment inventory's "Motor-fault flashing lamp"
+  row updates accordingly).
+- **Q-14 — "Control On" step. RESOLVED (owner ruling, 2026-07-17): "FaultReset is all thats
+  needed."** No separate control-on/reset precondition before REQ-001's start press — SpecSheet's
+  "Control On" step is just the existing `DB_Controls.FaultReset`/`DQ11_SHR_FaultReset` mechanism,
+  used when a fault needs clearing, not a new universal precondition gate.
+- **Q-15 — Hand control vs mode structure. RESOLVED (owner ruling, 2026-07-17): "Hand = Maunal,
+  this is true always."** Hand/jog (REQ-038…041) is not a fourth `PusherMode` value — it is
+  available within Manual mode (REQ-033's mode = 2), always. No new mode value needed.
 - **Q-16 — Off-mode idle repark (REQ-037 vs REQ-039).** Fix-wave-1 (owner rulings, 2026-07-16)
   narrowed the idle repark to resolve the REQ-037/REQ-039 tension: with the ram idle but off
   home, selecting Off no longer self-parks — repark occasions are only the plant pre-start and

@@ -29,18 +29,34 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   - **Blocks/types:** `FB_`/`FC_`/`DB_`/`UDT_` prefix + PascalCase function name (`FB_ConveyorControl`, `UDT_Motor`).
   - **Equipment instances:** the frozen equipment identifier (C-004) verbatim (`iDB_Motor_FCC`).
   - **Variables/UDT members:** short PascalCase (`Run`, `FltHigh`, `PosOk`) — context comes from the structure, so short names are correct here. Long names are only needed where the name is the *only* context. *(Revised 2026-07-16 from camelCase, which nothing — site blocks, patterns, or generated code — actually followed; PascalCase is universal site practice. Retrospective §5.3. Underscore-free member names; the physical-IO tag format below keeps its underscores by design.)*
-  - **Physical IO tags:** `<DI/DO/AI/AO><n>_<Equipment>_<Signal>` (e.g. `DI3_FCC_RunFb`).
+  - **Physical IO tags:** `<DI/DQ/AI/AQ><n>_<Equipment>_<Signal>` (e.g. `DI3_FCC_RunFb`). *(Fixed
+    2026-07-17 — owner ruling, owner-questions C-8: the letter previously read `<DI/DO/AI/AO>`,
+    a typo; site practice always used `DQ`/`AQ`, never `DO`/`AO`.)*
 - C-002 *(warn)* — Block names describe function, not sequence numbers alone (`FB_ConveyorControl`, not `FB12`).
 - C-003 *(warn)* — Prefixes: `FB_`/`FC_`/`DB_`/`UDT_`; instance DBs named `iDB_<FBName>_<Instance>`.
 - C-004 *(error)* — An **equipment identifier list is agreed and frozen at project start** (from site drawings/P&ID where they exist, invented sensibly where they don't). Those identifiers are used verbatim in all tag, instance, and HMI names; the PLC never invents a second alias for the same equipment.
 - C-005 *(error)* — Names use **letters, digits, and underscore only**, starting with a letter. No spaces or special characters — they break WinCC Unified scripting, CSV toolchains, and other PLC platforms even where TIA tolerates them. HMI-facing structures keep nesting shallow (2–3 levels) so names stay readable in alarm/event views; note WinCC Unified cannot dynamically index PLC-tag arrays from scripts — individually named tags only (consistent with C-105).
 - C-006 *(error)* — **English only** — all tags, comments, block names, and HMI-facing texts. No multilingual provisioning.
+- C-007 *(info)* — **Vendor-default names are a documented, standing exception to C-005.**
+  TIA/Siemens-supplied system objects that ship with a fixed vendor-chosen name — the
+  `Clock_0.5Hz` memory bit (a dot, breaching C-005's letters/digits/underscore rule),
+  `Default tag table` (a space) — are tolerated as-is rather than renamed. Every Siemens-vendor
+  project has them; renaming buys nothing and risks confusing a renamed vendor object with actual
+  project content. *(Owner ruling, 2026-07-17 — owner-questions C-9: "note as exceptions that
+  will be in every vendor specific project.")*
 
 ## Structure
 
 - C-101 *(warn)* — One function per network; no mega-rungs. Rule of thumb: a network should be explainable in one sentence.
 - C-102 *(error)* — No jumps (JMP/LBL). No documented exceptions currently exist; any future exception must be documented here before use.
 - C-103 *(warn)* — Set/Reset pairs in the same block, ideally adjacent networks. *(See also C-403 — S/R use itself is restricted.)*
+  **Documented exception pattern (owner ruling, 2026-07-17):** a fault-style bit intentionally
+  *set from outside* a reusable FB (by the orchestrating FC, per-scan) while the FB clears/resets
+  it *internally* is a deliberate cross-block split, not a defect — "this is intent so that it may
+  be latched/set outside of the block, and doesn't affect other use-cases": each instance's
+  external setter only touches its own instance, so other callers/instances of the same FB are
+  unaffected. Applies to the imported motor FB's `FaultFB` contract; state the intent in a comment
+  on both the setting FC's wiring and the FB's own reset network when reusing this shape.
 - C-104 *(info)* — Standard block layout: inputs read first, outputs written once, at the end.
 - C-105 *(error)* — No loops, indirect addressing, or array-index iteration in equipment control logic. Indexed access is permitted only in **documented data-handling blocks** (examples: recipe handling, comms mapping such as Modbus, queues/ordered requests). Such blocks are named to show what they are (`FB_Comms_…`, `FB_Recipe_…`) and carry a header comment stating they contain indexed access. Everything outside these fenced blocks obeys the plain-rung rule; a reader can skip the fenced blocks entirely.
 - C-106 *(warn)* — Repeated equipment uses a standard FB + UDT interface, one call per equipment instance — never copy-pasted rung variants that drift apart. Sameness is a simplicity feature: same block, same shape, this instance's tags.
@@ -60,8 +76,20 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 - C-114 *(error)* — Chained permissives: enables flow in **one consistent direction** (with material flow) — start-up ripples down the chain from a single conditional head. **No circular enables** (A enables B enables A = deadlock or a lie; reconvergence of parallel branches is topology, not a loop).
   *Scope:* the ban applies to the **enable chain only**. Process/safety interlocks are exempt and may feed back against flow direction (downstream-blocked stopping an upstream belt is an interlock, not an enable). Because enables are identifiable by name (C-115), the enable graph is statically checkable for cycles — a review target, human or AI, with no need to reason over belt configurations.
 - C-115 *(warn)* — Every equipment FB exposes the **same handshake vocabulary** through its UDT (e.g. `enable` in; `ready`, `running` out), so the chain wires identically everywhere. Run-on/stop delays for material clearing are named TONs per C-406.
+  **Clarified (owner ruling, 2026-07-17):** this applies to **every** equipment FB, including
+  consciously-stepped sequencers (C-113 "yes" — `FB_ShredderSequencer`/`FB_PusherControl`-style),
+  not only chained-permissive equipment — "they should expose that also, always, just ignore when
+  not needed." A stepped FB's caller may leave `enable`/`ready`/`running` unwired if this
+  integration has no use for them, but the interface UDT carries the members regardless — no
+  paradigm-based exemption from the vocabulary itself.
 - C-116 *(error)* — Bidirectional equipment has **one enable chain per direction**, each independently satisfying C-114 (the reviewer checks one acyclic graph per mode). The direction mode is explicit and mutually exclusive — never both directions, defined behaviour when neither is selected. An equipment FB takes its enable from exactly one chain at a time, selected by the mode; a rung never mixes conditions from both chains. (A belt feeding onto a bidirectional belt belongs to whichever chain(s) its material serves — chain membership follows material routing, not just belt orientation.)
 - C-117 *(error)* — Direction mode may change only when, **at minimum, all equipment in the affected section is stopped** (not-running feedback in the mode-change permissive). Whether additional conditions apply (section empty, perpendicular feeders held) is **defined per section by its material topology** and documented — an inline feeder and a perpendicular feeder have different consequences on reversal, so no blanket emptiness rule fits all layouts. No on-the-fly reversal, ever.
+  **Clarified (owner ruling, 2026-07-17):** the not-running-feedback interlock doesn't have to be
+  wired again by the caller if it is already genuinely enforced *inside* a called block (e.g. an
+  imported equipment FB's own internal reversal-pause interlock) — "if it is interlocked in the
+  FB there is no reason to duplicate elsewhere." A caller's transition may rely on that FB-internal
+  guarantee instead of adding a redundant `NOT RunFwdFB/RevFB` term of its own, as long as the
+  interlock genuinely exists inside the called block (verify, don't assume).
 - C-118 *(error)* — A stepped sequence's phase is exactly one `Step : Int` tag, living inside
   the block's own caller-visible interface UDT (the same struct C-115 already puts
   `enable`/`ready`/`running` in) — never a bare private Static, never a `DB_Controls`/`DB_Settings`
@@ -80,6 +108,12 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   reports on it. A `MOVE` that doesn't fire leaves `Step` untouched — no separate latch needed.
   Multiple possible exits from one step are mutually exclusive by construction (lower-priority exit
   explicitly excludes the higher-priority one), never arbitrated by network order.
+  **Clarified (owner ruling, 2026-07-17):** `Step = <from>` does not have to appear literally
+  inline in every transition's `EN` — if a named bit is a genuine equivalent (it contains, and is
+  never true without, `Step = <from>`), reusing that named bit satisfies the rule and is preferred
+  over duplicating the comparison inline (C-601's name-it-once principle applied here too). Confirm
+  the bit is a true equivalent before relying on it — an approximate or conditionally-narrower bit
+  does not qualify.
 - C-122 *(error)* — A step's own maximum dwell gets a dedicated timer, multi-instance inside
   the block's own Static section per C-407 (it belongs to this instance, not `DB_Timers`), `IN`
   gated by `Step = <that step>` — self-resets the instant the step changes. `PT` comes from a
@@ -92,6 +126,13 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   own condition clears, never writes `Step`). A fault is latched, cleared only by a named
   `FaultReset`, handled by an explicit transition to a defined recovery/abort step — never a silent
   freeze. They compose (a fault is often "this hold recurred too many times") but stay two bits.
+  **Clarified (owner ruling, 2026-07-17):** "All faults must be reset by `FaultReset`" is
+  universal, no exceptions — every fault bit, including one with no safer intermediate step to
+  force (e.g. a timeout fault raised from a step with nowhere better to go), still satisfies the
+  explicit-recovery-transition requirement via `FaultReset AND <fault> → step 0` (idle, C-119):
+  `FaultReset` firing *is* the recovery transition when no other recovery step applies. A fault
+  is never left as alarm-only with no transition at all — the transition may simply be "back to
+  idle," but it must exist and be wired.
 - C-124 *(error)* — On PLC restart (OB100, same block as C-403/C-305), `Step` and every other
   transient run-state (`Hold`, edge-memory, in-progress event counters) force-write back to idle,
   regardless of retentivity — mirrors C-403's own reasoning. Scoped narrowly: a genuine fault latch
@@ -129,6 +170,19 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   the FB usable exactly once, silently defeating C-106's whole reuse premise, and hides a real
   dependency on another piece of equipment inside logic instead of in the one place (the calling
   FC) a reader would actually look for it.
+- C-128 *(error)* — **No automatic restart after a stop or power event.** Once equipment has
+  stopped — via E-Stop, a PLC power cycle/restart (C-124), or a control-circuit power loss — it
+  never resumes motion on its own. A fresh, explicit start command from the operator is always
+  required, and it re-runs the **full** start-up sequence (siren, permissives, staged starts) from
+  the top — never a mid-sequence resume, even if retentive state made one possible. Any deviation
+  is a **documented, named exception** stated where it applies (e.g. one specific recovery
+  transition under C-123), never a default assumption.
+  *Why:* owner ruling, 2026-07-17 (`docs/notes/owner-questions.md` D-1/B-2) — a demo-panel
+  omission (no OB100, RETAIN `Step`/`RunFwd`/`RecentStart`) let a PLC power cycle mid-run silently
+  re-command the shredder motor, unwarned. Unwarned motion on power-up is exactly the hazard
+  E-Stop circuits exist to prevent; the same guarantee must hold on the PLC-logic side of the
+  boundary. This makes explicit the outcome C-124's mechanism (force `Step` to idle at OB100)
+  exists to guarantee, and generalizes REQ-062's per-project wording into a site-wide rule.
 
 ## Commenting
 
@@ -178,13 +232,27 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 - C-501 *(warn)* — All category alarms live in **`DB_Alarms`**, packed into Words per category, named `<Category>Alarm0`, `<Category>Alarm1`, … extending by Word as counts exceed 16.
   *Why:* WinCC Unified discrete alarms trigger cleanly off Word tags (Ints misbehave), and Words group related alarms meaningfully for HMI and comms mapping.
   Alarm bits are written via slice access (`DB_Alarms.EStopAlarm0.%X3`) — a **documented exception to C-301**, on two conditions: exactly one alarm bit per network, and the network title states the alarm text (matching the HMI alarm text), so the rung is read by its title, never by decoding `%Xn`.
-- C-502 *(warn)* — `FC_AlarmsMain` (called from OB1 per C-109) calls one monitoring FC per monitored function/category. Categories vary per project, but `FC_GeneralAlarms` (catch-all) and `FC_EStopAlarms` always exist.
+- C-502 *(warn)* — `FC_AlarmsMain` (called from OB1 per C-109) calls one monitoring FC per monitored function/category. Categories vary per project, but `FC_GeneralAlarms` (catch-all) and `FC_EStopAlarms` always exist. **No project-scale-down exception** — a small/demo project still instantiates the skeleton, even with few or no alarms in it yet. *(Confirmed by owner, 2026-07-17 — owner-questions C-6: "this is always required even if not used.")*
 - C-503 *(warn)* — Repeatable equipment (motors, VSDs, …) monitors its own alarms **inside its FB, per instance**. Alarm and faceplate data reaches the HMI through the equipment's UDT interface — the UDT carries everything the HMI needs; category words in `DB_Alarms` are not duplicated per instance.
 - C-504 *(error)* — **One alarm rung monitors one fault, and one root cause raises one alarm.** Where a fault is a known *consequence* of another alarm (e.g. E-Stop drops a drive's Ready), the consequence alarm is suppressed by a `-|/|-` on the causal alarm bit, extended by a short TON (per C-406) so slow-recovering equipment doesn't flash consequence alarms while the cause resets. Suppression lasts only for the causal alarm's duration (+ delay) — a genuine second fault that persists beyond it still alarms.
   *Why:* site incident — E-Stop presses flooded the alarm list with "Not Ready" echoes, burying the actual cause. Same principle as C-409: one fact, one place.
 - C-505 *(warn)* — Alarm text format: **`<Equipment> — <fault> — <action hint>`**. Equipment identifier per C-004, English per C-006.
 - C-506 *(warn)* — Fixed three-class severity taxonomy, assigned by the **operator-action test** (not perceived badness): **Fault** (equipment stopped/stopping; intervention before restart), **Warning** (running degraded/approaching limit; action soon), **Info/Event** (record only). Per-alarm class assignment happens in the project alarm list at kickoff (alongside the C-004 equipment list); the classes and their HMI presentation (colours, filtering) never vary between projects — fixed container, variable contents, same move as C-305.
 - C-507 *(warn)* — Alarms **self-clear when their condition clears; no acknowledgment required** — except documented per-alarm exceptions (expected to be Class 1 faults where proof a human saw it matters, e.g. E-Stop events; each exception is documented individually regardless).
+  **Clarified (owner ruling, 2026-07-17) — this rule was being misread against C-123, not
+  violated by it.** Two distinct mechanisms, easily conflated:
+  - **PLC-side fault latch + `FaultReset`** (C-123) — a control-logic requirement, always present
+    on a fault bit, from the PLC's own perspective. The vast majority of fault bits latch and need
+    `FaultReset`; this is normal and does **not** by itself make the alarm "ack-required."
+  - **HMI-side alarm acknowledgment** (this rule) — WinCC's own ack feature, genuinely optional
+    per-alarm. Because the underlying fault already demands an explicit human action
+    (`FaultReset`) to clear, a *second* HMI acknowledgment gesture is redundant for most alarms —
+    C-507's no-ack-required default is correct as written and GenProject1's latched,
+    `FaultReset`-cleared X1–X8 bits are **not** a C-507 exception case merely for latching.
+  - **Optional, separate:** a project may still want a timestamped *record* of when an operator
+    first saw an alarm (view-time) distinct from when it appeared and when it was fixed — that is
+    a logging/traceability feature, not the same thing as requiring acknowledgment to clear, and
+    doesn't change an alarm's ack-required status under this rule.
 
 ## Simplicity & readability
 
@@ -219,10 +287,24 @@ stricter-bar principle in the preamble — the rules a simplicity reviewer cites
   `NOT AlwaysTrue` idiom **with a comment naming the gap** is reserved for known-unbuilt
   placeholders. A bare, uncommented `AlwaysTrue`-derived constant is a finding: the reader can't
   tell design from debt, and the loud-TODO idiom only stays loud if it's *only* used for TODOs.
+  **Resolved wording conflict (owner ruling, 2026-07-17):** the rule's two branches previously
+  read as licensing the same shape two ways — a *permanent design fact* ("this plant has no hand
+  station") is **not** a known-unbuilt placeholder and must never be wired via `NOT AlwaysTrue`,
+  commented or not; `NOT AlwaysTrue` is reserved strictly for real, temporary, to-be-built gaps.
+  A permanent constant instead uses a dedicated, named constant: type (default `Bool`), a start
+  value matching the idle/default state (default `0`/`FALSE` if unclear), named
+  `placeholder_<Var Name>` (e.g. `placeholder_HandReverse`). This keeps the loud-TODO value of
+  `NOT AlwaysTrue` intact (it is now genuinely never used for anything else) while giving
+  permanent facts their own visually-distinct, equally-named-and-commented form.
 - C-605 *(error)* — **Interface members carry comments.** Every member of an equipment FB's
   interface UDT (the C-115/C-125/C-503 HMI-facing surface) carries a one-line member comment —
   role, units where numeric, and for settings the C-307 scope. *(Severity set to error by owner,
-  2026-07-16: "this should always be true.")*
+  2026-07-16: "this should always be true.")* **Extended (owner ruling, 2026-07-17 — owner-
+  questions F-3/F-4):** the same one-line-comment requirement applies to `DB_Settings` members
+  (any plant-wide setting that doesn't live in a single instance's UDT, C-307) on exactly the same
+  terms as interface UDT members — role, units, scope. More generally: **all AI-generated code
+  must be commented** — C-605's discipline is the specific, error-severity instance of that
+  general standing requirement, not an exception carved out for interface UDTs alone.
 - C-606 *(warn)* — **Justify size against the requirement.** A block whose behavior exceeds the
   requirement's literal ask carries, in its header **comment** (title stays short, per C-203), one
   line per extra feature saying why it exists. Unrequested capability is a complexity cost like
@@ -234,6 +316,42 @@ stricter-bar principle in the preamble — the rules a simplicity reviewer cites
   *Why:* C-106's "sameness is a simplicity feature," applied to design idioms — GenProject1's two
   sibling FBs solved settings access two different ways (retrospective F-5, resolved by
   C-307/C-308's 2026-07-16 sharpening).
+
+Adopted 2026-07-17 (owner-questions F-5 — "they all sound good adopt them please") from the four
+candidate rule gaps `review-simplicity`'s blind validation run surfaced against fix wave 1:
+
+- C-608 *(warn)* — **A comment must not contradict its rung.** If a network's comment describes
+  semantics the logic does not implement (e.g. a "re-triggering window" comment over a rung that
+  is actually one fixed window from the first event), the comment is corrected to match the rung,
+  or the rung is corrected to match the intended semantics — the two are reconciled before either
+  ships. A stale or aspirational comment is worse than none: it actively misleads the one-reading
+  test rather than just failing to help it.
+  *Why:* fix wave 1's reversal-window finding — the comment promised re-arming behavior the TON
+  did not implement (REQ-028's actual number-chain was satisfied; only the comment misled).
+- C-609 *(warn)* — **A redundant condition term states its reason.** A contact/term that is
+  already logically implied by another term in the same expression (belt-and-braces) is either
+  dropped, or kept with a comment stating why the redundancy is deliberate (defence-in-depth, an
+  upstream invariant the author doesn't want silently relied on). An unexplained redundant term
+  makes a reader doubt their own reading of the named condition sitting beside it.
+  *Why:* fix wave 1's `FB_ShredderSequencer` network 6 finding — `IO.DownstreamRunning` is already
+  implied by `NOT StopCmd` in the same expression, with no comment saying why it's repeated.
+- C-610 *(error)* — **No undocumented dead signals.** A buffer or interface member that is written
+  but never consumed, or consumed but never written anywhere, carries a known-gap comment at its
+  mapping/declaration point — the same discipline C-604 requires for constants, extended to
+  signals. Absent that comment, a dead signal is indistinguishable from a wiring mistake and is a
+  defect finding, not context.
+  *Why:* GenProject1 shipped an unwritten `IO.InCycle` (a permanently-off in-cycle lamp) and two
+  mapped-but-unconsumed inputs (`Pusher_Local_Remote`, `Infeed_Conv_Running`) with no gap comment
+  anywhere in the corpus.
+- C-611 *(warn)* — **A C-601-named bit lives with what it names.** When a repeated condition is
+  written once to a named bit (C-601), that bit is declared as close as possible to its first use
+  — a block-local Static for a block-internal condition, promoted into the interface UDT only if
+  a caller or another block genuinely needs to read it. Naming a condition is not, by itself, a
+  reason to widen its scope.
+  *Why:* closes a gap C-601 leaves open — it requires *naming* a repeated condition but says
+  nothing about *where the name lives*. **Scope inferred, not directly evidenced** in this
+  session's source material (the originating finding wasn't located verbatim) — flagged for
+  owner confirmation that this is the gap meant, next time it comes up.
 
 ## To fill in (owner: Oisin)
 

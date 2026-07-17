@@ -1,0 +1,6 @@
+DB DB_PLC
+  ROOTID 0
+  NUMBER 7
+  COMMENT "PLC-specific system data (C-305). Simulation is force-reset FALSE at every startup (OB100, C-305/C-403) regardless of retentivity - simulation mode must never survive a power cycle; start values only apply at download, not restart."
+  MEMBERS
+    Simulation : Bool RETAIN = FALSE

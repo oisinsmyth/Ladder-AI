@@ -43,11 +43,12 @@ A finding of "correct but harder to read than it needs to be" is a real finding,
 
 ## Stages and skills
 
-Thirteen skills across five phases. Names are the planned `.claude/skills/` names: pipeline-only
-skills carry a `gen-` prefix; the reviewers don't, because they are useful against *any* block,
-generated or not. Each skill's contract: declared input artifacts, one output artifact, the docs
-that bind it, and stop conditions (missing info → a question in the artifact's "Open questions"
-section, never an invention).
+Fifteen skills across five phases (raised from thirteen, 2026-07-17 — owner-questions A-2: the
+Build phase's coding skill split into three). Names are the planned `.claude/skills/` names:
+pipeline-only skills carry a `gen-` prefix; the reviewers don't, because they are useful against
+*any* block, generated or not. Each skill's contract: declared input artifacts, one output
+artifact, the docs that bind it, and stop conditions (missing info → a question in the artifact's
+"Open questions" section, never an invention).
 
 | # | Skill | Phase | Consumes → Produces | Anchors |
 |---|-------|-------|---------------------|---------|
@@ -55,15 +56,23 @@ section, never an invention).
 | 2 | `gen-pid-analysis` | Analyse | P&ID / drawings → `process-topology.md`: equipment+instrument inventory, material-flow direction, interlock candidates | C-114/C-116 (chain direction = material flow) |
 | 3 | `gen-io-tags` | Analyse | Site IO list + owner's address table → `io-map.md` + proposed tag-table IR | C-001, C-304; addresses never invented (hard rule 3) |
 | 4 | `gen-reconcile` | Analyse | Artifacts 1–3 → `rfi.md`: three-way cross-check, gaps, contradictions, undefined edge cases (first scan, restart, E-stop recovery, simultaneous inputs) | `11-review-workflow.md` edge-case list |
-| 5 | `gen-architecture` | Design | Artifacts 1–4 → `architecture.md`: block manifest, FB-vs-FC per C-113, UDT interfaces, DB landscape, enable-chain graph, OB1 order, pattern mapping + freeform %, REQ→block trace | C-109/C-110/C-113/C-114/C-115/C-127, C-30x |
+| 5 | `gen-architecture` | Design | Artifacts 1–4 → `architecture.md`: block manifest carved reuse-first (owner-questions A-1), UDT interfaces, DB landscape, enable-chain graph, OB1 order, pattern-tier mapping + freeform %, REQ→block trace | C-109/C-110/C-113/C-114/C-115/C-127, C-30x |
 | 6 | `gen-alarm-design` | Design | Artifacts 1, 5 → `alarms.md`: category words, cause→consequence suppression matrix, texts, severities | C-501–C-507 |
-| 7 | `gen-block-coding` | Build | `architecture.md` + `patterns/` → one block's IR, compile-clean | Existing 5-step loop (CLAUDE.md); C-126 at write time |
-| 8 | `gen-integration` | Build | Coded blocks + `architecture.md` → wired `FC_ControlMain`/OB1/instance DBs; whole-device compile | C-109/C-110/C-111/C-127 |
-| 9 | `review-conventions` | Check | IR + `06-lad-conventions.md` → findings (rule ID, location, severity, fix) | Wraps `converter review` + AI pass over non-mechanical rules (S4) |
-| 10 | `review-functional` | Check | `requirements.md` + IR (no author reasoning) → per-REQ trace; unimplemented REQs; **unrequested logic** | Requirements register |
-| 11 | `review-simplicity` | Check | IR + written simplicity rules → findings; one-sentence-per-network test | C-6xx (pending), C-101, C-126, the quality bar above |
-| 12 | `audit-artifact` | Check | Any stage artifact + its raw source → dropped/hallucinated-content findings | `14-s2-explanation-checklist.md` precedent |
-| 13 | `generate` | Entry | A request → stage selection, per-project state, gate enforcement, final presentation, S8 harvest | CLAUDE.md S6 workflow step 5 |
+| 7 | `gen-block-new` | Build | `architecture.md` (tier-(d)/freeform or tier-(a)/(b) items) + `patterns/` → one new block's IR, compile-clean | Existing 5-step loop (CLAUDE.md); C-126 at write time |
+| 8 | `gen-block-modify-purpose` | Build | `architecture.md` (tier-(c) item) + as-built block → modified block's IR, compile-clean, untouched-network invariance proof | CLAUDE.md "Workflow for modifying existing logic" (S7 gate); shared modification-choreography reference (§ below) |
+| 9 | `gen-block-modify-fix` | Build | A named defect (e.g. owner-questions §B docket) + as-built block → fixed block's IR, compile-clean, untouched-network invariance proof | Same as `gen-block-modify-purpose`; validation corpus is the B-docket |
+| 10 | `gen-integration` | Build | Coded blocks + `architecture.md` → wired `FC_ControlMain`/OB1/instance DBs; whole-device compile | C-109/C-110/C-111/C-127 |
+| 11 | `review-conventions` | Check | IR + `06-lad-conventions.md` → findings (rule ID, location, severity, fix) | Wraps `converter review` + AI pass over non-mechanical rules (S4) |
+| 12 | `review-functional` | Check | `requirements.md` + IR (no author reasoning) → per-REQ trace; unimplemented REQs; **unrequested logic** | Requirements register |
+| 13 | `review-simplicity` | Check | IR + written simplicity rules → findings; one-sentence-per-network test | C-6xx (pending), C-101, C-126, the quality bar above |
+| 14 | `audit-artifact` | Check | Any stage artifact + its raw source → dropped/hallucinated-content findings | `14-s2-explanation-checklist.md` precedent |
+| 15 | `generate` | Entry | A request → stage selection, per-project state, gate enforcement, final presentation, S8 harvest | CLAUDE.md S6 workflow step 5 |
+
+Skills 8–9 (the modify pair) share a **modification-choreography reference** — the common
+procedure for scoping a touch to named network(s), proving the untouched-network invariance
+check, and presenting the before/after diff (CLAUDE.md "Workflow for modifying existing logic").
+Not itself numbered as a skill; documented inline in each until a dedicated reference doc is
+worth splitting out.
 
 Checks apply to *artifacts*, not just code: staging concentrates trust in artifacts, so an error in
 `requirements.md` is amplified by every stage that consumes it — that is what `audit-artifact`
@@ -84,7 +93,8 @@ exists for.
 - **Tag status — the anti-laundering rule.** Every tag named in any artifact is marked either
   `exists` (verified present in the current `ir/<project>/` export — verified by grep at write
   time, not memory) or `proposed` (a named gap; the engineer creates tags — hard rule 3).
-  `gen-block-coding` refuses to reference a `proposed` tag; promotion to `exists` happens only via
+  `gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix` refuse to reference a
+  `proposed` tag; promotion to `exists` happens only via
   a fresh export showing it. A pipeline must never let "proposed in stage 1" mutate into "assumed
   real by stage 7".
 
@@ -159,6 +169,12 @@ freeform surface the next build needs.
   least reliable input medium; `process-topology.md` is a draft-for-confirmation, never ground
   truth.
 - REQ-nnn IDs are stable once assigned — S9 sim tests will trace to them.
+- **Manual coding is bounded** (owner ruling 2026-07-17 — owner-questions A-3): once
+  `gen-block-new` exists and is validated, ad hoc manual coding to the CLAUDE.md 5-step contract
+  is no longer acceptable except by explicit **per-case owner waiver**, recorded where the waiver
+  is granted (the waived request's own artifact or, absent one, `docs/notes/stage-gates.md`).
+  Three coding waves ran manual-to-contract before this ruling (InCycle/DI4 fix, fix wave 1
+  phases 1–2) — grandfathered, not a precedent for further manual runs.
 
 ## Build order & status
 
@@ -173,18 +189,20 @@ corpus: a reviewer skill that doesn't independently find the known problems isn'
 | 2 | `review-simplicity` (validated against GenProject1) | **Built + blind-validated** 2026-07-16 (`docs/notes/review-simplicity-validation-2026-07-16.md`) |
 | 3 | `review-conventions` (independent of step 1) | **Built + blind-validated** 2026-07-16 (drift check byte-identical; `docs/notes/review-conventions-validation-2026-07-16.md`) |
 | 4 | `review-functional` + `requirements.md` format definition | **Built + two-phase-validated** 2026-07-16 (format's defining instance: `gen/GenProject1/requirements.md`, 69 REQs; historical-regression phase caught both known bugs blind; `docs/notes/review-functional-validation-2026-07-16.md`) |
-| 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/GenProject1/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`) |
-| 6 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
-| 7 | `gen-pid-analysis`, `audit-artifact`, `gen-block-coding`/`gen-integration` formalization (the current 5-step loop is the working seed) | Not built |
-| 8 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |
+| 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/GenProject1/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`); reuse-first Method rewrite (A-1) landed 2026-07-17 |
+| 6 | `gen-block-new`, `gen-block-modify-purpose`, `gen-block-modify-fix` formalization (+ shared modification-choreography reference) — **pulled forward** ahead of the remaining analysis skills (owner ruling 2026-07-17, A-2/A-3: three coding waves ran manual-to-contract while this sat unbuilt at the old step 7) | Not built. The current 5-step manual loop (CLAUDE.md) is the working seed. Exact internal sequencing — `converter diff` tooling first, which of the three skills builds first, S7-gate timing — awaits owner-questions **A-4** (still under discussion, not yet ruled) |
+| 7 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
+| 8 | `gen-pid-analysis`, `audit-artifact`, `gen-integration` formalization | Not built |
+| 9 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |
 
 ## Relationship to existing docs
 
 - **CLAUDE.md "Workflow for logic generation"** — the 5-step loop remains, as the inner loop of
-  `gen-block-coding`/`gen-integration`; this doc is the outer structure around it.
+  `gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix`/`gen-integration`, until A-3's
+  bound takes effect; this doc is the outer structure around it.
 - **`06-lad-conventions.md`** — the rule base every reviewer cites; the quality bar lives in its
   preamble.
-- **`07-pattern-library-spec.md`** — what `gen-block-coding` composes from and what the harvest
+- **`07-pattern-library-spec.md`** — what `gen-block-new` composes from and what the harvest
   step feeds.
 - **`11-review-workflow.md`** — the engineer's side of the two gates; unchanged.
 - **`13-data-boundary.md`** — gate at analysis entry.

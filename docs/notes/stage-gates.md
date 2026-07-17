@@ -4269,3 +4269,112 @@ principle, the S7-rush/thin-library economics, the build-order-drift lesson, and
 facts (classifier wants visible owner approval for site-data/admitted-content agent launches;
 fresh worktree openness-cli binaries hit TIA's first-connect approval dialog - use the session's
 approved binary for Portal work).
+
+## S6: owner-questions batch pass - rulings applied, three items deliberately held (2026-07-17)
+
+The owner answered `docs/notes/owner-questions.md` in full; this entry is the dated ruling record
+the doc's own "never silently" rule requires. Every clear answer was written into its home
+document rather than left narrative-only:
+
+- **A-1/A-2/A-3 (direction) applied.** `gen-architecture`'s Method rewritten for reuse-first
+  carving (library-whole -> pattern-composed -> library-modified -> freeform, matched against
+  cached per-run library/pattern summaries, extra capability on a whole-reuse item explicitly not
+  a finding). `docs/15-generation-pipeline.md` now carries the 3-skill Build-phase split
+  (`gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix` + a shared
+  modification-choreography reference), pulled forward to build-order step 6, and A-3's
+  manual-coding bound (per-case owner waiver required once `gen-block-new` exists). **A-4 (the
+  S7-first ordering) was explicitly NOT ruled** - the owner wants a fuller discussion before
+  committing to the internal sequencing; it stays open.
+- **B-docket verdicts recorded**, not yet coded - `gen/GenProject1/fix-wave-1-reviews.md`'s new
+  "Owner verdicts on the B-docket" section covers B-1 through B-6. B-2's ruling withdraws the
+  demo-panel OB100/`DB_PLC` startup-machinery waiver. B-5 surfaced a mismatch between the question
+  asked and the answer given - recorded honestly as partially answered, not forced to a verdict.
+- **C rulings applied to `docs/06-lad-conventions.md`:** C-8's `<DI/DO/AI/AO>` typo fixed to
+  `<DI/DQ/AI/AQ>`; new C-007 (vendor-default-name exception); C-502 gets a confirming note (no
+  project-scale-down, per C-6); new **C-128** (no automatic restart after E-Stop or a power
+  event, except a documented exception - closes D-1/Q-01/B-2 together); F-5's four candidate
+  rules adopted as **C-608-C-611** (comment-vs-rung contradiction, unexplained redundant terms,
+  undocumented dead signals, C-601-named-bit scope - the last one's precise origin wasn't located
+  in this session's source material, flagged for confirmation). **C-1 was not resolved** - the
+  owner's proposed placeholder-naming convention needs a clarifying round-trip.
+- **D applied/recorded:** D-1 -> C-128. D-3 -> `requirements.md` Q-11 resolved (real AI hardware
+  exists generally; this prototype panel stays bool-signal-only by choice, not by hardware gap).
+  **D-2 (settings rework) deliberately deferred** - owner's own call, documented as a live AITODO
+  entry rather than actioned. **D-4 (S6 exit tally, stage-gates size) explicitly not ruled** - the
+  owner wants a separate agent conversation about this doc's own bloat before deciding gate
+  structure; flagged, not resolved by this pass.
+- **E register resolved in `gen/GenProject1/requirements.md`:** Q-01 (new C-128), Q-08 (manual
+  restart always required), Q-10 (overcurrent and overload stay distinct, not merged), Q-11 (see
+  D-3), Q-12 (partial - `HrsRun` confirmed as the hour-clock's home, zeroable-reset behavior still
+  open). Q-03 and Q-05 got owner context without closing (an HMI-boundary skill idea filed as
+  `docs/16-future-ideas.md` FI-18; a motor-starter-FB hint noted for the reuse-first pass).
+- **F applied:** F-1 (converter reporter bug) confirmed real by the owner, ticketed. F-5 -> the
+  C-608-C-611 rules above.
+- **Held open, by the owner's own words, not this pass's choice:** A-4, D-2 (deferred), D-4
+  (routed to a separate conversation), C-1/C-2/C-3/C-4/C-5/C-7/C-10, D-5, F-2/F-3/F-4, and register
+  Q-02/Q-04/Q-06/Q-07/Q-09/Q-13/Q-14/Q-15 - each is a case where the owner asked for further
+  explanation/context before ruling, or explicitly asked that the topic wait. `owner-questions.md`
+  itself was updated to mark resolved items with a pointer here and keep the rest listed as open.
+
+## S6: owner-questions round 2 - remaining rule-book items ruled, two briefing docs prepared (2026-07-17)
+
+Same day, second pass: the clarification-needed items from round 1 came back answered.
+
+- **C-1 confirmed** - the `placeholder_<Var Name>` constant convention resolves C-604's
+  wording conflict; written in. **C-2** - an interlock already inside a called FB satisfies
+  C-117, no caller-side duplication needed; closes the sequencer's direction-change finding.
+  **C-3** - a named bit that's a genuine equivalent of `Step = <from>` may be reused, satisfying
+  C-121 (grep-confirm before treating pusher N7 as closed). **C-4** - `FaultReset -> step 0` is
+  itself the recovery transition C-123 requires, even with no safer intermediate step; queues a
+  verify-and-fix for `ParkedTimeoutFault`. **C-5** - C-115's handshake vocabulary applies to
+  stepped-sequence FBs too, always, even if a given integration leaves it unwired; queues an
+  interface-extension item (needs `gen-block-modify-purpose`, not a fix). **C-7** - resolved the
+  actual confusion: PLC fault-latch/`FaultReset` (C-123) and HMI alarm acknowledgment (C-507) are
+  different mechanisms; GenProject1's latched X1-X8 bits were never a C-507 exception case, no
+  change needed. **C-10** - tentatively accepted as context (owner: "I dont know this is all
+  vibes"), not turned into a rule. **F-2** - the `FaultFB` cross-block split is the FB's intended
+  contract (deliberate external set, per-instance isolation); documented as a named C-103
+  exception pattern. **F-3/F-4** - "all AI code need commented" generalizes C-605 to
+  `DB_Settings` members too (F-4 folds in); F-3's literal empty-end-state sub-question stayed
+  unanswered, still open. All written into `docs/06-lad-conventions.md` (C-103/C-115/C-117/
+  C-121/C-123/C-507/C-604/C-605) and `gen/GenProject1/fix-wave-1-reviews.md`'s "Round 2" section.
+- **Register resolved:** Q-04 partial (three types confirmed, FuncDesc primary - setpoint
+  numbers still needed; the owner separately noted this kind of source disagreement should be
+  flagged for a ruling as soon as found, not carried as a long-open question). Q-07 (3s upstream
+  delay confirmed), Q-13 (reversal display is HMI-side, fault lamp is PLC-driven - now proposed),
+  Q-14 (`FaultReset` is the only precondition, no separate control-on step), Q-15 (Hand is always
+  an overlay on Manual, not a fourth mode) all closed in `gen/GenProject1/requirements.md`.
+- **B-5 still open, and honestly so.** The owner's round-2 answer confirmed REQ-027's
+  reverse-then-continue step design (already correct as built) but addressed a different question
+  than the one asked - the REQ-028 counting-window semantics (does the 3-minute window re-arm on
+  every reversal, or run once fixed from the first?) remain unresolved. Re-asked with a concrete
+  worked numeric example rather than guessed at.
+- **D-5 now resolved as deferred** (round 1 had it as needing clarification); at the owner's own
+  suggestion, a new `docs/notes/deferred-items.md` was created to hold genuinely-deferred (not
+  merely under-debate) work, and D-2 moved there alongside it.
+- **A-4 and D-4 briefing docs prepared** (`docs/notes/a4-s7-ordering-briefing.md`,
+  `docs/notes/d4-stage-gates-review-briefing.md`) per the owner's request - context, what's
+  already landed, and concrete decision points for whichever agent/conversation the owner directs
+  there. Neither A-4 nor D-4 is ruled; the docs are prep, not a ruling by proxy. Notably, D-4's
+  briefing surfaces that `docs/02-roadmap.md`'s S7 entry criterion ("S6 done") is in tension with
+  the owner's S7-rush framing - flagged for that conversation, not resolved here.
+- **Still genuinely open after round 2:** A-4, D-2 (deferred), D-4, B-5 (re-asked), F-3's
+  empty-end-state sub-question, and register Q-02/Q-06/Q-09. `owner-questions.md` updated
+  throughout with round-2 pointers.
+
+## S6: owner-questions round 3 - B-5 resolved as a real defect, not a comment fix (2026-07-17)
+
+Third pass, same day. **B-5 resolved:** the REQ-028 reversal-count window is re-arming - the
+count clears only after 180s with no new reversal, every reversal restarts the clock - the
+opposite of fix wave 1's actual fixed-window-from-first-reversal implementation. This upgrades
+B-5 from "comment mismatch" to a genuine functional defect, queued in the B-docket
+(`gen/GenProject1/fix-wave-1-reviews.md`, `requirements.md` REQ-028). **F-3 resolved:**
+`DB_Settings` is allowed to end up empty after the settings rework - not forced to keep content.
+**Q-04 fully resolved:** per-type overcurrent setpoint numbers deferred (owner doesn't have them
+yet) - moved to `docs/notes/deferred-items.md`, affected `DB_Settings` members get an explicit
+`0` placeholder start value per the C-604 convention in the meantime.
+
+Every item raised in `docs/notes/owner-questions.md` is now either closed (with a pointer) or
+deliberately deferred/routed to a separate conversation - A-4, D-2, D-4, D-5 (deferred, tracked
+in `docs/notes/deferred-items.md`), F-3(b) (unprioritized tooling backlog), and register
+Q-02/Q-06/Q-09 (simply unanswered) are what remains.
