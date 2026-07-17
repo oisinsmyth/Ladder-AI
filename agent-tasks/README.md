@@ -72,7 +72,7 @@ if it's still open, your IR draft + preflight will very likely hit the same wall
 | 4 | [`05-fitted-live-drop.md`](05-fitted-live-drop.md) | ready (⚠ likely hits D-6) | - | yes |
 | 5 | [`06-reversal-window-rearm-fix.md`](06-reversal-window-rearm-fix.md) | ready (⚠ likely hits D-6) | - | yes |
 | 6 | [`07-endtraveltimer-suppression.md`](07-endtraveltimer-suppression.md) | ready (⚠ likely hits D-6) | - | yes |
-| 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | blocked — D-6 (converter gap); IR fix drafted in `ir/GenProject1/FB_PusherControl.ir` Network 10, unconverted | - | conditional (see file) |
+| 7 | [`08-parkedtimeoutfault-recovery.md`](08-parkedtimeoutfault-recovery.md) | **done** (carried through by task 03's whole-file round trip; see `fix-wave-1-reviews.md` C-4) | - | conditional (see file) |
 | 8 | [`09-sequencer-interface-extension.md`](09-sequencer-interface-extension.md) | ready (⚠ likely hits D-6) | - | yes |
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**

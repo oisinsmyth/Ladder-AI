@@ -198,7 +198,8 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   closing the specific N7 finding, confirm by grep that the named bit never reads true without
   `Step = 0` also true — if confirmed, no fix needed; if the bit is only an approximation, it
   still needs the inline form.
-- **C-4 (C-123) — verified missing, fix drafted, blocked on a converter gap (task 08).** Owner:
+- **C-4 (C-123) — DONE (closed 2026-07-17, compiled clean via task 03's whole-file round trip).**
+  Owner:
   "All faults must by reset by FaultReset." Doc 06 C-123 now states `FaultReset AND <fault> →
   step 0` satisfies the explicit-recovery-transition requirement even with no safer intermediate
   step. Phase 1 (grep-confirmed): no fault in `FB_PusherControl` forces a step-0 transition on
@@ -215,10 +216,15 @@ block must match; ticket the reporter/counter divergence as a real bug (small/no
   data from a prior export" — only whole-file `--synthesize` for genuinely new, sidecar-less
   networks (which itself hard-errors if a real `SIDECAR` section is present). Per CLAUDE.md hard
   rule 7 this is a converter limitation to report, not a sidecar to hand-patch. Full writeup:
-  `docs/notes/deferred-items.md` D-6. **This blocks every other queued B/C-docket task that adds
-  logic to an already-exported network** (03/04/05/06/07/09), not just this one — flagged in
-  `agent-tasks/README.md`. IR diff is ready to convert/import/compile the moment the converter
-  gains this capability; no Portal queue slot claimed.
+  `docs/notes/deferred-items.md` D-6 (workaround documented there — whole-file sidecar strip +
+  `--synthesize`, proven by task 03).
+  **Resolved without a converter fix, by the whole-file workaround:** task 03's own round trip on
+  the same file (`FB_PusherControl.ir`) carried this Network 10 `MOVE` through to a clean compile
+  as a side effect — re-exported IR confirmed byte-identical everywhere except task 03's own
+  Network 11, meaning this fix survived untouched and is now live in the compiled scratch project.
+  Verified 2026-07-17 (grep-confirmed against the current committed IR): Network 10 reads
+  `MOVE(EN := IO.Step = 30 AND IO.ParkedTimeoutFault AND IO.FaultReset, IN := 0) => IO.Step`,
+  exactly the drafted fix. No separate Portal round trip needed for this entry specifically.
 - **C-5 (C-115) — closed, design change queued.** Owner: "They should expose that also, Always,
   just ignore when not needed." `FB_ShredderSequencer`'s and `FB_PusherControl`'s interface UDTs
   need `enable`/`ready`/`running`-equivalent members added (per doc 06 C-115's new clarification)

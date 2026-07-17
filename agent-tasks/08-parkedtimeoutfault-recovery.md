@@ -2,7 +2,7 @@
 task: 08-parkedtimeoutfault-recovery
 source: owner-questions C-4 (doc 06 C-123)
 portal: conditional — verify phase is Portal-free; fix phase (if needed) uses GenProject1 scratch project
-status: ready
+status: done (2026-07-17) — fix carried through to a clean compile by task 03's whole-file round trip; see gen/GenProject1/fix-wave-1-reviews.md C-4
 queue-order: 7
 ---
 
