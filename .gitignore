@@ -35,9 +35,11 @@ SampleProject/
 # S6 generation sandbox (2026-07-15) — a live, working TIA project used to incrementally build up
 # a real generated project via small prompted steps. Same reasoning as SampleProject/: never commit
 # the live project folder itself, only whatever gets extracted from it. Anchored to repo root
-# (2026-07-16) so the extracted corpus ir/GenProject1/ + simatic-ml/GenProject1/ CAN be committed:
-# Green-tier by construction (docs/13-data-boundary.md, 2026-07-15 GenProject1 entry), kept as the
-# durable S6 output and the standing validation corpus for reviewer skills (docs/15).
+# (2026-07-16) so the extracted corpus ir/test-project001/ + simatic-ml/test-project001/ CAN be
+# committed: Green-tier by construction (docs/13-data-boundary.md, 2026-07-15 GenProject1 entry —
+# codenamed test-project001 from 2026-07-17), kept as the durable S6 output and the standing
+# validation corpus for reviewer skills (docs/15). The live TIA project folder itself keeps its
+# original on-disk name (GenProject1/) for Openness continuity — see CLAUDE.md's codename note.
 /GenProject1/
 
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
