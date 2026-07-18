@@ -52,10 +52,10 @@ public static class SidecarSynthesizer
     // Input/Output/InOut member names — Constant excluded, a compile-time-substituted mechanism,
     // not a scoped variable) and passes it to every network — see Synthesize's own doc comment for
     // why this matters. ConstantMembers not included: never referenced this way in this codebase.
-    public static IReadOnlyList<NetworkSidecar> SynthesizeBlock(IrBlock block)
+    public static IReadOnlyList<NetworkSidecar> SynthesizeBlock(IrBlock block, CalleeInterfaceRegistry? callees = null)
     {
         var localNames = ComputeLocalNames(block);
-        return block.Networks.Select(network => Synthesize(network, localNames)).ToList();
+        return block.Networks.Select(network => Synthesize(network, localNames, callees)).ToList();
     }
 
     private static IReadOnlySet<string> ComputeLocalNames(IrBlock block)
@@ -108,7 +108,7 @@ public static class SidecarSynthesizer
     // reduces ScopeFor to the original always-GlobalVariable behavior exactly).
     public static NetworkSidecar Synthesize(IrNetwork network) => Synthesize(network, NoLocalNames);
 
-    public static NetworkSidecar Synthesize(IrNetwork network, IReadOnlySet<string> localNames)
+    public static NetworkSidecar Synthesize(IrNetwork network, IReadOnlySet<string> localNames, CalleeInterfaceRegistry? callees = null)
     {
         RequireInScope(network);
 
@@ -170,7 +170,7 @@ public static class SidecarSynthesizer
         var calls = new List<CallStatementSidecar>();
         foreach (var call in network.Calls)
         {
-            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty));
         }
 
         return new NetworkSidecar(
@@ -673,35 +673,28 @@ public static class SidecarSynthesizer
         return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, "Real", "DInt", destAccessUId, destWireUId);
     }
 
-    // An FB CALL — scoped (v2) to zero wired arguments: a Call with any Input/Output argument hard-
-    // errors, unimplemented (there is no grounded, live-verified shape here to mint CallArgumentSidecar
-    // Type strings from without a real donor). Every equipment FB this project has built or reused
-    // (MotorStarter/MotorDOL, MotorFwdRevSystem, and this build's own new FB_PusherControl/sequencer)
-    // exposes its interface through a caller-visible STATIC struct (C-115/C-118) instead of Input/
-    // Output parameters, wired by ordinary Coil/Move statements to the instance's own dotted path
-    // before the CALL — so a zero-argument, en-gated CALL covers every real need this build has.
+    // An FB/FC CALL. Two argument shapes are supported:
+    //   - Zero-argument (en-gated) — the site's STATIC-struct convention (C-115/C-118): the callee
+    //     exposes its interface through a caller-visible STATIC struct wired by ordinary Coil/Move
+    //     statements to the instance's dotted path before the CALL. Covers every equipment FB this
+    //     project reuses (MotorStarter/MotorDOL, MotorFwdRevSystem, FB_PusherControl/sequencer).
+    //   - Wired Input/Output arguments — for a callee exposing formal INPUT/OUTPUT parameters (a
+    //     reusable, C-304/C-127-clean FB). The argument Type strings come from the callee's own .ir
+    //     interface via CalleeInterfaceRegistry (ADR-0001: the callee .ir is the source of truth for
+    //     its interface — the readable CALL deliberately omits types), mirroring what the read side
+    //     records from a source <Parameter Type=…> element (GraphReducer.ReduceCall). See
+    //     BuildCallArguments. InOut params are not yet supported — they resolve as "unknown parameter"
+    //     and hard-error rather than being silently mistyped.
     // Instance is a standalone instance DB referenced by name (GlobalVariable scope, single-component
-    // path — confirmed real, FC ControlDelays' own standalone-timer precedent: "a single Component
-    // naming its own instance DB directly"), not a multi-instance nested in the caller's own Static
-    // section (that's TON's own LocalVariable-scoped shape, genuinely different, see BuildTimerSidecar) —
-    // matching how PlantAutoControl's own 20 real FB calls each reference their own dedicated instance DB.
-    // BlockType is inferred "FB" when an instance is present, "FC" otherwise — a safe default for
-    // this build specifically (every call it authors either has one or doesn't, matching the
-    // established correlation), not a claimed general rule (ir/SPEC.md is explicit that FB=>Instance/
-    // FC=>no-Instance isn't proven universal).
+    // path — confirmed real, FC ControlDelays' own standalone-timer precedent), not a multi-instance
+    // nested in the caller's own Static section (TON's own LocalVariable-scoped shape, see
+    // BuildTimerSidecar). BlockType is inferred "FB" when an instance is present, "FC" otherwise — a
+    // safe default matching the established correlation (ir/SPEC.md notes FB=>Instance/FC=>no-Instance
+    // isn't proven universal).
     private static CallStatementSidecar BuildCallSidecar(
         CallStatement call, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, CalleeInterfaceRegistry callees)
     {
-        if (call.Arguments.Count > 0)
-        {
-            throw new UnsupportedSynthesisConstructException(
-                $"Network: sidecar synthesis only supports zero-argument CALLs (found {call.Arguments.Count} " +
-                $"wired argument(s) on a call to '{call.BlockName}') — every equipment FB this build calls " +
-                "exposes its interface through a STATIC struct instead, wired by ordinary Coil/Move " +
-                "statements before the CALL, not through Input/Output parameters.");
-        }
-
         var (chainRail, steps) = BuildChain(call.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
         var callPartUId = nextUid++;
 
@@ -718,6 +711,8 @@ public static class SidecarSynthesizer
             instanceComponentPath = instancePath.Split('.');
         }
 
+        var arguments = BuildCallArguments(call, callees, ref nextUid, accessEntries, constantEntries, localNames);
+
         return new CallStatementSidecar(
             callPartUId,
             call.BlockName,
@@ -727,7 +722,85 @@ public static class SidecarSynthesizer
             instanceUId,
             instanceScope,
             instanceComponentPath,
-            Arguments: Array.Empty<CallArgumentSidecar>());
+            Arguments: arguments);
+    }
+
+    // Mints the wired Input/Output argument sidecars for a CALL, taking each argument's Type from the
+    // callee's interface (CalleeInterfaceRegistry). Input value operands reuse ResolveOperand (the same
+    // resolver the read side's Input path uses); Output destinations mint an ordinary dest Access + wire
+    // exactly like MOVE's out1. Emitted in written order — TIA matches <Parameter> by Name, so order is
+    // not semantically load-bearing. Every failure is an explicit hard-error naming the callee +
+    // parameter, never a silent guess (hard rule 7).
+    private static IReadOnlyList<CallArgumentSidecar> BuildCallArguments(
+        CallStatement call, CalleeInterfaceRegistry callees, ref int nextUid,
+        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            return Array.Empty<CallArgumentSidecar>();
+        }
+
+        if (!callees.TryGetBlock(call.BlockName, out var parms))
+        {
+            throw new UnsupportedSynthesisConstructException(
+                $"Network: cannot synthesize the wired CALL to '{call.BlockName}' — the callee's interface is not " +
+                "available. Include the callee's .ir in the same `to-xml --synthesize` batch (or pass " +
+                "`--project <ir-dir>`) so its parameter types can be resolved (ADR-0001: the callee .ir is the " +
+                "source of truth for its interface).");
+        }
+
+        var arguments = new List<CallArgumentSidecar>(call.Arguments.Count);
+        foreach (var argument in call.Arguments)
+        {
+            switch (argument)
+            {
+                case CallArgument.InputArg input:
+                {
+                    var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
+                    var value = ResolveOperand(input.Value, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+                    arguments.Add(new CallArgumentSidecar.InputArgSidecar(input.ParamName, param.Type, value));
+                    break;
+                }
+
+                case CallArgument.OutputArg output:
+                {
+                    var param = RequireParam(call.BlockName, output.ParamName, "Output", parms);
+                    var destAccessUId = nextUid++;
+                    accessEntries.Add(new SidecarAccessEntry(output.DestTag, destAccessUId, ScopeFor(output.DestTag, localNames)));
+                    var destWireUId = nextUid++;
+                    arguments.Add(new CallArgumentSidecar.OutputArgSidecar(output.ParamName, param.Type, destAccessUId, destWireUId));
+                    break;
+                }
+
+                default:
+                    throw new UnsupportedSynthesisConstructException($"Unsupported call argument kind: {argument.GetType().Name}");
+            }
+        }
+
+        return arguments;
+    }
+
+    // Resolves a CALL parameter against the callee interface: it must exist and its section must match
+    // the argument shape (an Input `:=` arg must be an Input param, an Output `=>` arg an Output param).
+    private static CalleeInterfaceRegistry.Param RequireParam(
+        string blockName, string paramName, string expectedSection,
+        IReadOnlyDictionary<string, CalleeInterfaceRegistry.Param> parms)
+    {
+        if (!parms.TryGetValue(paramName, out var param))
+        {
+            throw new UnsupportedSynthesisConstructException(
+                $"Network: CALL to '{blockName}' names parameter '{paramName}', which is not an Input or Output " +
+                "parameter of the callee (InOut is not supported in synthesis).");
+        }
+
+        if (param.Section != expectedSection)
+        {
+            throw new UnsupportedSynthesisConstructException(
+                $"Network: CALL to '{blockName}' passes '{paramName}' as {expectedSection}, but the callee " +
+                $"declares it as {param.Section}.");
+        }
+
+        return param;
     }
 }
 

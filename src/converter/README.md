@@ -1432,9 +1432,12 @@ TOF/TONR hard-error, matching site convention C-406 as well as being genuinely u
 `MOVE`, `MUL`/`ADD` (Multiply/Add only — Subtract/Divide hard-error), `CONVERT` (scoped to the
 real Real-seconds→DInt-milliseconds HMI idiom this project's `DB_Settings` convention, C-307, is
 built on — a differently-typed Convert is a separate, unimplemented case, not guessed at), and
-zero-argument FB `CALL` (a wired-argument call hard-errors — every equipment FB this project has
-built or reused exposes its interface through a caller-visible STATIC struct instead of Input/
-Output parameters, per C-115/C-118, so a zero-argument call covers every real need). Still out of
+FB/FC `CALL` — **zero-argument** (the STATIC-struct site convention, C-115/C-118) **or with wired
+Input/Output arguments** (2026-07-18). A wired call takes each argument's `Type` from the callee's
+own `.ir` interface via `CalleeInterfaceRegistry` (ADR-0001: the callee `.ir` is the source of truth;
+the readable CALL omits types) — so the callee must be resolvable: include its `.ir` in the same
+`to-xml --synthesize` batch, or pass `--project <ir-dir>`. A missing callee/param or a section
+mismatch hard-errors; InOut params are not yet supported. Still out of
 scope, still a deliberate, named future follow-on: WAND, SWAP, ABS, LIMIT, T_SUB, T_CONV, CALC,
 MOVE_BLK_VARIANT, WAIT, FILLBLOCKI, MODBUS_MASTER/MODBUS_COMM_LOAD — hard-errors by name
 (`UnsupportedSynthesisConstructException`), same discipline as v1.

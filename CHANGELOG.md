@@ -2,6 +2,24 @@
 
 ## 2026-07-18
 
+**`SidecarSynthesizer` mints wired-argument CALLs — reusable formal-parameter FBs are now integrable**
+
+- `converter to-xml --synthesize` previously supported **zero-argument CALLs only** (the site's
+  STATIC-struct convention), so a brand-new orchestrator block could not CALL a reusable FB that
+  exposes formal INPUT/OUTPUT parameters. Found blocking during the genval2 (ShredderControlSystem) blind
+  validation, whose owner-chosen reusable / C-304/C-127-clean architecture gave the control FB formal
+  parameters.
+- Wired Input/Output args now synthesize: each argument's `Type` comes from the callee's own `.ir`
+  interface via a new `CalleeInterfaceRegistry` (ADR-0001 — the callee `.ir` is the source of truth
+  for its interface; the readable CALL deliberately omits types), mirroring exactly what the read side
+  records from a source `<Parameter Type=…>` element (`GraphReducer.ReduceCall`). `to-xml --synthesize`
+  builds the registry from the batch's own block files plus an optional `--project <ir-dir>` export.
+  A missing callee/param or a section mismatch is a clear hard-error, never a silent guess. InOut
+  params and the Word→Int CONVERT typing gap remain separate follow-ups. **No writer change** — the
+  existing wired-CALL `<Parameter>` emission (proven by PlantAutoControl's round-trip) is reused.
+- 6 new tests (`WiredCallSynthesisTests`); converter suite 527/527. Live TIA import of a synthesized
+  wired CALL is the final gate (pending — re-running the genval2 subsystem build).
+
 **`SidecarSynthesizer` infers integer/comparison types by magnitude — fixes UDInt synthesis**
 
 - `converter to-xml --synthesize` previously hardcoded every comparison's `SrcType` and every

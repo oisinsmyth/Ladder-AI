@@ -138,7 +138,10 @@ time on the first run if you don't know them going in:
 - **The synthesizable subset is narrower than the converter's read side.** `--synthesize` covers plain
   Contact/Coil (incl. SCoil/RCoil, OR/NOT), **TON only** (no TONR/TOF), MOVE, **MUL/ADD/CONVERT** (no
   SUB/DIV/etc.), comparisons and literals (now magnitude-typed, so UDInt/DInt constants work — fixed
-  2026-07-18), and zero-argument CALLs. Anything outside that hard-errors at synthesis. If your design
+  2026-07-18), and **CALLs** — zero-argument (STATIC-struct convention) **or with wired Input/Output
+  arguments** (2026-07-18; the argument types come from the callee, so its `.ir` must be in the same
+  `--synthesize` batch or a `--project <ir-dir>`). Still out of subset: `TONR`/`TOF`, InOut call params,
+  and a Word→Int CONVERT (only Real→DInt is typed today). Anything outside that hard-errors at synthesis. If your design
   needs a construct the synthesizer can't mint, that's a **converter gap to report** (hard rule 7 —
   never hand-patch the XML), not a coding failure; note it and, where the register allows, ship the
   supported equivalent with the gap flagged.

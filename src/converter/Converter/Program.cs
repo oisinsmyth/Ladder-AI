@@ -47,7 +47,7 @@ internal static class Program
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
-            Console.Error.WriteLine("       converter to-xml <file> [<file> ...] --synthesize   # no real SIDECAR needed; mints a fresh one (plain COIL AND/OR/NOT chains only)");
+            Console.Error.WriteLine("       converter to-xml <file> [<file> ...] --synthesize [--project <ir-dir>]   # no real SIDECAR needed; mints a fresh one. --project/batch supplies callee interfaces for wired CALLs");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
@@ -60,13 +60,45 @@ internal static class Program
         var mode = args[0];
         var rest = args[1..];
         var synthesize = rest.Contains("--synthesize");
-        var files = rest.Where(a => a != "--synthesize").ToArray();
+
+        // --project <ir-dir> (optional, --synthesize only): supplies callee interfaces for wired-CALL
+        // synthesis beyond the blocks in the batch itself.
+        string? projectDir = null;
+        var positional = new List<string>();
+        for (var i = 0; i < rest.Length; i++)
+        {
+            if (rest[i] == "--synthesize")
+            {
+                continue;
+            }
+
+            if (rest[i] == "--project")
+            {
+                if (i + 1 >= rest.Length)
+                {
+                    Console.Error.WriteLine("Flag '--project' requires a value.");
+                    return 1;
+                }
+
+                projectDir = rest[++i];
+                continue;
+            }
+
+            positional.Add(rest[i]);
+        }
+
+        var files = positional.ToArray();
 
         if (synthesize && mode != "to-xml")
         {
             Console.Error.WriteLine("--synthesize is only valid with 'to-xml' — a real SimaticML export always has real sidecar data, so synthesis is meaningless for 'to-ir'.");
             return 1;
         }
+
+        // Callee-interface registry for wired-argument CALL synthesis (SidecarSynthesizer): a wired CALL
+        // needs the callee's parameter types, which the readable CALL omits (ADR-0001 — the callee .ir is
+        // the source of truth). Built from the batch's own block files plus any --project export.
+        var callees = synthesize ? BuildCalleeRegistry(files, projectDir) : null;
 
         foreach (var file in files)
         {
@@ -78,7 +110,7 @@ internal static class Program
                 }
                 else
                 {
-                    ConvertToXml(file, synthesize);
+                    ConvertToXml(file, synthesize, callees);
                 }
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException or UnsupportedSynthesisConstructException)
@@ -494,7 +526,53 @@ internal static class Program
         Console.WriteLine($"{sourcePath} -> {outPath}");
     }
 
-    private static void ConvertToXml(string sourcePath, bool synthesize = false)
+    // Builds the callee-interface registry for wired-CALL synthesis from the batch's own block .ir files
+    // (only "BLOCK …" files — DBs/UDTs/tag-tables have no callable interface) plus any --project export.
+    // A file that won't parse is skipped here; a wired CALL that actually needs it then fails with a
+    // clear error at synthesis time.
+    private static CalleeInterfaceRegistry BuildCalleeRegistry(IEnumerable<string> files, string? projectDir)
+    {
+        var texts = new List<string>();
+        foreach (var file in files)
+        {
+            if (File.Exists(file))
+            {
+                texts.Add(File.ReadAllText(file));
+            }
+        }
+
+        if (projectDir is not null && Directory.Exists(projectDir))
+        {
+            foreach (var file in Directory.EnumerateFiles(projectDir, "*.ir"))
+            {
+                texts.Add(File.ReadAllText(file));
+            }
+        }
+
+        var blocks = new List<IrBlock>();
+        foreach (var text in texts)
+        {
+            if (!text.StartsWith("BLOCK ", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                blocks.Add(IrParser.HasSidecarSection(text)
+                    ? IrParser.ParseBlock(text).Block
+                    : IrParser.ParseBlockWithoutSidecar(text));
+            }
+            catch (IrFormatException)
+            {
+                // Unparseable — skip; a wired CALL that needs this callee will error clearly at synthesis.
+            }
+        }
+
+        return CalleeInterfaceRegistry.FromBlocks(blocks);
+    }
+
+    private static void ConvertToXml(string sourcePath, bool synthesize = false, CalleeInterfaceRegistry? callees = null)
     {
         var irText = File.ReadAllText(sourcePath);
 
@@ -533,7 +611,7 @@ internal static class Program
         if (synthesize)
         {
             block = IrParser.ParseBlockWithoutSidecar(irText);
-            sidecars = SidecarSynthesizer.SynthesizeBlock(block);
+            sidecars = SidecarSynthesizer.SynthesizeBlock(block, callees);
         }
         else
         {
