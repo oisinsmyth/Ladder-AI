@@ -137,6 +137,24 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     file, mirroring S2's own read-only-activity pattern — the existing genericization rule above
     still applies in full to anything written *about* this work in `docs/notes/stage-gates.md`/
     `CHANGELOG.md` or any other committed doc.
+  - **2026-07-18 — extended to S6 generation-validation (sanitize-first, Green).** Project owner's
+    own explicit choice (this session), after the test-project001 survey found no clean tier-(a) /
+    REQ-grounded new-block target: use a **medium-complexity JOB9002 equipment-control FB as a
+    ground-truth answer key** for validating the `gen-block-new` skill (derive a spec from the real
+    block, regenerate it blind, compare to the original). **Handling: sanitize-to-Green-first** —
+    the chosen FB and its tag/DB dependency closure are run through `converter sanitize` (same
+    mechanism/maps as the reference corpus) into invented names **before** any generation work, so
+    every downstream artifact (derived spec, regenerated block, comparison) is Green and
+    committable; the only Amber access is the read needed to export+sanitize the block (Portal
+    `list`/`export`, then `sanitize`). **Method: blind isolation, enforced at the filesystem** — the
+    sanitized answer-key block is quarantined in a location the generating agent is never pointed at
+    and never told exists; the spec is derived by a context that may see the block; a separate,
+    fresh context runs `gen-architecture`/`gen-block-new` seeing **only** the derived requirements
+    spec + a deps-only context dir (dependency DBs/UDTs/tags, **not** the block), never the original
+    IR/XML; a final pass compares the regenerated block to the answer key. The genericization rule
+    above is satisfied by the sanitize pass — no real JOB9002 name reaches any committed artifact. The
+    resulting Green fixture (answer key + deps + spec + regenerated block) may become a reusable
+    coding-skill validation corpus.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's
