@@ -17,8 +17,15 @@
   A missing callee/param or a section mismatch is a clear hard-error, never a silent guess. InOut
   params and the Word→Int CONVERT typing gap remain separate follow-ups. **No writer change** — the
   existing wired-CALL `<Parameter>` emission (proven by PlantAutoControl's round-trip) is reused.
-- 6 new tests (`WiredCallSynthesisTests`); converter suite 527/527. Live TIA import of a synthesized
-  wired CALL is the final gate (pending — re-running the genval2 subsystem build).
+- 6 new tests (`WiredCallSynthesisTests`); converter suite 527/527. **Live TIA gate PASSED
+  (2026-07-18):** a synthesized wired CALL to the formal-parameter `FB_ShredderControl` imported and
+  compiled clean in `SampleProject` (0 errors, wired call resolved: "Number of updated calls … 1") as
+  part of the full genval2 subsystem build (10 blocks: 3 UDTs, 3 buffer DBs, 2 Map FCs, the FB, the
+  orchestrator). Two follow-ups surfaced during that build: the **Word→Int CONVERT** typing gap
+  (REQ-002 telemetry, deferred — only Real→DInt is typed) and a **new UDT-typed-param inline-nesting
+  bug** (an INPUT/OUTPUT param typed as a UDT with inline nested members mints leading-whitespace
+  member names, e.g. `Name="  Ready"`; workaround: declare UDT params as bare type refs, no inline
+  expansion — worth a converter fix).
 
 **`SidecarSynthesizer` infers integer/comparison types by magnitude — fixes UDInt synthesis**
 

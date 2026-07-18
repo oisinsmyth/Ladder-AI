@@ -56,6 +56,19 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
 ## Current task: none — nothing in-flight
 
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
+- **Wired-argument CALL synthesis built + LIVE-TIA-PROVEN (`e5bfeab`, CHANGELOG).** `to-xml
+  --synthesize` now mints wired Input/Output CALLs (types from the callee `.ir` via
+  `CalleeInterfaceRegistry`, ADR-0001), unblocking reusable formal-parameter FBs. Proven end-to-end:
+  the **genval2 ShredderControlSystem subsystem** (2nd blind validation, harder target) built as a 10-block
+  reusable/C-304/C-127-clean subsystem and **compiled clean in TIA** (0 errors) — the wired CALL to
+  `FB_ShredderControl` resolved and compiled. The AI produced a *better architecture* than the real
+  single-instance source block, and the owner's "extend the converter" call paid off.
+  - **Two converter follow-ups from that build (backlog, not yet done):** (1) Word→Int CONVERT typing
+    (REQ-002 — only Real→DInt is typed; needs operand types / a tag-type symbol table); (2) a
+    UDT-typed-param inline-nesting bug (leading-whitespace member names — workaround: bare type refs).
+  - **genval2 not yet through Stage C** (reviewers + answer-key comparison) — the subsystem is
+    compile-clean but unreviewed/uncompared; the design stage already showed the AI *avoided* the
+    source's likely program-bits copy-paste bug (OQ-3). Fixture in the session scratchpad (`genval2-*`).
 - **`gen-block-new` VALIDATED end-to-end (blind, vs a real block).** Sanitized JOB9002 `FilterUnitSystem` →
   `FilterUnitSystem` as a ground-truth answer key; blind pipeline (spec → gate-1 manifest → code →
   reviewers+compare) produced a compile-clean, functionally-correct block **cleaner than the site
