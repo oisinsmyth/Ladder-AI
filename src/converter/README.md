@@ -1618,8 +1618,10 @@ produces normalizes out for free. Block-level Title/Comment/interface changes ar
 separately (the interface via its own sidecar-free canonical slice; block `RootUId` is deliberately
 not compared, being a volatile block ID).
 
-Both inputs are parsed with `ParseBlock`, i.e. real exported IR with a `SIDECAR` (the S7 shape:
-before = exported block, after = the same block edited then reconverted). Networks are matched **by
+Either input may carry a real `SIDECAR` (a TIA export — the S7 shape: before = exported block, after =
+the same block edited then reconverted) **or be sidecar-less** (a freshly-authored / validation-corpus
+block); the comparison is sidecar-free either way. `--only` accepts space- or comma-separated numbers,
+or repeated flags (`--only 1 2` / `--only 1,2` / `--only 1 --only 2`). Networks are matched **by
 number** (S7 edits in place; a wholesale renumber would misreport — a stated limitation).
 
 **Exit code:** with `--only`, exit 1 if any network *outside* the declared set changed/appeared/

@@ -34,6 +34,20 @@ public class DiffTests : IDisposable
         return path;
     }
 
+    // A sidecar-less .ir (readable form only, no SIDECAR section) — what a freshly-authored or
+    // validation-corpus block looks like; diff must handle it (2026-07-18 gen-block-modify-fix finding).
+    private string WriteIrSidecarless(IrBlock block)
+    {
+        var sidecars = block.Networks
+            .Select(n => new NetworkSidecar(n.Number, n.Number.ToString(), Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>()))
+            .ToArray();
+        var sidecarless = IrSerializer.SerializeBlock(block, sidecars).Split("\nSIDECAR\n", 2)[0] + "\n";
+        var path = Path.Combine(Path.GetTempPath(), $"diff-test-{Guid.NewGuid():N}.ir");
+        File.WriteAllText(path, sidecarless);
+        _tempFiles.Add(path);
+        return path;
+    }
+
     public void Dispose()
     {
         foreach (var path in _tempFiles)
@@ -54,6 +68,26 @@ public class DiffTests : IDisposable
     private static IrBlock Block(string name, IReadOnlyList<IrNetwork> networks,
         string? title = null, IReadOnlyList<DbMember>? statics = null) =>
         new("0", "FB", name, 1, "LAD", null, networks, StaticMembers: statics, Title: title);
+
+    [Fact]
+    public void Diff_SidecarlessInputs_Work()
+    {
+        var block = Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") });
+        var report = DiffRunner.Run(WriteIrSidecarless(block), WriteIrSidecarless(block), Array.Empty<int>());
+
+        Assert.False(report.HasAnyChange);
+        Assert.Equal(2, report.IdenticalCount);
+    }
+
+    [Fact]
+    public void Diff_SidecarlessVsSidecarful_ComparesReadableForm()
+    {
+        // A sidecar-less as-built vs a sidecar-carrying re-export of the same logic reads as identical.
+        var block = Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA") });
+        var report = DiffRunner.Run(WriteIrSidecarless(block), WriteIr(block), Array.Empty<int>());
+
+        Assert.False(report.HasAnyChange);
+    }
 
     [Fact]
     public void Diff_SameBlockTwice_AllIdentical()

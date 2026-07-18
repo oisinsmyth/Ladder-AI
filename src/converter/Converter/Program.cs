@@ -396,20 +396,28 @@ internal static class Program
             switch (args[i])
             {
                 case "--only":
-                    var raw = RequireValue(args, ref i, "--only");
-                    if (raw is null)
+                {
+                    // Accept one or more network numbers after --only, space- and/or comma-separated
+                    // (`--only 1 2`, `--only 1,2`), and --only may repeat. Consume following tokens while
+                    // they parse as a network list; stop at the next flag or path. (Fixes the doc-vs-parser
+                    // mismatch found in the gen-block-modify-fix validation, 2026-07-18 — the docs implied
+                    // space-separated but the parser took only a single value.)
+                    var consumedAny = false;
+                    while (i + 1 < args.Length && TryParseNetworkList(args[i + 1], out var nets))
                     {
+                        onlyNetworks.AddRange(nets);
+                        i++;
+                        consumedAny = true;
+                    }
+
+                    if (!consumedAny)
+                    {
+                        Console.Error.WriteLine("--only requires at least one network number (e.g. --only 1 2 or --only 1,2).");
                         return 1;
                     }
 
-                    if (!int.TryParse(raw, out var network))
-                    {
-                        Console.Error.WriteLine($"--only expects a network number, got '{raw}'.");
-                        return 1;
-                    }
-
-                    onlyNetworks.Add(network);
                     break;
+                }
                 case "--json":
                     json = true;
                     break;
@@ -451,6 +459,25 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    // Parses a single --only token: one network number or a comma-separated list ("1" or "1,2,3").
+    // Returns false (so --only stops consuming) for anything not all-integer — the next flag or a path.
+    private static bool TryParseNetworkList(string token, out List<int> networks)
+    {
+        networks = new List<int>();
+        foreach (var part in token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!int.TryParse(part, out var n))
+            {
+                networks = new List<int>();
+                return false;
+            }
+
+            networks.Add(n);
+        }
+
+        return networks.Count > 0;
     }
 
     private static string? RequireValue(string[] args, ref int i, string flag)

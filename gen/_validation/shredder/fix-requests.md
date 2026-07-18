@@ -49,16 +49,20 @@ a fresh-context re-review confirms the defect is gone with no regression.
 - *Note:* this fix may touch two blocks (the UDT/interface + the map FC) — a good test of a multi-file,
   still-scoped fix.
 
-## FR-3 — REQ-032: non-retentive hours timer  *(NEEDS OWNER RULING — not a blind fix)*
+## FR-3 — REQ-032: non-retentive hours timer  *(RULED 2026-07-18 → build the accumulator)*
 
-- **Tension.** REQ-032 specifies a *retentive* 1-hour totaliser; the FB (N24) uses a self-resetting `TON`
-  (C-406 forbids `TONR`). Non-retentive loses the partial hour across a stop — wrong for burst-operated
-  equipment. But the C-406-compliant retentive-from-`TON`-accumulator construction (carry elapsed across
-  interruptions) is a design choice, and the site retentive-timer FB isn't built.
-- **This is a stop-and-route item, not a blind edit.** It exercises the skill's discipline of *flagging a
-  requirement-vs-convention tension for an owner ruling* rather than guessing. Do not fix until the owner
-  rules: (a) build the C-406-compliant retentive accumulator, or (b) accept the simplification with
-  sign-off. Target network would be FB N24 once ruled.
+- **Tension (as flagged).** REQ-032 specifies a *retentive* 1-hour totaliser; the FB (N24) uses a
+  self-resetting `TON` (C-406 forbids `TONR`). Non-retentive loses the partial hour across a stop — wrong
+  for burst-operated equipment.
+- **Owner ruling (2026-07-18): build the C-406-compliant retentive accumulator** (option (a)), not accept
+  the simplification. Approach: keep a `TON` (C-406-clean) but **carry elapsed time across interruptions**
+  in a retentive accumulator member so a stop mid-hour doesn't discard the partial hour — a `TON` +
+  retentive-elapsed-store construction, not a self-reset. Target network: FB N24 (plus a retentive
+  accumulator interface member).
+- **Scope caveat for the fixer:** this is new construction, not a one-line permissive add — confirm it
+  stays a *scoped fix to N24* (+ its accumulator member). If it grows into a new interface/pattern, it's
+  edging toward `gen-block-modify-purpose`; route it there rather than stretching a modify-*fix*. A small
+  reusable "retentive-hours" rung-shape may be worth harvesting (S8).
 
 ---
 

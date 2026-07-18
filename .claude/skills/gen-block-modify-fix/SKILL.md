@@ -66,6 +66,10 @@ is shared with `gen-block-modify-purpose`; documented inline here until that ski
 2. **Snapshot the as-built.** Keep the original IR (pre-edit) — you need it for the invariance diff.
 3. **Edit only the target network(s)'** readable IR to fix the defect. Keep the fix minimal and
    convention-clean; re-title/comment only the network(s) you changed if the change warrants it.
+   **Synthesis rule when adding a permissive:** an added OR-group (or `NOT` of a compound) must be the
+   **rail-most / first** operand of an AND chain — appending `AND (X OR Y)` to the *end* of a chain is
+   un-synthesizable (`UnsupportedSynthesisConstructException`). Write `(X OR Y) AND <rest>`, not
+   `<rest> AND (X OR Y)` — AND is commutative, and a leading branch is the conventional LAD shape anyway.
 4. **Re-synthesize (the D-6 reality).** A network in an **already-exported (sidecar-carrying)** block
    can't take an added/changed statement in place — the converter has no scoped-merge path yet
    (`docs/notes/deferred-items.md` D-6). Use the proven **whole-file strip-and-synthesize** workaround:
@@ -75,13 +79,18 @@ is shared with `gen-block-modify-purpose`; documented inline here until that ski
    form, so untouched networks still prove identical. (A sidecar-less block skips this — just edit +
    `--synthesize`.)
 5. **Invariance gate — the hard gate that defines this skill.** Run
-   `converter diff --only <target network number(s)> <as-built.ir> <fixed.ir>`. It **must exit 0**:
-   every network *outside* the named set is provably identical in readable IR, and the named ones are the
-   only changes. If it reports a change you didn't intend, you touched something you shouldn't have — undo
-   it or stop. This is CLAUDE.md's "untouched-network invariance check", mechanized.
+   `converter diff <as-built.ir> <fixed.ir> --only <target networks>` (paths first; `--only` takes
+   space- or comma-separated numbers, or repeated `--only`, e.g. `--only 1 2` / `--only 1,2`). It **must
+   exit 0**: every network *outside* the named set is provably identical in readable IR, and the named
+   ones are the only changes. If it reports a change you didn't intend, you touched something you
+   shouldn't have — undo it or stop. This is CLAUDE.md's "untouched-network invariance check", mechanized.
+   `diff` handles sidecar-carrying *and* sidecar-less inputs (compares the readable form either way).
+   **A UDT / `TYPE` change has no networks** — `diff` is block-only, so there's no invariance concept for
+   it; verify a UDT edit by member-text inspection + the compile gate instead.
 6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch**
    project → `openness-cli compile` clean. Playbook first on any failure. Claim the `agent-tasks/README.md`
-   Portal queue before import/compile.
+   Portal queue before import/compile. **An FB with multi-instance timers (a common fix target) compiles
+   only after its instance DB exists** — `openness-cli create-instance-db` first if there isn't one.
 
 ## Exit
 
@@ -93,8 +102,10 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
 - **preflight** (zero findings) + **compile** evidence (State, error/warning counts).
 
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
-runs). Then **stop** — the fresh-context Check stage (re-review of the fix + no-regression) and the final
-gate (`docs/11-review-workflow.md`) belong to others. Never treat your own fix as reviewed or approved.
+runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so
+note the run in your report instead of creating one. Then **stop** — the fresh-context Check stage
+(re-review of the fix + no-regression) and the final gate (`docs/11-review-workflow.md`) belong to others.
+Never treat your own fix as reviewed or approved.
 
 ## Calibration
 

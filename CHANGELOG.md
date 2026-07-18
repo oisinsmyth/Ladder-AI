@@ -2,6 +2,19 @@
 
 ## 2026-07-18
 
+**`converter diff` — sidecar-less inputs + `--only` multi-network parsing (gen-block-modify-fix findings)**
+
+- `diff` now accepts **sidecar-less** inputs (a freshly-authored / validation-corpus block), not only
+  real TIA exports — it branches on `HasSidecarSection` like `review`/`preflight`; the comparison was
+  already sidecar-free, so a sidecar-less as-built diffs against a sidecar-carrying fixed block fine.
+- **`--only` now accepts space- or comma-separated numbers and repeated flags** (`--only 1 2`,
+  `--only 1,2`, `--only 1 --only 2`). The docs implied space-separated but the parser took only a single
+  value, which blocked a multi-network scoped fix — parser fixed to match.
+- Both found in the first `gen-block-modify-fix` validation (2026-07-18). 2 new tests; converter suite
+  529/529. The `gen-block-modify-fix` / `gen-block-new` skills folded the run's other findings too (the
+  compound-operand-must-lead synthesis rule; the UDT/`TYPE` has-no-network-invariance note; the
+  FB-with-timers instance-DB compile note; the validation-corpus telemetry note).
+
 **`SidecarSynthesizer` mints wired-argument CALLs — reusable formal-parameter FBs are now integrable**
 
 - `converter to-xml --synthesize` previously supported **zero-argument CALLs only** (the site's

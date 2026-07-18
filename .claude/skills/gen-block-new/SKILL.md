@@ -135,6 +135,11 @@ time on the first run if you don't know them going in:
   TEMP across those pairs is safe** (each CONVERT reads it before the next MUL overwrites; this is the
   proven `motor-dol` "HMI Times" shape). Write the pairs in matching list order; you don't need a
   distinct temp per pair, but you do need the MULs and CONVERTs in corresponding order.
+- **A compound operand must lead its AND chain.** An OR-group (or `NOT` of a compound) has to be the
+  **rail-most / first** operand — `(X OR Y) AND <rest>`, never `<rest> AND (X OR Y)`. Appending a compound
+  to the end of an AND chain is un-synthesizable (`UnsupportedSynthesisConstructException`); AND is
+  commutative, so lead with it (the conventional LAD shape). Bites most when adding a permissive to an
+  existing chain.
 - **The synthesizable subset is narrower than the converter's read side.** `--synthesize` covers plain
   Contact/Coil (incl. SCoil/RCoil, OR/NOT), **TON only** (no TONR/TOF), MOVE, **MUL/ADD/CONVERT** (no
   SUB/DIV/etc.), comparisons and literals (now magnitude-typed, so UDInt/DInt constants work — fixed

@@ -4,16 +4,17 @@ using Converter.SimaticMl;
 namespace Converter.Diff;
 
 // Compares the before/after IR of one block at network granularity. See DiffModel for the semantic-
-// equality definition (sidecar-free readable form). Both inputs are parsed with IrParser.ParseBlock,
-// i.e. real exported IR carrying a SIDECAR — the S7 shape (before = exported block, after = the same
-// block edited then reconverted). A sidecar-less input throws IrFormatException, surfaced by the
-// caller as a clean exit 1; supporting sidecar-less diffs isn't needed for the invariance use.
+// equality definition (sidecar-free readable form). Either input may carry a real SIDECAR (a TIA export
+// — the S7 shape) or be sidecar-less (freshly authored / a validation-corpus block): the comparison is
+// sidecar-free either way, so a sidecar-less as-built diffs against a sidecar-carrying fixed block (or
+// vice versa) fine. Found needed 2026-07-18 in the gen-block-modify-fix validation, where the committed
+// as-built corpus was sidecar-less.
 public static class DiffRunner
 {
     public static DiffReport Run(string oldPath, string newPath, IReadOnlyList<int> onlyNetworks)
     {
-        var (oldBlock, oldSidecars) = IrParser.ParseBlock(File.ReadAllText(oldPath));
-        var (newBlock, newSidecars) = IrParser.ParseBlock(File.ReadAllText(newPath));
+        var (oldBlock, oldSidecars) = ParseEither(File.ReadAllText(oldPath));
+        var (newBlock, newSidecars) = ParseEither(File.ReadAllText(newPath));
 
         var header = DiffHeader(oldBlock, oldSidecars, newBlock, newSidecars);
         var networks = DiffNetworks(oldBlock, newBlock);
@@ -26,6 +27,14 @@ public static class DiffRunner
             Networks: networks,
             AllowedNetworks: onlyNetworks);
     }
+
+    // Parse whether or not the input carries a SIDECAR (same branch review/preflight use). A sidecar-less
+    // block has no round-trip data, but diff never needs it — the per-network compare and the interface
+    // canonical are both sidecar-free (SerializeBlock's INTERFACE portion doesn't touch the sidecars).
+    private static (IrBlock Block, IReadOnlyList<NetworkSidecar> Sidecars) ParseEither(string text) =>
+        IrParser.HasSidecarSection(text)
+            ? IrParser.ParseBlock(text)
+            : (IrParser.ParseBlockWithoutSidecar(text), Array.Empty<NetworkSidecar>());
 
     private static IReadOnlyList<NetworkDiff> DiffNetworks(IrBlock oldBlock, IrBlock newBlock)
     {
