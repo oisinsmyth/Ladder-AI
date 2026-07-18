@@ -52,6 +52,12 @@ anywhere — the anti-drift contract held.
 > of the tool as it was on 2026-07-16 and is left as-is; anyone re-running `converter review` against
 > the fixed tool and diffing should treat that single count line as the intended F-1 correction.
 
+> **Forward-note (2026-07-18, C-408 mechanized):** the current tool also emits one extra per-file
+> status line — `C-408: checked, …` (or `not applicable`) — that isn't in this evidence's "315
+> per-rule status lines". C-408 was moved from a `review-conventions` hand-sweep into `converter
+> review` (FI-09). It reports **clean on every file of this corpus** (no new findings, SUMMARY totals
+> unchanged), so the only diff on a re-run is the added status line per file. Expected, not drift.
+
 ### Expected AI findings (test-project001)
 
 | Expected (must-find) | Blind run result |

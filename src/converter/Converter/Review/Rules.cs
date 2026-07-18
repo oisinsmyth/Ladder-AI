@@ -339,4 +339,101 @@ public static class Rules
     public static IEnumerable<Finding> CheckC401NoCounters(IrBlock block) => Enumerable.Empty<Finding>();
 
     public static IEnumerable<Finding> CheckC404NoBuiltInEdgeInstructions(IrBlock block) => Enumerable.Empty<Finding>();
+
+    // C-408 (error) — a timer's ET is never compared to produce a boolean trigger; each time
+    // threshold is its own named timer, activated via Q (staged sequences chain timers). Reading ET
+    // as a *value* (HMI/diagnostics/proportional) is permitted — that form MOVEs ET to a named
+    // variable and carries no comparison, so it never matches here. Scope: ANY comparison operand
+    // that is a `.ET` reference, not only comparison against a literal constant (the skill recipe's
+    // broader, intent-matching form — owner-confirmed 2026-07-18).
+    public static IEnumerable<Finding> CheckC408EtComparison(IrBlock block)
+    {
+        foreach (var network in block.Networks)
+        {
+            var etPaths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var expr in TagReferences.AllExpressions(network))
+            {
+                foreach (var path in EtOperandsInComparisons(expr, insideCompare: false))
+                {
+                    if (seen.Add(path))
+                    {
+                        etPaths.Add(path);
+                    }
+                }
+            }
+
+            if (etPaths.Count == 0)
+            {
+                continue;
+            }
+
+            yield return new Finding(
+                "C-408",
+                FindingSeverity.Error,
+                block.Name,
+                network.Number,
+                $"Network {network.Number} compares timer ET ({string.Join(", ", etPaths)}) to produce a boolean trigger - C-408 forbids this. Use a named timer's Q (staged sequences chain timers: Q of stage n enables stage n+1's timer); read ET only as a value copied to a named variable.",
+                "Replace the ET comparison with a named timer whose Q gives the trigger; if the ET value itself is needed (display/diagnostics/proportional), MOVE it to a named variable instead of wiring ET mid-rung.");
+        }
+    }
+
+    // Yields every `.ET` tag reference that appears inside a comparison subtree. `insideCompare`
+    // flips true when descending into a Compare's operands, so a `.ET` read outside any comparison
+    // (the permitted value read) is never yielded.
+    private static IEnumerable<string> EtOperandsInComparisons(Expr expr, bool insideCompare)
+    {
+        switch (expr)
+        {
+            case Expr.TagRef tagRef:
+                if (insideCompare && tagRef.Path.EndsWith(".ET", StringComparison.Ordinal))
+                {
+                    yield return tagRef.Path;
+                }
+
+                break;
+            case Expr.And and:
+                foreach (var operand in and.Operands)
+                {
+                    foreach (var path in EtOperandsInComparisons(operand, insideCompare))
+                    {
+                        yield return path;
+                    }
+                }
+
+                break;
+            case Expr.Or or:
+                foreach (var operand in or.Operands)
+                {
+                    foreach (var path in EtOperandsInComparisons(operand, insideCompare))
+                    {
+                        yield return path;
+                    }
+                }
+
+                break;
+            case Expr.Not not:
+                foreach (var path in EtOperandsInComparisons(not.Operand, insideCompare))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.Compare compare:
+                foreach (var path in EtOperandsInComparisons(compare.Left, insideCompare: true))
+                {
+                    yield return path;
+                }
+
+                foreach (var path in EtOperandsInComparisons(compare.Right, insideCompare: true))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.Literal:
+                break;
+        }
+    }
 }

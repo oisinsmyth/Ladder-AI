@@ -391,6 +391,215 @@ public static class TagReferences
         }
     }
 
+    // Companion to AllTagPaths that yields each Expr-valued field (conditions, EN-source conditions,
+    // instruction inputs) as a whole Expr rather than flattening it to tag paths — so a rule that
+    // needs expression *structure* (e.g. C-408's "is a .ET operand inside a Compare?") can walk it.
+    // Mirrors AllTagPaths' per-statement-kind enumeration; deliberately skips the string dest/instance
+    // fields (a coil tag / dest tag / instance path can't hold a Compare).
+    public static IEnumerable<Expr> AllExpressions(IrNetwork network)
+    {
+        foreach (var assignment in network.Assignments)
+        {
+            yield return assignment.Condition;
+        }
+
+        foreach (var timer in network.Timers)
+        {
+            yield return timer.In;
+            yield return timer.Pt;
+            if (timer.Reset is not null)
+            {
+                yield return timer.Reset;
+            }
+        }
+
+        foreach (var move in network.Moves)
+        {
+            yield return move.En;
+            yield return move.In;
+        }
+
+        foreach (var wand in network.WordAnds)
+        {
+            yield return wand.En;
+            foreach (var input in wand.Inputs)
+            {
+                yield return input;
+            }
+        }
+
+        foreach (var call in network.Calls)
+        {
+            yield return call.En;
+            foreach (var arg in call.Arguments)
+            {
+                if (arg is CallArgument.InputArg input)
+                {
+                    yield return input.Value;
+                }
+            }
+        }
+
+        foreach (var mul in network.Muls)
+        {
+            foreach (var e in ExprsOfEnSource(mul.En))
+            {
+                yield return e;
+            }
+
+            foreach (var input in mul.Inputs)
+            {
+                yield return input;
+            }
+        }
+
+        foreach (var convert in network.Converts)
+        {
+            foreach (var e in ExprsOfEnSource(convert.En))
+            {
+                yield return e;
+            }
+
+            yield return convert.In;
+        }
+
+        foreach (var swap in network.Swaps)
+        {
+            foreach (var e in ExprsOfEnSource(swap.En))
+            {
+                yield return e;
+            }
+
+            yield return swap.In;
+        }
+
+        foreach (var abs in network.AbsStatements)
+        {
+            foreach (var e in ExprsOfEnSource(abs.En))
+            {
+                yield return e;
+            }
+
+            yield return abs.In;
+        }
+
+        foreach (var limit in network.Limits)
+        {
+            foreach (var e in ExprsOfEnSource(limit.En))
+            {
+                yield return e;
+            }
+
+            yield return limit.Min;
+            yield return limit.In;
+            yield return limit.Max;
+        }
+
+        foreach (var tsub in network.TSubs)
+        {
+            foreach (var e in ExprsOfEnSource(tsub.En))
+            {
+                yield return e;
+            }
+
+            yield return tsub.In1;
+            yield return tsub.In2;
+        }
+
+        foreach (var tconv in network.TConvs)
+        {
+            foreach (var e in ExprsOfEnSource(tconv.En))
+            {
+                yield return e;
+            }
+
+            yield return tconv.In;
+        }
+
+        foreach (var calc in network.Calcs)
+        {
+            foreach (var e in ExprsOfEnSource(calc.En))
+            {
+                yield return e;
+            }
+
+            foreach (var input in calc.Inputs)
+            {
+                yield return input;
+            }
+        }
+
+        foreach (var mbv in network.MoveBlkVariants)
+        {
+            foreach (var e in ExprsOfEnSource(mbv.En))
+            {
+                yield return e;
+            }
+
+            yield return mbv.Src;
+            yield return mbv.Count;
+            yield return mbv.SrcIndex;
+            yield return mbv.DestIndex;
+        }
+
+        foreach (var wait in network.Waits)
+        {
+            foreach (var e in ExprsOfEnSource(wait.En))
+            {
+                yield return e;
+            }
+
+            yield return wait.Wt;
+        }
+
+        foreach (var fill in network.FillBlockIs)
+        {
+            foreach (var e in ExprsOfEnSource(fill.En))
+            {
+                yield return e;
+            }
+
+            yield return fill.In;
+            yield return fill.Count;
+        }
+
+        foreach (var mm in network.ModbusMasters)
+        {
+            foreach (var e in ExprsOfEnSource(mm.En))
+            {
+                yield return e;
+            }
+
+            yield return mm.Req;
+            yield return mm.MbAddr;
+            yield return mm.Mode;
+            yield return mm.DataAddr;
+            yield return mm.DataLen;
+            yield return mm.DataPtr;
+        }
+
+        foreach (var mcl in network.ModbusCommLoads)
+        {
+            foreach (var e in ExprsOfEnSource(mcl.En))
+            {
+                yield return e;
+            }
+
+            yield return mcl.Req;
+            yield return mcl.Port;
+            yield return mcl.Baud;
+            yield return mcl.Parity;
+            yield return mcl.RespTo;
+            yield return mcl.MbDb;
+        }
+    }
+
+    private static IEnumerable<Expr> ExprsOfEnSource(EnSource en) => en switch
+    {
+        EnSource.Condition condition => new[] { condition.Value },
+        _ => Array.Empty<Expr>(),
+    };
+
     private static IEnumerable<string> FromEnSource(EnSource en) => en switch
     {
         EnSource.Condition condition => FromExpr(condition.Value),

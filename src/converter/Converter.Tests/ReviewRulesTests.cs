@@ -385,4 +385,70 @@ public class ReviewRulesTests
     {
         Assert.Empty(Rules.CheckC404NoBuiltInEdgeInstructions(MakeBlock("FB", "FB_Test", Array.Empty<IrNetwork>())));
     }
+
+    // ---- C-408: a timer's ET is never compared to produce a boolean trigger ----
+
+    [Fact]
+    public void CheckC408_EtComparedToConstant_Flags()
+    {
+        var network = new IrNetwork(1, "Homemade timer", new[]
+        {
+            new CoilAssignment("Trigger", new Expr.Compare(">", new Expr.TagRef("MyTimer.ET"), new Expr.Literal("T#5S"))),
+        });
+
+        var finding = Assert.Single(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
+        Assert.Equal("C-408", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("MyTimer.ET", finding.Description);
+    }
+
+    // The owner-confirmed scope call: ET compared against a *non-constant* is a finding too, not
+    // only against a literal constant.
+    [Fact]
+    public void CheckC408_EtComparedToVariable_Flags()
+    {
+        var network = new IrNetwork(1, "Homemade timer", new[]
+        {
+            new CoilAssignment("Trigger", new Expr.Compare(">=", new Expr.TagRef("MyTimer.ET"), new Expr.TagRef("Threshold"))),
+        });
+
+        Assert.Single(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
+    }
+
+    // Recursion: a Compare nested inside And/Or is still reached.
+    [Fact]
+    public void CheckC408_EtComparisonNestedInsideAnd_Flags()
+    {
+        var network = new IrNetwork(1, "Gated homemade timer", new[]
+        {
+            new CoilAssignment("Trigger", new Expr.And(new Expr[]
+            {
+                new Expr.TagRef("Enable"),
+                new Expr.Compare(">", new Expr.TagRef("MyTimer.ET"), new Expr.Literal("T#5S")),
+            })),
+        });
+
+        Assert.Single(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
+    }
+
+    // Permitted form: reading ET as a *value* (MOVE to a named variable) carries no comparison.
+    [Fact]
+    public void CheckC408_EtMovedToNamedVariable_Clean()
+    {
+        var network = new IrNetwork(1, "Display elapsed", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(new Expr.TagRef("Enable"), new Expr.TagRef("MyTimer.ET"), "HMI_Elapsed") });
+
+        Assert.Empty(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
+    }
+
+    [Fact]
+    public void CheckC408_ComparisonWithoutEt_Clean()
+    {
+        var network = new IrNetwork(1, "Level check", new[]
+        {
+            new CoilAssignment("HighLevel", new Expr.Compare(">", new Expr.TagRef("Tank_Level"), new Expr.Literal("100"))),
+        });
+
+        Assert.Empty(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
+    }
 }

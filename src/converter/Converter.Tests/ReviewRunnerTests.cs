@@ -25,7 +25,7 @@ public class ReviewRunnerTests : IDisposable
         return path;
     }
 
-    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public void Dispose()
     {

@@ -2,6 +2,20 @@
 
 ## 2026-07-18
 
+**C-408 mechanized in `converter review` — first of FI-09's rule set**
+
+- `converter review` now checks C-408 (a timer's `ET` compared to produce a boolean trigger) as a
+  deterministic rule (`Rules.CheckC408EtComparison`), moved out of `review-conventions`' hand-sweep.
+  Scope is the skill recipe's broader, owner-confirmed form: `.ET` inside **any** comparison, not
+  only against a literal constant; the permitted value read (`MOVE(IN := timer.ET) => namedVar`)
+  carries no comparison and stays clean. Per the skill's self-retiring clause, the hand-sweep
+  auto-retires once the tool reports C-408 `checked` — no skill edit.
+- New reusable seam: `TagReferences.AllExpressions(network)` yields each network Expr with structure
+  intact (the flattening `AllTagPaths` loses), for rules that need expression shape. Future FI-09
+  rules build on it. 5 new fixtures; suite 502/502. Corpus regression: C-408 reports clean on every
+  reviewable `ir/test-project001` file (zero false positives, SUMMARY totals unchanged). Forward-note
+  added to the 2026-07-16 conventions-validation evidence for the extra per-file status line.
+
 **`converter tagstatus` — mechanical exists/proposed tag classifier (FI-24, easiest win from the skill/tooling audit)**
 
 - New subcommand `converter tagstatus <name…> --project <ir-dir> [--json]` classifies each tag name

@@ -8,7 +8,7 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors)
     {
@@ -79,6 +79,8 @@ public static class ReviewRunner
             .Concat(Rules.CheckC406TimerDeclarations(block.Name, block.TempMembers)).ToList();
         Record(statuses, findings, "C-406", RuleCheckStatus.Checked, usageFindings.Concat(declFindings));
 
+        Record(statuses, findings, "C-408", RuleCheckStatus.Checked, Rules.CheckC408EtComparison(block));
+
         Record(statuses, findings, "C-102", RuleCheckStatus.CheckedVacuous, Rules.CheckC102NoJumps(block));
         Record(statuses, findings, "C-401", RuleCheckStatus.CheckedVacuous, Rules.CheckC401NoCounters(block));
         Record(statuses, findings, "C-404", RuleCheckStatus.CheckedVacuous, Rules.CheckC404NoBuiltInEdgeInstructions(block));
@@ -107,6 +109,7 @@ public static class ReviewRunner
 
         Record(statuses, findings, "C-406", RuleCheckStatus.Checked, Rules.CheckC406TimerDeclarations(db.Name, allMembers));
 
+        statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-102", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
