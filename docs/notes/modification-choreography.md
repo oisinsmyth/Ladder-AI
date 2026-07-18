@@ -13,16 +13,28 @@ reference is worth splitting out" point.)
    request/manifest names. Confirm by reading them. Everything else in the block is off-limits.
 2. **Snapshot the as-built.** Keep the original IR (pre-edit); you need it for the invariance diff.
 3. **Edit only the named** readable IR. Keep it minimal and convention-clean; re-title/comment only what you
-   changed. **Synthesis rule:** an added OR-group (or `NOT` of a compound) must be the **rail-most / first**
-   operand of an AND chain — `(X OR Y) AND <rest>`, never `<rest> AND (X OR Y)` (appending a compound is
-   un-synthesizable, `UnsupportedSynthesisConstructException`; AND is commutative, so lead with it — the
-   conventional LAD shape). Bites most when adding a permissive to an existing chain.
-4. **Re-synthesize (the D-6 reality).** A network in an already-exported (sidecar-carrying) block can't take
-   an added/changed statement in place (`docs/notes/deferred-items.md` D-6). Use the whole-file
-   strip-and-synthesize: strip the file's entire `SIDECAR` section → keep your readable edit → `converter
-   to-xml --synthesize` → import → compile → re-export → `to-ir`. This regenerates every network's sidecar
-   UIds, which is fine — the invariance check below reads the sidecar-*free* form, so untouched networks
-   still prove identical. (A sidecar-less block skips this — just edit + `--synthesize`.)
+   changed. Two synthesis rules the synthesizer enforces:
+   - **At most one compound (OR-group) per series chain, and it must lead.** Write `(X OR Y) AND <rest>`,
+     never `<rest> AND (X OR Y)` (appending a compound is un-synthesizable). And a chain that needs **two**
+     parallel OR-conditions — `(A OR B) AND (C OR D)`, an ordinary two-branch ladder shape — can't be one
+     synthesized chain: hoist one into a **named helper bit** (`H := A OR B`) and use `H` in the chain.
+   - **Statement kind-ordering within a network:** statements parse/emit in kind order (timers → coils →
+     moves → arithmetic → calls). Write them in that order or the parser errors.
+4. **Re-synthesize (the D-6 reality) — and its hard limit.** A network in an already-exported
+   (sidecar-carrying) block can't take an added/changed statement in place (`docs/notes/deferred-items.md`
+   D-6). The workaround is the whole-file strip-and-synthesize: strip the file's entire `SIDECAR` → keep
+   your readable edit → `converter to-xml --synthesize` → import → compile → re-export → `to-ir`.
+   - **PRE-CHECK first — the whole-file path requires the ENTIRE block to be within the synthesizable
+     subset.** A realistic as-built equipment FB routinely is **not**: TONR/TOF timers, array-index local
+     members, Real tag-vs-tag comparisons all fail synthesis today (`docs/notes/converter-synthesis-gaps.md`),
+     and this bites even on **unchanged** networks (the whole-file re-synthesis has to reproduce them too).
+     Check `converter preflight`'s `[convert]` line up front; if the block hits any of those, the whole-file
+     path **cannot compile** — report it as the converter gap it is (the **D-6 scoped merge**, which keeps
+     unchanged networks' real sidecars and synthesizes only the changed ones, is the fix), don't force it.
+   - This regenerates every network's sidecar UIds, which is fine for the *invariance check* (it reads the
+     sidecar-*free* form, so untouched networks still prove identical) — but the *compile gate* still needs
+     every network to synthesize. (A block that is entirely within the synthesizable subset — a generated
+     block, or a sidecar-less one — skips all this: just edit + `--synthesize`.)
 5. **Invariance gate — the hard gate.** `converter diff <as-built.ir> <modified.ir> --only <changed nets>`
    (paths first) must **exit 0**: every network *outside* the named set is provably identical in readable IR.
    `--only` takes space- or comma-separated numbers or repeated flags (`--only 1 2` / `--only 1,2` /

@@ -763,3 +763,39 @@ those "original is buggy" claims are unverified (only OQ-3, being text-verifiabl
 evidence the folded lesson generalizes, and a clean **FI candidate: a blind-comparison / answer-key-audit
 skill** carrying the same calibration discipline (C2 flagged this itself). Fixture: `genval2-*` in the
 session scratchpad.
+
+## `gen-block-modify-purpose` first validation — blind DOL→VSD purpose change (2026-07-18)
+
+Completes the three coding skills (all authored 2026-07-18; the shared modification choreography factored
+into `docs/notes/modification-choreography.md`). Owner-chosen validation: repurpose a real DOL motor FB into
+a VSD motor FB, blind, sanitize-first. Pair: real `MotorDOL` → sanitized `MotorStarter` (14 nets, as-built);
+real `MotorVSDSystem` → sanitized `MotorVSDSystem` (quarantined answer key). Stage A confirmed it's a genuinely
+*scoped* purpose change (5 skeleton networks byte-identical, ~2 new run-mechanism networks, no whole network
+deleted — not a rewrite). Gate 1 (blind `gen-architecture` tier-(c) manifest) resolved OQ-1 → a new VSD
+variant UDT `MotorVSDIOSet` (owner-signed; SpeedOutput → Real to avoid the CONVERT gap, OQ-N2).
+
+**Result — a split verdict, both halves important:**
+- **The skill's authoring + invariance discipline PASSED.** The blind modify authored the change correctly
+  (STAY N1–N5, CHANGE N6–N14, ADD speed-reference [with a **wired `CALL AnalogScale`** — the wired-CALL
+  feature] + accel-ramp, REMOVE the `FaultFB` reset rung, retype the interface to `MotorVSDIOSet`), and the
+  **`converter diff --only 6…16` invariance gate PASSED** (exit 0; N1–N5 proven identical; `HEADER changed`
+  surfaced the title + interface delta; the REMOVE showed in the diff). The wired CALL synthesized clean
+  (`Output`→`SpeedOutput` both Real, no CONVERT). The STAY-numbering handling (place ADDs after the invariant
+  set) worked first try. **The S7 modify discipline is validated.**
+- **The compile gate could NOT be reached — a converter limit, not an AI error.** The D-6 *whole-file*
+  strip-and-synthesize requires the **entire** block to be synthesizable, and a realistic as-built equipment
+  FB isn't: it hit three `SidecarSynthesizer` gaps — **TONR** (the hours totaliser), **array-index local
+  members mis-scoped GlobalVariable**, and **Real tag-vs-tag comparison typing** — two of which affect
+  **unchanged/STAY** networks. Recorded, not hand-patched. **This is the session-defining strategic finding:
+  modifying a *real* block (S7's whole point) is blocked on converter work, chiefly the D-6 scoped
+  `SidecarSynthesizer` merge** (keep unchanged networks' real sidecars, synthesize only the changed ones —
+  now the highest-priority converter build), plus the three subset gaps. Full plan:
+  `docs/notes/converter-synthesis-gaps.md`.
+
+**Skill feedback folded** (into `docs/notes/modification-choreography.md`): the compound-operand rule
+corrected to "at most one OR-group per series chain (two → a named helper bit)"; a **synthesizability
+pre-check** added before committing to the D-6 whole-file path; the parser statement-kind-ordering note. One
+flagged deviation: a `RunningConfirmed` helper bit (not in the manifest) was a build-level necessity for the
+two-OR N11 chain, correctly surfaced per "ask before design deviation". Fixture: `genval3-*` in the
+scratchpad. **This being the second exercise to hit the synthesizer's limits on realistic blocks is strong
+evidence for prioritizing the converter fixes over further build-skill work.**
