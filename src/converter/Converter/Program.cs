@@ -62,6 +62,7 @@ internal static class Program
         var mode = args[0];
         var rest = args[1..];
         var synthesize = rest.Contains("--synthesize");
+        var withSidecar = rest.Contains("--with-sidecar");
 
         // --project <ir-dir> (optional, --synthesize only): supplies callee interfaces for wired-CALL
         // synthesis beyond the blocks in the batch itself.
@@ -69,7 +70,7 @@ internal static class Program
         var positional = new List<string>();
         for (var i = 0; i < rest.Length; i++)
         {
-            if (rest[i] == "--synthesize")
+            if (rest[i] == "--synthesize" || rest[i] == "--with-sidecar")
             {
                 continue;
             }
@@ -97,12 +98,18 @@ internal static class Program
             return 1;
         }
 
-        // Registries for synthesis. Built for any `to-xml` (not just `--synthesize`), because
-        // derive-always (ADR-0005) means `to-xml` derives the sidecar whenever the input has none —
-        // so the callee interfaces (wired CALLs) and tag/member types (typed boxes) must be available
-        // by default, not only under the explicit flag. A sidecar-carrying input ignores them.
-        var callees = mode == "to-xml" ? BuildCalleeRegistry(files, projectDir) : null;
-        var tagTypes = mode == "to-xml" ? BuildTagTypeRegistry(files, projectDir) : null;
+        if (withSidecar && mode != "to-ir")
+        {
+            Console.Error.WriteLine("--with-sidecar is only valid with 'to-ir' — it keeps the stored SIDECAR that to-ir would otherwise omit for a synthesizable block.");
+            return 1;
+        }
+
+        // Registries for synthesis. Built for both modes: `to-xml` derives the sidecar when the input
+        // has none (ADR-0005), and `to-ir` uses the same synthesis to decide whether a block is
+        // derivable (so it can omit the stored sidecar) — both need the callee interfaces (wired CALLs)
+        // and tag/member types (typed boxes). A sidecar-carrying `to-xml` input ignores them.
+        var callees = BuildCalleeRegistry(files, projectDir);
+        var tagTypes = BuildTagTypeRegistry(files, projectDir);
 
         foreach (var file in files)
         {
@@ -110,7 +117,7 @@ internal static class Program
             {
                 if (mode == "to-ir")
                 {
-                    ConvertToIr(file);
+                    ConvertToIr(file, withSidecar, callees, tagTypes);
                 }
                 else
                 {
@@ -496,7 +503,8 @@ internal static class Program
         return args[i];
     }
 
-    private static void ConvertToIr(string sourcePath)
+    private static void ConvertToIr(
+        string sourcePath, bool forceWithSidecar, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
     {
         var document = XDocument.Load(sourcePath);
 
@@ -550,11 +558,37 @@ internal static class Program
         var irBlock = new IrBlock(
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers, block.Title,
             block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType);
-        var irText = IrSerializer.SerializeBlock(irBlock, sidecars);
+
+        // Derive-always (ADR-0005): omit the stored SIDECAR for a fully-synthesizable block — `to-xml`
+        // re-derives it on demand, so a later network edit can never leave a stale sidecar (no D-6). A
+        // block synthesis can't reproduce (an unsynthesizable construct, or a type it can't resolve from
+        // the batch/--project) keeps its stored sidecar, as does `--with-sidecar` (debug/fallback).
+        var irText = (!forceWithSidecar && IsSynthesizable(irBlock, callees, tagTypes))
+            ? IrSerializer.SerializeBlockReadable(irBlock)
+            : IrSerializer.SerializeBlock(irBlock, sidecars);
 
         var outPath = Path.ChangeExtension(sourcePath, ".ir");
         File.WriteAllText(outPath, irText);
         Console.WriteLine($"{sourcePath} -> {outPath}");
+    }
+
+    // Whether a block's sidecar can be re-derived from its readable form — the derive-always test
+    // (ADR-0005) for whether `to-ir` may safely omit the stored sidecar. The honest check is to
+    // actually run synthesis: it succeeds only when every construct is supported AND every operand type
+    // resolves (from the block's own interface plus the batch/--project). Any UnsupportedSynthesis*
+    // failure means "keep the stored sidecar" — a conservative, safe default. Other exceptions are real
+    // bugs and propagate.
+    private static bool IsSynthesizable(IrBlock block, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
+    {
+        try
+        {
+            SidecarSynthesizer.SynthesizeBlock(block, callees, tagTypes);
+            return true;
+        }
+        catch (UnsupportedSynthesisConstructException)
+        {
+            return false;
+        }
     }
 
     // Builds the callee-interface registry for wired-CALL synthesis from the batch's own block .ir files

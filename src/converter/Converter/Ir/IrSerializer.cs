@@ -8,6 +8,32 @@ public static class IrSerializer
     public static string SerializeBlock(IrBlock block, IReadOnlyList<NetworkSidecar> sidecars)
     {
         var sb = new StringBuilder();
+        AppendReadable(sb, block);
+
+        sb.Append("\nSIDECAR\n");
+        foreach (var sidecar in sidecars)
+        {
+            SerializeSidecarNetwork(sb, sidecar);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Readable-only form — no SIDECAR section. The derive-always canonical form (ADR-0005) for a
+    /// fully-synthesizable block: its sidecar is re-derived by `to-xml` on demand rather than stored,
+    /// so editing a network can't leave a stale sidecar behind (no D-6). A block that synthesis can't
+    /// yet reproduce keeps its stored sidecar via <see cref="SerializeBlock"/>.
+    /// </summary>
+    public static string SerializeBlockReadable(IrBlock block)
+    {
+        var sb = new StringBuilder();
+        AppendReadable(sb, block);
+        return sb.ToString();
+    }
+
+    private static void AppendReadable(StringBuilder sb, IrBlock block)
+    {
         sb.Append("BLOCK ").Append(block.Kind).Append(' ').Append(block.Name).Append('\n');
         sb.Append("ROOTID ").Append(block.RootUId).Append('\n');
         sb.Append("NUMBER ").Append(block.Number).Append('\n');
@@ -39,14 +65,6 @@ public static class IrSerializer
             sb.Append('\n');
             SerializeNetwork(sb, network);
         }
-
-        sb.Append("\nSIDECAR\n");
-        foreach (var sidecar in sidecars)
-        {
-            SerializeSidecarNetwork(sb, sidecar);
-        }
-
-        return sb.ToString();
     }
 
     /// <summary>Network-only form, for unit tests that operate at network granularity (no BLOCK wrapper).</summary>

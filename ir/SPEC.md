@@ -1036,6 +1036,17 @@ mechanism handling all three since none has ever been seen).
 
 ## Sidecar
 
+**Derived by default, not stored (ADR-0005, 2026-07-18).** The sidecar is machine-owned round-trip
+bookkeeping (UIds, wire identity, some type attributes) — never hand-edited, and per its own contract
+"never needed to *understand* the logic." Because `SidecarSynthesizer` now **derives** it from the
+readable form for every construct the reference corpus exercises (proven: parity 14/14 + live TIA
+compile 10/10), it is no longer *stored* for a fully-synthesizable block: `to-ir` omits the `SIDECAR`
+section, and `to-xml` re-derives it on demand. This removes the whole staleness/D-6 problem class —
+editing a network can't leave a stale sidecar behind because there is none to go stale. A block that
+synthesis can't yet reproduce (an unsynthesizable construct — `Limit`/`Wait`/`FillBlockI`/`Modbus*` — or
+a type it can't resolve) still carries a stored `SIDECAR`, and `to-ir --with-sidecar` forces keeping one
+(debug/fallback). When present, its content and contract are unchanged, as below.
+
 Machine-owned, appended once per file, never hand-edited by a human or the AI. Purpose: let the
 converter regenerate the exact source UIds and any other volatile-but-required-for-import
 identifiers on `to-xml`, so `SimaticML'' ≡ SimaticML` after normalization
