@@ -620,8 +620,34 @@ Ruling:
   per-network IR re-serialization (proven byte-stable by `IrSelfStabilityTests`) is the "identical"
   test, with volatile sidecar UIds normalized out (mirroring the golden-harness `Normalizer`).
 
-Residuals routed, not closed here: **D-4** (does closing S6's ten-request exit block *opening* S7,
-or can the modify skills develop sandbox-scoped with S6 still open) stays with the pending D-4
-discussion (`agent-tasks/discussion-d4-stage-gates-review.md`); real-site S7 (vs.
-test-project001 sandbox) still needs a `docs/13-data-boundary.md` approval extension when it
-arrives (horizon flag, unchanged). Recorded to `docs/15`'s step-6 row; a4 briefing marked done.
+Residuals routed: **D-4** (S6/S7 gate timing) was walked through the same day and ruled — see the
+next section. Real-site S7 (vs. test-project001 sandbox) still needs a `docs/13-data-boundary.md`
+approval extension when it arrives (horizon flag, unchanged). Recorded to `docs/15`'s step-6 row.
+
+## Stage-gates structure + S6/S7 gate + fix-wave tally ruled — D-4 (2026-07-18)
+
+Walked through with the owner (the D-4 briefing prepped 2026-07-17). Two of its four points were
+already overtaken by events before the conversation:
+- **Doc bloat (point 1) — already fixed.** FI-20 was implemented 2026-07-18: `stage-gates.md` is now
+  a 43-line status index, with narrative in `docs/evidence/stage-SN.md`. The status/narrative split
+  the owner wanted is in place; no further restructuring needed.
+- **S6/S7 gate tension (point 3) — dissolved by A-4.** A-4 put `gen-block-new` (the skill that
+  closes S6) next, and "S7 is the rush" is retired, so the natural path — build `gen-block-new` →
+  close S6's ten → then open S7 — no longer fights the roadmap's `S7 entry = "S6 done"` gate. S7's
+  other entry requirement ("diff tooling shows which networks changed") is met by `converter diff`,
+  built the same day.
+
+Rulings on the remaining points:
+- **Gate wording: keep as-is.** Roadmap S7 entry stays "S6 done" (`docs/02-roadmap.md` line ~56); no
+  reword. The sandbox-scoped compromise was a stopgap, now retired in favour of the A-4 sequence.
+- **Fix-wave tally: separate parallel count.** Bug-fix waves against the scratch project demonstrate
+  value but are **not** "plain-language generation requests" in the roadmap's sense, so they do
+  **not** count toward S6's exit criterion of ten. S6 exit = **ten fresh plain-language generation
+  requests**; fix waves are tracked separately. The running S6 generation-request tally lives in
+  `AITODO.md`'s "Project stage" S6 section (its live-status home), not a new counter.
+- **Ruling-record hygiene (point 2): status quo.** Dated owner rulings keep going into the relevant
+  `docs/evidence/stage-SN.md` (as this entry does), with `owner-questions.md` holding its compact
+  resolved-pointer record — no separate ruling log.
+
+Both discussion briefings (a4, d4) are now fully resolved and were deleted from `agent-tasks/`
+(convention: folded into permanent docs, then removed — don't let finished tasks accumulate).

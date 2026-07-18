@@ -25,8 +25,10 @@ owner answers) is fully resolved. Where things landed:
   `docs/15-generation-pipeline.md` (skill split, build order), `.claude/skills/gen-architecture/
   SKILL.md` (reuse-first carving), `docs/16-future-ideas.md` FI-18.
 - Deferred items (decided in principle, timing only): `docs/notes/deferred-items.md`.
-- Discussion-pending items, briefing docs prepared for the owner to route to an agent when ready:
-  `agent-tasks/discussion-a4-s7-ordering.md`, `agent-tasks/discussion-d4-stage-gates-review.md`.
+- Discussion items A-4 (S7 ordering) and D-4 (stage-gates/gate structure): both **resolved
+  2026-07-18** and their briefing docs deleted from `agent-tasks/` — outcomes recorded in
+  `docs/evidence/stage-S6.md` ("Coding-skill build order ruled — A-4" and "Stage-gates structure +
+  S6/S7 gate + fix-wave tally ruled — D-4").
   The B-docket/C-item implementation work from this batch also lives in `agent-tasks/` now, as a
   Portal-gated queue (`agent-tasks/README.md`) — see that folder for anything code-shaped.
 - Still-unanswered items with no clarification blocking them: register questions Q-02/Q-06/Q-09

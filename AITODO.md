@@ -47,9 +47,11 @@ four reviewer-adjacent skills exist and are blind-validated (`review-simplicity`
 the first pipeline artifacts live in `gen/test-project001/` (69-REQ requirements register,
 architecture baseline, telemetry); test-project001's functional verdict stands at
 45 implemented / 7 partial / 6 unimplemented / 10 disarmed / **0 contradicted** after fix wave 1
-(2026-07-17, device compile 0/0, invariance proven, triple-reviewed). Exit criterion (ten
-approved requests) not yet closed — counting rule awaits the owner (owner-questions D-4). Full
-history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
+(2026-07-17, device compile 0/0, invariance proven, triple-reviewed). Exit criterion **not yet
+closed**: counting rule ruled 2026-07-18 (D-4) — S6 exit = **ten fresh plain-language generation
+requests**; fix waves are tracked *separately* and don't count toward the ten. **S6 generation-request
+tally so far: 0 of 10** (fix waves excluded — keep this count here as the live tally). Full history:
+`docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-18.
 
 ## Current task: none — nothing in-flight
 
@@ -85,13 +87,13 @@ that steer.
 proper look / detailed plan here (entry criteria long met, S1 done; was parked below S6/S7, no longer).
 
 **S6/S7 — generation & modification pipeline:**
-- **S6 exit criterion not closed** — ten approved requests; the counting rule awaits the owner
-  (owner-questions D-4, discussed in `agent-tasks/discussion-d4-stage-gates-review.md`).
-- **S7-vs-S6 sequencing — build order RULED 2026-07-18 (A-4).** `gen-block-new` first, then
-  `gen-block-modify-fix`, then `gen-block-modify-purpose`; `converter diff` built now in parallel
-  (done — see Recently landed). What's *still* open is the S7-gate-timing half (does closing S6's
-  ten-request exit block *opening* S7): stays with the D-4 discussion
-  (`agent-tasks/discussion-d4-stage-gates-review.md`). The a4 briefing is marked done.
+- **S6 exit criterion not closed** — needs ten fresh plain-language generation requests (D-4:
+  fix waves don't count; tally kept in the Project stage / S6 section above, currently 0 of 10).
+- **S7-vs-S6 sequencing — fully ruled 2026-07-18 (A-4 + D-4).** Build order: `gen-block-new` first,
+  then `gen-block-modify-fix`, then `gen-block-modify-purpose`; `converter diff` built in parallel
+  (done — see Recently landed). Gate wording kept as-is (D-4): roadmap S7 entry stays "S6 done", so
+  the path is build `gen-block-new` → close S6's ten → open S7. Both discussion briefings (a4, d4)
+  resolved and deleted from `agent-tasks/`; full record in `docs/evidence/stage-S6.md`.
 - **The three coding skills are unbuilt** — build order now fixed: `gen-block-new` **next**, then
   `gen-block-modify-fix`, then `gen-block-modify-purpose` (`docs/15` build-order step 6).
 - **Library-filling is real, heavy work** — no longer treated as purely passive S8 harvest. A
