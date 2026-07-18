@@ -10,26 +10,41 @@ Most gaps surfaced 2026-07-18: some across the gen-block-* validations (the wire
 done + TIA-proven, commit `e5bfeab`), the rest by the Stage-0 parity harness run (below). None
 hand-patched (hard rule 7). `src/converter/` work — normal software rules, not `lad-coder`.
 
-## OPEN — real-block synthesis divergence (2026-07-19): the reference corpus is not representative
+## Real-block synthesis divergence (2026-07-19) — investigated; the reference corpus is not representative
 
-The derive-always migration (ADR-0005) audited **every** committed block against its export, not just the
-14-block reference corpus — and found **4 real blocks synthesise-but-diverge**: `MotorStarter`
-(`patterns/motor-dol`) and the `test-project001` FBs `FB_MotorFwdRevSystem`, `FB_PusherControl`,
-`FB_ShredderSequencer`. Each **synthesises without error** yet the derived SimaticML is **not** equivalent
-to the real export (large diffs — MotorStarter alone is ~1188 lines; heavy on `RisingEdgeFlags` /
-`<Access Scope>` mismatches → **Gap D** array-index locals, plus likely others not yet isolated).
+The derive-always migration audited **every** committed block, not just the 14-block reference corpus, and
+found **4 that don't round-trip**: `MotorStarter` (`patterns/motor-dol`) and the `test-project001` FBs
+`FB_MotorFwdRevSystem`, `FB_PusherControl`, `FB_ShredderSequencer`. Digging in (2026-07-19) untangled
+**three distinct causes** — the audit's single number conflated them:
 
-**Two consequences:**
-1. **These 4 blocks correctly keep their stored sidecars** — they can't be safely derived. Guarded by
-   `CommittedBlocksRoundTripTests` (a committed *readable-only* block must round-trip equivalent) and by
-   `to-ir` keeping the sidecar by default (`IsSynthesizable` alone is not enough — "synthesis succeeds" is
-   necessary but not sufficient; ADR-0005 CriticalCaveat).
-2. **The 14-block reference corpus under-samples real logic.** Complete-corpus-green ≠ complete-synthesis.
-   Closing these needs harder fixtures (these very blocks) added to the parity harness, then **Gap D** (and
-   whatever the diffs isolate next) fixed until each goes green. Only then can their sidecars be dropped.
+**1. A stale external answer-key (partly the corpus, exactly as hypothesised).** The audit compared synth
+vs the committed `simatic-ml/test-project001/*.xml`. But those `.ir` files carry **later fixes the `.xml`
+never re-captured** — e.g. `FB_ShredderSequencer`'s `.ir` has the B-5/REQ-028 (2026-07-17) re-arming-window
+fix (`IN := NOT (IO.Step = 60 AND NOT ...) AND ReversalCount > 0`) while its `.xml` still has the pre-fix
+`IN := ReversalCount > 0`. So the `.ir` is *ahead of* the `.xml`. **The correct migration oracle is
+synth-vs-the-block's-own-stored-sidecar, not synth-vs-external-XML** — comparing to the block's own sidecar
+shrank the diffs (PusherControl 543→198, ShredderSequencer 266→102), confirming a chunk was stale-XML noise.
+(Follow-on: re-export the `test-project001` corpus so `.xml` catches up to `.ir`, or drop the external
+answer-key for it and rely on self-consistency.)
 
-This is now the top synthesis priority — it's the gap between "the corpus derives" and "real blocks
-derive," and the guardrail that keeps a divergent block from ever being stored sidecar-less.
+**2. Gap D (array-index local scope) — FIXED 2026-07-19.** `ScopeFor` kept the `[i]` subscript on the first
+path component, so `RisingEdgeFlags[3]` mis-scoped to GlobalVariable (TIA: undefined global tag). Now strips
+the subscript before the local-name lookup. Covered by `ArrayIndexScopeSynthesisTests`. (MotorStarter 1188→976.)
+
+**3. Real, multiple, remaining synthesis gaps.** Even against the *own-sidecar* oracle, all 4 still differ —
+notably **more timer-`.Q` handling variants** (`InfeedRestartTimer.Q`/`UpstreamEnableTimer.Q` are ordinary
+`<Access>` reads in the real form but synth handles them differently — a G2-adjacent case for *local/FB-
+instance* or *cross-network-within-a-chain* timer Q reads, distinct from the whole-condition same-network
+case G2 already handles), plus others not yet isolated. These are genuine gaps, and there are several per
+block — a per-construct effort like the reference corpus was, one fixture + fix at a time.
+
+**Consequences / next steps:**
+- **The 4 blocks correctly keep their stored sidecars** (safe; guarded by `CommittedBlocksRoundTripTests` +
+  `to-ir` keeping the sidecar by default). Not droppable until the gaps close.
+- **The 14-block reference corpus under-samples real logic** — complete-corpus-green ≠ complete-synthesis.
+  Add these blocks as harder fixtures (against the *own-sidecar* oracle, given cause #1), then isolate and
+  fix each remaining gap until they round-trip. Only then can their sidecars drop.
+- This remains the top synthesis priority — the gap between "the corpus derives" and "real blocks derive."
 
 ## Stage-0 harness baseline (2026-07-18) — 9/14 corpus blocks reach parity
 
@@ -121,7 +136,10 @@ CompileUnit-ID fix. This had been silently affecting **wired-CALL** parity too (
 only ever validated by live TIA import, never the offline oracle, until now). No regression to the 14
 `NormalizerTests`.
 
-## Gap D — array-index local members mis-scoped `GlobalVariable`
+## Gap D — array-index local members mis-scoped `GlobalVariable` — DONE 2026-07-19
+
+**Fixed.** `ScopeFor` now strips a trailing `[…]` subscript before the local-name lookup, so
+`RisingEdgeFlags[3]` scopes `LocalVariable`. Covered by `ArrayIndexScopeSynthesisTests`. Original writeup:
 
 **Symptom.** A local STATIC member accessed by array index (`RisingEdgeFlags[3]`) synthesizes with
 `Scope="GlobalVariable"` → TIA `Tag "RisingEdgeFlags"[3] not defined`; the sibling scalar (`HandPosEdge`)

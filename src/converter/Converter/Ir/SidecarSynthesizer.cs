@@ -111,6 +111,17 @@ public static class SidecarSynthesizer
     private static string ScopeFor(string tagPath, IReadOnlySet<string> localNames)
     {
         var firstComponent = tagPath.Split('.')[0];
+
+        // Strip a trailing array subscript before the local-name lookup: the member behind
+        // `RisingEdgeFlags[3]` is `RisingEdgeFlags` (Gap D, 2026-07-19). Without this an array-indexed
+        // local member mis-scopes to GlobalVariable, so TIA rejects it as an undefined global tag — the
+        // divergence found in MotorStarter / the test-project001 FBs.
+        var bracket = firstComponent.IndexOf('[');
+        if (bracket >= 0)
+        {
+            firstComponent = firstComponent[..bracket];
+        }
+
         return localNames.Contains(firstComponent) ? LocalVariableScope : GlobalVariableScope;
     }
 
