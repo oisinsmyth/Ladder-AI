@@ -388,10 +388,15 @@ public static class SidecarSynthesizer
 
     // A comparison as an ordinary chain position (v2) — confirmed real, FC ControlDelays: behaves
     // like a Contact (a pass-through position, own rail-facing/continuation port is "pre"), not
-    // like an OrStep/TimerOutputStep terminal. SrcType is hardcoded "Int" — every comparison this
-    // build needs is a Step/count comparison against a plain Int (C-118's Step tag, C-401's
-    // counters); there is no symbol table here to infer a real type from, so a Real (or other)
-    // comparison is a genuinely separate, unimplemented case, not silently guessed at.
+    // like an OrStep/TimerOutputStep terminal. SrcType is inferred from a literal operand's
+    // magnitude (InferCompareSrcType): a Step/count comparison against a small Int stays "Int"
+    // (C-118's Step tag, C-401's counters — unchanged), but a comparison against a literal that
+    // cannot be an Int (e.g. a UDInt rollover constant like 4294967295) is typed from that literal,
+    // so it synthesizes instead of failing at import on an Int overflow — found 2026-07-18 during
+    // the gen-block-new validation of FB_FilterUnitSystem (REQ-023). Without a symbol table this is
+    // a magnitude heuristic, not full type inference: a tag-vs-tag comparison (no literal) still
+    // defaults to "Int", so a wide tag-vs-tag comparison remains a genuinely separate, unimplemented
+    // case, not silently guessed at.
     private static ChainStepSidecar.CompareStep BuildCompareStep(
         Expr.Compare compare, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
@@ -401,8 +406,37 @@ public static class SidecarSynthesizer
         var comparePartUId = nextUid++;
         var outgoingWireUId = nextUid++;
 
-        return new ChainStepSidecar.CompareStep(comparePartUId, ComparePartNameFor(compare.Operator), "Int", left, right, outgoingWireUId);
+        var srcType = InferCompareSrcType(compare.Left, compare.Right);
+        return new ChainStepSidecar.CompareStep(comparePartUId, ComparePartNameFor(compare.Operator), srcType, left, right, outgoingWireUId);
     }
+
+    // The comparison's SrcType must match its operand type. The only type signal available without a
+    // symbol table is a literal operand's magnitude, so a comparison involving a literal is typed
+    // from that literal (the widest, if both operands are literals); a tag-vs-tag comparison has no
+    // signal and defaults to "Int". Real outranks the integer widths — a comparison against a Real
+    // literal is a Real comparison.
+    private static string InferCompareSrcType(Expr left, Expr right)
+    {
+        var present = new[] { LiteralTypeOrNull(left), LiteralTypeOrNull(right) }
+            .Where(t => t is not null)
+            .Select(t => t!)
+            .ToList();
+        return present.Count == 0 ? "Int" : present.OrderByDescending(TypeRank).First();
+    }
+
+    private static string? LiteralTypeOrNull(Expr expr) =>
+        expr is Expr.Literal literal ? InferLiteralConstantType(literal.Value) : null;
+
+    private static int TypeRank(string type) => type switch
+    {
+        "Int" => 1,
+        "DInt" => 2,
+        "UDInt" => 3,
+        "LInt" => 4,
+        "ULInt" => 5,
+        "Real" => 6,
+        _ => 0,
+    };
 
     private static string ComparePartNameFor(string infixOperator) => infixOperator switch
     {
@@ -423,9 +457,10 @@ public static class SidecarSynthesizer
     // build's own timers actually use a literal PT, every one is HMI-tunable via a computed *MS
     // tag, but the shape is implemented for completeness rather than narrowed to "tag only"); false
     // for a LiteralConstant (every other case), whose ConstantType is inferred from the literal's
-    // own text shape (a decimal point means Real, otherwise Int) — correct for every literal this
-    // build actually writes (Step numbers, counter increments, the x1000.0 HMI-seconds scale
-    // factor), not a general numeric-type inference.
+    // own text shape (a decimal point means Real; otherwise the narrowest integer type that holds
+    // it — Int for in-range values, widening to DInt/UDInt/... for larger ones, InferLiteralConstantType)
+    // — correct for Step numbers, counter increments, the x1000.0 HMI-seconds scale factor, and a
+    // UDInt rollover constant alike; still a magnitude heuristic, not symbol-table type inference.
     private static OperandSidecar ResolveOperand(
         Expr expr, bool typedConstant, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
@@ -451,7 +486,26 @@ public static class SidecarSynthesizer
         }
     }
 
-    private static string InferLiteralConstantType(string value) => value.Contains('.') ? "Real" : "Int";
+    private static string InferLiteralConstantType(string value) =>
+        value.Contains('.') ? "Real" : InferIntegerLiteralType(value);
+
+    // Narrowest standard integer type that holds a non-decimal literal, defaulting to Int for
+    // in-range values so existing Step/counter literals are unchanged; widens to DInt/UDInt/LInt/
+    // ULInt only when the value genuinely exceeds Int (the UDInt-rollover case, 2026-07-18). A
+    // base-prefixed or otherwise non-plain-decimal literal that won't parse falls back to Int
+    // (unchanged behavior — those don't reach comparison synthesis today).
+    private static string InferIntegerLiteralType(string value)
+    {
+        if (long.TryParse(value, out var signed))
+        {
+            if (signed >= short.MinValue && signed <= short.MaxValue) return "Int";
+            if (signed >= int.MinValue && signed <= int.MaxValue) return "DInt";
+            if (signed >= 0 && signed <= uint.MaxValue) return "UDInt";
+            return "LInt";
+        }
+
+        return ulong.TryParse(value, out _) ? "ULInt" : "Int";
+    }
 
     // A TON — confirmed always TimerKind.Ton by construction (TOF/TONR hard-error below, matching
     // site convention C-406's own "TON is the only timer instruction used" as well as being

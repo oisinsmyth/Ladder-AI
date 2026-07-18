@@ -2,6 +2,23 @@
 
 ## 2026-07-18
 
+**`SidecarSynthesizer` infers integer/comparison types by magnitude — fixes UDInt synthesis**
+
+- `converter to-xml --synthesize` previously hardcoded every comparison's `SrcType` and every
+  non-decimal literal's `ConstantType` to `Int` (`SidecarSynthesizer.BuildCompareStep` /
+  `InferLiteralConstantType`), so a UDInt comparison against a large constant (e.g. a rollover guard
+  `HrsRun >= 4294967295`) synthesized as Int and was rejected at TIA import ("The value '4294967295'
+  cannot be set for the parameter of the type 'Int'"). Found 2026-07-18 during the blind
+  `gen-block-new` validation of `FB_FilterUnitSystem` (REQ-023).
+- Now the integer type is the narrowest that holds the literal — `Int` for in-range values (Step
+  numbers, counter increments — unchanged), widening to `DInt`/`UDInt`/`LInt`/`ULInt` only when the
+  value genuinely exceeds Int. A comparison's `SrcType` is inferred from its literal operand's type
+  (widest if both are literals), defaulting to `Int` for a tag-vs-tag comparison (no symbol table, so
+  a wide tag-vs-tag comparison stays unimplemented, not silently mistyped); a decimal literal still
+  types as Real.
+- 2 new tests (small-Int path unchanged; UDInt widens both `SrcType` and `ConstantType` and still
+  feeds `FlgNetBuilder`); converter suite 521/521.
+
 **C-001 member/variable naming mechanized in `converter review` — FI-09 rule #2**
 
 - `converter review` now checks C-001 (members/variables are short PascalCase, underscore-free) as a

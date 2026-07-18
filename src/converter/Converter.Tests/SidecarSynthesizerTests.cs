@@ -254,6 +254,34 @@ public class SidecarSynthesizerTests
     }
 
     [Fact]
+    public void Synthesize_CompareAgainstSmallInt_TypesSrcAndConstantAsInt()
+    {
+        // Guards the unchanged path: a Step/count comparison against a small literal stays Int.
+        var network = IrParser.ParseNetworkOnly("NETWORK 1 \"Test\"\n  COIL X := A = 1\n");
+        var sidecar = SidecarSynthesizer.Synthesize(network);
+
+        var compare = Assert.IsType<ChainStepSidecar.CompareStep>(sidecar.Assignments.Single().Steps.Single());
+        Assert.Equal("Int", compare.SrcType);
+        Assert.Equal("Int", sidecar.ConstantUIds.Single(c => c.Value == "1").ConstantType);
+    }
+
+    [Fact]
+    public void Synthesize_CompareAgainstUDIntConstant_WidensSrcAndConstantToUDInt()
+    {
+        // Regression: SidecarSynthesizer hardcoded SrcType/ConstantType to "Int", so a UDInt
+        // rollover comparison (HrsRun >= 4294967295) failed at TIA import on an Int overflow —
+        // found 2026-07-18 during the FB_FilterUnitSystem gen-block-new validation (REQ-023).
+        var network = IrParser.ParseNetworkOnly("NETWORK 1 \"Test\"\n  COIL X := HrsRun >= 4294967295\n");
+        var sidecar = SidecarSynthesizer.Synthesize(network);
+
+        var compare = Assert.IsType<ChainStepSidecar.CompareStep>(sidecar.Assignments.Single().Steps.Single());
+        Assert.Equal("Ge", compare.PartName);
+        Assert.Equal("UDInt", compare.SrcType);
+        Assert.Equal("UDInt", sidecar.ConstantUIds.Single(c => c.Value == "4294967295").ConstantType);
+        Assert.NotEmpty(FlgNetBuilder.Build(network, sidecar).Parts);
+    }
+
+    [Fact]
     public void Synthesize_OutOfScopeInstructionList_NamesTheConstruct()
     {
         var network = IrParser.ParseNetworkOnly(
