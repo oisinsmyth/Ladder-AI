@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-07-18
+
+**`converter review` F-1 fixed: per-rule count now matches the findings it prints**
+
+- The per-rule status line (`C-301: checked, N finding(s)`) over-counted when one check co-emits
+  another rule's findings: `CheckC301AbsoluteAddressing` returns both C-301 and C-501 findings, and
+  `ReviewRunner.Record` set C-301's count to the whole returned list (C-301 + C-501). Fixed to count
+  only the recording rule's own findings (`ReviewRunner.cs`, one line) — a general single-source fix,
+  not special-cased. Only C-301 was affected (e.g. `FB_MotorFwdRevSystem` 2 → 1); finding lists and
+  every SUMMARY total unchanged.
+- Regression guard added (`ReviewRunnerTests.cs`): the C-301/C-501 co-emission case + a general
+  invariant (every Checked status's count == its own printed findings). Suite 493/493. Corpus-wide
+  check: 88 Checked statuses, zero count-vs-printed mismatches.
+- The 2026-07-16 conventions-validation evidence is left verbatim (it records the pre-fix tool); a
+  dated forward-note in that doc's §1 explains the single shifted count line so it isn't misread as
+  drift.
+
 ## 2026-07-17
 
 **Direction reset (owner) + session-close housekeeping: owner-questions gate, S7-first path**

@@ -118,6 +118,9 @@ public static class ReviewRunner
     {
         var list = ruleFindings.ToList();
         findings.AddRange(list);
-        statuses.Add(new RuleStatusEntry(ruleId, status, list.Count, null));
+        // Count only this rule's own findings, not everything the check returned: a check may
+        // co-emit another rule's findings (CheckC301AbsoluteAddressing also yields C-501), and the
+        // status line must match the findings actually printed under this rule ID (F-1 fix).
+        statuses.Add(new RuleStatusEntry(ruleId, status, list.Count(f => f.RuleId == ruleId), null));
     }
 }

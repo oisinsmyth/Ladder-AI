@@ -44,6 +44,14 @@ per-file and sorted: **all 46 findings identical** (severity, rule ID, location,
 **all 315 per-rule status lines identical**. No re-derivation, paraphrase, or re-severitying
 anywhere — the anti-drift contract held.
 
+> **Forward-note (2026-07-18, F-1 fix):** one *status-line count* above shifts against the current
+> tool and is expected, not drift. `FB_MotorFwdRevSystem`'s C-301 status read `checked, 2 finding(s)`
+> here because the reporter counted the co-emitted C-501 finding under C-301 (the F-1 bug); the fixed
+> tool reads `checked, 1 finding(s)`. The **finding list, per-rule severities/locations, and every
+> SUMMARY total are unchanged** — only that one displayed count. This evidence is a verbatim record
+> of the tool as it was on 2026-07-16 and is left as-is; anyone re-running `converter review` against
+> the fixed tool and diffing should treat that single count line as the intended F-1 correction.
+
 ### Expected AI findings (test-project001)
 
 | Expected (must-find) | Blind run result |

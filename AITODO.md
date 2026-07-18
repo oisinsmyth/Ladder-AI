@@ -99,10 +99,9 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   `Q-12` residual (zeroable-clock reset behaviour). Q-01/02/04/06–11/13–15 are resolved.
 
 **Tooling backlog — non-blocking, PC-side (normal dev, not `lad-coder`):**
-- `F-1` converter reporter bug (C-301 count vs printed findings). `F-3(b)` = C-003's
-  `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`. Capture
+- `F-3(b)` = C-003's `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`. Capture
   `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's author/revision
-  mechanically checkable — still unbuilt).
+  mechanically checkable — still unbuilt). (`F-1` reporter count bug — fixed 2026-07-18, CHANGELOG.)
 
 **S1 carryover — needs owner:** `Modbus_Master`/`Modbus_Comm_Load` live-compile blocked by a confirmed
 general Openness limitation — source-side `JOB9002` fix vs. accept as a documented permanent limitation
