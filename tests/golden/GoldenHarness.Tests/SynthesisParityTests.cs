@@ -33,6 +33,9 @@ public class SynthesisParityTests
         "ThresholdAlarms",
         "FBTimers",
         "ScaleValue",
+        // 2026-07-18: the box family (MUL/CONVERT/SUB/DIV/ABS/SWAP) + Mul-to-Mul ENO chaining +
+        // registry-typed ABS/SWAP.
+        "SignalConditioning",
     };
 
     [Fact]

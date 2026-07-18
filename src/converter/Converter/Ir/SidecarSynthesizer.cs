@@ -56,8 +56,18 @@ public static class SidecarSynthesizer
         IrBlock block, CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var localNames = ComputeLocalNames(block);
-        return block.Networks.Select(network => Synthesize(network, localNames, callees, tagTypes)).ToList();
+        // The block's own interface members type its local operands (a bare TEMP `SignedValue`, a
+        // STATIC struct field) — layer them onto the project-wide registry so typed boxes resolve.
+        var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
+        return block.Networks.Select(network => Synthesize(network, localNames, callees, effectiveTypes)).ToList();
     }
+
+    private static IEnumerable<DbMember> InterfaceMembers(IrBlock block) =>
+        (block.StaticMembers ?? Array.Empty<DbMember>())
+            .Concat(block.TempMembers)
+            .Concat(block.InputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.InOutMembers);
 
     private static IReadOnlySet<string> ComputeLocalNames(IrBlock block)
     {
@@ -158,7 +168,10 @@ public static class SidecarSynthesizer
             int? mulPartUIdForEno = null;
             if (i < network.Muls.Count)
             {
-                var mulSidecar = BuildMulSidecar(network.Muls[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+                // A Mul/Add/Sub/Div with `EN := ENO` chains from the immediately-preceding box in
+                // the same network — Mul→Convert (existing) or Mul→Mul (Sub then Div, SignalConditioning).
+                var precedingMulUId = muls.Count > 0 ? muls[^1].MulPartUId : (int?)null;
+                var mulSidecar = BuildMulSidecar(network.Muls[i], precedingMulUId, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
                 muls.Add(mulSidecar);
                 mulPartUIdForEno = mulSidecar.MulPartUId;
             }
@@ -169,6 +182,20 @@ public static class SidecarSynthesizer
                     network.Converts[i], mulPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries,
                     localNames, tagTypes ?? TagTypeRegistry.Empty));
             }
+        }
+
+        var types = tagTypes ?? TagTypeRegistry.Empty;
+
+        var abs = new List<AbsStatementSidecar>();
+        foreach (var absStatement in network.AbsStatements)
+        {
+            abs.Add(BuildAbsSidecar(absStatement, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
+        }
+
+        var swaps = new List<SwapStatementSidecar>();
+        foreach (var swap in network.Swaps)
+        {
+            swaps.Add(BuildSwapSidecar(swap, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
         }
 
         var calls = new List<CallStatementSidecar>();
@@ -187,7 +214,9 @@ public static class SidecarSynthesizer
             Moves: moves,
             Calls: calls,
             Muls: muls,
-            Converts: converts);
+            Converts: converts,
+            Swaps: swaps,
+            AbsStatements: abs);
     }
 
     // Every non-Assignments/Timers/Moves/Muls/Converts/Calls production list on IrNetwork is out
@@ -201,16 +230,6 @@ public static class SidecarSynthesizer
         if (network.WordAnds.Count > 0)
         {
             populated.Add("WordAnds");
-        }
-
-        if (network.Swaps.Count > 0)
-        {
-            populated.Add("Swaps");
-        }
-
-        if (network.AbsStatements.Count > 0)
-        {
-            populated.Add("AbsStatements");
         }
 
         if (network.Limits.Count > 0)
@@ -627,22 +646,16 @@ public static class SidecarSynthesizer
         }
     }
 
-    // A MUL/ADD — Subtract/Divide hard-error (unimplemented; this build only ever multiplies an
-    // HMI seconds value by 1000.0 or increments a plain Int counter, both Multiply/Add). SrcType is
-    // always null (AutomaticTyped) — the original, more common real shape (MotorDOL/EquipmentControlSystem),
-    // and correct for both of this build's own uses (TIA infers Real from the x1000.0 scale
-    // multiply, Int from the counter increment).
+    // A MUL/ADD/SUB/DIV box (all four MulKinds — Subtract/Divide added 2026-07-18, SignalConditioning).
+    // SrcType is always null (AutomaticTyped): TIA infers it from the operands, which is correct for
+    // every grounded case (Real from the x1000.0 scale multiply, Int from a counter increment or the
+    // Sub/Div here). precedingEnoPartUId chains an `EN := ENO` box from the box immediately before it
+    // in the same network — a preceding Mul→Mul (Sub then Div) or the caller-paired Mul→Convert.
     private static MulStatementSidecar BuildMulSidecar(
-        MulStatement mul, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        MulStatement mul, int? precedingEnoPartUId, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
     {
-        if (mul.Kind is not (MulKind.Multiply or MulKind.Add))
-        {
-            throw new UnsupportedSynthesisConstructException(
-                $"Network: sidecar synthesis only supports MUL/ADD (Subtract/Divide are unimplemented here) — found '{mul.Kind}'.");
-        }
-
-        var (_, enSidecar) = BuildEnSourceSidecar(mul.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var (_, enSidecar) = BuildEnSourceSidecar(mul.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
         var mulPartUId = nextUid++;
         var inputs = new List<OperandSidecar>();
         foreach (var input in mul.Inputs)
@@ -688,6 +701,58 @@ public static class SidecarSynthesizer
         var destType = tagTypes.Resolve(convert.DestTag) ?? "DInt";
 
         return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
+    }
+
+    // An ABS box — en-gated (EnSource), one tag input, one dest write. SrcType is the input operand's
+    // type (the output has the same type; no DestType), resolved from the tag-type registry — no safe
+    // default exists (Real vs Int vs DInt all occur), so an unresolvable operand is a clear hard error.
+    private static AbsStatementSidecar BuildAbsSidecar(
+        AbsStatement abs, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var (_, enSidecar) = BuildEnSourceSidecar(abs.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var absPartUId = nextUid++;
+        var inOperand = ResolveOperand(abs.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var srcType = RequireOperandType(tagTypes, abs.In, "ABS");
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(abs.DestTag, destAccessUId, ScopeFor(abs.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new AbsStatementSidecar(absPartUId, enSidecar, inOperand, srcType, destAccessUId, destWireUId);
+    }
+
+    // A SWAP box — structurally identical to ABS (both real instances are `Word`); SrcType resolved
+    // from the input operand's type the same way.
+    private static SwapStatementSidecar BuildSwapSidecar(
+        SwapStatement swap, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var (_, enSidecar) = BuildEnSourceSidecar(swap.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var swapPartUId = nextUid++;
+        var inOperand = ResolveOperand(swap.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var srcType = RequireOperandType(tagTypes, swap.In, "SWAP");
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(swap.DestTag, destAccessUId, ScopeFor(swap.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new SwapStatementSidecar(swapPartUId, enSidecar, inOperand, srcType, destAccessUId, destWireUId);
+    }
+
+    // A box whose SrcType is its input operand's type (ABS/SWAP) needs that type resolved — there's
+    // no safe default, so an unresolvable operand is a hard error, not a silent guess.
+    private static string RequireOperandType(TagTypeRegistry tagTypes, Expr operand, string instruction)
+    {
+        if (operand is Expr.TagRef tag && tagTypes.Resolve(tag.Path) is string type)
+        {
+            return type;
+        }
+
+        var what = operand is Expr.TagRef t ? $"operand '{t.Path}'" : "a non-tag operand";
+        throw new UnsupportedSynthesisConstructException(
+            $"{instruction} synthesis needs its input {what}'s type, which couldn't be resolved — ensure it's " +
+            "declared in the block interface or a --project DB/UDT/tag-table.");
     }
 
     // An FB/FC CALL. Two argument shapes are supported:

@@ -19,21 +19,32 @@ public sealed class TagTypeRegistry
     private readonly IReadOnlyDictionary<string, string> _tagTypes;
     private readonly IReadOnlyDictionary<string, DbSource> _dbs;
     private readonly IReadOnlyDictionary<string, PlcTypeSource> _udts;
+    private readonly IReadOnlyList<DbMember> _localMembers;
 
     private TagTypeRegistry(
         IReadOnlyDictionary<string, string> tagTypes,
         IReadOnlyDictionary<string, DbSource> dbs,
-        IReadOnlyDictionary<string, PlcTypeSource> udts)
+        IReadOnlyDictionary<string, PlcTypeSource> udts,
+        IReadOnlyList<DbMember> localMembers)
     {
         _tagTypes = tagTypes;
         _dbs = dbs;
         _udts = udts;
+        _localMembers = localMembers;
     }
 
     public static readonly TagTypeRegistry Empty = new(
         new Dictionary<string, string>(StringComparer.Ordinal),
         new Dictionary<string, DbSource>(StringComparer.Ordinal),
-        new Dictionary<string, PlcTypeSource>(StringComparer.Ordinal));
+        new Dictionary<string, PlcTypeSource>(StringComparer.Ordinal),
+        Array.Empty<DbMember>());
+
+    // A copy that also resolves the enclosing block's OWN interface members (a bare `SignedValue`, a
+    // `IO.Ready` struct field) — these carry types in the block being synthesized, not in a separate
+    // DB, so SynthesizeBlock layers them on top of the project-wide sources. Local members take
+    // priority: they're the innermost namespace, exactly the LocalVariable scope ScopeFor assigns.
+    public TagTypeRegistry WithLocalMembers(IEnumerable<DbMember> localMembers) =>
+        new(_tagTypes, _dbs, _udts, localMembers.ToList());
 
     public static TagTypeRegistry FromSources(
         IEnumerable<DbSource> dbs, IEnumerable<PlcTypeSource> udts, IEnumerable<PlcTagSource> tags)
@@ -56,7 +67,7 @@ public sealed class TagTypeRegistry
             tagMap[tag.Name] = tag.DataTypeName;
         }
 
-        return new TagTypeRegistry(tagMap, dbMap, udtMap);
+        return new TagTypeRegistry(tagMap, dbMap, udtMap, Array.Empty<DbMember>());
     }
 
     // Builds from a set of .ir files, same DB/TYPE/TAGTABLE prefix dispatch as ProjectIndex. A file
@@ -113,6 +124,12 @@ public sealed class TagTypeRegistry
     {
         var components = dottedPath.Split('.');
         var root = StripSubscript(components[0]);
+
+        // The enclosing block's own interface members are the innermost, highest-priority namespace.
+        if (_localMembers.Count > 0 && ResolveInMembers(_localMembers, components) is string localType)
+        {
+            return localType;
+        }
 
         if (components.Length == 1)
         {

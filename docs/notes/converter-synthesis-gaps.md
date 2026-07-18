@@ -38,8 +38,9 @@ hidden dependency:
 
 - **Only `TimerSample` isolates a single small gap** (timer-scope). Gap G is now fixed, but Gap G2
   (dual-encoding) still holds it red.
-- **`SignalConditioning`** needs SUB/DIV **+ ABS + SWAP** — and SUB/DIV isn't a one-liner either: its
-  `DIV(EN := ENO)` needs **Mul-to-Mul ENO chaining** (synthesis currently only pairs Mul→Convert).
+- **`SignalConditioning` — GREEN 2026-07-18.** Closed the whole box family in one bundle: SUB/DIV kinds,
+  **Mul-to-Mul ENO chaining** (`DIV(EN := ENO)` chains from the preceding SUB), and registry-typed
+  **ABS/SWAP**. First parity gain of Stage 1 (9→10/14).
 - **`DataHandling`** needs WAND **+ Calc + T_SUB + T_CONV + MOVE_BLK_VARIANT** (five builders).
 - **The box family is gated behind the type symbol table.** WAND/ABS/SWAP each carry a **required
   `SrcType`** (`Word`/`Real`/`Word`) the read side pulls from source; to reach *parity* synthesis must
@@ -131,10 +132,12 @@ INPUT param, nested members) asserting clean member names; live-verify via re-im
 DB/UDT/tag-table `.ir` files — nested/UDT members, array-element typing, tag-table tags). It's **wired
 into `BuildConvertSidecar`** (`SrcType` from the IN tag, `DestType` from the dest tag; falls back to the
 old Real→DInt default only when a type is unknown — strictly better, never worse) and built in
-`Program.cs` alongside the callee registry. **Remaining consumers (queued):** WAND (Gap F), ABS/SWAP
-(SignalConditioning), and comparison `SrcType` (Gap E, replace the magnitude heuristic). Each is now a
-small wiring job on top of the registry rather than its own symbol-table build. Original design detail
-below (kept for the operand-resolution reasoning):
+`Program.cs` alongside the callee registry. **ABS/SWAP — DONE 2026-07-18** (SignalConditioning green): both resolve `SrcType` from the operand type
+(hard-error if unresolvable — no safe default). The registry was extended to also index the **block's
+own interface members** (`WithLocalMembers`, layered on in `SynthesizeBlock`), since these operands are
+TEMP/STATIC members, not DB members. **Remaining consumers (queued):** WAND (Gap F) and comparison
+`SrcType` (Gap E, replace the magnitude heuristic). Original design detail below (kept for the
+operand-resolution reasoning):
 
 ### Original framing — Word→Int CONVERT is mis-typed (bigger; needs a tag-type symbol table)
 
