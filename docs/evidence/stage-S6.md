@@ -651,3 +651,73 @@ Rulings on the remaining points:
 
 Both discussion briefings (a4, d4) are now fully resolved and were deleted from `agent-tasks/`
 (convention: folded into permanent docs, then removed — don't let finished tasks accumulate).
+
+## `gen-block-new` first validation — blind generation vs a real block (FilterUnitSystem, 2026-07-18)
+
+**The experiment.** After `gen-block-new` was authored (skill #7), test-project001 turned out to have
+no clean tier-(a)/REQ-grounded new-block target (all its DOL motors are sequencer-driven; its
+unimplemented REQs are proposed-tag or disarmed). Owner's idea: use a **real JOB9002 equipment FB as a
+ground-truth answer key** — derive a spec from it, regenerate blind, compare. Approved as a new
+`docs/13` data-boundary scope, **sanitize-to-Green-first**. Target: `FilterUnitSystem` (14-network DOL
+FilterUnitSystem FB, real logic — fault timers, hours totaliser, telemetry, alarm word; one UDT dep),
+sanitized to `FilterUnitSystem` (Green).
+
+**Blind isolation, enforced at the filesystem.** The sanitized answer-key block was quarantined
+(`genval-answerkey/`, never given to the generator); the generating agents were pointed only at
+`genval-work/` (spec + the `MotorIOSet` UDT dep), never the block or its XML. Verified by grep at each
+stage. Stages, each a separate `lad-coder` dispatch: (1) manual `gen-spec-analysis` → a 27-REQ
+behavioural register; (2) blind `gen-architecture` → gate-1 manifest; (3) blind `gen-block-new` →
+compile-clean IR; (4) blind reviewers + a two-sided comparison to the answer key.
+
+**Gate 1.** `gen-architecture`, working blind, independently carved the block as **~whole `motor-dol`
+pattern reuse** + a small freeform delta — reaching for the same library block a human would. Owner
+signed gate 1 on the **stricter generated-code bar** (C-406 TON totaliser not TONR; C-501 one-bit
+alarm networks; freeform go-ahead).
+
+**Outcome: the blind build compiled clean and is functionally correct — with zero real defects.** It
+came out, on the project's quality bar, **cleaner than the real engineer's original**: C-406 totaliser
+that also **fixes a latent rollover bug the original carries** (the original rolls to 1 not 0 at the
+UDInt cap via a MOVE-then-ADD re-read; the AI captures the at-max flag once and rolls to 0), C-501
+alarm split, C-001 `FB_` prefix, full titles/comments, and it correctly dropped the original's dead
+`TOF_TIME` static. 22/27 REQs cleanly implemented, mechanical conventions 0 findings, REQ-023 rollover
+guard verified correct.
+
+**The two "defects" the reviewers raised both dissolved on verification** — the load-bearing lesson:
+- **N10 FaultFB polarity → a spec-derivation error, not a code defect.** The code
+  (`RCOIL IO.FaultFB := IO.FaultReset`) was right; the reverse-derived REQ-020 was mis-worded
+  ("except while held" instead of "while held"). Owner ruled the code correct; REQ-020 corrected in the
+  fixture. A `manual:gen-spec-analysis` finding — a bad requirement propagates (what `audit-artifact`
+  exists for).
+- **N6 shared-temp "corruption" → a reviewer false positive.** A blind reviewer flagged N6 (three
+  MUL→CONVERT time-scalings sharing one TEMP) as corrupt, reasoning execution order from the **IR
+  source-text order** (all MULs listed before all CONVERTs). But `SidecarSynthesizer` **interleaves**
+  ENO-chained MUL→CONVERT pairs (`SidecarSynthesizer.cs:145-168`) — the synthesized XML proves the
+  order `Mul→Convert→Mul→Convert→Mul→Convert`, each CONVERT chained to its own MUL's ENO, so the shared
+  temp is safe; byte-identical to the proven working original. Verified at the artifact level before
+  any "fix" — the owner's call to **investigate before fixing** prevented a wrong change to correct,
+  proven code.
+
+**Real findings harvested:**
+- **Converter bug, found + fixed:** `SidecarSynthesizer` hardcoded comparison/literal types to `Int`,
+  blocking the REQ-023 UDInt rollover constant — now magnitude-inferred (commit `46abd8f`, CHANGELOG).
+- **Reviewer-calibration rule (fold into `review-functional`/`review-simplicity`):** never infer TIA
+  execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs; a shared TEMP across
+  such a network is safe by construction — confirm the synthesized order/ENO chaining before flagging
+  shared-temp corruption.
+- **`gen-block-new` skill-doc gaps (first-run feedback):** no pointer to the `--synthesize` path + IR
+  statement-kind ordering; no "synthesizable subset" boundary (TON-only, MUL/ADD/CONVERT, magnitude-
+  typed); no Portal mechanics (absolute `.ap20` path, background for slow opens); the manifest-vs-C-003
+  naming resolution. All queued to fold into the SKILL.md.
+- **Residual tier-2 findings that stand** (readability/convention, not defects): C-605 member comments,
+  C-602 N1 command-source mega-expression, C-505 alarm titles, C-601 `RunConfirmed` naming, and one
+  genuine gold-plating item — N5's unrequested `NOT FaultActive` prestart-drop (C-606, needs
+  justification or removal).
+
+**Verdict.** `gen-block-new` is validated as fundamentally sound: blind, from a spec alone, it produced
+compile-clean, functionally-correct, convention-clean LAD that reused the proven pattern (including its
+subtle interleaved shared-temp idiom) and held the stricter bar to beat the site original. The Check
+stage proved both valuable **and** fallible — findings must be verified, not trusted (this project's
+trust-but-verify discipline, exactly as applied here). **This block does not count toward S6's ten** (a
+skill/pipeline validation fixture, not an approved plain-language generation request; D-4). The Green
+fixture (spec + deps + answer key + generated block) is reproducible from the sanitization maps and is
+a candidate reusable coding-skill validation corpus.

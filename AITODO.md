@@ -56,6 +56,16 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
 ## Current task: none — nothing in-flight
 
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
+- **`gen-block-new` VALIDATED end-to-end (blind, vs a real block).** Sanitized JOB9002 `FilterUnitSystem` →
+  `FilterUnitSystem` as a ground-truth answer key; blind pipeline (spec → gate-1 manifest → code →
+  reviewers+compare) produced a compile-clean, functionally-correct block **cleaner than the site
+  original** (fixed a latent rollover bug). Both reviewer-raised "defects" dissolved on verification:
+  N10 = a spec-derivation error (REQ-020 mis-worded; code correct), N6 = a reviewer false positive
+  (execution-order-from-IR-text; synthesizer interleaves ENO-chained pairs — artifact-proven correct).
+  Full record: `docs/evidence/stage-S6.md` ("gen-block-new first validation"). **Does NOT count toward
+  S6's ten** (validation fixture). Fixture lives in the session scratchpad (`genval-work/` +
+  `genval-answerkey/`), reproducible from the sanitization maps.
+- **Converter UDInt bug fixed** (`SidecarSynthesizer`, commit `46abd8f`) — found by that validation.
 - **`gen-block-new` skill authored (docs/15 #7).** `.claude/skills/gen-block-new/SKILL.md` — the
   Build-stage coder: one gate-1-signed manifest item → one new compile-clean block's IR, reuse-first
   (CALL/patterns), C-126 grouping at write time, tag-status + compile gates, no self-review (Check
@@ -101,9 +111,20 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   (done — see Recently landed). Gate wording kept as-is (D-4): roadmap S7 entry stays "S6 done", so
   the path is build `gen-block-new` → close S6's ten → open S7. Both discussion briefings (a4, d4)
   resolved and deleted from `agent-tasks/`; full record in `docs/evidence/stage-S6.md`.
-- **Coding skills:** `gen-block-new` **authored 2026-07-18, pending validation** (validate via a
-  real tier-(a) `motor-dol` run against test-project001 = S6 #1). Still unbuilt, in order:
+- **Coding skills:** `gen-block-new` **authored + VALIDATED 2026-07-18** (blind FilterUnitSystem
+  experiment — see Recently landed / `docs/evidence/stage-S6.md`). Still unbuilt, in order:
   `gen-block-modify-fix`, then `gen-block-modify-purpose` (`docs/15` build-order step 6).
+- **Follow-ups from the gen-block-new validation (queued, not yet done):**
+  - Fold the **reviewer-calibration rule** into `review-functional`/`review-simplicity`: never infer
+    TIA execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs (shared TEMP is
+    safe by construction — the N6 false-positive lesson).
+  - Fold **`gen-block-new` SKILL.md gaps**: `--synthesize` path + IR statement-kind ordering; the
+    synthesizable subset (TON-only, MUL/ADD/CONVERT, magnitude-typed); Portal mechanics (absolute
+    `.ap20`, background for slow opens); manifest-vs-C-003 naming resolution.
+  - **Fixture housekeeping (owner's call):** whether to commit the Green `FilterUnitSystem` fixture as a
+    reusable coding-skill validation corpus (and where), vs. leave it reproducible-from-maps only.
+  - Optional fixture polish (tier-2, not defects): C-605 member comments, C-602 N1 mega-expression,
+    C-505 alarm titles, C-601 `RunConfirmed`, and the N5/C-606 gold-plating (justify or remove).
 - **Library-filling is real, heavy work** — no longer treated as purely passive S8 harvest. A
   harvest-assist skill is proposed (**FI-21**) to lower the per-pattern cost; see it for the design
   constraints (candidate-prep, not auto-admission).
