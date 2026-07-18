@@ -100,6 +100,11 @@ internal static class Program
         // the source of truth). Built from the batch's own block files plus any --project export.
         var callees = synthesize ? BuildCalleeRegistry(files, projectDir) : null;
 
+        // Tag/member-type registry for typed box/compare synthesis (CONVERT Src/DestType, and — as
+        // those consumers land — WAND/ABS/SWAP/comparison SrcType). Same batch + --project sources as
+        // the callee registry, but the DB/UDT/tag-table files rather than the block ones.
+        var tagTypes = synthesize ? BuildTagTypeRegistry(files, projectDir) : null;
+
         foreach (var file in files)
         {
             try
@@ -110,7 +115,7 @@ internal static class Program
                 }
                 else
                 {
-                    ConvertToXml(file, synthesize, callees);
+                    ConvertToXml(file, synthesize, callees, tagTypes);
                 }
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException or UnsupportedSynthesisConstructException)
@@ -599,7 +604,32 @@ internal static class Program
         return CalleeInterfaceRegistry.FromBlocks(blocks);
     }
 
-    private static void ConvertToXml(string sourcePath, bool synthesize = false, CalleeInterfaceRegistry? callees = null)
+    // Builds the tag/member-type registry for typed box/compare synthesis from the batch's own .ir
+    // files plus any --project export. TagTypeRegistry.FromFiles picks out the DB/UDT/tag-table files
+    // (a block file contributes no operand types) and skips anything unparseable — an operand whose
+    // type can't be resolved simply falls back to the builder's default rather than erroring here.
+    private static TagTypeRegistry BuildTagTypeRegistry(IEnumerable<string> files, string? projectDir)
+    {
+        var paths = new List<string>();
+        foreach (var file in files)
+        {
+            if (File.Exists(file))
+            {
+                paths.Add(file);
+            }
+        }
+
+        if (projectDir is not null && Directory.Exists(projectDir))
+        {
+            paths.AddRange(Directory.EnumerateFiles(projectDir, "*.ir"));
+        }
+
+        return TagTypeRegistry.FromFiles(paths);
+    }
+
+    private static void ConvertToXml(
+        string sourcePath, bool synthesize = false,
+        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var irText = File.ReadAllText(sourcePath);
 
@@ -638,7 +668,7 @@ internal static class Program
         if (synthesize)
         {
             block = IrParser.ParseBlockWithoutSidecar(irText);
-            sidecars = SidecarSynthesizer.SynthesizeBlock(block, callees);
+            sidecars = SidecarSynthesizer.SynthesizeBlock(block, callees, tagTypes);
         }
         else
         {

@@ -124,7 +124,19 @@ the workaround, and is what a real export does), or (b) fix the indentation so n
 don't carry leading whitespace. (a) is likely simpler and more correct. Add a fixture test (a UDT-typed
 INPUT param, nested members) asserting clean member names; live-verify via re-import.
 
-## Gap B — Word→Int CONVERT is mis-typed (bigger; needs a tag-type symbol table)
+## Gap B — CONVERT/box typing needs a tag-type symbol table — REGISTRY BUILT 2026-07-18
+
+**Status.** The keystone `TagTypeRegistry` (`Converter/Ir/TagTypeRegistry.cs`) is **built + unit-tested**
+(sibling of `CalleeInterfaceRegistry`: resolves a dotted path → datatype from batch/`--project`
+DB/UDT/tag-table `.ir` files — nested/UDT members, array-element typing, tag-table tags). It's **wired
+into `BuildConvertSidecar`** (`SrcType` from the IN tag, `DestType` from the dest tag; falls back to the
+old Real→DInt default only when a type is unknown — strictly better, never worse) and built in
+`Program.cs` alongside the callee registry. **Remaining consumers (queued):** WAND (Gap F), ABS/SWAP
+(SignalConditioning), and comparison `SrcType` (Gap E, replace the magnitude heuristic). Each is now a
+small wiring job on top of the registry rather than its own symbol-table build. Original design detail
+below (kept for the operand-resolution reasoning):
+
+### Original framing — Word→Int CONVERT is mis-typed (bigger; needs a tag-type symbol table)
 
 **Symptom.** `SidecarSynthesizer.BuildConvertSidecar` hardcodes `SrcType=Real` / `DestType=DInt` (the
 real Real-seconds→DInt-ms HMI idiom it was grounded on). A **Word→Int** telemetry convert (genval2

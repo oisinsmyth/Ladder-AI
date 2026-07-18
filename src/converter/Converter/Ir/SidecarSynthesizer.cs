@@ -52,10 +52,11 @@ public static class SidecarSynthesizer
     // Input/Output/InOut member names — Constant excluded, a compile-time-substituted mechanism,
     // not a scoped variable) and passes it to every network — see Synthesize's own doc comment for
     // why this matters. ConstantMembers not included: never referenced this way in this codebase.
-    public static IReadOnlyList<NetworkSidecar> SynthesizeBlock(IrBlock block, CalleeInterfaceRegistry? callees = null)
+    public static IReadOnlyList<NetworkSidecar> SynthesizeBlock(
+        IrBlock block, CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var localNames = ComputeLocalNames(block);
-        return block.Networks.Select(network => Synthesize(network, localNames, callees)).ToList();
+        return block.Networks.Select(network => Synthesize(network, localNames, callees, tagTypes)).ToList();
     }
 
     private static IReadOnlySet<string> ComputeLocalNames(IrBlock block)
@@ -108,7 +109,9 @@ public static class SidecarSynthesizer
     // reduces ScopeFor to the original always-GlobalVariable behavior exactly).
     public static NetworkSidecar Synthesize(IrNetwork network) => Synthesize(network, NoLocalNames);
 
-    public static NetworkSidecar Synthesize(IrNetwork network, IReadOnlySet<string> localNames, CalleeInterfaceRegistry? callees = null)
+    public static NetworkSidecar Synthesize(
+        IrNetwork network, IReadOnlySet<string> localNames,
+        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         RequireInScope(network);
 
@@ -163,7 +166,8 @@ public static class SidecarSynthesizer
             if (i < network.Converts.Count)
             {
                 converts.Add(BuildConvertSidecar(
-                    network.Converts[i], mulPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+                    network.Converts[i], mulPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries,
+                    localNames, tagTypes ?? TagTypeRegistry.Empty));
             }
         }
 
@@ -665,7 +669,8 @@ public static class SidecarSynthesizer
     // needed, rather than generalizing speculatively now.
     private static ConvertStatementSidecar BuildConvertSidecar(
         ConvertStatement convert, int? precedingEnoPartUId, int sharedRailWireUId, ref int nextUid,
-        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries,
+        IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
     {
         var (_, enSidecar) = BuildEnSourceSidecar(convert.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
         var convertPartUId = nextUid++;
@@ -675,7 +680,14 @@ public static class SidecarSynthesizer
         accessEntries.Add(new SidecarAccessEntry(convert.DestTag, destAccessUId, ScopeFor(convert.DestTag, localNames)));
         var destWireUId = nextUid++;
 
-        return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, "Real", "DInt", destAccessUId, destWireUId);
+        // Src/DestType are the operand tag types (sidecar-only, not in the readable text). Resolve
+        // them from the tag-type registry; fall back to the Real→DInt HMI-seconds→ms idiom this build
+        // was originally grounded on when a type is unknown (no --project types, or a literal input) —
+        // strictly better than the old hardcode, never worse. A tag-typed IN/dest now types correctly.
+        var srcType = (convert.In is Expr.TagRef inTag ? tagTypes.Resolve(inTag.Path) : null) ?? "Real";
+        var destType = tagTypes.Resolve(convert.DestTag) ?? "DInt";
+
+        return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
     }
 
     // An FB/FC CALL. Two argument shapes are supported:
