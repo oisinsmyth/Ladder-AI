@@ -121,6 +121,36 @@ reality into code. Report the gap and stop; don't improvise the DB.
    proven error→fix pair back into it. Respect the `agent-tasks/README.md` Portal queue before any
    import/compile against a shared scratch project.
 
+## Authoring new (sidecar-less) IR — the mechanics that bite
+
+A block you write from scratch has **no `SIDECAR` section** (that's machine-owned round-trip data,
+minted from a real TIA export — you don't have one). So convert it with **`converter to-xml
+--synthesize`**, not plain `to-xml`; the synthesizer mints the sidecar for you. These facts cost real
+time on the first run if you don't know them going in:
+
+- **Statement-kind ordering within a network.** The synthesizer emits by kind (timers, then coils,
+  then moves, then arithmetic), not in the order you typed them. For **ENO-chained MUL/ADD→CONVERT
+  pairs** it pairs `mul[i]`↔`convert[i]` by list index and interleaves their execution
+  (`mul0→convert0→mul1→convert1…`, each CONVERT enabled by its own MUL's ENO) — so a **single shared
+  TEMP across those pairs is safe** (each CONVERT reads it before the next MUL overwrites; this is the
+  proven `motor-dol` "HMI Times" shape). Write the pairs in matching list order; you don't need a
+  distinct temp per pair, but you do need the MULs and CONVERTs in corresponding order.
+- **The synthesizable subset is narrower than the converter's read side.** `--synthesize` covers plain
+  Contact/Coil (incl. SCoil/RCoil, OR/NOT), **TON only** (no TONR/TOF), MOVE, **MUL/ADD/CONVERT** (no
+  SUB/DIV/etc.), comparisons and literals (now magnitude-typed, so UDInt/DInt constants work — fixed
+  2026-07-18), and zero-argument CALLs. Anything outside that hard-errors at synthesis. If your design
+  needs a construct the synthesizer can't mint, that's a **converter gap to report** (hard rule 7 —
+  never hand-patch the XML), not a coding failure; note it and, where the register allows, ship the
+  supported equivalent with the gap flagged.
+- **Portal mechanics.** A cold `openness-cli` open needs the **absolute `.ap20` path** (a bare project
+  name only resolves if it's already open). A `SampleProject` open is slow — run it **backgrounded**
+  rather than foreground (it can exceed the 10-min cap). Copy the device `--group` value **verbatim**
+  from `openness-cli list`'s Path column (it can embed spaces and an article number as one literal
+  string).
+- **Naming vs. the manifest.** If the manifest's literal block name lacks the C-001/C-003 `FB_`/`FC_`
+  prefix but the manifest also commits to "names follow C-001/C-003," the convention wins: **apply the
+  prefix and proceed**, don't stop on the apparent conflict. Note the applied name in your report.
+
 ## C-126 at write time — group by function, not by instruction kind
 
 The whole pipeline exists because test-project001's first build was compile-clean and *obtuse*

@@ -127,6 +127,14 @@ the worst readability defects had no citable rule until a human read the block c
 - If the one-reading walk turns up what looks like a **functional** defect (a signal written
   nowhere, a polarity that can't work), report it — labeled as tier-1 territory for the
   functional review to rule on, with the evidence. Finding it is in scope; ruling on it is not.
+- **Don't infer TIA execution order from IR source-text order.** The IR lists all MULs then all
+  CONVERTs, but the synthesizer *interleaves* ENO-chained MUL/ADD→CONVERT pairs (`mul0→convert0→
+  mul1→convert1…`, each CONVERT enabled by its own MUL's ENO), so a **single shared TEMP across those
+  pairs is safe by construction** — each CONVERT consumes it before the next MUL overwrites (the
+  proven `motor-dol` "HMI Times" shape). Before flagging shared-temp reuse as corruption or a
+  read-order hazard, confirm the synthesized Part/ENO order or that it matches that pattern. A
+  2026-07-18 validation over-called exactly this as a blocker — the code was correct
+  (`docs/evidence/stage-S6.md`).
 
 ## Report structure
 

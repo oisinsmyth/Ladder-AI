@@ -149,6 +149,14 @@ regardless of whether the logic works.
 - **Stricter bar for generated code** (doc 06 preamble): err toward flagging; "compiles and looks
   plausible" is not a pass; a defensible-but-untraceable behavior is `partial` or worse, never
   waved through. One functional miss discredits the pipeline, not just the block.
+- **Don't infer TIA execution order from IR source-text order.** The IR lists all MULs then all
+  CONVERTs, but the synthesizer *interleaves* ENO-chained MUL/ADD→CONVERT pairs (each CONVERT enabled
+  by its own MUL's ENO), so a **single shared TEMP across those pairs computes correctly** — each
+  CONVERT reads it before the next MUL overwrites (the proven `motor-dol` "HMI Times" shape). Before
+  ruling a shared-temp scaling network `contradicted` for value corruption, confirm the synthesized
+  Part/ENO order. A 2026-07-18 validation over-called exactly this as a blocking functional defect —
+  the code was correct (`docs/evidence/stage-S6.md`). (This cuts *both* ways: err toward flagging real
+  misses, but a shared TEMP alone is not one.)
 
 ## Report structure
 
