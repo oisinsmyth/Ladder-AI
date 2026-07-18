@@ -88,6 +88,16 @@ public static class Normalizer
         ["MultilingualTextItem"] = "ID",
         ["Wire"] = "UId",
 
+        // An <Instance> (a timer/CALL Part's instance sub-element) and an <OpenCon> (a wire's open
+        // endpoint, e.g. a timer's unused ET) each carry a UId that TIA reassigns on import, exactly
+        // like Wire/Access/Part — surfaced 2026-07-18 by the parity harness (TimingAndCalls: a fresh
+        // synthesis mints them from small numbers, the real export has larger ones). Neither is
+        // referenced by UId from elsewhere: an Instance's identity is its Scope+Component path (kept),
+        // an OpenCon is already described positionally as "OPEN" by the wire refinement — so a plain
+        // strip is safe and only ever makes two topologically-identical graphs compare equal.
+        ["Instance"] = "UId",
+        ["OpenCon"] = "UId",
+
         // A CompileUnit's own block-scoped ID is volatile too — surfaced 2026-07-18 by the offline
         // synthesis-parity harness (SynthesisParityRunner). A real export numbers CompileUnits with
         // arbitrary block-scoped IDs (e.g. 3, 8); a freshly *synthesized* sidecar mints them from
@@ -170,8 +180,12 @@ public static class Normalizer
     // the comparison stays correct even without a fully unique key per Part in that edge case.
     private static Dictionary<string, string> BuildPartContentKeyMap(XElement flgNet, IReadOnlyDictionary<string, string> accessContentKeyByUId)
     {
+        // "Part" and "Call" are both producers in <Parts> referenced by <NameCon UId="…">, so both
+        // need topology-based UId normalization (a <Call>'s own UId is volatile too — TimingAndCalls,
+        // 2026-07-18). "Call" is included here and rewritten alongside Part/NameCon in Strip; an
+        // <Access> is handled separately (content-key), everything else in <Parts> stays as-is.
         var parts = flgNet.Elements().FirstOrDefault(e => e.Name.LocalName == "Parts")?.Elements()
-            .Where(e => e.Name.LocalName == "Part").ToList() ?? new List<XElement>();
+            .Where(e => e.Name.LocalName is "Part" or "Call").ToList() ?? new List<XElement>();
         if (parts.Count == 0)
         {
             return new Dictionary<string, string>();
@@ -304,7 +318,7 @@ public static class Normalizer
         {
             attributes = element.Attributes().Select(a => a.Name.LocalName == "UId" ? new XAttribute("UId", key) : a);
         }
-        else if ((element.Name.LocalName == "Part" || element.Name.LocalName == "NameCon")
+        else if ((element.Name.LocalName is "Part" or "Call" or "NameCon")
             && (string?)element.Attribute("UId") is string partUid && partContentKeyByUId.TryGetValue(partUid, out var partKey))
         {
             attributes = element.Attributes().Select(a => a.Name.LocalName == "UId" ? new XAttribute("UId", partKey) : a);

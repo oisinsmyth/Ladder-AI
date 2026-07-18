@@ -38,4 +38,26 @@ public class TimerScopeSynthesisTests
         var timer = Assert.Single(sidecar.Timers);
         Assert.Equal("LocalVariable", timer.InstanceScope);
     }
+
+    [Fact]
+    public void Synthesize_Tonr_CarriesKindAndResetOperand()
+    {
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n  TONR(FBTimers.RunTimeTimer, IN := Run, PT := T#1S, R := ResetReq)\n");
+
+        var timer = Assert.Single(SidecarSynthesizer.Synthesize(network).Timers);
+        Assert.Equal(TimerKind.Tonr, timer.Kind);
+        Assert.NotNull(timer.Reset);
+    }
+
+    [Fact]
+    public void Synthesize_Tof_CarriesKindAndNoReset()
+    {
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n  TOF(FBTimers.HoldTimer, IN := Hold, PT := T#1S)\n");
+
+        var timer = Assert.Single(SidecarSynthesizer.Synthesize(network).Timers);
+        Assert.Equal(TimerKind.Tof, timer.Kind);
+        Assert.Null(timer.Reset);
+    }
 }

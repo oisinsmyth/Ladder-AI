@@ -530,17 +530,17 @@ public static class SidecarSynthesizer
         return ulong.TryParse(value, out _) ? "ULInt" : "Int";
     }
 
-    // A TON — confirmed always TimerKind.Ton by construction (TOF/TONR hard-error below, matching
-    // site convention C-406's own "TON is the only timer instruction used" as well as being
-    // genuinely unimplemented here). IN is an ordinary chain (same BuildChain mechanism as a Coil's
-    // condition). Et is always a fresh OpenCon (wired, not read) — corrected from an initial "no
+    // A TON/TONR/TOF (TOF/TONR added 2026-07-18, TimingAndCalls — the read side already renders each
+    // kind, so synthesis just builds the right sidecar). IN is an ordinary chain (same BuildChain
+    // mechanism as a Coil's condition). A TONR additionally carries a reset (R) operand, built below.
+    // Et is always a fresh OpenCon (wired, not read) — corrected from an initial "no
     // wire at all" attempt: that's a real, confirmed shape too, but only for a *standalone*
     // (GlobalVariable-scoped) timer (FC ControlDelays); this build's own timers are all multi-
     // instance (C-407, LocalVariable-scoped, matching MotorStarter's own real precedent, which
     // *always* wires ET to OpenCon) — live TIA import genuinely rejected the unconnected-ET shape
     // here ("The connection with the name 'ET' is not connected to the object with the UID"),
-    // found 2026-07-15 building FB_PusherControl. Reset is always
-    // null — TONR-only, unreachable once Kind is validated Ton. Every reference to this timer's own
+    // found 2026-07-15 building FB_PusherControl. Reset is built from timer.Reset (present for a
+    // TONR, null for TON/TOF). Every reference to this timer's own
     // Q elsewhere in the network is an ordinary tag reference (e.g. "PusherEndTravelTimer.Q"),
     // resolved by the ordinary ResolveOperand/BuildLeafContactStep machinery like any other tag —
     // not a ChainStepSidecar.TimerOutputStep (that shape is for a Q wired *directly* into a
@@ -553,13 +553,9 @@ public static class SidecarSynthesizer
         TimerBinding timer, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
     {
-        if (timer.Kind != TimerKind.Ton)
-        {
-            throw new UnsupportedSynthesisConstructException(
-                $"Network: TON is the only timer instruction sidecar synthesis supports (site convention " +
-                $"C-406 — TOF/TONR are also unimplemented here regardless) — found '{timer.Kind}'.");
-        }
-
+        // TON/TONR/TOF all supported (TOF/TONR added 2026-07-18, TimingAndCalls). The read side and
+        // FlgNetBuilder already render each kind; synthesis just builds the right sidecar — the same
+        // shape for all three, plus the reset (R) operand a TONR carries and TON/TOF don't.
         var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
         var tonPartUId = nextUid++;
         var preset = ResolveOperand(timer.Pt, typedConstant: true, ref nextUid, accessEntries, constantEntries, localNames);
@@ -573,6 +569,13 @@ public static class SidecarSynthesizer
 
         var etWireUId = nextUid++;
         var etOpenConUId = nextUid++;
+
+        // The reset (R) input — a TONR carries one, TON/TOF don't. Minted after ET so the reset wire
+        // sits last in flow order, matching the real export; its Access (like every operand Access)
+        // is outside the Parts flow-order constraint, so late minting is fine.
+        var reset = timer.Reset is null
+            ? null
+            : ResolveOperand(timer.Reset, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
 
         return new TimerBindingSidecar(
             tonPartUId,
@@ -590,8 +593,8 @@ public static class SidecarSynthesizer
             steps,
             preset,
             Et: new OpenConnectionSidecar(etWireUId, etOpenConUId),
-            TimerKind.Ton,
-            Reset: null);
+            timer.Kind,
+            reset);
     }
 
     // A MOVE — En is a plain Expr (ordinary chain, not EnSource; confirmed real, MoveStatement's

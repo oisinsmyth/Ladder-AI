@@ -36,6 +36,9 @@ public class SynthesisParityTests
         // 2026-07-18: the box family (MUL/CONVERT/SUB/DIV/ABS/SWAP) + Mul-to-Mul ENO chaining +
         // registry-typed ABS/SWAP.
         "SignalConditioning",
+        // 2026-07-18: TONR/TOF synthesis + wired CALL, once the Normalizer learned Call/Instance/
+        // OpenCon UIds are volatile too.
+        "TimingAndCalls",
     };
 
     [Fact]

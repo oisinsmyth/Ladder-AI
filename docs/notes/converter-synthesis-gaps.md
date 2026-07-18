@@ -74,13 +74,21 @@ networks must be synthesizable. **This is now the highest-priority converter bui
 modifying real blocks at all.** (Gaps C/D/E still matter for when a *changed* network uses those constructs;
 the scoped merge only saves the *unchanged* ones.)
 
-## Gap C — synthesis is TON-only (no TONR/TOF)
+## Gap C — synthesis is TON-only (no TONR/TOF) — DONE 2026-07-18 (TimingAndCalls green)
 
-**Symptom.** `to-xml --synthesize` hard-errors on a `TONR`/`TOF` ("TON is the only timer instruction sidecar
-synthesis supports … found 'Tonr'"). Real equipment FBs use TONR (retentive hours totalisers) routinely.
-Blocks the whole file under the D-6 workaround even when the TONR network is unchanged. **Fix:** extend
-`BuildTimerSidecar` to mint TONR (its `R` reset port) and TOF, mirroring the read side's `TimerKind`
-handling. (Also unblocks the genval1/genval2 REQ-032-class retentive-timer requests directly.)
+**Fixed.** `BuildTimerSidecar` now accepts all three `TimerKind`s and passes `timer.Kind` through; a TONR
+additionally builds its `R` reset operand (TON/TOF have none). The read side and `FlgNetBuilder` already
+render each kind, so this was just building the right sidecar. Covered by `TimerScopeSynthesisTests`
+(TONR carries kind + reset; TOF carries kind, no reset). Also unblocks the genval1/genval2 REQ-032-class
+retentive-timer requests directly.
+
+**Also fixed a Normalizer oracle gap it surfaced.** TimingAndCalls synthesized correctly but failed
+*compare* on pure UId-value differences: the Normalizer didn't treat `<Call>` (a producer, like a
+`<Part>`), `<Instance>`, or `<OpenCon>` UIds as volatile. Extended the volatility model (`<Call>` now
+WL-refined alongside `<Part>`; `<Instance>`/`<OpenCon>` plain-stripped) — the same completion as the
+CompileUnit-ID fix. This had been silently affecting **wired-CALL** parity too (the wired-CALL feature was
+only ever validated by live TIA import, never the offline oracle, until now). No regression to the 14
+`NormalizerTests`.
 
 ## Gap D — array-index local members mis-scoped `GlobalVariable`
 
