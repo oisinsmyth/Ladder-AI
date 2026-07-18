@@ -192,7 +192,21 @@ hardcoded `LocalVariable`. Covered by `Converter.Tests/TimerScopeSynthesisTests`
 multi-instance FB timer) stays green, confirming the local case is preserved. (Adjacent to Gap D — both
 are scope-classification of a dotted path.)
 
-## Gap G2 — a same-network timer `.Q` read synthesized as an ordinary Access, not a direct wire (new)
+## Gap G2 — same-network timer `.Q` read → direct wire — INVESTIGATED 2026-07-18: DETERMINISTIC, not a SPEC question
+
+**Resolved as a plain synthesis rule (no SPEC change, no ambiguity).** TimerSample's own sidecar is the
+proof: a `.Q` read of a timer defined in the **same network** is a `timeroutput` step (direct wire from
+the TON's Q port), while a **cross-network** `.Q` read is an ordinary Access. Network 3 shows both at once
+— its TON `IN` reads `SampleTimer0.Q`/`SampleTimer1.Q` (timers from N1/N2, cross-network) as ordinary
+Access contacts, and its coil reads `SampleTimer2.Q` (same-network) as a `timeroutput` step; N1/N2 confirm
+the same-network case. So the readable IR (`:= SampleTimerN.Q`) needs no change — synthesis just detects
+whether the referenced timer instance is one built in this same network and, if so, emits a
+`ChainStepSidecar.TimerOutputStep` (referencing that TON's part UId) instead of an ordinary contact+Access.
+**Implementation note:** build the network's timers before the assignments/chains that read them, so the
+TON part UId is known when the TimerOutputStep is minted. **Buildable now — recommend implementing.**
+
+### Original framing (superseded — kept for the shape detail)
+A same-network timer `.Q` read synthesized as an ordinary Access, not a direct wire.
 
 **Symptom.** After Gap G, `TimerSample` *still* diverges: each `COIL outN := SampleTimerN.Q` reads a
 timer's `Q` that is defined **in the same network**. The real export wires the TON's `Q` port **directly**
@@ -208,7 +222,40 @@ question first:** does TIA *always* export a same-network `.Q` read as a direct 
 occur? If both, the readable IR needs a way to say which (a SPEC question), like Gap H. **Verify:**
 `TimerSample` flips green.
 
-## Gap H — standalone `Not` (invert-RLO) synthesized as a negated contact (new, harness-surfaced)
+## Gap H — standalone `Not` vs negated contact — INVESTIGATED 2026-07-18: GENUINE ambiguity, OWNER DECISION NEEDED
+
+**Both encodings occur in real exports, and the readable `NOT <tag>` conflates them.** Confirmed against
+the corpus:
+- **PerimeterSafetyAlarms** (passes parity): every `NOT <tag>` — including a lone `COIL := NOT SafetyZone1`
+  and `NOT A OR NOT B OR NOT C` — is a **negated contact** (7 negated contacts, 0 standalone-Not steps).
+- **BooleanExtras** (red): `COIL RunA := NOT EnableCmd AND FaultLatch` is a **standalone `Not` step** fed by
+  a *non-negated* contact.
+
+`to-ir` serialises both as `NOT <tag>`, so the readable form can't tell synthesis which to emit. The two
+are **semantically identical for a `NOT <single-tag>` at a chain lead** (both compute `NOT tag`, both
+compile) — the difference is purely which LAD element the engineer drew. (`NOT <compound>`, e.g.
+`NOT (A OR B)`, is already unambiguously a NotStep and synthesises correctly — the ambiguity is only
+`NOT <single-tag>`.) This looks like **author choice** preserved by TIA, not a deterministic rule.
+
+**Three options (owner's call — touches `ir/SPEC.md` or accepts a known non-parity case):**
+1. **Canonicalise + document (lean).** Synthesis always emits a negated contact for `NOT <tag>`; accept
+   BooleanExtras as a known benign non-parity case. The distinction is semantically null, so this matches
+   the readable-form principle ("logic, not drawing choices"). One real consequence: a *derive-always*
+   round-trip of an existing standalone-`Not` block would render it as a negated contact — same logic,
+   same compile, but a `|NOT|` box becomes a `|/|` contact in the editor (a reviewer would see the diff).
+2. **SPEC grammar change.** Give the readable IR a distinct spelling for a standalone `Not` vs a negated
+   contact so `to-ir` preserves it and byte-parity holds. Faithful, but adds grammar + reader/writer
+   complexity for a semantically-null distinction.
+3. **Heuristic rule (unconfirmed).** "`NOT <tag>` leading a *multi-element series* → standalone Not; else
+   negated contact." It happens to fit both corpus blocks (Perimeter's NOTs are lone or in OR-branches;
+   BooleanExtras' leads a series) and would make both green — but it rests on a **single** positive example
+   and may just be coincidence/author-choice, so a block that drew `NOT A AND B` as a negated contact would
+   mis-synthesise. Not recommended without more data.
+
+**Recommendation: Option 1** unless editor-level visual fidelity of standalone-`Not` boxes matters.
+
+### Original framing (kept for the shape detail)
+Standalone `Not` (invert-RLO) synthesized as a negated contact.
 
 **Symptom.** `BooleanExtras` has a real `Part Name="Not"` (a standalone invert-power-flow element);
 synthesis emits a `Contact` with `<Negated Name="operand"/>` instead. Logically adjacent but a different
