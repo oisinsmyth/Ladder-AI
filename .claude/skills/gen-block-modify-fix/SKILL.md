@@ -56,41 +56,22 @@ dispatch this to `lad-coder`.
 - **`docs/06-lad-conventions.md`** (read fresh) — the touched networks still answer to conventions (C-126
   grouping, titles/comments, the stricter generated-code bar); **`docs/notes/compile-error-playbook.md`**.
 
-## Method — the modification choreography
+## Method — follow the shared modification choreography
 
-**Scope first, edit narrowly, prove the rest unchanged, then compile.** (docs/15 notes this choreography
-is shared with `gen-block-modify-purpose`; documented inline here until that skill is built.)
+The mechanics — scope → snapshot the as-built → edit only the named network(s) → D-6 whole-file
+re-synthesize → the `converter diff --only` **invariance gate** → compile gate — live in
+**`docs/notes/modification-choreography.md`** (shared with `gen-block-modify-purpose` so the two skills
+can't drift; it also carries the tooling notes: the `--only` space/comma/repeated forms, sidecar-less
+diffing, the UDT/`TYPE` no-network-invariance fallback, the FB-with-timers instance-DB rule, and the
+compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:**
 
-1. **Scope.** From the fix-request, fix the exact network number(s) named. Confirm the defect by reading
-   those networks. Everything else in the block is off-limits.
-2. **Snapshot the as-built.** Keep the original IR (pre-edit) — you need it for the invariance diff.
-3. **Edit only the target network(s)'** readable IR to fix the defect. Keep the fix minimal and
-   convention-clean; re-title/comment only the network(s) you changed if the change warrants it.
-   **Synthesis rule when adding a permissive:** an added OR-group (or `NOT` of a compound) must be the
-   **rail-most / first** operand of an AND chain — appending `AND (X OR Y)` to the *end* of a chain is
-   un-synthesizable (`UnsupportedSynthesisConstructException`). Write `(X OR Y) AND <rest>`, not
-   `<rest> AND (X OR Y)` — AND is commutative, and a leading branch is the conventional LAD shape anyway.
-4. **Re-synthesize (the D-6 reality).** A network in an **already-exported (sidecar-carrying)** block
-   can't take an added/changed statement in place — the converter has no scoped-merge path yet
-   (`docs/notes/deferred-items.md` D-6). Use the proven **whole-file strip-and-synthesize** workaround:
-   strip the file's entire `SIDECAR` section → keep your readable edit → `converter to-xml --synthesize`
-   the whole file → import → compile → re-export → `to-ir` to restore real sidecars. This regenerates
-   every network's sidecar UIds, which is fine — the invariance check below reads the sidecar-*free*
-   form, so untouched networks still prove identical. (A sidecar-less block skips this — just edit +
-   `--synthesize`.)
-5. **Invariance gate — the hard gate that defines this skill.** Run
-   `converter diff <as-built.ir> <fixed.ir> --only <target networks>` (paths first; `--only` takes
-   space- or comma-separated numbers, or repeated `--only`, e.g. `--only 1 2` / `--only 1,2`). It **must
-   exit 0**: every network *outside* the named set is provably identical in readable IR, and the named
-   ones are the only changes. If it reports a change you didn't intend, you touched something you
-   shouldn't have — undo it or stop. This is CLAUDE.md's "untouched-network invariance check", mechanized.
-   `diff` handles sidecar-carrying *and* sidecar-less inputs (compares the readable form either way).
-   **A UDT / `TYPE` change has no networks** — `diff` is block-only, so there's no invariance concept for
-   it; verify a UDT edit by member-text inspection + the compile gate instead.
-6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch**
-   project → `openness-cli compile` clean. Playbook first on any failure. Claim the `agent-tasks/README.md`
-   Portal queue before import/compile. **An FB with multi-instance timers (a common fix target) compiles
-   only after its instance DB exists** — `openness-cli create-instance-db` first if there isn't one.
+- **Scope = the network(s) the fix-request names — a defect repair, not an interface change.** If the
+  "fix" actually needs a new interface member or a new/removed network, it's a *purpose* change → stop
+  and route to `gen-block-modify-purpose`; don't grow the fix into a redesign.
+- **The REQ you restore already exists** — re-check the fixed network against it; a fix that compiles but
+  doesn't restore the REQ is a miss (the compile gate never proves behavior).
+- **A requirement-vs-convention tension is a stop-and-route, not a guess** (e.g. a "retentive timer" REQ vs
+  C-406's TONR ban) — flag both sides for an owner ruling rather than silently picking one.
 
 ## Exit
 

@@ -131,14 +131,15 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   (done — see Recently landed). Gate wording kept as-is (D-4): roadmap S7 entry stays "S6 done", so
   the path is build `gen-block-new` → close S6's ten → open S7. Both discussion briefings (a4, d4)
   resolved and deleted from `agent-tasks/`; full record in `docs/evidence/stage-S6.md`.
-- **Coding skills:** `gen-block-new` **authored + VALIDATED 2026-07-18** (two blind runs — see Recently
-  landed / `docs/evidence/stage-S6.md`). **`gen-block-modify-fix` authored 2026-07-18**, pending
-  validation against the genval2 fix corpus (`gen/_validation/shredder/fix-requests.md`: FR-1 REQ-030,
-  FR-2 C-610 blind-fixable; FR-3 REQ-032 needs-ruling). Its invariance gate = `converter diff --only`.
-  Still unbuilt: `gen-block-modify-purpose` (`docs/15` build-order step 6, last of the three).
-  **Tooling to mechanize modify-fix (from the plan):** `converter diff --only` (built); the D-6 scoped
-  `SidecarSynthesizer` merge (recommended next — removes the whole-file-strip friction); FI-22
-  whole-project cross-check (post-fix cross-block safety).
+- **Coding skills — ALL THREE AUTHORED 2026-07-18** (`docs/15` build-order step 6 complete):
+  `gen-block-new` (validated, two blind runs), `gen-block-modify-fix` (validated on the genval2 fix
+  corpus — FR-1/FR-2 proven, FR-3 routed), `gen-block-modify-purpose` (**pending validation** via a blind
+  MotorDOL→MotorVSDSystem purpose change, `genval3-*`). Shared modification choreography factored into
+  `docs/notes/modification-choreography.md` (both modify skills reference it). Invariance gate =
+  `converter diff --only`.
+  **Tooling recommended next (mechanize the modify skills):** the D-6 scoped `SidecarSynthesizer` merge
+  (removes the whole-file-strip friction); FI-22 whole-project cross-check (post-change cross-block
+  safety). `converter diff --only` (built) already covers both fix and purpose invariance + interface delta.
 - **Follow-ups from the gen-block-new validation (queued, not yet done):**
   - Fold the **reviewer-calibration rule** into `review-functional`/`review-simplicity`: never infer
     TIA execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs (shared TEMP is
