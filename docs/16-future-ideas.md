@@ -121,8 +121,10 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 
 ### FI-09 — Convention rules Phase 2: mechanize more of the remaining ~42
 - **Status:** Parked
-- **Raised:** 2026-07-16 · **Source:** S4 Phase 1 shipped 8 of ~50 rules as mechanical checks; the rough re-estimate of the rest is in `docs/notes/stage-gates.md`. `review-conventions` (pipeline skill 9) wraps `converter review` plus an AI pass over the non-mechanical rules.
-**Merits:** Each mechanized rule is a deterministic, zero-hallucination check forever, and directly shrinks the AI-judgment surface `review-conventions` has to carry.
+- **Raised:** 2026-07-16 · **Source:** S4 Phase 1 shipped 8 of ~50 rules as mechanical checks; the rough re-estimate of the rest is in `docs/evidence/stage-S4.md`. `review-conventions` (pipeline skill 9) wraps `converter review` plus an AI pass over the non-mechanical rules. Specificity below added 2026-07-18 from a read-only skill/tooling audit (preserved in git history, commit `eede95d`, then folded here).
+**Merits:** Each mechanized rule is a deterministic, zero-hallucination check forever, and directly shrinks the AI-judgment surface `review-conventions` has to carry. Each landed rule *auto-retires the matching hand-sweep* via `review-conventions`' self-retiring NotApplicable clause — so growing the tool shrinks the skill with no skill edit per rule.
+**Which rules pay off (2026-07-18 audit).** `review-conventions` spells out exact mechanical recipes that are pure structural checks on the already-parsed IR model — the highest-leverage genuinely-mechanizable: **C-121** (a Step-write must be a `MOVE` whose `EN` carries `Step = <from> AND …`); **C-118/119/120/122/125** (sequencing structure — one `Int` Step in the interface UDT, step 0 present and explicitly returned to, ascend-by-10, dwell-timer shape); **C-408** (`.ET` inside a comparison — trivial over `Ir/TagReferences.cs` / `Expr.Compare`); **C-103** (SCOIL/RCOIL set-vs-reset pairing — `CoilAssignment.Kind` already carries Assign/Set/Reset); **C-107/C-402** (within-block edge-memory single-writer discipline); **C-001** non-prefix (PascalCase / no-underscore on members and variables). Each follows the existing one-method-per-rule pattern in `Rules.cs` + a `ReviewRulesTests.cs` fixture. `AITODO.md`'s F-3(b) (C-003's `iDB_<FBName>_<Instance>` sub-clause) is one such gap already flagged.
+**Boundary — do not over-mechanize (same audit).** All bucket-C judgment rules (C-113 paradigm choice, C-504 suppression intent, C-002/C-004 semantic naming, the one-reading test), blindness/regime disposition, owner-ruling routing, and the report split stay AI. Scripting these manufactures false confidence — worse than the hand-work.
 **Costs / risks:** The re-estimate found genuine severity/checkability mismatches — some rules are not mechanical at any reasonable cost; diminishing returns are real.
 **Dependencies:** `review-conventions` in real use (pipeline build-order step 3).
 **Verdict / revisit trigger:** Revisit when `review-conventions` usage shows which rules actually fire often enough to be worth mechanizing.
@@ -227,3 +229,31 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Mechanics:** reads/reviews/edits IR → runs **inside `lad-coder`** (hard rule 8); each review pass follows the persist-to-`docs/evidence/` convention (`docs/15` "Artifacts"). It is an **S8 accelerator** by nature; building it early is fine as tooling but it shouldn't jump the S6-exit / coding-skill queue unless the owner explicitly bumps library-coverage up (which this session's steer begins to).
 **Dependencies:** the three review skills (built); `docs/07-pattern-library-spec.md`'s admission criteria (the gate it feeds, never replaces).
 **Verdict / revisit trigger:** Open — owner's "tomorrow's work." Start from the candidate-prep reframe above, not the literal "iterate to clean the example" seed.
+
+### FI-22 — Whole-project cross-check review mode (reference-graph analysis over `ProjectIndex`)
+- **Status:** Raised (2026-07-18, skill/tooling audit — net-new, not previously tracked; the audit's highest-leverage new item).
+- **Raised:** 2026-07-18 · **Source:** a read-only skill/tooling audit (preserved in git history, commit `eede95d`, then folded here). `converter review` is per-file, so the review skills do project-wide reference-graph analysis by hand — but the infrastructure already exists: `Preflight/PreflightRunner.cs` builds a `ProjectIndex` (`Preflight/ProjectIndex.cs`) over the whole export (verified 2026-07-18: `ProjectIndex.Build` / `ResolvesAsTagRoot`).
+**Merits:** A `converter review --project ir/<project>/` (or a new `cross-check` subcommand) reusing that index could emit — as verbatim tool output the reviewer reasons over, same status as today's `converter review` dump, **not** a new judgment source:
+- **review-conventions Group-2 cross-block tables** — C-308 one-writer table (every write destination targeting `DB_Settings.*` or an instance-UDT settings member); C-115 handshake-vocabulary table; C-127 reusable-FB sibling-reference check; C-304 IO-boundary scan (raw `%I`/`%Q` outside Map FCs). These are exactly the tables the skill's report already builds by hand.
+- **review-functional Pass-2 dead-wiring** — every interface-UDT / buffer-DB member checked for readers AND writers in both directions (consumed-but-never-written / written-but-never-consumed). A whole-project reader/writer set-difference — the *in-cycle-lamp bug class* the functional reviewer exists to catch, and it is mechanical. REQ *tracing* stays AI (needs register semantics); the dead-wiring detection should not be hand-grep.
+**Costs / risks:** Emit reference-graph *facts* the AI reasons over, never adjudicated verdicts (same discipline as the mechanical `converter review` dump). Keep scope to structure, not judgment.
+**Dependencies:** `ProjectIndex` (built, used by `preflight`); the per-file rule methods (`Rules.cs`). Complements FI-09 (per-file rules) but is a distinct capability (cross-file).
+**Verdict / revisit trigger:** Open — worth it once the reviewers are in steady real use; the highest-leverage net-new item from the audit.
+
+### FI-23 — `explain-plc-block` structural-fingerprint helper
+- **Status:** Raised (2026-07-18, skill/tooling audit — net-new).
+- **Raised:** 2026-07-18 · **Source:** the audit. `explain-plc-block`'s core method is "describe the repeating template once, then verify *every* instance — copy-paste drift is where the real findings are," done by hand across N networks today.
+**Merits:** A `--fingerprint` mode emitting a normalized structural signature per network (extending `Digest/DigestBuilder.cs`, which already computes per-network statement summaries — verified 2026-07-18) would surface the outlier instance directly instead of hand-comparison, serving the skill's stated main failure mode.
+**Costs / risks:** Keep it **distinct from `digest`**, which is policy-banned *as review input* (`docs/15` isolation model). This is an orientation aid for *explanation*, which is allowed — it must not become a review shortcut.
+**Dependencies:** `DigestBuilder` (built).
+**Verdict / revisit trigger:** Open — net-new; lower priority than FI-22 but cheap (extends existing digest machinery).
+
+### FI-24 — `gen-architecture` bookkeeping helpers (provenance + tag-status)
+- **Status:** Raised (2026-07-18, skill/tooling audit — net-new, small tooling).
+- **Raised:** 2026-07-18 · **Source:** the audit. Two rote, error-prone hand-steps in `gen-architecture`:
+**Merits:**
+- **Provenance header** currently needs `git log -1 --format=%h -- <path>` per input; a tiny wrapper emitting the whole provenance block removes a hand-repeated, easy-to-fumble step.
+- **Tag-status classification** ("every named tag `exists`/`proposed`") is exactly `ProjectIndex.ResolvesAsTagRoot`; a `converter tagstatus <names…> --project ir/<project>/` mode would let the designer mechanically classify a proposed-tag list instead of hand-grepping — the same primitive `preflight` already uses, and direct support for the anti-laundering rule.
+**Costs / risks:** Low — both are small, deterministic, and reuse existing primitives.
+**Dependencies:** `ProjectIndex` (built).
+**Verdict / revisit trigger:** Open — small quick wins; `tagstatus` is the more useful (anti-laundering support).

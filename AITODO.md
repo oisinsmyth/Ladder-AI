@@ -111,7 +111,10 @@ general Openness limitation — source-side `JOB9002` fix vs. accept as a docume
 (constructed edge-detection pattern), FI-08 (engineer-side proposed-tag approval path), FI-11
 (presentation bundling for the final gate), FI-12 (persistent Portal session for the inner loop),
 FI-17 (explanation sidecars), FI-18 (HMI-interface skill — would give Q-03/13/14/15-class questions a
-home). FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/09/10 parked.
+home). **From the 2026-07-18 skill/tooling audit:** FI-22 (whole-project cross-check review mode over
+`ProjectIndex` — highest-leverage net-new), FI-23 (`explain-plc-block` structural-fingerprint helper),
+FI-24 (`gen-architecture` provenance + `tagstatus` helpers); FI-09 enriched with which rules actually
+pay off to mechanize. FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/09/10 parked.
 
 `docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever opens.
 
