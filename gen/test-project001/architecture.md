@@ -576,3 +576,140 @@ cascade to `FB_ShredderSequencer`/`FB_PusherControl`/their iDBs/`FC_ControlMain`
 `FB_ShredderSequencer` diff against pre-edit `HEAD` showed exactly the intended two changes
 (dropped stale `UPSEnable`/`Run` reflection from the reverted resolution (a), added the `InCycle`
 wiring) — task 06's re-arm fix and everything else confirmed untouched.
+
+### 2026-07-18 — Tier-(a) `motor-dol` instance evaluation (gen-block-new validation target) — BLOCKED at gate 1
+
+**Intent.** Carve a clean tier-(a) `motor-dol` (`patterns/motor-dol/`, ADMITTED 2026-07-15)
+instance to serve as `gen-block-new`'s first validation build (docs/15 build-order step 6 — "S6
+request #1"). Skill-driven: `gen-architecture` reuse-first carving pass (Method step 3, tier (a)).
+
+**Candidate evaluated — discharge conveyor (REQ-004).** On a register-derived (greenfield-posture)
+design this is a clean tier-(a): a DOL conveyor with start + running-confirm is exactly what the
+admitted motor-dol FB provides, and §1 of this artifact already carved it as `iDB_MotorDOL_DIS`.
+Its infeed-conveyor (REQ-010/011) and pusher-power-pack (REQ-030/031) siblings are the same shape.
+
+**Blocker — no clean new-block-only landing spot in the as-built.** All three DOL motors are
+already controlled *inline*: `FB_ShredderSequencer` drives the discharge and infeed conveyors (its
+`RunDischargeConv`/`RunInfeedConv` outputs → `DB_Output` via `FC_ControlMain` N79/N80; feedbacks →
+sequencer inputs, N18 etc.), and `FB_PusherControl` drives the power pack. Instantiating a motor-dol
+FB for any of them moves the physical run output (single-writer) from the sequencer/pusher to the
+new instance — which **edits existing `FC_ControlMain` wiring networks and strands/duplicates the
+sequencer's own step-20 start-confirm logic (REQ-004)**. That is a `gen-block-modify-purpose`
+restructure (docs/15 skill #8 — S7-gated, not yet built), not a `gen-block-new` build:
+`gen-block-new`'s boundary is new blocks/networks only (docs/15 Boundaries).
+
+**The only genuinely-additive motor-dol target is blocked the other way.** A second/other motor
+(Q-05, owner hint "motor starter type FBs for each motor") would be a clean additive instance, but
+its instrumentation (current/fault/feedback) is entirely `proposed` — no tags in the as-built — so
+hard rule 3 forbids coding against it. No uncontrolled DOL motor with `exists` tags is present
+(spares `DI2`/`DI17`–`22`, `DQ12`–`18` carry no equipment function).
+
+**Touched blocks (if built).** Would create `MotorStarter` (pattern FB import) + `iDB_MotorDOL_DIS`;
+would modify `FB_ShredderSequencer` (relinquish discharge control) + `FC_ControlMain` wiring
+(N18/N79). **Interface changes:** none to existing UDTs for the new instance itself; the sequencer
+UDT would *lose* its `RunDischargeConv`/`DischargeConvRunning` members — a modify-purpose interface
+change. **Pattern or freeform:** tier-(a) whole-block reuse for the instance (0% freeform); the
+entangled sequencer rework is modify-purpose, not covered by any pattern. **REQ refs:** REQ-004
+(discharge) / REQ-010–011 (infeed) / REQ-030–031 (power pack) — all real; no new REQ needed.
+**Tag status:** every discharge-conveyor tag `exists` (`converter tagstatus`-verified 2026-07-18
+against `ir/test-project001/` @ `2001fe0`: `DQ5_DIS_Run`, `DI10_DIS_Running`,
+`DB_Output.Run_Discharge_Conv`, `DB_Input.Discharge_Conv_Running`,
+`DB_Settings.DischargeConveyorTimeout`, `DB_Controls.FaultReset`, `DB_Input.Control_Healthy` —
+0 proposed); the second-motor path is fully `proposed` (Q-05).
+
+**Gate-1 decision owed (not a build sign-off).** `gen-block-new` needs a clean new-block-only
+target; test-project001's as-built offers none for a DOL motor. Options for the owner:
+1. Authorize a scoped restructure of the discharge (or infeed / power-pack) control out of the
+   sequencer into a motor-dol instance — accepting this is `gen-block-modify-purpose` +
+   `gen-integration` scope, not a pure `gen-block-new` run, and blocks on skill #8 (unbuilt).
+2. Pick a different validation vehicle for `gen-block-new` (e.g. a new/freeform block the as-built
+   genuinely lacks and that adds no edits to existing networks).
+3. Create the second-motor instrumentation tags (resolve Q-05), promoting the additive motor-dol
+   target from `proposed` to `exists` — then a truly new, edit-free tier-(a) instance is buildable.
+
+— Decision: **OPTION 2 — chosen by owner 2026-07-18.** This tier-(a) `motor-dol` evaluation is
+closed as *not a fit for `gen-block-new`*: every as-built DOL motor is sequencer/pusher-driven
+inline, so instancing one is `gen-block-modify-purpose`/S7 scope (Option 1 — declined), and the
+only additive `motor-dol` target (the Q-05 second motor) is all-`proposed` tags (Option 3 —
+declined, no tag creation now). No sequencer restructure and no Q-05 tag creation. This entry is
+retained as the audit trail; the clean new-block-only vehicle is carved in the next mini-manifest
+(2026-07-18 — `FC_Simulation`). Engineer: owner (recorded via dispatch) Date: 2026-07-18
+
+### 2026-07-18 — `FC_Simulation` (Option-2 replacement vehicle for gen-block-new) — gate 1
+
+**Survey result first (why this target, and its honest weak point).** Option 2 asked for a
+genuinely new-block/new-networks-only vehicle for `gen-block-new`'s first validation. An honest
+survey of test-project001 against the task's priority order (REQ-grounded > tier-(a)/(b) >
+tier-(d)) finds **no clean REQ-grounded target and no clean tier-(a)/(b) target**:
+- *Every unimplemented/partial functional REQ is un-buildable clean.* Machine-type selection
+  (REQ-018/019/064/067, Q-04), second motor (REQ-020/057, Q-05), remote pusher pushbutton
+  (REQ-036, Q-03), flashing motor-fault lamp (REQ-060, Q-13), zeroable hour clock (REQ-066, Q-12)
+  are all **`proposed`-tag-blocked** (hard rule 3). The overcurrent/overload family
+  (REQ-017…029, REQ-059) is **disarmed** — Q-11: this prototype panel carries no AI channel.
+  REQ-065/068 are **HMI-binding only** (no PLC block). None is additive with `exists` tags.
+- *Every tier-(a)/(b) pattern is unavailable.* `motor-dol` — all three DOL motors are inline in
+  the sequencer/pusher (blocked entry above) and the only additive instance is Q-05-`proposed`;
+  `input-mapping`/`output-mapping` already built as `FC_Inputs`/`FC_Outputs`;
+  `db-inputs`/`db-outputs` already built (`DB_Input`/`DB_Output`); `chained-permissive-enable`
+  does not fit a stepped-sequencer plant (§6).
+
+The one clean new-block-only target that names **only `exists` tags** is the convention-mandated
+**`FC_Simulation`** (C-111/C-305; this artifact's §1 manifest row + §3, open question **AQ-02**) —
+absent from the as-built: `DB_PLC.Simulation` exists and is force-reset by `OB100` but is **read
+by nothing**, so the flag has no effect today. It is **tier-(d) freeform** and **not grounded in a
+functional REQ** (its basis is doc-06 C-111/C-305 — the C-606 "convention-mandated element cites
+its C-rule" case). Flagged loudly below.
+
+**Touched blocks.** Creates **`FC_Simulation`** (new FC, new networks) only. Modified/wired-into:
+**none**. It reads `DB_Output` / `DB_Settings` / `DB_PLC.Simulation` and writes `DB_Input` buffer
+members — all existing DBs; it defines **no new shared DB/UDT/tag table** (scope rule 4 satisfied).
+Its OB1 call and the `FC_Inputs`-gating that makes simulation coherent (C-111: input-map gated off
+while `Simulation`) are **`gen-integration` scope (skill #10, unbuilt)** and deliberately out of
+`gen-block-new` — so this target **edits zero existing networks**, which is exactly the
+`gen-block-new` boundary (docs/15 Boundaries).
+
+**Interface changes: NO.** `FC_Simulation` carries an empty parameter interface (like `FC_Inputs`/
+`FC_Outputs`/`FC_AlarmsMain`); no UDT member changes anywhere.
+
+**Pattern or freeform: FREEFORM (tier-(d)), ~100% — >20% flag RAISED, loudly.** No `patterns/`
+entry covers a simulation driver. Structured by C-111/C-112 (simulation gating), C-403 (plain
+coils), C-109 (area-Main content) — freeform is not convention-free. Because this is
+`gen-block-new`'s **first** validation and the owner's steer was lowest-risk / prove-the-happy-path
+(a tier-(a) pattern instance), signing this manifest is **both** the CLAUDE.md workflow-step-3
+freeform go-ahead **and** an explicit acceptance that the first validation runs on a *freeform*
+block, no tier-(a) pattern instance being available in this project. The alternative is to redirect
+`gen-block-new`'s tier-(a) happy-path validation to a different project (or admit the Q-05
+second-motor tags first).
+
+**Network sketch (design only — no code written).** ~7 networks, each `DB_PLC.Simulation` in
+series with a run-command contact driving the matching feedback coil (C-403 plain coil):
+`Simulation` ∧ `Run_Shredder_Fwd` → `Shredder_Run_Fwd_FB`; ∧ `Run_Shredder_Rev` →
+`Shredder_Run_Rev_FB`; ∧ `Run_Discharge_Conv` → `Discharge_Conv_Running`; ∧ `Run_Infeed_Conv` →
+`Infeed_Conv_Running`; ∧ `Run_PowerPack` → `Pusher_PowerPack_Running`; pusher position ∧
+`Pusher_Extend` → `Pusher_Full_Travel_Limit`, ∧ `Pusher_Retract` → `Pusher_Home_Limit`. All
+Contact/Coil, inside the converter slice. (Pusher position may want an SR latch so a limit holds
+after its solenoid drops — a coding-stage C-113 call, noted not decided here.) The physical-analog
+current and the `Control_Healthy`/E-stop feedback are deliberately **not** simulated (hard rule 2 /
+Q-11 — no invented hardware behaviour).
+
+**REQ refs: NONE — the honest weak point.** `FC_Simulation` implements no functional REQ; it is a
+convention-mandated infrastructure block (C-111/C-305, AQ-02). If the owner requires the first
+`gen-block-new` validation to be REQ-grounded, this target does not qualify and the survey's
+meta-finding stands: **test-project001 offers no clean REQ-grounded new-block-only target** — a
+useful finding in its own right (gen-block-new's REQ-driven / tier-(a) happy path would then need a
+different validation project).
+
+**Tag status.** All 15 named tags **`exists`, 0 proposed** — `converter tagstatus` against
+`ir/test-project001/` @ `2cf85d5` (2026-07-18, exit 0): `DB_PLC.Simulation`;
+`DB_Output.Run_Shredder_Fwd`/`Run_Shredder_Rev`/`Run_Discharge_Conv`/`Run_Infeed_Conv`/
+`Run_PowerPack`/`Pusher_Extend`/`Pusher_Retract`; `DB_Input.Shredder_Run_Fwd_FB`/
+`Shredder_Run_Rev_FB`/`Discharge_Conv_Running`/`Infeed_Conv_Running`/`Pusher_PowerPack_Running`/
+`Pusher_Home_Limit`/`Pusher_Full_Travel_Limit`. The new block name `FC_Simulation` is itself
+`proposed` (this design defines it) until a fresh export shows it.
+
+**Gate-1 decision owed (two things, signed together):** (1) approve `FC_Simulation` as
+`gen-block-new`'s validation vehicle **and** grant the CLAUDE.md-step-3 freeform go-ahead
+(~100% freeform, no REQ) — **or** redirect the validation elsewhere; (2) confirm **AQ-02** (build
+the simulation driver for the demo panel) rather than waive it.
+
+— Decision: **pending.** Engineer: ____________ Date: ____________
