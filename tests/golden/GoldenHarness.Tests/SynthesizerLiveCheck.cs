@@ -97,6 +97,80 @@ public static class SynthesizerLiveCheck
         }
     }
 
+    /// <summary>
+    /// The derive-always live backstop (ADR-0005, phase 2). For every reference *code* block: strip its
+    /// sidecar, re-derive the SimaticML via `to-xml --synthesize --project ir/reference`, import it over
+    /// the existing block in the reference project, then compile — the ground-truth check that the
+    /// *derived* form TIA-imports-and-compiles, beyond the offline Normalizer's semantic-equivalence
+    /// proof (<see cref="SynthesisParityRunner"/>). DBs/UDTs are not re-derived (they have no FlgNet to
+    /// synthesise and already exist in the project, referenced by the derived code).
+    ///
+    /// Same "manual/live, not CI" discipline as <see cref="Run"/> and
+    /// <see cref="ReferenceProjectRoundTrip"/> — needs a live Portal session and the real reference
+    /// project, so deliberately not an always-running [Fact]. Two phases (import all, then compile all)
+    /// for the same IsConsistent-cascade reason as <see cref="RoundTripRunner.RunAllSettled"/>. Blocks
+    /// are dependency-ordered (a callee before its caller: ScaleValue before TimingAndCalls). Unlike
+    /// <see cref="Run"/>'s throwaway probe, this overwrites the reference project's own code blocks with
+    /// their byte-equivalent derived versions (same discipline as RunAllSettled's re-import) — run it
+    /// against the scratch/reference project only.
+    /// </summary>
+    public static IReadOnlyDictionary<string, RoundTripReport> RunCorpus(string workDir)
+    {
+        Directory.CreateDirectory(workDir);
+        var irDir = Path.Combine(ToolPaths.RepoRoot(), "ir", "reference");
+        var runner = new RoundTripRunner();
+        var results = new Dictionary<string, RoundTripReport>();
+
+        var codeBlocks = new[]
+        {
+            "NodeStatusAlarms", "PerimeterSafetyAlarms", "TimerSample", "ThresholdAlarms",
+            "SignalConditioning", "DataHandling", "BooleanExtras", "FBTimers", "ScaleValue", "TimingAndCalls",
+        };
+
+        // Phase 1: derive + import every block. Re-importing cascades IsConsistent, so compile only after
+        // all imports are done.
+        var derivedXml = new Dictionary<string, string>();
+        foreach (var block in codeBlocks)
+        {
+            var irPath = Path.Combine(irDir, block + ".ir");
+            var readablePath = Path.Combine(workDir, block + ".ir");
+            File.WriteAllText(readablePath, SynthesisParityRunner.StripSidecar(File.ReadAllText(irPath)));
+
+            var toXml = ProcessRunner.Run(ToolPaths.ConverterExe, "to-xml", readablePath, "--synthesize", "--project", irDir);
+            if (toXml.ExitCode != 0)
+            {
+                results[block] = RoundTripReport.Failed("to-xml --synthesize", toXml);
+                continue;
+            }
+
+            var xmlPath = Path.ChangeExtension(readablePath, ".xml");
+            var import = runner.Import(ProjectPath, GroupPath, xmlPath);
+            if (import.ExitCode != 0)
+            {
+                results[block] = RoundTripReport.Failed("import", import);
+                continue;
+            }
+
+            derivedXml[block] = xmlPath;
+        }
+
+        // Phase 2: compile + check each settled block.
+        foreach (var block in codeBlocks)
+        {
+            if (!derivedXml.TryGetValue(block, out var xmlPath))
+            {
+                continue;
+            }
+
+            var compile = runner.Compile(ProjectPath, Device, block);
+            results[block] = (compile.ExitCode != 0 && GetErrorCount(compile.StdOut) != 0)
+                ? RoundTripReport.Failed("compile", compile)
+                : RoundTripReport.Passed(xmlPath, xmlPath);
+        }
+
+        return results;
+    }
+
     private static int GetErrorCount(string stdOut)
     {
         try

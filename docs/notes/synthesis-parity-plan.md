@@ -106,24 +106,32 @@ locals, Word→Int convert, Real tag-vs-tag compare, UDT-param inline, SUB/DIV, 
 **prefer new Green reference blocks** (committable, no sanitize); fall back to **sanitized JOB9002 blocks**
 (under the 2026-07-18 generation-validation scope, `docs/13`) for anything only a real as-built FB shows.
 
-## Stage 3 — flip to derive-always (the payoff)
+## Stage 3 — flip to derive-always (the payoff) — LINED UP 2026-07-18
 
-Once the parity matrix is fully green **and** the live compile backstop passes corpus-wide, record the
-ADR: readable IR is canonical; `to-xml` derives the sidecar by default; stored `SIDECAR` sections are
-deprecated. At that point **D-6 and the scoped merge become moot** — editing a network just re-derives.
+**The decision is recorded: `docs/adr/adr-0005-derive-always-sidecar.md` (Proposed).** Readable IR is
+canonical; `to-xml` derives the sidecar by default; stored `SIDECAR` sections are deprecated — **D-6 and
+the scoped merge become moot.** The ADR is gated + phased; the remaining gates before any stored sidecar
+is dropped:
 
-**Sequencing.** Keep stored sidecars until parity is *proven per construct* (don't drop the safety net
-early). The **D-6 scoped merge stays as the interim bridge** so real-block modifies work *now*
-(`converter-synthesis-gaps.md` — keep unchanged networks' real sidecars, synthesize only changed ones),
-and retires itself when derive-always lands. Same converter investment, aimed at *eliminating* the
-sidecar rather than *maintaining* it.
+1. Offline parity green corpus-wide — **DONE** (14/14).
+2. **Live compile backstop corpus-wide — pending a Portal session.** Code is prepared:
+   `SynthesizerLiveCheck.RunCorpus(workDir)` derives → imports → compiles every reference code block
+   against real TIA. This is the ground-truth gate (the Normalizer proves semantic equivalence; TIA
+   import+compile of the *derived* form is the final proof).
+3. Then: `to-xml` derives by default for synthesizable blocks; `to-ir` stops emitting stored sidecars for
+   them (or keeps them behind a debug flag); `ir/SPEC.md` §Sidecar updated; D-6/scoped merge retired.
+
+**Sequencing.** Keep stored sidecars until the live backstop passes (don't drop the safety net before the
+ground-truth check). The **D-6 scoped merge stays available as the interim bridge** for modifying real
+blocks until derive-always fully lands — same converter investment, aimed at *eliminating* the sidecar
+rather than *maintaining* it.
 
 ## Definition of done
 
-- Offline parity harness green over the full corpus (type-sensitive).
-- `SynthesizerLiveCheck` extended corpus-wide passes (import + compile).
-- Derive-always ADR recorded; `converter-synthesis-gaps.md` reframed into a parity checklist (each
-  construct = a corpus block that must synthesize-match its export).
+- Offline parity harness green over the full corpus (type-sensitive) — **DONE** (14/14).
+- `SynthesizerLiveCheck.RunCorpus` passes (import + compile) in a Portal session — **pending**.
+- Derive-always ADR recorded — **DONE** (ADR-0005, Proposed); `converter-synthesis-gaps.md` reframed as
+  the parity checklist — **DONE**.
 
 ## Tracking
 

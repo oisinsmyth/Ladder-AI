@@ -25,6 +25,13 @@ D-2 remains the ruling record.
 
 ## D-6 — Converter can't add a new statement to an already-exported network
 
+**End-state resolution (2026-07-18): subsumed by ADR-0005 (derive-always).** Complete synthesis for the
+reference corpus (parity 14/14) means the sidecar is derivable, so the plan is to stop *storing* it —
+after which a network edit just re-derives and D-6 cannot occur (`docs/adr/adr-0005-derive-always-sidecar.md`,
+`docs/notes/synthesis-parity-plan.md`). The scoped `SidecarSynthesizer` merge below remains the **interim
+bridge** for modifying real blocks until derive-always fully lands (gated on the live compile backstop,
+`SynthesizerLiveCheck.RunCorpus`).
+
 **What:** `converter to-xml`/`preflight` have no supported path for "add one new statement to a
 network that already carries real sidecar data from a prior TIA export." Hit concretely during
 the 2026-07-17 fix-wave/agent-tasks build-out: adding one `MOVE` to
