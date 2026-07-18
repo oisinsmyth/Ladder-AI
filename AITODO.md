@@ -63,9 +63,10 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
   reusable/C-304/C-127-clean subsystem and **compiled clean in TIA** (0 errors) — the wired CALL to
   `FB_ShredderControl` resolved and compiled. The AI produced a *better architecture* than the real
   single-instance source block, and the owner's "extend the converter" call paid off.
-  - **Two converter follow-ups from that build (backlog, not yet done):** (1) Word→Int CONVERT typing
-    (REQ-002 — only Real→DInt is typed; needs operand types / a tag-type symbol table); (2) a
-    UDT-typed-param inline-nesting bug (leading-whitespace member names — workaround: bare type refs).
+  - **Two converter follow-ups from that build — SCOPED PLAN queued:**
+    `docs/notes/converter-synthesis-gaps.md`. (A) UDT-typed-param inline-nesting bug (small —
+    bare-type-ref fix); (B) Word→Int CONVERT typing (bigger — a `TagTypeRegistry`, sibling of the
+    callee-interface registry). Both PC-side; workarounds in use so nothing is blocked.
   - **genval2 not yet through Stage C** (reviewers + answer-key comparison) — the subsystem is
     compile-clean but unreviewed/uncompared; the design stage already showed the AI *avoided* the
     source's likely program-bits copy-paste bug (OQ-3). Fixture in the session scratchpad (`genval2-*`).
