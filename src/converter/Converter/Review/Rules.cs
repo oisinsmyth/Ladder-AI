@@ -86,6 +86,14 @@ public static class Rules
     {
         foreach (var member in members)
         {
+            // TIA-informative system parameters — e.g. an OB's Initial_Call/Remanence startup-info
+            // inputs (BAREPARAM INFORMATIVE) — are TIA-provided, not author-named and not renameable,
+            // so C-001 doesn't apply to them.
+            if (member.Informative)
+            {
+                continue;
+            }
+
             if (!IsPascalCaseMember(member.Name))
             {
                 yield return new Finding(

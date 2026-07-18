@@ -13,9 +13,10 @@
   underscores by design.
 - To check UDTs, the TYPE dispatch (previously blanket-NotApplicable) now parses the type and runs
   C-001, marking every other rule NotApplicable; TAGTABLE stays blanket-NotApplicable. First rule to
-  fire on the real corpus: 27 findings — the 26 `Snake_Case` buffer members in `DB_Input`/`DB_Output`
-  plus `Main`'s TIA-fixed `Initial_Call` OB param (surfaced by the block-variable scope; the reviewer
-  skill contextualizes it by regime). iDB and UDT members are checked and clean.
+  fire on the real corpus: 26 findings — the `Snake_Case` buffer members in `DB_Input`/`DB_Output`.
+  iDB and UDT members are checked and clean. **TIA-informative system params are exempt** (a
+  member's `Informative` flag — e.g. an OB's `Initial_Call`/`Remanence` startup-info inputs): they're
+  TIA-provided and not renameable, so C-001 skips them (owner ruling 2026-07-18).
 - 7 new tests (5 rule fixtures + TYPE-reviewed and tag-table-exempt runner tests); suite 510/510.
   Also fixed a latent nullable warning on the C-406 `TempMembers` arg (now null-coalesced like
   `StaticMembers` beside it). Forward-note added to the 2026-07-16 conventions-validation evidence.

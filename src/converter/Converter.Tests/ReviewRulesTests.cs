@@ -498,6 +498,17 @@ public class ReviewRulesTests
         }));
     }
 
+    // TIA-informative system params (e.g. an OB's Initial_Call startup-info input) are exempt -
+    // they're TIA-provided and not renameable, even with an underscore.
+    [Fact]
+    public void CheckC001_InformativeSystemParam_Exempt()
+    {
+        Assert.Empty(Rules.CheckC001MemberNames("Main", new[]
+        {
+            new DbMember("Initial_Call", "Bool", Retain: false, StartValue: null, Informative: true),
+        }));
+    }
+
     // Recursion: a nested struct member with a bad name is reached.
     [Fact]
     public void CheckC001_NestedBadMember_FlaggedViaRecursion()
