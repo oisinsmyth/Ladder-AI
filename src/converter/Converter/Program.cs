@@ -46,8 +46,10 @@ internal static class Program
 
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
-            Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
-            Console.Error.WriteLine("       converter to-xml <file> [<file> ...] --synthesize [--project <ir-dir>]   # no real SIDECAR needed; mints a fresh one. --project/batch supplies callee interfaces for wired CALLs");
+            Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
+            Console.Error.WriteLine("       converter to-xml   # derives the sidecar when the input has none (ADR-0005); uses a stored SIDECAR if present. --project supplies callee/tag types for derivation");
+            Console.Error.WriteLine("       converter to-ir    # omits the SIDECAR for a fully-synthesizable block (derive-always); --with-sidecar keeps it (debug/unsynthesizable)");
+            Console.Error.WriteLine("       converter to-xml <file> --synthesize   # force the derive path (errors if a SIDECAR is present)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
@@ -95,15 +97,12 @@ internal static class Program
             return 1;
         }
 
-        // Callee-interface registry for wired-argument CALL synthesis (SidecarSynthesizer): a wired CALL
-        // needs the callee's parameter types, which the readable CALL omits (ADR-0001 — the callee .ir is
-        // the source of truth). Built from the batch's own block files plus any --project export.
-        var callees = synthesize ? BuildCalleeRegistry(files, projectDir) : null;
-
-        // Tag/member-type registry for typed box/compare synthesis (CONVERT Src/DestType, and — as
-        // those consumers land — WAND/ABS/SWAP/comparison SrcType). Same batch + --project sources as
-        // the callee registry, but the DB/UDT/tag-table files rather than the block ones.
-        var tagTypes = synthesize ? BuildTagTypeRegistry(files, projectDir) : null;
+        // Registries for synthesis. Built for any `to-xml` (not just `--synthesize`), because
+        // derive-always (ADR-0005) means `to-xml` derives the sidecar whenever the input has none —
+        // so the callee interfaces (wired CALLs) and tag/member types (typed boxes) must be available
+        // by default, not only under the explicit flag. A sidecar-carrying input ignores them.
+        var callees = mode == "to-xml" ? BuildCalleeRegistry(files, projectDir) : null;
+        var tagTypes = mode == "to-xml" ? BuildTagTypeRegistry(files, projectDir) : null;
 
         foreach (var file in files)
         {
@@ -663,9 +662,13 @@ internal static class Program
             return;
         }
 
+        // Derive-always (ADR-0005): a block with no stored SIDECAR is synthesized from its readable form;
+        // one that still carries a sidecar (an unsynthesizable construct, or an older file) uses it.
+        // `--synthesize` forces the derive path (and errors if a sidecar is present) — an explicit assert
+        // that this input is sidecar-less, kept for back-compat and intent.
         IrBlock block;
         IReadOnlyList<NetworkSidecar> sidecars;
-        if (synthesize)
+        if (synthesize || !IrParser.HasSidecarSection(irText))
         {
             block = IrParser.ParseBlockWithoutSidecar(irText);
             sidecars = SidecarSynthesizer.SynthesizeBlock(block, callees, tagTypes);
