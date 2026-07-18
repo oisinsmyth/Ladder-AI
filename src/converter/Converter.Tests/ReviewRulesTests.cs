@@ -451,4 +451,62 @@ public class ReviewRulesTests
 
         Assert.Empty(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
     }
+
+    // ---- C-001: member/variable names are short PascalCase, underscore-free ----
+
+    [Fact]
+    public void CheckC001_UnderscoreMember_Flags()
+    {
+        var finding = Assert.Single(Rules.CheckC001MemberNames("DB_Input", new[]
+        {
+            new DbMember("Cycle_Start", "Bool", Retain: false, StartValue: null),
+        }));
+        Assert.Equal("C-001", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("Cycle_Start", finding.Description);
+    }
+
+    [Fact]
+    public void CheckC001_CamelCaseMember_Flags()
+    {
+        Assert.Single(Rules.CheckC001MemberNames("FB_X", new[]
+        {
+            new DbMember("runFlag", "Bool", Retain: false, StartValue: null),
+        }));
+    }
+
+    [Fact]
+    public void CheckC001_PascalCaseMembers_Clean()
+    {
+        Assert.Empty(Rules.CheckC001MemberNames("FB_X", new[]
+        {
+            new DbMember("CycleStart", "Bool", Retain: false, StartValue: null),
+            new DbMember("FltHigh", "Bool", Retain: false, StartValue: null),
+            new DbMember("Q", "Bool", Retain: false, StartValue: null),
+            new DbMember("Motor2Run", "Bool", Retain: false, StartValue: null),
+        }));
+    }
+
+    // All-caps system leaves (a timer's PT/ET/Q) are uppercase + alphanumeric, so they pass.
+    [Fact]
+    public void CheckC001_AllCapsLeaf_Clean()
+    {
+        Assert.Empty(Rules.CheckC001MemberNames("iDB_X", new[]
+        {
+            new DbMember("PT", "Time", Retain: false, StartValue: null),
+            new DbMember("ET", "Time", Retain: false, StartValue: null),
+        }));
+    }
+
+    // Recursion: a nested struct member with a bad name is reached.
+    [Fact]
+    public void CheckC001_NestedBadMember_FlaggedViaRecursion()
+    {
+        var parent = new DbMember("Settings", "Struct", Retain: false, StartValue: null, NestedMembers: new[]
+        {
+            new DbMember("Bad_Name", "Bool", Retain: false, StartValue: null),
+        });
+        var finding = Assert.Single(Rules.CheckC001MemberNames("DB_X", new[] { parent }));
+        Assert.Contains("Bad_Name", finding.Description);
+    }
 }

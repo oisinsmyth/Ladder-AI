@@ -25,7 +25,7 @@ public class ReviewRunnerTests : IDisposable
         return path;
     }
 
-    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public void Dispose()
     {
@@ -211,5 +211,47 @@ public class ReviewRunnerTests : IDisposable
         Assert.Null(file.FileError);                 // was non-null ("COULD NOT REVIEW") before the fix
         Assert.Equal("OB_Startup", file.BlockName);
         Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-408" && s.Status == RuleCheckStatus.Checked); // rules ran
+    }
+
+    // A UDT (TYPE file) is a member container: only C-001 (member naming) is checked, every other
+    // Phase-1 rule is NotApplicable.
+    [Fact]
+    public void ReviewFiles_TypeKindFile_ChecksC001OnlyRestNotApplicable()
+    {
+        var udt = new PlcTypeSource("0", "UDT_Test", "A type.", new[]
+        {
+            new DbMember("Good", "Bool", Retain: false, StartValue: null),
+            new DbMember("Bad_Name", "Bool", Retain: false, StartValue: null),
+        });
+        var path = WriteTempIrFile(TypeIrSerializer.Serialize(udt));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.Equal("UDT_Test", file.BlockName);
+        Assert.Contains(file.Findings, f => f.RuleId == "C-001" && f.Description.Contains("Bad_Name"));
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-001" && s.Status == RuleCheckStatus.Checked);
+        foreach (var id in AllRuleIds.Where(id => id != "C-001"))
+        {
+            Assert.Contains(file.RuleStatuses, s => s.RuleId == id && s.Status == RuleCheckStatus.NotApplicable);
+        }
+    }
+
+    // Physical-IO tags keep their underscores by design, so C-001 must not fire on tag-table
+    // entries - the whole table is NotApplicable.
+    [Fact]
+    public void ReviewFiles_TagTable_C001NotApplicable_UnderscoredTagsNotFlagged()
+    {
+        var tags = new PlcTagTableSource("0", "Tags", new[]
+        {
+            new PlcTagSource("1", "DI3_SYS_Start", "Bool", "%I0.0", true, true, true, null),
+        });
+        var path = WriteTempIrFile(TagTableIrSerializer.Serialize(tags));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-001");
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-001" && s.Status == RuleCheckStatus.NotApplicable);
     }
 }

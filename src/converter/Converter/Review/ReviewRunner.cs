@@ -8,7 +8,7 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors)
     {
@@ -43,12 +43,16 @@ public static class ReviewRunner
             return ReviewDb(path, DbIrParser.ParseDb(text));
         }
 
-        if (text.StartsWith("TYPE ", StringComparison.Ordinal) || text.StartsWith("TAGTABLE ", StringComparison.Ordinal))
+        if (text.StartsWith("TYPE ", StringComparison.Ordinal))
         {
-            // Phase 1 pilot corpus has no TYPE/TAGTABLE files - handled honestly (every rule
-            // reported NotApplicable with a stated reason) rather than silently mis-checked or
-            // left to throw.
-            var statuses = AllRuleIds.Select(id => new RuleStatusEntry(id, RuleCheckStatus.NotApplicable, 0, "TYPE/TAGTABLE rule support not implemented in Phase 1")).ToList();
+            return ReviewType(path, TypeIrParser.ParseType(text));
+        }
+
+        if (text.StartsWith("TAGTABLE ", StringComparison.Ordinal))
+        {
+            // Tag-table entries are physical-IO tags, which keep their underscores by design (C-001)
+            // - so no member-naming check applies, and no other Phase-1 rule inspects tag tables.
+            var statuses = AllRuleIds.Select(id => new RuleStatusEntry(id, RuleCheckStatus.NotApplicable, 0, "TAGTABLE rule support not implemented in Phase 1")).ToList();
             return new FileReviewResult(path, null, Array.Empty<Finding>(), statuses, null);
         }
 
@@ -66,6 +70,15 @@ public static class ReviewRunner
         var findings = new List<Finding>();
         var statuses = new List<RuleStatusEntry>();
 
+        var blockMembers = (block.InputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.InOutMembers ?? Array.Empty<DbMember>())
+            .Concat(block.StaticMembers ?? Array.Empty<DbMember>())
+            .Concat(block.TempMembers ?? Array.Empty<DbMember>())
+            .Concat(block.ConstantMembers ?? Array.Empty<DbMember>())
+            .ToList();
+        Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001MemberNames(block.Name, blockMembers));
+
         Record(statuses, findings, "C-003", RuleCheckStatus.Checked, Rules.CheckC003BlockPrefix(block));
         Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005Charset(block));
 
@@ -81,7 +94,7 @@ public static class ReviewRunner
 
         var usageFindings = Rules.CheckC406TimerUsage(block).ToList();
         var declFindings = Rules.CheckC406TimerDeclarations(block.Name, block.StaticMembers ?? Array.Empty<DbMember>())
-            .Concat(Rules.CheckC406TimerDeclarations(block.Name, block.TempMembers)).ToList();
+            .Concat(Rules.CheckC406TimerDeclarations(block.Name, block.TempMembers ?? Array.Empty<DbMember>())).ToList();
         Record(statuses, findings, "C-406", RuleCheckStatus.Checked, usageFindings.Concat(declFindings));
 
         Record(statuses, findings, "C-408", RuleCheckStatus.Checked, Rules.CheckC408EtComparison(block));
@@ -104,6 +117,7 @@ public static class ReviewRunner
             .Concat(db.OutputMembers ?? Array.Empty<DbMember>())
             .Concat(db.InOutMembers)
             .ToList();
+        Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001MemberNames(db.Name, allMembers));
         Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005CharsetDbMembers(db.Name, allMembers));
 
         Record(statuses, findings, "C-201", RuleCheckStatus.Checked, Rules.CheckC201HeaderComment(db.Name, db.Comment));
@@ -120,6 +134,23 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
 
         return new FileReviewResult(path, db.Name, findings, statuses, null);
+    }
+
+    private static FileReviewResult ReviewType(string path, PlcTypeSource type)
+    {
+        var findings = new List<Finding>();
+        var statuses = new List<RuleStatusEntry>();
+
+        // A UDT is a member container with no networks: only C-001 (member naming) applies. Every
+        // other Phase-1 rule inspects networks/instructions/prefixes a type doesn't have.
+        Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001MemberNames(type.Name, type.Members));
+
+        foreach (var id in AllRuleIds.Where(id => id != "C-001"))
+        {
+            statuses.Add(new RuleStatusEntry(id, RuleCheckStatus.NotApplicable, 0, "TYPE rule support: only C-001 (member naming) checked in Phase 1"));
+        }
+
+        return new FileReviewResult(path, type.Name, findings, statuses, null);
     }
 
     private static void Record(List<RuleStatusEntry> statuses, List<Finding> findings, string ruleId, RuleCheckStatus status, IEnumerable<Finding> ruleFindings)

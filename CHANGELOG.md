@@ -2,6 +2,24 @@
 
 ## 2026-07-18
 
+**C-001 member/variable naming mechanized in `converter review` — FI-09 rule #2**
+
+- `converter review` now checks C-001 (members/variables are short PascalCase, underscore-free) as a
+  deterministic rule (`Rules.CheckC001MemberNames`, recursing nested struct members), moved out of
+  the `review-conventions` hand-sweep. A name is clean iff non-empty, starts uppercase, and is
+  otherwise letters/digits only. Applies to **DB members (including TIA-generated iDB members — not
+  exempted, owner's call), UDT (`TYPE`) members, and block interface variables**
+  (Static/Temp/In/Out/InOut/Constant). Tag-table entries stay exempt — physical-IO tags keep their
+  underscores by design.
+- To check UDTs, the TYPE dispatch (previously blanket-NotApplicable) now parses the type and runs
+  C-001, marking every other rule NotApplicable; TAGTABLE stays blanket-NotApplicable. First rule to
+  fire on the real corpus: 27 findings — the 26 `Snake_Case` buffer members in `DB_Input`/`DB_Output`
+  plus `Main`'s TIA-fixed `Initial_Call` OB param (surfaced by the block-variable scope; the reviewer
+  skill contextualizes it by regime). iDB and UDT members are checked and clean.
+- 7 new tests (5 rule fixtures + TYPE-reviewed and tag-table-exempt runner tests); suite 510/510.
+  Also fixed a latent nullable warning on the C-406 `TempMembers` arg (now null-coalesced like
+  `StaticMembers` beside it). Forward-note added to the 2026-07-16 conventions-validation evidence.
+
 **`converter review` now reviews sidecar-less blocks (found while verifying C-408)**
 
 - `converter review` used to fail a `.ir` with no `SIDECAR` section ("Expected a 'SIDECAR' section")

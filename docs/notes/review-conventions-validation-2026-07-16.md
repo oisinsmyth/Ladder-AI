@@ -58,6 +58,15 @@ anywhere — the anti-drift contract held.
 > review` (FI-09). It reports **clean on every file of this corpus** (no new findings, SUMMARY totals
 > unchanged), so the only diff on a re-run is the added status line per file. Expected, not drift.
 
+> **Forward-note (2026-07-18, C-001 mechanized):** C-001 member-naming was moved from a hand-sweep
+> into `converter review` (FI-09). Unlike C-408 it **adds real findings to the mechanical dump** —
+> the 26 `Snake_Case` buffer members in `DB_Input`/`DB_Output` (which this evidence reported in its
+> §-below AI-findings section, not in the drift-checked mechanical output) plus `Main`'s TIA-fixed
+> `Initial_Call` param = 27 `[Error] C-001` findings, and a per-file `C-001` status line. UDTs are
+> now reviewed (C-001 only); tag tables stay exempt (IO tags keep underscores). So on a re-run the
+> mechanical dump's finding count and status-line count both rise against this 2026-07-16 evidence.
+> Expected, not drift; the evidence stays verbatim as the pre-mechanization record.
+
 ### Expected AI findings (test-project001)
 
 | Expected (must-find) | Blind run result |

@@ -78,6 +78,41 @@ public static class Rules
         }
     }
 
+    // C-001 (error) — member/variable names are short PascalCase, underscore-free. Physical-IO tags
+    // keep their underscores by design, but those live in tag tables (exempt here), not in DB/UDT/
+    // block members. Prefixes (FB_/DB_/…) are C-003's job; this checks member/variable names only.
+    // Recurses nested struct members, same shape as CheckC005CharsetDbMembers.
+    public static IEnumerable<Finding> CheckC001MemberNames(string ownerName, IReadOnlyList<DbMember> members)
+    {
+        foreach (var member in members)
+        {
+            if (!IsPascalCaseMember(member.Name))
+            {
+                yield return new Finding(
+                    "C-001",
+                    FindingSeverity.Error,
+                    ownerName,
+                    null,
+                    $"Member/variable '{member.Name}' is not PascalCase (C-001: short PascalCase, underscore-free; physical-IO tags keep underscores, DB/UDT/block members do not).",
+                    $"Rename '{member.Name}' to PascalCase without underscores (e.g. Cycle_Start -> CycleStart).");
+            }
+
+            if (member.NestedMembers is { Count: > 0 })
+            {
+                foreach (var finding in CheckC001MemberNames(ownerName, member.NestedMembers))
+                {
+                    yield return finding;
+                }
+            }
+        }
+    }
+
+    // PascalCase member name: non-empty, starts with an ASCII uppercase letter, otherwise letters
+    // and digits only (no underscore or punctuation). All-caps system leaves like a timer's PT/ET/Q
+    // pass. Char-based to match this file's IsValidIdentifier style (no Regex).
+    private static bool IsPascalCaseMember(string name) =>
+        name.Length > 0 && char.IsAsciiLetterUpper(name[0]) && name.All(char.IsAsciiLetterOrDigit);
+
     public static IEnumerable<Finding> CheckC005CharsetDbMembers(string ownerName, IReadOnlyList<DbMember> members)
     {
         foreach (var member in members)

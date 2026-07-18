@@ -118,9 +118,9 @@ FI-17 (explanation sidecars), FI-18 (HMI-interface skill — would give Q-03/13/
 home). **From the 2026-07-18 skill/tooling audit:** FI-22 (whole-project cross-check review mode over
 `ProjectIndex` — highest-leverage net-new), FI-23 (`explain-plc-block` structural-fingerprint helper),
 FI-24 (`gen-architecture` helpers — **`tagstatus` built 2026-07-18**, CHANGELOG; provenance wrapper
-still open); FI-09 (**first rule C-408 mechanized 2026-07-18** on the new `TagReferences.AllExpressions`
-seam; C-121/C-118–125/C-103/C-107/C-402/C-001-nonprefix still open). FI-13/14/15/16/19/20 done;
-FI-04 rejected; FI-01/02/03/07/10 parked.
+still open); FI-09 (**C-408 + C-001 mechanized 2026-07-18** — `.ET`-in-comparison, and
+member/variable PascalCase across DB/iDB/UDT/block-vars; C-121/C-118–125/C-103/C-107/C-402 still
+open). FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/10 parked.
 
 `docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever opens.
 
