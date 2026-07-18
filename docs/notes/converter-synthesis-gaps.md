@@ -192,7 +192,13 @@ hardcoded `LocalVariable`. Covered by `Converter.Tests/TimerScopeSynthesisTests`
 multi-instance FB timer) stays green, confirming the local case is preserved. (Adjacent to Gap D — both
 are scope-classification of a dotted path.)
 
-## Gap G2 — same-network timer `.Q` read → direct wire — INVESTIGATED 2026-07-18: DETERMINISTIC, not a SPEC question
+## Gap G2 — same-network timer `.Q` read → direct wire — DONE 2026-07-18 (TimerSample green)
+
+**Built.** `BuildAssignment` (timers now built before assignments) emits a `TimerOutputStep` when a
+coil's condition is exactly `<sameNetworkTimerInstancePath>.Q`; a cross-network `.Q` has no matching
+same-network timer and falls through to an ordinary Access — exactly how TimerSample N3 renders both.
+Covered by `TimerScopeSynthesisTests`. (Mid-chain same-network `.Q` isn't in the corpus and is left for
+when a real case appears.) Detail below:
 
 **Resolved as a plain synthesis rule (no SPEC change, no ambiguity).** TimerSample's own sidecar is the
 proof: a `.Q` read of a timer defined in the **same network** is a `timeroutput` step (direct wire from

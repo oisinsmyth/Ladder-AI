@@ -39,6 +39,9 @@ public class SynthesisParityTests
         // 2026-07-18: TONR/TOF synthesis + wired CALL, once the Normalizer learned Call/Instance/
         // OpenCon UIds are volatile too.
         "TimingAndCalls",
+        // 2026-07-18 (Gap G2): a same-network timer .Q read wires directly from the TON's Q port
+        // (a TimerOutputStep), matching how TIA exports it.
+        "TimerSample",
     };
 
     [Fact]

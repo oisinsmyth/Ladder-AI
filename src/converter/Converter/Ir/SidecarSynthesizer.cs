@@ -130,23 +130,23 @@ public static class SidecarSynthesizer
         var nextUid = 1;
         var railWireUId = nextUid++;
 
+        // Timers are built before the assignments/chains that read them: a coil fed directly by a
+        // same-network timer's Q wires straight from the TON's Q port (a TimerOutputStep, Gap G2),
+        // which needs that TON's part UId already minted. Map each timer's instance path to its UId.
+        var timers = new List<TimerBindingSidecar>();
+        var timerPartUIdByInstancePath = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var timer in network.Timers)
+        {
+            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+            timers.Add(timerSidecar);
+            timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+        }
+
         var assignments = new List<CoilAssignmentSidecar>();
         foreach (var assignment in network.Assignments)
         {
-            var (chainRail, steps) = BuildChain(assignment.Condition, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
-
-            var coilUId = nextUid++;
-            var coilOperandAccessUId = nextUid++;
-            accessEntries.Add(new SidecarAccessEntry(assignment.CoilTag, coilOperandAccessUId, ScopeFor(assignment.CoilTag, localNames)));
-            var coilOperandWireUId = nextUid++;
-
-            assignments.Add(new CoilAssignmentSidecar(chainRail, steps, coilUId, coilOperandAccessUId, coilOperandWireUId));
-        }
-
-        var timers = new List<TimerBindingSidecar>();
-        foreach (var timer in network.Timers)
-        {
-            timers.Add(BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+            assignments.Add(BuildAssignment(
+                assignment, railWireUId, timerPartUIdByInstancePath, ref nextUid, accessEntries, constantEntries, localNames));
         }
 
         var moves = new List<MoveStatementSidecar>();
@@ -282,6 +282,54 @@ public static class SidecarSynthesizer
             throw new UnsupportedSynthesisConstructException(
                 $"Network {network.Number}: sidecar synthesis does not support: {string.Join(", ", populated)}.");
         }
+    }
+
+    // One coil assignment. The common case is an ordinary rail-to-coil chain; the exception (Gap G2)
+    // is a coil fed *directly* by a same-network timer's Q — that wires straight from the TON's Q port
+    // (a TimerOutputStep, no rail, no Access), exactly as TIA exports it. A cross-network `.Q` read has
+    // no matching same-network timer here, so it falls through to the ordinary chain (an Access) —
+    // which is precisely how the real export renders it (TimerSample N3).
+    private static CoilAssignmentSidecar BuildAssignment(
+        CoilAssignment assignment, int sharedRailWireUId, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath,
+        ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+    {
+        IReadOnlyList<ChainStepSidecar> steps;
+        int? chainRail;
+        if (assignment.Condition is Expr.TagRef tag
+            && TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath) is (int tonPartUId, string port))
+        {
+            var outgoingWireUId = nextUid++;
+            steps = new ChainStepSidecar[] { new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outgoingWireUId) };
+            chainRail = null; // fed by the timer's Q, never the rail
+        }
+        else
+        {
+            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        }
+
+        var coilUId = nextUid++;
+        var coilOperandAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(assignment.CoilTag, coilOperandAccessUId, ScopeFor(assignment.CoilTag, localNames)));
+        var coilOperandWireUId = nextUid++;
+
+        return new CoilAssignmentSidecar(chainRail, steps, coilUId, coilOperandAccessUId, coilOperandWireUId);
+    }
+
+    // A `<instancePath>.Q` read of a timer built in this same network → (its TON part UId, "Q"), else
+    // null. Only the whole-condition case is handled (a coil reads exactly one timer's Q, TimerSample's
+    // shape); a same-network Q *mid-chain* would need a TimerOutputStep inside BuildChain — not seen in
+    // the corpus (N3's multi-term reads are all cross-network), left for when a real case appears.
+    private static (int TonPartUId, string Port)? TrySplitTimerOutput(
+        string path, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath)
+    {
+        const string suffix = ".Q";
+        if (path.EndsWith(suffix, StringComparison.Ordinal)
+            && timerPartUIdByInstancePath.TryGetValue(path[..^suffix.Length], out var tonPartUId))
+        {
+            return (tonPartUId, "Q");
+        }
+
+        return null;
     }
 
     // Rail-to-coil chain for one condition. Mirrors GraphReducer.TraceChain's own confirmed

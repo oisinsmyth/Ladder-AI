@@ -60,4 +60,35 @@ public class TimerScopeSynthesisTests
         Assert.Equal(TimerKind.Tof, timer.Kind);
         Assert.Null(timer.Reset);
     }
+
+    [Fact]
+    public void Synthesize_CoilFedBySameNetworkTimerQ_IsTimerOutputStep()
+    {
+        // Gap G2: `COIL Out := <sameNetworkTimer>.Q` wires directly from the TON's Q port.
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n" +
+            "  TON(DB_Timers.T0, IN := Run, PT := T#1S)\n" +
+            "  COIL Out := DB_Timers.T0.Q\n");
+
+        var sidecar = SidecarSynthesizer.Synthesize(network);
+        var assignment = Assert.Single(sidecar.Assignments);
+
+        Assert.Null(assignment.RailWireUId); // fed by the timer's Q, not the rail
+        var step = Assert.IsType<ChainStepSidecar.TimerOutputStep>(Assert.Single(assignment.Steps));
+        Assert.Equal("Q", step.Port);
+        Assert.Equal(Assert.Single(sidecar.Timers).TonPartUId, step.TonPartUId);
+    }
+
+    [Fact]
+    public void Synthesize_CoilFedByOtherNetworkTimerQ_IsOrdinaryContact()
+    {
+        // A `.Q` with no matching same-network timer (cross-network read) stays an ordinary contact.
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n  COIL Out := DB_Timers.Elsewhere.Q\n");
+
+        var assignment = Assert.Single(SidecarSynthesizer.Synthesize(network).Assignments);
+
+        Assert.NotNull(assignment.RailWireUId);
+        Assert.IsType<ChainStepSidecar.ContactStep>(Assert.Single(assignment.Steps));
+    }
 }
