@@ -1,6 +1,6 @@
 # ADR-0005 — Derive-always: the sidecar is derived, not stored
 
-- **Status:** Proposed
+- **Status:** Accepted (owner, 2026-07-18)
 - **Date:** 2026-07-18
 - **Refines:** ADR-0001 item 5 (the sidecar). Does not supersede it — the two-layer readable/sidecar
   concept stands; this changes the sidecar from a *stored* artifact to a *derived* one for the covered
@@ -84,10 +84,18 @@ legibility first).
    clean. Both gates (offline 14/14 + live 10/10) are now green; what remains is owner acceptance of this
    ADR, then phases 3–5.
 3. Make `to-xml` derive by default for blocks fully within the synthesizable subset; keep the
-   stored-sidecar path for the rest and as an explicit opt-in.
-4. Stop emitting stored `SIDECAR` sections from `to-ir` for synthesizable blocks (or keep behind a debug
-   flag); update `ir/SPEC.md` §Sidecar accordingly.
-5. Retire D-6 / the scoped merge from the roadmap (`deferred-items.md`).
+   stored-sidecar path for the rest and as an explicit opt-in. — **DONE 2026-07-18** (`to-xml`
+   auto-detects: derives when no `SIDECAR`, uses it when present; `--synthesize` forces the derive path).
+4. Stop emitting stored `SIDECAR` sections from `to-ir` for synthesizable blocks; keep behind a
+   `--with-sidecar` flag; update `ir/SPEC.md` §Sidecar. — **DONE 2026-07-18** (`to-ir` runs
+   `IsSynthesizable` — actually synthesises — and omits the sidecar only when that succeeds).
+5. Retire D-6 / the scoped merge from the roadmap (`deferred-items.md`). — **DONE 2026-07-18** (D-6
+   marked resolved by derive-always; the scoped merge is no longer needed).
+
+**Follow-on (not blocking):** the S7 modification-choreography (`docs/notes/modification-choreography.md`)
+still documents the D-6 whole-file strip-and-synthesize workaround; with derive-always, editing a
+sidecar-less block just re-derives, so that step simplifies — to be folded into the modify skills when
+they're next touched.
 
 **Revisit if:** the unsynthesizable construct set turns out large or common in real projects (then stored
 sidecars stay necessary for those blocks), or ADR-0001's non-reducible fallback turns out common (same) —

@@ -118,13 +118,17 @@ is dropped:
    derived → imported → compiled all 10 reference code blocks against the real `SampleProject` in TIA,
    all clean — the ground-truth proof that the *derived* form imports and compiles, beyond the offline
    Normalizer's semantic-equivalence check.
-3. Then: `to-xml` derives by default for synthesizable blocks; `to-ir` stops emitting stored sidecars for
-   them (or keeps them behind a debug flag); `ir/SPEC.md` §Sidecar updated; D-6/scoped merge retired.
+3. **DONE 2026-07-18 — the flip landed.** ADR-0005 Accepted (owner). `to-xml` derives by default (uses a
+   stored sidecar only when present); `to-ir` omits the sidecar for a synthesizable block (`IsSynthesizable`
+   actually runs synthesis) and keeps it otherwise or under `--with-sidecar`; `ir/SPEC.md` §Sidecar
+   updated; D-6 marked resolved and the scoped merge retired (`deferred-items.md`,
+   `converter-synthesis-gaps.md`).
 
-**Sequencing.** Keep stored sidecars until the live backstop passes (don't drop the safety net before the
-ground-truth check). The **D-6 scoped merge stays available as the interim bridge** for modifying real
-blocks until derive-always fully lands — same converter investment, aimed at *eliminating* the sidecar
-rather than *maintaining* it.
+**Stage 3 COMPLETE.** Derive-always is the operative behavior. A synthesizable block is now stored as
+readable-only IR; its sidecar is re-derived on demand — no staleness, no D-6. A block using a
+still-unsynthesizable construct keeps a stored sidecar until that construct is added to synthesis (guarded
+by the parity harness). Follow-on: simplify the S7 modification-choreography (its D-6 workaround is now
+moot) when the modify skills are next touched.
 
 ## Definition of done
 

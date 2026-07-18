@@ -23,14 +23,18 @@ now."
 `fix-wave-1-reviews.md`, retired in the 2026-07-17 test-project001 declutter; `docs/notes/owner-questions.md`
 D-2 remains the ruling record.
 
-## D-6 — Converter can't add a new statement to an already-exported network
+## D-6 — Converter can't add a new statement to an already-exported network — RESOLVED 2026-07-18 (ADR-0005)
 
-**End-state resolution (2026-07-18): subsumed by ADR-0005 (derive-always).** Complete synthesis for the
-reference corpus (parity 14/14) means the sidecar is derivable, so the plan is to stop *storing* it —
-after which a network edit just re-derives and D-6 cannot occur (`docs/adr/adr-0005-derive-always-sidecar.md`,
-`docs/notes/synthesis-parity-plan.md`). The scoped `SidecarSynthesizer` merge below remains the **interim
-bridge** for modifying real blocks until derive-always fully lands (gated on the live compile backstop,
-`SynthesizerLiveCheck.RunCorpus`).
+**Resolved by derive-always (ADR-0005, Accepted).** A synthesizable block no longer *stores* a sidecar
+(`to-ir` omits it; `to-xml` re-derives it), so there is no stale sidecar to reconcile when a statement is
+added — the edit just re-derives. Both gates passed (offline parity 14/14, live TIA compile 10/10) and
+the flip landed (`to-xml` derives by default, `to-ir` omits the sidecar for synthesizable blocks). The
+scoped `SidecarSynthesizer` merge sketched below is therefore **no longer needed** — it was the interim
+bridge for a world where the sidecar stayed stored. (A block using a still-unsynthesizable construct —
+`Limit`/`Wait`/`FillBlockI`/`Modbus*` — keeps a stored sidecar and would still hit D-6 if edited in
+place; adding that construct to synthesis, guarded by the parity harness, is the path, not the merge.)
+
+**Original writeup (historical):**
 
 **What:** `converter to-xml`/`preflight` have no supported path for "add one new statement to a
 network that already carries real sidecar data from a prior TIA export." Hit concretely during

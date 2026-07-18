@@ -55,7 +55,17 @@ Calc/T_SUB/T_CONV/MOVE_BLK_VARIANT); (3) resolve the **dual-encoding SPEC questi
 complementary **Stage-2** move — add small *single-construct* Green reference blocks — would let each
 incremental builder flip a block green instead of waiting for a whole dense block's constructs.
 
-## THE CRITICAL ONE — the D-6 scoped merge is now the S7-on-real-blocks blocker (genval3, 2026-07-18)
+## THE D-6 scoped merge — SUPERSEDED 2026-07-18 by derive-always (ADR-0005)
+
+**No longer needed.** Complete synthesis (parity 14/14 + live compile 10/10) let the sidecar be *derived*
+rather than stored (ADR-0005, Accepted): `to-ir` omits the sidecar for a synthesizable block and `to-xml`
+re-derives it, so a network edit just re-derives — D-6 cannot occur, and there are no "unchanged networks'
+real sidecars" to preserve. The scoped-merge writeup below is kept as the historical record of the
+problem it was meant to solve. (A block using a still-unsynthesizable construct keeps a stored sidecar and
+would still hit D-6 if edited in place — the fix there is adding that construct to synthesis, guarded by
+the parity harness, not the merge.)
+
+### Historical — the scoped merge as the S7-on-real-blocks blocker (genval3, 2026-07-18)
 
 The genval3 blind DOL→VSD `gen-block-modify-purpose` run proved the skill's *authoring + invariance
 discipline* works (the modified block was authored; `converter diff --only` proved the N1–N5 skeleton
