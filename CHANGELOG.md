@@ -2,6 +2,18 @@
 
 ## 2026-07-18
 
+**`converter tagstatus` — mechanical exists/proposed tag classifier (FI-24, easiest win from the skill/tooling audit)**
+
+- New subcommand `converter tagstatus <name…> --project <ir-dir> [--json]` classifies each tag name
+  `EXISTS`/`PROPOSED` against a project export — mechanizing the anti-laundering step (hard rule 3,
+  `docs/15` "Artifacts") that `gen-architecture` did by hand-grep. Pure composition: reuses
+  `ProjectIndex` + the `AccessNode.FromDottedPath` root extraction `preflight` already uses, so the
+  two never disagree; whole-name-first resolution handles dotted tag-table names (`Clock_0.5Hz`).
+  Exit 1 if any name is proposed, so `tagstatus … && <build>` is a usable "all tags exist" gate.
+- `src/converter/Converter/TagStatus/` (Model/Runner/Formatter, mirroring Review/Preflight/Digest);
+  4 new tests (`TagStatusTests`); suite 497/497. Documented in `src/converter/README.md` and
+  CLAUDE.md's command list. FI-24's provenance-header wrapper half stays open.
+
 **`converter review` F-1 fixed: per-rule count now matches the findings it prints**
 
 - The per-rule status line (`C-301: checked, N finding(s)`) over-counted when one check co-emits

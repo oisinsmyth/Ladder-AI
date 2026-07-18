@@ -1569,6 +1569,34 @@ findings, 17 genuine review findings; `ir/reference` blocks reproduce the S4 pil
 findings (C-003 naming, the `NodeStatusAlarms` C-301/C-501 alarm-word pair, C-406 TONR/TOF) with
 zero false unresolved-tag findings.
 
+## `tagstatus` — classify tag names exists/proposed (2026-07-18, FI-24)
+
+`converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]`
+
+Mechanizes the pipeline's anti-laundering classification (`docs/15-generation-pipeline.md`
+"Artifacts"; CLAUDE.md hard rule 3): each name is `EXISTS` (present in the current export) or
+`PROPOSED` (a named gap the engineer resolves). Built for `gen-architecture`'s tag-status step,
+which otherwise hand-greps the export. Composition only — reuses `ProjectIndex` and the *same*
+`AccessNode.FromDottedPath` root extraction `preflight` uses, so the two never disagree.
+
+Each name is resolved by checking the whole name first (catches bare tag-table tags whose own name
+contains a dot, e.g. `Clock_0.5Hz`, and DB names) then its root (catches `DB.member` /
+`Block.member` references — classification is by root, exactly like `preflight`'s `exists`/`proposed`
+line). `--project <ir-dir>` is the current export, scanned non-recursively; unindexable files
+surface as `INDEX WARNING`s. **Exit non-zero if any name is `proposed`** — so
+`converter tagstatus … --project … && <build>` is a usable "all tags exist" gate.
+
+```
+$ converter tagstatus DB_Input.Cycle_Start DI3_SYS_CycleStart MadeUpTag --project ir/test-project001
+DB_Input.Cycle_Start -> EXISTS (root: DB_Input)
+DI3_SYS_CycleStart -> EXISTS
+MadeUpTag -> PROPOSED
+SUMMARY: 3 name(s), 1 proposed          # exit 1
+```
+
+Note: classification is root-level (does `DB_Input` exist?), not member-level — the same scope
+`preflight` checks; member existence within a DB is TIA's own compile-time check.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

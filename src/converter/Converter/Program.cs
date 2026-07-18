@@ -5,6 +5,7 @@ using Converter.Preflight;
 using Converter.Review;
 using Converter.Sanitize;
 using Converter.SimaticMl;
+using Converter.TagStatus;
 
 namespace Converter;
 
@@ -32,6 +33,11 @@ internal static class Program
             return RunPreflight(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "tagstatus")
+        {
+            return RunTagStatus(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
@@ -40,6 +46,7 @@ internal static class Program
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
+            Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
             return 1;
         }
 
@@ -297,6 +304,46 @@ internal static class Program
         Console.WriteLine(json ? PreflightOutputFormatter.FormatJson(report) : PreflightOutputFormatter.FormatText(report));
 
         return report.HasFindings ? 1 : 0;
+    }
+
+    private static int RunTagStatus(string[] args)
+    {
+        var names = new List<string>();
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    names.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (names.Count == 0 || projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = TagStatusRunner.Run(names, projectDir);
+        Console.WriteLine(json ? TagStatusOutputFormatter.FormatJson(report) : TagStatusOutputFormatter.FormatText(report));
+
+        return report.HasProposed ? 1 : 0;
     }
 
     private static string? RequireValue(string[] args, ref int i, string flag)

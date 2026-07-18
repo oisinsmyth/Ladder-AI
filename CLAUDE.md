@@ -40,6 +40,7 @@ converter sanitize <file> --map <mapping.json> --out <path>   # real-project dat
 converter review    <file...> [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs
 converter digest    <file...> [--ignore-errors] [--json]      # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR)
 converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
+converter tagstatus <name...> --project <ir-dir> [--json]     # classify tag names exists/proposed against the export (anti-laundering, hard rule 3); exit 1 if any proposed
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 

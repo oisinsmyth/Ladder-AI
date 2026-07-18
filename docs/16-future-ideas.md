@@ -249,7 +249,7 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — net-new; lower priority than FI-22 but cheap (extends existing digest machinery).
 
 ### FI-24 — `gen-architecture` bookkeeping helpers (provenance + tag-status)
-- **Status:** Raised (2026-07-18, skill/tooling audit — net-new, small tooling).
+- **Status:** Partially done (2026-07-18). The **tag-status half is built** — `converter tagstatus <name…> --project <ir-dir> [--json]` (`src/converter/Converter/TagStatus/`, `src/converter/README.md`): classifies each name `EXISTS`/`PROPOSED` against the export via the same `ProjectIndex` + `AccessNode.FromDottedPath` primitive `preflight` uses, exit 1 if any proposed (a usable "all tags exist" gate). The **provenance-header wrapper is still open** (below). Originally raised 2026-07-18 from the skill/tooling audit — net-new, small tooling.
 - **Raised:** 2026-07-18 · **Source:** the audit. Two rote, error-prone hand-steps in `gen-architecture`:
 **Merits:**
 - **Provenance header** currently needs `git log -1 --format=%h -- <path>` per input; a tiny wrapper emitting the whole provenance block removes a hand-repeated, easy-to-fumble step.
