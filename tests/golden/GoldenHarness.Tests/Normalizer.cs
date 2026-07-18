@@ -87,6 +87,16 @@ public static class Normalizer
         ["MultilingualText"] = "ID",
         ["MultilingualTextItem"] = "ID",
         ["Wire"] = "UId",
+
+        // A CompileUnit's own block-scoped ID is volatile too — surfaced 2026-07-18 by the offline
+        // synthesis-parity harness (SynthesisParityRunner). A real export numbers CompileUnits with
+        // arbitrary block-scoped IDs (e.g. 3, 8); a freshly *synthesized* sidecar mints them from
+        // the network number (1, 2). SynthesizerLiveCheck proves the synthesized block (IDs 1, 2)
+        // imports and compiles unchanged, so the ID value carries no meaning TIA preserves — same
+        // reassigned-on-import class as Wire/Access/Part/MultilingualText. Nothing within the block
+        // references a CompileUnit by this ID (unlike Access, which IdentCon points at), so a plain
+        // strip is enough; network identity for comparison is document position + content, not ID.
+        ["SW.Blocks.CompileUnit"] = "ID",
     };
 
     public static bool AreSemanticallyEquivalent(XDocument original, XDocument reExported)

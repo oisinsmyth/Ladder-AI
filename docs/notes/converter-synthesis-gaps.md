@@ -1,9 +1,34 @@
-# Queued plan — `SidecarSynthesizer` gaps (found across the genval2/genval3 builds)
+# Parity checklist — `SidecarSynthesizer` gaps (the road to complete synthesis)
 
-All surfaced 2026-07-18 across the gen-block-* validations (the wired-CALL feature itself is done +
-TIA-proven — commit `e5bfeab`). None hand-patched (hard rule 7); all recorded here with their workaround
-(or lack of one) so the finding isn't lost, queued for a later PC-side session. `src/converter/` work —
-normal software rules, not `lad-coder`.
+Goal + strategy: `docs/notes/synthesis-parity-plan.md` (derive-always north star). This doc is the
+per-construct **parity checklist** — each gap = a reference-corpus block that must synthesize-match its
+real export in the offline harness (`tests/golden/GoldenHarness.Tests/SynthesisParityRunner.cs`, matrix
+at `tests/golden/synthesis-parity-matrix.md`). Close a gap → its block flips green in the matrix → move
+it into the test's `KnownGreen` guard. **Complete synthesis = every corpus block green.**
+
+Most gaps surfaced 2026-07-18: some across the gen-block-* validations (the wired-CALL feature itself is
+done + TIA-proven, commit `e5bfeab`), the rest by the Stage-0 parity harness run (below). None
+hand-patched (hard rule 7). `src/converter/` work — normal software rules, not `lad-coder`.
+
+## Stage-0 harness baseline (2026-07-18) — 9/14 corpus blocks reach parity
+
+The offline oracle (export → strip sidecar → `to-xml --synthesize` → `Normalizer` vs the real export)
+turned the remembered gap list into data. First run flagged 9 failures; triage showed **4 were an oracle
+under-strip** — the `Normalizer` wasn't treating `SW.Blocks.CompileUnit`'s block-scoped `ID` as volatile
+(a real export numbers them 3/8, a fresh synthesis mints 1/2; `SynthesizerLiveCheck` proves TIA
+reassigns it on import like every other UId). **Fixed** in `Normalizer.cs` (`ElementsWithVolatileId`),
+lifting parity to 9/14. The remaining **5 are real synthesis gaps**, below, split into hard synthesize
+errors and subtler compare-divergences:
+
+- **Synthesize-blockers** (hard error, block can't be derived at all): SUB/DIV (`SignalConditioning`,
+  Gap "arith" below); **WordAnd** (`DataHandling`, **Gap F — new**, not previously listed); TONR
+  (`TimingAndCalls`, Gap C).
+- **Compare-divergences** (synthesizes, but the derived graph differs from the real export):
+  **timer-instance-scope** (`TimerSample`, **Gap G — new**: a single-instance TON in a *global* DB is
+  synthesized `Scope="LocalVariable"` instead of `GlobalVariable`, plus a divergent `.Q`-read shape);
+  **standalone-Not** (`BooleanExtras`, **Gap H — new**: a real `Part Name="Not"` invert-RLO element is
+  synthesized as a `Contact` with `<Negated>` — logically close, structurally different; likely a
+  readable-form expressiveness question — `NOT x` doesn't distinguish the two).
 
 ## THE CRITICAL ONE — the D-6 scoped merge is now the S7-on-real-blocks blocker (genval3, 2026-07-18)
 
@@ -101,6 +126,39 @@ over the batch's DBs/UDTs/tag-tables.
 **Verify.** Unit tests (Word→Int, Int→Real, unknown-type hard-error); then the live gate — re-run the
 genval2 build so REQ-002's telemetry convert synthesizes + compiles clean, closing that deferral.
 
+## Gap F — WordAnd (WAND) synthesis unsupported (new, harness-surfaced)
+
+**Symptom.** `to-xml --synthesize` hard-errors on a `WordAnd` ("Network 1: sidecar synthesis does not
+support: WordAnds") — `DataHandling`, a committed reference block, uses one (masking word). The read
+side handles WAND fine; only synthesis lacks it. **Fix:** add a `BuildWordAndSidecar` mirroring the
+box-family shape (`BuildMulSidecar`/`BuildConvertSidecar`) — WAND is a two-input EN/ENO box with a
+constant or tag mask. Its operand types feed the same `TagTypeRegistry` question as Gap B/E. **Verify:**
+`DataHandling` flips green in the parity matrix.
+
+## Gap G — timer-instance-scope mis-inferred for a global single-instance DB (new, harness-surfaced)
+
+**Symptom.** A single-instance `TON` whose instance lives in a **global** DB (`DB_Timers.SampleTimer0`)
+synthesizes with `Instance Scope="LocalVariable"` where the real export has `Scope="GlobalVariable"`;
+the `.Q`-read path also renders differently. So `TimerSample` synthesizes but its derived graph diverges
+from the real export (compile-safe under stored sidecar, but not parity-clean). **Cause:** the timer
+instance-scope inference in `BuildTimerSidecar` assumes a local (FB multi-instance) scope; it needs to
+classify the instance path the way `ScopeFor` classifies operands (global DB member → `GlobalVariable`).
+**Fix:** resolve the timer instance's scope from whether its instance path names a global DB vs a local
+STATIC member; align the `.Q`/`.ET` output-read Access shape with the real export. **Verify:**
+`TimerSample` flips green. (Adjacent to Gap D — both are scope-classification of a dotted path.)
+
+## Gap H — standalone `Not` (invert-RLO) synthesized as a negated contact (new, harness-surfaced)
+
+**Symptom.** `BooleanExtras` has a real `Part Name="Not"` (a standalone invert-power-flow element);
+synthesis emits a `Contact` with `<Negated Name="operand"/>` instead. Logically adjacent but a different
+Part — so it synthesizes yet diverges from the real export. **Root question first (don't just force a
+Part):** the readable form `NOT x` doesn't distinguish "standalone Not element" from "negated contact".
+Options: (a) teach the readable form / synthesizer to emit a standalone `Not` Part where the source shape
+calls for it (needs a way to tell them apart — a distinct IR spelling, or a reduction rule); (b) accept
+the two as interchangeable where they're provably equivalent and normalize one to the other in the
+oracle. Decide before coding — this is a readable-form expressiveness call, not only a synthesis one, so
+it may touch `ir/SPEC.md`. **Verify:** `BooleanExtras` flips green (via whichever resolution).
+
 ## Where this is tracked
-`AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here. Update both
-when either gap lands.
+`AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity
+matrix (`tests/golden/synthesis-parity-matrix.md`) is the live scoreboard. Update both when a gap lands.

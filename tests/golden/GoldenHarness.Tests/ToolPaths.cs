@@ -15,7 +15,7 @@ public static class ToolPaths
         Environment.GetEnvironmentVariable("CONVERTER_EXE")
         ?? Path.Combine(RepoRoot(), "src", "converter", "Converter", "bin", "Debug", "net8.0", "converter.exe");
 
-    private static string RepoRoot()
+    public static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "CLAUDE.md")))
