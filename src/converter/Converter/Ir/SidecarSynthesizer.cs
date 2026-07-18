@@ -556,7 +556,12 @@ public static class SidecarSynthesizer
             Version: "1.0",
             TimeType: "Time",
             instanceUId,
-            LocalVariableScope,
+            // The instance scope follows the instance path the same way an operand's does: a timer
+            // whose instance lives in a *global* DB (e.g. `DB_Timers.SampleTimer0`) is
+            // GlobalVariable; a multi-instance FB timer (a local STATIC member) is LocalVariable.
+            // Previously hardcoded LocalVariable — surfaced by the parity harness (TimerSample: a
+            // real single-instance global-DB TON exports GlobalVariable, Gap G).
+            ScopeFor(timer.InstancePath, localNames),
             instanceComponentPath,
             chainRail,
             steps,

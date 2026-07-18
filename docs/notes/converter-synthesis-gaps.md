@@ -30,6 +30,30 @@ errors and subtler compare-divergences:
   synthesized as a `Contact` with `<Negated>` — logically close, structurally different; likely a
   readable-form expressiveness question — `NOT x` doesn't distinguish the two).
 
+## Stage-1 reality check (2026-07-18) — the corpus blocks are dense; "small wins" are mostly gated
+
+Starting Stage 1 revealed the reference corpus blocks are **multi-construct** (built to exercise the
+*read* side comprehensively), so a single gap rarely isolates one block, and each remaining gap has a
+hidden dependency:
+
+- **Only `TimerSample` isolates a single small gap** (timer-scope). Gap G is now fixed, but Gap G2
+  (dual-encoding) still holds it red.
+- **`SignalConditioning`** needs SUB/DIV **+ ABS + SWAP** — and SUB/DIV isn't a one-liner either: its
+  `DIV(EN := ENO)` needs **Mul-to-Mul ENO chaining** (synthesis currently only pairs Mul→Convert).
+- **`DataHandling`** needs WAND **+ Calc + T_SUB + T_CONV + MOVE_BLK_VARIANT** (five builders).
+- **The box family is gated behind the type symbol table.** WAND/ABS/SWAP each carry a **required
+  `SrcType`** (`Word`/`Real`/`Word`) the read side pulls from source; to reach *parity* synthesis must
+  emit the same type → the **`TagTypeRegistry` (Gap B/E) is the real keystone**, not a late item. Only
+  SUB/DIV is type-independent (`SrcType=null`, TIA auto-infers).
+- **Two gaps are dual-encoding / SPEC questions** (G2 timer-`.Q`, H standalone-Not): the readable IR
+  admits two valid encodings and synthesis picks the other one from this particular export.
+
+**Revised leverage order:** (1) the **`TagTypeRegistry`** — unlocks WAND/ABS/SWAP/Convert/Compare typing
+in one stroke; (2) **Mul-to-Mul ENO chaining** + SUB/DIV; then the remaining box builders (ABS/SWAP/WAND,
+Calc/T_SUB/T_CONV/MOVE_BLK_VARIANT); (3) resolve the **dual-encoding SPEC questions** (G2, H). A
+complementary **Stage-2** move — add small *single-construct* Green reference blocks — would let each
+incremental builder flip a block green instead of waiting for a whole dense block's constructs.
+
 ## THE CRITICAL ONE — the D-6 scoped merge is now the S7-on-real-blocks blocker (genval3, 2026-07-18)
 
 The genval3 blind DOL→VSD `gen-block-modify-purpose` run proved the skill's *authoring + invariance
@@ -135,17 +159,31 @@ box-family shape (`BuildMulSidecar`/`BuildConvertSidecar`) — WAND is a two-inp
 constant or tag mask. Its operand types feed the same `TagTypeRegistry` question as Gap B/E. **Verify:**
 `DataHandling` flips green in the parity matrix.
 
-## Gap G — timer-instance-scope mis-inferred for a global single-instance DB (new, harness-surfaced)
+## Gap G — timer-instance-scope mis-inferred for a global single-instance DB — FIXED 2026-07-18
 
 **Symptom.** A single-instance `TON` whose instance lives in a **global** DB (`DB_Timers.SampleTimer0`)
-synthesizes with `Instance Scope="LocalVariable"` where the real export has `Scope="GlobalVariable"`;
-the `.Q`-read path also renders differently. So `TimerSample` synthesizes but its derived graph diverges
-from the real export (compile-safe under stored sidecar, but not parity-clean). **Cause:** the timer
-instance-scope inference in `BuildTimerSidecar` assumes a local (FB multi-instance) scope; it needs to
-classify the instance path the way `ScopeFor` classifies operands (global DB member → `GlobalVariable`).
-**Fix:** resolve the timer instance's scope from whether its instance path names a global DB vs a local
-STATIC member; align the `.Q`/`.ET` output-read Access shape with the real export. **Verify:**
-`TimerSample` flips green. (Adjacent to Gap D — both are scope-classification of a dotted path.)
+synthesized `Instance Scope="LocalVariable"` where the real export has `Scope="GlobalVariable"`.
+**Fix (landed):** `BuildTimerSidecar` now scopes the instance via `ScopeFor(timer.InstancePath,
+localNames)` — global DB root → `GlobalVariable`, local STATIC member → `LocalVariable` — instead of the
+hardcoded `LocalVariable`. Covered by `Converter.Tests/TimerScopeSynthesisTests`; `FBTimers` (a local
+multi-instance FB timer) stays green, confirming the local case is preserved. (Adjacent to Gap D — both
+are scope-classification of a dotted path.)
+
+## Gap G2 — a same-network timer `.Q` read synthesized as an ordinary Access, not a direct wire (new)
+
+**Symptom.** After Gap G, `TimerSample` *still* diverges: each `COIL outN := SampleTimerN.Q` reads a
+timer's `Q` that is defined **in the same network**. The real export wires the TON's `Q` port **directly**
+into the downstream coil — a `ChainStepSidecar.TimerOutputStep` as `steps[0]`, no intermediate `<Access>`
+(the exact shape `TimerBindingSidecar.RailWireUId`-nullable and `Model.cs`'s own comment describe).
+Synthesis instead renders `.Q` as an *ordinary tag Access* (`BuildTimerSidecar`'s doc comment says it
+"never needs" the TimerOutputStep shape), producing one extra `Contact`+`Access` per network. Both are
+valid TIA and both compile — but they're **two encodings of the same logic**, and the readable IR
+(`:= SampleTimerN.Q`) doesn't distinguish them. **Same dual-encoding class as Gap H.** **Fix:** teach
+synthesis to detect a condition that is exactly a same-network timer's `.Q` and emit a `TimerOutputStep`
+(reference the TON part UId, order the TON before its reader) — structural, no symbol table. **Open
+question first:** does TIA *always* export a same-network `.Q` read as a direct wire, or do both forms
+occur? If both, the readable IR needs a way to say which (a SPEC question), like Gap H. **Verify:**
+`TimerSample` flips green.
 
 ## Gap H — standalone `Not` (invert-RLO) synthesized as a negated contact (new, harness-surfaced)
 
