@@ -143,14 +143,21 @@ public static class SidecarSynthesizer
 
         // Timers are built before the assignments/chains that read them: a coil fed directly by a
         // same-network timer's Q wires straight from the TON's Q port (a TimerOutputStep, Gap G2),
-        // which needs that TON's part UId already minted. Map each timer's instance path to its UId.
+        // which needs that TON's part UId already minted. Map each *eligible* timer's instance path
+        // to its UId — eligible = a GLOBAL-instance timer. A same-network GLOBAL-instance timer's Q is
+        // a direct wire (TimerOutputStep, TimerSample); a LOCAL/FB-instance timer's Q is an ordinary
+        // LocalVariable Access even in the same network (FB_ShredderSequencer N11) — so a local timer
+        // is left out of the map and its Q read falls through to the normal contact/Access path.
         var timers = new List<TimerBindingSidecar>();
         var timerPartUIdByInstancePath = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var timer in network.Timers)
         {
             var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
             timers.Add(timerSidecar);
-            timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+            if (timerSidecar.InstanceScope == GlobalVariableScope)
+            {
+                timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+            }
         }
 
         var assignments = new List<CoilAssignmentSidecar>();

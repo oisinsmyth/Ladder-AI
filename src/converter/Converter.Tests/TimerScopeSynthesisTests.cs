@@ -91,4 +91,21 @@ public class TimerScopeSynthesisTests
         Assert.NotNull(assignment.RailWireUId);
         Assert.IsType<ChainStepSidecar.ContactStep>(Assert.Single(assignment.Steps));
     }
+
+    [Fact]
+    public void Synthesize_CoilFedBySameNetworkLocalTimerQ_IsOrdinaryContact()
+    {
+        // Only a GLOBAL-instance timer's same-network Q wires directly. A LOCAL (FB-instance) timer's
+        // Q is an ordinary LocalVariable Access even in the same network (FB_ShredderSequencer N11).
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n  TON(RunTimer, IN := Enable, PT := T#1S)\n  COIL Out := RunTimer.Q\n");
+        var block = new Converter.SimaticMl.DbMember("RunTimer", "TON_TIME", Retain: false, StartValue: null);
+        var irBlock = new IrBlock("0", "FB", "T", 1, "LAD", null, new[] { network }, StaticMembers: new[] { block });
+
+        var sidecar = SidecarSynthesizer.SynthesizeBlock(irBlock).Single();
+        var assignment = Assert.Single(sidecar.Assignments);
+
+        Assert.NotNull(assignment.RailWireUId); // rail-fed contact, not a timer-output direct wire
+        Assert.IsType<ChainStepSidecar.ContactStep>(Assert.Single(assignment.Steps));
+    }
 }
