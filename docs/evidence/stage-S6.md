@@ -599,3 +599,29 @@ This generalizes a pattern already proven useful here: docs/15's adversarial-rev
 design already isolates the review skills from whichever context wrote the logic being reviewed,
 specifically so the reviewer isn't biased by having just authored it. This extends the same
 isolation to authorship itself, not just review.
+
+## Coding-skill build order ruled — A-4 (2026-07-18)
+
+The internal sequencing of build-order step 6 (`docs/15-generation-pipeline.md`), open since the
+A-2/A-3 rulings of 2026-07-17, was walked through with the owner and ruled. Context that changed
+the answer: the **"S7 is the rush" framing was retired 2026-07-18** (the priority steer in
+`AITODO.md`; superseded memory `project_s7_rush_thin_library`), which removed the original a4
+briefing's main argument for building the *modify* pair ahead of `gen-block-new`.
+
+Ruling:
+- **`gen-block-new` is built first** — roadmap-fidelity. It is S6's own named deliverable, and
+  closing S6's exit criterion is S7's formal entry gate; with modify no longer "the rush," there's
+  no reason to defer the skill that actually advances the roadmap. Then `gen-block-modify-fix`
+  (cheapest, B-docket-shaped), then `gen-block-modify-purpose` (largest, interface-changing).
+- **`converter diff` is built now, in parallel** — the S7 entry-requirement tool (invariance
+  proof: which networks changed, the rest provably identical in IR). Low-risk PC-side tooling with
+  no dependency on which coding skill lands first; formalizes the invariance checks currently done
+  by hand. Slots into the existing `Runner`/`Model`/`OutputFormatter` converter pattern; canonical
+  per-network IR re-serialization (proven byte-stable by `IrSelfStabilityTests`) is the "identical"
+  test, with volatile sidecar UIds normalized out (mirroring the golden-harness `Normalizer`).
+
+Residuals routed, not closed here: **D-4** (does closing S6's ten-request exit block *opening* S7,
+or can the modify skills develop sandbox-scoped with S6 still open) stays with the pending D-4
+discussion (`agent-tasks/discussion-d4-stage-gates-review.md`); real-site S7 (vs.
+test-project001 sandbox) still needs a `docs/13-data-boundary.md` approval extension when it
+arrives (horizon flag, unchanged). Recorded to `docs/15`'s step-6 row; a4 briefing marked done.

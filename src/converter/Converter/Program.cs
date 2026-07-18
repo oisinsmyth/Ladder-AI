@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Converter.Diff;
 using Converter.Digest;
 using Converter.Ir;
 using Converter.Preflight;
@@ -38,6 +39,11 @@ internal static class Program
             return RunTagStatus(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "diff")
+        {
+            return RunDiff(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...]");
@@ -47,6 +53,7 @@ internal static class Program
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
             Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
+            Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
             return 1;
         }
 
@@ -344,6 +351,74 @@ internal static class Program
         Console.WriteLine(json ? TagStatusOutputFormatter.FormatJson(report) : TagStatusOutputFormatter.FormatText(report));
 
         return report.HasProposed ? 1 : 0;
+    }
+
+    private static int RunDiff(string[] args)
+    {
+        var paths = new List<string>();
+        var onlyNetworks = new List<int>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--only":
+                    var raw = RequireValue(args, ref i, "--only");
+                    if (raw is null)
+                    {
+                        return 1;
+                    }
+
+                    if (!int.TryParse(raw, out var network))
+                    {
+                        Console.Error.WriteLine($"--only expects a network number, got '{raw}'.");
+                        return 1;
+                    }
+
+                    onlyNetworks.Add(network);
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    paths.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (paths.Count != 2)
+        {
+            Console.Error.WriteLine("Usage: converter diff <old.ir> <new.ir> [--only <network> ...] [--json]");
+            return 1;
+        }
+
+        foreach (var path in paths)
+        {
+            if (!File.Exists(path))
+            {
+                Console.Error.WriteLine($"File not found: {path}");
+                return 1;
+            }
+        }
+
+        DiffReport report;
+        try
+        {
+            report = DiffRunner.Run(paths[0], paths[1], onlyNetworks);
+        }
+        catch (Exception ex) when (ex is IrFormatException or SimaticMlFormatException)
+        {
+            Console.Error.WriteLine($"{ex.GetType().Name}: {ex.Message}");
+            return 1;
+        }
+
+        Console.WriteLine(json ? DiffOutputFormatter.FormatJson(report) : DiffOutputFormatter.FormatText(report));
+
+        // --only makes this an assertion: exit 1 if anything changed outside the declared set. With
+        // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
+        // its own.
+        return report.HasInvarianceViolation ? 1 : 0;
     }
 
     private static string? RequireValue(string[] args, ref int i, string flag)

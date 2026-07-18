@@ -1,3 +1,14 @@
+> **DONE 2026-07-18.** The core sequencing question (decision points 2 & 3) was walked through with
+> the owner and ruled: **`gen-block-new` first**, then `gen-block-modify-fix`, then
+> `gen-block-modify-purpose`; **`converter diff` built now in parallel** (built same session). The
+> "S7 is the rush" premise this briefing was written around is retired (2026-07-18 steer), which is
+> what flipped the answer toward roadmap-fidelity. Outcome recorded in `docs/15` step-6 row and
+> `docs/evidence/stage-S6.md` ("Coding-skill build order ruled — A-4"). **Residual, still open:**
+> decision point 4 (does closing S6's exit block *opening* S7) and the S7-gate wording belong to the
+> D-4 discussion (`discussion-d4-stage-gates-review.md`) — kept open there. Decision point 5
+> (real-site S7 needs a data-boundary extension) stays a horizon flag. Delete this file once D-4
+> is also walked and both can be cleared together.
+
 # Discussion task — the S7-first ordering (originally owner-questions A-4)
 
 **Purpose of this doc:** the owner asked (2026-07-17) for a doc another agent/conversation can use

@@ -10,6 +10,7 @@ converter to-ir  <file>                                   # SimaticML → IR
 converter to-xml <file>                                   # IR → SimaticML
 converter to-xml <file> --synthesize                      # IR (no SIDECAR needed) → SimaticML — see "Sidecar synthesis" below
 converter sanitize <file> --map <mapping.json> --out <path>  # SimaticML → sanitized SimaticML
+converter diff <old.ir> <new.ir> [--only <network> ...] [--json]  # which networks changed, rest provably identical (S7 invariance)
 ```
 
 `to-ir`/`to-xml`/`sanitize` all auto-detect DB vs code-block content (root element name for XML
@@ -1596,6 +1597,42 @@ SUMMARY: 3 name(s), 1 proposed          # exit 1
 
 Note: classification is root-level (does `DB_Input` exist?), not member-level — the same scope
 `preflight` checks; member existence within a DB is TIA's own compile-time check.
+
+## `diff` — network-level IR invariance (2026-07-18, S7 entry requirement)
+
+`converter diff <old.ir> <new.ir> [--only <network> ...] [--json]`
+
+Mechanizes the S7 "untouched-network invariance check" (roadmap `docs/02-roadmap.md` line 57;
+CLAUDE.md "Workflow for modifying existing logic"): given the before/after IR of **one block**, it
+reports which networks changed and — with `--only` — proves the rest are identical. Built now, in
+parallel with the coding skills, per the 2026-07-18 A-4 ruling (`docs/evidence/stage-S6.md`).
+
+**How "identical" is defined (and why no separate normalizer is needed):** semantic equality is
+equality of the sidecar-free *readable* form (`IrSerializer.SerializeNetworkOnly`), which
+`IrSelfStabilityTests` already proves byte-stable. Every volatile UId (Wire/Access/Part/
+CompileUnit) lives only in the `SIDECAR` section that form omits, so the UId churn a TIA re-export
+produces normalizes out for free. Block-level Title/Comment/interface changes are surfaced
+separately (the interface via its own sidecar-free canonical slice; block `RootUId` is deliberately
+not compared, being a volatile block ID).
+
+Both inputs are parsed with `ParseBlock`, i.e. real exported IR with a `SIDECAR` (the S7 shape:
+before = exported block, after = the same block edited then reconverted). Networks are matched **by
+number** (S7 edits in place; a wholesale renumber would misreport — a stated limitation).
+
+**Exit code:** with `--only`, exit 1 if any network *outside* the declared set changed/appeared/
+disappeared — the invariance assertion the S7 skill gates on. Without `--only`, it's an
+informational report (exit 0); a malformed IR file or a missing path exits 1.
+
+```
+$ converter diff before.ir after.ir --only 1
+SUMMARY: 2 network(s): 1 changed, 0 added, 0 removed, 1 identical
+
+CHANGED network 1 "Perimeter Safety Alarm Bit Mapping"
+  - ... old readable form ...
+  + ... new readable form ...
+
+INVARIANCE OK: all changes confined to --only {1}          # exit 0
+```
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

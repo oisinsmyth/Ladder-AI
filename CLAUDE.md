@@ -41,6 +41,7 @@ converter review    <file...> [--ignore-errors] [--json]      # mechanical conve
 converter digest    <file...> [--ignore-errors] [--json]      # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR)
 converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
 converter tagstatus <name...> --project <ir-dir> [--json]     # classify tag names exists/proposed against the export (anti-laundering, hard rule 3); exit 1 if any proposed
+converter diff <old.ir> <new.ir> [--only <network>...] [--json] # which networks changed, rest provably identical in IR (S7 invariance check); with --only, exit 1 on any change outside the set
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 

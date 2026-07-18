@@ -54,6 +54,14 @@ history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
 ## Current task: none — nothing in-flight
 
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
+- **A-4 coding-skill build order ruled + `converter diff` built.** Owner ruled (2026-07-18):
+  `gen-block-new` first (roadmap-fidelity; "S7 is the rush" retired), then `gen-block-modify-fix`,
+  then `gen-block-modify-purpose`; `converter diff` built now in parallel. Recorded in `docs/15`
+  step-6 row and `docs/evidence/stage-S6.md`. **`converter diff` is now built** (S7 invariance
+  tool: per-network before/after, `--only` assertion → exit 1 on any out-of-scope change;
+  sidecar-free readable-form compare, no separate normalizer needed). `src/converter/Converter/Diff/`,
+  8 tests, README + CLAUDE.md updated; full converter suite 519 green; CLI smoke-tested against
+  `ir/reference/PerimeterSafetyAlarms.ir`.
 - **GenProject1 → test-project001 codename purge complete.** Docs/IR/mirror renamed; `simatic-ml/test-project001/`
   refreshed to the full 23 files by live-exporting `DB_PLC` + `OB100`. Live TIA folder keeps its on-disk
   name `GenProject1/` (CLAUDE.md codename note).
@@ -79,11 +87,13 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
 **S6/S7 — generation & modification pipeline:**
 - **S6 exit criterion not closed** — ten approved requests; the counting rule awaits the owner
   (owner-questions D-4, discussed in `agent-tasks/discussion-d4-stage-gates-review.md`).
-- **S7-vs-S6 sequencing unsettled** — the internal build/exercise order of the three coding skills and
-  their relationship to closing S6. Owner to walk an agent through `agent-tasks/discussion-a4-s7-ordering.md`;
-  related gate-wording in `discussion-d4-stage-gates-review.md`.
-- **The three coding skills are unbuilt** — `gen-block-new` / `gen-block-modify-purpose` /
-  `gen-block-modify-fix` (`docs/15` build-order step 6).
+- **S7-vs-S6 sequencing — build order RULED 2026-07-18 (A-4).** `gen-block-new` first, then
+  `gen-block-modify-fix`, then `gen-block-modify-purpose`; `converter diff` built now in parallel
+  (done — see Recently landed). What's *still* open is the S7-gate-timing half (does closing S6's
+  ten-request exit block *opening* S7): stays with the D-4 discussion
+  (`agent-tasks/discussion-d4-stage-gates-review.md`). The a4 briefing is marked done.
+- **The three coding skills are unbuilt** — build order now fixed: `gen-block-new` **next**, then
+  `gen-block-modify-fix`, then `gen-block-modify-purpose` (`docs/15` build-order step 6).
 - **Library-filling is real, heavy work** — no longer treated as purely passive S8 harvest. A
   harvest-assist skill is proposed (**FI-21**) to lower the per-pattern cost; see it for the design
   constraints (candidate-prep, not auto-admission).
