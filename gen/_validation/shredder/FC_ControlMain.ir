@@ -1,0 +1,27 @@
+BLOCK FC FC_ControlMain
+ROOTID 0
+NUMBER 916
+LANGUAGE LAD
+TITLE "Shredder subsystem orchestration"
+COMMENT "Area-Main orchestrator (gen-integration, manual - no skill yet). Sequences input map -> shredder control instance -> output map per C-110, and makes the per-instance cross-block wires the FB stays clear of (C-127): buffer DBs as image params, Clock_0.5Hz as HeartbeatClock, PlantControl.Test[7] as ExternalFault, and the E-stop feedback republish. A second shredder = a second iDB + buffer set + Map-FC pair wired here, no edit inside FB_ShredderControl."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  INOUT
+  TEMP
+  CONSTANT
+
+NETWORK 1 "Refresh inbound image (C-110 first)"
+  CALL FC_ShredderInputMap(EN := TRUE)
+
+NETWORK 2 "Shredder control instance (wired)"
+  COMMENT "Buffer DBs wired as the symbolic image params; the 0.5 Hz clock and the plant test bit enter as inputs; the outbound command image is written back to its buffer DB."
+  CALL FB_ShredderControl(iDB_ShredderControl_Shredder1, EN := TRUE, InImage := DB_ShredderInputs.Img, InAnalog := DB_ShredderInputsAnalog.Ana, HeartbeatClock := Clock_0.5Hz, ExternalFault := PlantControl.Test[7], OutImage => DB_ShredderOutputs.Cmd)
+
+NETWORK 3 "E-stop feedback republish (REQ-006)"
+  COMMENT "Straight word copy of the buffered E-stop feedback to the plant DB for plant-level consumers; kept in the orchestrator, not the FB (C-127)."
+  MOVE(EN := TRUE, IN := DB_ShredderInputsAnalog.Ana.EStopFBRaw) => PlantControl.ShredderEStopFB
+
+NETWORK 4 "Drive outbound command image (C-110 last)"
+  CALL FC_ShredderOutputMap(EN := TRUE)

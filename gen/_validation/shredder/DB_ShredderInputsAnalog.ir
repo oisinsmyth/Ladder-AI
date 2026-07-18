@@ -1,0 +1,10 @@
+DB DB_ShredderInputsAnalog
+  ROOTID 0
+  NUMBER 911
+  COMMENT "Inbound analog/status word buffer (C-304, analog kept separate). Written by FC_ShredderInputMap, passed to FB_ShredderControl.InAnalog."
+  MEMBERS
+    Ana : "UDT_ShredderInAnalog"
+      SpeedRaw : Word
+      Amps1Raw : Word
+      Amps2Raw : Word
+      EStopFBRaw : Word

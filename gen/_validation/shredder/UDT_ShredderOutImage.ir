@@ -1,0 +1,18 @@
+TYPE UDT_ShredderOutImage
+  ROOTID 0
+  COMMENT "Outbound comms command image to the shredder (bytes 500-502). Flat members; grouping flattened for converter DB-member inlining."
+  MEMBERS
+    LifeBit : Bool COMMENT "Byte500.0 - outbound life-bit heartbeat"
+    ResetOverload : Bool COMMENT "Byte500.1 - overload reset command"
+    StopAuto : Bool COMMENT "Byte500.2 - stop command"
+    HoldAuto : Bool COMMENT "Byte500.4 - hold command"
+    StartAuto : Bool COMMENT "Byte500.5 - run command (seal-in)"
+    Program1 : Bool COMMENT "Byte501.0 - recipe 1 command"
+    Program2 : Bool COMMENT "Byte501.1 - recipe 2 command"
+    Program3 : Bool COMMENT "Byte501.2 - recipe 3 command"
+    Program4 : Bool COMMENT "Byte501.3 - recipe 4 command"
+    Program5 : Bool COMMENT "Byte501.4 - recipe 5 command"
+    Program6 : Bool COMMENT "Byte501.5 - recipe 6 command"
+    Release4Op : Bool COMMENT "Byte502.0 - release for operation"
+    StartHorn : Bool COMMENT "Byte502.1 - start horn"
+    RadioControlPermit : Bool COMMENT "Byte502.2 - radio control permit"

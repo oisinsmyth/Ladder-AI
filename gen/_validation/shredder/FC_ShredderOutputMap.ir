@@ -1,0 +1,31 @@
+BLOCK FC FC_ShredderOutputMap
+ROOTID 0
+NUMBER 914
+LANGUAGE LAD
+TITLE "Shredder output map"
+COMMENT "C-304 output IO boundary: the only block that writes the shredder's physical outputs. Copies the outbound command image bits to raw %Q500-502. Un-muxed straight copy per REQ-003."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  INOUT
+  TEMP
+  CONSTANT
+
+NETWORK 1 "Byte 500/501 command bits to physical outputs (REQ-003)"
+  COIL Tag_27 := DB_ShredderOutputs.Cmd.LifeBit
+  COIL Tag_28 := DB_ShredderOutputs.Cmd.ResetOverload
+  COIL Tag_29 := DB_ShredderOutputs.Cmd.StopAuto
+  COIL Tag_30 := DB_ShredderOutputs.Cmd.HoldAuto
+  COIL Tag_31 := DB_ShredderOutputs.Cmd.StartAuto
+  COIL Tag_32 := DB_ShredderOutputs.Cmd.Program1
+  COIL Tag_33 := DB_ShredderOutputs.Cmd.Program2
+  COIL Tag_34 := DB_ShredderOutputs.Cmd.Program3
+  COIL Tag_35 := DB_ShredderOutputs.Cmd.Program4
+  COIL Tag_36 := DB_ShredderOutputs.Cmd.Program5
+  COIL Tag_37 := DB_ShredderOutputs.Cmd.Program6
+
+NETWORK 2 "Byte 502 command bits to physical outputs (REQ-003)"
+  COIL Tag_38 := DB_ShredderOutputs.Cmd.Release4Op
+  COIL Tag_39 := DB_ShredderOutputs.Cmd.StartHorn
+  COIL Tag_40 := DB_ShredderOutputs.Cmd.RadioControlPermit

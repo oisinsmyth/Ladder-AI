@@ -1,0 +1,20 @@
+DB DB_ShredderOutputs
+  ROOTID 0
+  NUMBER 912
+  COMMENT "Outbound discrete command image buffer (C-304). Written by FB_ShredderControl.OutImage, read by FC_ShredderOutputMap."
+  MEMBERS
+    Cmd : "UDT_ShredderOutImage"
+      LifeBit : Bool
+      ResetOverload : Bool
+      StopAuto : Bool
+      HoldAuto : Bool
+      StartAuto : Bool
+      Program1 : Bool
+      Program2 : Bool
+      Program3 : Bool
+      Program4 : Bool
+      Program5 : Bool
+      Program6 : Bool
+      Release4Op : Bool
+      StartHorn : Bool
+      RadioControlPermit : Bool

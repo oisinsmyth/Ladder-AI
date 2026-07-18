@@ -1,0 +1,219 @@
+BLOCK FB FB_ShredderControl
+ROOTID 0
+NUMBER 915
+LANGUAGE LAD
+TITLE "Shredder comms control"
+COMMENT "Reusable core control for one comms-connected shredder drive. Paradigm: continuous comms-driven equipment control (C-114 family), NOT a stepped sequence (C-113, no phase memory). Operates on a symbolic interface only - decoded inbound image (InImage/InAnalog), outbound command image (OutImage), HMI/orchestrator command+status structs (Inputs/Outputs). No raw IO, no plant-DB or sibling reference inside (C-304/C-127), so it is instanceable. Running state is DECODED from inbound status bits (Outputs.ShredderRunning), not a wired RunningFB (C-606 named deviation). C-403 startup-reset obligation for the transient run-state bits is declared to gen-integration (OB100), out of scope here. Note: UDT image members are flat (grouping flattened from the manifest Byte50x sub-structs) to fit the converter's DB-member inlining. Note: REQ-002 Word->Int telemetry conversion (ActualSpeed/MotorAmps1/MotorAmps2) is deferred - the synthesizer supports only Real->DInt CONVERT today; the raw words are buffered and available."
+
+INTERFACE
+  INPUT
+    InImage : "UDT_ShredderInImage"
+    InAnalog : "UDT_ShredderInAnalog"
+    HeartbeatClock : Bool
+    ExternalFault : Bool
+  OUTPUT
+    OutImage : "UDT_ShredderOutImage"
+  INOUT
+  STATIC
+    Inputs : Struct RETAIN
+      InHand : Bool COMMENT "Hand/Auto selector"
+      AutoStartSignal : Bool COMMENT "Auto run permission (from orchestrator)"
+      HandStartSignal : Bool COMMENT "Momentary hand start (HMI-set, block-reset)"
+      HandIntervention : Bool COMMENT "Hand intervention active (HMI-set, block-reset)"
+      RecentStart : Bool COMMENT "Momentary start-ack (HMI-set, block-held)"
+      PreStartDone : Bool COMMENT "Prestart complete signal"
+      InhibitMotor : Bool COMMENT "Hard run inhibit"
+      FaultReset : Bool COMMENT "Momentary fault reset"
+      Shutdown : Bool COMMENT "Shutdown request"
+      ProgramSelection : Int COMMENT "Recipe select 1..6"
+      FTTime : Real COMMENT "Fail time setpoint (s)"
+      EnableUPSTime : Real COMMENT "Upstream-enable delay setpoint (s)"
+      ShutdownTime : Real COMMENT "Shutdown timeout setpoint (s)"
+    Outputs : Struct
+      TryRun : Bool COMMENT "Request-to-run"
+      Run : Bool COMMENT "Run commanded (mirrors StartAuto)"
+      Stop : Bool COMMENT "Latched stop"
+      ShredderRunning : Bool COMMENT "Running confirmed (decoded)"
+      UPSEnable : Bool COMMENT "Upstream feeder release"
+      ShutdownComplete : Bool COMMENT "Shutdown complete"
+      FaultActive : Bool COMMENT "Aggregate fault latch"
+      FTR : Bool COMMENT "Fail-to-run latch"
+      FTS : Bool COMMENT "Fail-to-stop latch"
+      ActualSpeed : Int COMMENT "Rotor speed (REQ-002, deferred conversion)"
+      MotorAmps1 : Int COMMENT "Drive 1 current (REQ-002, deferred)"
+      MotorAmps2 : Int COMMENT "Drive 2 current (REQ-002, deferred)"
+      HrsRun : UDInt COMMENT "Running-hours totaliser"
+      Telemetry : Int COMMENT "HMI status code"
+      Alarm : Word COMMENT "13-bit alarm pack"
+      Name : String COMMENT "Instance display name (C-004)"
+    ShutdownTimeMS : DInt COMMENT "Shutdown preset (ms)"
+    EnableUPSTimeMS : DInt COMMENT "Upstream-enable preset (ms)"
+    FTTimeMS : DInt COMMENT "Fail preset (ms)"
+    PreStartMemory : Bool COMMENT "Prestart-complete hold"
+    LostLifeBit : Bool COMMENT "Loss-of-life watchdog latch"
+    HandPosEdge : Bool COMMENT "InHand rising edge (C-404)"
+    HandNegEdge : Bool COMMENT "InHand falling edge (C-404)"
+    InHandPrev : Bool COMMENT "InHand previous-scan (C-404)"
+    ShutdownPrev : Bool COMMENT "Shutdown previous-scan (C-404)"
+    LifeWatchdogTimer : TON_TIME VERSION 1.0
+    PreStartTimeoutTimer : TON_TIME VERSION 1.0
+    HandStartDebounceTimer : TON_TIME VERSION 1.0
+    ShutdownTimer : TON_TIME VERSION 1.0
+    UPSEnableTimer : TON_TIME VERSION 1.0
+    FailToRunTimer : TON_TIME VERSION 1.0
+    FailToStopTimer : TON_TIME VERSION 1.0
+    HoursTimer : TON_TIME VERSION 1.0
+  TEMP
+    TempShutdownMS : Real
+    TempUPSMS : Real
+    TempFTMS : Real
+    RunRequest : Bool
+  CONSTANT
+
+NETWORK 1 "Running confirmation decode (REQ-008)"
+  COMMENT "Running is decoded from inbound status bits, not a wired feedback contact (C-606)."
+  COIL Outputs.ShredderRunning := InImage.Ready AND InImage.RotorOn OR InImage.ReleaseFeeding
+
+NETWORK 2 "Overload-reset command follows fault reset (REQ-007a)"
+  COIL OutImage.ResetOverload := Inputs.FaultReset
+
+NETWORK 3 "Outbound life-bit heartbeat (REQ-007)"
+  COMMENT "0.5 Hz clock is wired in by the orchestrator (HeartbeatClock), not read as a global tag - keeps the FB instanceable (C-127)."
+  COIL OutImage.LifeBit := HeartbeatClock
+
+NETWORK 4 "Loss-of-life watchdog and latch (REQ-008a)"
+  COMMENT "Watchdog runs while both the inbound mirror and the outbound life bit are low; expiry latches LostLifeBit until FaultReset (C-406 TON, C-123 fault latch, +OB100)."
+  TON(LifeWatchdogTimer, IN := NOT InImage.LifeBitMirror AND NOT OutImage.LifeBit, PT := T#5S)
+  SCOIL LostLifeBit := LifeWatchdogTimer.Q
+  RCOIL LostLifeBit := Inputs.FaultReset
+
+NETWORK 5 "Program/recipe encode to outbound bits (REQ-009)"
+  COMMENT "Program selection drives the OUTBOUND program bits (OQ-3 disposition); mutually exclusive by construction."
+  COIL OutImage.Program1 := Inputs.ProgramSelection = 1
+  COIL OutImage.Program2 := Inputs.ProgramSelection = 2
+  COIL OutImage.Program3 := Inputs.ProgramSelection = 3
+  COIL OutImage.Program4 := Inputs.ProgramSelection = 4
+  COIL OutImage.Program5 := Inputs.ProgramSelection = 5
+  COIL OutImage.Program6 := Inputs.ProgramSelection = 6
+
+NETWORK 6 "Time setpoints seconds to millisecond presets (REQ-016)"
+  COMMENT "Three independent conversions (OQ-4): each setpoint x1000 through its own Temp real, then Real->DInt. MULs and CONVERTs render kind-grouped and pair by list index (one pair per preset: Shutdown, UPS, FT)."
+  MUL(EN := TRUE, IN1 := Inputs.ShutdownTime, IN2 := 1000.0) => TempShutdownMS
+  MUL(EN := TRUE, IN1 := Inputs.EnableUPSTime, IN2 := 1000.0) => TempUPSMS
+  MUL(EN := TRUE, IN1 := Inputs.FTTime, IN2 := 1000.0) => TempFTMS
+  CONVERT(EN := ENO, IN := TempShutdownMS) => ShutdownTimeMS
+  CONVERT(EN := ENO, IN := TempUPSMS) => EnableUPSTimeMS
+  CONVERT(EN := ENO, IN := TempFTMS) => FTTimeMS
+
+NETWORK 7 "Run-source selection (REQ-010)"
+  COMMENT "In Hand+intervention the request follows the hand start; otherwise it follows the auto signal."
+  COIL RunRequest := Inputs.InHand AND Inputs.HandIntervention AND Inputs.HandStartSignal OR (NOT Inputs.InHand OR NOT Inputs.HandIntervention) AND Inputs.AutoStartSignal
+
+NETWORK 8 "Try-run permissives (REQ-011)"
+  COIL Outputs.TryRun := RunRequest AND NOT Inputs.InhibitMotor AND NOT Outputs.FTR AND NOT Outputs.FaultActive
+
+NETWORK 9 "Hand-selector edge detection (REQ-019)"
+  COMMENT "Constructed rising/falling edges on InHand (C-404); previous-scan bit updated last so the edges read the prior value."
+  COIL HandPosEdge := Inputs.InHand AND NOT InHandPrev
+  COIL HandNegEdge := NOT Inputs.InHand AND InHandPrev
+  COIL InHandPrev := Inputs.InHand
+
+NETWORK 10 "Prestart hold and timeout (REQ-019)"
+  COMMENT "PreStartMemory latches on PreStartDone and holds until the drive is commanded running, a 30 s in-Hand prestart timeout elapses, or a Hand-selector edge occurs (C-406 TON, C-403 latch, +OB100)."
+  TON(PreStartTimeoutTimer, IN := Inputs.InHand AND NOT Inputs.PreStartDone, PT := T#30S)
+  COIL PreStartMemory := Inputs.PreStartDone OR PreStartMemory AND NOT OutImage.StartAuto AND NOT PreStartTimeoutTimer.Q AND NOT HandPosEdge AND NOT HandNegEdge
+
+NETWORK 11 "Recent-start acknowledgement hold (REQ-018)"
+  COMMENT "Holds the HMI-set RecentStart while the drive is not yet commanded running, prestart is complete, and no fault is active; clears otherwise."
+  COIL Inputs.RecentStart := Inputs.RecentStart AND NOT OutImage.StartAuto AND PreStartMemory AND NOT Outputs.FaultActive
+
+NETWORK 12 "Run command seal-in (REQ-012)"
+  COMMENT "StartAuto engages on TryRun with prestart complete and a recent-start ack, seals on its own contact while TryRun holds, and drops on Stop or Shutdown (C-403 seal, C-128)."
+  COIL OutImage.StartAuto := (Outputs.TryRun AND PreStartMemory AND Inputs.RecentStart OR OutImage.StartAuto AND Outputs.TryRun) AND NOT Outputs.Stop AND NOT Inputs.Shutdown
+
+NETWORK 13 "Run/Stop command mirror (REQ-004, REQ-013)"
+  COMMENT "Run mirrors the run command; StopAuto is its exact inverse (mutually exclusive each scan)."
+  COIL Outputs.Run := OutImage.StartAuto
+  COIL OutImage.StopAuto := NOT OutImage.StartAuto
+
+NETWORK 14 "Hand-intervention reset (REQ-014, REQ-015)"
+  COMMENT "Hand intervention is cleared whenever Hand mode is not selected (C-403 reset, +OB100)."
+  RCOIL Inputs.HandIntervention := NOT Inputs.InHand
+
+NETWORK 15 "Hand-start condition reset (REQ-014, REQ-016b)"
+  COMMENT "Hand start is cleared when out of Hand, no intervention, a fault is active, or the motor is inhibited."
+  RCOIL Inputs.HandStartSignal := NOT Inputs.InHand OR NOT Inputs.HandIntervention OR Outputs.FaultActive OR Inputs.InhibitMotor
+
+NETWORK 16 "Hand-start debounce reset (REQ-017)"
+  COMMENT "After an accepted hand start, a fixed 100 ms debounce clears the momentary hand-start bit so one press yields one start (C-406 TON)."
+  TON(HandStartDebounceTimer, IN := OutImage.StartAuto AND Inputs.InHand AND Inputs.HandStartSignal, PT := T#100MS)
+  RCOIL Inputs.HandStartSignal := HandStartDebounceTimer.Q
+
+NETWORK 17 "Shutdown request sets latched stop (REQ-025)"
+  COMMENT "Rising edge of the shutdown request SETs Outputs.Stop; previous-scan bit updated last (C-404, C-403 S, C-103 pair with N18)."
+  SCOIL Outputs.Stop := Inputs.Shutdown AND NOT ShutdownPrev
+  COIL ShutdownPrev := Inputs.Shutdown
+
+NETWORK 18 "Stop reset on shutdown complete (REQ-026)"
+  COMMENT "Latched stop clears when shutdown is complete and the request has been released (C-403 R, C-103 pair with N17)."
+  RCOIL Outputs.Stop := Outputs.ShutdownComplete AND NOT Inputs.Shutdown
+
+NETWORK 19 "Shutdown complete and timer (REQ-027)"
+  COMMENT "Shutdown timer runs while Stop is asserted; complete on timeout with drive no longer confirmed running, or already-complete-and-not-commanded, or a Hand stop condition, or a fault (C-406 TON)."
+  TON(ShutdownTimer, IN := Outputs.Stop, PT := ShutdownTimeMS)
+  COIL Outputs.ShutdownComplete := ShutdownTimer.Q AND NOT Outputs.ShredderRunning OR Outputs.ShutdownComplete AND NOT OutImage.StartAuto OR Inputs.InHand AND Inputs.HandIntervention AND NOT Inputs.HandStartSignal OR Outputs.FaultActive
+
+NETWORK 20 "Fail-to-run detection (REQ-028)"
+  COMMENT "If commanded running without running confirmed within the fail time, FTR latches until FaultReset (C-406 TON, C-123, +OB100 excluded)."
+  TON(FailToRunTimer, IN := OutImage.StartAuto AND NOT Outputs.ShredderRunning, PT := FTTimeMS)
+  SCOIL Outputs.FTR := FailToRunTimer.Q
+  RCOIL Outputs.FTR := Inputs.FaultReset
+
+NETWORK 21 "Fail-to-stop detection (REQ-029)"
+  COMMENT "If not commanded running but running confirmation persists beyond the fail time, FTS latches until FaultReset (C-406 TON, C-123, +OB100 excluded)."
+  TON(FailToStopTimer, IN := NOT OutImage.StartAuto AND Outputs.ShredderRunning, PT := FTTimeMS)
+  SCOIL Outputs.FTS := FailToStopTimer.Q
+  RCOIL Outputs.FTS := Inputs.FaultReset
+
+NETWORK 22 "Fault summary (REQ-031)"
+  COMMENT "Aggregate latch of FTR, FTS, the loss-of-life watchdog, and the external plant fault-inject (wired in as ExternalFault, C-127); cleared only by FaultReset."
+  SCOIL Outputs.FaultActive := Outputs.FTR OR Outputs.FTS OR LostLifeBit OR ExternalFault
+  RCOIL Outputs.FaultActive := Inputs.FaultReset
+
+NETWORK 23 "Upstream enable delayed-on (REQ-030)"
+  COMMENT "Once commanded running, confirmed running, and releasing feed have held for the upstream-enable delay, UPSEnable follows while running remains confirmed (C-406 TON)."
+  TON(UPSEnableTimer, IN := OutImage.StartAuto AND Outputs.ShredderRunning AND InImage.ReleaseFeeding, PT := EnableUPSTimeMS)
+  COIL Outputs.UPSEnable := UPSEnableTimer.Q AND Outputs.ShredderRunning
+
+NETWORK 24 "Running-hours totaliser (REQ-032)"
+  COMMENT "Self-resetting 1 h TON (C-406, not TONR) pulses once per running-hour while commanded-and-confirmed running; each pulse increments HrsRun (rollover handled in N25)."
+  TON(HoursTimer, IN := OutImage.StartAuto AND Outputs.ShredderRunning AND NOT HoursTimer.Q, PT := T#1H)
+  ADD(EN := HoursTimer.Q AND Outputs.HrsRun < 4294967295, IN1 := Outputs.HrsRun, IN2 := 1) => Outputs.HrsRun
+
+NETWORK 25 "Running-hours rollover reset (REQ-033)"
+  COMMENT "At the UDInt maximum the completed-hour pulse resets HrsRun to 0 instead of incrementing (runs after N24, so the value is the pre-increment one)."
+  MOVE(EN := HoursTimer.Q AND Outputs.HrsRun >= 4294967295, IN := 0) => Outputs.HrsRun
+
+NETWORK 26 "Telemetry priority status code (REQ-034)"
+  COMMENT "Priority-encoded, highest applicable wins by later-MOVE override: 0 idle, 1 commanded, 2 confirmed, 3 upstream-enabled or confirmed-in-Hand, -1 faulted."
+  MOVE(EN := TRUE, IN := 0) => Outputs.Telemetry
+  MOVE(EN := OutImage.StartAuto, IN := 1) => Outputs.Telemetry
+  MOVE(EN := OutImage.StartAuto AND Outputs.ShredderRunning, IN := 2) => Outputs.Telemetry
+  MOVE(EN := Outputs.ShredderRunning AND Outputs.UPSEnable OR Outputs.ShredderRunning AND Inputs.InHand, IN := 3) => Outputs.Telemetry
+  MOVE(EN := Outputs.FaultActive, IN := -1) => Outputs.Telemetry
+
+NETWORK 27 "Alarm word pack (REQ-035)"
+  COMMENT "Per-instance 13-bit alarm surface (C-503). bit0 FTR, bit1 FTS, bit2 not-ready, bit3 local, bit4 maintenance, bit5 bypass, bit6 radio, bit7 not-auto, bit8 service, bit9 selector-local, bit10 selector-not-remote, bit11 commanded-not-feeding, bit12 loss-of-life."
+  COIL Outputs.Alarm.%X0 := Outputs.FTR
+  COIL Outputs.Alarm.%X1 := Outputs.FTS
+  COIL Outputs.Alarm.%X2 := NOT InImage.Ready
+  COIL Outputs.Alarm.%X3 := InImage.LocalMode
+  COIL Outputs.Alarm.%X4 := InImage.MaintenanceOn
+  COIL Outputs.Alarm.%X5 := InImage.BypassActive
+  COIL Outputs.Alarm.%X6 := InImage.RadioModeOn
+  COIL Outputs.Alarm.%X7 := NOT InImage.AutoModeOn
+  COIL Outputs.Alarm.%X8 := InImage.ServiceModeOn
+  COIL Outputs.Alarm.%X9 := InImage.Selector1Local
+  COIL Outputs.Alarm.%X10 := NOT InImage.Selector1Remote
+  COIL Outputs.Alarm.%X11 := OutImage.StartAuto AND NOT InImage.ReleaseFeeding
+  COIL Outputs.Alarm.%X12 := LostLifeBit

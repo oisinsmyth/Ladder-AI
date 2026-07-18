@@ -1,0 +1,32 @@
+DB DB_ShredderInputs
+  ROOTID 0
+  NUMBER 910
+  COMMENT "Decoded inbound discrete image buffer (C-304). Written by FC_ShredderInputMap, passed to FB_ShredderControl.InImage."
+  MEMBERS
+    Img : "UDT_ShredderInImage"
+      Ready : Bool
+      RotorOn : Bool
+      RotorStandby : Bool
+      ReleaseFeeding : Bool
+      ProgramP1 : Bool
+      ProgramP2 : Bool
+      ProgramP3 : Bool
+      ProgramP4 : Bool
+      ProgramP5 : Bool
+      ProgramP6 : Bool
+      FlashBit : Bool
+      LifeBitMirror : Bool
+      LocalMode : Bool
+      MaintenanceOn : Bool
+      BypassActive : Bool
+      CuttingUnitRemote : Bool
+      TouchPanelShredder : Bool
+      TouchPanelMainCabnet : Bool
+      RadioModeOn : Bool
+      Drive1Ready : Bool
+      Drive2Ready : Bool
+      OilCoolerRunning : Bool
+      AutoModeOn : Bool
+      ServiceModeOn : Bool
+      Selector1Local : Bool
+      Selector1Remote : Bool

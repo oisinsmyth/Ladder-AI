@@ -1,0 +1,53 @@
+BLOCK FC FC_ShredderInputMap
+ROOTID 0
+NUMBER 913
+LANGUAGE LAD
+TITLE "Shredder input map"
+COMMENT "C-304 input IO boundary: the only block that reads the shredder's physical inputs. Copies raw %I500-503 discrete points and %IW508/528/532/650 status words into the decoded inbound buffers. Un-muxed straight copy per REQ-001/002."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  INOUT
+  TEMP
+  CONSTANT
+
+NETWORK 1 "Byte 500 discrete inputs into image (REQ-001)"
+  COIL DB_ShredderInputs.Img.Ready := Tag_1
+  COIL DB_ShredderInputs.Img.RotorOn := Tag_2
+  COIL DB_ShredderInputs.Img.RotorStandby := Tag_3
+  COIL DB_ShredderInputs.Img.ReleaseFeeding := Tag_4
+  COIL DB_ShredderInputs.Img.ProgramP1 := Tag_5
+  COIL DB_ShredderInputs.Img.ProgramP2 := Tag_6
+
+NETWORK 2 "Byte 501 discrete inputs into image (REQ-001)"
+  COIL DB_ShredderInputs.Img.ProgramP3 := Tag_7
+  COIL DB_ShredderInputs.Img.ProgramP4 := Tag_8
+  COIL DB_ShredderInputs.Img.ProgramP5 := Tag_9
+  COIL DB_ShredderInputs.Img.ProgramP6 := Tag_10
+  COIL DB_ShredderInputs.Img.FlashBit := Tag_11
+  COIL DB_ShredderInputs.Img.LifeBitMirror := Tag_12
+  COIL DB_ShredderInputs.Img.LocalMode := Tag_13
+  COIL DB_ShredderInputs.Img.MaintenanceOn := Tag_14
+
+NETWORK 3 "Byte 502 discrete inputs into image (REQ-001)"
+  COIL DB_ShredderInputs.Img.BypassActive := Tag_15
+  COIL DB_ShredderInputs.Img.CuttingUnitRemote := Tag_16
+  COIL DB_ShredderInputs.Img.TouchPanelShredder := Tag_17
+  COIL DB_ShredderInputs.Img.TouchPanelMainCabnet := Tag_18
+  COIL DB_ShredderInputs.Img.RadioModeOn := Tag_19
+  COIL DB_ShredderInputs.Img.Drive1Ready := Tag_20
+  COIL DB_ShredderInputs.Img.Drive2Ready := Tag_21
+
+NETWORK 4 "Byte 503 discrete inputs into image (REQ-001)"
+  COIL DB_ShredderInputs.Img.OilCoolerRunning := Tag_22
+  COIL DB_ShredderInputs.Img.AutoModeOn := Tag_23
+  COIL DB_ShredderInputs.Img.ServiceModeOn := Tag_24
+  COIL DB_ShredderInputs.Img.Selector1Local := Tag_25
+  COIL DB_ShredderInputs.Img.Selector1Remote := Tag_26
+
+NETWORK 5 "Status words into analog buffer (REQ-002, REQ-006 buffer)"
+  MOVE(EN := TRUE, IN := Tag_41) => DB_ShredderInputsAnalog.Ana.SpeedRaw
+  MOVE(EN := TRUE, IN := Tag_42) => DB_ShredderInputsAnalog.Ana.Amps1Raw
+  MOVE(EN := TRUE, IN := Tag_43) => DB_ShredderInputsAnalog.Ana.Amps2Raw
+  MOVE(EN := TRUE, IN := Tag_44) => DB_ShredderInputsAnalog.Ana.EStopFBRaw

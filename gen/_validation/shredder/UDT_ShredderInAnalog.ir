@@ -1,0 +1,8 @@
+TYPE UDT_ShredderInAnalog
+  ROOTID 0
+  COMMENT "Inbound status/analog words from the shredder over the link (raw, pre-conversion)."
+  MEMBERS
+    SpeedRaw : Word COMMENT "IW508 - raw rotor speed word"
+    Amps1Raw : Word COMMENT "IW528 - raw drive-1 current word"
+    Amps2Raw : Word COMMENT "IW532 - raw drive-2 current word"
+    EStopFBRaw : Word COMMENT "IW650 - raw E-stop feedback word (republished by orchestrator)"
