@@ -68,14 +68,25 @@ history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
 
 ## Outstanding works
 
-**S6/S7 — the live strategic thread (owner: "S7 is the rush"):**
+**Priority steer (2026-07-18):** the earlier "S7 is the rush" framing is retired. **S5** is bumped up
+for a proper look; **library-filling** is acknowledged as heavy work that may get a dedicated
+harvest-assist skill (**FI-21**, `docs/16`) — but that's tomorrow's work, not now. Order below reflects
+that steer.
+
+**S5 — Structured data extraction (bumped up 2026-07-18):** ACTIVE, no work started — owner wants a
+proper look / detailed plan here (entry criteria long met, S1 done; was parked below S6/S7, no longer).
+
+**S6/S7 — generation & modification pipeline:**
 - **S6 exit criterion not closed** — ten approved requests; the counting rule awaits the owner
   (owner-questions D-4, discussed in `agent-tasks/discussion-d4-stage-gates-review.md`).
 - **S7-vs-S6 sequencing unsettled** — the internal build/exercise order of the three coding skills and
   their relationship to closing S6. Owner to walk an agent through `agent-tasks/discussion-a4-s7-ordering.md`;
   related gate-wording in `discussion-d4-stage-gates-review.md`.
 - **The three coding skills are unbuilt** — `gen-block-new` / `gen-block-modify-purpose` /
-  `gen-block-modify-fix` (`docs/15` build-order step 6). Library stays thin by design — fills via S8 harvest.
+  `gen-block-modify-fix` (`docs/15` build-order step 6).
+- **Library-filling is real, heavy work** — no longer treated as purely passive S8 harvest. A
+  harvest-assist skill is proposed (**FI-21**) to lower the per-pattern cost; see it for the design
+  constraints (candidate-prep, not auto-admission).
 
 **Deferred — decided in principle, owner's call on timing (`docs/notes/deferred-items.md`):**
 - D-2 settings rework wave; D-6 converter can't add a statement to an already-exported network
@@ -92,8 +103,6 @@ history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
   `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`. Capture
   `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's author/revision
   mechanically checkable — still unbuilt).
-
-**S5 — Structured data extraction:** ACTIVE, no work started, deliberately deprioritized below S6/S7.
 
 **S1 carryover — needs owner:** `Modbus_Master`/`Modbus_Comm_Load` live-compile blocked by a confirmed
 general Openness limitation — source-side `JOB9002` fix vs. accept as a documented permanent limitation
