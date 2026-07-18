@@ -102,6 +102,10 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
 - `F-3(b)` = C-003's `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`. Capture
   `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's author/revision
   mechanically checkable — still unbuilt). (`F-1` reporter count bug — fixed 2026-07-18, CHANGELOG.)
+- **`converter review` now reviews sidecar-less blocks** — found + FIXED 2026-07-18 (CHANGELOG):
+  review used to error "Expected a 'SIDECAR' section" on a `.ir` with no `SIDECAR` (e.g. `OB100.ir`),
+  leaving that block invisible to convention review. `ReviewRunner.ReviewFile` now branches on the
+  consolidated `IrParser.HasSidecarSection` like preflight does; the whole corpus reviews.
 
 **S1 carryover — needs owner:** `Modbus_Master`/`Modbus_Comm_Load` live-compile blocked by a confirmed
 general Openness limitation — source-side `JOB9002` fix vs. accept as a documented permanent limitation

@@ -5,6 +5,13 @@ namespace Converter.Ir;
 
 public static partial class IrParser
 {
+    // True when the IR text carries a machine-owned SIDECAR section (real round-trip data). A block
+    // without one is sidecar-less (hand-authored, or synthesizable) and must be parsed via
+    // ParseBlockWithoutSidecar. Single source for review and preflight/ProjectIndex, which both
+    // branch on it.
+    public static bool HasSidecarSection(string text) =>
+        text.Replace("\r\n", "\n").Split('\n').Any(line => line == "SIDECAR");
+
     public static (IrBlock Block, IReadOnlyList<NetworkSidecar> Sidecars) ParseBlock(string text)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');

@@ -2,6 +2,18 @@
 
 ## 2026-07-18
 
+**`converter review` now reviews sidecar-less blocks (found while verifying C-408)**
+
+- `converter review` used to fail a `.ir` with no `SIDECAR` section ("Expected a 'SIDECAR' section")
+  and, with `--ignore-errors`, mark it "could not be reviewed" — so a committed sidecar-less block
+  (`OB100.ir`, hand-authored without one) was silently invisible to convention review. Fixed:
+  `ReviewRunner.ReviewFile` now branches on sidecar presence and parses via `ParseBlockWithoutSidecar`
+  when absent — the same branch `preflight`/`ProjectIndex` already used. The whole
+  `ir/test-project001` corpus now reviews (23 files, 0 unreviewable; OB100 clean).
+- The `HasSidecarSection` helper was consolidated into `IrParser` (single source; `ProjectIndex`
+  delegates to it) so review and preflight can't diverge — Review can't depend on Preflight (that
+  would cycle, since preflight folds in review findings). 1 new test; suite 503/503.
+
 **C-408 mechanized in `converter review` — first of FI-09's rule set**
 
 - `converter review` now checks C-408 (a timer's `ET` compared to produce a boolean trigger) as a

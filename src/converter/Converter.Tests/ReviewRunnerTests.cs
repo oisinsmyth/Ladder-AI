@@ -184,4 +184,32 @@ public class ReviewRunnerTests : IDisposable
             Assert.Equal(printed, status.FindingCount);
         }
     }
+
+    // A committed block .ir can be sidecar-less (e.g. a hand-authored OB); review its logic anyway,
+    // the same branch preflight uses. Before this, review threw "Expected a 'SIDECAR' section" and
+    // the block was silently unreviewable.
+    [Fact]
+    public void ReviewFiles_SidecarLessBlock_ReviewsInsteadOfErroring()
+    {
+        var block = new IrBlock("0", "OB", "OB_Startup", 100, "LAD", "Startup reset.", new[]
+        {
+            new IrNetwork(1, "Reset a state bit", new[] { new CoilAssignment("SomeState", new Expr.TagRef("Trigger")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        var full = IrSerializer.SerializeBlock(block, new[] { sidecar });
+
+        var cut = full.IndexOf("\nSIDECAR", StringComparison.Ordinal);
+        Assert.True(cut > 0, "fixture setup: serialized block should contain a SIDECAR section to strip");
+        var sidecarLess = full[..cut] + "\n";
+        Assert.False(IrParser.HasSidecarSection(sidecarLess)); // the fixture really is sidecar-less
+
+        var path = WriteTempIrFile(sidecarLess);
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+
+        var file = Assert.Single(report.Files);
+        Assert.Null(file.FileError);                 // was non-null ("COULD NOT REVIEW") before the fix
+        Assert.Equal("OB_Startup", file.BlockName);
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-408" && s.Status == RuleCheckStatus.Checked); // rules ran
+    }
 }

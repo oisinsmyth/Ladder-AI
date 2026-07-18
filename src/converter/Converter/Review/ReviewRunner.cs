@@ -52,7 +52,12 @@ public static class ReviewRunner
             return new FileReviewResult(path, null, Array.Empty<Finding>(), statuses, null);
         }
 
-        var (block, _) = IrParser.ParseBlock(text);
+        // A block .ir may be sidecar-less (e.g. a hand-authored OB committed without one) - review
+        // its logic anyway, the same branch preflight/ProjectIndex use. The sidecar carries
+        // wire/UID layout, not the logic the rules inspect, so its absence doesn't affect findings.
+        var block = IrParser.HasSidecarSection(text)
+            ? IrParser.ParseBlock(text).Block
+            : IrParser.ParseBlockWithoutSidecar(text);
         return ReviewBlock(path, block);
     }
 

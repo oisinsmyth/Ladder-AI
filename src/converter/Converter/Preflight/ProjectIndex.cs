@@ -81,6 +81,5 @@ public sealed class ProjectIndex
         }
     }
 
-    internal static bool HasSidecarSection(string text) =>
-        text.Replace("\r\n", "\n").Split('\n').Any(line => line == "SIDECAR");
+    internal static bool HasSidecarSection(string text) => IrParser.HasSidecarSection(text);
 }
