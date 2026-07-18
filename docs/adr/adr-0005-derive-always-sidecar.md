@@ -86,11 +86,29 @@ legibility first).
 3. Make `to-xml` derive by default for blocks fully within the synthesizable subset; keep the
    stored-sidecar path for the rest and as an explicit opt-in. — **DONE 2026-07-18** (`to-xml`
    auto-detects: derives when no `SIDECAR`, uses it when present; `--synthesize` forces the derive path).
-4. Stop emitting stored `SIDECAR` sections from `to-ir` for synthesizable blocks; keep behind a
-   `--with-sidecar` flag; update `ir/SPEC.md` §Sidecar. — **DONE 2026-07-18** (`to-ir` runs
-   `IsSynthesizable` — actually synthesises — and omits the sidecar only when that succeeds).
+4. Omit stored `SIDECAR` sections for synthesizable blocks; update `ir/SPEC.md` §Sidecar. —
+   **CORRECTED 2026-07-19.** First shipped 2026-07-18 as `to-ir` auto-omitting whenever
+   `IsSynthesizable` (synthesis succeeds). **That was unsafe** — a real block can *synthesise-but-diverge*
+   (found: the `test-project001` FBs + `patterns/motor-dol/MotorStarter`, on gaps the reference corpus
+   never exercised — array-index locals, Gap D). "Synthesis succeeds" is necessary but **not** proof the
+   derived graph matches, so auto-omitting on it would silently corrupt such a block. Corrected: `to-ir`
+   **keeps the sidecar by default**; `--no-sidecar` is the explicit opt-in (guarded — errors if the block
+   can't even synthesise — but it does not itself prove equivalence, the caller's responsibility). A
+   committed block is stored readable-only only after a **verified migration** proves it equivalent (the
+   parity/round-trip harness). See the `CriticalCaveat` below.
 5. Retire D-6 / the scoped merge from the roadmap (`deferred-items.md`). — **DONE 2026-07-18** (D-6
    marked resolved by derive-always; the scoped merge is no longer needed).
+
+**CriticalCaveat — "synthesis succeeds" ≠ "safe to omit".** The safety invariant is: never store a block
+readable-only unless its derived form is *proven semantically equivalent* to its export. The reference
+corpus (14 blocks) is **not representative** — real blocks synthesise-but-diverge. So (a) the committed
+migration strips sidecars only from blocks the round-trip harness proves equivalent (14 did; 4 diverged
+and kept theirs), guarded permanently by `CommittedBlocksRoundTripTests`; and (b) `to-ir` cannot yet omit
+safely-and-automatically because the equivalence check (the golden `Normalizer`) lives in the test project,
+not the converter. **Follow-on:** port a semantic-equivalence check into the converter so `to-ir` can
+verify `synth ≡ source` and then omit automatically — the only way the policy becomes both safe *and*
+one-step for arbitrary real exports. The 4 divergent blocks are tracked as synthesis gaps in
+`converter-synthesis-gaps.md`.
 
 **Follow-on (not blocking):** the S7 modification-choreography (`docs/notes/modification-choreography.md`)
 still documents the D-6 whole-file strip-and-synthesize workaround; with derive-always, editing a

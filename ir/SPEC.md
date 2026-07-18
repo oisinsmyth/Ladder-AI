@@ -1038,14 +1038,16 @@ mechanism handling all three since none has ever been seen).
 
 **Derived by default, not stored (ADR-0005, 2026-07-18).** The sidecar is machine-owned round-trip
 bookkeeping (UIds, wire identity, some type attributes) — never hand-edited, and per its own contract
-"never needed to *understand* the logic." Because `SidecarSynthesizer` now **derives** it from the
-readable form for every construct the reference corpus exercises (proven: parity 14/14 + live TIA
-compile 10/10), it is no longer *stored* for a fully-synthesizable block: `to-ir` omits the `SIDECAR`
-section, and `to-xml` re-derives it on demand. This removes the whole staleness/D-6 problem class —
-editing a network can't leave a stale sidecar behind because there is none to go stale. A block that
-synthesis can't yet reproduce (an unsynthesizable construct — `Limit`/`Wait`/`FillBlockI`/`Modbus*` — or
-a type it can't resolve) still carries a stored `SIDECAR`, and `to-ir --with-sidecar` forces keeping one
-(debug/fallback). When present, its content and contract are unchanged, as below.
+"never needed to *understand* the logic." Because `SidecarSynthesizer` **derives** it from the
+readable form (proven for the reference corpus: parity 14/14 + live TIA compile 10/10), a block whose
+derived form is proven equivalent to its export is stored **readable-only** — no `SIDECAR` — and `to-xml`
+re-derives it on demand. This removes the whole staleness/D-6 problem class: editing a network can't leave
+a stale sidecar behind because there is none. **But omission is gated on *proven equivalence*, not merely
+"synthesis succeeds"** — a real block can synthesise-but-diverge (array-index locals, Gap D; found in the
+test-project001 FBs + MotorStarter). So `to-ir` **keeps the sidecar by default**; `--no-sidecar` omits it
+only for a block already verified derivable (it errors if the block can't even synthesise). A block using
+an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or that diverges keeps its stored
+`SIDECAR`. When present, its content and contract are unchanged, as below.
 
 Machine-owned, appended once per file, never hand-edited by a human or the AI. Purpose: let the
 converter regenerate the exact source UIds and any other volatile-but-required-for-import

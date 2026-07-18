@@ -48,7 +48,7 @@ internal static class Program
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
             Console.Error.WriteLine("       converter to-xml   # derives the sidecar when the input has none (ADR-0005); uses a stored SIDECAR if present. --project supplies callee/tag types for derivation");
-            Console.Error.WriteLine("       converter to-ir    # omits the SIDECAR for a fully-synthesizable block (derive-always); --with-sidecar keeps it (debug/unsynthesizable)");
+            Console.Error.WriteLine("       converter to-ir    # keeps the stored SIDECAR by default (safe); --no-sidecar omits it for a block already verified derivable (errors if unsynthesizable)");
             Console.Error.WriteLine("       converter to-xml <file> --synthesize   # force the derive path (errors if a SIDECAR is present)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
@@ -62,7 +62,7 @@ internal static class Program
         var mode = args[0];
         var rest = args[1..];
         var synthesize = rest.Contains("--synthesize");
-        var withSidecar = rest.Contains("--with-sidecar");
+        var noSidecar = rest.Contains("--no-sidecar");
 
         // --project <ir-dir> (optional, --synthesize only): supplies callee interfaces for wired-CALL
         // synthesis beyond the blocks in the batch itself.
@@ -70,7 +70,7 @@ internal static class Program
         var positional = new List<string>();
         for (var i = 0; i < rest.Length; i++)
         {
-            if (rest[i] == "--synthesize" || rest[i] == "--with-sidecar")
+            if (rest[i] == "--synthesize" || rest[i] == "--no-sidecar")
             {
                 continue;
             }
@@ -98,9 +98,9 @@ internal static class Program
             return 1;
         }
 
-        if (withSidecar && mode != "to-ir")
+        if (noSidecar && mode != "to-ir")
         {
-            Console.Error.WriteLine("--with-sidecar is only valid with 'to-ir' — it keeps the stored SIDECAR that to-ir would otherwise omit for a synthesizable block.");
+            Console.Error.WriteLine("--no-sidecar is only valid with 'to-ir' — it omits the stored SIDECAR for a block already verified derivable.");
             return 1;
         }
 
@@ -117,7 +117,7 @@ internal static class Program
             {
                 if (mode == "to-ir")
                 {
-                    ConvertToIr(file, withSidecar, callees, tagTypes);
+                    ConvertToIr(file, noSidecar, callees, tagTypes);
                 }
                 else
                 {
@@ -504,7 +504,7 @@ internal static class Program
     }
 
     private static void ConvertToIr(
-        string sourcePath, bool forceWithSidecar, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
+        string sourcePath, bool noSidecar, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
     {
         var document = XDocument.Load(sourcePath);
 
@@ -559,25 +559,43 @@ internal static class Program
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers, block.Title,
             block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType);
 
-        // Derive-always (ADR-0005): omit the stored SIDECAR for a fully-synthesizable block — `to-xml`
-        // re-derives it on demand, so a later network edit can never leave a stale sidecar (no D-6). A
-        // block synthesis can't reproduce (an unsynthesizable construct, or a type it can't resolve from
-        // the batch/--project) keeps its stored sidecar, as does `--with-sidecar` (debug/fallback).
-        var irText = (!forceWithSidecar && IsSynthesizable(irBlock, callees, tagTypes))
-            ? IrSerializer.SerializeBlockReadable(irBlock)
-            : IrSerializer.SerializeBlock(irBlock, sidecars);
+        // Derive-always (ADR-0005), corrected 2026-07-19: to-ir KEEPS the stored SIDECAR by default. A
+        // real export can synthesise-but-diverge (e.g. array-index locals, Gap D — found in the
+        // test-project001 FBs and MotorStarter), so "synthesis succeeds" is NOT proof the derived form
+        // matches, and auto-omitting on that alone would silently corrupt such a block. Omitting is safe
+        // only once the block is proven equivalent (the verified migration / parity harness). `--no-sidecar`
+        // is the explicit opt-in for a block the caller has already verified derivable (or genuinely-new
+        // synthesizable content); it still errors if the block can't even synthesise, but does not itself
+        // check equivalence — that's the caller's responsibility. (A future in-converter equivalence check
+        // would let to-ir omit safely and automatically — see ADR-0005.)
+        string irText;
+        if (noSidecar)
+        {
+            if (!IsSynthesizable(irBlock, callees, tagTypes))
+            {
+                throw new UnsupportedSynthesisConstructException(
+                    $"{irBlock.Name}: --no-sidecar requested but the block is not synthesizable — cannot omit the sidecar (it would not round-trip).");
+            }
+
+            irText = IrSerializer.SerializeBlockReadable(irBlock);
+        }
+        else
+        {
+            irText = IrSerializer.SerializeBlock(irBlock, sidecars);
+        }
 
         var outPath = Path.ChangeExtension(sourcePath, ".ir");
         File.WriteAllText(outPath, irText);
         Console.WriteLine($"{sourcePath} -> {outPath}");
     }
 
-    // Whether a block's sidecar can be re-derived from its readable form — the derive-always test
-    // (ADR-0005) for whether `to-ir` may safely omit the stored sidecar. The honest check is to
-    // actually run synthesis: it succeeds only when every construct is supported AND every operand type
-    // resolves (from the block's own interface plus the batch/--project). Any UnsupportedSynthesis*
-    // failure means "keep the stored sidecar" — a conservative, safe default. Other exceptions are real
-    // bugs and propagate.
+    // Whether a block's sidecar can even be *synthesised* from its readable form — the guard on
+    // `to-ir --no-sidecar` (ADR-0005). Necessary but NOT sufficient for safe omission: synthesis
+    // succeeding means every construct is supported and every operand type resolves, but it does NOT
+    // prove the derived graph matches the source (a real block can synthesise-but-diverge — Gap D and
+    // friends). Equivalence is the caller's responsibility (the verified migration / parity harness),
+    // until an in-converter equivalence check lets to-ir omit automatically and safely. Other exceptions
+    // are real bugs and propagate.
     private static bool IsSynthesizable(IrBlock block, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
     {
         try

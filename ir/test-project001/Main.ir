@@ -22,33 +22,3 @@ NETWORK 3 "Alarms"
 
 NETWORK 4 "Output Mapping"
   CALL FC_Outputs(EN := TRUE)
-
-SIDECAR
-NETWORK 1
-  compileunit = 3
-  call 0
-    calluid = 21
-    blockname = FC_Inputs
-    blocktype = FC
-    rail = 22
-NETWORK 2
-  compileunit = 8
-  call 0
-    calluid = 21
-    blockname = FC_ControlMain
-    blocktype = FC
-    rail = 22
-NETWORK 3
-  compileunit = D
-  call 0
-    calluid = 21
-    blockname = FC_AlarmsMain
-    blocktype = FC
-    rail = 22
-NETWORK 4
-  compileunit = 12
-  call 0
-    calluid = 21
-    blockname = FC_Outputs
-    blocktype = FC
-    rail = 22

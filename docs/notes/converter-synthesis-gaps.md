@@ -10,6 +10,27 @@ Most gaps surfaced 2026-07-18: some across the gen-block-* validations (the wire
 done + TIA-proven, commit `e5bfeab`), the rest by the Stage-0 parity harness run (below). None
 hand-patched (hard rule 7). `src/converter/` work — normal software rules, not `lad-coder`.
 
+## OPEN — real-block synthesis divergence (2026-07-19): the reference corpus is not representative
+
+The derive-always migration (ADR-0005) audited **every** committed block against its export, not just the
+14-block reference corpus — and found **4 real blocks synthesise-but-diverge**: `MotorStarter`
+(`patterns/motor-dol`) and the `test-project001` FBs `FB_MotorFwdRevSystem`, `FB_PusherControl`,
+`FB_ShredderSequencer`. Each **synthesises without error** yet the derived SimaticML is **not** equivalent
+to the real export (large diffs — MotorStarter alone is ~1188 lines; heavy on `RisingEdgeFlags` /
+`<Access Scope>` mismatches → **Gap D** array-index locals, plus likely others not yet isolated).
+
+**Two consequences:**
+1. **These 4 blocks correctly keep their stored sidecars** — they can't be safely derived. Guarded by
+   `CommittedBlocksRoundTripTests` (a committed *readable-only* block must round-trip equivalent) and by
+   `to-ir` keeping the sidecar by default (`IsSynthesizable` alone is not enough — "synthesis succeeds" is
+   necessary but not sufficient; ADR-0005 CriticalCaveat).
+2. **The 14-block reference corpus under-samples real logic.** Complete-corpus-green ≠ complete-synthesis.
+   Closing these needs harder fixtures (these very blocks) added to the parity harness, then **Gap D** (and
+   whatever the diffs isolate next) fixed until each goes green. Only then can their sidecars be dropped.
+
+This is now the top synthesis priority — it's the gap between "the corpus derives" and "real blocks
+derive," and the guardrail that keeps a divergent block from ever being stored sidecar-less.
+
 ## Stage-0 harness baseline (2026-07-18) — 9/14 corpus blocks reach parity
 
 The offline oracle (export → strip sidecar → `to-xml --synthesize` → `Normalizer` vs the real export)
