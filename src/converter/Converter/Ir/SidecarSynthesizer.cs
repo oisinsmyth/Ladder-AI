@@ -198,6 +198,46 @@ public static class SidecarSynthesizer
             swaps.Add(BuildSwapSidecar(swap, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
         }
 
+        var wordAnds = new List<WordAndStatementSidecar>();
+        foreach (var wordAnd in network.WordAnds)
+        {
+            wordAnds.Add(BuildWordAndSidecar(wordAnd, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
+        }
+
+        var calcs = new List<CalcStatementSidecar>();
+        foreach (var calc in network.Calcs)
+        {
+            calcs.Add(BuildCalcSidecar(calc, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
+        }
+
+        // T_SUB → T_CONV ENO chaining, index-paired exactly like Mul → Convert (N3: a T_CONV whose
+        // `EN := ENO` chains from the T_SUB immediately before it).
+        var tsubs = new List<TSubStatementSidecar>();
+        var tconvs = new List<TConvStatementSidecar>();
+        var timePairCount = Math.Max(network.TSubs.Count, network.TConvs.Count);
+        for (var i = 0; i < timePairCount; i++)
+        {
+            int? tsubPartUIdForEno = null;
+            if (i < network.TSubs.Count)
+            {
+                var tsubSidecar = BuildTSubSidecar(network.TSubs[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types);
+                tsubs.Add(tsubSidecar);
+                tsubPartUIdForEno = tsubSidecar.TSubPartUId;
+            }
+
+            if (i < network.TConvs.Count)
+            {
+                tconvs.Add(BuildTConvSidecar(
+                    network.TConvs[i], tsubPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
+            }
+        }
+
+        var moveBlkVariants = new List<MoveBlkVariantStatementSidecar>();
+        foreach (var moveBlkVariant in network.MoveBlkVariants)
+        {
+            moveBlkVariants.Add(BuildMoveBlkVariantSidecar(moveBlkVariant, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+        }
+
         var calls = new List<CallStatementSidecar>();
         foreach (var call in network.Calls)
         {
@@ -216,7 +256,12 @@ public static class SidecarSynthesizer
             Muls: muls,
             Converts: converts,
             Swaps: swaps,
-            AbsStatements: abs);
+            AbsStatements: abs,
+            WordAnds: wordAnds,
+            Calcs: calcs,
+            TSubs: tsubs,
+            TConvs: tconvs,
+            MoveBlkVariants: moveBlkVariants);
     }
 
     // Every non-Assignments/Timers/Moves/Muls/Converts/Calls production list on IrNetwork is out
@@ -227,34 +272,9 @@ public static class SidecarSynthesizer
     private static void RequireInScope(IrNetwork network)
     {
         var populated = new List<string>();
-        if (network.WordAnds.Count > 0)
-        {
-            populated.Add("WordAnds");
-        }
-
         if (network.Limits.Count > 0)
         {
             populated.Add("Limits");
-        }
-
-        if (network.TSubs.Count > 0)
-        {
-            populated.Add("TSubs");
-        }
-
-        if (network.TConvs.Count > 0)
-        {
-            populated.Add("TConvs");
-        }
-
-        if (network.Calcs.Count > 0)
-        {
-            populated.Add("Calcs");
-        }
-
-        if (network.MoveBlkVariants.Count > 0)
-        {
-            populated.Add("MoveBlkVariants");
         }
 
         if (network.Waits.Count > 0)
@@ -536,7 +556,7 @@ public static class SidecarSynthesizer
     // UDInt rollover constant alike; still a magnitude heuristic, not symbol-table type inference.
     private static OperandSidecar ResolveOperand(
         Expr expr, bool typedConstant, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, string? constantTypeOverride = null)
     {
         switch (expr)
         {
@@ -548,7 +568,10 @@ public static class SidecarSynthesizer
 
             case Expr.Literal literal:
                 var constantUId = nextUid++;
-                var constantType = typedConstant ? null : InferLiteralConstantType(literal.Value);
+                // constantTypeOverride carries the operation's own type where magnitude can't infer it
+                // (a WAND mask `16#89` is a Word, not the Int its digits suggest) — from the caller's
+                // resolved SrcType.
+                var constantType = typedConstant ? null : (constantTypeOverride ?? InferLiteralConstantType(literal.Value));
                 constantEntries.Add(new SidecarConstantEntry(literal.Value, constantUId, constantType));
                 var literalWireUId = nextUid++;
                 return new OperandSidecar.LiteralOperand(constantUId, literalWireUId);
@@ -806,6 +829,136 @@ public static class SidecarSynthesizer
         throw new UnsupportedSynthesisConstructException(
             $"{instruction} synthesis needs its input {what}'s type, which couldn't be resolved — ensure it's " +
             "declared in the block interface or a --project DB/UDT/tag-table.");
+    }
+
+    // The operation type of a multi-input box (WAND/Calc) — the type of its first tag operand (its
+    // literal inputs share it). Hard-error if no input is a resolvable tag, same discipline as
+    // RequireOperandType (no safe default).
+    private static string RequireInputsType(TagTypeRegistry tagTypes, IReadOnlyList<Expr> inputs, string instruction)
+    {
+        foreach (var input in inputs)
+        {
+            if (input is Expr.TagRef tag && tagTypes.Resolve(tag.Path) is string type)
+            {
+                return type;
+            }
+        }
+
+        throw new UnsupportedSynthesisConstructException(
+            $"{instruction} synthesis needs its operation type from a tag input, none of which resolved — ensure " +
+            "at least one input tag is declared in the block interface or a --project DB/UDT/tag-table.");
+    }
+
+    // A WAND (bitwise word-AND box). En is a plain Expr chain (like Move); Inputs are tag-or-literal;
+    // SrcType is the operation's word type, from the first tag input — and its literal inputs (a mask
+    // like `16#89`) take that same type, not the Int their digits suggest (Gap F).
+    private static WordAndStatementSidecar BuildWordAndSidecar(
+        WordAndStatement wordAnd, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var srcType = RequireInputsType(tagTypes, wordAnd.Inputs, "WAND");
+        var (chainRail, steps) = BuildChain(wordAnd.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var andPartUId = nextUid++;
+
+        var inputs = new List<OperandSidecar>();
+        foreach (var input in wordAnd.Inputs)
+        {
+            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType));
+        }
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(wordAnd.DestTag, destAccessUId, ScopeFor(wordAnd.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new WordAndStatementSidecar(andPartUId, chainRail, steps, inputs, srcType, destAccessUId, destWireUId);
+    }
+
+    // A CALC (free-expression box). Like a MUL but the input combination is the Equation string
+    // (carried verbatim, shown in the readable text); SrcType is the operation type from the first tag.
+    private static CalcStatementSidecar BuildCalcSidecar(
+        CalcStatement calc, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var srcType = RequireInputsType(tagTypes, calc.Inputs, "CALC");
+        var (_, enSidecar) = BuildEnSourceSidecar(calc.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var calcPartUId = nextUid++;
+
+        var inputs = new List<OperandSidecar>();
+        foreach (var input in calc.Inputs)
+        {
+            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType));
+        }
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(calc.DestTag, destAccessUId, ScopeFor(calc.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new CalcStatementSidecar(calcPartUId, enSidecar, inputs, calc.Equation, srcType, destAccessUId, destWireUId);
+    }
+
+    // A T_SUB (time subtraction box). Version 1.2; two tag-or-literal inputs; DateType from In1, TimeType
+    // from In2 (both Time in the one grounded Time−Time case).
+    private static TSubStatementSidecar BuildTSubSidecar(
+        TSubStatement tsub, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var (_, enSidecar) = BuildEnSourceSidecar(tsub.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var tsubPartUId = nextUid++;
+        var in1 = ResolveOperand(tsub.In1, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var in2 = ResolveOperand(tsub.In2, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var dateType = RequireOperandType(tagTypes, tsub.In1, "T_SUB");
+        var timeType = RequireOperandType(tagTypes, tsub.In2, "T_SUB");
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(tsub.DestTag, destAccessUId, ScopeFor(tsub.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new TSubStatementSidecar(tsubPartUId, "1.2", enSidecar, in1, in2, dateType, timeType, destAccessUId, destWireUId);
+    }
+
+    // A T_CONV (time type-conversion box). Convert-shaped plus Version 1.2; SrcType from the IN tag,
+    // DestType from the dest tag; `EN := ENO` chains from the paired T_SUB (precedingEnoPartUId).
+    private static TConvStatementSidecar BuildTConvSidecar(
+        TConvStatement tconv, int? precedingEnoPartUId, int sharedRailWireUId, ref int nextUid,
+        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+    {
+        var (_, enSidecar) = BuildEnSourceSidecar(tconv.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var tconvPartUId = nextUid++;
+        var inOperand = ResolveOperand(tconv.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var srcType = RequireOperandType(tagTypes, tconv.In, "T_CONV");
+        var destType = tagTypes.Resolve(tconv.DestTag) ?? throw new UnsupportedSynthesisConstructException(
+            $"T_CONV synthesis needs its dest '{tconv.DestTag}' type, which couldn't be resolved.");
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(tconv.DestTag, destAccessUId, ScopeFor(tconv.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new TConvStatementSidecar(tconvPartUId, "1.2", enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
+    }
+
+    // A MOVE_BLK_VARIANT (block move with array indexing). Version 1.2; four fixed-named tag-or-literal
+    // inputs; the first production with TWO output tags (Ret_Val + Dest), both plain-tag writes.
+    private static MoveBlkVariantStatementSidecar BuildMoveBlkVariantSidecar(
+        MoveBlkVariantStatement move, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+    {
+        var (_, enSidecar) = BuildEnSourceSidecar(move.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var partUId = nextUid++;
+        var src = ResolveOperand(move.Src, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var count = ResolveOperand(move.Count, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var srcIndex = ResolveOperand(move.SrcIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        var destIndex = ResolveOperand(move.DestIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+
+        var retValAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(move.RetValTag, retValAccessUId, ScopeFor(move.RetValTag, localNames)));
+        var retValWireUId = nextUid++;
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(move.DestTag, destAccessUId, ScopeFor(move.DestTag, localNames)));
+        var destWireUId = nextUid++;
+
+        return new MoveBlkVariantStatementSidecar(
+            partUId, "1.2", enSidecar, src, count, srcIndex, destIndex, retValAccessUId, retValWireUId, destAccessUId, destWireUId);
     }
 
     // An FB/FC CALL. Two argument shapes are supported:

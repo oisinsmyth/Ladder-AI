@@ -173,14 +173,17 @@ over the batch's DBs/UDTs/tag-tables.
 **Verify.** Unit tests (Word→Int, Int→Real, unknown-type hard-error); then the live gate — re-run the
 genval2 build so REQ-002's telemetry convert synthesizes + compiles clean, closing that deferral.
 
-## Gap F — WordAnd (WAND) synthesis unsupported (new, harness-surfaced)
+## Gap F — WordAnd (WAND) + the rest of DataHandling — DONE 2026-07-18 (DataHandling green → 14/14)
 
-**Symptom.** `to-xml --synthesize` hard-errors on a `WordAnd` ("Network 1: sidecar synthesis does not
-support: WordAnds") — `DataHandling`, a committed reference block, uses one (masking word). The read
-side handles WAND fine; only synthesis lacks it. **Fix:** add a `BuildWordAndSidecar` mirroring the
-box-family shape (`BuildMulSidecar`/`BuildConvertSidecar`) — WAND is a two-input EN/ENO box with a
-constant or tag mask. Its operand types feed the same `TagTypeRegistry` question as Gap B/E. **Verify:**
-`DataHandling` flips green in the parity matrix.
+**Done — completes the reference corpus.** DataHandling needed five builders, all added together (the
+block goes green only when all five synthesise): **WAND** (`BuildWordAndSidecar`, SrcType from the first
+tag input, its literal mask typed to match — `16#89` is a Word, not the Int its digits suggest, via a
+`constantTypeOverride` on `ResolveOperand`), **CALC** (`BuildCalcSidecar`, Equation verbatim + SrcType),
+**T_SUB**/**T_CONV** (`BuildTSubSidecar`/`BuildTConvSidecar`, Version 1.2, T_CONV `EN := ENO` chains from
+T_SUB via the same index-pairing as Mul→Convert), **MOVE_BLK_VARIANT** (`BuildMoveBlkVariantSidecar`,
+Version 1.2, the first production with two output tags — Ret_Val + Dest). All types resolve through the
+`TagTypeRegistry` (block-interface members). Removed from `RequireInScope`. Covered by
+`DataHandlingSynthesisTests`. **Every reference block now derives a sidecar matching its real export.**
 
 ## Gap G — timer-instance-scope mis-inferred for a global single-instance DB — FIXED 2026-07-18
 

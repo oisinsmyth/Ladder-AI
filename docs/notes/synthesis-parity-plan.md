@@ -71,7 +71,17 @@ baseline to 9/14. The remaining **5 are real synthesis gaps** (`converter-synthe
 **WordAnd (Gap F, new)**, TONR (blockers); **timer-instance-scope (Gap G, new)** and **standalone-Not
 (Gap H, new)** (compare-divergences). The 9 green are locked into the test's `KnownGreen` guard.
 
-## Stage 1 — close the gaps (ordered by leverage)
+## Stage 1 — close the gaps — COMPLETE 2026-07-18 (14/14, complete synthesis for the corpus)
+
+Every reference block now derives a sidecar that matches its real export. Landed, in order: Gap G
+(timer scope), G2 (same-network `.Q` direct-wire), the **TagTypeRegistry** keystone, the box family
+(SUB/DIV/ABS/SWAP + Mul-to-Mul ENO), Gap C (TONR/TOF), Gap H (standalone-Not SPEC change), and
+DataHandling's five (WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT). Plus three Normalizer oracle completions
+the harness surfaced (CompileUnit-ID, Call/Instance/OpenCon volatility). Detail per gap:
+`converter-synthesis-gaps.md`. **Next: Stage 3 (derive-always) is now reachable** — the corpus is fully
+green; the remaining step is the live compile backstop corpus-wide, then the ADR to drop stored sidecars.
+
+### The gap list (as built)
 
 Enumerated from the construct dispatch (`src/converter/Converter/Ir/SidecarSynthesizer.cs`):
 

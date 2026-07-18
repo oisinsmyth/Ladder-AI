@@ -284,12 +284,13 @@ public class SidecarSynthesizerTests
     [Fact]
     public void Synthesize_OutOfScopeInstructionList_NamesTheConstruct()
     {
+        // LIMIT is still out of scope (WAND/Calc/T_SUB/T_CONV/MOVE_BLK_VARIANT were added 2026-07-18).
         var network = IrParser.ParseNetworkOnly(
             "NETWORK 1 \"Test\"\n" +
-            "  WAND(EN := TRUE, IN1 := A, IN2 := B) => C\n");
+            "  LIMIT(EN := TRUE, MN := Lo, IN := Val, MX := Hi) => Out\n");
 
         var ex = Assert.Throws<UnsupportedSynthesisConstructException>(() => SidecarSynthesizer.Synthesize(network));
-        Assert.Contains("WordAnds", ex.Message);
+        Assert.Contains("Limits", ex.Message);
     }
 
     [Fact]
