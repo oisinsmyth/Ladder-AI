@@ -42,6 +42,9 @@ public class SynthesisParityTests
         // 2026-07-18 (Gap G2): a same-network timer .Q read wires directly from the TON's Q port
         // (a TimerOutputStep), matching how TIA exports it.
         "TimerSample",
+        // 2026-07-18 (Gap H): a standalone Not part `NOT (X)` is now distinct from a negated contact
+        // `NOT X` in the readable grammar, so synthesis rebuilds the right LAD element.
+        "BooleanExtras",
     };
 
     [Fact]

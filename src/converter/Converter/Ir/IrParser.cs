@@ -935,7 +935,10 @@ public static partial class IrParser
     {
         if (TryConsumeToken(text, ref pos, "NOT "))
         {
-            return new Expr.Not(ParseUnaryExpr(text, ref pos));
+            // `NOT ( ... )` is a standalone Not part (invert-RLO of a group); a bare `NOT A` is a
+            // negated contact (Gap H). The serializer emits exactly `NOT (` for the standalone form.
+            var standalone = pos < text.Length && text[pos] == '(';
+            return new Expr.Not(ParseUnaryExpr(text, ref pos), standalone);
         }
 
         return ParsePrimaryExpr(text, ref pos);

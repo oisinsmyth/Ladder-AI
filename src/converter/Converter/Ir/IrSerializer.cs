@@ -380,7 +380,10 @@ public static class IrSerializer
     {
         Expr.TagRef tagRef => tagRef.Path,
         Expr.Literal literal => literal.Value,
-        Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Operand is Expr.And or Expr.Or)}",
+        // A standalone Not (invert-RLO) is parenthesised even around a single tag — `NOT (A)` — to
+        // distinguish it from a negated contact `NOT A` (Gap H); a compound operand is parenthesised
+        // regardless.
+        Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Standalone || not.Operand is Expr.And or Expr.Or)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
         Expr.And and => string.Join(" AND ", and.Operands.Select(op => Parenthesize(op, op is Expr.Or))),
         Expr.Or { Operands.Count: 0 } => "TRUE",

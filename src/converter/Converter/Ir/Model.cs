@@ -18,7 +18,16 @@ public abstract record Expr
     // `<Negated Name="operand" />` child on the source `<Part Name="Contact">`. Wraps a single
     // operand (only ever seen on a TagRef in practice; modeled generally since nothing about the
     // source shape ties negation to any particular operand kind).
-    public sealed record Not(Expr Operand) : Expr;
+    //
+    // Standalone distinguishes the two real LAD shapes a `NOT` can take, which are logically
+    // identical but drawn differently and must round-trip faithfully (Gap H, 2026-07-18): a
+    // *negated contact* (`--|/A|--`, Standalone=false, the common case, text `NOT A`) inverts the
+    // read of a single tag, while a *standalone Not part* (`--|NOT|--`, Standalone=true, text
+    // `NOT (X)`) inverts the accumulated power flow of a parenthesised group. A `NOT` of a compound
+    // (`NOT (A OR B)`) is inherently a standalone part, so it always carries Standalone=true; a bare
+    // `NOT A` is a negated contact. Both PerimeterSafetyAlarms (negated contacts) and BooleanExtras
+    // (a standalone Not) are real; `to-ir` used to collapse both to `NOT A`, losing the distinction.
+    public sealed record Not(Expr Operand, bool Standalone = false) : Expr;
 
     // A literal operand fed to a TON's `PT` (`Access Scope="TypedConstant"`, e.g. `T#100MS`) or
     // a comparison's `in1`/`in2` (`Access Scope="LiteralConstant"` at the top level, e.g. `1`) —

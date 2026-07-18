@@ -1735,7 +1735,10 @@ public static class GraphReducer
                 var (notExpr, notSteps, notRailWireUId) = TraceChain(
                     network, (upstreamPart.UId, "in"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
                 steps.Insert(0, new ChainStepSidecar.NotStep(upstreamPart.UId, notSteps, notRailWireUId, outgoingWireUId));
-                stepExprs.Insert(0, new Expr.Not(notExpr));
+                // A standalone Not part (invert-RLO), distinct from a negated contact (line ~1686) —
+                // Standalone=true so `to-ir` emits `NOT (X)` and synthesis rebuilds a NotStep, not a
+                // negated contact (Gap H).
+                stepExprs.Insert(0, new Expr.Not(notExpr, Standalone: true));
                 break;
             }
 

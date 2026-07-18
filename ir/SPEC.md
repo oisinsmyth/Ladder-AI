@@ -216,7 +216,7 @@ lookup table entry:
 | Source (`Part Name`) | IR syntax |
 |---|---|
 | `Contact` | bare tag reference, e.g. `Sensor1.Ok` |
-| `Contact` (negated) **[converter-verify exact source attribute]** | `NOT Sensor1.Ok` |
+| `Contact` (negated, `<Negated>` on the Contact) | `NOT Sensor1.Ok` — a bare `NOT <tag>` (see the standalone-`Not` note below for `NOT (X)`) |
 | `Coil` | `COIL <tag> := <expr>` |
 | `SCoil`/`RCoil` (set/reset coils) — **confirmed real and built, 2026-07-12 (S1 item 15)**, structurally identical to `Coil` (same `in`/`operand` ports, never a producer) | `SCOIL <tag> := <expr>` / `RCOIL <tag> := <expr>` |
 | `Eq` / `Ge` — **confirmed real and built, 2026-07-11** (`FC ControlDelays`); `Lt` — **confirmed real and built, 2026-07-12 (S1 item 19)** (`FB MotorDOL`/`FilterUnitSystem`); `Ne` — **confirmed real and built, 2026-07-12 (S1 item 22)** (`FB AirStar`); `Gt`/`Le` — **confirmed real and built, 2026-07-14** (`FC Scale`, grounding `FB MotorVSDSystem`'s dependency closure) — **the full IEC comparison family, none left unconfirmed** | `=`  `<>`  `>=`  `<=`  `>`  `<` as infix operators |
@@ -233,9 +233,13 @@ bitwise/word-level box instruction, not a boolean chain position at all — see 
 
 **Operator precedence (confirmed with the project owner, 2026-07-11, S1 item 11):** `AND` binds
 tighter than `OR`, matching ordinary language convention — `A AND B OR C` reads unambiguously as
-`(A AND B) OR C` with no parentheses needed. Parentheses are emitted only where precedence alone
+`(A AND B) OR C` with no parentheses needed. Parentheses are emitted where precedence alone
 would misparse: an `OR` appearing as an `AND`'s own operand (`(A OR B) AND C`), or as a `NOT`'s
-own operand (`NOT (A OR B)`). This only became reachable once an OR-merge branch could itself be
+own operand (`NOT (A OR B)`) — **and, since 2026-07-18 (Gap H), to distinguish a standalone `Not`
+part from a negated contact even around a single tag**: `NOT (A)` is a standalone `Not` (invert-RLO)
+part, `NOT A` is a negated contact. Both are real, logically identical LAD shapes; the parentheses
+carry the which-Part distinction so it round-trips and synthesises faithfully (see the standalone-`Not`
+note below). This only became reachable once an OR-merge branch could itself be
 a compound expression rather than a single tag (S1 item 11) — before that, `AND`/`OR` never
 nested inside each other in any real or built shape, so the distinction was moot.
 
@@ -389,9 +393,16 @@ NETWORK 8 "Run enable delay"
   different UIds, identical shape). Genuinely different from a Contact's own
   `<Negated Name="operand" />` (which negates a *tag read*, not a chain position): `Not` is a
   standalone Part with a single `in`/`out` port pair (same port names as `Contact`'s own), no
-  operand/Access at all — it inverts whatever boolean value arrives on `in`. No new IR-text
-  grammar was needed — `NOT <expr>`/`Expr.Not` already existed (S1 items 7/11) and already
-  rendered/parsed with correct precedence. Architecturally simpler than MOVE/WAND: `Not` is never
+  operand/Access at all — it inverts whatever boolean value arrives on `in`. **Grammar update,
+  2026-07-18 (Gap H):** originally this reused `NOT <expr>`/`Expr.Not` with no new text grammar, but
+  that collapsed a standalone `Not` and a negated contact to the same `NOT A` text — so a sidecar-less
+  *synthesis* (or a derive-always round trip) could not tell which LAD element to rebuild, and picked a
+  negated contact even for a real `Not` part (surfaced by the synthesis-parity harness on
+  `BooleanExtras`). `Expr.Not` now carries a `Standalone` flag: `NOT (X)` is a standalone `Not` part
+  (invert-RLO, `Standalone=true`, always parenthesised — a `Not` of a compound like `NOT (A OR B)` is
+  inherently one), `NOT A` is a negated contact (`Standalone=false`). The two remain logically
+  identical; the parentheses carry the which-Part distinction so it round-trips and synthesises exactly.
+  Architecturally simpler than MOVE/WAND: `Not` is never
   its own top-level production (no new `IrNetwork`/`NetworkSidecar` list) — purely a new
   chain-position kind, discovered only when some other production's own backward trace hits one.
   Resolved via a fully self-contained, recursive trace on the `Not`'s own `in` (exactly like an

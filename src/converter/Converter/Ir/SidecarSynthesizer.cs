@@ -398,11 +398,13 @@ public static class SidecarSynthesizer
         _ => new List<Expr> { expr },
     };
 
+    // A standalone Not (Standalone=true, incl. every Not of a compound) is a NotStep; a negated
+    // contact (Standalone=false, always a bare tag) is a leaf (Gap H).
     private static bool IsCompound(Expr expr) =>
-        expr is Expr.Or || (expr is Expr.Not not && not.Operand is not Expr.TagRef);
+        expr is Expr.Or || expr is Expr.Not { Standalone: true };
 
     private static bool IsLeaf(Expr expr) =>
-        expr is Expr.TagRef || (expr is Expr.Not { Operand: Expr.TagRef });
+        expr is Expr.TagRef || (expr is Expr.Not { Standalone: false, Operand: Expr.TagRef });
 
     private static ChainStepSidecar BuildCompoundStep(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
@@ -443,7 +445,7 @@ public static class SidecarSynthesizer
         var (tagPath, negated) = expr switch
         {
             Expr.TagRef tagRef => (tagRef.Path, false),
-            Expr.Not { Operand: Expr.TagRef tagRef } => (tagRef.Path, true),
+            Expr.Not { Standalone: false, Operand: Expr.TagRef tagRef } => (tagRef.Path, true),
             _ => throw new UnsupportedSynthesisConstructException(
                 $"BuildLeafContactStep called with a non-leaf expression: {expr.GetType().Name}."),
         };

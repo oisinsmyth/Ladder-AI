@@ -228,7 +228,17 @@ question first:** does TIA *always* export a same-network `.Q` read as a direct 
 occur? If both, the readable IR needs a way to say which (a SPEC question), like Gap H. **Verify:**
 `TimerSample` flips green.
 
-## Gap H — standalone `Not` vs negated contact — INVESTIGATED 2026-07-18: GENUINE ambiguity, OWNER DECISION NEEDED
+## Gap H — standalone `Not` vs negated contact — DONE 2026-07-18 (owner chose the SPEC change; BooleanExtras green)
+
+**Resolved via the SPEC grammar change (owner's decision).** `Expr.Not` now carries a `Standalone` flag;
+the readable grammar spells a standalone `Not` part as `NOT (X)` and a negated contact as `NOT A`
+(`ir/SPEC.md` updated). Threaded through parser/serializer/reducer/synthesizer (the reducer sets the flag
+from which real Part it read; synthesis routes `Standalone` → NotStep, bare → negated contact). The
+committed `ir/reference/BooleanExtras.ir` was regenerated with the new grammar (`NOT (EnableCmd)`).
+Covered by `StandaloneNotGrammarTests` (parse/round-trip/synthesise, both forms) + `NotTests` updated.
+The investigation record + the three options considered are below.
+
+### Investigation (2026-07-18) — why it was a genuine ambiguity
 
 **Both encodings occur in real exports, and the readable `NOT <tag>` conflates them.** Confirmed against
 the corpus:

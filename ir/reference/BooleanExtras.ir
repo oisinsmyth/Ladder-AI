@@ -19,7 +19,7 @@ INTERFACE
   CONSTANT
 
 NETWORK 1 "Interlock inversion (Not)"
-  COIL RunA := NOT EnableCmd AND FaultLatch
+  COIL RunA := NOT (EnableCmd) AND FaultLatch
 
 NETWORK 2 "Motor latch (SCoil/RCoil)"
   COIL Run := StartCmd
