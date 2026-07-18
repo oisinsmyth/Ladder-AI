@@ -51,28 +51,61 @@ architecture baseline, telemetry); test-project001's functional verdict stands a
 approved requests) not yet closed — counting rule awaits the owner (owner-questions D-4). Full
 history: `docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-17.
 
-## Current task: none
+## Current task: none — nothing in-flight
 
-The 2026-07-17 owner-questions batch, the agent-tasks dispatch board it spawned, and the
-GenProject1 -> test-project001 codename cleanup are all closed and documented
-(`docs/evidence/stage-S6.md`'s dated entries; `docs/notes/owner-questions.md` is back to empty per its own
-reusable-template policy; `agent-tasks/` is back to a template folder). Nothing in-flight right
-now.
+**Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
+- **GenProject1 → test-project001 codename purge complete.** Docs/IR/mirror renamed; `simatic-ml/test-project001/`
+  refreshed to the full 23 files by live-exporting `DB_PLC` + `OB100`. Live TIA folder keeps its on-disk
+  name `GenProject1/` (CLAUDE.md codename note).
+- **Hard rule 8 + `.claude/agents/lad-coder.md`.** All LAD/IR work (write/edit/review/explain `.ir`,
+  the compile loop, `patterns/`) now goes through the `lad-coder` sub-agent; the main agent orchestrates
+  and verifies, never authors. Recorded in `docs/evidence/stage-S6.md`.
+- **FI-20 done:** `stage-gates.md` is now a 43-line status index; per-stage narrative lives in
+  `docs/evidence/stage-S0.md`…`stage-S6.md`.
+- **FI-19 done:** the three validation docs' verbatim §3 transcripts moved to `docs/evidence/…-blind-run-…md`;
+  the split convention is baked into the review skills and stated canonically in `docs/15` ("Artifacts").
+- Reference sweep clean afterward (128 files, zero dangling file refs).
 
-**Open backlog (non-blocking):**
-- Register questions with no clarification blocking them, just unanswered — `Q-02` (5 settings
-  numbers), `Q-03` (local/remote selector semantics), `Q-05` (motor count), `Q-06` (start button
-  action), `Q-09` (spin-down pause home), `Q-12` residual (zeroable-clock reset behavior) — all
-  tracked in `gen/test-project001/requirements.md`'s Open Questions section.
-- `F-3(b)` (C-003 enforcement).
-- Converter reporter bug (F-1, confirmed real — C-301 count vs printed findings); converter
-  capture of `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's
-  author/revision mechanically checkable — still unbuilt); C-003's `iDB_<FBName>_<Instance>`
-  sub-clause unenforced in `converter review`.
-- Deferred items (decided in principle, timing only): `docs/notes/deferred-items.md`.
+## Outstanding works
 
-`docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever
-opens.
+**S6/S7 — the live strategic thread (owner: "S7 is the rush"):**
+- **S6 exit criterion not closed** — ten approved requests; the counting rule awaits the owner
+  (owner-questions D-4, discussed in `agent-tasks/discussion-d4-stage-gates-review.md`).
+- **S7-vs-S6 sequencing unsettled** — the internal build/exercise order of the three coding skills and
+  their relationship to closing S6. Owner to walk an agent through `agent-tasks/discussion-a4-s7-ordering.md`;
+  related gate-wording in `discussion-d4-stage-gates-review.md`.
+- **The three coding skills are unbuilt** — `gen-block-new` / `gen-block-modify-purpose` /
+  `gen-block-modify-fix` (`docs/15` build-order step 6). Library stays thin by design — fills via S8 harvest.
+
+**Deferred — decided in principle, owner's call on timing (`docs/notes/deferred-items.md`):**
+- D-2 settings rework wave; D-6 converter can't add a statement to an already-exported network
+  (whole-file-strip workaround proven; a scoped `SidecarSynthesizer` is the real fix); Q-04 per-type
+  overcurrent setpoint numbers (owner has the real numbers); D-5 `chained-permissive-enable` blind-draft
+  gap (needs a genuine blind target).
+
+**Open register questions — need owner input (`gen/test-project001/requirements.md` Open Questions):**
+- `Q-03` local/remote selector semantics (HMI-boundary — see FI-18), `Q-05` motor count / per-motor id,
+  `Q-12` residual (zeroable-clock reset behaviour). Q-01/02/04/06–11/13–15 are resolved.
+
+**Tooling backlog — non-blocking, PC-side (normal dev, not `lad-coder`):**
+- `F-1` converter reporter bug (C-301 count vs printed findings). `F-3(b)` = C-003's
+  `iDB_<FBName>_<Instance>` sub-clause unenforced in `converter review`. Capture
+  `HeaderAuthor`/`HeaderVersion`/`HeaderFamily` as IR header lines (would make C-201's author/revision
+  mechanically checkable — still unbuilt).
+
+**S5 — Structured data extraction:** ACTIVE, no work started, deliberately deprioritized below S6/S7.
+
+**S1 carryover — needs owner:** `Modbus_Master`/`Modbus_Comm_Load` live-compile blocked by a confirmed
+general Openness limitation — source-side `JOB9002` fix vs. accept as a documented permanent limitation
+(full detail in the "Open question carried over from S1" section below).
+
+**Ideas awaiting a decision when there's room (`docs/16-future-ideas.md`, still open):** FI-06
+(constructed edge-detection pattern), FI-08 (engineer-side proposed-tag approval path), FI-11
+(presentation bundling for the final gate), FI-12 (persistent Portal session for the inner loop),
+FI-17 (explanation sidecars), FI-18 (HMI-interface skill — would give Q-03/13/14/15-class questions a
+home). FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/09/10 parked.
+
+`docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever opens.
 
 ## Open question carried over from S1 (still needs the project owner's input)
 
