@@ -721,3 +721,45 @@ trust-but-verify discipline, exactly as applied here). **This block does not cou
 skill/pipeline validation fixture, not an approved plain-language generation request; D-4). The Green
 fixture (spec + deps + answer key + generated block) is reproducible from the sanitization maps and is
 a candidate reusable coding-skill validation corpus.
+
+## `gen-block-new` second validation — harder target, reusable multi-block subsystem (ShredderControlSystem, 2026-07-18)
+
+A deliberately harder blind validation after FilterUnitSystem (which was ~93% `motor-dol` reuse). Target:
+JOB9002 `ShredderControlSystem` (sanitized `ShredderControlSystem`) — 29 networks, ~79% freeform, comms-driven,
+self-contained interface. Same sanitize-first / filesystem-quarantine discipline (`genval2-*`). Owner
+steered two difficulty increases mid-run: (a) full difficulty — the generator authors the whole
+interface from the spec (no UDT handed over); (b) at gate 1, **improve on the source's architecture** —
+add an IO-map boundary and make the core FB reusable (formal parameters), even though that diverges from
+the answer key.
+
+**Two tooling walls hit and cleared (the main story):**
+- **Wired-argument CALL synthesis.** The reusable formal-parameter FB can't be integrated because
+  `--synthesize` supported zero-argument CALLs only — the STATIC-struct site convention the synthesizer
+  encodes. Owner chose to extend the converter: a `CalleeInterfaceRegistry` sources each wired arg's type
+  from the callee `.ir` (ADR-0001), mirroring the read side; no writer change (commit `e5bfeab`, CHANGELOG,
+  6 tests, suite 527). **Live-TIA-proven:** the full 10-block subsystem (3 UDTs, 3 buffer DBs, 2 Map FCs,
+  the core FB, the orchestrator) compiled clean with the wired CALL resolved. The owner's "improve the
+  architecture" steer paid off — the AI produced a reusable/C-304/C-127-clean subsystem where the source
+  is a single-instance monolith with raw IO inline.
+- **Two converter gaps queued, not hand-patched:** Word→Int CONVERT typing (REQ-002 telemetry deferred)
+  and a UDT-typed-param inline-nesting bug (bare-type-ref workaround). Scoped plan:
+  `docs/notes/converter-synthesis-gaps.md`.
+
+**Verdict (Stage C — blind reviewers + answer-key comparison).** Strong: 31/35 REQs implemented, compile
+clean, convention-clean (C-127/C-304/C-406/C-103/C-605), **avoided the source's OQ-3 double-fault** (the
+original mis-sends recipes 4–6 to the drive *and* corrupts inbound status bits — text-verifiable), and
+**honored OQ-4** (independent temps). Three real findings to fix (a natural `gen-block-modify-fix` corpus):
+REQ-030 missing Hand-intervention gate (flagged independently by BOTH reviewers), C-610 four
+mapped-but-undriven outbound bits (dead-wiring), REQ-032 non-retentive hours timer (a REQ-vs-C-406
+tension). Plus owner-ruling tensions (C-115, C-501 pack, C-403 OB100 reset owed to integration).
+
+**Meta-finding — the folded calibration lesson works, and the comparison step needs a skill.** C1 (the
+review skills, now carrying the "don't infer TIA execution order from IR text order for ENO-chained
+MUL/CONVERT pairs" note) **correctly honored OQ-4** — no shared-temp false positive, where genval1's
+reviewer had over-called exactly that. C2 (the answer-key comparison, done **manually** — no
+blind-comparison skill exists) **repeated the guarded error**, over-claiming that the *original* is broken
+on OQ-4 / its hours counter / its TONR by reasoning from IR text order rather than its real sidecar — so
+those "original is buggy" claims are unverified (only OQ-3, being text-verifiable, is solid). Direct
+evidence the folded lesson generalizes, and a clean **FI candidate: a blind-comparison / answer-key-audit
+skill** carrying the same calibration discipline (C2 flagged this itself). Fixture: `genval2-*` in the
+session scratchpad.

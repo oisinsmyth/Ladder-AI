@@ -67,9 +67,15 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
     `docs/notes/converter-synthesis-gaps.md`. (A) UDT-typed-param inline-nesting bug (small —
     bare-type-ref fix); (B) Word→Int CONVERT typing (bigger — a `TagTypeRegistry`, sibling of the
     callee-interface registry). Both PC-side; workarounds in use so nothing is blocked.
-  - **genval2 not yet through Stage C** (reviewers + answer-key comparison) — the subsystem is
-    compile-clean but unreviewed/uncompared; the design stage already showed the AI *avoided* the
-    source's likely program-bits copy-paste bug (OQ-3). Fixture in the session scratchpad (`genval2-*`).
+  - **genval2 Stage C DONE** (`docs/evidence/stage-S6.md`): strong — 31/35 REQs, compile-clean,
+    architecturally better than the source, **avoided the OQ-3 bug** (a text-verifiable double-fault in
+    the original), honored OQ-4. Three real findings to fix (a natural `gen-block-modify-fix` corpus):
+    REQ-030 missing Hand-intervention gate (both reviewers), C-610 four undriven outbound bits, REQ-032
+    non-retentive timer (REQ-vs-C-406 tension). Owner-ruling tensions: C-115, C-501 pack, C-403 OB100.
+  - **Meta: the folded calibration lesson works** — C1 (review skills) honored OQ-4; C2 (manual
+    comparison, no skill) repeated the guarded execution-order-from-text error re the *original*. → **FI
+    candidate: a blind-comparison / answer-key-audit skill** carrying the calibration discipline.
+    (C2's "the original is buggy on OQ-4/hours/TONR" claims are unverified — the genval1 N6 lesson.)
 - **`gen-block-new` VALIDATED end-to-end (blind, vs a real block).** Sanitized JOB9002 `FilterUnitSystem` →
   `FilterUnitSystem` as a ground-truth answer key; blind pipeline (spec → gate-1 manifest → code →
   reviewers+compare) produced a compile-clean, functionally-correct block **cleaner than the site
