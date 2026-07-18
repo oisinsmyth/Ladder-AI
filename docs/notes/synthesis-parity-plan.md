@@ -114,10 +114,10 @@ the scoped merge become moot.** The ADR is gated + phased; the remaining gates b
 is dropped:
 
 1. Offline parity green corpus-wide — **DONE** (14/14).
-2. **Live compile backstop corpus-wide — pending a Portal session.** Code is prepared:
-   `SynthesizerLiveCheck.RunCorpus(workDir)` derives → imports → compiles every reference code block
-   against real TIA. This is the ground-truth gate (the Normalizer proves semantic equivalence; TIA
-   import+compile of the *derived* form is the final proof).
+2. **Live compile backstop corpus-wide — DONE 2026-07-18 (10/10).** `SynthesizerLiveCheck.RunCorpus`
+   derived → imported → compiled all 10 reference code blocks against the real `SampleProject` in TIA,
+   all clean — the ground-truth proof that the *derived* form imports and compiles, beyond the offline
+   Normalizer's semantic-equivalence check.
 3. Then: `to-xml` derives by default for synthesizable blocks; `to-ir` stops emitting stored sidecars for
    them (or keeps them behind a debug flag); `ir/SPEC.md` §Sidecar updated; D-6/scoped merge retired.
 
@@ -129,7 +129,7 @@ rather than *maintaining* it.
 ## Definition of done
 
 - Offline parity harness green over the full corpus (type-sensitive) — **DONE** (14/14).
-- `SynthesizerLiveCheck.RunCorpus` passes (import + compile) in a Portal session — **pending**.
+- `SynthesizerLiveCheck.RunCorpus` passes (import + compile) in a Portal session — **DONE** (10/10, 2026-07-18).
 - Derive-always ADR recorded — **DONE** (ADR-0005, Proposed); `converter-synthesis-gaps.md` reframed as
   the parity checklist — **DONE**.
 

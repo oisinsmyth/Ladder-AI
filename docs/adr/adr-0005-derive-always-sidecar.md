@@ -76,10 +76,13 @@ legibility first).
 **Rollout (phased):**
 
 1. Offline parity green corpus-wide — **DONE** (14/14, `synthesis-parity-matrix.md`).
-2. **Live compile backstop corpus-wide** — extend `SynthesizerLiveCheck` to derive → import → compile
-   *every* reference code block against real TIA (needs a Portal session). This is the gate before
-   dropping any stored sidecar: the Normalizer proves semantic equivalence, but TIA import + compile of
-   the *derived* form is the ground truth. (Prepared: `SynthesizerLiveCheck.RunCorpus`.)
+2. **Live compile backstop corpus-wide** — **DONE 2026-07-18.** `SynthesizerLiveCheck.RunCorpus` derived,
+   imported, and compiled all 10 reference code blocks against the real `SampleProject` in TIA — **10/10
+   pass** (`NodeStatusAlarms`, `PerimeterSafetyAlarms`, `TimerSample`, `ThresholdAlarms`,
+   `SignalConditioning`, `DataHandling`, `BooleanExtras`, `FBTimers`, `ScaleValue`, `TimingAndCalls`). So
+   the derived form is not merely Normalizer-equivalent to the export — TIA itself imports and compiles it
+   clean. Both gates (offline 14/14 + live 10/10) are now green; what remains is owner acceptance of this
+   ADR, then phases 3–5.
 3. Make `to-xml` derive by default for blocks fully within the synthesizable subset; keep the
    stored-sidecar path for the rest and as an explicit opt-in.
 4. Stop emitting stored `SIDECAR` sections from `to-ir` for synthesizable blocks (or keep behind a debug
