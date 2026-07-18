@@ -56,6 +56,13 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
 ## Current task: none — nothing in-flight
 
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
+- **`gen-block-new` skill authored (docs/15 #7).** `.claude/skills/gen-block-new/SKILL.md` — the
+  Build-stage coder: one gate-1-signed manifest item → one new compile-clean block's IR, reuse-first
+  (CALL/patterns), C-126 grouping at write time, tag-status + compile gates, no self-review (Check
+  stage runs fresh). Scope = code block + own interface + instance-DB scaffolding; shared DB/UDT + tag
+  tables out of scope (named-gap stop). **Not yet validated** — next step is a real tier-(a)
+  `motor-dol` instance against test-project001 (dispatched to `lad-coder`), which also becomes
+  **S6 generation-request #1 of 10**. docs/15 step-6 status updated.
 - **A-4 coding-skill build order ruled + `converter diff` built.** Owner ruled (2026-07-18):
   `gen-block-new` first (roadmap-fidelity; "S7 is the rush" retired), then `gen-block-modify-fix`,
   then `gen-block-modify-purpose`; `converter diff` built now in parallel. Recorded in `docs/15`
@@ -94,7 +101,8 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   (done — see Recently landed). Gate wording kept as-is (D-4): roadmap S7 entry stays "S6 done", so
   the path is build `gen-block-new` → close S6's ten → open S7. Both discussion briefings (a4, d4)
   resolved and deleted from `agent-tasks/`; full record in `docs/evidence/stage-S6.md`.
-- **The three coding skills are unbuilt** — build order now fixed: `gen-block-new` **next**, then
+- **Coding skills:** `gen-block-new` **authored 2026-07-18, pending validation** (validate via a
+  real tier-(a) `motor-dol` run against test-project001 = S6 #1). Still unbuilt, in order:
   `gen-block-modify-fix`, then `gen-block-modify-purpose` (`docs/15` build-order step 6).
 - **Library-filling is real, heavy work** — no longer treated as purely passive S8 harvest. A
   harvest-assist skill is proposed (**FI-21**) to lower the per-pattern cost; see it for the design
