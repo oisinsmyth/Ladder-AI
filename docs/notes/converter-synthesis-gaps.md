@@ -431,6 +431,19 @@ the corpus (N12/N13 share only coils/moves↔box, consistent in both orders). Th
 `SidecarSynthesizer.Synthesize`'s box builds after wands/calls (and swap before abs) to match the serializer;
 deferred because it changes cross-statement UId order and warrants a live-TIA `SynthesizerLiveCheck` re-verify.
 
+## MOVE-IN / box-input constant typing — open (blocks MotorStarter + FB_MotorFwdRevSystem sidecar-drop)
+The phase-4 own-sidecar oracle (`FrozenAnswerKeyRoundTripTests`, Normalizer-level — stricter than the
+contact-count proxy) proved **FB_ShredderSequencer and FB_PusherControl byte-exact (sidecars dropped)** but
+**blocked MotorStarter and FB_MotorFwdRevSystem** on a constant-typing gap: a `MOVE`'s `IN` literal and a box
+(ADD) input literal — `0`, `1` in the "Hours Run Counter" — synthesize as `ConstantType=Int` (by magnitude,
+`InferLiteralConstantType`) where the real export types them to the **UDInt destination** (`IO.HrsRun`).
+**Fix:** thread `TagTypeRegistry` into `BuildMoveSidecar`/`BuildMulSidecar` and type the literal from the
+destination (MOVE) / tag-input (box) type via `ResolveOperand`'s existing `constantTypeOverride`, falling back
+to magnitude. `ResolveOperand` already supports the override (used for WAND masks). **MotorStarter's only
+diff is these two constants; FB_MotorFwdRevSystem additionally shows a residual `NameCon` wiring diff** — check
+whether it is downstream of the constant-Access identity change (likely) or a genuine second issue, after the
+constant fix. Then both drop via the oracle (add them to `FrozenAnswerKeyRoundTripTests.Blocks`). Not fan-out.
+
 ## Where this is tracked
 `AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity
 matrix (`tests/golden/synthesis-parity-matrix.md`) is the live scoreboard. Update both when a gap lands.
