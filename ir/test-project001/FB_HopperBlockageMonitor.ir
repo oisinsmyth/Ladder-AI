@@ -1,0 +1,64 @@
+BLOCK FB FB_HopperBlockageMonitor
+ROOTID 0
+NUMBER 50
+LANGUAGE LAD
+TITLE "Hopper-Blockage Monitor"
+COMMENT "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), via a countdown remaining-budget (see NETWORK 4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    IO : "UDT_HopperBlockageIO" RETAIN SETPOINT COMMENT "Caller interface (C-115). Inputs (HopperLevelHigh/PlantRunning/FaultReset) are written by FC_ControlMain at integration; outputs (HopperBlockedAlarm/HopperBlockStopReq) are read there. The whole interface is RETAIN - immaterial for the re-driven inputs, deliberate for the two output latches (C-124 carve-out)."
+      HopperLevelHigh : Bool
+      PlantRunning : Bool
+      FaultReset : Bool
+      BlockedTimeThreshold : Time
+      ClearDebounceTime : Time
+      HopperBlockedAlarm : Bool
+      HopperBlockStopReq : Bool
+    HighQualified : Bool COMMENT "Debounced blockage-present latch: set the instant the hopper reads high, held through momentary sensor clears (chatter), cleared only once the hopper has read clear continuously for ClearDebounceTime (Q-HBA-02). Transient (non-retentive)."
+    BlockActive : Bool COMMENT "The persistence window accrues only while this is true: a qualified blockage AND the plant actually running (Q-HBA-04)."
+    BlockActiveMem : Bool COMMENT "Previous-scan BlockActive, for the constructed falling-edge (C-404)."
+    PauseEdge : Bool COMMENT "One-scan pulse when BlockActive falls (plant stop or genuine clear) - fires the T_SUB bank in NETWORK 4."
+    RemainingTime : Time = T#60S COMMENT "Countdown budget realising the cumulative timer without TONR (C-406). Holds BlockedTimeThreshold while unblocked; NETWORK 4 shrinks it by each elapsed segment. Start value T#60S guards the power-up-with-hopper-already-high case so the timer never trips on a stale 0. Transient (non-retentive)."
+    HeldET : Time COMMENT "Tracks the live segment's elapsed while BlockActive; on a pause its MOVE stops firing so it retains the last-active value for T_SUB to bank."
+    ClearDebounceTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PersistenceTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+
+NETWORK 1 "Confirmed-Clear Debounce"
+  COMMENT "Times the hopper reading NOT high. Its Q (hopper clear continuously for ClearDebounceTime) is the only thing that re-arms the blockage qualifier - a shorter blip is ignored (Q-HBA-02, debounced clear)."
+  TON(ClearDebounceTimer, IN := NOT IO.HopperLevelHigh, PT := IO.ClearDebounceTime)
+
+NETWORK 2 "Blockage-Present Qualifier And Run Gate"
+  COMMENT "HighQualified goes true when the hopper reads high and holds through momentary clears, dropping only on a confirmed (debounced) clear - so a chattering sensor cannot re-arm the window (REQ-HBA-003, Q-HBA-02). BlockActive additionally requires the plant to be running (Q-HBA-04)."
+  COIL HighQualified := IO.HopperLevelHigh OR HighQualified AND NOT ClearDebounceTimer.Q
+  COIL BlockActive := HighQualified AND IO.PlantRunning
+
+NETWORK 3 "Remaining Budget Re-Arm"
+  COMMENT "While no blockage is qualified (or on FaultReset) the countdown budget holds the full BlockedTimeThreshold. Re-armed in its own network BEFORE the timer network so NETWORK 4 reads a fresh value each scan - on the first scan after power-up this hands the timer BlockedTimeThreshold rather than a stale 0 (non-retentive state, NEW-HBA-06)."
+  MOVE(EN := NOT HighQualified OR IO.FaultReset, IN := IO.BlockedTimeThreshold) => RemainingTime
+
+NETWORK 4 "Cumulative Persistence Timer (TON + Time Subtraction, C-406)"
+  COMMENT "Pause-and-resume cumulative timing (NEW-HBA-01) from a plain TON, never TONR (C-406). PersistenceTimer times the current contiguous high-and-running segment against RemainingTime; its Q trips when a segment exhausts the budget - i.e. cumulative high-and-running time reaches BlockedTimeThreshold. HeldET tracks the live segment's elapsed while BlockActive; on the segment's falling edge (PauseEdge - a plant stop or genuine clear, C-404) T_SUB banks that elapsed by shrinking RemainingTime, so the next segment resumes where this one left off. HeldET holds across the pause because its MOVE is gated on BlockActive, and BlockActiveMem's write follows PauseEdge's read (read-before-write, C-404)."
+  TON(PersistenceTimer, IN := BlockActive, PT := RemainingTime)
+  COIL PauseEdge := NOT BlockActive AND BlockActiveMem
+  COIL BlockActiveMem := BlockActive
+  MOVE(EN := BlockActive, IN := PersistenceTimer.ET) => HeldET
+  T_SUB(EN := PauseEdge, IN1 := RemainingTime, IN2 := HeldET) => RemainingTime
+
+NETWORK 5 "Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)"
+  COMMENT "Latched fault (C-123): set when the cumulative budget is exhausted (PersistenceTimer.Q), held until FaultReset. Lives in the RETAIN interface and is deliberately not cleared at startup (C-124 carve-out, NEW-HBA-04) - a blockage needing a human still needs acknowledgement after a power cycle, exactly like the sequencer's DischargeConveyorTimeoutFault. This is fail-safe: the stop demand below stays asserted until acknowledged."
+  COIL IO.HopperBlockedAlarm := PersistenceTimer.Q OR IO.HopperBlockedAlarm AND NOT IO.FaultReset
+
+NETWORK 6 "Stop / Inhibit Demand"
+  COMMENT "The FB emits a stop/inhibit demand on its own interface (Q-HBA-05) and writes no shared output - integration wires this demand to the actual stop and the alarm to annunciation at a separate step (out of gen-block-new scope, converter-diff-enforced). Kept a distinct member from the alarm so the two can be routed independently."
+  COIL IO.HopperBlockStopReq := IO.HopperBlockedAlarm

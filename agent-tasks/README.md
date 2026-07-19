@@ -67,6 +67,8 @@ processes (CLAUDE.md's existing guidance) and check this table for a stale `in-p
 
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
+| 1 | S6 req#1 hopper-blockage-alarm — import UDT/FB/iDB + compile (scratch test-project001) | done | — | yes |
+<!-- Row 1 done 2026-07-19 (lad-coder session dc2a8814): UDT+FB+iDB imported clean; UDT compile 0 errors; FB block compile 0 errors ("Block was successfully compiled", FB50). 1 pre-existing device-level HW-IO warning, not from this block. Compile gate PASSED. Not committed (coordinator handles). -->
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**
 

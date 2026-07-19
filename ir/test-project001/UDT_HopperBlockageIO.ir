@@ -1,0 +1,11 @@
+TYPE UDT_HopperBlockageIO
+  ROOTID 0
+  COMMENT "Caller-visible interface (C-115) for FB_HopperBlockageMonitor. FC_ControlMain writes HopperLevelHigh/PlantRunning/FaultReset in and reads HopperBlockedAlarm/HopperBlockStopReq out (wiring is a separate integration step). Per the Gate-1 supervisory-monitor exemption (NEW-HBA-07) this pure monitor carries no enable/ready/running vocabulary stubs. BlockedTimeThreshold/ClearDebounceTime are this instance's own tunables (C-307), commissioning defaults set as the iDB start values."
+  MEMBERS
+    HopperLevelHigh : Bool
+    PlantRunning : Bool
+    FaultReset : Bool
+    BlockedTimeThreshold : Time
+    ClearDebounceTime : Time
+    HopperBlockedAlarm : Bool
+    HopperBlockStopReq : Bool

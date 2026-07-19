@@ -1,0 +1,32 @@
+DB iDB_HopperBlockageMonitor
+  ROOTID 0
+  NUMBER 51
+  INSTANCEOF FB_HopperBlockageMonitor
+  COMMENT "Single instance of FB_HopperBlockageMonitor (S6 request #1, hopper-blockage alarm). Members mirror the FB STATIC section; BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) carry the commissioning defaults (C-307/C-309). Hand-authored per the compile-error-playbook's synthesize-produced-FB path."
+  INPUT
+  OUTPUT
+  MEMBERS
+    IO : "UDT_HopperBlockageIO" RETAIN SETPOINT
+      HopperLevelHigh : Bool
+      PlantRunning : Bool
+      FaultReset : Bool
+      BlockedTimeThreshold : Time = T#60S
+      ClearDebounceTime : Time = T#2S
+      HopperBlockedAlarm : Bool
+      HopperBlockStopReq : Bool
+    HighQualified : Bool
+    BlockActive : Bool
+    BlockActiveMem : Bool
+    PauseEdge : Bool
+    RemainingTime : Time = T#60S
+    HeldET : Time
+    ClearDebounceTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PersistenceTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
