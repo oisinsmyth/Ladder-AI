@@ -440,14 +440,18 @@ tag, `BuildMulSidecar` types inputs from a tag input (soft `TryInputsType`), bot
 `constantTypeOverride` (fallback magnitude); `TagTypeRegistry` threaded in. MotorStarter's *only* diff was
 these two constants — now byte-exact, **sidecar dropped**. Three of four migration blocks derived.
 
-## FB_MotorFwdRevSystem Network-1 wiring divergence — open (last block blocking full sidecar-drop)
-With fan-out + constant-typing fixed, FB_MotorFwdRevSystem's own-sidecar oracle still fails — and the
-divergence is **localized entirely to Network 1** (a complex 15-contact / 4-OR-merge network; the Normalizer
-part-hashes differ across ~30 contacts, 8 `O`, coils/RCoil/SCoil, so the wire topology genuinely differs
-there). It is **not** the constant typing (fixed) and not the box-EN fan-out (fixed) — a separate wiring
-issue, only unmasked once those were closed. Investigate N1's real part/wire structure vs synth (the OR-merge
-nesting / fan-out in N1 is the likely locus). Until resolved, FB_MotorFwdRevSystem keeps its stored sidecar;
-when fixed, add it to `FrozenAnswerKeyRoundTripTests.Blocks` and drop it to empty ADR-0005's residual.
+## FB_MotorFwdRevSystem Network-1 timer-Q fan-out — RESOLVED 2026-07-19
+The own-sidecar oracle localized the last block's divergence entirely to N1, and a per-wire connectivity
+diff pinned it to **one wire**: a timer Q feeding two latch coils (`RCOIL Pasue := ReversalPauseTimer.Q{split N}`,
+`SCOIL CycleDelay := {recv N}`) fans out via ONE shared wire in the real export, but the direct-wire
+`TimerOutputStep` path in `BuildAssignment` minted a fresh wire per coil and ignored the fan-out markers (only
+`BuildChain` consulted the registry). The 261-line Normalizer diff was all cascade from that single wire.
+**Fixed:** the `TimerOutputStep` path now honours the registry — `{split}` registers its step, `{recv}` reuses
+it, sharing one outgoing wire from the TON's Q. FB_MotorFwdRevSystem byte-exact; **sidecar dropped**.
+
+**ADR-0005 residual is now EMPTY** — all four migration blocks (MotorStarter + the three test-project001 FBs)
+are committed readable-only, guarded by `FrozenAnswerKeyRoundTripTests`. No sidecar-carrying synthesizable
+block remains.
 
 ## Where this is tracked
 `AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity

@@ -102,13 +102,19 @@ legibility first).
 **CriticalCaveat — "synthesis succeeds" ≠ "safe to omit".** The safety invariant is: never store a block
 readable-only unless its derived form is *proven semantically equivalent* to its export. The reference
 corpus (14 blocks) is **not representative** — real blocks synthesise-but-diverge. So (a) the committed
-migration strips sidecars only from blocks the round-trip harness proves equivalent (14 did; 4 diverged
-and kept theirs), guarded permanently by `CommittedBlocksRoundTripTests`; and (b) `to-ir` cannot yet omit
-safely-and-automatically because the equivalence check (the golden `Normalizer`) lives in the test project,
-not the converter. **Follow-on:** port a semantic-equivalence check into the converter so `to-ir` can
-verify `synth ≡ source` and then omit automatically — the only way the policy becomes both safe *and*
-one-step for arbitrary real exports. The 4 divergent blocks are tracked as synthesis gaps in
-`converter-synthesis-gaps.md`.
+migration strips sidecars only from blocks the round-trip harness proves equivalent (14 did; 4 initially
+diverged and kept theirs), guarded permanently by `CommittedBlocksRoundTripTests`; and (b) `to-ir` cannot yet
+omit safely-and-automatically because the equivalence check (the golden `Normalizer`) lives in the test
+project, not the converter. **Follow-on:** port a semantic-equivalence check into the converter so `to-ir`
+can verify `synth ≡ source` and then omit automatically — the only way the policy becomes both safe *and*
+one-step for arbitrary real exports.
+
+**Residual now EMPTY (2026-07-19).** The four initially-divergent blocks (`MotorStarter` + the three
+`test-project001` FBs) are all committed **readable-only** — the divergences were closed by ADR-0006 (fan-out,
+and the box-EN / timer-Q fan-out + constant-typing gaps its Normalizer-level own-sidecar oracle surfaced; see
+`converter-synthesis-gaps.md`). They are guarded by `FrozenAnswerKeyRoundTripTests` (against a frozen own-
+sidecar answer key, since their `simatic-ml` exports are stale / absent). No sidecar-carrying synthesizable
+block remains; every block's sidecar is now derived.
 
 **Follow-on (not blocking):** the S7 modification-choreography (`docs/notes/modification-choreography.md`)
 still documents the D-6 whole-file strip-and-synthesize workaround; with derive-always, editing a

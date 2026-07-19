@@ -183,10 +183,20 @@ neither over-share N4 nor miss N1.
    `HandAuthorSplitsMerges` golden parity (byte-exact) is green. 581 converter (incl. new
    `SidecarSynthesizerFanoutTests`) + 31 golden green. *(The recv prefix-verify safety check was left as a
    future refinement — the registry-miss hard-error already guards the structural invariant.)*
-4. **Migrate + validate.** Re-derive `HandAuthorSplitsMerges` markers (stay byte-exact); drive
-   `MotorStarter` + the four `test-project001` FBs to **per-network byte-exact** against the `fanout.py` /
-   golden `Normalizer` oracle; then drop those blocks' stored sidecars (closing the ADR-0005 residual) and
-   guard with the round-trip tests.
+4. **Migrate + validate.** — **DONE 2026-07-19. All four migration blocks dropped; ADR-0005 residual empty.**
+   Built the staleness-immune **own-sidecar oracle** (`FrozenAnswerKeyRoundTripTests`: synth(readable-only) ==
+   `to-xml` of the block's own stored sidecar, frozen under `tests/golden/answer-keys/`, via the golden
+   `Normalizer`) — necessary because the `simatic-ml/test-project001` exports had drifted from the committed
+   `.ir` and `MotorStarter` has no export. The Normalizer-level oracle (stricter than the contact-count proxy)
+   drove out three further gaps, each fixed here — all in ADR-0006's own fan-out/derivation territory, none a
+   reducer-fidelity issue: **box-EN fan-out** (the ADD in N12/N13 shared a prefix but boxes were out of scope);
+   **MOVE-IN / box-input constant typing** (a literal typed by magnitude, not to its UDInt destination);
+   **timer-Q direct-wire fan-out** (a shared `Timer.Q` feeding two latch coils via one wire in `BuildAssignment`'s
+   `TimerOutputStep` path, which ignored the markers). `MotorStarter` + `FB_ShredderSequencer` +
+   `FB_PusherControl` + `FB_MotorFwdRevSystem` are now committed **readable-only**, guarded by the frozen-key
+   oracle; `CommittedBlocksRoundTripTests` skips any block with a frozen key (its export is stale). 582
+   converter + 35 golden green. **No sidecar-carrying synthesizable block remains** — fan-out (and everything it
+   unblocked) is completely derivable end to end.
 
 **Guardrails:** the fan-out extractor + `Normalizer` as the answer key; the synthesis-parity harness stays
 green corpus-wide throughout; per-network byte-exact is the acceptance bar for each migrated block.
