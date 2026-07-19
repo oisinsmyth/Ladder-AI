@@ -1,4 +1,3 @@
-using System.Text;
 using Converter.SimaticMl;
 
 namespace Converter.Ir;
