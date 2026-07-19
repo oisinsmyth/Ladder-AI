@@ -412,8 +412,11 @@ public static class IrSerializer
         Expr.Literal literal => literal.Value,
         // A standalone Not (invert-RLO) is parenthesised even around a single tag — `NOT (A)` — to
         // distinguish it from a negated contact `NOT A` (Gap H); a compound operand is parenthesised
-        // regardless.
-        Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Standalone || not.Operand is Expr.And or Expr.Or)}",
+        // regardless. The standalone form's inner is a chain (SerializeChain) so a fan-out marker on an
+        // inner element (`NOT (EnableCmd{recv 1})`) is emitted; a negated contact wraps a bare tag whose
+        // marker rides on the Not element itself (SerializeOperand), so its inner needs no marker pass.
+        Expr.Not { Standalone: true } not => $"NOT ({SerializeChain(not.Operand)})",
+        Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Operand is Expr.And or Expr.Or)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
         Expr.And and => string.Join(" AND ", and.Operands.Select(op => SerializeOperand(op, op is Expr.Or))),
         Expr.Or { Operands.Count: 0 } => "TRUE",

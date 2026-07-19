@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Converter.Ir;
 using Converter.SimaticMl;
@@ -40,13 +41,16 @@ public class SidecarSynthesizerFidelityTests
         var reparsed = FlgNetParser.Parse(xml);
         var reReduced = GraphReducer.Reduce(reparsed, networkNumber: networkNumber, title: title, compileUnitUId: compileUnitUId);
 
-        // Meaning, not shape: strip the SPLIT marker (a fan-out drawing detail, not logic) so this
-        // fidelity check stays about the re-reduced logic. Byte-exact fan-out reproduction is covered
-        // separately by the split round-trip on HandAuthorSplitsMerges.
-        Assert.Equal(
-            IrSerializer.SerializeNetworkOnly(originalReduced.Network).Replace(" SPLIT\n", "\n"),
-            IrSerializer.SerializeNetworkOnly(reReduced.Network).Replace(" SPLIT\n", "\n"));
+        // Meaning, not shape: strip the fan-out annotations (the ` SPLIT` flag and the per-node
+        // `{split N}`/`{recv N}` markers, ADR-0006) — both are drawing detail, not logic — so this fidelity
+        // check stays about the re-reduced logic. Byte-exact fan-out reproduction is a separate concern
+        // (the split round-trip on HandAuthorSplitsMerges; phase 3 makes synthesis honour the markers).
+        Assert.Equal(LogicOnly(originalReduced.Network), LogicOnly(reReduced.Network));
     }
+
+    private static string LogicOnly(IrNetwork network) =>
+        Regex.Replace(IrSerializer.SerializeNetworkOnly(network), @"\{(?:split|recv) \d+\}", string.Empty)
+            .Replace(" SPLIT\n", "\n");
 
     [Fact]
     public void SimpleAndCoil_SynthesizedSidecar_PreservesLogic() =>

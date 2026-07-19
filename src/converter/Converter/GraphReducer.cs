@@ -489,6 +489,10 @@ public static class GraphReducer
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
             moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars);
+        // ADR-0006 phase 2: derive per-node fan-out markers ({split N}/{recv N}) from shared part UIds and
+        // attach them to the readable Expr trees. (The network-level `Split` flag above stays alongside for
+        // now — synthesis still uses it; both are removed in phase 3 with the synthesis switch.)
+        irNetwork = ApplyFanoutMarkers(irNetwork, networkSidecar);
         return new ReducedNetwork(irNetwork, networkSidecar);
     }
 
@@ -539,6 +543,184 @@ public static class GraphReducer
                     CollectPartUIds(not.Steps, uids);
                     break;
             }
+        }
+    }
+
+    // ADR-0006 phase 2: derive per-node fan-out markers from the reduced network's shared part UIds and
+    // attach them to the readable Expr trees. The sidecar's ChainStep tree is isomorphic to the Expr tree
+    // (TraceChain builds both in lockstep), so every Expr element has a known part UId; a UId at >= 2 chain
+    // positions network-wide is a physical fan-out. Marks the boundary of each shared leading run per the
+    // "boundary-marking algorithm" (docs/adr/adr-0006): the deepest received node gets {recv} (absorbing the
+    // shallower prefix), each newly-mastered node gets {split}. Labels are network-scoped ordinals assigned
+    // at first master, walking the boolean chains in serialization order so a {split} always precedes its {recv}.
+    private static IrNetwork ApplyFanoutMarkers(IrNetwork net, NetworkSidecar sidecar)
+    {
+        var timers = net.Timers ?? Array.Empty<TimerBinding>();
+        var moves = net.Moves ?? Array.Empty<MoveStatement>();
+        var wordAnds = net.WordAnds ?? Array.Empty<WordAndStatement>();
+        var calls = net.Calls ?? Array.Empty<CallStatement>();
+
+        // Boolean chains in serialization order (must match IrSerializer: timers, coils, moves, wands, calls),
+        // so a shared part is first seen — and mastered ({split}) — at the position it is serialized first.
+        var chains = new List<(Expr Expr, IReadOnlyList<ChainStepSidecar> Steps)>();
+        for (var i = 0; i < timers.Count; i++) chains.Add((timers[i].In, sidecar.Timers[i].Steps));
+        for (var i = 0; i < net.Assignments.Count; i++) chains.Add((net.Assignments[i].Condition, sidecar.Assignments[i].Steps));
+        for (var i = 0; i < moves.Count; i++) chains.Add((moves[i].En, sidecar.Moves[i].Steps));
+        for (var i = 0; i < wordAnds.Count; i++) chains.Add((wordAnds[i].En, sidecar.WordAnds[i].Steps));
+        for (var i = 0; i < calls.Count; i++) chains.Add((calls[i].En, sidecar.Calls[i].Steps));
+
+        var counts = new Dictionary<int, int>();
+        foreach (var (_, steps) in chains)
+        {
+            CountPartUIds(steps, counts);
+        }
+
+        if (!counts.Values.Any(c => c >= 2))
+        {
+            return net; // no fan-out anywhere — nothing to mark
+        }
+
+        var ctx = new FanoutMarkContext(counts);
+        var marked = chains.Select(c => MarkChain(c.Expr, c.Steps, ctx)).ToList();
+
+        // Reduce always passes non-null (possibly empty) lists, so rebuild each in place. A statement whose
+        // chain had no fan-out gets an identical Expr back (no marker), so this is a no-op for those.
+        var idx = 0;
+        return net with
+        {
+            Timers = timers.Select(t => t with { In = marked[idx++] }).ToList(),
+            Assignments = net.Assignments.Select(a => a with { Condition = marked[idx++] }).ToList(),
+            Moves = moves.Select(m => m with { En = marked[idx++] }).ToList(),
+            WordAnds = wordAnds.Select(w => w with { En = marked[idx++] }).ToList(),
+            Calls = calls.Select(c => c with { En = marked[idx++] }).ToList(),
+        };
+    }
+
+    private sealed class FanoutMarkContext
+    {
+        public FanoutMarkContext(IReadOnlyDictionary<int, int> counts) => Counts = counts;
+
+        public IReadOnlyDictionary<int, int> Counts { get; }
+
+        public Dictionary<int, int> LabelOf { get; } = new();
+
+        public int NextLabel { get; set; } = 1;
+
+        public bool Shared(int uid) => Counts.TryGetValue(uid, out var c) && c >= 2;
+    }
+
+    private static int? StepPartUId(ChainStepSidecar step) => step switch
+    {
+        ChainStepSidecar.ContactStep c => c.ContactUId,
+        ChainStepSidecar.CompareStep cmp => cmp.ComparePartUId,
+        ChainStepSidecar.OrStep or => or.OrPartUId,
+        ChainStepSidecar.NotStep not => not.NotPartUId,
+        ChainStepSidecar.TimerOutputStep t => t.TonPartUId,
+        _ => null,
+    };
+
+    // Occurrence count of each part UId across a chain, recursing into OR-branches and NOT inner chains — so
+    // a contact shared between a top-level position and one nested in an OR/NOT is counted at both (the
+    // cross-depth case, N13). >= 2 occurrences ⇒ fan-out.
+    private static void CountPartUIds(IReadOnlyList<ChainStepSidecar> steps, Dictionary<int, int> counts)
+    {
+        foreach (var step in steps)
+        {
+            if (StepPartUId(step) is int u)
+            {
+                counts[u] = counts.GetValueOrDefault(u) + 1;
+            }
+
+            switch (step)
+            {
+                case ChainStepSidecar.OrStep or:
+                    foreach (var branch in or.Branches)
+                    {
+                        CountPartUIds(branch.Steps, counts);
+                    }
+
+                    break;
+                case ChainStepSidecar.NotStep not:
+                    CountPartUIds(not.Steps, counts);
+                    break;
+            }
+        }
+    }
+
+    // Mark one chain whose Expr operands align 1:1 with `steps` (rail-to-coil order). Applies the boundary
+    // rule to the leading run of shared elements, then recurses into compound elements (OR-branches, a
+    // standalone NOT's inner chain) as their own chains.
+    private static Expr MarkChain(Expr expr, IReadOnlyList<ChainStepSidecar> steps, FanoutMarkContext ctx)
+    {
+        var isAnd = expr is Expr.And;
+        var operands = expr is Expr.And and ? and.Operands.ToList() : new List<Expr> { expr };
+        if (operands.Count != steps.Count || operands.Count == 0)
+        {
+            return expr; // isomorphism broken (never guess) or rail-fed TRUE — nothing to mark
+        }
+
+        var uids = steps.Select(StepPartUId).ToList();
+
+        // Leading run of shared elements (a part has one input, so shared elements are always a prefix).
+        var k = 0;
+        while (k < uids.Count && uids[k] is int u && ctx.Shared(u))
+        {
+            k++;
+        }
+
+        // m = first index in the leading run this chain masters (UId not yet labelled); else k.
+        var m = 0;
+        while (m < k && ctx.LabelOf.ContainsKey(uids[m]!.Value))
+        {
+            m++;
+        }
+
+        var markers = new FanoutMarker?[operands.Count];
+        if (m > 0)
+        {
+            // The deepest received node — absorbs the shallower prefix (indices 0..m-2 stay unmarked).
+            markers[m - 1] = new FanoutMarker(FanoutMarkerKind.Recv, ctx.LabelOf[uids[m - 1]!.Value]);
+        }
+
+        for (var i = m; i < k; i++)
+        {
+            var label = ctx.NextLabel++;
+            ctx.LabelOf[uids[i]!.Value] = label;
+            markers[i] = new FanoutMarker(FanoutMarkerKind.Split, label);
+        }
+
+        var newOperands = new List<Expr>(operands.Count);
+        for (var i = 0; i < operands.Count; i++)
+        {
+            // A shared element's whole subtree IS the node — reused as a unit — so mark it and do NOT recurse
+            // (a shared OR's branch contacts are internal to it, reused whenever it is; marking them too would
+            // be redundant, MotorStarter N4). A non-shared compound may still have independent sharing between
+            // its branches (an OR whose branches share a leading contact, N1), so recurse there.
+            var op = markers[i] is { } marker
+                ? operands[i] with { Fanout = marker }
+                : RecurseCompound(operands[i], steps[i], ctx);
+            newOperands.Add(op);
+        }
+
+        return isAnd ? new Expr.And(newOperands) : newOperands[0];
+    }
+
+    private static Expr RecurseCompound(Expr op, ChainStepSidecar step, FanoutMarkContext ctx)
+    {
+        switch (step)
+        {
+            case ChainStepSidecar.OrStep orStep when op is Expr.Or orExpr && orExpr.Operands.Count == orStep.Branches.Count:
+                var branches = new List<Expr>(orExpr.Operands.Count);
+                for (var j = 0; j < orExpr.Operands.Count; j++)
+                {
+                    branches.Add(MarkChain(orExpr.Operands[j], orStep.Branches[j].Steps, ctx));
+                }
+
+                return orExpr with { Operands = branches };
+            case ChainStepSidecar.NotStep notStep when op is Expr.Not notExpr:
+                return notExpr with { Operand = MarkChain(notExpr.Operand, notStep.Steps, ctx) };
+            default:
+                return op; // leaf (contact / negated contact / comparison / timer-Q) — no sub-chain
         }
     }
 

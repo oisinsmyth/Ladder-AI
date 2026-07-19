@@ -230,13 +230,15 @@ public class MoveTests
 
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
-        // The telescoping cascade fans StartCmd (and StartCmd·RunCmd) out across the coil and moves, so
-        // the network is marked SPLIT (2026-07-19).
+        // The telescoping cascade fans StartCmd (node 1) and RunCmd (node 2) out across the coil and moves.
+        // The coil (serialised first) masters both — `{split 1}`/`{split 2}`; each move receives the deepest
+        // node it taps — move1 `{recv 1}`, move2 `{recv 2}` (StartCmd absorbed) — per the ADR-0006 boundary
+        // rule. The network keeps its SPLIT flag alongside for now (phase 2).
         Assert.Equal(
             "NETWORK 3 \"Motor status telemetry\" SPLIT\n" +
-            "  COIL Output.Run := StartCmd AND RunCmd\n" +
-            "  MOVE(EN := StartCmd, IN := 1) => Status.Word1\n" +
-            "  MOVE(EN := StartCmd AND RunCmd, IN := SourceValue) => Status.Word2\n",
+            "  COIL Output.Run := StartCmd{split 1} AND RunCmd{split 2}\n" +
+            "  MOVE(EN := StartCmd{recv 1}, IN := 1) => Status.Word1\n" +
+            "  MOVE(EN := StartCmd AND RunCmd{recv 2}, IN := SourceValue) => Status.Word2\n",
             text);
     }
 

@@ -341,8 +341,12 @@ public class OrMergeAndNegationTests
 
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
+        // One EnableCmd contact fans out to both OR-branches of the single coil (an intra-statement split),
+        // so the reducer marks it `{split 1}`/`{recv 1}` (ADR-0006). Note: no ` SPLIT` header — the legacy
+        // per-network flag only catches *cross*-statement fan-out (DetectSplit), which is exactly the gap
+        // the per-node markers close; the flag is removed entirely in phase 3.
         Assert.Equal(
-            "NETWORK 1 \"Shared prefix\"\n  COIL Output.Selected := EnableCmd AND ModeA OR EnableCmd AND ModeB\n",
+            "NETWORK 1 \"Shared prefix\"\n  COIL Output.Selected := EnableCmd{split 1} AND ModeA OR EnableCmd{recv 1} AND ModeB\n",
             text);
     }
 
