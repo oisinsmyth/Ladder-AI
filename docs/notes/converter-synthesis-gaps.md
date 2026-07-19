@@ -31,12 +31,28 @@ answer-key for it and rely on self-consistency.)
 path component, so `RisingEdgeFlags[3]` mis-scoped to GlobalVariable (TIA: undefined global tag). Now strips
 the subscript before the local-name lookup. Covered by `ArrayIndexScopeSynthesisTests`. (MotorStarter 1188→976.)
 
-**3. Real, multiple, remaining synthesis gaps.** Even against the *own-sidecar* oracle, all 4 still differ —
-notably **more timer-`.Q` handling variants** (`InfeedRestartTimer.Q`/`UpstreamEnableTimer.Q` are ordinary
-`<Access>` reads in the real form but synth handles them differently — a G2-adjacent case for *local/FB-
-instance* or *cross-network-within-a-chain* timer Q reads, distinct from the whole-condition same-network
-case G2 already handles), plus others not yet isolated. These are genuine gaps, and there are several per
-block — a per-construct effort like the reference corpus was, one fixture + fix at a time.
+**3. Real, multiple, remaining synthesis gaps.** Working the own-sidecar oracle down:
+- **Timer-`.Q` instance scope — FIXED 2026-07-19** (commit `adbb660`): a same-network timer `.Q` is a
+  direct-wire `TimerOutputStep` only for a **GLOBAL-instance** timer (TimerSample); a **LOCAL/FB-instance**
+  timer's `.Q` is an ordinary `LocalVariable` Access (FB_ShredderSequencer N11). This **perfected two of
+  the four** blocks: `FB_ShredderSequencer` and `FB_PusherControl` now round-trip through readable-only
+  exactly (0 diff). `FB_MotorFwdRevSystem` and `MotorStarter` remain.
+- **Fan-out / shared-contact — OPEN, hard.** The remaining two are dominated by **contact fan-out**: TIA
+  shares one contact's output across multiple consumers where synthesis rebuilds each Expr-tree occurrence
+  separately (MotorStarter N13: five MOVEs to `IO.Telemetry` share the cascading `NF/Run/RunningFB`
+  contacts — sidecar shows contact `uid 37` reused across moves). Logically identical, structurally
+  different. **Investigated 2026-07-19; NOT yet cracked.** The sharing IS deterministic but the exact rule
+  is intricate — attempts to reproduce it (top-level common-prefix sharing; then dest-scoped) each
+  **over-shared** and broke the two perfected blocks (PerimeterSafetyAlarms keeps repeated same-tag
+  contacts separate when they sit in different structural roles; FB_ShredderSequencer has *same-dest,
+  same-leading-prefix* statements TIA still does NOT share, so "dest-scoped cascade" is necessary but not
+  sufficient — likely also gated on a *strict prefix cascade* / adjacency, still unconfirmed). Reverted;
+  the two blocks keep their sidecars (safe). **Cracking this needs systematic reverse-engineering**: a
+  tool that extracts, per network across the whole real corpus, exactly which contacts are shared, and
+  correlates with statement structure to derive the precise rule before implementing — approximations make
+  it worse.
+- Plus **OR-factoring** (move 3): the reducer distributes `prefix AND (X OR Y)` to `(prefix AND X) OR
+  (prefix AND Y)`, losing the shared prefix — a `to-ir` (reducer) fix, separate from synthesis.
 
 **Consequences / next steps:**
 - **The 4 blocks correctly keep their stored sidecars** (safe; guarded by `CommittedBlocksRoundTripTests` +
