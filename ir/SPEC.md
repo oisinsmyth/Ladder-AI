@@ -243,13 +243,13 @@ note below). This only became reachable once an OR-merge branch could itself be
 a compound expression rather than a single tag (S1 item 11) — before that, `AND`/`OR` never
 nested inside each other in any real or built shape, so the distinction was moot.
 
-#### Contact fan-out (splits): `{split N}` / `{recv N}` — **PROPOSED (ADR-0006, 2026-07-19; not yet implemented)**
+#### Contact fan-out (splits): `{split N}` / `{recv N}` — **IMPLEMENTED (ADR-0006, phases 1–3, 2026-07-19)**
 
-> This subsection is the agreed draft grammar for ADR-0006, phase 1. It is **not yet implemented** in
-> the converter — no `.ir` file carries these markers today, and the parser/serializer do not yet accept
-> them. It is recorded here as the signed-off design so implementation can proceed against a fixed target.
-> Until phase 2/3 land, fan-out is still handled by the interim per-network `SPLIT` flag + synthesis
-> heuristic (`SidecarSynthesizer`), which this grammar replaces.
+> Live end to end: `to-ir` derives the markers (`GraphReducer.ApplyFanoutMarkers`), the parser/serializer
+> round-trip them, and `to-xml --synthesize` reproduces the fan-out from them (`SidecarSynthesizer`'s
+> per-network label registry). The interim per-network `SPLIT` flag + synthesis prefix heuristic it replaced
+> are removed (the parser still accepts-and-ignores a leftover ` SPLIT` header). Remaining: phase 4 drops the
+> stored sidecars from the blocks this makes byte-exact.
 
 Fan-out — one part's output feeding several consumers (a "split") — is a **drawing choice, not logic**:
 a split network and its split-free equivalent have *byte-identical readable logic but different sidecars*
@@ -353,10 +353,11 @@ ambiguous (`(IO.HrsRun = 4294967295){split 1}`).
 **Derivation / synthesis contract** (mechanics, not text): `to-ir` reads fan-out straight from the export
 DAG (a part whose output wires to more than one consumer), assigns ordinals per shared part, and emits the
 full condition with `{split}`/`{recv}` on the boundary elements. `to-xml` builds each `{split N}` once and
-registers its boundary wire under N; at a `{recv N}` it verifies the written prefix against node N, wires
-from node N's registered wire, and builds only the elements after the marker — no new part/access for the
-prefix, no guessing. This **replaces** `SidecarSynthesizer`'s prefix-signature sharing cache and the
-`IrNetwork.Split` / network `SPLIT` flag (both removed in phase 2/3, ADR-0006).
+registers node N's prefix step-list under N; at a `{recv N}` it splices node N's steps by reference (so the
+shared Parts fan out) and builds only the elements after the marker — no new part/access for the prefix, no
+guessing. A `{recv N}` with no registered `{split N}` is a hard error. This **replaced**
+`SidecarSynthesizer`'s prefix-signature sharing cache and the `IrNetwork.Split` / network `SPLIT` flag
+(both removed, ADR-0006 phase 3).
 
 Stateful and boxed instructions (timers, MOVE, bitwise word instructions, block calls —
 anything with named ports beyond a single boolean in/out) use call syntax, with a small
@@ -1164,12 +1165,12 @@ only for a block already verified derivable (it errors if the block can't even s
 an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or that diverges keeps its stored
 `SIDECAR`. When present, its content and contract are unchanged, as below.
 
-**Contact fan-out is a readable concern, not a sidecar one (ADR-0006, proposed).** One class of
+**Contact fan-out is a readable concern, not a sidecar one (ADR-0006, implemented).** One class of
 "wire identity" the sidecar historically implied — which occurrences of a contact are physically the
-*same* fanned-out part — is *not* derivable from the logic, so once ADR-0006 lands it is carried in the
-readable form via `{split N}`/`{recv N}` node markers (see the readable-form subsection above), not left
-to a synthesis heuristic. The sidecar still owns the genuinely machine-only identifiers (UIds, wire UIds,
-scopes); it no longer needs to encode the split topology, because the readable does.
+*same* fanned-out part — is *not* derivable from the logic, so it is carried in the readable form via
+`{split N}`/`{recv N}` node markers (see the readable-form subsection above), not a synthesis heuristic.
+The sidecar still owns the genuinely machine-only identifiers (UIds, wire UIds, scopes); it no longer
+encodes the split topology, because the readable does.
 
 Machine-owned, appended once per file, never hand-edited by a human or the AI. Purpose: let the
 converter regenerate the exact source UIds and any other volatile-but-required-for-import
