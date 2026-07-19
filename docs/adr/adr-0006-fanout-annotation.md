@@ -127,15 +127,21 @@ neither over-share N4 nor miss N1.
    change — owner sign-off gate, per [[feedback_ask_before_design_deviation]].)* — **DRAFT WRITTEN
    2026-07-19** as a clearly-banner-marked "PROPOSED / not yet implemented" subsection of `ir/SPEC.md`
    (readable-form section), plus a cross-reference from the Sidecar section. Covers tokens, placement,
-   the single-contact / cascade-junction / non-contact-receiver cases, recv-as-node vs recv-as-origin, an
-   EBNF sketch, and the parse/validate constraints. **Awaiting owner sign-off** before the model + parser/
+   the single-node / cascade / non-contact-receiver cases, the **boundary** semantics (below), an EBNF
+   sketch, and the parse/validate constraints. **Awaiting owner sign-off** before the model + parser/
    serializer work begins; nothing in the converter accepts the markers yet.
+   - **Boundary model (owner correction 2026-07-19):** every rung is **self-contained and fully readable**
+     — the complete condition is always written out; the marker only tags the shared node *in place* and
+     the rung continues. There is **no bare/reference-only element.** A marker means "the chain from its
+     start up to *and including* this element is node N"; a `{recv N}` reuses node N's wire and builds only
+     what follows, `to-xml` verifying the written prefix matches node N's master. (This replaced the
+     earlier bare-`{recv}` "recv-as-origin" sketch, which required tracing a reference to read a rung.)
 2. **Derivation.** `GraphReducer` emits `split`/`recv` from shared part UIds (document-order master);
    **remove `DetectSplit` and the `IrNetwork.Split` / network `SPLIT` flag.**
-3. **Synthesis.** A per-network label registry replaces the prefix cache; `{recv N}` wires fan-out at any
-   depth and to any consumer port. Implement both receiver flavors: **recv-as-node** (the marked operand
-   *is* the shared node — N1, N12) and **recv-as-origin** (a branch *begins* at node `N` then continues —
-   N13 move 3 tapping the `NF·Run·RF` junction). Delete the prefix-signature cache.
+3. **Synthesis.** A per-network label registry replaces the prefix cache. At each element, build the
+   written chain; on a `{recv N}` verify the prefix against node N's registered definition, wire from
+   node N's boundary wire, and build only the elements after the marker (fan-out at any depth, into any
+   consumer port). Delete the prefix-signature cache.
 4. **Migrate + validate.** Re-derive `HandAuthorSplitsMerges` markers (stay byte-exact); drive
    `MotorStarter` + the four `test-project001` FBs to **per-network byte-exact** against the `fanout.py` /
    golden `Normalizer` oracle; then drop those blocks' stored sidecars (closing the ADR-0005 residual) and

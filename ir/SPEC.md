@@ -260,85 +260,103 @@ express a split *inside one statement* (MotorStarter N1), and cannot distinguish
 contact" from "don't" for two identically-shaped networks TIA drew oppositely (N13 vs N4 — the proof that
 depth fan-out is non-derivable; see `docs/notes/converter-synthesis-gaps.md`).
 
-**Tokens.** Two suffix markers, on the element whose output is (or references) the shared node:
+**Tokens — a boundary in the chain.** Each marker suffixes a chain element and marks a *boundary*: the
+chain from its start (the rail, or the start of the `OR`-branch the marker sits in) up to **and including**
+the marked element is physically shared node **N**.
 
-- `{split N}` — the element's output **is** shared node **N**, drawn once ("the master"). Exactly one per
-  label per network.
-- `{recv N}` — this position **is** node N's output (it taps the master's wire, not a fresh part). One or
-  more per label.
+- `{split N}` — the **master**: node N is *defined* here, drawn once. Exactly one per label per network.
+- `{recv N}` — a **reference**: the chain up to here reuses node N's already-built wire instead of building
+  fresh parts; everything **after** the marked element continues the chain, built normally. One or more per
+  label.
 
-`N` is an ordinal **scoped to the network**, assigned by `to-ir` in document order of the `{split}`
-masters (`1`, `2`, …). A `{split}` with no matching `{recv}` never occurs — that is just an unmarked node.
+`N` is an ordinal **scoped to the network**, assigned by `to-ir` in document order of the masters
+(`1`, `2`, …). A `{split}` with no matching `{recv}` never occurs — that is just an unmarked node.
 
-**Placement.** A marker suffixes any single **chain element** whose output fans out — a contact
-(`IO.Run{split 2}`), a negated contact (`NOT X{split 2}`), a standalone `NOT (X){split 2}`, a comparison,
-or a parenthesized compound like an OR-merge (`(A OR B){split 2}`). It attaches at **any depth** (top
-level, inside an `OR` branch, inside a `NOT`), and a `{recv N}` may feed **any consumer port** — another
-contact, a `COIL`/`SCOIL`/`RCOIL`, a `MOVE`'s `EN`, or a comparison's chain input (real: N12's
-`RisingEdgeFlags[2]` fans into two comparisons; N13's cascade fans into `MOVE` `EN`s). The full logic
-chain stays visible — the marker only records *which occurrence is physically shared*.
+**Every rung stays self-contained and fully readable.** The complete condition is always written out in
+the clear — the marker only *tags* which element's output is shared. A reader can ignore every marker and
+still read the exact logic of each rung, on its own, with nothing to trace elsewhere. `to-xml` **verifies**
+that the written chain-prefix up to a `{recv N}` is logically identical to node N's master definition, so
+the readable redundancy is checked, never blindly trusted.
 
-**Single-contact node (common case — real: MotorStarter N1, an intra-statement split):**
+**Placement.** A marker suffixes any single chain element — a contact (`IO.Run{split 2}`), a negated
+contact (`NOT X{split 2}`), a standalone `NOT (X){split 2}`, a comparison, or a parenthesized compound like
+an OR-merge (`(A OR B){split 2}`) — at **any depth** (top level, inside an `OR`-branch, inside a `NOT`). A
+`{recv N}` may feed **any consumer port** — another contact, a `COIL`/`SCOIL`/`RCOIL`, a `MOVE`'s `EN`, or
+a comparison's chain input (real: N12's `RisingEdgeFlags[2]` fans into two comparisons; N13's cascade fans
+into `MOVE` `EN`s).
+
+**Single-node share (real: MotorStarter N1, an intra-statement split).** Node 1 is a single contact, so
+the boundary "chain up to the marked element" is just that contact:
 
 ```
 COIL IO.Run := (IO.TryRunMotor{split 1} AND PreStartMemory AND IO.RecentStart
              OR IO.TryRunMotor{recv 1} AND IO.Run) AND NOT IO.StopMotor AND NOT IO.Shutdown
 ```
 
-The reader still sees `IO.TryRunMotor AND IO.Run`; `{recv 1}` says that second `IO.TryRunMotor` is the
-*same physical contact* as the first — one contact, fanned out to both OR-branches of the one coil.
+Both branches read completely on their own (`TryRunMotor AND PreStartMemory AND RecentStart`,
+`TryRunMotor AND Run`); `{recv 1}` only says the second `IO.TryRunMotor` is the *same physical contact* as
+the first — one contact fanned out to both OR-branches of the one coil.
 
-**Cascade-junction node (real: MotorStarter N13, telemetry):** when statements share a *cascade prefix*,
-each contact's output is its own node; a later rung tapping a mid-cascade junction references it with a
-**bare** `{recv N}` (the junction is a compound value — the AND of everything up to it — so there is no
-single tag to inline):
+**Cascade share (real: MotorStarter N13, telemetry).** The statements share a growing prefix
+`NF → NF·Run → NF·Run·RunningFB`. Each rung writes its **whole** condition; the marker sits on the last
+element of the shared prefix (the boundary), and the rung continues past it:
 
 ```
 MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry
 MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{split 2}, IN := 1) => IO.Telemetry
-MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{recv 2} AND IO.RunningFB{split 3}, IN := 2) => IO.Telemetry
-MOVE(EN := {recv 3} AND IO.UPSEnable OR {recv 3} AND IO.InHand, IN := 3) => IO.Telemetry
+MOVE(EN := NOT IO.FaultActive AND IO.Run{recv 2} AND IO.RunningFB{split 3}, IN := 2) => IO.Telemetry
+MOVE(EN := NOT IO.FaultActive AND IO.Run AND IO.RunningFB{recv 3} AND IO.UPSEnable
+       OR NOT IO.FaultActive AND IO.Run AND IO.RunningFB{recv 3} AND IO.InHand, IN := 3) => IO.Telemetry
 ```
 
-`{split 1/2/3}` mark the `NF` / `NF·Run` / `NF·Run·RunningFB` junctions; the fourth MOVE's two OR-branches
-each **begin** at junction 3 and add their own contact. So there are two receiver forms:
+Read top to bottom, every rung is complete: the fourth MOVE plainly says
+`NOT FaultActive AND Run AND RunningFB AND UPSEnable OR … AND InHand` — no reference to chase. The markers
+add only: node 1 = `NF`, node 2 = `NF·Run`, node 3 = `NF·Run·RunningFB`; `{recv 3}` says the chain up to
+`RunningFB` reuses node 3's wire, and `AND IO.UPSEnable` continues from there.
 
-- **recv-as-node** — `<tag>{recv N}` (or `NOT <tag>{recv N}`): the marked contact *is* node N (node N is a
-  single contact of that tag). The tag is shown for readability and is **verified** against the master.
-- **recv-as-origin** — a **bare** `{recv N}` standing where a chain element would: the chain/branch begins
-  at node N's output instead of the rail. Used when node N is a compound junction (no single tag to show).
+Two rules keep the marking minimal and unambiguous:
+
+- **Mark only the deepest shared node** a prefix passes through — `{recv 3}`, not also `{recv 1}`/`{recv 2}`
+  — because tapping the deepest node already carries the whole shared prefix; the shallower marks would be
+  redundant. (That is why the fourth MOVE's branches carry a single `{recv 3}`, and why `NF` is unmarked on
+  the third/fourth rungs but `{recv 1}` on the second — on the second rung `NF` *is* the deepest shared node
+  reached before node 2 is defined.)
+- **The cascade's internal structure is stated once, in the masters** — the second rung taps node 1 to
+  define node 2 (`NF{recv 1} AND Run{split 2}`), the third taps node 2 to define node 3
+  (`… Run{recv 2} AND RunningFB{split 3}`). Receiver rungs never re-state it; they just tap the deepest node.
 
 **Grammar (EBNF sketch — micro-lexing finalized in implementation):**
 
 ```
 element        ::= ( contact | negated-contact | standalone-not | compare | "(" or-expr ")" ) [ marker ]
-                 | recv-origin
-recv-origin    ::= marker-recv           # bare {recv N} at a chain/branch start
-marker         ::= marker-split | marker-recv
-marker-split   ::= "{split" ws ordinal "}"
-marker-recv    ::= "{recv"  ws ordinal "}"
+marker         ::= ( "{split" | "{recv" ) ws ordinal "}"
 ordinal        ::= digit { digit }
 ```
 
-The `{` unambiguously ends a tag path (tag chars are `[A-Za-z0-9_.\[\]]`), so `IO.Run{split 2}` needs no
-separator. A comparison's marker binds the whole comparison and is parenthesized when otherwise ambiguous
-(`(IO.HrsRun = 4294967295){split 1}`).
+Every element is written in full; a marker is an optional suffix on it — there is no bare/reference-only
+element. The `{` unambiguously ends a tag path (tag chars are `[A-Za-z0-9_.\[\]]`), so `IO.Run{split 2}`
+needs no separator. A comparison's marker binds the whole comparison and is parenthesized when otherwise
+ambiguous (`(IO.HrsRun = 4294967295){split 1}`).
 
 **Constraints (parse / validate):**
 
-- Each `{split N}` is unique within its network; each `{recv N}` must have a matching `{split N}` **earlier
-  in document order** (the master is always drawn before it is received).
-- A recv-as-node's tag must equal its master's tag — a mismatch is a hard parse error, because the readable
-  is asserting physical identity.
+- Each `{split N}` is unique within its network; each `{recv N}` has a matching `{split N}` **earlier in
+  document order** (the master is drawn before it is received).
+- The written chain-prefix up to a `{recv N}` must be **logically identical to node N's master definition**
+  — `to-xml` verifies it; a mismatch is a hard error (the rung is asserting physical identity, and the
+  redundancy is what makes each rung independently readable).
+- `to-ir` marks only the **deepest** shared node in each branch prefix; a redundant shallower `{recv}` whose
+  whole prefix is already covered by a deeper marker in the same run is rejected on parse.
 - Markers are **not tags**: `tagstatus`, `preflight`, `review`, and `digest` ground the underlying tag and
   ignore the marker (hard rule 3 unaffected).
 
 **Derivation / synthesis contract** (mechanics, not text): `to-ir` reads fan-out straight from the export
-DAG (a part whose output wires to more than one consumer), assigns ordinals per shared part, and emits
-`{split}`/`{recv}`. `to-xml` builds each `{split N}` once, registers its output wire under N, and wires
-every `{recv N}` from that wire — no new part/access, no guessing. This **replaces** `SidecarSynthesizer`'s
-prefix-signature sharing cache and the `IrNetwork.Split` / network `SPLIT` flag (both removed in phase 2/3,
-ADR-0006).
+DAG (a part whose output wires to more than one consumer), assigns ordinals per shared part, and emits the
+full condition with `{split}`/`{recv}` on the boundary elements. `to-xml` builds each `{split N}` once and
+registers its boundary wire under N; at a `{recv N}` it verifies the written prefix against node N, wires
+from node N's registered wire, and builds only the elements after the marker — no new part/access for the
+prefix, no guessing. This **replaces** `SidecarSynthesizer`'s prefix-signature sharing cache and the
+`IrNetwork.Split` / network `SPLIT` flag (both removed in phase 2/3, ADR-0006).
 
 Stateful and boxed instructions (timers, MOVE, bitwise word instructions, block calls —
 anything with named ports beyond a single boolean in/out) use call syntax, with a small
