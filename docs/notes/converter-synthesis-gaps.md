@@ -418,6 +418,19 @@ the two as interchangeable where they're provably equivalent and normalize one t
 oracle. Decide before coding — this is a readable-form expressiveness call, not only a synthesis one, so
 it may touch `ir/SPEC.md`. **Verify:** `BooleanExtras` flips green (via whichever resolution).
 
+## Box-EN fan-out — RESOLVED 2026-07-19 (ADR-0006 phase 4); one build-order limitation open
+The "Hours Run Counter" residual (MotorStarter N12, FB_MotorFwdRevSystem N13) was **not** a compare-structure
+reducer bug (the readable is faithful — both the reset `MOVE`/`Eq` and increment `ADD`/`Lt` are correct). It
+was **fan-out into a box**: the `ADD` shares the `Q AND NOT RisingEdgeFlags` prefix with the `MOVE`/coils, but
+fan-out marking + synthesis excluded the box family. Fixed by extending both to the synthesizable box EN
+chains (Mul/Add/Sub/Div, Convert, Swap, Abs, Calc, T_Sub, T_Conv). All four migration blocks now byte-exact.
+**Still open — build-order alignment:** synthesis builds boxes *before* wands/calls (and abs before swap),
+while the serializer/marking order is `… wands → calls → boxes` (abs after swap). So a fan-out node shared
+**box↔wand/call** or **swap↔abs** would hit the registry-miss hard-error rather than reproduce. None occurs in
+the corpus (N12/N13 share only coils/moves↔box, consistent in both orders). The robust fix is to reorder
+`SidecarSynthesizer.Synthesize`'s box builds after wands/calls (and swap before abs) to match the serializer;
+deferred because it changes cross-statement UId order and warrants a live-TIA `SynthesizerLiveCheck` re-verify.
+
 ## Where this is tracked
 `AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity
 matrix (`tests/golden/synthesis-parity-matrix.md`) is the live scoreboard. Update both when a gap lands.
