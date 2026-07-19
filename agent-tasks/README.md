@@ -67,8 +67,8 @@ processes (CLAUDE.md's existing guidance) and check this table for a stale `in-p
 
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
-| 1 | S6 req#1 hopper-blockage-alarm — C-605 comment-only UDT fix + re-close gate | done | — | yes |
-<!-- Row 1: Stage-3 build DONE 2026-07-19. C-605 comment-only UDT fix DONE 2026-07-20: UDT re-import + compile --type 0 errors; FB block compile 0 errors ("successfully compiled" FB50); 1 pre-existing device HW-IO warning only. Gate re-closed. Not committed (coordinator handles). -->
+| 1 | S6 req#1 hopper-blockage-alarm — F1/F2/S1 fix (up-accumulator rebuild NW3-5) | done | — | yes |
+<!-- Row 1: Stage-3 build + C-605 fix + F1/F2/S1 fix all DONE 2026-07-19/20. gen-block-modify-fix: NW3-5 rebuilt as clean up-accumulator; converter diff --only 3 4 5 exit 0 (NW1/2/6 identical); FB block compile 0 errors (FB50). review-findings F1/F2/S1 RESOLVED. Not committed (coordinator handles). -->
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**
 

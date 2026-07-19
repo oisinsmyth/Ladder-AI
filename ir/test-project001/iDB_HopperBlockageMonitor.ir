@@ -18,8 +18,9 @@ DB iDB_HopperBlockageMonitor
     BlockActive : Bool
     BlockActiveMem : Bool
     PauseEdge : Bool
-    RemainingTime : Time = T#60S
-    HeldET : Time
+    AccumulatedElapsed : Time
+    CumulativeElapsed : Time
+    ZeroTime : Time
     ClearDebounceTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time

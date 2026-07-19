@@ -3,7 +3,7 @@ ROOTID 0
 NUMBER 50
 LANGUAGE LAD
 TITLE "Hopper-Blockage Monitor"
-COMMENT "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), via a countdown remaining-budget (see NETWORK 4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members."
+COMMENT "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), plus a banked up-accumulator compared against the threshold (see NETWORK 3-4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members."
 
 INTERFACE
   INPUT
@@ -21,8 +21,9 @@ INTERFACE
     BlockActive : Bool COMMENT "The persistence window accrues only while this is true: a qualified blockage AND the plant actually running (Q-HBA-04)."
     BlockActiveMem : Bool COMMENT "Previous-scan BlockActive, for the constructed falling-edge (C-404)."
     PauseEdge : Bool COMMENT "One-scan pulse when BlockActive falls (plant stop or genuine clear) - fires the T_SUB bank in NETWORK 4."
-    RemainingTime : Time = T#60S COMMENT "Countdown budget realising the cumulative timer without TONR (C-406). Holds BlockedTimeThreshold while unblocked; NETWORK 4 shrinks it by each elapsed segment. Start value T#60S guards the power-up-with-hopper-already-high case so the timer never trips on a stale 0. Transient (non-retentive)."
-    HeldET : Time COMMENT "Tracks the live segment's elapsed while BlockActive; on a pause its MOVE stops firing so it retains the last-active value for T_SUB to bank."
+    AccumulatedElapsed : Time COMMENT "Cumulative high-and-running elapsed banked across plant-stop pauses (NEW-HBA-01). Two disjoint writers (NETWORK 3): reset to T#0S on a confirmed clear or FaultReset, banked up by each just-ended segment's elapsed on a plant-stop pause - never both in one scan. Transient (non-retentive); starts 0, so no first-scan trip. Replaces the former countdown RemainingTime (F1/F2/S1 fix, 2026-07-20)."
+    CumulativeElapsed : Time COMMENT "Live total = AccumulatedElapsed + PersistenceTimer.ET (NETWORK 4), compared against BlockedTimeThreshold to trip the alarm. Single-writer, derived each scan."
+    ZeroTime : Time COMMENT "Constant zero (T#0S) source for the accumulator reset - TIA import rejects a bare Time literal as a MOVE operand, so the zero is held as an unwritten Time member (defaults to T#0S, never written). Non-retentive."
     ClearDebounceTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
@@ -43,21 +44,21 @@ NETWORK 2 "Blockage-Present Qualifier And Run Gate"
   COIL HighQualified := IO.HopperLevelHigh OR HighQualified AND NOT ClearDebounceTimer.Q
   COIL BlockActive := HighQualified AND IO.PlantRunning
 
-NETWORK 3 "Remaining Budget Re-Arm"
-  COMMENT "While no blockage is qualified (or on FaultReset) the countdown budget holds the full BlockedTimeThreshold. Re-armed in its own network BEFORE the timer network so NETWORK 4 reads a fresh value each scan - on the first scan after power-up this hands the timer BlockedTimeThreshold rather than a stale 0 (non-retentive state, NEW-HBA-06)."
-  MOVE(EN := NOT HighQualified OR IO.FaultReset, IN := IO.BlockedTimeThreshold) => RemainingTime
-
-NETWORK 4 "Cumulative Persistence Timer (TON + Time Subtraction, C-406)"
-  COMMENT "Pause-and-resume cumulative timing (NEW-HBA-01) from a plain TON, never TONR (C-406). PersistenceTimer times the current contiguous high-and-running segment against RemainingTime; its Q trips when a segment exhausts the budget - i.e. cumulative high-and-running time reaches BlockedTimeThreshold. HeldET tracks the live segment's elapsed while BlockActive; on the segment's falling edge (PauseEdge - a plant stop or genuine clear, C-404) T_SUB banks that elapsed by shrinking RemainingTime, so the next segment resumes where this one left off. HeldET holds across the pause because its MOVE is gated on BlockActive, and BlockActiveMem's write follows PauseEdge's read (read-before-write, C-404)."
-  TON(PersistenceTimer, IN := BlockActive, PT := RemainingTime)
+NETWORK 3 "Cumulative Blockage-Elapsed Accumulator"
+  COMMENT "Banks cumulative high-and-running time across plant-stop pauses (NEW-HBA-01), replacing the former countdown budget (F1/F2/S1 fix, 2026-07-20). AccumulatedElapsed has two provably-disjoint writers, so there is no same-scan race and no next-scan cleanup (the F2/S1 root cause is gone): it is reset to T#0S on a genuine confirmed clear (NOT HighQualified) or on FaultReset, and otherwise banked up by the just-ended segment's elapsed only on a real plant-stop pause (PauseEdge AND HighQualified AND NOT FaultReset - i.e. the hopper is still blocked but the plant stopped). PauseEdge is a constructed falling edge (C-404); it and the bank read PersistenceTimer.ET from before NETWORK 4's TON re-evaluates this scan, so the ET captured is the just-completed segment's, with no separate held-value register needed."
   COIL PauseEdge := NOT BlockActive AND BlockActiveMem
   COIL BlockActiveMem := BlockActive
-  MOVE(EN := BlockActive, IN := PersistenceTimer.ET) => HeldET
-  T_SUB(EN := PauseEdge, IN1 := RemainingTime, IN2 := HeldET) => RemainingTime
+  MOVE(EN := NOT HighQualified OR IO.FaultReset, IN := ZeroTime) => AccumulatedElapsed
+  ADD(EN := PauseEdge AND HighQualified AND NOT IO.FaultReset, IN1 := PersistenceTimer.ET, IN2 := AccumulatedElapsed) => AccumulatedElapsed
+
+NETWORK 4 "Cumulative Persistence Timer (TON, C-406)"
+  COMMENT "Plain TON, never TONR (C-406), times the current contiguous high-and-running segment; FaultReset in its IN forces the current segment back to zero so a reset clears the in-progress time too (F1: reset is history-independent). CumulativeElapsed = AccumulatedElapsed (banked pauses) + this segment's live ET is the total cumulative high-and-running time, compared against BlockedTimeThreshold in NETWORK 5. PT is BlockedTimeThreshold only so a single contiguous segment's ET can itself reach the threshold; the trip is the comparison, not the timer's own Q."
+  TON(PersistenceTimer, IN := BlockActive AND NOT IO.FaultReset, PT := IO.BlockedTimeThreshold)
+  ADD(EN := TRUE, IN1 := AccumulatedElapsed, IN2 := PersistenceTimer.ET) => CumulativeElapsed
 
 NETWORK 5 "Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)"
-  COMMENT "Latched fault (C-123): set when the cumulative budget is exhausted (PersistenceTimer.Q), held until FaultReset. Lives in the RETAIN interface and is deliberately not cleared at startup (C-124 carve-out, NEW-HBA-04) - a blockage needing a human still needs acknowledgement after a power cycle, exactly like the sequencer's DischargeConveyorTimeoutFault. This is fail-safe: the stop demand below stays asserted until acknowledged."
-  COIL IO.HopperBlockedAlarm := PersistenceTimer.Q OR IO.HopperBlockedAlarm AND NOT IO.FaultReset
+  COMMENT "Latched fault (C-123): set when cumulative high-and-running time reaches BlockedTimeThreshold (CumulativeElapsed >= threshold), held until FaultReset. FaultReset gates the whole rung (AND NOT FaultReset) so a reset clears the latch regardless of the trip's current state (F1 fix - the old rung let a still-true trip defeat the reset); paired with NETWORK 3/4 zeroing the accumulator and current segment, a reset requires a fresh full accumulation before re-alarming, identically whether the trip was contiguous or post-pause. Lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - a blockage needing a human still needs acknowledgement after a restart, like the sequencer's DischargeConveyorTimeoutFault. Fail-safe: the stop demand below stays asserted until acknowledged."
+  COIL IO.HopperBlockedAlarm := (CumulativeElapsed >= IO.BlockedTimeThreshold OR IO.HopperBlockedAlarm) AND NOT IO.FaultReset
 
 NETWORK 6 "Stop / Inhibit Demand"
   COMMENT "The FB emits a stop/inhibit demand on its own interface (Q-HBA-05) and writes no shared output - integration wires this demand to the actual stop and the alarm to annunciation at a separate step (out of gen-block-new scope, converter-diff-enforced). Kept a distinct member from the alarm so the two can be routed independently."

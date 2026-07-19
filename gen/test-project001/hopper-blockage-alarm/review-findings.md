@@ -37,14 +37,27 @@ gold-plating (the `HopperBlockStopReq` demand traces to Q-HBA-05).
 
 ## Disposition (owner, 2026-07-20)
 
-- **F1, F2, S1, S2 — ACCEPTED AS KNOWN LIMITATIONS this run; not fixed.** Root cause: all four trace
-  to the countdown-budget `RemainingTime` dual-writer (NW3 `MOVE` re-arm vs NW4 `T_SUB`), which
-  existed **only** to dodge converter **Gap E** (tag-vs-tag comparison typing) — the reason NW3 was
-  not built as the literal `up-accumulator + accumulator ≥ threshold` compare. **Gap E was fixed
-  earlier the same day (commit `e7e4980`).** A future fix run can therefore rebuild NW3 as a clean
-  `accumulator ≥ threshold` comparison and **dissolve F1/F2/S1 at the root** (removing the dual
-  writer removes both the reset history-dependence and the re-arm/subtract race) rather than
-  patching around them. S2's density also eases once the `T_SUB`/`HeldET` machinery is gone.
+- **F1, F2, S1 — RESOLVED (2026-07-20, `gen-block-modify-fix`).** NW3–NW5 rebuilt as the clean
+  up-accumulator now that **Gap E is fixed (`e7e4980`)** — the tag-vs-tag `CumulativeElapsed ≥
+  BlockedTimeThreshold` comparison compiles clean (Time-vs-Time), and TIA accepts the Time `ADD`
+  (`AccumulatedElapsed + PersistenceTimer.ET`). The countdown-budget `RemainingTime`/`HeldET`/`T_SUB`
+  machinery is gone, dissolving all three at the root:
+  - **F2/S1 (dual-writer race)** — `AccumulatedElapsed` has two *provably-disjoint* writers (NW3):
+    reset to zero on `NOT HighQualified OR FaultReset`, bank up on `PauseEdge AND HighQualified AND
+    NOT FaultReset`. They can never fire in one scan, so no same-scan order dependence and no
+    next-scan cleanup. `CumulativeElapsed` is single-writer (NW4 `ADD`). Verifiable in one reading.
+  - **F1 (history-dependent reset)** — NW5 latch is `(CumulativeElapsed ≥ threshold OR alarm) AND
+    NOT FaultReset`, so `FaultReset` clears the latch regardless of the trip state; NW3 zeroes
+    `AccumulatedElapsed` and NW4's `TON IN := BlockActive AND NOT FaultReset` zeroes the current
+    segment — a reset requires a fresh full accumulation before re-alarming, *identically* whether
+    the prior trip was contiguous or post-pause. Verified against both review cases.
+  Scoped/invariance: only NW3/NW4/NW5 changed (`converter diff --only 3 4 5` exit 0; NW1/NW2/NW6
+  byte-identical); interface UDT unchanged; internal Statics swapped (dropped `RemainingTime`/
+  `HeldET`, added `AccumulatedElapsed`/`CumulativeElapsed`/`ZeroTime`). Compiles clean (FB50, 0
+  errors). One import-shape note: a bare `T#0S` literal as a MOVE operand is rejected by TIA
+  (playbook class), so the accumulator resets from an unwritten zero-valued `ZeroTime` member.
+- **S2 — also dissolved as a consequence.** The old NW4 packed 5 statements; the rebuilt NW4 is 2
+  (TON + `ADD`) and NW3 is 4 — the `T_SUB`/`HeldET` machinery that drove the high-water mark is gone.
 - **C-124, C-115 — reaffirmed Gate-1 decisions, left as-is by design.** C-124 → NEW-HBA-06
   (rely-on-non-retentivity for transient state, no OB100 edit). C-115 → NEW-HBA-07 (supervisory-
   monitor exemption from the handshake vocabulary). Recorded as accepted judgment calls, **not open
