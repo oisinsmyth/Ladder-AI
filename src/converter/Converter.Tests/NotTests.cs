@@ -141,9 +141,10 @@ public class NotTests
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
         // The fixture is a standalone Not *part* (invert-RLO), so it serialises as `NOT (EnableCmd)`
-        // — distinct from a negated contact `NOT EnableCmd` (Gap H, 2026-07-18).
+        // — distinct from a negated contact `NOT EnableCmd` (Gap H, 2026-07-18). It also fans a contact
+        // out across the two coils, so the network is marked SPLIT (2026-07-19).
         Assert.Equal(
-            "NETWORK 1 \"Not tap\"\n" +
+            "NETWORK 1 \"Not tap\" SPLIT\n" +
             "  COIL Output.RunA := EnableCmd AND ModeA\n" +
             "  COIL Output.RunB := NOT (EnableCmd) AND FaultLatch\n",
             text);

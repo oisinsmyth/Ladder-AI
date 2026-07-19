@@ -413,7 +413,14 @@ public sealed record IrNetwork(
     IReadOnlyList<WaitStatement>? Waits = null,
     IReadOnlyList<FillBlockIStatement>? FillBlockIs = null,
     IReadOnlyList<ModbusMasterStatement>? ModbusMasters = null,
-    IReadOnlyList<ModbusCommLoadStatement>? ModbusCommLoads = null)
+    IReadOnlyList<ModbusCommLoadStatement>? ModbusCommLoads = null,
+    // Split (2026-07-19): this network's statements physically SHARE their maximal common leading
+    // sub-expressions as fan-out (a "split"), rather than each drawing its own contacts. This is a pure
+    // drawing choice invisible in the logic — the same rungs can be drawn split or duplicated with
+    // identical meaning (HandAuthorSplitsMerges N1 vs N2 have byte-identical readable, different
+    // sidecars) — so it can't be derived and must be recorded. `to-ir` sets it when the real export
+    // fans a contact out across statements; synthesis honours it by sharing maximal common prefixes.
+    bool Split = false)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 

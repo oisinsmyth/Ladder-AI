@@ -40,9 +40,12 @@ public class SidecarSynthesizerFidelityTests
         var reparsed = FlgNetParser.Parse(xml);
         var reReduced = GraphReducer.Reduce(reparsed, networkNumber: networkNumber, title: title, compileUnitUId: compileUnitUId);
 
+        // Meaning, not shape: strip the SPLIT marker (a fan-out drawing detail, not logic) so this
+        // fidelity check stays about the re-reduced logic. Byte-exact fan-out reproduction is covered
+        // separately by the split round-trip on HandAuthorSplitsMerges.
         Assert.Equal(
-            IrSerializer.SerializeNetworkOnly(originalReduced.Network),
-            IrSerializer.SerializeNetworkOnly(reReduced.Network));
+            IrSerializer.SerializeNetworkOnly(originalReduced.Network).Replace(" SPLIT\n", "\n"),
+            IrSerializer.SerializeNetworkOnly(reReduced.Network).Replace(" SPLIT\n", "\n"));
     }
 
     [Fact]

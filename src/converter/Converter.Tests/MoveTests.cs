@@ -230,8 +230,10 @@ public class MoveTests
 
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
+        // The telescoping cascade fans StartCmd (and StartCmd·RunCmd) out across the coil and moves, so
+        // the network is marked SPLIT (2026-07-19).
         Assert.Equal(
-            "NETWORK 3 \"Motor status telemetry\"\n" +
+            "NETWORK 3 \"Motor status telemetry\" SPLIT\n" +
             "  COIL Output.Run := StartCmd AND RunCmd\n" +
             "  MOVE(EN := StartCmd, IN := 1) => Status.Word1\n" +
             "  MOVE(EN := StartCmd AND RunCmd, IN := SourceValue) => Status.Word2\n",

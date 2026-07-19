@@ -1,3 +1,4 @@
+using System.Text;
 using Converter.SimaticMl;
 
 namespace Converter.Ir;
@@ -160,17 +161,23 @@ public static class SidecarSynthesizer
             }
         }
 
+        // A SPLIT network shares its statements' maximal common leading sub-expressions as fan-out; the
+        // cache carries the shared steps across coils and moves (built in authored order). Null (no
+        // sharing) unless the network is marked SPLIT — which is exactly how a non-split network stays
+        // duplicated (the drawing choice `to-ir` recorded).
+        var prefixCache = network.Split ? new Dictionary<string, ChainStepSidecar>(StringComparer.Ordinal) : null;
+
         var assignments = new List<CoilAssignmentSidecar>();
         foreach (var assignment in network.Assignments)
         {
             assignments.Add(BuildAssignment(
-                assignment, railWireUId, timerPartUIdByInstancePath, ref nextUid, accessEntries, constantEntries, localNames));
+                assignment, railWireUId, timerPartUIdByInstancePath, ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
         }
 
         var moves = new List<MoveStatementSidecar>();
         foreach (var move in network.Moves)
         {
-            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
         }
 
         // Mul/Convert are synthesized as index-paired siblings, not two independent batches — see
@@ -329,7 +336,8 @@ public static class SidecarSynthesizer
     // which is precisely how the real export renders it (TimerSample N3).
     private static CoilAssignmentSidecar BuildAssignment(
         CoilAssignment assignment, int sharedRailWireUId, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath,
-        ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<string, ChainStepSidecar>? prefixCache)
     {
         IReadOnlyList<ChainStepSidecar> steps;
         int? chainRail;
@@ -342,7 +350,7 @@ public static class SidecarSynthesizer
         }
         else
         {
-            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache);
         }
 
         var coilUId = nextUid++;
@@ -382,45 +390,92 @@ public static class SidecarSynthesizer
     // an OR-merge/TON).
     private static (int? RailWireUId, List<ChainStepSidecar> Steps) BuildChain(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<string, ChainStepSidecar>? prefixCache = null)
     {
         var operands = FlattenAnd(expr);
         var steps = new List<ChainStepSidecar>();
 
+        // A SPLIT network (prefixCache non-null) shares the maximal common leading sub-expression across
+        // statements as physical fan-out: each step's running prefix signature is looked up, a hit reuses
+        // the already-built step (its output fans out, no new Parts/Access), a miss builds and caches it.
+        // Contacts AND compound steps (an OR-merge, HandAuthorSplitsMerges N7) share this way. The cache
+        // is only supplied when the network is marked SPLIT, so a non-split network never shares.
+        var prefix = prefixCache is null ? null : new StringBuilder();
+
         for (var idx = 0; idx < operands.Count; idx++)
         {
             var operand = operands[idx];
-            if (idx == 0 && IsCompound(operand))
+            if (prefix is not null)
             {
-                steps.Add(BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames));
-            }
-            else if (operand is Expr.Compare compare)
-            {
-                steps.Add(BuildCompareStep(compare, ref nextUid, accessEntries, constantEntries, localNames));
-            }
-            else if (IsLeaf(operand))
-            {
-                steps.Add(BuildLeafContactStep(operand, ref nextUid, accessEntries, localNames));
-            }
-            else if (IsCompound(operand))
-            {
-                throw new UnsupportedSynthesisConstructException(
-                    "Only the first operand of an AND chain may be a compound (OR, or NOT-of-non-leaf) " +
-                    "expression — this matches every real series-ladder-chain shape this converter has " +
-                    "ever seen (a branch point can only occur at the rail-most position of a chain). " +
-                    $"Found a compound operand at position {idx}.");
+                prefix.Append(ExprSignature(operand)).Append('|');
+                var key = prefix.ToString();
+                if (prefixCache!.TryGetValue(key, out var cached))
+                {
+                    steps.Add(cached);
+                    continue;
+                }
+
+                var built = BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+                prefixCache[key] = built;
+                steps.Add(built);
             }
             else
             {
-                throw new UnsupportedSynthesisConstructException(
-                    $"Sidecar synthesis does not support '{operand.GetType().Name}' expression nodes " +
-                    "yet (only TagRef/And/Or/Not/Compare are supported).");
+                steps.Add(BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames));
             }
         }
 
         var railWired = operands.Count == 0 || !IsCompound(operands[0]);
         return (railWired ? sharedRailWireUId : null, steps);
     }
+
+    private static ChainStepSidecar BuildStep(
+        Expr operand, int idx, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+    {
+        if (idx == 0 && IsCompound(operand))
+        {
+            return BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        }
+
+        if (operand is Expr.Compare compare)
+        {
+            return BuildCompareStep(compare, ref nextUid, accessEntries, constantEntries, localNames);
+        }
+
+        if (IsLeaf(operand))
+        {
+            return BuildLeafContactStep(operand, ref nextUid, accessEntries, localNames);
+        }
+
+        if (IsCompound(operand))
+        {
+            throw new UnsupportedSynthesisConstructException(
+                "Only the first operand of an AND chain may be a compound (OR, or NOT-of-non-leaf) " +
+                "expression — this matches every real series-ladder-chain shape this converter has " +
+                "ever seen (a branch point can only occur at the rail-most position of a chain). " +
+                $"Found a compound operand at position {idx}.");
+        }
+
+        throw new UnsupportedSynthesisConstructException(
+            $"Sidecar synthesis does not support '{operand.GetType().Name}' expression nodes " +
+            "yet (only TagRef/And/Or/Not/Compare are supported).");
+    }
+
+    // A canonical signature of an expression, for the SPLIT prefix cache — two structurally-identical
+    // sub-expressions share the same signature and are physically shared as one fan-out.
+    private static string ExprSignature(Expr expr) => expr switch
+    {
+        Expr.TagRef t => t.Path,
+        Expr.Not { Standalone: false, Operand: Expr.TagRef t } => "!" + t.Path,
+        Expr.Not not => "N(" + ExprSignature(not.Operand) + ")",
+        Expr.Or or => "O(" + string.Join(",", or.Operands.Select(ExprSignature)) + ")",
+        Expr.And and => "A(" + string.Join(",", and.Operands.Select(ExprSignature)) + ")",
+        Expr.Compare c => "C" + c.Operator + "(" + ExprSignature(c.Left) + "," + ExprSignature(c.Right) + ")",
+        Expr.Literal l => "L" + l.Value,
+        _ => "?" + expr.GetType().Name,
+    };
 
     // Expr.And can arrive left-nested from parenthesized text (e.g. "(A AND B) AND C") even
     // though it's logically flat — flatten defensively rather than assume the parser always
@@ -694,9 +749,10 @@ public static class SidecarSynthesizer
     // an ordinary Access, never a literal or expression).
     private static MoveStatementSidecar BuildMoveSidecar(
         MoveStatement move, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<string, ChainStepSidecar>? prefixCache)
     {
-        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache);
         var movePartUId = nextUid++;
         var inOperand = ResolveOperand(move.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
 

@@ -78,6 +78,11 @@ public static class IrSerializer
     private static void SerializeNetwork(StringBuilder sb, IrNetwork network)
     {
         sb.Append("NETWORK ").Append(network.Number).Append(" \"").Append(EscapeString(network.Title)).Append('"');
+        if (network.Split)
+        {
+            sb.Append(" SPLIT"); // statements share their maximal common leading sub-expressions as fan-out
+        }
+
         sb.Append(network.IsEmpty ? " [empty]\n" : "\n");
 
         // Comment (S1 item 16) — a network-level COMMENT line, mirroring the block-level one,

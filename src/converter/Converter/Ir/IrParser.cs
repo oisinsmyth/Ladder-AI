@@ -229,6 +229,7 @@ public static partial class IrParser
 
         var number = int.Parse(headerMatch.Groups["number"].Value);
         var title = UnescapeString(headerMatch.Groups["title"].Value);
+        var split = headerMatch.Groups["split"].Success;
 
         // Comment (S1 item 16) — an optional network-level COMMENT line, shown regardless of
         // [empty] (mirrors IrSerializer.SerializeNetwork's own placement).
@@ -851,7 +852,7 @@ public static partial class IrParser
 
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
-            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
+            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, Split: split);
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -2061,7 +2062,7 @@ public static partial class IrParser
     [GeneratedRegex(@"^BLOCK (?<kind>\S+) (?<name>\S+)$")]
     private static partial Regex BlockLineRegex();
 
-    [GeneratedRegex("^NETWORK (?<number>\\d+) \"(?<title>(?:[^\"\\\\]|\\\\.)*)\"(?<empty> \\[empty\\])?$")]
+    [GeneratedRegex("^NETWORK (?<number>\\d+) \"(?<title>(?:[^\"\\\\]|\\\\.)*)\"(?<split> SPLIT)?(?<empty> \\[empty\\])?$")]
     private static partial Regex NetworkLineRegex();
 
     [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL) (?<tag>\S+) := (?<expr>.+)$")]

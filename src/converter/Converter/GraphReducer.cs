@@ -478,15 +478,68 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
+        // Split (2026-07-19): a contact/OR/NOT part shared across two statements is a physical fan-out
+        // (a "split") the readable logic can't express — record it so synthesis can reproduce it.
+        var split = DetectSplit(assignmentSidecars, moveSidecars);
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
             swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements, waitStatements,
-            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements);
+            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements, Split: split);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
             moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars);
         return new ReducedNetwork(irNetwork, networkSidecar);
+    }
+
+    // A network "splits" when a contact/OR/NOT part is physically shared across two statements (its
+    // output fans out). Detected by collecting each coil/move statement's part UIds and checking for any
+    // UId that appears in more than one statement.
+    private static bool DetectSplit(
+        IReadOnlyList<CoilAssignmentSidecar> coils, IReadOnlyList<MoveStatementSidecar> moves)
+    {
+        var seen = new HashSet<int>();
+        foreach (var steps in coils.Select(c => c.Steps).Concat(moves.Select(m => m.Steps)))
+        {
+            var uids = new HashSet<int>();
+            CollectPartUIds(steps, uids);
+            if (uids.Any(seen.Contains))
+            {
+                return true;
+            }
+
+            seen.UnionWith(uids);
+        }
+
+        return false;
+    }
+
+    private static void CollectPartUIds(IReadOnlyList<ChainStepSidecar> steps, HashSet<int> uids)
+    {
+        foreach (var step in steps)
+        {
+            switch (step)
+            {
+                case ChainStepSidecar.ContactStep c:
+                    uids.Add(c.ContactUId);
+                    break;
+                case ChainStepSidecar.CompareStep cmp:
+                    uids.Add(cmp.ComparePartUId);
+                    break;
+                case ChainStepSidecar.OrStep or:
+                    uids.Add(or.OrPartUId);
+                    foreach (var branch in or.Branches)
+                    {
+                        CollectPartUIds(branch.Steps, uids);
+                    }
+
+                    break;
+                case ChainStepSidecar.NotStep not:
+                    uids.Add(not.NotPartUId);
+                    CollectPartUIds(not.Steps, uids);
+                    break;
+            }
+        }
     }
 
     private static (CoilAssignment Assignment, CoilAssignmentSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceOneChain(
