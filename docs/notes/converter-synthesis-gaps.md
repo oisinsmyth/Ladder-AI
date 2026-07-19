@@ -116,6 +116,11 @@ the subscript before the local-name lookup. Covered by `ArrayIndexScopeSynthesis
   scope entirely — it's a timer-wiring fix. N1/N3/N12 are three *different* residuals, only two of which are
   fan-out.
 
+  **→ Decided: `docs/adr/adr-0006-fanout-annotation.md` (Accepted 2026-07-19).** Per-node `{split N}`/
+  `{recv N}` markers replace the per-network `SPLIT` flag + the prefix-sharing heuristic (annotate-all,
+  ordinal labels, retire the flag). This section is the investigation record behind that ADR; the ADR's
+  phased rollout supersedes the "cross-depth residual" framing above.
+
 **Consequences / next steps:**
 - **The 4 blocks correctly keep their stored sidecars** (safe; guarded by `CommittedBlocksRoundTripTests` +
   `to-ir` keeping the sidecar by default). Not droppable until the gaps close.
