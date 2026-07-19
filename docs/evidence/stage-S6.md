@@ -799,3 +799,63 @@ flagged deviation: a `RunningConfirmed` helper bit (not in the manifest) was a b
 two-OR N11 chain, correctly surfaced per "ask before design deviation". Fixture: `genval3-*` in the
 scratchpad. **This being the second exercise to hit the synthesizer's limits on realistic blocks is strong
 evidence for prioritizing the converter fixes over further build-skill work.**
+
+## S6 generation-request #1 — `FB_HopperBlockageMonitor`, full pipeline end to end (2026-07-20)
+
+**The first genuine, counting S6 request** (D-4: ten fresh plain-language generation requests; this is 1 of
+10). Distinct from the two `gen-block-new` skill-validations (FilterUnitSystem/ShredderControlSystem, which
+reconstructed real JOB9002 blocks as answer keys and don't count) — this is an owner-originated plain-language
+ask, grounded entirely in test-project001's own Green tags, run through the whole pipeline.
+
+**Request + reuse-first pivot.** Initial ask was a discharge-conveyor run/feedback supervisor. Stage-1
+analyse (reuse-first) found it **already implemented** — `FB_ShredderSequencer` raises
+`DischargeConveyorTimeoutFault` on the same `DischargeConveyorTimeout`, annunciated at `ShredderAlarm0.%X8`;
+a run-hours totaliser also already exists (`FB_MotorFwdRevSystem` NW13). This is the same "test-project001 is
+comprehensively implemented" reality that stalled the earlier target search — the pipeline caught the
+duplicate **before any design or code**. Owner pivoted to a **hopper-blockage alarm** (grep-confirmed genuine
+gap: `Hopper_Level_High` is only a pusher cycle trigger; nothing monitors persistence). Request: *"raise a
+hopper-blockage alarm when `Hopper_Level_High` stays continuously high longer than a threshold while the
+plant runs; clear on `FaultReset`."*
+
+**Design (gate 1, signed).** One additive FB + a dedicated interface UDT + instance DB. Owner Gate-1 calls:
+UDT-IO handshake style; pause-and-resume cumulative timing; `T#60S`/`T#2S` FB-own tunables;
+inhibit-as-output-demand (`HopperBlockStopReq`, no shared write — actual stop/annunciation deferred to
+integration). **A convention correction was verified against rule text, not assumed:** v1 read C-128 as
+"no fault latch survives power cycle" → non-retentive; grounding C-128 (motion-restart, not latches), C-124
+(the `RETAIN` fault-latch carve-out), and the corpus sibling `DischargeConveyorTimeoutFault` (RETAIN,
+OB100-excluded, survives) showed the alarm latch **should** be RETAIN and survive (fail-safe). REQ-HBA-007
+was revised accordingly. A naive build would have shipped this fail-**un**safe.
+
+**Build (compile gate PASSED).** Preflight 0 findings; `openness-cli` import + block compile
+`State=Success, 0 errors` (1 pre-existing device-level warning, not attributable to the block); invariance
+proven — 3 additive blocks, nothing existing edited (`converter diff` unnecessary — no existing block
+touched). Committed `11775de`. Notable operational friction: the compile gate was **blocked twice on TIA
+Portal** — the first-connect approval dialog + a stale-process pileup the sub-agent worsened by retrying/
+killing `list` (against the no-retry/no-kill rule); resolved once the owner cleared the strays and accepted
+the dialog. A build-mechanism deviation was flagged, not silent: NW3's cumulative pause-resume was realized
+as a **countdown remaining-budget** (TON + `T_SUB`, C-406-clean) to dodge converter Gap E — owner-accepted as
+functionally equivalent to the literal up-accumulator.
+
+**Check (Stage 4, fresh context) — the pipeline earned its keep.** Mechanical `converter review` clean
+(C-406 confirmed, no TONR). The AI/judgment passes found real substance the compile gate can't see:
+one **error** (C-605, uncommented UDT members), **two medium correctness edges** (F1 — `FaultReset` is
+history-dependent, defeated on a contiguous full-budget trip; F2 — a same-scan `RemainingTime` dual-write
+race can trip the alarm early), and readability (S1/S2) — F1/F2/S1 **all rooted in the countdown-budget
+dual-writer** that only existed to dodge Gap E. The requested-scrutiny item (pause/resume timing) was
+confirmed **correct**. Two judgment convention flags (C-124 transient-state OB100 reset; C-115 handshake
+vocab) trace to the reaffirmed Gate-1 decisions NEW-HBA-06/07.
+
+**Disposition (Gate 2, owner).** **Present as-is with F1/F2/S1/S2 documented as known limitations** — not
+silently shipped. Recorded in `gen/test-project001/hopper-blockage-alarm/review-findings.md`. Root-cause fix
+path is clean: **Gap E (tag-vs-tag comparison typing) was fixed the same day** (`e7e4980`), so a future run
+can rebuild NW3 as a plain `accumulator ≥ threshold` compare and dissolve F1/F2/S1 at the root. This makes
+F1/F2 an **ideal first validation corpus for `gen-block-modify-fix`** (the next skill in the build order).
+C-605 left pending as a trivial comment-only item. The block is **not yet wired into the scan** — integration
+(the CALL + annunciation) is a deferred follow-on.
+
+**Verdict.** The delivered block is imperfect, but **the pipeline is not**: from plain language it produced a
+compile-clean block, and the Check stage **self-caught its own real correctness defects** rather than shipping
+them — including a fail-safe convention subtlety grounded against rule text. That is the capability S6 exists
+to prove. Process note for the record: the build ran **manual-to-contract**, not via the `gen-block-new`
+skill wrapper (design locked at gate 1; build needed converter-capability reconciliation the wrapper wouldn't
+automate) — an acceptable path per docs/15, flagged for transparency. Counts as **S6 request 1 of 10**.

@@ -50,8 +50,17 @@ architecture baseline, telemetry); test-project001's functional verdict stands a
 (2026-07-17, device compile 0/0, invariance proven, triple-reviewed). Exit criterion **not yet
 closed**: counting rule ruled 2026-07-18 (D-4) — S6 exit = **ten fresh plain-language generation
 requests**; fix waves are tracked *separately* and don't count toward the ten. **S6 generation-request
-tally so far: 0 of 10** (fix waves excluded — keep this count here as the live tally). Full history:
-`docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-18.
+tally so far: 1 of 10** (fix waves excluded — keep this count here as the live tally). Full history:
+`docs/evidence/stage-S6.md` entries 2026-07-16 → 2026-07-20.
+- **#1 (2026-07-20): `FB_HopperBlockageMonitor`** — hopper-blockage supervisory alarm, owner-pivoted
+  from an initial discharge-conveyor pick that reuse-first found already implemented. Full pipeline
+  (analyse → gate 1 → build → check → gate 2); **compile-clean** on scratch, invariance proven
+  (3 additive blocks, nothing existing edited). Stage-4 review caught two real correctness edges
+  (F1 reset history-dependence, F2 re-arm race) + readability (S1), all rooted in the countdown-budget
+  Gap-E workaround — **owner accepted as documented known limitations** (not silently shipped), now a
+  `gen-block-modify-fix` validation-corpus candidate (clean fix = rebuild NW3 post-`e7e4980`). Not yet
+  wired into the scan (integration = deferred follow-on). Record: `gen/test-project001/hopper-blockage-alarm/`,
+  `docs/evidence/stage-S6.md`.
 
 ## Current task: none — nothing in-flight
 
@@ -118,9 +127,10 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
   Build-stage coder: one gate-1-signed manifest item → one new compile-clean block's IR, reuse-first
   (CALL/patterns), C-126 grouping at write time, tag-status + compile gates, no self-review (Check
   stage runs fresh). Scope = code block + own interface + instance-DB scaffolding; shared DB/UDT + tag
-  tables out of scope (named-gap stop). **Not yet validated** — next step is a real tier-(a)
-  `motor-dol` instance against test-project001 (dispatched to `lad-coder`), which also becomes
-  **S6 generation-request #1 of 10**. docs/15 step-6 status updated.
+  tables out of scope (named-gap stop). **Validated** (two blind runs 2026-07-18) and now **exercised on
+  its first real request** — S6 request #1 was `FB_HopperBlockageMonitor` (hopper-blockage alarm), run
+  full-pipeline and compile-clean (2026-07-20; see the S6 section above + `docs/evidence/stage-S6.md`).
+  docs/15 step-6 status updated.
 - **A-4 coding-skill build order ruled + `converter diff` built.** Owner ruled (2026-07-18):
   `gen-block-new` first (roadmap-fidelity; "S7 is the rush" retired), then `gen-block-modify-fix`,
   then `gen-block-modify-purpose`; `converter diff` built now in parallel. Recorded in `docs/15`
@@ -153,7 +163,7 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
 
 **S6/S7 — generation & modification pipeline:**
 - **S6 exit criterion not closed** — needs ten fresh plain-language generation requests (D-4:
-  fix waves don't count; tally kept in the Project stage / S6 section above, currently 0 of 10).
+  fix waves don't count; tally kept in the Project stage / S6 section above, currently 1 of 10).
 - **S7-vs-S6 sequencing — fully ruled 2026-07-18 (A-4 + D-4).** Build order: `gen-block-new` first,
   then `gen-block-modify-fix`, then `gen-block-modify-purpose`; `converter diff` built in parallel
   (done — see Recently landed). Gate wording kept as-is (D-4): roadmap S7 entry stays "S6 done", so
