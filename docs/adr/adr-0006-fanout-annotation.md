@@ -136,8 +136,16 @@ neither over-share N4 nor miss N1.
      start up to *and including* this element is node N"; a `{recv N}` reuses node N's wire and builds only
      what follows, `to-xml` verifying the written prefix matches node N's master. (This replaced the
      earlier bare-`{recv}` "recv-as-origin" sketch, which required tracing a reference to read a rung.)
-2. **Derivation.** `GraphReducer` emits `split`/`recv` from shared part UIds (document-order master);
-   **remove `DetectSplit` and the `IrNetwork.Split` / network `SPLIT` flag.**
+2. **Derivation.** `GraphReducer` emits `split`/`recv` from shared part UIds (document-order master).
+   — **DONE 2026-07-19** (code): `ApplyFanoutMarkers` runs after reduction, implementing the boundary
+   algorithm below; verified to emit exactly the worked markers for MotorStarter N1/N4/N7/N12/N13 and
+   `HandAuthorSplitsMerges`. A refinement beyond the ADR sketch: a *shared compound* (an OR whose output
+   fans out) has its whole subtree marked as one node (`{split N}` on the OR), and recursion into its
+   branches is skipped — the branches are internal to the node and reused as a unit (N4). The
+   `IrNetwork.Split` flag / `DetectSplit` are **kept alongside** for now (synthesis still uses them) — their
+   removal, and the committed-corpus regeneration, are **folded into phase 3** (owner decision 2026-07-19)
+   so the corpus churns once, not twice. 577 converter + 31 golden green; 5 fixtures/tests updated for the
+   new marker output.
    - **Correlation is free:** `TraceChain` already builds the `Expr` tree and the `ChainStepSidecar`
      list in lockstep (each `stepExprs.Insert(0,…)` pairs with a `steps.Insert(0,…)`), so every `Expr`
      element has a known part UId (`ContactUId`/`ComparePartUId`/`OrPartUId`/`NotPartUId`). A shared part
@@ -152,14 +160,16 @@ neither over-share N4 nor miss N1.
      node — this absorbs `e₁…e_{m-2}`, which stay unmarked); and `{split label(node_i)}` on each `e_i` for
      `i ≥ m` (the new nodes this chain defines). Worked: move0 `NF{split1}`; move1 `NF{recv1} Run{split2}`;
      move2 `NF Run{recv2} RunningFB{split3}`; move3 (receiver) `NF Run RunningFB{recv3} …`.
-   - **Corpus/test ripple to expect:** the readable form of every fan-out block gains markers, so the
-     committed `.ir` corpus must be regenerated and any exact-readable-text fixtures updated. The old
-     `SPLIT` flag stays *alongside* through this phase (synthesis still uses it) so the parity harness
-     stays green; it is deleted in phase 3 with the synthesis switch.
-3. **Synthesis.** A per-network label registry replaces the prefix cache. At each element, build the
-   written chain; on a `{recv N}` verify the prefix against node N's registered definition, wire from
-   node N's boundary wire, and build only the elements after the marker (fan-out at any depth, into any
-   consumer port). Delete the prefix-signature cache.
+   - **Corpus/test ripple:** the exact-readable-text fixtures were updated (5 tests). The committed `.ir`
+     corpus regeneration is deferred to phase 3 (above) — regeneration is verified marker-only for
+     readable+sidecar blocks (sidecar UIds preserved); readable-only blocks must regenerate with
+     `--no-sidecar` to stay readable-only.
+3. **Synthesis + flag removal + corpus regen.** A per-network label registry replaces the prefix cache. At
+   each element, build the written chain; on a `{recv N}` verify the prefix against node N's registered
+   definition, wire from node N's boundary wire, and build only the elements after the marker (fan-out at
+   any depth, into any consumer port). Delete the prefix-signature cache **and** the `IrNetwork.Split` /
+   `DetectSplit` flag. Then regenerate the committed `.ir` corpus in one pass (each file by its committed
+   type, so every diff stays marker-only) and confirm the parity/round-trip harness stays green.
 4. **Migrate + validate.** Re-derive `HandAuthorSplitsMerges` markers (stay byte-exact); drive
    `MotorStarter` + the four `test-project001` FBs to **per-network byte-exact** against the `fanout.py` /
    golden `Normalizer` oracle; then drop those blocks' stored sidecars (closing the ADR-0005 residual) and
