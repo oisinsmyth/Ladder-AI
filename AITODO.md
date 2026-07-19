@@ -72,6 +72,16 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
   (N12/N13's ADD sharing a prefix), **MOVE-IN/box-input constant typing** (literal typed by magnitude vs its
   UDInt dest), and **timer-Q direct-wire fan-out** (a shared `Timer.Q` feeding two latch coils via one wire).
   Full record: ADRs 0005/0006 + `docs/notes/converter-synthesis-gaps.md`.
+- **`to-ir --no-sidecar` now self-verifies equivalence (2026-07-19, ADR-0005 follow-on — the "biggest single
+  confidence multiplier").** The semantic-equivalence `Normalizer` was **ported from the golden test project
+  into the converter** (`src/converter/Converter/SimaticMl/Normalizer.cs`, now the single shared copy the
+  harness references too). `--no-sidecar` no longer trusts the caller / the weak `IsSynthesizable` guard: it
+  derives a sidecar from the readable form, rebuilds the SimaticML, and Normalizer-compares it to the source
+  export being converted — omitting the sidecar only when semantically equivalent, erroring (keep the sidecar)
+  otherwise. Any remaining synthesis gap now degrades a block to "keeps its sidecar," never a corrupt readable-
+  only block. Pinned by `NoSidecarEquivalenceTests` (586 converter + 35 golden green). **Scope (owner):** the
+  *default* `to-ir` still keeps the sidecar — flipping it to auto-omit-when-equivalent is a separate deferred
+  decision.
 
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
 - **Wired-argument CALL synthesis built + LIVE-TIA-PROVEN (`e5bfeab`, CHANGELOG).** `to-xml

@@ -6,4 +6,9 @@
     <AssemblyName>converter</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The unit suite drives the verified no-sidecar gate (SynthesizeReadableVerified) directly. -->
+    <InternalsVisibleTo Include="Converter.Tests" />
+  </ItemGroup>
+
 </Project>

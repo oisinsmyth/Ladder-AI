@@ -1,8 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 
-namespace GoldenHarness;
+namespace Converter.SimaticMl;
 
 /// <summary>
 /// Strips known-volatile elements before comparing two exports for semantic equivalence
@@ -10,6 +13,11 @@ namespace GoldenHarness;
 /// Narrower than originally anticipated: the IR sidecar (ADR-0001) is designed to preserve
 /// exact source UIds on regeneration, so what's left to normalize is only what TIA itself
 /// regenerates regardless of input content.
+///
+/// Ported into the converter (2026-07-19, ADR-0005 follow-on) so `to-ir --no-sidecar` can
+/// self-verify that a block's derived form is semantically equivalent to its source export
+/// before omitting the stored sidecar — the same check the golden harness trusts, now a single
+/// shared implementation (the golden test project references this copy).
 /// </summary>
 public static class Normalizer
 {
@@ -255,8 +263,8 @@ public static class Normalizer
 
     // Stable across processes/runs (unlike string.GetHashCode(), which .NET deliberately
     // randomizes per-process) — needed since AreSemanticallyEquivalent compares two independent
-    // Strip() calls (potentially different process invocations of this test suite) that must
-    // still agree on which Parts are "the same" whenever they truly are.
+    // Strip() calls (potentially different process invocations) that must still agree on which
+    // Parts are "the same" whenever they truly are.
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private static string DescribeEndpoint(XElement endpoint, IReadOnlyDictionary<string, string> accessContentKeyByUId, IReadOnlyDictionary<string, string> currentPartSignature) =>

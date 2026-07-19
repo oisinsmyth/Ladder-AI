@@ -10,6 +10,12 @@ Most gaps surfaced 2026-07-18: some across the gen-block-* validations (the wire
 done + TIA-proven, commit `e5bfeab`), the rest by the Stage-0 parity harness run (below). None
 hand-patched (hard rule 7). `src/converter/` work — normal software rules, not `lad-coder`.
 
+**Safety net (2026-07-19, ADR-0005 follow-on):** a block that still hits any gap below is now caught, not
+silently mis-dropped — `to-ir --no-sidecar` ports the `Normalizer` into the converter and verifies the
+derived form is semantically equivalent to the source export before omitting the sidecar, erroring (and
+keeping the sidecar) on any divergence. So these gaps degrade to "keeps its sidecar," never to a corrupt
+readable-only block. Pinned by `NoSidecarEquivalenceTests`.
+
 ## Real-block synthesis divergence (2026-07-19) — investigated; the reference corpus is not representative
 
 The derive-always migration audited **every** committed block, not just the 14-block reference corpus, and

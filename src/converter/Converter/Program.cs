@@ -563,21 +563,17 @@ internal static class Program
         // real export can synthesise-but-diverge (e.g. array-index locals, Gap D — found in the
         // test-project001 FBs and MotorStarter), so "synthesis succeeds" is NOT proof the derived form
         // matches, and auto-omitting on that alone would silently corrupt such a block. Omitting is safe
-        // only once the block is proven equivalent (the verified migration / parity harness). `--no-sidecar`
-        // is the explicit opt-in for a block the caller has already verified derivable (or genuinely-new
-        // synthesizable content); it still errors if the block can't even synthesise, but does not itself
-        // check equivalence — that's the caller's responsibility. (A future in-converter equivalence check
-        // would let to-ir omit safely and automatically — see ADR-0005.)
+        // only once the block is proven equivalent. `--no-sidecar` is the explicit opt-in — and, since the
+        // ADR-0005 follow-on landed (2026-07-19), it VERIFIES that equivalence itself rather than trusting
+        // the caller: it derives a sidecar from the readable form, rebuilds the SimaticML, and
+        // Normalizer-compares it to the source export being converted, omitting the sidecar only if
+        // semantically equivalent (else it errors and the block keeps its sidecar). Default (no flag) still
+        // keeps the sidecar — flipping THAT to auto-omit-when-equivalent is a separate, deferred owner
+        // decision.
         string irText;
         if (noSidecar)
         {
-            if (!IsSynthesizable(irBlock, callees, tagTypes))
-            {
-                throw new UnsupportedSynthesisConstructException(
-                    $"{irBlock.Name}: --no-sidecar requested but the block is not synthesizable — cannot omit the sidecar (it would not round-trip).");
-            }
-
-            irText = IrSerializer.SerializeBlockReadable(irBlock);
+            irText = SynthesizeReadableVerified(irBlock, document, callees, tagTypes);
         }
         else
         {
@@ -589,24 +585,50 @@ internal static class Program
         Console.WriteLine($"{sourcePath} -> {outPath}");
     }
 
-    // Whether a block's sidecar can even be *synthesised* from its readable form — the guard on
-    // `to-ir --no-sidecar` (ADR-0005). Necessary but NOT sufficient for safe omission: synthesis
-    // succeeding means every construct is supported and every operand type resolves, but it does NOT
-    // prove the derived graph matches the source (a real block can synthesise-but-diverge — Gap D and
-    // friends). Equivalence is the caller's responsibility (the verified migration / parity harness),
-    // until an in-converter equivalence check lets to-ir omit automatically and safely. Other exceptions
-    // are real bugs and propagate.
-    private static bool IsSynthesizable(IrBlock block, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
+    // The verified `--no-sidecar` path (ADR-0005 follow-on, 2026-07-19). Produces the readable-only IR for a
+    // block only after PROVING it safe to drop the stored sidecar: derive a sidecar from the readable form
+    // exactly as `to-xml` later will (serialize readable -> re-parse -> synthesize), rebuild the SimaticML,
+    // and semantically compare it (the Normalizer) to `sourceDocument` — the very export being converted, so
+    // the comparison is self-consistent and staleness-immune. Equivalent => the readable-only text is safe to
+    // return. Not even synthesizable, or synthesizes-but-diverges => throw, and the caller keeps the stored
+    // sidecar. This is the safe replacement for the old IsSynthesizable guard, which proved only that
+    // synthesis didn't throw — necessary but, per ADR-0005's CriticalCaveat, NOT sufficient (a real block can
+    // synthesise-but-diverge on gaps the reference corpus never exercised).
+    internal static string SynthesizeReadableVerified(
+        IrBlock block, XDocument sourceDocument, CalleeInterfaceRegistry? callees, TagTypeRegistry? tagTypes)
     {
+        var readableText = IrSerializer.SerializeBlockReadable(block);
+        var reparsed = IrParser.ParseBlockWithoutSidecar(readableText);
+
+        IReadOnlyList<NetworkSidecar> synthSidecars;
         try
         {
-            SidecarSynthesizer.SynthesizeBlock(block, callees, tagTypes);
-            return true;
+            synthSidecars = SidecarSynthesizer.SynthesizeBlock(reparsed, callees, tagTypes);
         }
-        catch (UnsupportedSynthesisConstructException)
+        catch (UnsupportedSynthesisConstructException ex)
         {
-            return false;
+            // Genuinely unsynthesizable (an unsupported construct or an unresolvable operand type) — the old
+            // IsSynthesizable failure mode. Reframe with the --no-sidecar context, preserving the reason.
+            throw new UnsupportedSynthesisConstructException(
+                $"{block.Name}: --no-sidecar requested but the block is not synthesizable — cannot omit the sidecar (it would not round-trip). {ex.Message}");
         }
+
+        // Compare on documents that have BOTH been through an XML parse. The source export was loaded from
+        // disk, but BuildBlockXml yields an in-memory tree whose node shape (text/whitespace nodes) differs
+        // from a freshly-parsed one — and XNode.DeepEquals (inside the Normalizer) is sensitive to that, so
+        // comparing the in-memory tree directly reports a spurious mismatch. Serialize-then-parse the synth
+        // so both sides match the trusted offline parity comparison exactly (SynthesisParityRunner loads the
+        // export and the synth both from file).
+        var synthXml = XDocument.Parse(BuildBlockXml(reparsed, synthSidecars).ToString());
+        if (!Normalizer.AreSemanticallyEquivalent(sourceDocument, synthXml))
+        {
+            throw new UnsupportedSynthesisConstructException(
+                $"{block.Name}: --no-sidecar requested but the derived form is NOT semantically equivalent to the " +
+                "source export — the block is not yet fully derivable, so its sidecar cannot be safely omitted (keep it). " +
+                "See ADR-0005 / docs/notes/converter-synthesis-gaps.md.");
+        }
+
+        return readableText;
     }
 
     // Builds the callee-interface registry for wired-CALL synthesis from the batch's own block .ir files
@@ -730,6 +752,18 @@ internal static class Program
             (block, sidecars) = IrParser.ParseBlock(irText);
         }
 
+        var xml = BuildBlockXml(block, sidecars);
+
+        var outPath = Path.ChangeExtension(sourcePath, ".xml");
+        xml.Save(outPath);
+        Console.WriteLine($"{sourcePath} -> {outPath}");
+    }
+
+    // Rebuild the SimaticML XDocument for a block from its (stored or synthesized) sidecars — the shared
+    // block->XML step used by both `to-xml` and the verified `--no-sidecar` equivalence check, so the two
+    // paths produce byte-for-byte the same output from the same inputs.
+    internal static XDocument BuildBlockXml(IrBlock block, IReadOnlyList<NetworkSidecar> sidecars)
+    {
         var flgNetworks = new List<FlgNetwork>();
         var compileUnitUIds = new List<string>();
         var networkTitles = new List<string?>();
@@ -747,10 +781,6 @@ internal static class Program
         var blockSource = new BlockSource(
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers, block.Title,
             block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType);
-        var xml = BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkTitles, networkComments);
-
-        var outPath = Path.ChangeExtension(sourcePath, ".xml");
-        xml.Save(outPath);
-        Console.WriteLine($"{sourcePath} -> {outPath}");
+        return BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkTitles, networkComments);
     }
 }

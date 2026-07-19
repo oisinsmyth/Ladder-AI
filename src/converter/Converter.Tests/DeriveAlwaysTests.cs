@@ -6,8 +6,8 @@ namespace Converter.Tests;
 /// <summary>
 /// Derive-always (ADR-0005): a fully-synthesizable block serialises to a readable-only `.ir` (no
 /// SIDECAR), which parses back and re-derives its sidecar — the round trip `to-ir` (readable-only) →
-/// `to-xml` (synthesize) relies on. The CLI's omit/keep decision (IsSynthesizable) is exercised
-/// end-to-end by the parity harness + the live backstop; this checks the serializer contract.
+/// `to-xml` (synthesize) relies on. The CLI's verified omit/keep decision (`--no-sidecar`) is pinned by
+/// NoSidecarEquivalenceTests + the parity harness + the live backstop; this checks the serializer contract.
 /// </summary>
 public class DeriveAlwaysTests
 {

@@ -123,6 +123,10 @@ is dropped:
    actually runs synthesis) and keeps it otherwise or under `--with-sidecar`; `ir/SPEC.md` §Sidecar
    updated; D-6 marked resolved and the scoped merge retired (`deferred-items.md`,
    `converter-synthesis-gaps.md`).
+   > **Corrected since (see ADR-0005 phase 4 / CriticalCaveat):** auto-omit-on-`IsSynthesizable` was unsafe
+   > (a real block can synthesise-but-diverge), so `to-ir` now **keeps the sidecar by default** and
+   > `--no-sidecar` is the explicit opt-in — which, since 2026-07-19, **verifies** `synth ≡ source` via the
+   > `Normalizer` (ported into the converter) before omitting, rather than trusting synthesis-succeeds alone.
 
 **Stage 3 COMPLETE.** Derive-always is the operative behavior. A synthesizable block is now stored as
 readable-only IR; its sidecar is re-derived on demand — no staleness, no D-6. A block using a

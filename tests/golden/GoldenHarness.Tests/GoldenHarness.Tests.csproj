@@ -18,6 +18,13 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <!-- The semantic-equivalence Normalizer now lives in the Converter project (ADR-0005
+         follow-on, 2026-07-19) as the single shared implementation; the harness references it. -->
+    <Using Include="Converter.SimaticMl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\converter\Converter\Converter.csproj" />
   </ItemGroup>
 
 </Project>

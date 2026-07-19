@@ -92,10 +92,12 @@ legibility first).
    (found: the `test-project001` FBs + `patterns/motor-dol/MotorStarter`, on gaps the reference corpus
    never exercised — array-index locals, Gap D). "Synthesis succeeds" is necessary but **not** proof the
    derived graph matches, so auto-omitting on it would silently corrupt such a block. Corrected: `to-ir`
-   **keeps the sidecar by default**; `--no-sidecar` is the explicit opt-in (guarded — errors if the block
-   can't even synthesise — but it does not itself prove equivalence, the caller's responsibility). A
-   committed block is stored readable-only only after a **verified migration** proves it equivalent (the
-   parity/round-trip harness). See the `CriticalCaveat` below.
+   **keeps the sidecar by default**; `--no-sidecar` is the explicit opt-in. **Since the follow-on landed
+   (2026-07-19) `--no-sidecar` VERIFIES equivalence itself** — it derives a sidecar from the readable form,
+   rebuilds the SimaticML, and Normalizer-compares it to the source export being converted, omitting only if
+   semantically equivalent and erroring otherwise (superseding the old synthesis-succeeds-only `IsSynthesizable`
+   guard). A committed block is stored readable-only only after a **verified migration** proves it equivalent
+   (the parity/round-trip harness). See the `CriticalCaveat` below.
 5. Retire D-6 / the scoped merge from the roadmap (`deferred-items.md`). — **DONE 2026-07-18** (D-6
    marked resolved by derive-always; the scoped merge is no longer needed).
 
@@ -103,11 +105,17 @@ legibility first).
 readable-only unless its derived form is *proven semantically equivalent* to its export. The reference
 corpus (14 blocks) is **not representative** — real blocks synthesise-but-diverge. So (a) the committed
 migration strips sidecars only from blocks the round-trip harness proves equivalent (14 did; 4 initially
-diverged and kept theirs), guarded permanently by `CommittedBlocksRoundTripTests`; and (b) `to-ir` cannot yet
-omit safely-and-automatically because the equivalence check (the golden `Normalizer`) lives in the test
-project, not the converter. **Follow-on:** port a semantic-equivalence check into the converter so `to-ir`
-can verify `synth ≡ source` and then omit automatically — the only way the policy becomes both safe *and*
-one-step for arbitrary real exports.
+diverged and kept theirs), guarded permanently by `CommittedBlocksRoundTripTests`; and (b) `to-ir --no-sidecar`
+now proves `synth ≡ source` before omitting, rather than trusting the caller.
+
+**Follow-on — DONE 2026-07-19.** The semantic-equivalence check (the `Normalizer`) was ported into the
+converter (`src/converter/Converter/SimaticMl/Normalizer.cs`, now the single shared implementation the golden
+harness also references). `to-ir --no-sidecar` self-verifies `synth ≡ source` (rebuild the derived SimaticML,
+Normalizer-compare it to the source export it is converting) and omits the sidecar only when equivalent —
+pinned by `NoSidecarEquivalenceTests`. This makes the omit decision safe *and* one-step for arbitrary real
+exports. **Deferred (separate owner decision):** flipping the *default* `to-ir` (no flag) to auto-omit-when-
+equivalent — kept at keep-by-default for now, since an unguarded auto-omit default was the very thing reverted
+above.
 
 **Residual now EMPTY (2026-07-19).** The four initially-divergent blocks (`MotorStarter` + the three
 `test-project001` FBs) are all committed **readable-only** — the divergences were closed by ADR-0006 (fan-out,

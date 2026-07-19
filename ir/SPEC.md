@@ -1161,9 +1161,11 @@ re-derives it on demand. This removes the whole staleness/D-6 problem class: edi
 a stale sidecar behind because there is none. **But omission is gated on *proven equivalence*, not merely
 "synthesis succeeds"** — a real block can synthesise-but-diverge (array-index locals, Gap D; found in the
 test-project001 FBs + MotorStarter). So `to-ir` **keeps the sidecar by default**; `--no-sidecar` omits it
-only for a block already verified derivable (it errors if the block can't even synthesise). A block using
-an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or that diverges keeps its stored
-`SIDECAR`. When present, its content and contract are unchanged, as below.
+and, since 2026-07-19 (ADR-0005 follow-on), **verifies that omission is safe**: it derives a sidecar from
+the readable form, rebuilds the SimaticML, and Normalizer-compares it to the source export being converted,
+omitting only when semantically equivalent and erroring otherwise (the `Normalizer` was ported into the
+converter for this). A block using an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or
+that diverges keeps its stored `SIDECAR`. When present, its content and contract are unchanged, as below.
 
 **Contact fan-out is a readable concern, not a sidecar one (ADR-0006, implemented).** One class of
 "wire identity" the sidecar historically implied — which occurrences of a contact are physically the
