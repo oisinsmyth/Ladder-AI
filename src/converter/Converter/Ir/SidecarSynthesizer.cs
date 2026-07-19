@@ -372,9 +372,26 @@ public static class SidecarSynthesizer
             : null;
         if (directTimer is (int tonPartUId, string port))
         {
-            var outgoingWireUId = nextUid++;
-            steps = new ChainStepSidecar[] { new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outgoingWireUId) };
             chainRail = null; // fed by the timer's Q, never the rail
+
+            // A fanned-out timer Q (`RCOIL a := Timer.Q{split N}` / `SCOIL b := Timer.Q{recv N}`) must share ONE
+            // outgoing wire from the TON's Q across all its coils — the real export fans the Q wire out, not one
+            // wire per coil (FB_MotorFwdRevSystem N1). The direct-wire path is separate from BuildChain, so it
+            // honours the fan-out registry itself: {split} registers its TimerOutputStep, {recv} reuses it.
+            var marker = (assignment.Condition as Expr.TagRef)?.Fanout;
+            if (marker is { Kind: FanoutMarkerKind.Recv, Label: var recvLabel } && fanoutRegistry.TryGetValue(recvLabel, out var reused))
+            {
+                steps = reused;
+            }
+            else
+            {
+                var outgoingWireUId = nextUid++;
+                steps = new ChainStepSidecar[] { new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outgoingWireUId) };
+                if (marker is { Kind: FanoutMarkerKind.Split, Label: var splitLabel })
+                {
+                    fanoutRegistry[splitLabel] = steps;
+                }
+            }
         }
         else
         {

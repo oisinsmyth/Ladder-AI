@@ -16,16 +16,15 @@ namespace GoldenHarness;
 /// </summary>
 public class FrozenAnswerKeyRoundTripTests
 {
-    // The blocks that fan-out + constant-typing made derivable, each guarded against its frozen own-sidecar
-    // key. FB_MotorFwdRevSystem is NOT here yet: with the constant-typing fix its only remaining divergence is
-    // a Network-1 wiring difference (a complex 4-OR-merge network) the oracle still catches — a separate,
-    // non-trivial issue; it keeps its stored sidecar until that is resolved.
+    // All four migration blocks, now derivable (fan-out + constant-typing + timer-Q fan-out), each guarded
+    // against its frozen own-sidecar key — ADR-0005's residual is empty.
     public static IEnumerable<object[]> Blocks()
     {
         var repo = ToolPaths.RepoRoot();
         yield return new object[] { "FB_ShredderSequencer", Path.Combine(repo, "ir", "test-project001", "FB_ShredderSequencer.ir") };
         yield return new object[] { "FB_PusherControl", Path.Combine(repo, "ir", "test-project001", "FB_PusherControl.ir") };
         yield return new object[] { "MotorStarter", Path.Combine(repo, "patterns", "motor-dol", "MotorStarter.ir") };
+        yield return new object[] { "FB_MotorFwdRevSystem", Path.Combine(repo, "ir", "test-project001", "FB_MotorFwdRevSystem.ir") };
     }
 
     [Theory]
