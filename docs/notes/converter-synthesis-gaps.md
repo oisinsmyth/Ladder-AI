@@ -431,18 +431,23 @@ the corpus (N12/N13 share only coils/moves↔box, consistent in both orders). Th
 `SidecarSynthesizer.Synthesize`'s box builds after wands/calls (and swap before abs) to match the serializer;
 deferred because it changes cross-statement UId order and warrants a live-TIA `SynthesizerLiveCheck` re-verify.
 
-## MOVE-IN / box-input constant typing — open (blocks MotorStarter + FB_MotorFwdRevSystem sidecar-drop)
+## MOVE-IN / box-input constant typing — RESOLVED 2026-07-19
 The phase-4 own-sidecar oracle (`FrozenAnswerKeyRoundTripTests`, Normalizer-level — stricter than the
-contact-count proxy) proved **FB_ShredderSequencer and FB_PusherControl byte-exact (sidecars dropped)** but
-**blocked MotorStarter and FB_MotorFwdRevSystem** on a constant-typing gap: a `MOVE`'s `IN` literal and a box
-(ADD) input literal — `0`, `1` in the "Hours Run Counter" — synthesize as `ConstantType=Int` (by magnitude,
-`InferLiteralConstantType`) where the real export types them to the **UDInt destination** (`IO.HrsRun`).
-**Fix:** thread `TagTypeRegistry` into `BuildMoveSidecar`/`BuildMulSidecar` and type the literal from the
-destination (MOVE) / tag-input (box) type via `ResolveOperand`'s existing `constantTypeOverride`, falling back
-to magnitude. `ResolveOperand` already supports the override (used for WAND masks). **MotorStarter's only
-diff is these two constants; FB_MotorFwdRevSystem additionally shows a residual `NameCon` wiring diff** — check
-whether it is downstream of the constant-Access identity change (likely) or a genuine second issue, after the
-constant fix. Then both drop via the oracle (add them to `FrozenAnswerKeyRoundTripTests.Blocks`). Not fan-out.
+contact-count proxy) caught a constant-typing gap: a `MOVE`'s `IN` literal and a box (ADD) input literal —
+`0`, `1` in the "Hours Run Counter" — synthesized as `ConstantType=Int` (by magnitude) where the real export
+types them to the **UDInt destination**. **Fixed:** `BuildMoveSidecar` types the `IN` literal from the dest
+tag, `BuildMulSidecar` types inputs from a tag input (soft `TryInputsType`), both via `ResolveOperand`'s
+`constantTypeOverride` (fallback magnitude); `TagTypeRegistry` threaded in. MotorStarter's *only* diff was
+these two constants — now byte-exact, **sidecar dropped**. Three of four migration blocks derived.
+
+## FB_MotorFwdRevSystem Network-1 wiring divergence — open (last block blocking full sidecar-drop)
+With fan-out + constant-typing fixed, FB_MotorFwdRevSystem's own-sidecar oracle still fails — and the
+divergence is **localized entirely to Network 1** (a complex 15-contact / 4-OR-merge network; the Normalizer
+part-hashes differ across ~30 contacts, 8 `O`, coils/RCoil/SCoil, so the wire topology genuinely differs
+there). It is **not** the constant typing (fixed) and not the box-EN fan-out (fixed) — a separate wiring
+issue, only unmasked once those were closed. Investigate N1's real part/wire structure vs synth (the OR-merge
+nesting / fan-out in N1 is the likely locus). Until resolved, FB_MotorFwdRevSystem keeps its stored sidecar;
+when fixed, add it to `FrozenAnswerKeyRoundTripTests.Blocks` and drop it to empty ADR-0005's residual.
 
 ## Where this is tracked
 `AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity
