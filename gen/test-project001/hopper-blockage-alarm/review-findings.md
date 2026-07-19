@@ -49,8 +49,13 @@ gold-plating (the `HopperBlockStopReq` demand traces to Q-HBA-05).
   (rely-on-non-retentivity for transient state, no OB100 edit). C-115 → NEW-HBA-07 (supervisory-
   monitor exemption from the handshake vocabulary). Recorded as accepted judgment calls, **not open
   defects**.
-- **C-605 — pending owner call.** The one easily-closable item: a trivial, comment-only fix
-  (add the required one-line role/units/scope comments to the 7 UDT members). No logic impact.
+- **C-605 — RESOLVED (2026-07-20, comments added).** All 7 `UDT_HopperBlockageIO` members now carry
+  one-line role comments; the two `Time` settings (`BlockedTimeThreshold`, `ClearDebounceTime`)
+  additionally state units + C-307 per-instance-setting scope, and the two outputs
+  (`HopperBlockedAlarm`, `HopperBlockStopReq`) note the RETAIN/survives-power-cycle intent (C-124).
+  Comment-only diff — no member name/type/order/retentivity change; `converter preflight` CLEAN
+  (0 findings); UDT re-imported and `compile --type` re-run to re-close the gate (evidence in
+  `telemetry.log`).
 
 ## Pointer for a future `gen-block-modify-fix` run
 
