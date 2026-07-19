@@ -191,16 +191,26 @@ neither over-share N4 nor miss N1.
 **Guardrails:** the fan-out extractor + `Normalizer` as the answer key; the synthesis-parity harness stays
 green corpus-wide throughout; per-network byte-exact is the acceptance bar for each migrated block.
 
-## Known adjacent issue (not this ADR to fix)
+## Box-EN fan-out (was mis-diagnosed as "compare-structure"; RESOLVED 2026-07-19)
 
-`MotorStarter` N12's readable shows a single `IO.HrsRun = 4294967295` where the real export has a `Lt`+`Eq`
-pair sharing one `RisingEdgeFlags[2]` contact. The **shared contact** is fan-out (this ADR), but the
-**one-compare-vs-two-compares** structure is a *reducer* fidelity question orthogonal to fan-out.
-**Confirmed in phase 3:** with fan-out now marker-driven, MotorStarter N12 (6 vs 4 contacts) and
-FB_MotorFwdRevSystem N13 (8 vs 6) are the *only* residuals, and both are exactly this same "Hours Run
-Counter" `HrTotaliserTimer.Q` + `= 4294967295` shape — the compare-structure difference, not fan-out. It
-is what stops those two blocks reaching byte-exact in phase 4; tracked separately in
-`converter-synthesis-gaps.md`, not resolved here.
+The last two residuals — `MotorStarter` N12 (6 vs 4 contacts) and `FB_MotorFwdRevSystem` N13 (8 vs 6) — were
+initially framed as a `Lt`+`Eq` "compare-structure" reducer bug. **Investigation proved that wrong:** the
+readable is entirely faithful (the "Hours Run Counter" has both a reset `MOVE` gated by `Eq` and an increment
+`ADD` gated by `Lt`, `NOT RisingEdgeFlags` matches a real `Negated` contact). The sole divergence was
+**fan-out into a box**: the `ADD` (a `MulStatement`) shares the `Q AND NOT RisingEdgeFlags` prefix with the
+`MOVE` and coils, but fan-out marking + synthesis originally scoped markers to timers/coils/moves/wands/calls
+and **excluded the box family**, so the ADD's two contacts were rebuilt (the exact +2). This was the box-EN
+gap noted under "Revisit if" — a real instance, and squarely this ADR's fan-out, not a separate reducer
+question. **Fix:** `ApplyFanoutMarkers` and `SidecarSynthesizer` now cover the synthesizable box EN chains
+(Mul/Add/Sub/Div, Convert, Swap, Abs, Calc, T_Sub, T_Conv); the registry threads through the box builders.
+All four blocks are now byte-exact.
+
+**Known limitation:** the marking/serializer statement order (… wands → calls → boxes) and the synthesis
+build order (boxes built *before* wands/calls, and abs *before* swap) are not fully aligned, so a fan-out
+node shared **box↔wand/call or swap↔abs** would trip the registry-miss hard-error rather than reproduce.
+None occurs in the corpus (N12/N13 share only coils/moves↔box, consistent in both orders). Aligning the
+synthesis build order to the serializer order is the robust follow-up, deferred because it changes cross-
+statement UId order and warrants a live-TIA re-verify; tracked in `converter-synthesis-gaps.md`.
 
 ## Revisit if
 

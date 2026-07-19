@@ -191,8 +191,8 @@ NETWORK 13 "Hours Run Counter"
   TONR(HrTotaliserTimer, IN := IO.RunFwd AND IO.RunningFBFwd OR IO.RunRev AND IO.RunningFBRev, PT := T#1H, R := HrTotaliserTimerReset)
   COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q{split 1}
   COIL HrTotaliserTimerReset := HrTotaliserTimer.Q{recv 1}
-  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2] AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
-  ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2] AND IO.HrsRun < 4294967295, IN1 := 1, IN2 := IO.HrsRun) => IO.HrsRun
+  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2]{split 2} AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
+  ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2]{recv 2} AND IO.HrsRun < 4294967295, IN1 := 1, IN2 := IO.HrsRun) => IO.HrsRun
 
 NETWORK 14 "HMI Motor Status Telemetry"
   MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry

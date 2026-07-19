@@ -502,45 +502,70 @@ public static class GraphReducer
     // at first master, walking the boolean chains in serialization order so a {split} always precedes its {recv}.
     private static IrNetwork ApplyFanoutMarkers(IrNetwork net, NetworkSidecar sidecar)
     {
-        var timers = net.Timers ?? Array.Empty<TimerBinding>();
-        var moves = net.Moves ?? Array.Empty<MoveStatement>();
-        var wordAnds = net.WordAnds ?? Array.Empty<WordAndStatement>();
-        var calls = net.Calls ?? Array.Empty<CallStatement>();
-
-        // Boolean chains in serialization order (must match IrSerializer: timers, coils, moves, wands, calls),
-        // so a shared part is first seen — and mastered ({split}) — at the position it is serialized first.
-        var chains = new List<(Expr Expr, IReadOnlyList<ChainStepSidecar> Steps)>();
-        for (var i = 0; i < timers.Count; i++) chains.Add((timers[i].In, sidecar.Timers[i].Steps));
-        for (var i = 0; i < net.Assignments.Count; i++) chains.Add((net.Assignments[i].Condition, sidecar.Assignments[i].Steps));
-        for (var i = 0; i < moves.Count; i++) chains.Add((moves[i].En, sidecar.Moves[i].Steps));
-        for (var i = 0; i < wordAnds.Count; i++) chains.Add((wordAnds[i].En, sidecar.WordAnds[i].Steps));
-        for (var i = 0; i < calls.Count; i++) chains.Add((calls[i].En, sidecar.Calls[i].Steps));
-
+        // Pass 0: count part-UId occurrences across every markable chain — the boolean chains (timers, coils,
+        // moves, wands, calls) and the synthesizable box-family EN chains (Mul/Add/Sub/Div, Convert, Swap,
+        // Abs, T_Sub, T_Conv, Calc). A UId at >= 2 positions network-wide is fan-out (e.g. MotorStarter N12's
+        // `Q AND NOT RisingEdgeFlags` prefix shared between the reset MOVE and the increment ADD).
         var counts = new Dictionary<int, int>();
-        foreach (var (_, steps) in chains)
-        {
-            CountPartUIds(steps, counts);
-        }
+        foreach (var s in sidecar.Timers) CountPartUIds(s.Steps, counts);
+        foreach (var s in sidecar.Assignments) CountPartUIds(s.Steps, counts);
+        foreach (var s in sidecar.Moves) CountPartUIds(s.Steps, counts);
+        foreach (var s in sidecar.WordAnds) CountPartUIds(s.Steps, counts);
+        foreach (var s in sidecar.Calls) CountPartUIds(s.Steps, counts);
+        foreach (var s in sidecar.Muls) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.Converts) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.Swaps) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.AbsStatements) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.TSubs) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.TConvs) CountEnChain(s.En, counts);
+        foreach (var s in sidecar.Calcs) CountEnChain(s.En, counts);
 
         if (!counts.Values.Any(c => c >= 2))
         {
             return net; // no fan-out anywhere — nothing to mark
         }
 
+        // Pass 1: mark in serialization order (timers → coils → moves → wands → calls → box family, matching
+        // IrSerializer), so a shared part is mastered ({split}) at its first serialized position and every
+        // {recv} follows it. The `with` initializer evaluates top-to-bottom and each `.ToList()` forces its
+        // chain immediately, so `ctx` is mutated in exactly that order. A box EN is an EnSource — MarkEnSource
+        // marks a `Condition` chain and leaves a `PrecedingEno` (ENO-chained, no chain) untouched.
         var ctx = new FanoutMarkContext(counts);
-        var marked = chains.Select(c => MarkChain(c.Expr, c.Steps, ctx)).ToList();
-
-        // Reduce always passes non-null (possibly empty) lists, so rebuild each in place. A statement whose
-        // chain had no fan-out gets an identical Expr back (no marker), so this is a no-op for those.
-        var idx = 0;
         return net with
         {
-            Timers = timers.Select(t => t with { In = marked[idx++] }).ToList(),
-            Assignments = net.Assignments.Select(a => a with { Condition = marked[idx++] }).ToList(),
-            Moves = moves.Select(m => m with { En = marked[idx++] }).ToList(),
-            WordAnds = wordAnds.Select(w => w with { En = marked[idx++] }).ToList(),
-            Calls = calls.Select(c => c with { En = marked[idx++] }).ToList(),
+            Timers = net.Timers.Select((t, i) => t with { In = MarkChain(t.In, sidecar.Timers[i].Steps, ctx) }).ToList(),
+            Assignments = net.Assignments.Select((a, i) => a with { Condition = MarkChain(a.Condition, sidecar.Assignments[i].Steps, ctx) }).ToList(),
+            Moves = net.Moves.Select((m, i) => m with { En = MarkChain(m.En, sidecar.Moves[i].Steps, ctx) }).ToList(),
+            WordAnds = net.WordAnds.Select((w, i) => w with { En = MarkChain(w.En, sidecar.WordAnds[i].Steps, ctx) }).ToList(),
+            Calls = net.Calls.Select((c, i) => c with { En = MarkChain(c.En, sidecar.Calls[i].Steps, ctx) }).ToList(),
+            Muls = net.Muls.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Muls[i].En, ctx) }).ToList(),
+            Converts = net.Converts.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Converts[i].En, ctx) }).ToList(),
+            Swaps = net.Swaps.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Swaps[i].En, ctx) }).ToList(),
+            AbsStatements = net.AbsStatements.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.AbsStatements[i].En, ctx) }).ToList(),
+            TSubs = net.TSubs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.TSubs[i].En, ctx) }).ToList(),
+            TConvs = net.TConvs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.TConvs[i].En, ctx) }).ToList(),
+            Calcs = net.Calcs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Calcs[i].En, ctx) }).ToList(),
         };
+    }
+
+    private static void CountEnChain(EnSourceSidecar enSidecar, Dictionary<int, int> counts)
+    {
+        if (enSidecar is EnSourceSidecar.ConditionSidecar cs)
+        {
+            CountPartUIds(cs.Steps, counts);
+        }
+    }
+
+    // A box's `En` is an EnSource: mark a `Condition`'s chain (via its aligned ConditionSidecar steps); leave a
+    // `PrecedingEno` (an ENO-chained box, no boolean chain of its own) untouched.
+    private static EnSource MarkEnSource(EnSource en, EnSourceSidecar enSidecar, FanoutMarkContext ctx)
+    {
+        if (en is EnSource.Condition cond && enSidecar is EnSourceSidecar.ConditionSidecar cs)
+        {
+            return new EnSource.Condition(MarkChain(cond.Value, cs.Steps, ctx));
+        }
+
+        return en;
     }
 
     private sealed class FanoutMarkContext

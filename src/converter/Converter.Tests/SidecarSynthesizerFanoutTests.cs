@@ -76,4 +76,24 @@ public class SidecarSynthesizerFanoutTests
         var network = IrParser.ParseNetworkOnly("NETWORK 1 \"T\"\n  COIL A := Orphan{recv 7} AND X\n");
         Assert.Throws<UnsupportedSynthesisConstructException>(() => SidecarSynthesizer.Synthesize(network));
     }
+
+    [Fact]
+    public void BoxEn_ReusesPrefixSharedWithAMove()
+    {
+        // MotorStarter N12 shape: a MOVE (reset) and an ADD (increment, a box) share a `Shared AND Gate`
+        // prefix. The box EN is now in fan-out scope (ADR-0006 phase 4), so the ADD reuses node 2 rather than
+        // rebuilding — the exact +2 contacts that used to divergence.
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n" +
+            "  MOVE(EN := Shared{split 1} AND Gate{split 2}, IN := 0) => Dest\n" +
+            "  ADD(EN := Shared AND Gate{recv 2}, IN1 := 1, IN2 := Dest) => Dest\n");
+
+        var sidecar = SidecarSynthesizer.Synthesize(network);
+        var moveSteps = sidecar.Moves[0].Steps;
+        var addEn = Assert.IsType<EnSourceSidecar.ConditionSidecar>(sidecar.Muls[0].En);
+
+        Assert.Equal(Contact(moveSteps[0]).ContactUId, Contact(addEn.Steps[0]).ContactUId); // ADD reuses Shared
+        Assert.Equal(Contact(moveSteps[1]).ContactUId, Contact(addEn.Steps[1]).ContactUId); // ADD reuses Gate
+        Assert.Equal(1, sidecar.AccessUIds.Count(a => a.TagPath == "Gate")); // one Gate Access, fanned out
+    }
 }
