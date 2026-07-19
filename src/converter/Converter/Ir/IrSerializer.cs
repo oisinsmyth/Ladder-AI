@@ -102,7 +102,7 @@ public static class IrSerializer
         foreach (var timer in network.Timers)
         {
             sb.Append("  ").Append(TimerKeywordFor(timer.Kind)).Append('(').Append(timer.InstancePath)
-              .Append(", IN := ").Append(SerializeExpr(timer.In))
+              .Append(", IN := ").Append(SerializeChain(timer.In))
               .Append(", PT := ").Append(SerializeExpr(timer.Pt));
 
             if (timer.Reset is { } reset)
@@ -116,19 +116,19 @@ public static class IrSerializer
         foreach (var assignment in network.Assignments)
         {
             sb.Append("  ").Append(CoilKeywordFor(assignment.Kind)).Append(' ').Append(assignment.CoilTag)
-              .Append(" := ").Append(SerializeExpr(assignment.Condition)).Append('\n');
+              .Append(" := ").Append(SerializeChain(assignment.Condition)).Append('\n');
         }
 
         foreach (var move in network.Moves)
         {
-            sb.Append("  MOVE(EN := ").Append(SerializeExpr(move.En))
+            sb.Append("  MOVE(EN := ").Append(SerializeChain(move.En))
               .Append(", IN := ").Append(SerializeExpr(move.In))
               .Append(") => ").Append(move.DestTag).Append('\n');
         }
 
         foreach (var wordAnd in network.WordAnds)
         {
-            sb.Append("  WAND(EN := ").Append(SerializeExpr(wordAnd.En));
+            sb.Append("  WAND(EN := ").Append(SerializeChain(wordAnd.En));
             for (var k = 0; k < wordAnd.Inputs.Count; k++)
             {
                 sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(wordAnd.Inputs[k]));
@@ -149,7 +149,7 @@ public static class IrSerializer
                 sb.Append(call.InstancePath).Append(", ");
             }
 
-            sb.Append("EN := ").Append(SerializeExpr(call.En));
+            sb.Append("EN := ").Append(SerializeChain(call.En));
 
             foreach (var argument in call.Arguments)
             {
@@ -399,6 +399,13 @@ public static class IrSerializer
     // there). Every other nesting needs none — either the parent is already looser (And-in-Or),
     // or the child is a single self-contained token (Compare, TagRef, Literal) or already the
     // tightest binder (Not-in-anything).
+    // A boolean chain (a coil/move/timer condition, an OR-branch) whose top-level element may itself carry
+    // a fan-out marker (ADR-0006) — e.g. a whole condition that is one shared contact (N12). Routes through
+    // SerializeOperand so that marker lands correctly even when the whole condition is a single element.
+    private static string SerializeChain(Expr expr) => SerializeOperand(expr, precedenceParens: false);
+
+    // The pure logic text of a node — no fan-out marker. And/Or operands go through SerializeOperand so a
+    // marked operand's `{split N}`/`{recv N}` suffix lands OUTSIDE any precedence parentheses.
     private static string SerializeExpr(Expr expr) => expr switch
     {
         Expr.TagRef tagRef => tagRef.Path,
@@ -408,12 +415,26 @@ public static class IrSerializer
         // regardless.
         Expr.Not not => $"NOT {Parenthesize(not.Operand, not.Standalone || not.Operand is Expr.And or Expr.Or)}",
         Expr.And { Operands.Count: 0 } => "TRUE",
-        Expr.And and => string.Join(" AND ", and.Operands.Select(op => Parenthesize(op, op is Expr.Or))),
+        Expr.And and => string.Join(" AND ", and.Operands.Select(op => SerializeOperand(op, op is Expr.Or))),
         Expr.Or { Operands.Count: 0 } => "TRUE",
-        Expr.Or or => string.Join(" OR ", or.Operands.Select(SerializeExpr)),
+        Expr.Or or => string.Join(" OR ", or.Operands.Select(op => SerializeOperand(op, precedenceParens: false))),
         Expr.Compare compare => $"{SerializeExpr(compare.Left)} {compare.Operator} {SerializeExpr(compare.Right)}",
         _ => throw new IrFormatException($"Unsupported expression node: {expr.GetType().Name}"),
     };
+
+    // A chain operand: precedence parens (if the caller needs them) OR marker-forced parens (a marked
+    // comparison/OR must be parenthesised so its suffix binds the whole element, not the RHS/last branch),
+    // then the `{split N}`/`{recv N}` suffix — always outside the parentheses. A marked TagRef/Not needs no
+    // parens; a marked And never occurs (the And *is* the chain, not a chain element).
+    private static string SerializeOperand(Expr expr, bool precedenceParens)
+    {
+        var markerParens = expr.Fanout is not null && expr is Expr.Compare or Expr.Or;
+        var body = precedenceParens || markerParens ? $"({SerializeExpr(expr)})" : SerializeExpr(expr);
+        return expr.Fanout is { } marker ? body + MarkerText(marker) : body;
+    }
+
+    private static string MarkerText(FanoutMarker marker) =>
+        marker.Kind == FanoutMarkerKind.Split ? $"{{split {marker.Label}}}" : $"{{recv {marker.Label}}}";
 
     private static string Parenthesize(Expr expr, bool needsParens) =>
         needsParens ? $"({SerializeExpr(expr)})" : SerializeExpr(expr);

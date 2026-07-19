@@ -8,6 +8,15 @@ public abstract record Expr
     {
     }
 
+    // Fan-out annotation (ADR-0006). When set, this chain element is a shared-node *boundary*: the chain
+    // from its start up to and including this element is physically shared node Fanout.Label — drawn once
+    // at its `{split N}` master and reused at each `{recv N}`. Null on an ordinary (un-shared) element.
+    // Lives in the readable form, never the sidecar: fan-out is a drawing choice, not derivable from logic
+    // (ADR-0005/0006). An `init` property, so positional construction (`new Expr.TagRef("x")`) is unchanged
+    // and only marker-aware code sets it (`expr with { Fanout = ... }`); it participates in record equality,
+    // so a marked and an unmarked element are correctly distinct.
+    public FanoutMarker? Fanout { get; init; }
+
     public sealed record TagRef(string Path) : Expr;
 
     public sealed record And(IReadOnlyList<Expr> Operands) : Expr;
@@ -46,6 +55,17 @@ public abstract record Expr
     // Left/Right are ordered (not just an operand set) since `>=`/`<=`/`>`/`<` aren't symmetric.
     public sealed record Compare(string Operator, Expr Left, Expr Right) : Expr;
 }
+
+// A fan-out marker on an `Expr` chain element (ADR-0006). `Split` is the master (node Label defined here,
+// drawn once); `Recv` reuses that node's already-built wire. Label is a network-scoped ordinal assigned by
+// `to-ir` in document order of the masters. See ir/SPEC.md's "Contact fan-out" subsection.
+public enum FanoutMarkerKind
+{
+    Split,
+    Recv,
+}
+
+public sealed record FanoutMarker(FanoutMarkerKind Kind, int Label);
 
 // The EN source for an en-gated production — deliberately NOT folded into Expr. Every production
 // built before S1 item 18 (TON/Move/WAND/CALL) has its own `en`/`IN` resolved as an ordinary

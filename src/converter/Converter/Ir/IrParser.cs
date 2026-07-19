@@ -931,18 +931,59 @@ public static partial class IrParser
     }
 
     // NOT binds tighter than AND/OR — "NOT A AND B" is "(NOT A) AND B", not "NOT (A AND B)"
-    // (matches IrSerializer.SerializeExpr's own parenthesization rule for Not-wrapping-And/Or).
-    private static Expr ParseUnaryExpr(string text, ref int pos)
+    // (matches IrSerializer.SerializeExpr's own parenthesization rule for Not-wrapping-And/Or). A single
+    // element may carry a trailing fan-out marker (ADR-0006), consumed here so it binds the whole element
+    // (a `NOT X{recv 1}` binds to `NOT X`, not to the inner `X` — the operand parse below uses ParseElement,
+    // which deliberately does NOT consume the marker itself).
+    private static Expr ParseUnaryExpr(string text, ref int pos) =>
+        ConsumeMarker(text, ref pos, ParseElement(text, ref pos));
+
+    // One chain element, without its trailing fan-out marker.
+    private static Expr ParseElement(string text, ref int pos)
     {
         if (TryConsumeToken(text, ref pos, "NOT "))
         {
             // `NOT ( ... )` is a standalone Not part (invert-RLO of a group); a bare `NOT A` is a
             // negated contact (Gap H). The serializer emits exactly `NOT (` for the standalone form.
             var standalone = pos < text.Length && text[pos] == '(';
-            return new Expr.Not(ParseUnaryExpr(text, ref pos), standalone);
+            return new Expr.Not(ParseElement(text, ref pos), standalone);
         }
 
         return ParsePrimaryExpr(text, ref pos);
+    }
+
+    // A trailing `{split N}`/`{recv N}` fan-out marker (ADR-0006), if present, attached to `expr`. The
+    // leaf/paren element parses stop at `{`, so pos sits exactly on the opening brace when one follows.
+    private static Expr ConsumeMarker(string text, ref int pos, Expr expr)
+    {
+        if (pos >= text.Length || text[pos] != '{')
+        {
+            return expr;
+        }
+
+        var close = text.IndexOf('}', pos);
+        if (close < 0)
+        {
+            throw new IrFormatException($"Unterminated fan-out marker in expression '{text}' at position {pos}.");
+        }
+
+        var inner = text[(pos + 1)..close].Trim();
+        var parts = inner.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !int.TryParse(parts[1], out var label))
+        {
+            throw new IrFormatException(
+                $"Malformed fan-out marker '{{{inner}}}' in expression '{text}' (expected '{{split N}}' or '{{recv N}}').");
+        }
+
+        var kind = parts[0] switch
+        {
+            "split" => FanoutMarkerKind.Split,
+            "recv" => FanoutMarkerKind.Recv,
+            _ => throw new IrFormatException($"Unknown fan-out marker '{{{inner}}}' in expression '{text}'."),
+        };
+
+        pos = close + 1;
+        return expr with { Fanout = new FanoutMarker(kind, label) };
     }
 
     // A parenthesized group (recurses to the top of the grammar) or a comparison-or-leaf.
@@ -983,7 +1024,8 @@ public static partial class IrParser
     private static Expr ParseComparisonOrLeaf(string text, ref int pos)
     {
         var start = pos;
-        while (pos < text.Length && text[pos] != ')' && !MatchesAt(text, pos, " AND ") && !MatchesAt(text, pos, " OR "))
+        while (pos < text.Length && text[pos] != ')' && text[pos] != '{'
+               && !MatchesAt(text, pos, " AND ") && !MatchesAt(text, pos, " OR "))
         {
             pos++;
         }
