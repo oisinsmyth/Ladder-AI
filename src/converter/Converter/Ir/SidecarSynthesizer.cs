@@ -167,9 +167,14 @@ public static class SidecarSynthesizer
         // heuristic with the explicit markers `to-ir` derived.
         var fanoutRegistry = new Dictionary<int, IReadOnlyList<ChainStepSidecar>>();
 
+        // Resolved tag types (from the project export / block interface) — used to type a literal operand to
+        // its destination/operation type, and a tag-vs-tag comparison to its operands' type, rather than by
+        // magnitude alone. Available from the timer loop on, since a timer IN can carry a comparison too.
+        var types = tagTypes ?? TagTypeRegistry.Empty;
+
         foreach (var timer in network.Timers)
         {
-            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
             timers.Add(timerSidecar);
             if (timerSidecar.InstanceScope == GlobalVariableScope)
             {
@@ -186,13 +191,8 @@ public static class SidecarSynthesizer
         {
             assignments.Add(BuildAssignment(
                 assignment, railWireUId, timerPartUIdByInstancePath, latchTimerPartUIdByInstancePath,
-                ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
+                ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
         }
-
-        // Resolved tag types (from the project export / block interface) — used to type a literal operand to
-        // its destination/operation type rather than by magnitude alone (a MOVE `IN := 0` to a UDInt tag, an
-        // ADD `IN1 := 1` on UDInt operands, must carry ConstantType UDInt, not the Int its digits suggest).
-        var types = tagTypes ?? TagTypeRegistry.Empty;
 
         var moves = new List<MoveStatementSidecar>();
         foreach (var move in network.Moves)
@@ -284,7 +284,7 @@ public static class SidecarSynthesizer
         var calls = new List<CallStatementSidecar>();
         foreach (var call in network.Calls)
         {
-            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry));
+            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry, types));
         }
 
         return new NetworkSidecar(
@@ -356,7 +356,7 @@ public static class SidecarSynthesizer
         CoilAssignment assignment, int sharedRailWireUId, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath,
         IReadOnlyDictionary<string, int> latchTimerPartUIdByInstancePath,
         ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         IReadOnlyList<ChainStepSidecar> steps;
         int? chainRail;
@@ -395,7 +395,7 @@ public static class SidecarSynthesizer
         }
         else
         {
-            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         }
 
         var coilUId = nextUid++;
@@ -436,7 +436,7 @@ public static class SidecarSynthesizer
     private static (int? RailWireUId, List<ChainStepSidecar> Steps) BuildChain(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         var operands = FlattenAnd(expr);
         var steps = new List<ChainStepSidecar>();
@@ -467,7 +467,7 @@ public static class SidecarSynthesizer
         for (var idx = startBuild; idx < operands.Count; idx++)
         {
             var operand = operands[idx];
-            steps.Add(BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
+            steps.Add(BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes));
 
             // Register node N as the prefix up to and including this element, for a later `{recv N}` to
             // reuse (a snapshot copy of the current step references — cascading: node 3 = node 2's steps + this).
@@ -486,16 +486,16 @@ public static class SidecarSynthesizer
     private static ChainStepSidecar BuildStep(
         Expr operand, int idx, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         if (idx == 0 && IsCompound(operand))
         {
-            return BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+            return BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         }
 
         if (operand is Expr.Compare compare)
         {
-            return BuildCompareStep(compare, ref nextUid, accessEntries, constantEntries, localNames);
+            return BuildCompareStep(compare, ref nextUid, accessEntries, constantEntries, localNames, tagTypes);
         }
 
         if (IsLeaf(operand))
@@ -542,7 +542,7 @@ public static class SidecarSynthesizer
     private static ChainStepSidecar BuildCompoundStep(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         switch (expr)
         {
@@ -554,7 +554,7 @@ public static class SidecarSynthesizer
                 var branches = new List<OrBranch>();
                 foreach (var operand in or.Operands)
                 {
-                    var (branchRail, branchSteps) = BuildChain(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+                    var (branchRail, branchSteps) = BuildChain(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
                     branches.Add(new OrBranch(branchSteps, branchRail));
                 }
 
@@ -563,7 +563,7 @@ public static class SidecarSynthesizer
                 return new ChainStepSidecar.OrStep(orPartUId, branches, orOutgoingWireUId);
 
             case Expr.Not not:
-                var (notRail, notSteps) = BuildChain(not.Operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+                var (notRail, notSteps) = BuildChain(not.Operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
                 var notPartUId = nextUid++;
                 var notOutgoingWireUId = nextUid++;
                 return new ChainStepSidecar.NotStep(notPartUId, notSteps, notRail, notOutgoingWireUId);
@@ -607,33 +607,36 @@ public static class SidecarSynthesizer
     // case, not silently guessed at.
     private static ChainStepSidecar.CompareStep BuildCompareStep(
         Expr.Compare compare, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
     {
         var left = ResolveOperand(compare.Left, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var right = ResolveOperand(compare.Right, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var comparePartUId = nextUid++;
         var outgoingWireUId = nextUid++;
 
-        var srcType = InferCompareSrcType(compare.Left, compare.Right);
+        var srcType = InferCompareSrcType(compare.Left, compare.Right, tagTypes);
         return new ChainStepSidecar.CompareStep(comparePartUId, ComparePartNameFor(compare.Operator), srcType, left, right, outgoingWireUId);
     }
 
-    // The comparison's SrcType must match its operand type. The only type signal available without a
-    // symbol table is a literal operand's magnitude, so a comparison involving a literal is typed
-    // from that literal (the widest, if both operands are literals); a tag-vs-tag comparison has no
-    // signal and defaults to "Int". Real outranks the integer widths — a comparison against a Real
-    // literal is a Real comparison.
-    private static string InferCompareSrcType(Expr left, Expr right)
+    // The comparison's SrcType must match its operand type. Each operand contributes a type: a literal by
+    // magnitude, a tag by its registry-resolved type. The widest present wins (Real outranks the integer
+    // widths). A tag-vs-tag comparison whose tags resolve now types from them (closing the wide-tag gap); one
+    // with no resolvable type still falls back to "Int" (unchanged).
+    private static string InferCompareSrcType(Expr left, Expr right, TagTypeRegistry tagTypes)
     {
-        var present = new[] { LiteralTypeOrNull(left), LiteralTypeOrNull(right) }
+        var present = new[] { OperandType(left, tagTypes), OperandType(right, tagTypes) }
             .Where(t => t is not null)
             .Select(t => t!)
             .ToList();
         return present.Count == 0 ? "Int" : present.OrderByDescending(TypeRank).First();
     }
 
-    private static string? LiteralTypeOrNull(Expr expr) =>
-        expr is Expr.Literal literal ? InferLiteralConstantType(literal.Value) : null;
+    private static string? OperandType(Expr expr, TagTypeRegistry tagTypes) => expr switch
+    {
+        Expr.Literal literal => InferLiteralConstantType(literal.Value),
+        Expr.TagRef tag => tagTypes.Resolve(tag.Path),
+        _ => null,
+    };
 
     private static int TypeRank(string type) => type switch
     {
@@ -740,12 +743,12 @@ public static class SidecarSynthesizer
     private static TimerBindingSidecar BuildTimerSidecar(
         TimerBinding timer, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         // TON/TONR/TOF all supported (TOF/TONR added 2026-07-18, TimingAndCalls). The read side and
         // FlgNetBuilder already render each kind; synthesis just builds the right sidecar — the same
         // shape for all three, plus the reset (R) operand a TONR carries and TON/TOF don't.
-        var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tonPartUId = nextUid++;
         var preset = ResolveOperand(timer.Pt, typedConstant: true, ref nextUid, accessEntries, constantEntries, localNames);
 
@@ -795,7 +798,7 @@ public static class SidecarSynthesizer
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
-        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var movePartUId = nextUid++;
         // A literal `IN` is typed to the destination tag's type (a MOVE moves a value of the dest's type), not
         // by magnitude — so `IN := 0 => IO.HrsRun` (UDInt) carries ConstantType UDInt, matching the real
@@ -820,7 +823,7 @@ public static class SidecarSynthesizer
     private static (int? RailWireUId, EnSourceSidecar Sidecar) BuildEnSourceSidecar(
         EnSource en, int? precedingEnoPartUId, int sharedRailWireUId, ref int nextUid,
         List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>>? fanoutRegistry = null)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>>? fanoutRegistry = null, TagTypeRegistry? tagTypes = null)
     {
         switch (en)
         {
@@ -832,7 +835,7 @@ public static class SidecarSynthesizer
                 // a marked box EN (MOVE_BLK_VARIANT) omits it → a throwaway registry that is never consulted.
                 var (chainRail, steps) = BuildChain(
                     condition.Value, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames,
-                    fanoutRegistry ?? new Dictionary<int, IReadOnlyList<ChainStepSidecar>>());
+                    fanoutRegistry ?? new Dictionary<int, IReadOnlyList<ChainStepSidecar>>(), tagTypes ?? TagTypeRegistry.Empty);
                 return (chainRail, new EnSourceSidecar.ConditionSidecar(chainRail, steps));
 
             case EnSource.PrecedingEno:
@@ -862,7 +865,7 @@ public static class SidecarSynthesizer
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(mul.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(mul.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var mulPartUId = nextUid++;
         // A literal input is typed to the operation type (the box's tag operand's type), not by magnitude — so
         // an increment `ADD(IN1 := 1, IN2 := IO.HrsRun)` types the `1` UDInt to match `IO.HrsRun`, as the real
@@ -899,7 +902,7 @@ public static class SidecarSynthesizer
         IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(convert.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(convert.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var convertPartUId = nextUid++;
         var inOperand = ResolveOperand(convert.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
 
@@ -925,7 +928,7 @@ public static class SidecarSynthesizer
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(abs.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(abs.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var absPartUId = nextUid++;
         var inOperand = ResolveOperand(abs.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var srcType = RequireOperandType(tagTypes, abs.In, "ABS");
@@ -944,7 +947,7 @@ public static class SidecarSynthesizer
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(swap.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(swap.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var swapPartUId = nextUid++;
         var inOperand = ResolveOperand(swap.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var srcType = RequireOperandType(tagTypes, swap.In, "SWAP");
@@ -1014,7 +1017,7 @@ public static class SidecarSynthesizer
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         var srcType = RequireInputsType(tagTypes, wordAnd.Inputs, "WAND");
-        var (chainRail, steps) = BuildChain(wordAnd.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (chainRail, steps) = BuildChain(wordAnd.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var andPartUId = nextUid++;
 
         var inputs = new List<OperandSidecar>();
@@ -1038,7 +1041,7 @@ public static class SidecarSynthesizer
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         var srcType = RequireInputsType(tagTypes, calc.Inputs, "CALC");
-        var (_, enSidecar) = BuildEnSourceSidecar(calc.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(calc.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var calcPartUId = nextUid++;
 
         var inputs = new List<OperandSidecar>();
@@ -1061,7 +1064,7 @@ public static class SidecarSynthesizer
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(tsub.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(tsub.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tsubPartUId = nextUid++;
         var in1 = ResolveOperand(tsub.In1, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var in2 = ResolveOperand(tsub.In2, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
@@ -1082,7 +1085,7 @@ public static class SidecarSynthesizer
         List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
         Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (_, enSidecar) = BuildEnSourceSidecar(tconv.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (_, enSidecar) = BuildEnSourceSidecar(tconv.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tconvPartUId = nextUid++;
         var inOperand = ResolveOperand(tconv.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
         var srcType = RequireOperandType(tagTypes, tconv.In, "T_CONV");
@@ -1142,9 +1145,9 @@ public static class SidecarSynthesizer
     private static CallStatementSidecar BuildCallSidecar(
         CallStatement call, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, CalleeInterfaceRegistry callees,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
-        var (chainRail, steps) = BuildChain(call.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+        var (chainRail, steps) = BuildChain(call.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var callPartUId = nextUid++;
 
         // Not added to accessEntries, same reason as BuildTimerSidecar's own instance reference
