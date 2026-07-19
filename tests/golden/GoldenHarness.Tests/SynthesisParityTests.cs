@@ -48,6 +48,8 @@ public class SynthesisParityTests
         // 2026-07-18: the box family's last five — WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT — closing
         // the corpus. Complete synthesis: all 14 reference blocks derive a sidecar matching their export.
         "DataHandling",
+        // 2026-07-19: the SPLIT grammar — contact fan-out is now derivable (hand-authored split/merge pairs).
+        "HandAuthorSplitsMerges",
     };
 
     [Fact]

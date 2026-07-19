@@ -42,6 +42,9 @@ public static class SynthesisParityRunner
         "FBTimers",
         "ScaleValue",
         "TimingAndCalls",
+        // Hand-authored split/merge fixture (2026-07-19): the SPLIT grammar makes contact fan-out
+        // derivable — five split networks + five split-free equivalents, all round-tripping exactly.
+        "HandAuthorSplitsMerges",
     };
 
     /// <summary>
