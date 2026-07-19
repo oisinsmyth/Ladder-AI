@@ -55,6 +55,24 @@ tally so far: 0 of 10** (fix waves excluded — keep this count here as the live
 
 ## Current task: none — nothing in-flight
 
+**Recently landed (2026-07-19 session — fan-out annotation + derive-always completion; full record in git + the ADRs):**
+- **ADR-0006 — contact fan-out is now recorded per-node in the readable IR (`{split N}`/`{recv N}`), fully
+  IMPLEMENTED (phases 1–4) and derivable end to end.** Fan-out (one part's output feeding several consumers) is
+  a drawing choice not derivable from logic — proven by the hand-authored `HandAuthorSplitsMerges` split/split-
+  free pairs, and by the N13-vs-N4 experiment (same logic, opposite drawing). So it is carried by per-node
+  markers on the readable `Expr` (boundary model: "the chain up to and including this element is node N"), each
+  rung self-contained. `to-ir` derives them from the export DAG (`GraphReducer.ApplyFanoutMarkers`); `to-xml
+  --synthesize` reproduces them via a per-network label registry in `SidecarSynthesizer` (replacing the old
+  per-network `SPLIT` flag + prefix heuristic, both deleted). SPEC updated. New converter/golden tests.
+- **ADR-0005 residual now EMPTY — every synthesizable block's sidecar is derived, none stored.** The four
+  blocks that used to keep sidecars (`MotorStarter` + the three `test-project001` FBs) are all committed
+  **readable-only**. Getting there closed several gaps the new **own-sidecar oracle** (`FrozenAnswerKeyRoundTrip
+  Tests` — Normalizer-level, staleness-immune, since the `simatic-ml/test-project001` exports have drifted)
+  surfaced that the contact-count proxy missed: **latch-coil timer-Q direct-wire** (N3), **box-EN fan-out**
+  (N12/N13's ADD sharing a prefix), **MOVE-IN/box-input constant typing** (literal typed by magnitude vs its
+  UDInt dest), and **timer-Q direct-wire fan-out** (a shared `Timer.Q` feeding two latch coils via one wire).
+  Full record: ADRs 0005/0006 + `docs/notes/converter-synthesis-gaps.md`.
+
 **Recently landed (2026-07-18 session — prune once stale; full record in git + the pointers named):**
 - **Wired-argument CALL synthesis built + LIVE-TIA-PROVEN (`e5bfeab`, CHANGELOG).** `to-xml
   --synthesize` now mints wired Input/Output CALLs (types from the callee `.ir` via
@@ -136,14 +154,16 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   (blind DOL→VSD, `genval3-*`). Shared choreography in `docs/notes/modification-choreography.md`.
   **All three skills' disciplines are proven** (invariance gate = `converter diff --only`; genval3's
   DOL→VSD invariance PASSED, N1–N5 proven identical).
-- **STRATEGIC FINDING (genval3, session-defining):** the modify skills' **compile gate can't be reached on
-  a *real* as-built block** — the D-6 *whole-file* strip-and-synthesize needs the whole block synthesizable,
-  and real equipment FBs use TONR / array-index members / Real tag-vs-tag comparisons the synthesizer can't
-  mint (some on *unchanged* networks). **The next priority is converter work, not more build-skills:** the
-  **D-6 scoped `SidecarSynthesizer` merge is now the critical build** (keep unchanged networks' real
-  sidecars, synthesize only changed) — it's the enabler for modifying real blocks at all. Plus three subset
-  gaps (TONR/TOF synth; array-index local scope; tag-vs-tag comparison typing). Full plan (+ the earlier
-  Word→Int / UDT-param gaps): `docs/notes/converter-synthesis-gaps.md`.
+- **STRATEGIC FINDING (genval3) — LARGELY RESOLVED 2026-07-19.** The premise ("the modify skills' compile
+  gate can't be reached on a *real* as-built block — the whole block isn't synthesizable") no longer holds for
+  the test-project001 FBs: **all three (`FB_ShredderSequencer`, `FB_PusherControl`, `FB_MotorFwdRevSystem`)
+  now synthesize byte-exact and are committed readable-only** (own-sidecar oracle green). The gaps that blocked
+  them are closed — TONR/TOF synth (2026-07-18), array-index local scope (Gap D), and the 2026-07-19 fan-out /
+  box-EN / constant-typing / timer-Q-fan-out work. So the **whole-file strip-and-synthesize works on a real
+  block**, and the **D-6 scoped merge is no longer the critical build** (derive-always retired D-6 anyway,
+  ADR-0005). Residual converter gap: a **wide tag-vs-tag comparison** still defaults SrcType to `Int` (no
+  literal to infer from) — not hit by the migrated blocks, but the one known unsolved synthesis-typing case;
+  tracked in `docs/notes/converter-synthesis-gaps.md` (+ the earlier Word→Int / UDT-param gaps).
 - **Follow-ups from the gen-block-new validation (queued, not yet done):**
   - Fold the **reviewer-calibration rule** into `review-functional`/`review-simplicity`: never infer
     TIA execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs (shared TEMP is
