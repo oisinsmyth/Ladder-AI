@@ -44,6 +44,15 @@ public class CommittedBlocksRoundTripTests
                 }
 
                 var name = Path.GetFileNameWithoutExtension(irPath);
+
+                // A block with a committed frozen answer key is guarded by FrozenAnswerKeyRoundTripTests
+                // instead — its `simatic-ml/` export has drifted from the committed `.ir` (fixes never
+                // re-exported), so the export-based check here would fail on correct synthesis.
+                if (File.Exists(Path.Combine(repo, "tests", "golden", "answer-keys", name + ".xml")))
+                {
+                    continue;
+                }
+
                 if (File.Exists(Path.Combine(xmlDir, name + ".xml")))
                 {
                     yield return new object[] { name, irDir, xmlDir };
