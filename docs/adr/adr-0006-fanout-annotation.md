@@ -124,7 +124,12 @@ neither over-share N4 nor miss N1.
 
 1. **Grammar + model.** `ir/SPEC.md`: the `{split N}`/`{recv N}` node-marker syntax and lexing; `Expr`
    carries an optional network-scoped ordinal label; parser + serializer round-trip it. *(SPEC/grammar
-   change — owner sign-off gate, per [[feedback_ask_before_design_deviation]].)*
+   change — owner sign-off gate, per [[feedback_ask_before_design_deviation]].)* — **DRAFT WRITTEN
+   2026-07-19** as a clearly-banner-marked "PROPOSED / not yet implemented" subsection of `ir/SPEC.md`
+   (readable-form section), plus a cross-reference from the Sidecar section. Covers tokens, placement,
+   the single-contact / cascade-junction / non-contact-receiver cases, recv-as-node vs recv-as-origin, an
+   EBNF sketch, and the parse/validate constraints. **Awaiting owner sign-off** before the model + parser/
+   serializer work begins; nothing in the converter accepts the markers yet.
 2. **Derivation.** `GraphReducer` emits `split`/`recv` from shared part UIds (document-order master);
    **remove `DetectSplit` and the `IrNetwork.Split` / network `SPLIT` flag.**
 3. **Synthesis.** A per-network label registry replaces the prefix cache; `{recv N}` wires fan-out at any

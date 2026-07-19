@@ -243,6 +243,103 @@ note below). This only became reachable once an OR-merge branch could itself be
 a compound expression rather than a single tag (S1 item 11) — before that, `AND`/`OR` never
 nested inside each other in any real or built shape, so the distinction was moot.
 
+#### Contact fan-out (splits): `{split N}` / `{recv N}` — **PROPOSED (ADR-0006, 2026-07-19; not yet implemented)**
+
+> This subsection is the agreed draft grammar for ADR-0006, phase 1. It is **not yet implemented** in
+> the converter — no `.ir` file carries these markers today, and the parser/serializer do not yet accept
+> them. It is recorded here as the signed-off design so implementation can proceed against a fixed target.
+> Until phase 2/3 land, fan-out is still handled by the interim per-network `SPLIT` flag + synthesis
+> heuristic (`SidecarSynthesizer`), which this grammar replaces.
+
+Fan-out — one part's output feeding several consumers (a "split") — is a **drawing choice, not logic**:
+a split network and its split-free equivalent have *byte-identical readable logic but different sidecars*
+(proven by `HandAuthorSplitsMerges`). Under derive-always (ADR-0005) the sidecar is derived from the
+readable form, so this bit cannot be reconstructed from the logic — the readable must carry it. It is
+recorded **per node**, replacing the interim per-network `SPLIT` flag, which is too coarse: it cannot
+express a split *inside one statement* (MotorStarter N1), and cannot distinguish "share this OR-branch
+contact" from "don't" for two identically-shaped networks TIA drew oppositely (N13 vs N4 — the proof that
+depth fan-out is non-derivable; see `docs/notes/converter-synthesis-gaps.md`).
+
+**Tokens.** Two suffix markers, on the element whose output is (or references) the shared node:
+
+- `{split N}` — the element's output **is** shared node **N**, drawn once ("the master"). Exactly one per
+  label per network.
+- `{recv N}` — this position **is** node N's output (it taps the master's wire, not a fresh part). One or
+  more per label.
+
+`N` is an ordinal **scoped to the network**, assigned by `to-ir` in document order of the `{split}`
+masters (`1`, `2`, …). A `{split}` with no matching `{recv}` never occurs — that is just an unmarked node.
+
+**Placement.** A marker suffixes any single **chain element** whose output fans out — a contact
+(`IO.Run{split 2}`), a negated contact (`NOT X{split 2}`), a standalone `NOT (X){split 2}`, a comparison,
+or a parenthesized compound like an OR-merge (`(A OR B){split 2}`). It attaches at **any depth** (top
+level, inside an `OR` branch, inside a `NOT`), and a `{recv N}` may feed **any consumer port** — another
+contact, a `COIL`/`SCOIL`/`RCOIL`, a `MOVE`'s `EN`, or a comparison's chain input (real: N12's
+`RisingEdgeFlags[2]` fans into two comparisons; N13's cascade fans into `MOVE` `EN`s). The full logic
+chain stays visible — the marker only records *which occurrence is physically shared*.
+
+**Single-contact node (common case — real: MotorStarter N1, an intra-statement split):**
+
+```
+COIL IO.Run := (IO.TryRunMotor{split 1} AND PreStartMemory AND IO.RecentStart
+             OR IO.TryRunMotor{recv 1} AND IO.Run) AND NOT IO.StopMotor AND NOT IO.Shutdown
+```
+
+The reader still sees `IO.TryRunMotor AND IO.Run`; `{recv 1}` says that second `IO.TryRunMotor` is the
+*same physical contact* as the first — one contact, fanned out to both OR-branches of the one coil.
+
+**Cascade-junction node (real: MotorStarter N13, telemetry):** when statements share a *cascade prefix*,
+each contact's output is its own node; a later rung tapping a mid-cascade junction references it with a
+**bare** `{recv N}` (the junction is a compound value — the AND of everything up to it — so there is no
+single tag to inline):
+
+```
+MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry
+MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{split 2}, IN := 1) => IO.Telemetry
+MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{recv 2} AND IO.RunningFB{split 3}, IN := 2) => IO.Telemetry
+MOVE(EN := {recv 3} AND IO.UPSEnable OR {recv 3} AND IO.InHand, IN := 3) => IO.Telemetry
+```
+
+`{split 1/2/3}` mark the `NF` / `NF·Run` / `NF·Run·RunningFB` junctions; the fourth MOVE's two OR-branches
+each **begin** at junction 3 and add their own contact. So there are two receiver forms:
+
+- **recv-as-node** — `<tag>{recv N}` (or `NOT <tag>{recv N}`): the marked contact *is* node N (node N is a
+  single contact of that tag). The tag is shown for readability and is **verified** against the master.
+- **recv-as-origin** — a **bare** `{recv N}` standing where a chain element would: the chain/branch begins
+  at node N's output instead of the rail. Used when node N is a compound junction (no single tag to show).
+
+**Grammar (EBNF sketch — micro-lexing finalized in implementation):**
+
+```
+element        ::= ( contact | negated-contact | standalone-not | compare | "(" or-expr ")" ) [ marker ]
+                 | recv-origin
+recv-origin    ::= marker-recv           # bare {recv N} at a chain/branch start
+marker         ::= marker-split | marker-recv
+marker-split   ::= "{split" ws ordinal "}"
+marker-recv    ::= "{recv"  ws ordinal "}"
+ordinal        ::= digit { digit }
+```
+
+The `{` unambiguously ends a tag path (tag chars are `[A-Za-z0-9_.\[\]]`), so `IO.Run{split 2}` needs no
+separator. A comparison's marker binds the whole comparison and is parenthesized when otherwise ambiguous
+(`(IO.HrsRun = 4294967295){split 1}`).
+
+**Constraints (parse / validate):**
+
+- Each `{split N}` is unique within its network; each `{recv N}` must have a matching `{split N}` **earlier
+  in document order** (the master is always drawn before it is received).
+- A recv-as-node's tag must equal its master's tag — a mismatch is a hard parse error, because the readable
+  is asserting physical identity.
+- Markers are **not tags**: `tagstatus`, `preflight`, `review`, and `digest` ground the underlying tag and
+  ignore the marker (hard rule 3 unaffected).
+
+**Derivation / synthesis contract** (mechanics, not text): `to-ir` reads fan-out straight from the export
+DAG (a part whose output wires to more than one consumer), assigns ordinals per shared part, and emits
+`{split}`/`{recv}`. `to-xml` builds each `{split N}` once, registers its output wire under N, and wires
+every `{recv N}` from that wire — no new part/access, no guessing. This **replaces** `SidecarSynthesizer`'s
+prefix-signature sharing cache and the `IrNetwork.Split` / network `SPLIT` flag (both removed in phase 2/3,
+ADR-0006).
+
 Stateful and boxed instructions (timers, MOVE, bitwise word instructions, block calls —
 anything with named ports beyond a single boolean in/out) use call syntax, with a small
 maintained vendor↔neutral name table for the box name itself (e.g. `MOVE_BLK_VARIANT` → `MOVE`,
@@ -1048,6 +1145,13 @@ test-project001 FBs + MotorStarter). So `to-ir` **keeps the sidecar by default**
 only for a block already verified derivable (it errors if the block can't even synthesise). A block using
 an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or that diverges keeps its stored
 `SIDECAR`. When present, its content and contract are unchanged, as below.
+
+**Contact fan-out is a readable concern, not a sidecar one (ADR-0006, proposed).** One class of
+"wire identity" the sidecar historically implied — which occurrences of a contact are physically the
+*same* fanned-out part — is *not* derivable from the logic, so once ADR-0006 lands it is carried in the
+readable form via `{split N}`/`{recv N}` node markers (see the readable-form subsection above), not left
+to a synthesis heuristic. The sidecar still owns the genuinely machine-only identifiers (UIds, wire UIds,
+scopes); it no longer needs to encode the split topology, because the readable does.
 
 Machine-owned, appended once per file, never hand-edited by a human or the AI. Purpose: let the
 converter regenerate the exact source UIds and any other volatile-but-required-for-import
