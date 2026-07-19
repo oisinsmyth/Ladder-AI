@@ -161,9 +161,10 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   them are closed — TONR/TOF synth (2026-07-18), array-index local scope (Gap D), and the 2026-07-19 fan-out /
   box-EN / constant-typing / timer-Q-fan-out work. So the **whole-file strip-and-synthesize works on a real
   block**, and the **D-6 scoped merge is no longer the critical build** (derive-always retired D-6 anyway,
-  ADR-0005). Residual converter gap: a **wide tag-vs-tag comparison** still defaults SrcType to `Int` (no
-  literal to infer from) — not hit by the migrated blocks, but the one known unsolved synthesis-typing case;
-  tracked in `docs/notes/converter-synthesis-gaps.md` (+ the earlier Word→Int / UDT-param gaps).
+  ADR-0005). The **wide tag-vs-tag comparison** typing gap is now **FIXED too** (2026-07-19, `e7e4980` —
+  `InferCompareSrcType` resolves operand types from the `TagTypeRegistry`). Remaining synthesis-typing gaps
+  are the earlier **Word→Int CONVERT** and **UDT-typed-param inline-nesting** cases (tracked in
+  `docs/notes/converter-synthesis-gaps.md`, workarounds in use).
 - **Follow-ups from the gen-block-new validation (queued, not yet done):**
   - Fold the **reviewer-calibration rule** into `review-functional`/`review-simplicity`: never infer
     TIA execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs (shared TEMP is
