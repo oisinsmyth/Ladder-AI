@@ -37,7 +37,20 @@ the subscript before the local-name lookup. Covered by `ArrayIndexScopeSynthesis
   timer's `.Q` is an ordinary `LocalVariable` Access (FB_ShredderSequencer N11). This **perfected two of
   the four** blocks: `FB_ShredderSequencer` and `FB_PusherControl` now round-trip through readable-only
   exactly (0 diff). `FB_MotorFwdRevSystem` and `MotorStarter` remain.
-- **Fan-out / shared-contact — OPEN, hard.** The remaining two are dominated by **contact fan-out**: TIA
+- **Fan-out / shared-contact — SPLIT grammar built 2026-07-19 (clean cases derivable; cross-depth residual).**
+  Hand-authored split/merge pairs (`HandAuthorSplitsMerges`, exported from SampleProject) proved fan-out is
+  a **pure drawing choice**: split and split-free networks have byte-identical readable but different
+  sidecars, so it can't be derived — it's recorded via a new per-network **`SPLIT`** marker (owner-authorised
+  grammar change). `to-ir` marks a network when a part is shared across statements; synthesis, on a SPLIT
+  network, shares the maximal common leading sub-expressions (contacts + compound OR-merges) via a
+  prefix-signature cache, gated on the marker so non-split networks stay duplicated (resolving the earlier
+  over-share). All 10 networks of the fixture round-trip byte-exact (parity 15/15). **Residual:** *cross-depth*
+  fan-out — a contact shared between a top-level position and one nested inside a NOT/OR (real edge-detect
+  patterns; MotorStarter 113→104 contacts, not yet 94) — isn't reproduced; only top-level prefix sharing is.
+  The SPLIT marker is still emitted for those blocks; the harder sharing is the next refinement.
+
+  ### Original framing (superseded — kept for the investigation record)
+  The remaining two are dominated by **contact fan-out**: TIA
   shares one contact's output across multiple consumers where synthesis rebuilds each Expr-tree occurrence
   separately (MotorStarter N13: five MOVEs to `IO.Telemetry` share the cascading `NF/Run/RunningFB`
   contacts — sidecar shows contact `uid 37` reused across moves). Logically identical, structurally
