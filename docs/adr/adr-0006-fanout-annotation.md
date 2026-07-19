@@ -164,12 +164,25 @@ neither over-share N4 nor miss N1.
      corpus regeneration is deferred to phase 3 (above) — regeneration is verified marker-only for
      readable+sidecar blocks (sidecar UIds preserved); readable-only blocks must regenerate with
      `--no-sidecar` to stay readable-only.
-3. **Synthesis + flag removal + corpus regen.** A per-network label registry replaces the prefix cache. At
-   each element, build the written chain; on a `{recv N}` verify the prefix against node N's registered
-   definition, wire from node N's boundary wire, and build only the elements after the marker (fan-out at
-   any depth, into any consumer port). Delete the prefix-signature cache **and** the `IrNetwork.Split` /
-   `DetectSplit` flag. Then regenerate the committed `.ir` corpus in one pass (each file by its committed
-   type, so every diff stays marker-only) and confirm the parity/round-trip harness stays green.
+3. **Synthesis + flag removal + corpus regen.** — **DONE 2026-07-19.** `SidecarSynthesizer` uses a
+   per-network label registry (`Dictionary<int, IReadOnlyList<ChainStepSidecar>>`) in place of the prefix
+   cache: a `{split N}` element registers node N's prefix step-list; a `{recv N}` splices it BY REFERENCE
+   (so `FlgNetBuilder` dedups the Parts and fans out the shared wire — the proven mechanism the prefix cache
+   used) and builds only what follows. Threaded through timers/coils/moves/wands/calls in serialization
+   order so every split registers before its receiver. Deleted the prefix-signature cache, `ExprSignature`,
+   `IrNetwork.Split`, and `DetectSplit`; the ` SPLIT` header is no longer emitted (the parser still
+   accepts-and-ignores a leftover one). A **phase-2 marking fix landed here**: always recurse into a marked
+   compound — a shared inner OR-merge reused *outside* its enclosing compound (FB_MotorFwdRevSystem's
+   telemetry OR-cascade) must be marked, or synthesis rebuilds it; the extra `{recv}` inside a
+   wholesale-reused compound (N4) is harmless (synthesis splices the whole compound, never re-processing its
+   interior). Corpus regenerated: **only the three fan-out blocks** — `MotorStarter`, `FB_MotorFwdRevSystem`
+   (both readable+sidecar, self-sourced, marker-only), `HandAuthorSplitsMerges` (readable-only, from export
+   via `--no-sidecar`). Other blocks are left untouched (regen-from-export would clobber hand-edits the stale
+   export lacks — DB_Settings comments, UDT member comments, an INTERFACE block). Verified: marker-driven
+   synthesis reproduces every fan-out case — MotorStarter N1/N4/N7/N13 and FB N14 now real==synth; the
+   `HandAuthorSplitsMerges` golden parity (byte-exact) is green. 581 converter (incl. new
+   `SidecarSynthesizerFanoutTests`) + 31 golden green. *(The recv prefix-verify safety check was left as a
+   future refinement — the registry-miss hard-error already guards the structural invariant.)*
 4. **Migrate + validate.** Re-derive `HandAuthorSplitsMerges` markers (stay byte-exact); drive
    `MotorStarter` + the four `test-project001` FBs to **per-network byte-exact** against the `fanout.py` /
    golden `Normalizer` oracle; then drop those blocks' stored sidecars (closing the ADR-0005 residual) and
@@ -182,9 +195,12 @@ green corpus-wide throughout; per-network byte-exact is the acceptance bar for e
 
 `MotorStarter` N12's readable shows a single `IO.HrsRun = 4294967295` where the real export has a `Lt`+`Eq`
 pair sharing one `RisingEdgeFlags[2]` contact. The **shared contact** is fan-out (this ADR), but the
-**one-compare-vs-two-compares** structure is a *reducer* fidelity question orthogonal to fan-out. If N12
-doesn't reach byte-exact on the shared contact alone in phase 4, that compare-structure difference is the
-reason and is tracked separately in `converter-synthesis-gaps.md`, not resolved here.
+**one-compare-vs-two-compares** structure is a *reducer* fidelity question orthogonal to fan-out.
+**Confirmed in phase 3:** with fan-out now marker-driven, MotorStarter N12 (6 vs 4 contacts) and
+FB_MotorFwdRevSystem N13 (8 vs 6) are the *only* residuals, and both are exactly this same "Hours Run
+Counter" `HrTotaliserTimer.Q` + `= 4294967295` shape — the compare-structure difference, not fan-out. It
+is what stops those two blocks reaching byte-exact in phase 4; tracked separately in
+`converter-synthesis-gaps.md`, not resolved here.
 
 ## Revisit if
 

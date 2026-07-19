@@ -478,72 +478,19 @@ public static class GraphReducer
                 "reduction — unexpected topology, refusing to silently drop structure.");
         }
 
-        // Split (2026-07-19): a contact/OR/NOT part shared across two statements is a physical fan-out
-        // (a "split") the readable logic can't express — record it so synthesis can reproduce it.
-        var split = DetectSplit(assignmentSidecars, moveSidecars);
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
             swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements, waitStatements,
-            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements, Split: split);
+            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
             moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars);
         // ADR-0006 phase 2: derive per-node fan-out markers ({split N}/{recv N}) from shared part UIds and
-        // attach them to the readable Expr trees. (The network-level `Split` flag above stays alongside for
-        // now — synthesis still uses it; both are removed in phase 3 with the synthesis switch.)
+        // attach them to the readable Expr trees. Fan-out is recorded per node here — the old per-network
+        // SPLIT flag + synthesis heuristic are gone (ADR-0006 phase 3).
         irNetwork = ApplyFanoutMarkers(irNetwork, networkSidecar);
         return new ReducedNetwork(irNetwork, networkSidecar);
-    }
-
-    // A network "splits" when a contact/OR/NOT part is physically shared across two statements (its
-    // output fans out). Detected by collecting each coil/move statement's part UIds and checking for any
-    // UId that appears in more than one statement.
-    private static bool DetectSplit(
-        IReadOnlyList<CoilAssignmentSidecar> coils, IReadOnlyList<MoveStatementSidecar> moves)
-    {
-        var seen = new HashSet<int>();
-        foreach (var steps in coils.Select(c => c.Steps).Concat(moves.Select(m => m.Steps)))
-        {
-            var uids = new HashSet<int>();
-            CollectPartUIds(steps, uids);
-            if (uids.Any(seen.Contains))
-            {
-                return true;
-            }
-
-            seen.UnionWith(uids);
-        }
-
-        return false;
-    }
-
-    private static void CollectPartUIds(IReadOnlyList<ChainStepSidecar> steps, HashSet<int> uids)
-    {
-        foreach (var step in steps)
-        {
-            switch (step)
-            {
-                case ChainStepSidecar.ContactStep c:
-                    uids.Add(c.ContactUId);
-                    break;
-                case ChainStepSidecar.CompareStep cmp:
-                    uids.Add(cmp.ComparePartUId);
-                    break;
-                case ChainStepSidecar.OrStep or:
-                    uids.Add(or.OrPartUId);
-                    foreach (var branch in or.Branches)
-                    {
-                        CollectPartUIds(branch.Steps, uids);
-                    }
-
-                    break;
-                case ChainStepSidecar.NotStep not:
-                    uids.Add(not.NotPartUId);
-                    CollectPartUIds(not.Steps, uids);
-                    break;
-            }
-        }
     }
 
     // ADR-0006 phase 2: derive per-node fan-out markers from the reduced network's shared part UIds and
@@ -692,13 +639,19 @@ public static class GraphReducer
         var newOperands = new List<Expr>(operands.Count);
         for (var i = 0; i < operands.Count; i++)
         {
-            // A shared element's whole subtree IS the node — reused as a unit — so mark it and do NOT recurse
-            // (a shared OR's branch contacts are internal to it, reused whenever it is; marking them too would
-            // be redundant, MotorStarter N4). A non-shared compound may still have independent sharing between
-            // its branches (an OR whose branches share a leading contact, N1), so recurse there.
-            var op = markers[i] is { } marker
-                ? operands[i] with { Fanout = marker }
-                : RecurseCompound(operands[i], steps[i], ctx);
+            // Always recurse into compound elements, even a marked one: a shared compound's branches may hold
+            // a node shared *outside* it (a cross-statement nested OR-merge cascade — FB_MotorFwdRevSystem's
+            // telemetry, where an inner `(A OR B)` is shared between a top-level MOVE and the branches of a
+            // later MOVE's outer OR), which must still be marked so synthesis reuses it rather than rebuilding.
+            // When the branch-internal node is only reused *via* the enclosing compound (MotorStarter N4), the
+            // extra `{recv}` inside is harmless — synthesis splices the whole compound and never re-processes
+            // its interior.
+            var op = RecurseCompound(operands[i], steps[i], ctx);
+            if (markers[i] is { } marker)
+            {
+                op = op with { Fanout = marker };
+            }
+
             newOperands.Add(op);
         }
 

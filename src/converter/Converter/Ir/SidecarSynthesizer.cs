@@ -159,9 +159,18 @@ public static class SidecarSynthesizer
         // N1/N4 — 4/4), while every plain-Coil LOCAL-instance timer-Q is an ordinary Access
         // (FB_ShredderSequencer N11, FB_PusherControl N5, MotorStarter N11/N12). Coil type is the signal.
         var latchTimerPartUIdByInstancePath = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // Fan-out registry (ADR-0006, phase 3): label N → shared node N's reused prefix step-list. A
+        // `{split N}` element registers node N; a later `{recv N}` (in this or any following boolean chain)
+        // splices node N's steps by reference, so FlgNetBuilder fans out the shared wire. Built up as the
+        // boolean chains are synthesised in serialization order (timers → coils → moves → wands → calls), so
+        // every split is registered before its receiver — replacing the old per-network SPLIT prefix
+        // heuristic with the explicit markers `to-ir` derived.
+        var fanoutRegistry = new Dictionary<int, IReadOnlyList<ChainStepSidecar>>();
+
         foreach (var timer in network.Timers)
         {
-            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
             timers.Add(timerSidecar);
             if (timerSidecar.InstanceScope == GlobalVariableScope)
             {
@@ -173,24 +182,18 @@ public static class SidecarSynthesizer
             }
         }
 
-        // A SPLIT network shares its statements' maximal common leading sub-expressions as fan-out; the
-        // cache carries the shared steps across coils and moves (built in authored order). Null (no
-        // sharing) unless the network is marked SPLIT — which is exactly how a non-split network stays
-        // duplicated (the drawing choice `to-ir` recorded).
-        var prefixCache = network.Split ? new Dictionary<string, ChainStepSidecar>(StringComparer.Ordinal) : null;
-
         var assignments = new List<CoilAssignmentSidecar>();
         foreach (var assignment in network.Assignments)
         {
             assignments.Add(BuildAssignment(
                 assignment, railWireUId, timerPartUIdByInstancePath, latchTimerPartUIdByInstancePath,
-                ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
+                ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
         }
 
         var moves = new List<MoveStatementSidecar>();
         foreach (var move in network.Moves)
         {
-            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
+            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
         }
 
         // Mul/Convert are synthesized as index-paired siblings, not two independent batches — see
@@ -239,7 +242,7 @@ public static class SidecarSynthesizer
         var wordAnds = new List<WordAndStatementSidecar>();
         foreach (var wordAnd in network.WordAnds)
         {
-            wordAnds.Add(BuildWordAndSidecar(wordAnd, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types));
+            wordAnds.Add(BuildWordAndSidecar(wordAnd, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
         }
 
         var calcs = new List<CalcStatementSidecar>();
@@ -279,7 +282,7 @@ public static class SidecarSynthesizer
         var calls = new List<CallStatementSidecar>();
         foreach (var call in network.Calls)
         {
-            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty));
+            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry));
         }
 
         return new NetworkSidecar(
@@ -351,7 +354,7 @@ public static class SidecarSynthesizer
         CoilAssignment assignment, int sharedRailWireUId, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath,
         IReadOnlyDictionary<string, int> latchTimerPartUIdByInstancePath,
         ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<string, ChainStepSidecar>? prefixCache)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         IReadOnlyList<ChainStepSidecar> steps;
         int? chainRail;
@@ -373,7 +376,7 @@ public static class SidecarSynthesizer
         }
         else
         {
-            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache);
+            (chainRail, steps) = BuildChain(assignment.Condition, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         }
 
         var coilUId = nextUid++;
@@ -414,52 +417,61 @@ public static class SidecarSynthesizer
     private static (int? RailWireUId, List<ChainStepSidecar> Steps) BuildChain(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<string, ChainStepSidecar>? prefixCache = null)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         var operands = FlattenAnd(expr);
         var steps = new List<ChainStepSidecar>();
 
-        // A SPLIT network (prefixCache non-null) shares the maximal common leading sub-expression across
-        // statements as physical fan-out: each step's running prefix signature is looked up, a hit reuses
-        // the already-built step (its output fans out, no new Parts/Access), a miss builds and caches it.
-        // Contacts AND compound steps (an OR-merge, HandAuthorSplitsMerges N7) share this way. The cache
-        // is only supplied when the network is marked SPLIT, so a non-split network never shares.
-        var prefix = prefixCache is null ? null : new StringBuilder();
-
-        for (var idx = 0; idx < operands.Count; idx++)
+        // Fan-out (ADR-0006): a `{recv N}` operand means the chain from its start up to and including it IS
+        // shared node N — splice node N's registered prefix steps (reused BY REFERENCE, so FlgNetBuilder
+        // dedups the Parts and fans out the shared wire), and skip building the absorbed prefix operands
+        // before it; only the operands after it are built. The boundary rule (docs/adr/adr-0006) guarantees
+        // at most one recv per chain, with every split after it — so find the recv, splice, then build on.
+        var startBuild = 0;
+        for (var i = 0; i < operands.Count; i++)
         {
-            var operand = operands[idx];
-            if (prefix is not null)
+            if (operands[i].Fanout is { Kind: FanoutMarkerKind.Recv, Label: var recvLabel })
             {
-                prefix.Append(ExprSignature(operand)).Append('|');
-                var key = prefix.ToString();
-                if (prefixCache!.TryGetValue(key, out var cached))
+                if (!fanoutRegistry.TryGetValue(recvLabel, out var reused))
                 {
-                    steps.Add(cached);
-                    continue;
+                    throw new UnsupportedSynthesisConstructException(
+                        $"'{{recv {recvLabel}}}' has no matching '{{split {recvLabel}}}' registered earlier in " +
+                        "this network — a split master must be serialised before its receiver (ADR-0006).");
                 }
 
-                var built = BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
-                prefixCache[key] = built;
-                steps.Add(built);
-            }
-            else
-            {
-                steps.Add(BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+                steps.AddRange(reused);
+                startBuild = i + 1;
+                break;
             }
         }
 
+        for (var idx = startBuild; idx < operands.Count; idx++)
+        {
+            var operand = operands[idx];
+            steps.Add(BuildStep(operand, idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
+
+            // Register node N as the prefix up to and including this element, for a later `{recv N}` to
+            // reuse (a snapshot copy of the current step references — cascading: node 3 = node 2's steps + this).
+            if (operand.Fanout is { Kind: FanoutMarkerKind.Split, Label: var splitLabel })
+            {
+                fanoutRegistry[splitLabel] = steps.ToList();
+            }
+        }
+
+        // The rail-facing status follows operands[0] (the reused prefix's first element when a recv spliced
+        // it) — a leaf/compare chain is rail-fed, an OR/standalone-Not first element bubbles a null rail.
         var railWired = operands.Count == 0 || !IsCompound(operands[0]);
         return (railWired ? sharedRailWireUId : null, steps);
     }
 
     private static ChainStepSidecar BuildStep(
         Expr operand, int idx, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         if (idx == 0 && IsCompound(operand))
         {
-            return BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+            return BuildCompoundStep(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         }
 
         if (operand is Expr.Compare compare)
@@ -486,20 +498,6 @@ public static class SidecarSynthesizer
             "yet (only TagRef/And/Or/Not/Compare are supported).");
     }
 
-    // A canonical signature of an expression, for the SPLIT prefix cache — two structurally-identical
-    // sub-expressions share the same signature and are physically shared as one fan-out.
-    private static string ExprSignature(Expr expr) => expr switch
-    {
-        Expr.TagRef t => t.Path,
-        Expr.Not { Standalone: false, Operand: Expr.TagRef t } => "!" + t.Path,
-        Expr.Not not => "N(" + ExprSignature(not.Operand) + ")",
-        Expr.Or or => "O(" + string.Join(",", or.Operands.Select(ExprSignature)) + ")",
-        Expr.And and => "A(" + string.Join(",", and.Operands.Select(ExprSignature)) + ")",
-        Expr.Compare c => "C" + c.Operator + "(" + ExprSignature(c.Left) + "," + ExprSignature(c.Right) + ")",
-        Expr.Literal l => "L" + l.Value,
-        _ => "?" + expr.GetType().Name,
-    };
-
     // Expr.And can arrive left-nested from parenthesized text (e.g. "(A AND B) AND C") even
     // though it's logically flat — flatten defensively rather than assume the parser always
     // hands back a flat list. Or is deliberately NOT flattened: nesting there is structurally
@@ -524,18 +522,20 @@ public static class SidecarSynthesizer
 
     private static ChainStepSidecar BuildCompoundStep(
         Expr expr, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         switch (expr)
         {
             case Expr.Or or:
                 // Build every branch (and everything upstream of it) before minting the O Part's
                 // own UId — see this class's own doc comment for why minting order must produce
-                // ascending-UId-equals-signal-flow-order on its own.
+                // ascending-UId-equals-signal-flow-order on its own. Branches carry the fanout registry so a
+                // marker inside a branch (an intra-statement split, MotorStarter N1) is honoured.
                 var branches = new List<OrBranch>();
                 foreach (var operand in or.Operands)
                 {
-                    var (branchRail, branchSteps) = BuildChain(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+                    var (branchRail, branchSteps) = BuildChain(operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
                     branches.Add(new OrBranch(branchSteps, branchRail));
                 }
 
@@ -544,7 +544,7 @@ public static class SidecarSynthesizer
                 return new ChainStepSidecar.OrStep(orPartUId, branches, orOutgoingWireUId);
 
             case Expr.Not not:
-                var (notRail, notSteps) = BuildChain(not.Operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+                var (notRail, notSteps) = BuildChain(not.Operand, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
                 var notPartUId = nextUid++;
                 var notOutgoingWireUId = nextUid++;
                 return new ChainStepSidecar.NotStep(notPartUId, notSteps, notRail, notOutgoingWireUId);
@@ -720,12 +720,13 @@ public static class SidecarSynthesizer
     // Parts-list flow-order constraint entirely (this class's own doc comment).
     private static TimerBindingSidecar BuildTimerSidecar(
         TimerBinding timer, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         // TON/TONR/TOF all supported (TOF/TONR added 2026-07-18, TimingAndCalls). The read side and
         // FlgNetBuilder already render each kind; synthesis just builds the right sidecar — the same
         // shape for all three, plus the reset (R) operand a TONR carries and TON/TOF don't.
-        var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var tonPartUId = nextUid++;
         var preset = ResolveOperand(timer.Pt, typedConstant: true, ref nextUid, accessEntries, constantEntries, localNames);
 
@@ -773,9 +774,9 @@ public static class SidecarSynthesizer
     private static MoveStatementSidecar BuildMoveSidecar(
         MoveStatement move, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<string, ChainStepSidecar>? prefixCache)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, prefixCache);
+        var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var movePartUId = nextUid++;
         var inOperand = ResolveOperand(move.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
 
@@ -799,7 +800,10 @@ public static class SidecarSynthesizer
         switch (en)
         {
             case EnSource.Condition condition:
-                var (chainRail, steps) = BuildChain(condition.Value, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+                // Box EN chains (Mul/Convert/Abs/Swap/Calc/T_Sub/T_Conv) are not marked for fan-out (ADR-0006
+                // scopes markers to timers/coils/moves/wands/calls), so a fresh throwaway registry is used —
+                // it is never consulted (no marker in the chain to trigger a split/recv lookup).
+                var (chainRail, steps) = BuildChain(condition.Value, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, new Dictionary<int, IReadOnlyList<ChainStepSidecar>>());
                 return (chainRail, new EnSourceSidecar.ConditionSidecar(chainRail, steps));
 
             case EnSource.PrecedingEno:
@@ -951,10 +955,11 @@ public static class SidecarSynthesizer
     // like `16#89`) take that same type, not the Int their digits suggest (Gap F).
     private static WordAndStatementSidecar BuildWordAndSidecar(
         WordAndStatement wordAnd, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
         var srcType = RequireInputsType(tagTypes, wordAnd.Inputs, "WAND");
-        var (chainRail, steps) = BuildChain(wordAnd.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var (chainRail, steps) = BuildChain(wordAnd.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var andPartUId = nextUid++;
 
         var inputs = new List<OperandSidecar>();
@@ -1078,9 +1083,10 @@ public static class SidecarSynthesizer
     // isn't proven universal).
     private static CallStatementSidecar BuildCallSidecar(
         CallStatement call, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, CalleeInterfaceRegistry callees)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, CalleeInterfaceRegistry callees,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
     {
-        var (chainRail, steps) = BuildChain(call.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
+        var (chainRail, steps) = BuildChain(call.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var callPartUId = nextUid++;
 
         // Not added to accessEntries, same reason as BuildTimerSidecar's own instance reference

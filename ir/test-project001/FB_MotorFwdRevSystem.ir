@@ -113,23 +113,23 @@ NETWORK 1 "Reverse Pause and Control"
   TON(ReversalPauseTimer, IN := Pasue, PT := PauseTimeMS)
   TON(CycleDelayReset, IN := CycleDelay, PT := T#300MS)
   TON(ReversalIgnoreFTTimer, IN := Pasue OR ReversalIgnoreFTTimer.IN AND NOT ReversalIgnoreFTTimer.Q, PT := ReverseIgnoreFTTimeMS)
-  SCOIL Pasue := IO.Reverse AND NOT RisingEdgeFlags[0]
-  SCOIL StartTimer := IO.Reverse AND NOT RisingEdgeFlags[0]
-  COIL RisingEdgeFlags[0] := IO.Reverse
-  SCOIL Pasue := (IO.Reverse OR NegitiveSignalEdge[0]) AND NOT IO.Reverse
-  SCOIL StartTimer := (IO.Reverse OR NegitiveSignalEdge[0]) AND NOT IO.Reverse
-  COIL NegitiveSignalEdge[0] := (IO.Reverse OR NegitiveSignalEdge[0]) AND NOT Pasue OR (IO.Reverse OR NegitiveSignalEdge[0]) AND NOT StartTimer
-  RCOIL Pasue := ReversalPauseTimer.Q
-  SCOIL CycleDelay := ReversalPauseTimer.Q
-  RCOIL Pasue := IO.FaultActive
-  RCOIL StartTimer := IO.FaultActive
+  SCOIL Pasue := IO.Reverse{split 1} AND NOT RisingEdgeFlags[0]{split 2}
+  SCOIL StartTimer := IO.Reverse AND NOT RisingEdgeFlags[0]{recv 2}
+  COIL RisingEdgeFlags[0] := IO.Reverse{recv 1}
+  SCOIL Pasue := (IO.Reverse{split 5} OR NegitiveSignalEdge[0]{split 6}){split 3} AND NOT IO.Reverse{split 4}
+  SCOIL StartTimer := (IO.Reverse{recv 5} OR NegitiveSignalEdge[0]{recv 6}) AND NOT IO.Reverse{recv 4}
+  COIL NegitiveSignalEdge[0] := (IO.Reverse{recv 5} OR NegitiveSignalEdge[0]{recv 6}){recv 3} AND NOT Pasue OR (IO.Reverse{recv 5} OR NegitiveSignalEdge[0]{recv 6}){recv 3} AND NOT StartTimer
+  RCOIL Pasue := ReversalPauseTimer.Q{split 7}
+  SCOIL CycleDelay := ReversalPauseTimer.Q{recv 7}
+  RCOIL Pasue := IO.FaultActive{split 8}
+  RCOIL StartTimer := IO.FaultActive{recv 8}
   RCOIL CycleDelay := IO.RunFwd OR IO.RunRev
   RCOIL CycleDelay := CycleDelayReset.Q
 
 NETWORK 2 "DOL Motor Start / Stop"
   COIL IO.TryRunMotor := ((NOT IO.InHand OR IO.InHand AND NOT IO.HandIntervention) AND IO.AutoStartSignal OR IO.InHand AND IO.HandIntervention AND IO.HandStartSignal) AND NOT IO.InhibitMotor AND NOT IO.FaultActive AND IO.SystemHealthy
-  COIL IO.RunFwd := (IO.TryRunMotor AND PreStartMemory AND IO.RecentStart OR IO.TryRunMotor AND IO.RunFwd OR IO.TryRunMotor AND IO.RunRev OR IO.TryRunMotor AND Pasue OR IO.TryRunMotor AND CycleDelay) AND NOT IO.StopMotor AND NOT IO.Shutdown AND NOT Pasue AND NOT IO.Reverse
-  COIL IO.RunRev := (IO.TryRunMotor AND PreStartMemory AND IO.RecentStart OR IO.TryRunMotor AND IO.RunFwd OR IO.TryRunMotor AND IO.RunRev OR IO.TryRunMotor AND Pasue OR IO.TryRunMotor AND CycleDelay) AND NOT IO.StopMotor AND NOT IO.Shutdown AND NOT Pasue AND IO.Reverse
+  COIL IO.RunFwd := (IO.TryRunMotor{split 5} AND PreStartMemory{split 6} AND IO.RecentStart{split 7} OR IO.TryRunMotor{recv 5} AND IO.RunFwd{split 8} OR IO.TryRunMotor{recv 5} AND IO.RunRev{split 9} OR IO.TryRunMotor{recv 5} AND Pasue{split 10} OR IO.TryRunMotor{recv 5} AND CycleDelay{split 11}){split 1} AND NOT IO.StopMotor{split 2} AND NOT IO.Shutdown{split 3} AND NOT Pasue{split 4} AND NOT IO.Reverse
+  COIL IO.RunRev := (IO.TryRunMotor AND PreStartMemory AND IO.RecentStart{recv 7} OR IO.TryRunMotor AND IO.RunFwd{recv 8} OR IO.TryRunMotor AND IO.RunRev{recv 9} OR IO.TryRunMotor AND Pasue{recv 10} OR IO.TryRunMotor AND CycleDelay{recv 11}) AND NOT IO.StopMotor AND NOT IO.Shutdown AND NOT Pasue{recv 4} AND IO.Reverse
 
 NETWORK 3 "Hand Intervention Logic"
   COMMENT "Must Have Set Bit (#IO.HandIntervention)On Hand Control Buttons Press/Release On HMI"
@@ -144,10 +144,10 @@ NETWORK 4 "Start Signal After Inhibit/Fault"
 
 NETWORK 5 ""
   TON(InHandReqPreStart, IN := PreStartMemory AND NOT IO.PreStartDone AND IO.InHand, PT := T#30S)
-  COIL HandPosEdge := IO.InHand AND NOT RisingEdgeFlags[3]
-  COIL RisingEdgeFlags[3] := IO.InHand
-  COIL HandPosEdge := (IO.InHand OR NegitiveSignalEdge[2]) AND NOT IO.InHand
-  COIL NegitiveSignalEdge[2] := (IO.InHand OR NegitiveSignalEdge[2]) AND NOT HandPosEdge
+  COIL HandPosEdge := IO.InHand{split 1} AND NOT RisingEdgeFlags[3]
+  COIL RisingEdgeFlags[3] := IO.InHand{recv 1}
+  COIL HandPosEdge := (IO.InHand{split 3} OR NegitiveSignalEdge[2]{split 4}){split 2} AND NOT IO.InHand
+  COIL NegitiveSignalEdge[2] := (IO.InHand{recv 3} OR NegitiveSignalEdge[2]{recv 4}){recv 2} AND NOT HandPosEdge
 
 NETWORK 6 "Prestart Hold On Until Motor Run Signal"
   COIL PreStartMemory := IO.PreStartDone OR PreStartMemory AND NOT IO.FaultActive AND NOT IO.RunFwd AND NOT IO.RunRev AND NOT InHandReqPreStart.Q AND NOT HandPosEdge AND NOT HandPosEdge
@@ -166,8 +166,8 @@ NETWORK 7 "HMI Times"
 
 NETWORK 8 "DOL Motor Shutdown"
   TON(ShutdownTimer, IN := IO.StopMotor, PT := ShutdownTimeMS)
-  SCOIL IO.StopMotor := IO.Shutdown AND NOT RisingEdgeFlags[1]
-  COIL RisingEdgeFlags[1] := IO.Shutdown
+  SCOIL IO.StopMotor := IO.Shutdown{split 1} AND NOT RisingEdgeFlags[1]
+  COIL RisingEdgeFlags[1] := IO.Shutdown{recv 1}
   COIL IO.ShutdownComplete := ShutdownTimer.Q AND NOT IO.RunningFBFwd AND NOT IO.RunningFBRev OR IO.ShutdownComplete AND NOT IO.RunFwd AND NOT IO.RunRev OR IO.InHand AND IO.HandIntervention AND NOT IO.HandStartSignal OR IO.FaultActive
   RCOIL IO.StopMotor := IO.ShutdownComplete AND NOT IO.Shutdown
 
@@ -189,16 +189,16 @@ NETWORK 12 "Motor Running, Enable Upstream Component"
 
 NETWORK 13 "Hours Run Counter"
   TONR(HrTotaliserTimer, IN := IO.RunFwd AND IO.RunningFBFwd OR IO.RunRev AND IO.RunningFBRev, PT := T#1H, R := HrTotaliserTimerReset)
-  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q
-  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q
-  MOVE(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2] AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
+  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q{split 1}
+  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q{recv 1}
+  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2] AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
   ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2] AND IO.HrsRun < 4294967295, IN1 := 1, IN2 := IO.HrsRun) => IO.HrsRun
 
 NETWORK 14 "HMI Motor Status Telemetry"
-  MOVE(EN := NOT IO.FaultActive, IN := 0) => IO.Telemetry
-  MOVE(EN := NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev, IN := 1) => IO.Telemetry
-  MOVE(EN := (NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBFwd OR (NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBRev, IN := 2) => IO.Telemetry
-  MOVE(EN := ((NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBFwd OR (NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBRev) AND IO.UPSEnable OR ((NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBFwd OR (NOT IO.FaultActive AND IO.RunFwd OR NOT IO.FaultActive AND IO.RunRev) AND IO.RunningFBRev) AND IO.InHand, IN := 3) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry
+  MOVE(EN := (NOT IO.FaultActive{recv 1} AND IO.RunFwd{split 3} OR NOT IO.FaultActive{recv 1} AND IO.RunRev{split 4}){split 2}, IN := 1) => IO.Telemetry
+  MOVE(EN := ((NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}){recv 2} AND IO.RunningFBFwd{split 6} OR (NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}){recv 2} AND IO.RunningFBRev{split 7}){split 5}, IN := 2) => IO.Telemetry
+  MOVE(EN := ((NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}) AND IO.RunningFBFwd{recv 6} OR (NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}) AND IO.RunningFBRev{recv 7}){recv 5} AND IO.UPSEnable OR ((NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}) AND IO.RunningFBFwd{recv 6} OR (NOT IO.FaultActive AND IO.RunFwd{recv 3} OR NOT IO.FaultActive AND IO.RunRev{recv 4}) AND IO.RunningFBRev{recv 7}){recv 5} AND IO.InHand, IN := 3) => IO.Telemetry
   MOVE(EN := IO.FaultActive, IN := -1) => IO.Telemetry
 
 NETWORK 15 "Alarm"

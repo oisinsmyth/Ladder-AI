@@ -143,10 +143,11 @@ public class NotTests
         // The fixture is a standalone Not *part* (invert-RLO), so it serialises as `NOT (EnableCmd)`
         // — distinct from a negated contact `NOT EnableCmd` (Gap H, 2026-07-18). It also fans one EnableCmd
         // contact out across the two coils — RunA's top-level contact and RunB's NOT input — so the reducer
-        // marks it `{split 1}` (master) / `{recv 1}` (ADR-0006, 2026-07-19); the network keeps its SPLIT
-        // flag alongside for now (phase 2). The recv marker rides inside the standalone Not: `NOT (EnableCmd{recv 1})`.
+        // marks it `{split 1}` (master) / `{recv 1}` (ADR-0006). The recv marker rides inside the standalone
+        // Not: `NOT (EnableCmd{recv 1})`. (No ` SPLIT` header — the legacy per-network flag was removed in
+        // phase 3; fan-out now lives entirely in the per-node markers.)
         Assert.Equal(
-            "NETWORK 1 \"Not tap\" SPLIT\n" +
+            "NETWORK 1 \"Not tap\"\n" +
             "  COIL Output.RunA := EnableCmd{split 1} AND ModeA\n" +
             "  COIL Output.RunB := NOT (EnableCmd{recv 1}) AND FaultLatch\n",
             text);

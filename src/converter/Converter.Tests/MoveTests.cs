@@ -233,9 +233,9 @@ public class MoveTests
         // The telescoping cascade fans StartCmd (node 1) and RunCmd (node 2) out across the coil and moves.
         // The coil (serialised first) masters both — `{split 1}`/`{split 2}`; each move receives the deepest
         // node it taps — move1 `{recv 1}`, move2 `{recv 2}` (StartCmd absorbed) — per the ADR-0006 boundary
-        // rule. The network keeps its SPLIT flag alongside for now (phase 2).
+        // rule. (No ` SPLIT` header — the legacy per-network flag was removed in phase 3.)
         Assert.Equal(
-            "NETWORK 3 \"Motor status telemetry\" SPLIT\n" +
+            "NETWORK 3 \"Motor status telemetry\"\n" +
             "  COIL Output.Run := StartCmd{split 1} AND RunCmd{split 2}\n" +
             "  MOVE(EN := StartCmd{recv 1}, IN := 1) => Status.Word1\n" +
             "  MOVE(EN := StartCmd AND RunCmd{recv 2}, IN := SourceValue) => Status.Word2\n",

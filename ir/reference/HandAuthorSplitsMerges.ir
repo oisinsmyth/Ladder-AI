@@ -9,46 +9,46 @@ INTERFACE
     OutputVars : Array[0..10] of Bool BAREPARAM
   CONSTANT
 
-NETWORK 1 "Split Cascade" SPLIT
-  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0]
-  COIL OutputVars[1] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]
-  COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND DB_Controls.ControlVarsBool[2]
+NETWORK 1 "Split Cascade"
+  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0]{split 1}
+  COIL OutputVars[1] := DB_Controls.ControlVarsBool[0]{recv 1} AND DB_Controls.ControlVarsBool[1]{split 2}
+  COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]{recv 2} AND DB_Controls.ControlVarsBool[2]
 
 NETWORK 2 "Equivlent Cascade"
   COIL OutputVars[0] := DB_Controls.ControlVarsBool[0]
   COIL OutputVars[1] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]
   COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND DB_Controls.ControlVarsBool[2]
 
-NETWORK 3 "Split logic tree" SPLIT
-  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.ControlVarsBool[1]
-  COIL OutputVars[1] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND NOT DB_Controls.ControlVarsBool[2]
-  COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND DB_Controls.ControlVarsBool[2]
+NETWORK 3 "Split logic tree"
+  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0]{split 1} AND NOT DB_Controls.ControlVarsBool[1]
+  COIL OutputVars[1] := DB_Controls.ControlVarsBool[0]{recv 1} AND DB_Controls.ControlVarsBool[1]{split 2} AND NOT DB_Controls.ControlVarsBool[2]
+  COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]{recv 2} AND DB_Controls.ControlVarsBool[2]
 
 NETWORK 4 "Equivlent Split logic tree"
   COIL OutputVars[0] := DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.ControlVarsBool[1]
   COIL OutputVars[1] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND NOT DB_Controls.ControlVarsBool[2]
   COIL OutputVars[2] := DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1] AND DB_Controls.ControlVarsBool[2]
 
-NETWORK 5 "Positive Edge Detection w/ Split" SPLIT
-  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.PosEdgeArray[0]
-  COIL DB_Controls.PosEdgeArray[0] := DB_Controls.ControlVarsBool[0]
+NETWORK 5 "Positive Edge Detection w/ Split"
+  COIL OutputVars[0] := DB_Controls.ControlVarsBool[0]{split 1} AND NOT DB_Controls.PosEdgeArray[0]
+  COIL DB_Controls.PosEdgeArray[0] := DB_Controls.ControlVarsBool[0]{recv 1}
 
 NETWORK 6 "Equivlent Positive Edge Detection no Split"
   COIL OutputVars[0] := DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.PosEdgeArray[0]
   COIL DB_Controls.PosEdgeArray[0] := DB_Controls.ControlVarsBool[0]
 
-NETWORK 7 "Negitive Edge Detection /w split and merge" SPLIT
-  COIL OutputVars[0] := (DB_Controls.ControlVarsBool[0] OR DB_Controls.NegEdgeArray[0]) AND NOT DB_Controls.ControlVarsBool[0]
-  COIL DB_Controls.NegEdgeArray[0] := (DB_Controls.ControlVarsBool[0] OR DB_Controls.NegEdgeArray[0]) AND NOT OutputVars[0]
+NETWORK 7 "Negitive Edge Detection /w split and merge"
+  COIL OutputVars[0] := (DB_Controls.ControlVarsBool[0]{split 2} OR DB_Controls.NegEdgeArray[0]{split 3}){split 1} AND NOT DB_Controls.ControlVarsBool[0]
+  COIL DB_Controls.NegEdgeArray[0] := (DB_Controls.ControlVarsBool[0]{recv 2} OR DB_Controls.NegEdgeArray[0]{recv 3}){recv 1} AND NOT OutputVars[0]
 
 NETWORK 8 "Equivlent Negitive Edge Detection /w merge and no split"
   COIL OutputVars[0] := (DB_Controls.ControlVarsBool[0] OR DB_Controls.NegEdgeArray[0]) AND NOT DB_Controls.ControlVarsBool[0]
   COIL DB_Controls.NegEdgeArray[0] := (DB_Controls.ControlVarsBool[0] OR DB_Controls.NegEdgeArray[0]) AND NOT OutputVars[0]
 
-NETWORK 9 "Complex for the stake of complexity w/ splits and merges" SPLIT
-  COIL OutputVars[0] := (AlwaysTrue OR NOT AlwaysTrue) AND DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]
-  COIL OutputVars[1] := (AlwaysTrue OR NOT AlwaysTrue) AND DB_Controls.ControlVarsBool[0]
-  COIL OutputVars[2] := (AlwaysTrue OR NOT AlwaysTrue) AND NOT DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.ControlVarsBool[1]
+NETWORK 9 "Complex for the stake of complexity w/ splits and merges"
+  COIL OutputVars[0] := (AlwaysTrue{split 3} OR NOT AlwaysTrue{split 4}){split 1} AND DB_Controls.ControlVarsBool[0]{split 2} AND DB_Controls.ControlVarsBool[1]
+  COIL OutputVars[1] := (AlwaysTrue{recv 3} OR NOT AlwaysTrue{recv 4}) AND DB_Controls.ControlVarsBool[0]{recv 2}
+  COIL OutputVars[2] := (AlwaysTrue{recv 3} OR NOT AlwaysTrue{recv 4}){recv 1} AND NOT DB_Controls.ControlVarsBool[0] AND NOT DB_Controls.ControlVarsBool[1]
 
 NETWORK 10 "Equivlent Complex for the stake of complexity w/merges and no splits"
   COIL OutputVars[0] := (AlwaysTrue OR NOT AlwaysTrue) AND DB_Controls.ControlVarsBool[0] AND DB_Controls.ControlVarsBool[1]

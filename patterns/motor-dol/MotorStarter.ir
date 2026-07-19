@@ -90,7 +90,7 @@ INTERFACE
 
 NETWORK 1 "DOL Motor Start / Stop"
   COIL IO.TryRunMotor := ((NOT IO.InHand OR IO.InHand AND NOT IO.HandIntervention) AND IO.AutoStartSignal OR IO.InHand AND IO.HandIntervention AND IO.HandStartSignal) AND NOT IO.InhibitMotor AND NOT IO.FaultActive AND IO.SystemHealthy
-  COIL IO.Run := (IO.TryRunMotor AND PreStartMemory AND IO.RecentStart OR IO.TryRunMotor AND IO.Run) AND NOT IO.StopMotor AND NOT IO.Shutdown
+  COIL IO.Run := (IO.TryRunMotor{split 1} AND PreStartMemory AND IO.RecentStart OR IO.TryRunMotor{recv 1} AND IO.Run) AND NOT IO.StopMotor AND NOT IO.Shutdown
 
 NETWORK 2 "Hand Intervention Logic"
   COMMENT "Must Have Set Bit (#IO.HandIntervention)On Hand Control Buttons Press/Release On HMI"
@@ -105,10 +105,10 @@ NETWORK 3 "Start Signal After Inhibit/Fault"
 
 NETWORK 4 "Hand Selector Edges And Prestart Timeout"
   TON(InHandReqPreStart, IN := PreStartMemory AND NOT IO.PreStartDone AND IO.InHand, PT := T#30S)
-  COIL HandPosEdge := IO.InHand AND NOT RisingEdgeFlags[3]
-  COIL RisingEdgeFlags[3] := IO.InHand
-  COIL HandNegEdge := (IO.InHand OR NegitiveSignalEdge[1]) AND NOT IO.InHand
-  COIL NegitiveSignalEdge[1] := (IO.InHand OR NegitiveSignalEdge[1]) AND NOT HandNegEdge
+  COIL HandPosEdge := IO.InHand{split 1} AND NOT RisingEdgeFlags[3]
+  COIL RisingEdgeFlags[3] := IO.InHand{recv 1}
+  COIL HandNegEdge := (IO.InHand{split 3} OR NegitiveSignalEdge[1]{split 4}){split 2} AND NOT IO.InHand
+  COIL NegitiveSignalEdge[1] := (IO.InHand{recv 3} OR NegitiveSignalEdge[1]{recv 4}){recv 2} AND NOT HandNegEdge
 
 NETWORK 5 "Prestart Hold On Until Motor Run Signal"
   COIL PreStartMemory := IO.PreStartDone OR PreStartMemory AND NOT IO.FaultActive AND NOT IO.Run AND NOT InHandReqPreStart.Q AND NOT HandPosEdge AND NOT HandNegEdge
@@ -124,8 +124,8 @@ NETWORK 6 "HMI Times"
 
 NETWORK 7 "DOL Motor Shutdown"
   TON(ShutdownTimer, IN := IO.StopMotor, PT := ShutdownTimeMS)
-  SCOIL IO.StopMotor := IO.Shutdown AND NOT RisingEdgeFlags[1]
-  COIL RisingEdgeFlags[1] := IO.Shutdown
+  SCOIL IO.StopMotor := IO.Shutdown{split 1} AND NOT RisingEdgeFlags[1]
+  COIL RisingEdgeFlags[1] := IO.Shutdown{recv 1}
   COIL IO.ShutdownComplete := ShutdownTimer.Q AND NOT IO.RunningFB OR IO.ShutdownComplete AND NOT IO.Run OR IO.InHand AND IO.HandIntervention AND NOT IO.HandStartSignal OR IO.FaultActive
   RCOIL IO.StopMotor := IO.ShutdownComplete AND NOT IO.Shutdown
 
@@ -147,16 +147,16 @@ NETWORK 11 "Motor Running, Enable Upstream Component"
 
 NETWORK 12 "Hours Run Counter"
   TONR(HrTotaliserTimer, IN := IO.Run AND IO.RunningFB, PT := T#1H, R := HrTotaliserTimerReset)
-  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q
-  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q
-  MOVE(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2] AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
+  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q{split 1}
+  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q{recv 1}
+  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2] AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
   ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2] AND IO.HrsRun < 4294967295, IN1 := 1, IN2 := IO.HrsRun) => IO.HrsRun
 
 NETWORK 13 "HMI Motor Status Telemetry"
-  MOVE(EN := NOT IO.FaultActive, IN := 0) => IO.Telemetry
-  MOVE(EN := NOT IO.FaultActive AND IO.Run, IN := 1) => IO.Telemetry
-  MOVE(EN := NOT IO.FaultActive AND IO.Run AND IO.RunningFB, IN := 2) => IO.Telemetry
-  MOVE(EN := NOT IO.FaultActive AND IO.Run AND IO.RunningFB AND IO.UPSEnable OR NOT IO.FaultActive AND IO.Run AND IO.RunningFB AND IO.InHand, IN := 3) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{split 2}, IN := 1) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive AND IO.Run{recv 2} AND IO.RunningFB{split 3}, IN := 2) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive AND IO.Run AND IO.RunningFB{recv 3} AND IO.UPSEnable OR NOT IO.FaultActive AND IO.Run AND IO.RunningFB{recv 3} AND IO.InHand, IN := 3) => IO.Telemetry
   MOVE(EN := IO.FaultActive, IN := -1) => IO.Telemetry
 
 NETWORK 14 "Alarm"
