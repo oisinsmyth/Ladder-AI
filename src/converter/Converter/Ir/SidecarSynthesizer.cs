@@ -151,6 +151,14 @@ public static class SidecarSynthesizer
         // is left out of the map and its Q read falls through to the normal contact/Access path.
         var timers = new List<TimerBindingSidecar>();
         var timerPartUIdByInstancePath = new Dictionary<string, int>(StringComparer.Ordinal);
+        // Same-network LOCAL-instance timers, kept in a separate map used only for latch (Set/Reset)
+        // coils. A plain (Assign) coil wires directly from a same-network timer's Q only for a
+        // GLOBAL-instance timer (the first map); a Set/Reset coil wires directly for a LOCAL-instance
+        // one too. Evidence (docs/notes/converter-synthesis-gaps.md, 2026-07-19): every whole-condition
+        // R/SCoil-from-timer-Q in the real corpus is a direct wire (MotorStarter N3, FB_MotorFwdRevSystem
+        // N1/N4 — 4/4), while every plain-Coil LOCAL-instance timer-Q is an ordinary Access
+        // (FB_ShredderSequencer N11, FB_PusherControl N5, MotorStarter N11/N12). Coil type is the signal.
+        var latchTimerPartUIdByInstancePath = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var timer in network.Timers)
         {
             var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames);
@@ -158,6 +166,10 @@ public static class SidecarSynthesizer
             if (timerSidecar.InstanceScope == GlobalVariableScope)
             {
                 timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+            }
+            else
+            {
+                latchTimerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
             }
         }
 
@@ -171,7 +183,8 @@ public static class SidecarSynthesizer
         foreach (var assignment in network.Assignments)
         {
             assignments.Add(BuildAssignment(
-                assignment, railWireUId, timerPartUIdByInstancePath, ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
+                assignment, railWireUId, timerPartUIdByInstancePath, latchTimerPartUIdByInstancePath,
+                ref nextUid, accessEntries, constantEntries, localNames, prefixCache));
         }
 
         var moves = new List<MoveStatementSidecar>();
@@ -336,13 +349,23 @@ public static class SidecarSynthesizer
     // which is precisely how the real export renders it (TimerSample N3).
     private static CoilAssignmentSidecar BuildAssignment(
         CoilAssignment assignment, int sharedRailWireUId, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath,
+        IReadOnlyDictionary<string, int> latchTimerPartUIdByInstancePath,
         ref int nextUid, List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
         Dictionary<string, ChainStepSidecar>? prefixCache)
     {
         IReadOnlyList<ChainStepSidecar> steps;
         int? chainRail;
-        if (assignment.Condition is Expr.TagRef tag
-            && TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath) is (int tonPartUId, string port))
+        // A whole-condition timer-Q coil feed wires directly from the TON's Q port. A plain (Assign)
+        // coil qualifies only for a GLOBAL-instance timer; a Set/Reset (latch) coil qualifies for a
+        // same-network LOCAL-instance timer too — see the timer-loop comment above for the corpus
+        // evidence that coil type, not scope alone, is the signal.
+        var directTimer = assignment.Condition is Expr.TagRef tag
+            ? TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath)
+              ?? (assignment.Kind != CoilKind.Assign
+                  ? TrySplitTimerOutput(tag.Path, latchTimerPartUIdByInstancePath)
+                  : null)
+            : null;
+        if (directTimer is (int tonPartUId, string port))
         {
             var outgoingWireUId = nextUid++;
             steps = new ChainStepSidecar[] { new ChainStepSidecar.TimerOutputStep(tonPartUId, port, outgoingWireUId) };

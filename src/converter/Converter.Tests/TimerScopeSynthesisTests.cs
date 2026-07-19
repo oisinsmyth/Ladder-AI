@@ -93,10 +93,11 @@ public class TimerScopeSynthesisTests
     }
 
     [Fact]
-    public void Synthesize_CoilFedBySameNetworkLocalTimerQ_IsOrdinaryContact()
+    public void Synthesize_PlainCoilFedBySameNetworkLocalTimerQ_IsOrdinaryContact()
     {
-        // Only a GLOBAL-instance timer's same-network Q wires directly. A LOCAL (FB-instance) timer's
-        // Q is an ordinary LocalVariable Access even in the same network (FB_ShredderSequencer N11).
+        // A GLOBAL-instance timer's same-network Q wires directly; a LOCAL (FB-instance) timer's Q
+        // feeding a *plain* (Assign) coil is an ordinary LocalVariable Access even in the same network
+        // (FB_ShredderSequencer N11). Coil type is the signal — see the latch case below.
         var network = IrParser.ParseNetworkOnly(
             "NETWORK 1 \"T\"\n  TON(RunTimer, IN := Enable, PT := T#1S)\n  COIL Out := RunTimer.Q\n");
         var block = new Converter.SimaticMl.DbMember("RunTimer", "TON_TIME", Retain: false, StartValue: null);
@@ -107,5 +108,29 @@ public class TimerScopeSynthesisTests
 
         Assert.NotNull(assignment.RailWireUId); // rail-fed contact, not a timer-output direct wire
         Assert.IsType<ChainStepSidecar.ContactStep>(Assert.Single(assignment.Steps));
+    }
+
+    [Theory]
+    [InlineData("RCOIL")]
+    [InlineData("SCOIL")]
+    public void Synthesize_LatchCoilFedBySameNetworkLocalTimerQ_WiresDirectly(string coilKeyword)
+    {
+        // A Set/Reset (latch) coil whose whole condition is a same-network timer's Q wires DIRECTLY
+        // from the TON's Q port even when the timer is a LOCAL (FB-instance) one — unlike a plain coil
+        // (above). Evidence: every whole-condition R/SCoil-from-timer-Q in the real corpus is a direct
+        // wire (MotorStarter N3, FB_MotorFwdRevSystem N1/N4), while every plain-Coil local-instance
+        // timer-Q is a contact — see docs/notes/converter-synthesis-gaps.md (2026-07-19).
+        var network = IrParser.ParseNetworkOnly(
+            $"NETWORK 1 \"T\"\n  TON(RunTimer, IN := Enable, PT := T#1S)\n  {coilKeyword} Latch := RunTimer.Q\n");
+        var block = new Converter.SimaticMl.DbMember("RunTimer", "TON_TIME", Retain: false, StartValue: null);
+        var irBlock = new IrBlock("0", "FB", "T", 1, "LAD", null, new[] { network }, StaticMembers: new[] { block });
+
+        var sidecar = SidecarSynthesizer.SynthesizeBlock(irBlock).Single();
+        var assignment = Assert.Single(sidecar.Assignments);
+
+        Assert.Null(assignment.RailWireUId); // fed by the timer's Q, not the rail
+        var step = Assert.IsType<ChainStepSidecar.TimerOutputStep>(Assert.Single(assignment.Steps));
+        Assert.Equal("Q", step.Port);
+        Assert.Equal(Assert.Single(sidecar.Timers).TonPartUId, step.TonPartUId);
     }
 }

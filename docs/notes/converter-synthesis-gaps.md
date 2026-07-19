@@ -67,6 +67,55 @@ the subscript before the local-name lookup. Covered by `ArrayIndexScopeSynthesis
 - Plus **OR-factoring** (move 3): the reducer distributes `prefix AND (X OR Y)` to `(prefix AND X) OR
   (prefix AND Y)`, losing the shared prefix — a `to-ir` (reducer) fix, separate from synthesis.
 
+  ### Depth-aware sharing experiment + N1/N3/N12 diagnosis (2026-07-19)
+  **The experiment that settled "annotate vs derive".** Threaded the SPLIT prefix cache *into* OR-branches
+  and NOT-operands (`BuildCompoundStep` → `BuildChain(..., prefixCache)`), i.e. "share maximally within a
+  split network", and measured MotorStarter per-network contacts vs its own stored sidecar:
+  - **N13 telemetry 12→6 (exact)** and the `NotFedByContact` fixture both **closed** — the OR branches
+    correctly tapped the `NF·Run·RF` cascade / the top-level↔inside-NOT contact.
+  - **N4 9→8 and N7 13→12 — over-shared** (merged a contact TIA drew *separately*). In N13 TIA fanned the
+    cascade contacts into the OR; in N4 (`(IO.InHand OR …) AND NOT IO.InHand`) TIA drew the OR's `IO.InHand`
+    as its *own* contact. **Same logical shape, opposite drawing choice** → a single heuristic is wrong half
+    the time → fan-out at depth is genuinely a free drawing choice, **not derivable — annotation required.**
+  - All 562 converter + reference parity (15/15, incl. `HandAuthorSplitsMerges`) stayed green — the rule is
+    only wrong where nothing guards it (MotorStarter isn't in an automated parity gate). **Reverted.** The
+    threading *mechanism* is correct and reusable; it just needs to be **gated by a per-node annotation**
+    (a "master" where the shared node is defined, "receive" where each other consumer taps it) rather than
+    applied blindly. The per-network `SPLIT` flag is too coarse: it can't say "share the cascade, *don't*
+    share the OR's InHand" within one network.
+
+  **What N1/N3/N12 actually need (real fan-out extracted from the stored sidecar, `tmp/fanout.py`):**
+  - **N1 — intra-*statement* fan-out (new class).** Real: `Contact IO.TryRunMotor.out → 2×Contact.in`,
+    i.e. `P AND (X OR Y)` drawn with one shared `P`, *within a single coil's OR* (`IO.Run`). `DetectSplit`
+    only inspects *cross-statement* UId reuse, so N1 **isn't even marked `SPLIT`**; synth builds `P` twice
+    (17 vs 16). The annotation must attach at the **sub-expression node inside one statement**, not per-
+    network/per-statement — this is the strongest argument for the user's master/receive-at-the-split-point
+    over any coarser marker.
+  - **N3 — NOT a split at all; FIXED 2026-07-19.** Zero fan-out in real. The only difference: real wires
+    `RCOIL IO.HandStartSignal := GeneralDelayTimer.Q` **directly from the same-network TON's Q** (no
+    contact); synth built an ordinary `GeneralDelayTimer.Q` contact (+1 → 11 vs 10). The **signal is coil
+    type, not scope.** A corpus scan of every whole-condition timer-Q→coil wire settled it: **R/SCoil →
+    direct wire, always** (MotorStarter N3, FB_MotorFwdRevSystem N1×2/N4 — 4/4, all LOCAL-instance); a
+    **plain (Assign) Coil → direct only for a GLOBAL-instance timer** (TimerSample), else a contact
+    (FB_ShredderSequencer N11, FB_PusherControl N5, MotorStarter N11/N12). This is why gating to global
+    alone under-fired: it missed the latch-coil case. **Fix landed:** `Synthesize` keeps a second
+    same-network **local**-timer map consulted only for Set/Reset coils; `BuildAssignment` wires a latch
+    coil directly from a local timer's Q, a plain coil only from the global map. MotorStarter N3 now 10=10;
+    FB_ShredderSequencer stays exact on all 15 networks; FB_MotorFwdRevSystem N4 (RCoil) exact. Guarded by
+    `TimerScopeSynthesisTests.Synthesize_LatchCoilFedBySameNetworkLocalTimerQ_WiresDirectly` (RCOIL+SCOIL)
+    plus the plain-Coil negative test. 562 converter + 31 golden green.
+  - **N12 — multi-target fan-out, incl. non-contact consumers.** SPLIT sharing already reproduces
+    `HrTotaliserTimer.Q → 2×Coil.in + Contact.in`. Residual: real also fans `RisingEdgeFlags[2] → Lt.pre +
+    Eq.pre` (a contact into *two `Compare` boxes' chain-input ports*), which synth doesn't share (6 vs 4);
+    plus a reduction question — readable shows one `= 4294967295` where real has a `Lt`+`Eq` pair.
+    **Design consequence: "receive" points are any consumer position — `contact.in`, `coil.in`, `move.en`,
+    `compare.pre` — not only contacts.**
+
+  **Net for the annotation design:** (1) attach at the sub-expression node (intra-statement, N1);
+  (2) receive markers go on *any* consumer port, not just contacts (N12/N13); (3) pull N3 out of the split
+  scope entirely — it's a timer-wiring fix. N1/N3/N12 are three *different* residuals, only two of which are
+  fan-out.
+
 **Consequences / next steps:**
 - **The 4 blocks correctly keep their stored sidecars** (safe; guarded by `CommittedBlocksRoundTripTests` +
   `to-ir` keeping the sidecar by default). Not droppable until the gaps close.
