@@ -49,8 +49,18 @@ public class PatternExampleTests
         var path = Path.Combine(RepoRoot(), "patterns", "motor-dol", "MotorStarter.ir");
         var text = File.ReadAllText(path);
 
-        var (block, sidecars) = IrParser.ParseBlock(text);
-        var reserialized = IrSerializer.SerializeBlock(block, sidecars);
+        // MotorStarter is committed readable-only since ADR-0006 phase 4 (its sidecar is derived). Parse and
+        // serialize via whichever form the committed file uses, so the round-trip stays lossless either way.
+        string reserialized;
+        if (IrParser.HasSidecarSection(text))
+        {
+            var (block, sidecars) = IrParser.ParseBlock(text);
+            reserialized = IrSerializer.SerializeBlock(block, sidecars);
+        }
+        else
+        {
+            reserialized = IrSerializer.SerializeBlockReadable(IrParser.ParseBlockWithoutSidecar(text));
+        }
 
         Assert.Equal(text, reserialized);
     }

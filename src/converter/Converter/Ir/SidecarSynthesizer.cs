@@ -189,10 +189,15 @@ public static class SidecarSynthesizer
                 ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
         }
 
+        // Resolved tag types (from the project export / block interface) — used to type a literal operand to
+        // its destination/operation type rather than by magnitude alone (a MOVE `IN := 0` to a UDInt tag, an
+        // ADD `IN1 := 1` on UDInt operands, must carry ConstantType UDInt, not the Int its digits suggest).
+        var types = tagTypes ?? TagTypeRegistry.Empty;
+
         var moves = new List<MoveStatementSidecar>();
         foreach (var move in network.Moves)
         {
-            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry));
+            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
         }
 
         // Mul/Convert are synthesized as index-paired siblings, not two independent batches — see
@@ -211,7 +216,7 @@ public static class SidecarSynthesizer
                 // A Mul/Add/Sub/Div with `EN := ENO` chains from the immediately-preceding box in
                 // the same network — Mul→Convert (existing) or Mul→Mul (Sub then Div, SignalConditioning).
                 var precedingMulUId = muls.Count > 0 ? muls[^1].MulPartUId : (int?)null;
-                var mulSidecar = BuildMulSidecar(network.Muls[i], precedingMulUId, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
+                var mulSidecar = BuildMulSidecar(network.Muls[i], precedingMulUId, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
                 muls.Add(mulSidecar);
                 mulPartUIdForEno = mulSidecar.MulPartUId;
             }
@@ -223,8 +228,6 @@ public static class SidecarSynthesizer
                     localNames, tagTypes ?? TagTypeRegistry.Empty, fanoutRegistry));
             }
         }
-
-        var types = tagTypes ?? TagTypeRegistry.Empty;
 
         var abs = new List<AbsStatementSidecar>();
         foreach (var absStatement in network.AbsStatements)
@@ -773,11 +776,16 @@ public static class SidecarSynthesizer
     private static MoveStatementSidecar BuildMoveSidecar(
         MoveStatement move, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         var (chainRail, steps) = BuildChain(move.En, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var movePartUId = nextUid++;
-        var inOperand = ResolveOperand(move.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // A literal `IN` is typed to the destination tag's type (a MOVE moves a value of the dest's type), not
+        // by magnitude — so `IN := 0 => IO.HrsRun` (UDInt) carries ConstantType UDInt, matching the real
+        // export. A tag `IN` ignores the override; an unresolvable dest falls back to magnitude.
+        var inOperand = ResolveOperand(
+            move.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames,
+            constantTypeOverride: tagTypes.Resolve(move.DestTag));
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(move.DestTag, destAccessUId, ScopeFor(move.DestTag, localNames)));
@@ -835,14 +843,20 @@ public static class SidecarSynthesizer
     private static MulStatementSidecar BuildMulSidecar(
         MulStatement mul, int? precedingEnoPartUId, int sharedRailWireUId, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
-        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry)
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         var (_, enSidecar) = BuildEnSourceSidecar(mul.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry);
         var mulPartUId = nextUid++;
+        // A literal input is typed to the operation type (the box's tag operand's type), not by magnitude — so
+        // an increment `ADD(IN1 := 1, IN2 := IO.HrsRun)` types the `1` UDInt to match `IO.HrsRun`, as the real
+        // export does. Falls back to magnitude when no input is a resolvable tag (all-literal box).
+        var operandType = TryInputsType(tagTypes, mul.Inputs);
         var inputs = new List<OperandSidecar>();
         foreach (var input in mul.Inputs)
         {
-            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames));
+            inputs.Add(ResolveOperand(
+                input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames,
+                constantTypeOverride: operandType));
         }
 
         var destAccessUId = nextUid++;
@@ -956,6 +970,22 @@ public static class SidecarSynthesizer
         throw new UnsupportedSynthesisConstructException(
             $"{instruction} synthesis needs its operation type from a tag input, none of which resolved — ensure " +
             "at least one input tag is declared in the block interface or a --project DB/UDT/tag-table.");
+    }
+
+    // Soft variant of RequireInputsType: the first resolvable tag input's type, or null (no resolvable tag —
+    // an all-literal box). Used only to *type a literal input* to the operation type; a miss falls back to
+    // magnitude, so unlike ABS/SWAP/WAND — which genuinely need the type — this never hard-errors.
+    private static string? TryInputsType(TagTypeRegistry tagTypes, IReadOnlyList<Expr> inputs)
+    {
+        foreach (var input in inputs)
+        {
+            if (input is Expr.TagRef tag && tagTypes.Resolve(tag.Path) is string type)
+            {
+                return type;
+            }
+        }
+
+        return null;
     }
 
     // A WAND (bitwise word-AND box). En is a plain Expr chain (like Move); Inputs are tag-or-literal;

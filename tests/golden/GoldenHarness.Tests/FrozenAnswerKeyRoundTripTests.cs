@@ -16,16 +16,16 @@ namespace GoldenHarness;
 /// </summary>
 public class FrozenAnswerKeyRoundTripTests
 {
-    // The blocks dropped to readable-only, each guarded against its frozen own-sidecar key. MotorStarter and
-    // FB_MotorFwdRevSystem are NOT here yet — the oracle proved they are not byte-exact (a constant-typing
-    // gap: a MOVE `IN`/box input literal is typed by magnitude, `Int`, where the real export types it to the
-    // UDInt destination — plus a residual wiring diff on FB_MotorFwdRevSystem). They keep their stored
-    // sidecars until that is fixed; add them here when it is.
+    // The blocks that fan-out + constant-typing made derivable, each guarded against its frozen own-sidecar
+    // key. FB_MotorFwdRevSystem is NOT here yet: with the constant-typing fix its only remaining divergence is
+    // a Network-1 wiring difference (a complex 4-OR-merge network) the oracle still catches — a separate,
+    // non-trivial issue; it keeps its stored sidecar until that is resolved.
     public static IEnumerable<object[]> Blocks()
     {
         var repo = ToolPaths.RepoRoot();
         yield return new object[] { "FB_ShredderSequencer", Path.Combine(repo, "ir", "test-project001", "FB_ShredderSequencer.ir") };
         yield return new object[] { "FB_PusherControl", Path.Combine(repo, "ir", "test-project001", "FB_PusherControl.ir") };
+        yield return new object[] { "MotorStarter", Path.Combine(repo, "patterns", "motor-dol", "MotorStarter.ir") };
     }
 
     [Theory]
