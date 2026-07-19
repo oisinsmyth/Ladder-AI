@@ -138,6 +138,24 @@ neither over-share N4 nor miss N1.
      earlier bare-`{recv}` "recv-as-origin" sketch, which required tracing a reference to read a rung.)
 2. **Derivation.** `GraphReducer` emits `split`/`recv` from shared part UIds (document-order master);
    **remove `DetectSplit` and the `IrNetwork.Split` / network `SPLIT` flag.**
+   - **Correlation is free:** `TraceChain` already builds the `Expr` tree and the `ChainStepSidecar`
+     list in lockstep (each `stepExprs.Insert(0,…)` pairs with a `steps.Insert(0,…)`), so every `Expr`
+     element has a known part UId (`ContactUId`/`ComparePartUId`/`OrPartUId`/`NotPartUId`). A shared part
+     (same UId at ≥2 chain positions network-wide, counting intra-statement OR-branches) is fan-out.
+   - **A shared element is always in a *leading* run.** A part has one input wire, so every occurrence
+     of a shared contact has the same upstream — i.e. the chains share a common prefix ending at it. So
+     marks only ever land on a leading cascade `e₁…e_k` (recurse into OR-branches as their own chains).
+   - **Boundary-marking algorithm, per chain** (worked against N13/N1): let `e₁…e_k` be the leading run
+     of shared elements; `node_i` = the node at `e_i` (its UId); `label(UId)` assigned by first-occurrence
+     document order. Let `m` = smallest `i` where *this* chain is `node_i`'s master (first occurrence), or
+     `k+1` if none. Then: emit `{recv label(node_{m-1})}` on `e_{m-1}` if `m>1` (the deepest *received*
+     node — this absorbs `e₁…e_{m-2}`, which stay unmarked); and `{split label(node_i)}` on each `e_i` for
+     `i ≥ m` (the new nodes this chain defines). Worked: move0 `NF{split1}`; move1 `NF{recv1} Run{split2}`;
+     move2 `NF Run{recv2} RunningFB{split3}`; move3 (receiver) `NF Run RunningFB{recv3} …`.
+   - **Corpus/test ripple to expect:** the readable form of every fan-out block gains markers, so the
+     committed `.ir` corpus must be regenerated and any exact-readable-text fixtures updated. The old
+     `SPLIT` flag stays *alongside* through this phase (synthesis still uses it) so the parity harness
+     stays green; it is deleted in phase 3 with the synthesis switch.
 3. **Synthesis.** A per-network label registry replaces the prefix cache. At each element, build the
    written chain; on a `{recv N}` verify the prefix against node N's registered definition, wire from
    node N's boundary wire, and build only the elements after the marker (fan-out at any depth, into any
