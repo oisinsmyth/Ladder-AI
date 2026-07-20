@@ -187,8 +187,8 @@ public class CrossCheckTests : IDisposable
         var report = CrossCheckRunner.Run(_dir);
 
         var text = CrossCheckOutputFormatter.FormatText(report);
-        Assert.Contains("DEAD GLOBAL-DB MEMBERS", text);
-        Assert.Contains("DB_Buf.Dead", text);
+        Assert.Contains("DEAD MEMBERS", text);
+        Assert.Contains("DB_Buf.Dead [global-db]", text);
         Assert.Contains("SUMMARY:", text);
 
         var json = CrossCheckOutputFormatter.FormatJson(report);

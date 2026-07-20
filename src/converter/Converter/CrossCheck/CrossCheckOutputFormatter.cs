@@ -18,13 +18,14 @@ public static class CrossCheckOutputFormatter
                 .Append(string.Join(", ", m.Writers.Select(w => $"{w.Block} N{w.Network} ({w.Kind})"))).Append('\n');
         }
 
-        sb.Append("== DEAD GLOBAL-DB MEMBERS (dead-wiring: no writer and/or no reader) ==\n");
+        sb.Append("== DEAD MEMBERS (dead-wiring: no writer and/or no reader — global-DB + FB interface-UDT) ==\n");
         foreach (var d in report.DeadMembers)
         {
+            var scope = d.Scope == DeadMemberScope.InterfaceMember ? "interface" : "global-db";
             var dir = d.Writers.Count == 0 && d.Readers.Count == 0 ? "unused (no writer, no reader)"
                 : d.Writers.Count == 0 ? "consumed-but-never-written; readers: " + string.Join(", ", d.Readers.Select(r => $"{r.Block} N{r.Network}"))
                 : "written-but-never-consumed; writers: " + string.Join(", ", d.Writers.Select(w => $"{w.Block} N{w.Network}"));
-            sb.Append("  ").Append(d.Path).Append(": ").Append(dir).Append('\n');
+            sb.Append("  ").Append(d.Path).Append(" [").Append(scope).Append("]: ").Append(dir).Append('\n');
         }
 
         sb.Append("== PHYSICAL-IO REFERENCES (C-304: logic touches IO only in Map FCs — AI excludes those) ==\n");
@@ -75,6 +76,7 @@ public static class CrossCheckOutputFormatter
             deadMembers = report.DeadMembers.Select(d => new
             {
                 path = d.Path,
+                scope = d.Scope.ToString(),
                 writers = d.Writers.Select(w => new { block = w.Block, network = w.Network, kind = w.Kind }),
                 readers = d.Readers.Select(r => new { block = r.Block, network = r.Network }),
             }),
