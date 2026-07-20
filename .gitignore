@@ -66,3 +66,8 @@ Desktop.ini
 # (.claude/skills/ and other shared config are NOT covered by these and should still be committed)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# S6 gen-block-modify-purpose validation: MotorVSDSystem answer key is a quarantined blind-
+# isolation ground truth (Green/sanitized, docs/13 2026-07-20). Never commit it - the blind
+# generator must never be able to discover it in the tree.
+gen/_validation/MotorVSDSystem-purpose/answerkey/

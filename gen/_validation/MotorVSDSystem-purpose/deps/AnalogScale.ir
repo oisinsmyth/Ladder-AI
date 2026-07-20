@@ -1,0 +1,205 @@
+BLOCK FC AnalogScale
+ROOTID 0
+NUMBER 28
+LANGUAGE LAD
+TITLE "Analog Scaling"
+
+INTERFACE
+  INPUT
+    Input : Real BAREPARAM
+    Input_Min : Real BAREPARAM
+    Input_Max : Real BAREPARAM
+    Scaled_Min : Real BAREPARAM
+    Scaled_Max : Real BAREPARAM
+  OUTPUT
+    Output : Real BAREPARAM
+  TEMP
+    InTemp : Real
+    Temp1 : Real
+    Temp2 : Real
+    Temp3 : Real
+    Temp4 : Real
+    Temp5 : Real
+  CONSTANT
+
+NETWORK 1 ""
+  MOVE(EN := TRUE, IN := Input) => InTemp
+  MOVE(EN := Input < Input_Min, IN := Input_Min) => InTemp
+  MOVE(EN := Input > Input_Max, IN := Input_Max) => InTemp
+
+NETWORK 2 ""
+  MOVE(EN := AlwaysTrue{split 1} AND Input_Max <= Input_Min, IN := 0.0) => Output
+  SUB(EN := AlwaysTrue{recv 1} AND (Input_Max > Input_Min){split 2}, IN1 := InTemp, IN2 := Input_Min) => Temp1
+  SUB(EN := ENO, IN1 := Input_Max, IN2 := Input_Min) => Temp2
+  DIV(EN := ENO, IN1 := Temp1, IN2 := Temp2) => Temp3
+  SUB(EN := AlwaysTrue AND (Input_Max > Input_Min){recv 2}, IN1 := Scaled_Max, IN2 := Scaled_Min) => Temp4
+  MUL(EN := ENO, IN1 := Temp3, IN2 := Temp4) => Temp5
+  ADD(EN := ENO, IN1 := Temp5, IN2 := Scaled_Min) => Output
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access Input = 21 LocalVariable
+  access InTemp = 22 LocalVariable
+  access Input = 23 LocalVariable
+  access Input_Min = 24 LocalVariable
+  access Input_Min = 25 LocalVariable
+  access InTemp = 26 LocalVariable
+  access Input = 27 LocalVariable
+  access Input_Max = 28 LocalVariable
+  access Input_Max = 29 LocalVariable
+  access InTemp = 30 LocalVariable
+  move 0
+    moveuid = 31
+    rail = 38
+    in tag = 21 36
+    dest = 22
+    destwire = 37
+  move 1
+    moveuid = 33
+    rail = 38
+    step 0 compare
+      partname = Lt
+      uid = 32
+      srctype = Real
+      left tag = 23 39
+      right tag = 24 40
+      out = 41
+    in tag = 25 42
+    dest = 26
+    destwire = 43
+  move 2
+    moveuid = 35
+    rail = 38
+    step 0 compare
+      partname = Gt
+      uid = 34
+      srctype = Real
+      left tag = 27 44
+      right tag = 28 45
+      out = 46
+    in tag = 29 47
+    dest = 30
+    destwire = 48
+NETWORK 2
+  compileunit = 8
+  access Input_Max = 21 LocalVariable
+  access Input_Min = 22 LocalVariable
+  access AlwaysTrue = 23 GlobalVariable
+  access Output = 24 LocalVariable
+  access Input_Max = 25 LocalVariable
+  access Input_Min = 26 LocalVariable
+  access InTemp = 27 LocalVariable
+  access Input_Min = 28 LocalVariable
+  access Temp1 = 29 LocalVariable
+  access Input_Max = 30 LocalVariable
+  access Input_Min = 31 LocalVariable
+  access Temp2 = 32 LocalVariable
+  access Temp1 = 33 LocalVariable
+  access Temp2 = 34 LocalVariable
+  access Temp3 = 35 LocalVariable
+  access Scaled_Max = 36 LocalVariable
+  access Scaled_Min = 37 LocalVariable
+  access Temp4 = 38 LocalVariable
+  access Temp3 = 39 LocalVariable
+  access Temp4 = 40 LocalVariable
+  access Temp5 = 41 LocalVariable
+  access Temp5 = 42 LocalVariable
+  access Scaled_Min = 43 LocalVariable
+  access Output = 44 LocalVariable
+  constant 0.0 = 45 Real
+  move 0
+    moveuid = 48
+    rail = 63
+    step 0 contact
+      uid = 46
+      operand = 23
+      operandwire = 56
+      negated = false
+      out = 57
+    step 1 compare
+      partname = Le
+      uid = 47
+      srctype = Real
+      left tag = 21 58
+      right tag = 22 59
+      out = 60
+    in literal = 45 61
+    dest = 24
+    destwire = 62
+  mul 0
+    muluid = 50
+    kind = sub
+    en = condition
+      rail = 63
+      step 0 contact
+        uid = 46
+        operand = 23
+        operandwire = 56
+        negated = false
+        out = 57
+      step 1 compare
+        partname = Gt
+        uid = 49
+        srctype = Real
+        left tag = 25 64
+        right tag = 26 65
+        out = 66
+    input 0 tag = 27 67
+    input 1 tag = 28 68
+    dest = 29
+    destwire = 69
+  mul 1
+    muluid = 51
+    kind = sub
+    en = eno 50 70
+    input 0 tag = 30 71
+    input 1 tag = 31 72
+    dest = 32
+    destwire = 73
+  mul 2
+    muluid = 52
+    kind = div
+    en = eno 51 74
+    input 0 tag = 33 75
+    input 1 tag = 34 76
+    dest = 35
+    destwire = 77
+  mul 3
+    muluid = 53
+    kind = sub
+    en = condition
+      rail = 63
+      step 0 contact
+        uid = 46
+        operand = 23
+        operandwire = 56
+        negated = false
+        out = 57
+      step 1 compare
+        partname = Gt
+        uid = 49
+        srctype = Real
+        left tag = 25 64
+        right tag = 26 65
+        out = 66
+    input 0 tag = 36 78
+    input 1 tag = 37 79
+    dest = 38
+    destwire = 80
+  mul 4
+    muluid = 54
+    kind = mul
+    en = eno 53 81
+    input 0 tag = 39 82
+    input 1 tag = 40 83
+    dest = 41
+    destwire = 84
+  mul 5
+    muluid = 55
+    kind = add
+    en = eno 54 85
+    input 0 tag = 42 86
+    input 1 tag = 43 87
+    dest = 44
+    destwire = 88
