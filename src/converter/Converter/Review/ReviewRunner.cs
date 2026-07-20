@@ -8,7 +8,7 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-125", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     // udtIndex (optional) resolves cross-file references — today only C-118's interface-UDT Step
     // (FI-09), built from `--project` when supplied. Null means the caller ran `review` without
@@ -117,6 +117,18 @@ public static class ReviewRunner
             statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "C-122 PT-home check needs --project to resolve the block's interface UDT (cross-file)"));
         }
 
+        // C-125's fault-bit-home check is cross-file (FI-09) — like C-118/C-122 it needs the
+        // --project index to resolve the block's interface UDT. Without one the whole rule is
+        // recorded NotApplicable so it's never silently absent.
+        if (udtIndex is not null)
+        {
+            Record(statuses, findings, "C-125", RuleCheckStatus.Checked, Rules.CheckC125TimeoutFaultInInterfaceUdt(block, udtIndex));
+        }
+        else
+        {
+            statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "C-125 needs --project to resolve the fault bit's interface UDT (cross-file)"));
+        }
+
         var headerFindings = Rules.CheckC201HeaderComment(block.Name, block.Comment).ToList();
         var titleFindings = Rules.CheckC201NetworkTitles(block).ToList();
         Record(statuses, findings, "C-201", RuleCheckStatus.Checked, headerFindings.Concat(titleFindings));
@@ -164,6 +176,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no step logic"));
         statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/timers"));
+        statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/timers/fault coils"));
         statuses.Add(new RuleStatusEntry("C-301", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
 

@@ -936,4 +936,151 @@ public class ReviewRulesTests
             File.Delete(path);
         }
     }
+
+    // ---- C-125: a C-122 dwell-timeout timer's fault bit lives in the interface UDT (cross-file) ----
+
+    // A step-10 dwell-timeout network mirroring FB_PusherControl N8: a Step-gated TON
+    // (EndTravelTimer, IN := IO.Step = 10) and a self-latch fault coil written to `faultCoilTag`,
+    // cleared by `NOT IO.FaultReset` — the exact timeout-fault shape C-125 keys off.
+    private static IrBlock MakeTimeoutFaultBlock(string faultCoilTag, string udtTypeName = "UDT_SeqIO")
+    {
+        var timerGate = new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal("10"));
+        var faultCond = new Expr.And(new Expr[]
+        {
+            new Expr.Or(new Expr[]
+            {
+                new Expr.TagRef("EndTravelTimer.Q"),
+                new Expr.And(new Expr[]
+                {
+                    new Expr.TagRef(faultCoilTag),
+                    new Expr.Not(new Expr.TagRef("IO.FaultReset")),
+                }),
+            }),
+            new Expr.TagRef("IO.Fitted"),
+        });
+        var network = new IrNetwork(8, "Step 10 - Timer And Timeout Fault",
+            new[] { new CoilAssignment(faultCoilTag, faultCond) },
+            Timers: new[] { new TimerBinding("EndTravelTimer", timerGate, new Expr.TagRef("IO.EndTravelTimeout")) });
+        var ioMember = new DbMember("IO", $"\"{udtTypeName}\"", Retain: true, StartValue: null, SetPoint: true);
+        return new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "A stepped sequence.", new[] { network },
+            StaticMembers: new[] { ioMember, new DbMember("EndTravelTimer", "TON_TIME", false, null) });
+    }
+
+    // True negative: the timeout-fault bit is a member of the resolvable interface UDT (IO.<...>Fault)
+    // — the real FB_PusherControl / FB_ShredderSequencer shape. Clean, no false positive.
+    [Fact]
+    public void CheckC125_FaultInInterfaceUdt_Clean()
+    {
+        var block = MakeTimeoutFaultBlock("IO.EndTravelTimeoutFault");
+        var index = IndexWithUdt("UDT_SeqIO",
+            new DbMember("Step", "Int", false, null),
+            new DbMember("EndTravelTimeoutFault", "Bool", false, null));
+
+        Assert.Empty(Rules.CheckC125TimeoutFaultInInterfaceUdt(block, index));
+    }
+
+    // True positive: the SAME timeout-fault shape but the fault bit is a bare private Static
+    // (not in the interface UDT) → C-125 warn.
+    [Fact]
+    public void CheckC125_FaultInBarePrivateStatic_Flags()
+    {
+        var block = MakeTimeoutFaultBlock("EndTravelTimeoutFault");
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "Int", false, null));
+
+        var finding = Assert.Single(Rules.CheckC125TimeoutFaultInInterfaceUdt(block, index));
+        Assert.Equal("C-125", finding.RuleId);
+        Assert.Equal(FindingSeverity.Warn, finding.Severity);
+        Assert.Equal(8, finding.NetworkNumber);
+        Assert.Contains("EndTravelTimeoutFault", finding.Description);
+    }
+
+    // True positive: the timeout-fault bit lives in a DB, not the interface UDT → C-125 warn.
+    [Fact]
+    public void CheckC125_FaultInDb_Flags()
+    {
+        var block = MakeTimeoutFaultBlock("DB_Alarms.EndTravelTimeoutFault");
+        var index = TagTypeRegistry.FromSources(
+            new[] { new DbSource("0", "DB_Alarms", 1, InstanceOfName: null, Comment: null, Members: new[] { new DbMember("EndTravelTimeoutFault", "Bool", false, null) }) },
+            new[] { new PlcTypeSource("0", "UDT_SeqIO", null, new[] { new DbMember("Step", "Int", false, null) }) },
+            Array.Empty<PlcTagSource>());
+
+        var finding = Assert.Single(Rules.CheckC125TimeoutFaultInInterfaceUdt(block, index));
+        Assert.Equal("C-125", finding.RuleId);
+        Assert.Contains("DB_Alarms", finding.Description);
+    }
+
+    // True negative (the PressureHold false-positive guard): a HOLD bit reads a Step-gated timer's
+    // .Q but its name does NOT end in "Fault" and it is cleared by another timer's Q, not FaultReset
+    // — so it is NOT a timeout-fault subject and is never flagged, even as a bare private Static.
+    [Fact]
+    public void CheckC125_HoldBitNotFault_NotFlagged()
+    {
+        var timerGate = new Expr.And(new Expr[]
+        {
+            new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal("10")),
+            new Expr.TagRef("IO.HighPressure"),
+        });
+        var holdCond = new Expr.Or(new Expr[]
+        {
+            new Expr.TagRef("PressureConfirmTimer.Q"),
+            new Expr.And(new Expr[]
+            {
+                new Expr.TagRef("PressureHold"),
+                new Expr.Not(new Expr.TagRef("PressureClearTimer.Q")),
+            }),
+        });
+        var network = new IrNetwork(5, "Pressure Hold",
+            new[] { new CoilAssignment("PressureHold", holdCond) },
+            Timers: new[] { new TimerBinding("PressureConfirmTimer", timerGate, new Expr.TagRef("IO.ConfirmTime")) });
+        var ioMember = new DbMember("IO", "\"UDT_SeqIO\"", Retain: true, StartValue: null, SetPoint: true);
+        var block = new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "A stepped sequence.", new[] { network },
+            StaticMembers: new[] { ioMember, new DbMember("PressureConfirmTimer", "TON_TIME", false, null), new DbMember("PressureHold", "Bool", false, null) });
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "Int", false, null));
+
+        Assert.Empty(Rules.CheckC125TimeoutFaultInInterfaceUdt(block, index));
+    }
+
+    // True negative: a block with no Step-gated (C-122-subject) timer has no dwell-timeout to place
+    // — yields nothing regardless of any Fault-named coils.
+    [Fact]
+    public void CheckC125_NoDwellTimer_Clean()
+    {
+        var faultCond = new Expr.Or(new Expr[]
+        {
+            new Expr.TagRef("SomeTrip"),
+            new Expr.And(new Expr[] { new Expr.TagRef("SomeFault"), new Expr.Not(new Expr.TagRef("IO.FaultReset")) }),
+        });
+        var network = new IrNetwork(1, "Plain fault latch", new[] { new CoilAssignment("SomeFault", faultCond) });
+        var ioMember = new DbMember("IO", "\"UDT_SeqIO\"", Retain: true, StartValue: null, SetPoint: true);
+        var block = new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "c", new[] { network }, StaticMembers: new[] { ioMember });
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "Int", false, null));
+
+        Assert.Empty(Rules.CheckC125TimeoutFaultInInterfaceUdt(block, index));
+    }
+
+    // Cross-file gating: reviewed without a --project index, C-125 is recorded NotApplicable (its
+    // fault-bit-home check can't resolve the interface UDT) — never silently absent. Goes through
+    // ReviewRunner, the only place the NotApplicable status is produced.
+    [Fact]
+    public void ReviewFiles_NoProjectIndex_C125NotApplicable()
+    {
+        var block = new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "c", new[]
+        {
+            new IrNetwork(1, "T", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        var path = Path.Combine(Path.GetTempPath(), $"c125-na-{Guid.NewGuid():N}.ir");
+        File.WriteAllText(path, IrSerializer.SerializeBlock(block, new[] { sidecar }));
+        try
+        {
+            var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+
+            var file = Assert.Single(report.Files);
+            Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-125" && s.Status == RuleCheckStatus.NotApplicable);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
