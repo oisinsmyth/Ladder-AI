@@ -76,6 +76,15 @@ public sealed record CreateInstanceDbCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// No <project> positional: portal-status inspects the running Portal *processes*, not a project,
+// so it never connects or opens anything. Carries the common flags (--json + install/timeouts) only
+// for uniformity with every other command; the timeout values are unused (it does no connect/open).
+public sealed record PortalStatusOptions(
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -96,6 +105,8 @@ public abstract record ParseResult
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
 
+    public sealed record PortalStatusSuccess(PortalStatusOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -113,6 +124,7 @@ public static class ArgumentParser
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
         "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
@@ -134,8 +146,9 @@ public static class ArgumentParser
             "delete" => ParseDelete(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
+            "portal-status" => ParsePortalStatus(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -203,6 +216,52 @@ public static class ArgumentParser
         // every device in the project), so reuse its parsing directly rather than duplicating it.
         var result = ParseList(args);
         return result is ParseResult.ListSuccess success ? new ParseResult.SanityCheckSuccess(success.Options) : result;
+    }
+
+    private static ParseResult ParsePortalStatus(string[] args)
+    {
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--json":
+                    json = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    // No <project> positional here — portal-status inspects Portal processes, not a
+                    // project. Anything not a recognised flag is a mistake, flagged rather than swallowed.
+                    return new ParseResult.Failure(
+                        $"Unexpected argument '{args[i]}'. `portal-status` takes no <project> and no positional arguments — it inspects running Portal processes.{Environment.NewLine}{Usage}");
+            }
+        }
+
+        return new ParseResult.PortalStatusSuccess(new PortalStatusOptions(json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseExport(string[] args)

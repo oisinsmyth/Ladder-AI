@@ -12,6 +12,7 @@ openness-cli compile       <project> [--device <name>] [--block <name> | --type 
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
+openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
 
@@ -107,3 +108,43 @@ compiling clean does **not** imply its blocks are all consistent — confirmed f
 2026-07-10: `docs/notes/openness-quirks.md` has a live example where every device compiled
 `Success` while 15 blocks stayed flagged inconsistent. Run this any time something in the
 export/import/compile chain is behaving oddly, before assuming it's a converter/CLI bug.
+
+```
+openness-cli portal-status [--json] [--tia-install <dir>]
+```
+
+A **read-only** diagnostic for Portal *process* health — the complement to `sanity-check`, which
+checks *project* health. Where `sanity-check` answers "is this project's Openness state OK",
+`portal-status` answers "are there stale/leftover `Siemens.Automation.Portal.exe` processes piling
+up" — the confirmed correlate of the "second instance won't connect" symptom (CLAUDE.md environment
+notes / the 2026-07-14 stability audit), which today is diagnosed by hand via `tasklist` plus
+judgment on which to close.
+
+**It never attaches, launches, opens, closes, or kills anything.** Unlike every other subcommand,
+it does *not* go through the connect-first flow: attaching risks the first-connect approval dialog,
+and launching a fresh Portal is the exact opposite of a pileup diagnostic. It only calls the static
+`TiaPortal.GetProcesses()` and reads each process's own `Id`/`ProjectPath`/`Mode`/`AcquisitionTime`
+— all readable **without** `Attach()` (`docs/notes/openness-api-surface-v20.md`). It takes **no
+`<project>`**; a positional argument is a usage error.
+
+Each running process is cross-referenced against the CLI's own `LaunchedInstanceRegistry` and
+classified into one of three buckets:
+
+- **in-use** — has a project open. Never a cleanup candidate.
+- **self-launched-orphan** — empty *and* marked in the registry as one this tool launched and never
+  finished opening a project into. Self-healing: this tool recognises and reuses/replaces these
+  itself on its next run, so they need no action.
+- **stray-empty** — empty and *not* marked. Could be a human's own empty window, a Portal still
+  waiting on the first-connect approval dialog, or genuine stale pileup — never this tool's to close
+  automatically, which is why `portal-status` only reports it.
+
+Output includes a short human note inferring the likely cause from the counts (one stray reads as a
+probable first-connect-dialog wait or human window; several strays match the pileup symptom). This
+is the read-only, safe subset of the parked FI-07 janitor — **killing stays out of scope** (FI-07
+needs a `--yes`/dry-run pattern and a safe "idle" definition so a mid-compile Portal is never
+touched; there is no is-compiling flag on the Openness side, so the tool cannot tell). Because a
+stray is frequently a legitimate human window, this is **not a gate**: it is purely informational
+and **always exits 0**, in both table and `--json` form.
+
+The classification and formatting are pure and unit-tested (`PortalStatusTests`); the
+`GetProcesses()` enumeration itself is integration-only (needs a live Portal).

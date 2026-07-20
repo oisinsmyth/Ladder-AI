@@ -169,6 +169,81 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    private static readonly string[] PortalStatusHeaders = { "PID", "CLASS", "PROJECT", "UI", "ACQUIRED" };
+
+    public static string FormatPortalStatusTable(PortalStatusReport report)
+    {
+        var sb = new StringBuilder();
+        sb.Append("PROCESSES: ").Append(report.Total)
+            .Append("  IN-USE: ").Append(report.InUseCount)
+            .Append("  SELF-LAUNCHED ORPHANS: ").Append(report.SelfLaunchedOrphanCount)
+            .Append("  STRAYS: ").Append(report.StrayEmptyCount).Append('\n');
+        sb.Append("NOTE: ").Append(report.Note).Append('\n');
+
+        if (report.Processes.Count == 0)
+        {
+            return sb.ToString().TrimEnd('\n', '\r');
+        }
+
+        var rows = report.Processes.Select(ToPortalRow).ToList();
+        var widths = Enumerable.Range(0, PortalStatusHeaders.Length)
+            .Select(col => Math.Max(PortalStatusHeaders[col].Length, rows.Max(r => r[col].Length)))
+            .ToArray();
+
+        sb.Append('\n');
+        AppendRow(sb, PortalStatusHeaders, widths);
+        AppendSeparator(sb, widths);
+        foreach (var row in rows)
+        {
+            AppendRow(sb, row, widths);
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatPortalStatusJson(PortalStatusReport report)
+    {
+        var payload = new
+        {
+            processes = report.Processes.Select(p => new
+            {
+                pid = p.Process.Pid,
+                @class = ClassLabel(p.Class),
+                projectPath = p.Process.ProjectPath,
+                hasUserInterface = p.Process.HasUserInterface,
+                acquired = p.Process.Acquired,
+                markedByThisTool = p.Process.MarkedByThisTool,
+            }),
+            counts = new
+            {
+                total = report.Total,
+                inUse = report.InUseCount,
+                selfLaunchedOrphans = report.SelfLaunchedOrphanCount,
+                strayEmpty = report.StrayEmptyCount,
+            },
+            note = report.Note,
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string ClassLabel(PortalProcessClass c) => c switch
+    {
+        PortalProcessClass.InUse => "in-use",
+        PortalProcessClass.SelfLaunchedOrphan => "self-launched-orphan",
+        PortalProcessClass.StrayEmpty => "stray-empty",
+        _ => c.ToString(),
+    };
+
+    private static string[] ToPortalRow(ClassifiedPortalProcess p) => new[]
+    {
+        p.Process.Pid.ToString(CultureInfo.InvariantCulture),
+        ClassLabel(p.Class),
+        string.IsNullOrEmpty(p.Process.ProjectPath) ? "(none)" : p.Process.ProjectPath!,
+        p.Process.HasUserInterface ? "yes" : "no",
+        p.Process.Acquired.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+    };
+
     private static string[] ToRow(BlockInfo b) => new[]
     {
         b.Type.ToString(),
