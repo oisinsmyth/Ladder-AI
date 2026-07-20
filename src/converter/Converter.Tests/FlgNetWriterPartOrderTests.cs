@@ -40,4 +40,50 @@ public class FlgNetWriterPartOrderTests
 
         Assert.Equal(new[] { 27, 31, 37 }, accessUIds);
     }
+
+    [Fact]
+    public void InstructionParts_EmittedInWireFlowOrder_GroupingAConsumerWithItsProducer()
+    {
+        // The MotorStarter/MotorVSDSystem NW3 shape (Gap I): a TON (UId 30) whose `.Q` feeds a reset-coil
+        // (UId 56), plus an INDEPENDENT coil (UId 52). Raw UId order is 30, 52, 56 — which separates the
+        // TON from the consumer it feeds by the independent rung, and TIA import rejects that ("must be
+        // sorted according to the current flow"). Flow order (DFS from the rail) groups the TON with its
+        // downstream consumer before the independent rung: 30, 56, 52. The Normalizer sorts parts before
+        // comparing, so only a raw-order assertion like this catches a regression.
+        var network = new FlgNetwork(
+            Array.Empty<AccessNode>(),
+            new[]
+            {
+                new PartNode(30, "Ton"),
+                new PartNode(56, "RCoil"),
+                new PartNode(52, "Coil"),
+            },
+            new[]
+            {
+                new WireNode(1, new[]
+                {
+                    new WireEndpoint(EndpointKind.Powerrail, null, null),
+                    new WireEndpoint(EndpointKind.NameCon, 30, "in"),
+                }),
+                new WireNode(2, new[]
+                {
+                    new WireEndpoint(EndpointKind.NameCon, 30, "Q"),
+                    new WireEndpoint(EndpointKind.NameCon, 56, "in"),
+                }),
+                new WireNode(3, new[]
+                {
+                    new WireEndpoint(EndpointKind.Powerrail, null, null),
+                    new WireEndpoint(EndpointKind.NameCon, 52, "in"),
+                }),
+            });
+
+        var flgNet = FlgNetWriter.Write(network);
+
+        var partUIds = flgNet.Elements().First(e => e.Name.LocalName == "Parts")
+            .Elements().Where(e => e.Name.LocalName == "Part")
+            .Select(e => int.Parse(e.Attribute("UId")!.Value))
+            .ToList();
+
+        Assert.Equal(new[] { 30, 56, 52 }, partUIds);
+    }
 }

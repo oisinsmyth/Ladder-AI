@@ -97,7 +97,7 @@ public static class FlgNetWriter
             partsElement.Add(element);
         }
 
-        foreach (var part in network.Parts.OrderBy(p => p.UId))
+        foreach (var part in FlowOrderedParts(network))
         {
             if (part.Name == "Call")
             {
@@ -247,6 +247,85 @@ public static class FlgNetWriter
         }
 
         return new XElement(ns + "FlgNet", partsElement, wiresElement);
+    }
+
+    // Instruction Parts must be emitted in TIA's wire-graph FLOW order, not UId order (Gap I): TIA
+    // rejects import if a producer's downstream consumer is separated from it by an independent rung
+    // ("must be sorted according to the current flow"). Real exports satisfy this only because TIA
+    // numbers UIds along the flow, so UId order == flow order for them; the synthesizer's UId numbering
+    // does not follow flow, so it must be re-ordered here. This is a DFS from the power rail following
+    // producer->consumer edges: a part's consumers are emitted immediately after it, grouping each rung
+    // with the downstream parts it feeds before moving to independent rungs. Byte-stable for real blocks
+    // (their flow == UId order, so the DFS reproduces it); validated against TIA import for the
+    // synthesized case (MotorStarter/MotorVSDSystem NW3, the same-network-timer-.Q-consumer shape).
+    private static IEnumerable<PartNode> FlowOrderedParts(FlgNetwork network)
+    {
+        var partByUId = network.Parts.ToDictionary(p => p.UId);
+        if (partByUId.Count <= 1)
+        {
+            return network.Parts;
+        }
+
+        // Producer -> consumer adjacency among Parts, plus the rail-connected roots. Each wire lists its
+        // producer endpoint first (the power rail, or a Part's output port), then its consumer endpoints;
+        // an <IdentCon> producer is an <Access> data source (a leaf, not a Part) and is skipped for the
+        // instruction-Part flow. Consumer order within a wire is preserved (a producer's fan-out order).
+        var adjacency = partByUId.Keys.ToDictionary(uid => uid, _ => new List<int>());
+        var railRoots = new List<int>();
+        foreach (var wire in network.Wires)
+        {
+            if (wire.Endpoints.Count == 0)
+            {
+                continue;
+            }
+
+            var producer = wire.Endpoints[0];
+            var consumers = wire.Endpoints.Skip(1)
+                .Where(e => e.Kind == EndpointKind.NameCon && e.UId is int cu && partByUId.ContainsKey(cu))
+                .Select(e => e.UId!.Value);
+
+            if (producer.Kind == EndpointKind.Powerrail)
+            {
+                railRoots.AddRange(consumers);
+            }
+            else if (producer.Kind == EndpointKind.NameCon && producer.UId is int pu && adjacency.ContainsKey(pu))
+            {
+                adjacency[pu].AddRange(consumers);
+            }
+        }
+
+        var order = new List<PartNode>(partByUId.Count);
+        var visited = new HashSet<int>();
+
+        void Visit(int uid)
+        {
+            if (!visited.Add(uid))
+            {
+                return;
+            }
+
+            order.Add(partByUId[uid]);
+            foreach (var consumer in adjacency[uid])
+            {
+                Visit(consumer);
+            }
+        }
+
+        foreach (var root in railRoots)
+        {
+            Visit(root);
+        }
+
+        // Any Part not reachable from the rail (defensive — every Part should be) is appended in UId order.
+        foreach (var part in network.Parts.OrderBy(p => p.UId))
+        {
+            if (!visited.Contains(part.UId))
+            {
+                Visit(part.UId);
+            }
+        }
+
+        return order;
     }
 
     // A Call is its own sibling element under <Parts>, not a <Part Name="Call"> — mirrors
