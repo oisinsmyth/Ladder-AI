@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Xml.Linq;
 
 namespace Converter.SimaticMl;
@@ -8,7 +9,19 @@ public static class FlgNetWriter
     {
         var ns = FlgNetParser.Ns;
 
+        // <Parts> children must be UId-ascending within the Access group (all <Access> elements) and
+        // within the Part group — TIA rejects an out-of-order element on import ("must be sorted
+        // according to the current flow"). All <Access> elements (tag/local-constant reads AND
+        // literal/typed constants) form ONE group, so they are collected and merge-sorted by UId
+        // together, not emitted as separate access-then-constant runs: the synthesizer can mint a
+        // constant's UId interleaved among the tag-access UIds (a TON PT or comparison literal), whereas
+        // real blocks number constants after their tag-accesses. So the merge is a no-op for real blocks
+        // (byte-stable round-trip) and only reorders the synthesized interleaved case. The Normalizer
+        // sorts parts before comparing, which masked this from the parity / own-sidecar oracles.
+        // Surfaced 2026-07-20 on MotorStarter NW3: a TypedConstant UId 31 emitted after tag-accesses
+        // 37..57, which TIA import rejects as out of flow order.
         var partsElement = new XElement(ns + "Parts");
+        var accessElements = new List<(int UId, XElement Element)>();
         foreach (var access in network.AccessNodes)
         {
             // LocalConstant — confirmed real, 2026-07-12 (S1 item 21): a bare reference by name,
@@ -17,11 +30,11 @@ public static class FlgNetWriter
             // `access.ComponentPath[0]` is the whole reference.
             if (access.Scope == "LocalConstant")
             {
-                partsElement.Add(new XElement(
+                accessElements.Add((access.UId, new XElement(
                     ns + "Access",
                     new XAttribute("Scope", "LocalConstant"),
                     new XAttribute("UId", access.UId),
-                    new XElement(ns + "Constant", new XAttribute("Name", access.ComponentPath[0]))));
+                    new XElement(ns + "Constant", new XAttribute("Name", access.ComponentPath[0])))));
                 continue;
             }
 
@@ -52,11 +65,11 @@ public static class FlgNetWriter
                     return element;
                 });
 
-            partsElement.Add(new XElement(
+            accessElements.Add((access.UId, new XElement(
                 ns + "Access",
                 new XAttribute("Scope", access.Scope),
                 new XAttribute("UId", access.UId),
-                new XElement(ns + "Symbol", componentElements)));
+                new XElement(ns + "Symbol", componentElements))));
         }
 
         foreach (var constant in network.Constants)
@@ -72,14 +85,19 @@ public static class FlgNetWriter
 
             constantChildren.Add(new XElement(ns + "ConstantValue", constant.Value));
 
-            partsElement.Add(new XElement(
+            accessElements.Add((constant.UId, new XElement(
                 ns + "Access",
                 new XAttribute("Scope", scope),
                 new XAttribute("UId", constant.UId),
-                new XElement(ns + "Constant", constantChildren)));
+                new XElement(ns + "Constant", constantChildren))));
         }
 
-        foreach (var part in network.Parts)
+        foreach (var (_, element) in accessElements.OrderBy(a => a.UId))
+        {
+            partsElement.Add(element);
+        }
+
+        foreach (var part in network.Parts.OrderBy(p => p.UId))
         {
             if (part.Name == "Call")
             {
