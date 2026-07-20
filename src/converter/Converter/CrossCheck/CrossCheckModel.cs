@@ -12,10 +12,27 @@ public sealed record ReaderRef(string Block, int Network);
 // legitimate Set+Reset pair vs two conflicting Assigns is why each writer carries its kind).
 public sealed record MultiWriterFact(string Path, IReadOnlyList<WriterRef> Writers);
 
-// review-functional Pass-2 dead-wiring support (scoped to GLOBAL-DB members — unambiguous addressing):
-// a member with no writer (consumed-but-never-written / fully unused) or no reader
-// (written-but-never-consumed). Exactly one side may be non-empty.
-public sealed record DeadMemberFact(string Path, IReadOnlyList<WriterRef> Writers, IReadOnlyList<ReaderRef> Readers);
+// Whether a dead member is a global-DB member (unambiguous full path) or an interface-UDT member of
+// an FB (aliased between the FB-internal bare form and the external iDB-qualified form — correlated
+// across both before the deadness verdict). Lets a consumer treat the two classes distinctly.
+public enum DeadMemberScope
+{
+    GlobalDb,
+    InterfaceMember,
+}
+
+// review-functional Pass-2 dead-wiring support. A member with no writer (consumed-but-never-written /
+// fully unused) or no reader (written-but-never-consumed) across ALL the ways it is addressed:
+//   - GlobalDb: the single full path `DBName.member…`.
+//   - InterfaceMember: an FB interface member, whose writers/readers are aggregated across the
+//     FB-internal bare form AND every `iDB.<suffix>` alias (FB->iDB is one-to-many) before the
+//     no-writer/no-reader test — so a member written internally and read via an iDB is NOT dead. Its
+//     Path is rendered FB-rooted (`<FB>.<suffix>`). Exactly one of Writers/Readers is empty.
+public sealed record DeadMemberFact(
+    string Path,
+    IReadOnlyList<WriterRef> Writers,
+    IReadOnlyList<ReaderRef> Readers,
+    DeadMemberScope Scope = DeadMemberScope.GlobalDb);
 
 // C-304 support: a physical-IO tag reference and the block that makes it. The AI excludes the Map FCs
 // (mapping IS their job) and flags any OTHER block touching raw IO.

@@ -36,6 +36,8 @@ public static class CrossCheckRunner
             }
         }
 
+        deadMembers.AddRange(DeadInterfaceMembers(graph));
+
         var ioBoundary = graph.Flat
             .Where(f => IsPhysicalIo(f.Path))
             .Select(f => new IoBoundaryFact(f.Block, f.Path, f.Direction == TagDirection.Write ? "write" : "read"))
@@ -46,6 +48,63 @@ public static class CrossCheckRunner
         var siblingRefs = BuildSiblingRefs(graph);
 
         return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings);
+    }
+
+    // Interface-UDT dead members. Each FB interface member aliases between the FB-internal bare form
+    // (`IO.Step`, referenced inside the FB's own block) and an external `iDB.IO.Step` per iDB of that
+    // FB. The usage graph keys every alias verbatim, so each looks half-dead on its own; here we pool
+    // writers/readers across ALL alias forms per canonical member and flag only the genuinely dead.
+    private static IEnumerable<DeadMemberFact> DeadInterfaceMembers(ProjectUsageGraph graph)
+    {
+        // FB -> its instance DBs (one-to-many).
+        var idbsByFb = graph.InstanceToFb
+            .GroupBy(kv => kv.Value, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(kv => kv.Key).Distinct(StringComparer.Ordinal)
+                    .OrderBy(n => n, StringComparer.Ordinal).ToList(),
+                StringComparer.Ordinal);
+
+        // Canonical members: one (FB, suffix) per interface member, de-duplicated across the FB's iDBs.
+        var canonicalMembers = graph.InstanceMemberPaths
+            .Select(m => (Fb: graph.InstanceToFb[m.InstanceDb], m.Suffix))
+            .Distinct()
+            .OrderBy(m => m.Fb, StringComparer.Ordinal)
+            .ThenBy(m => m.Suffix, StringComparer.Ordinal);
+
+        foreach (var (fb, suffix) in canonicalMembers)
+        {
+            var writers = new List<ProjectUsageGraph.UsageSite>();
+            var readers = new List<ProjectUsageGraph.UsageSite>();
+
+            // FB-internal alias: the bare suffix, but only where the referencing block IS the FB
+            // itself (a bare `IO.Step` in an unrelated block is a different tag, not this member).
+            if (graph.Usages.TryGetValue(suffix, out var internalUsage))
+            {
+                writers.AddRange(internalUsage.Writers.Where(s => string.Equals(s.Block, fb, StringComparison.Ordinal)));
+                readers.AddRange(internalUsage.Readers.Where(s => string.Equals(s.Block, fb, StringComparison.Ordinal)));
+            }
+
+            // External aliases: `iDB.suffix` for every iDB of this FB.
+            var idbs = idbsByFb.TryGetValue(fb, out var list) ? list : Enumerable.Empty<string>();
+            foreach (var idb in idbs)
+            {
+                if (graph.Usages.TryGetValue(idb + "." + suffix, out var externalUsage))
+                {
+                    writers.AddRange(externalUsage.Writers);
+                    readers.AddRange(externalUsage.Readers);
+                }
+            }
+
+            if (writers.Count == 0 || readers.Count == 0)
+            {
+                yield return new DeadMemberFact(
+                    fb + "." + suffix,
+                    writers.Select(ToWriter).ToList(),
+                    readers.Select(r => new ReaderRef(r.Block, r.Network)).ToList(),
+                    DeadMemberScope.InterfaceMember);
+            }
+        }
     }
 
     private static List<SiblingRefFact> BuildSiblingRefs(ProjectUsageGraph graph)

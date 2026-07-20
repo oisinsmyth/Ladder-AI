@@ -57,6 +57,37 @@ public class CrossCheckTests : IDisposable
         {
             new IrNetwork(1, "Trivial", new[] { new CoilAssignment("DB_Buf.Live", new Expr.TagRef("Enable")) }),
         }));
+
+        // Interface-UDT aliasing corpus (FI-22 follow-up). FB_Seq owns a Static UDT member `IO` with
+        // two leaves: `IO.Foo` (written FB-internally, read externally via the iDB) and `IO.Ghost`
+        // (written FB-internally, read NOWHERE). iDB_Seq is its instance DB; FC_Orch is the caller.
+        WriteDb("iDB_Seq.ir", new DbSource("0", "iDB_Seq", 20, InstanceOfName: "FB_Seq", Comment: null, Members: new[]
+        {
+            new DbMember("IO", "\"UDT_SeqIO\"", Retain: true, StartValue: null, SetPoint: true, NestedMembers: new[]
+            {
+                new DbMember("Foo", "Bool", Retain: false, StartValue: null),
+                new DbMember("Ghost", "Bool", Retain: false, StartValue: null),
+            }),
+        }));
+
+        // FB-internal writes use the BARE suffix; block name == the instantiated FB (FB_Seq).
+        WriteBlock("FB_Seq.ir", new IrBlock("0", "FB", "FB_Seq", 3, "LAD", null, new[]
+        {
+            new IrNetwork(1, "Drive interface members", new[]
+            {
+                new CoilAssignment("IO.Foo", new Expr.TagRef("Enable")),
+                new CoilAssignment("IO.Ghost", new Expr.TagRef("Enable")),
+            }),
+        }));
+
+        // Orchestrator reads Foo through the iDB-qualified alias; never references Ghost.
+        WriteBlock("FC_Orch.ir", new IrBlock("0", "FC", "FC_Orch", 4, "LAD", null, new[]
+        {
+            new IrNetwork(1, "Consume via iDB", new[]
+            {
+                new CoilAssignment("Scratch", new Expr.TagRef("iDB_Seq.IO.Foo")),
+            }),
+        }));
     }
 
     private void WriteDb(string file, DbSource db) =>
@@ -98,6 +129,32 @@ public class CrossCheckTests : IDisposable
         Assert.True(byPath.ContainsKey("DB_Buf.Unused"));  // neither
 
         Assert.False(byPath.ContainsKey("DB_Buf.Live"));   // both — not dead
+    }
+
+    [Fact]
+    public void InterfaceMember_WrittenInternally_ReadViaIdb_IsNotDead()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+        var byPath = report.DeadMembers.ToDictionary(d => d.Path);
+
+        // IO.Foo: written in FB_Seq (bare), read in FC_Orch (iDB-qualified) — aliasing correlates the
+        // two, so it is NOT dead despite each alias form looking half-dead on its own.
+        Assert.False(byPath.ContainsKey("FB_Seq.IO.Foo"));
+    }
+
+    [Fact]
+    public void InterfaceMember_WrittenInternally_NeverRead_IsDead()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+        var byPath = report.DeadMembers.ToDictionary(d => d.Path);
+
+        // IO.Ghost: written FB-internally, read by nobody anywhere (no internal read, no iDB read).
+        Assert.True(byPath.ContainsKey("FB_Seq.IO.Ghost"));
+        var ghost = byPath["FB_Seq.IO.Ghost"];
+        Assert.Equal(DeadMemberScope.InterfaceMember, ghost.Scope);
+        Assert.Empty(ghost.Readers);                 // written-but-never-consumed
+        Assert.NotEmpty(ghost.Writers);
+        Assert.Contains(ghost.Writers, w => w.Block == "FB_Seq");
     }
 
     [Fact]
