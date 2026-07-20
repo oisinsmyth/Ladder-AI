@@ -23,7 +23,7 @@ AI-assisted Siemens LAD engineering via TIA Openness. Generated 2026-07-09; thes
 | `15-generation-pipeline.md` | S6 generation pipeline — stages, skills, artifacts, gates (ADR-0004) |
 | `16-future-ideas.md` | Candidate ideas under debate — merits/costs, verdicts, ADR-gated promotion into the plan |
 | `adr-0000…0004` | Decision records: template, IR format (accepted), tooling languages (accepted), generation pipeline (accepted; 0003 reserved by `13` for the data-boundary decision) |
-| `audit/` | Dated audit records — stage/goals sanity checks, doc-consistency and docs-vs-code findings, run periodically, not on every change. `audit/README.md` is the standing charter: audit dimensions, method, and output contract |
+| `audit/` | Dated **project**-audit records (not ladder review — that's the review skills' job) — stage/goals, doc-consistency, docs-vs-code, tooling quality, dead-links, compliance, AI-operational health. Run periodically, not on every change. `audit/README.md` is the standing charter: dimensions D1–D8, method, and output contract |
 | `CLAUDE.md` | The distilled operating manual Claude Code reads every session |
 | `CHANGELOG.md` (repo root) | Hand-maintained, dated record of what changed and why — Git doesn't generate this on its own |
 

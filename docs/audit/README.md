@@ -1,9 +1,10 @@
 # Audit requirements — Ladder-AI
 
 The standing charter for periodic audits of this project. An audit is a **deliberate, owner-requested
-health check**, run occasionally (not on every change), that verifies the project's documented picture
-of itself against what the code, tests, and git history actually say — and, when requested, reviews code
-quality and compliance. Each audit produces one dated report in this folder.
+health check**, run occasionally (not on every change), that gives a strong overview of the project's
+state — verifying its documented picture of itself against what the code, tests, and git history actually
+say, and, when requested, reviewing tooling quality, process, and compliance. Each audit produces one
+dated report in this folder.
 
 This document formalises **what an audit may cover, how it is run, and what it must produce**. It is
 derived from the two audits that predate it, whose criteria it generalises:
@@ -13,12 +14,31 @@ derived from the two audits that predate it, whose criteria it generalises:
 - [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) — docs-vs-code
   accuracy plus a code-quality & architecture review.
 
+## Scope boundary — this is a *project* audit, not a ladder-code audit
+
+**An audit examines the health of the project: its docs, its PC-side tooling, its process, and the
+AI-operational layer that produces ladder logic. It does not review ladder logic itself.**
+
+LAD/IR content is reviewed **continuously during development** by the dedicated review skills —
+`review-functional`, `review-conventions`, `review-simplicity` — running in fresh adversarial context per
+`docs/11-review-workflow.md` and the `docs/15` check stage. That is where ladder correctness, convention
+compliance, and simplicity are judged. An audit never re-does that work and **never opens a LAD/IR block
+to read or judge it**.
+
+The one carve-out — the "good reason" to touch the corpus at all: an audit may cite **mechanical,
+tooling-derived facts *about* the corpus** as evidence for a project-level claim — e.g. whether a tag
+exists in the export (`converter tagstatus`), whether blocks compiled (`openness-cli compile`), or a
+`converter diff`/`digest`/`drift-check` count. That is reading the *tooling's output*, not reading or
+reasoning about ladder logic. The moment a finding would require a block to be **read, explained, or
+semantically reviewed**, it is out of the audit's lane: dispatch it to `lad-coder` / the review skills
+(hard rule 8), and record it as a hand-off, not an audit finding.
+
 ## How an audit is scoped
 
 **The owner picks the scope from the dimension menu below; the auditor does not silently expand it.**
 This is how the 2026-07-14 audit ran — the owner chose two of the offered dimensions and explicitly
-excluded hard-rule/data-boundary compliance that round. State the chosen dimensions at the top of the
-report, and name anything offered-but-excluded so the exclusion is on the record, not an oversight.
+excluded compliance auditing that round. State the chosen dimensions at the top of the report, and name
+anything offered-but-excluded so the exclusion is on the record, not an oversight.
 
 Each report also states its **baseline**: which prior audit it picks up from (so the doc suite is covered
 continuously, not re-read from zero each time) and what had shipped since.
@@ -26,7 +46,8 @@ continuously, not re-read from zero each time) and what had shipped since.
 ## Audit dimensions (the criteria)
 
 An audit covers one or more of these. Each names what it checks and the concrete failure modes the prior
-audits actually found, so a future auditor knows what "done" looks like.
+audits actually found, so a future auditor knows what "done" looks like. None of them involve reading
+ladder logic (see the scope boundary above).
 
 ### D1 — Stage & goals accuracy
 Does the project's own record of *what stage it is in and what is / isn't in scope now* match reality?
@@ -53,18 +74,24 @@ Do the docs agree with **each other** and with themselves?
 ### D3 — Docs-vs-code accuracy
 Are specific, checkable doc claims true against the code/tests/git history right now?
 - Pick claims that are cheap to falsify — "feature X is out of scope", "converter is Contact/Coil-only",
-  "current task is Y" — and check each against source, the test suites, and `git log`.
+  "current task is Y" — and check each against source, the test suites, and `git log`. Sample; don't
+  exhaust (see the time-box rule under Method).
 - Watch especially: **built-but-undocumented** features (real, tested, live-verified, but absent from the
   reference docs) and **documented-but-superseded** claims left behind after the work moved on.
+- **Convention rule-ID parity:** `converter review` (`Rules.cs`) implements a subset of `docs/06`'s
+  C-rules. Check that rule IDs in code match `docs/06`, and that rules documented but not yet implemented
+  are marked as such rather than implied-complete. Conventions are core IP — this slice is worth an
+  explicit pass.
 - **Known failure mode:** `CHANGELOG.md` missing an entire milestone's entries (2026-07-11 #2 in miniature,
   2026-07-14 #2 at scale — flagged as *recurring*); `CLAUDE.md`'s own Commands block describing a
   walking-skeleton-era converter ~20 constructs behind reality; a real feature (`--tagtable`) undocumented
   in both `CLAUDE.md` and the README whose stated job is to be the flag reference (2026-07-14 #4).
   `CLAUDE.md` is the highest-value target here — it loads as instructions every session.
 
-### D4 — Code quality & architecture
+### D4 — Code quality & architecture (PC-side tooling only)
 Is the PC-side code (`src/converter/`, `src/openness-cli/`, `extract/`, `tests/golden/`) healthy? Normal
-software rules apply here — hard rules 1–8 are about PLC logic, not this tooling.
+software rules apply here — hard rules 1–8 are about PLC logic, not this tooling, and this dimension never
+touches ladder.
 - Exception discipline (purpose-built types, no bare `throw new Exception`, justified broad `catch`es),
   compiler warnings (target zero), dead-code / `TODO`/`FIXME` markers, file-size and test-suite growth.
 - Type/design health — e.g. the deliberately-generic "kitchen sink" records (`PartNode`, `DbMember`)
@@ -72,7 +99,8 @@ software rules apply here — hard rules 1–8 are about PLC logic, not this too
   has grown enough to justify a discriminated union.
 - Test-coverage gaps, especially the **live-TIA regression gap**: constructs proven only against Amber-tier
   content that can never be committed, so the proof survives only as narrative in `stage-gates.md`. Report
-  which supported constructs still have no committed golden-corpus coverage.
+  which supported constructs still have no committed golden-corpus coverage. (This reports *coverage of the
+  tooling*, derived from test/fixture inventory — it does not read the ladder those tests exercise.)
 - Report positives too (the prior audit did) — a clean bill on a dimension is a finding worth recording.
 
 ### D5 — Compliance (opt-in; not run unless requested)
@@ -80,11 +108,49 @@ Explicitly **excluded** from 2026-07-14 by owner choice; listed here so it is a 
 default assumption.
 - **Hard-rule compliance** — evidence that the 8 hard rules in `CLAUDE.md` held (LAD-only; safety untouched;
   no invented tags/addresses; compile gate before "done"; review not bypassed; no hardware access; IR-not-XML
-  edits; all LAD/IR work dispatched to `lad-coder`).
+  edits; all LAD/IR work dispatched to `lad-coder`). This is checked from process artefacts — telemetry,
+  git history, dispatch records — not by reading the ladder that resulted.
 - **Data-boundary compliance** — Amber-tier usage stayed inside a recorded per-project approval in
   `docs/13-data-boundary.md`; no identifying data outside an approval. Note that 2026-07-14 #5
   *flagged* a data-governance scope question here but, correctly, did not resolve it unilaterally — see the
   fixed-vs-flagged rule below.
+
+### D6 — Cross-reference / dead-link integrity
+Do the project's internal pointers still resolve? Distinct from D2: D2 checks whether *claims* agree; this
+checks whether *references* are live.
+- `CLAUDE.md` warns that this repo "cite[s] each other by literal file path constantly… after deleting or
+  renaming any doc/file, grep the old filename repo-wide." A rename-only pass (bulk `sed`) won't catch
+  dangling pointers left by deletions.
+- Sweep for: dangling `docs/NN-*.md` and `docs/notes/*.md` citations, references to deleted or renamed
+  files, stale skill / sub-agent / rule-ID / FI-item / ADR names, and section-anchor citations
+  (`… §N`) that no longer exist.
+- **Why now:** recent history is heavy with renames and deletions (FI churn, the `test-project001`
+  de-identification) — exactly the conditions that break literal-path citations.
+
+### D7 — Prior-findings follow-through
+Did the *previous* audit's outcomes actually land? A meta-check the earlier audits couldn't run because
+nothing preceded them.
+- Walk the prior report's **Flagged, not fixed** and deferred items and classify each as: resolved /
+  still-deferred-on-purpose (with the deferral still justified) / silently dropped.
+- Standing carry-forward items to track until closed: `docs/13-data-boundary.md`'s JOB9002 approval-scope
+  record (2026-07-14 #5), the `Normalizer` Part-UId-volatility gap, the committed reference-corpus growth
+  for live-TIA coverage, and any `PartNode`/`DbMember` restructure decision.
+- Also confirm each prior audit's **Fixed directly** changes are still in place and weren't quietly
+  reverted.
+
+### D8 — AI-operational surface
+The deliverable is "an AI capable of programming ladder logic," so the layer that *produces* ladder is
+itself a first-class audit target — auditing this layer is not the same as reading ladder.
+- **Skill inventory vs docs:** do the skills the docs reference actually exist in `.claude/skills/`, and do
+  their descriptions match what they do? Does `docs/15`'s build-order table match the real skill +
+  `lad-coder` inventory, including which stages are "built" vs "performed manually to contract"?
+- **Sub-agent coherence:** `.claude/agents/lad-coder.md`'s stated contract still matches the workflow in
+  `CLAUDE.md` and `docs/15`.
+- **Hard-rule coherence:** the 8 hard rules still describe the tooling as it now is (e.g. commands they
+  reference exist; the dispatch model in rule 8 matches the actual skill/agent set) — a coherence check on
+  the rules' text, separate from D5's compliance-with-them.
+- **Telemetry / process artefacts:** the generation-pipeline telemetry convention (`docs/notes/gen-telemetry.md`,
+  `gen/<project>/telemetry.log`) is being followed where the pipeline claims to run.
 
 ## Method — standing rules for every audit
 
@@ -96,25 +162,30 @@ default assumption.
    did by running all three suites rather than believing the doc *or* the diff.
 3. **Reconcile whole files, not single lines** (the D2 grep rule) — the single most repeated failure mode.
 4. **Ground claims against the artefact, not memory** — grep the real export / source at check time.
-5. **Stay in lane on PLC content.** An audit reads and reasons about docs, tooling code, tests, and git
-   history directly. It does **not** read, write, or explain LAD/IR content itself — if a finding needs a
-   block opened or explained, that is dispatched to `lad-coder` (hard rule 8), same as any other work.
+5. **Sample, don't exhaust, and time-box.** D3/D6 especially can balloon. Prefer a representative sweep of
+   cheap-to-falsify claims over an exhaustive line-by-line read; state what was sampled vs covered in full.
+6. **Never read ladder to judge it** (the scope boundary). An audit reasons about docs, tooling code, tests,
+   git history, and process artefacts directly. If a finding needs a block opened, explained, or reviewed,
+   that is a hand-off to `lad-coder` / the review skills, not an audit finding.
 
 ## Output contract — what an audit produces
 
 One report named `docs/audit/YYYY-MM-DD-<short-scope>.md`, containing:
 
-- **Header:** who requested it, the chosen scope (dimensions D1–D5), anything offered-but-excluded, and the
+- **Header:** who requested it, the chosen scope (dimensions D1–D8), anything offered-but-excluded, and the
   baseline (which prior audit it continues + what shipped since).
-- **Findings**, grouped by dimension, each stating what was checked, what was found, and — critically —
-  which of the two dispositions it got:
+- **Findings**, grouped by dimension and **ranked by severity within each group** (most consequential
+  first — the prior audits ordered implicitly; make it explicit so triage is obvious). Each finding states
+  what was checked, what was found, and — critically — which of the two dispositions it got:
   - **Fixed directly** — only safe, mechanical corrections with no design or governance decision involved
-    (stale text, missing changelog entries, self-contradictions). Say exactly what changed and cite the
-    commit if one was made.
+    (stale text, missing changelog entries, self-contradictions, dead links). Say exactly what changed and
+    cite the commit if one was made.
   - **Flagged, not fixed** — anything requiring an owner decision: design trade-offs, data-governance
     records, scope calls. The auditor surfaces these, never resolves them unilaterally (2026-07-14 #5 is
     the template: a compliance-relevant scope entry left for the owner to write).
 - **Positives / clean-bill notes** — dimensions checked with no issue found are recorded, not omitted.
+- **Prior-findings status (D7)** — if D7 was in scope, an explicit table of previous flagged/deferred items
+  and their current disposition.
 - **Outcome + process recommendations** — a short close-out, plus any standing-habit recommendation the
   round surfaced (e.g. the whole-file reconcile rule, promoted here from 2026-07-14's recommendation).
 - **Re-confirm tests green** at the end and state the counts.
@@ -124,6 +195,6 @@ One report named `docs/audit/YYYY-MM-DD-<short-scope>.md`, containing:
 | Date | Scope | Report |
 |------|-------|--------|
 | 2026-07-11 | D1 stage/goals + D2 doc consistency (full suite → S1 item 7) | [`2026-07-11-stage-and-docs-audit.md`](2026-07-11-stage-and-docs-audit.md) |
-| 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (D5 excluded by owner) | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
+| 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (compliance excluded by owner) | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
 
 Add a row here whenever a new audit lands.
