@@ -1790,6 +1790,31 @@ MATCH: DB_Alarms
 SUMMARY: 6 drifted, 17 match, 3 skipped, 0 error          # exit 1
 ```
 
+## `cross-check` — whole-project cross-block facts (2026-07-20, FI-22)
+
+`converter cross-check --project <ir-dir> [--json]`
+
+`converter review` is per-file; the review skills build cross-block tables by hand. `cross-check`
+walks every block's networks across the whole export and emits the reference-graph **facts** those
+tables need — as **verbatim facts the reviewer reasons over, never adjudicated verdicts** (same
+discipline as the `review` dump). Substrate: `TagReferences.AllDirectedUsages` (a direction-tagged
+reader/writer extractor, sibling of `AllTagPaths`) + `CrossCheck/ProjectUsageGraph` (the whole-export
+reader/writer index, reused by FI-25). Four fact tables:
+
+- **Multi-writer paths** (C-308): every full path written by >1 site, each writer with its block +
+  network + Set/Reset kind — the AI distinguishes a legit S/R pair from conflicting writes.
+- **Dead global-DB members** (review-functional Pass-2 dead-wiring): each global-DB member with no
+  writer (consumed-but-never-written / fully unused) or no reader (written-but-never-consumed) — the
+  in-cycle-lamp / dead-selector bug classes as a mechanical set-difference. Scoped to global-DB
+  members (unambiguous full-path addressing); iDB/interface-UDT member aliasing needs instance→FB
+  correlation (a documented follow-up).
+- **Physical-IO references** (C-304): each `DI/DQ/AI/AQ…`-rooted or raw `%I`/`%Q` reference with its
+  block + direction — the AI excludes the Map FCs and flags any other block touching raw IO.
+- **Sibling references** (C-127): per block, the blocks it CALLs and any `iDB_*` root it references.
+
+**Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
+(e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

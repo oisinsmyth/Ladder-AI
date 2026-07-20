@@ -127,7 +127,15 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Boundary — do not over-mechanize (same audit).** All bucket-C judgment rules (C-113 paradigm choice, C-504 suppression intent, C-002/C-004 semantic naming, the one-reading test), blindness/regime disposition, owner-ruling routing, and the report split stay AI. Scripting these manufactures false confidence — worse than the hand-work.
 **Costs / risks:** The re-estimate found genuine severity/checkability mismatches — some rules are not mechanical at any reasonable cost; diminishing returns are real.
 **Dependencies:** `review-conventions` in real use (pipeline build-order step 3).
-**Verdict / revisit trigger:** Revisit when `review-conventions` usage shows which rules actually fire often enough to be worth mechanizing. **Rules landed 2026-07-18:** **C-408** (`.ET` inside any comparison, `Rules.CheckC408EtComparison`, on the new `TagReferences.AllExpressions` seam) and **C-001** (member/variable PascalCase/underscore-free, `Rules.CheckC001MemberNames` — DB incl. iDBs, UDTs via a now-checked TYPE path, and block interface variables; tag tables exempt). Both are deterministic `converter review` checks now; CHANGELOG has detail. The remaining candidates (C-121, C-118–125, C-103, C-107/C-402) stay open.
+**Verdict / revisit trigger:** Revisit when `review-conventions` usage shows which rules actually fire often enough to be worth mechanizing. **Rules landed 2026-07-18:** **C-408** (`.ET` inside any comparison, `Rules.CheckC408EtComparison`, on the new `TagReferences.AllExpressions` seam) and **C-001** (member/variable PascalCase/underscore-free, `Rules.CheckC001MemberNames` — DB incl. iDBs, UDTs via a now-checked TYPE path, and block interface variables; tag tables exempt). Both are deterministic `converter review` checks now; CHANGELOG has detail. **Rules landed 2026-07-20:**
+**C-103** (Set/Reset pairing, Warn — `Rules.CheckC103SetResetPairing`; candidate-worded, the
+external-set/internal-reset reusable-FB exception is cross-block/judgment) and **C-121 inline form**
+(Step-transition = MOVE whose EN carries `Step = <from>`, Error — `Rules.CheckC121StepTransition`;
+the named-equivalent-bit form stays AI). **A 2026-07-20 audit refined the rest:** C-107/C-402
+(edge-memory single-writer) is subsumed by FI-22's C-308 multi-writer table (built — don't duplicate
+in `Rules.cs`); C-118/C-125 need **cross-file UDT resolution** (FI-22's ProjectIndex direction, not the
+per-file `Rules.cs` seam); C-119/C-120/C-122 are structurally mechanizable only once an upstream AI
+judgment (C-113) identifies the block as a stepped sequencer — all deferred with dependencies recorded.
 
 ### FI-10 — HMI-importable alarm exports from S5
 - **Status:** Parked
@@ -231,7 +239,18 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — owner's "tomorrow's work." Start from the candidate-prep reframe above, not the literal "iterate to clean the example" seed.
 
 ### FI-22 — Whole-project cross-check review mode (reference-graph analysis over `ProjectIndex`)
-- **Status:** Raised (2026-07-18, skill/tooling audit — net-new, not previously tracked; the audit's highest-leverage new item).
+- **Status:** IMPLEMENTED 2026-07-20 as `converter cross-check --project <ir-dir>`
+  (`src/converter/Converter/CrossCheck/`, `src/converter/README.md`). Substrate:
+  `TagReferences.AllDirectedUsages` (a direction-tagged reader/writer extractor, sibling of
+  `AllTagPaths`) + `CrossCheck/ProjectUsageGraph` (whole-export reader/writer index — **the shared
+  substrate FI-25 reuses**). Emits four fact tables, verbatim facts the reviewer reasons over (never
+  verdicts): multi-writer paths (C-308, with Set/Reset kind), dead global-DB members
+  (review-functional Pass-2 dead-wiring, both directions), physical-IO references (C-304), per-block
+  sibling references (C-127). Exit 0 (facts dump). Dead-wiring scoped to global-DB members
+  (unambiguous addressing); **iDB/interface-UDT member aliasing (instance→FB correlation) is a
+  documented follow-up**, as is wiring the dump into the review skills (they still hand-build the
+  tables meanwhile). Real-corpus piloted (surfaces `DB_Input.Pusher_Local_Remote` dead input, unused
+  overcurrent setpoints). 5 tests.
 - **Raised:** 2026-07-18 · **Source:** a read-only skill/tooling audit (preserved in git history, commit `eede95d`, then folded here). `converter review` is per-file, so the review skills do project-wide reference-graph analysis by hand — but the infrastructure already exists: `Preflight/PreflightRunner.cs` builds a `ProjectIndex` (`Preflight/ProjectIndex.cs`) over the whole export (verified 2026-07-18: `ProjectIndex.Build` / `ResolvesAsTagRoot`).
 **Merits:** A `converter review --project ir/<project>/` (or a new `cross-check` subcommand) reusing that index could emit — as verbatim tool output the reviewer reasons over, same status as today's `converter review` dump, **not** a new judgment source:
 - **review-conventions Group-2 cross-block tables** — C-308 one-writer table (every write destination targeting `DB_Settings.*` or an instance-UDT settings member); C-115 handshake-vocabulary table; C-127 reusable-FB sibling-reference check; C-304 IO-boundary scan (raw `%I`/`%Q` outside Map FCs). These are exactly the tables the skill's report already builds by hand.
@@ -241,7 +260,16 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — worth it once the reviewers are in steady real use; the highest-leverage net-new item from the audit.
 
 ### FI-23 — `explain-plc-block` structural-fingerprint helper
-- **Status:** Raised (2026-07-18, skill/tooling audit — net-new).
+- **Status:** IMPLEMENTED 2026-07-20 as `converter digest --fingerprint`
+  (`src/converter/Converter/Digest/NetworkSignature.cs`, `src/converter/README.md`). Adds a
+  per-network normalized structural signature (SHA-256 of a canonical string that walks the statement
+  lists in fixed order and canonicalizes each statement's `Expr` trees — `TagRef`→`TAG`, sorted
+  And/Or operands, ordered Compare with operator — so two structurally-identical networks with
+  different tags collapse to one hash; **literal values are KEPT** so a template copy that changed a
+  constant is surfaced). Default `digest` output unchanged; signature shown per network only with
+  `--fingerprint` (always in `--json`). Stays digest's orientation-only posture (explanation aid, not
+  review input — reviewers read full IR). Piloted on `FB_ShredderSequencer` (15 distinct signatures;
+  separates two step-networks a count-summary can't). 7 tests.
 - **Raised:** 2026-07-18 · **Source:** the audit. `explain-plc-block`'s core method is "describe the repeating template once, then verify *every* instance — copy-paste drift is where the real findings are," done by hand across N networks today.
 **Merits:** A `--fingerprint` mode emitting a normalized structural signature per network (extending `Digest/DigestBuilder.cs`, which already computes per-network statement summaries — verified 2026-07-18) would surface the outlier instance directly instead of hand-comparison, serving the skill's stated main failure mode.
 **Costs / risks:** Keep it **distinct from `digest`**, which is policy-banned *as review input* (`docs/15` isolation model). This is an orientation aid for *explanation*, which is allowed — it must not become a review shortcut.

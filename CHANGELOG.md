@@ -2,6 +2,32 @@
 
 ## 2026-07-20
 
+**Tier C review mechanization — cross-check facts, digest fingerprints, two more review rules (FI-22/23/09)**
+
+The last band from the value/leverage survey of `docs/16-future-ideas.md`: review-mechanization tooling
+that compounds across future reviews. Built in three parallel tracks (FI-22 on the main track; FI-09 and
+FI-23 as concurrent subagents), merged clean. Each new mechanical output is verbatim facts the AI reviewer
+reasons over, never a verdict.
+
+- **`converter cross-check --project <ir-dir>` (FI-22)** — whole-project cross-block reference-graph facts:
+  a multi-writer table (C-308), a dead global-DB-member table (review-functional Pass-2 dead-wiring, both
+  directions), physical-IO references (C-304), and per-block sibling references (C-127). New
+  `TagReferences.AllDirectedUsages` (direction-tagged reader/writer extractor) + `CrossCheck/ProjectUsageGraph`
+  (whole-export usage index — the substrate FI-25 will reuse). Exit 0 (facts dump). Dead-wiring scoped to
+  global-DB members; iDB/interface-UDT aliasing is a documented follow-up. Surfaces real signals on the corpus
+  (a dead mapped input; unused overcurrent setpoints). 5 tests.
+- **`converter digest --fingerprint` (FI-23)** — per-network normalized structural signature (SHA-256 of a
+  canonical, tag-abstracted walk of the statement/`Expr` structure; literal values kept to catch a template
+  copy that changed a constant), so copy-pasted networks collapse to one hash and the outlier stands out —
+  serving `explain-plc-block`'s "verify every instance" method. Default output unchanged; orientation-only
+  (not review input). `Digest/NetworkSignature.cs`. 7 tests.
+- **`converter review` C-103 + C-121 (FI-09)** — C-103 (Set/Reset pairing, Warn) and C-121 inline form
+  (Step-transition = MOVE guarded by `Step = <from>`, Error), both candidate-worded where the doc-06 exception
+  is cross-block/judgment. The audit re-scoped the rest of FI-09: C-107/C-402 is subsumed by FI-22's
+  multi-writer table, C-118/C-125 need cross-file UDT resolution, C-119/120/122 need AI sequencer-identification
+  first — all deferred with dependencies recorded. `Review/Rules.cs`. +15 tests.
+- Converter suite **625/625**; golden suite unaffected (still green).
+
 **Tier B correctness/friction wins — export-drift detector, preflight flow-order check, read-only portal-status (FI-26/27/28)**
 
 The next band from the value/leverage survey of `docs/16-future-ideas.md`: three cheap, session-proven
