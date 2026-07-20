@@ -47,8 +47,13 @@ dispatches, and verifies evidence.
 
 ## Phase 1 — Spec derivation (Examiner)
 
-Produce artifacts shaped exactly like the architecture skill's output: `requirements.md` (REQ
-register) + `architecture.md` (REQ→block table, interface/UDT design, reuse decisions).
+Produce the **`requirements.md` REQ register only** — the intent-level WHAT, shaped like the
+`gen-spec-analysis` register (the test-project001 register is the canonical format). **Not
+`architecture.md`:** the design (block manifest, interfaces, wiring) is the Candidate's own
+`gen-architecture` output in Phase 2 — deriving it here would leak the block breakdown (the very
+"7/8 blocks" structure the pipeline should discover) and skip testing the Design stage. The full
+step-by-step Examiner protocol (reverse-derive path, Level-1 scope, ban-list + leakage audit) is
+planned separately.
 
 **Anti-leakage discipline — the make-or-break rule.** The spec carries *intent*, not *implementation*:
 
