@@ -12,6 +12,10 @@ allowed-tools:
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe review:*)
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe reuse-scan:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe reuse-scan:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe target-scan:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe target-scan:*)
 ---
 
 # /gen-architecture — the Design-stage manifest builder (gate 1's input)
@@ -29,12 +33,15 @@ apply throughout.
   `openness-cli` anything. The compile gate (hard rule 4) lives downstream in the Build coding stage
   (`gen-block-new` / the S7 modify pair);
   this stage's output is a markdown artifact and nothing else.
-- **Bash exists in this skill for exactly three read-only commands**: `converter digest` (brownfield
+- **Bash exists in this skill for exactly five read-only commands**: `converter digest` (brownfield
   orientation — see Method), `converter review` (only to note the current mechanical-findings
-  state of an as-built block the manifest proposes to touch), and `converter tagstatus` (the
+  state of an as-built block the manifest proposes to touch), `converter tagstatus` (the
   section-9 tag-status classification — EXISTS/PROPOSED against the export, the anti-laundering
-  check the skill otherwise hand-greps). Nothing else — zero TIA/Portal contact. If the Release
-  binary is missing, skip them (all three are optional aids), say so, and fall back to reading the
+  check the skill otherwise hand-greps), `converter reuse-scan` (the reuse-first "does an existing
+  block already cover this?" query — see Method step 3), and `converter target-scan` (the
+  REQ × tag-status × as-built survey aid — which REQ groups are already implemented inline / proposed-
+  blocked / HMI-only). Nothing else — zero TIA/Portal contact. If the Release
+  binary is missing, skip them (all five are optional aids), say so, and fall back to reading the
   IR files / grepping the export directly instead; never build tooling mid-run.
 - **Never invent tags, addresses, DB numbers, or hardware** (hard rule 3 — the rule this stage is
   most likely to trip, because designing interfaces begs for "obviously there must be a sensor").
@@ -104,7 +111,14 @@ beautifully and still misses requirements, because the trace was fitted, not der
    a block set, build a per-run summary of what's reusable — every site-proven FB/UDT and every
    admitted pattern in `patterns/` (via `converter digest` plus each pattern's own `pattern.md`;
    computed fresh this run, never persisted to disk, per FI-15's digest policy) — and hold each
-   REQ group against it **in this order**:
+   REQ group against it **in this order**. **Mechanical aids (orientation only — the tier decision
+   stays yours):** `converter reuse-scan --project ir/<project>/ --tag <T> [--kind timer|coil|…]`
+   (FI-29) surfaces which existing blocks reference a group's tag or implement a relevant statement
+   kind — the deterministic "does logic for this already exist?" check behind tiers (a)/(c), so a
+   duplicate is caught here rather than after a wasted analysis cycle; `converter target-scan
+   --requirements <register> --project ir/<project>/` (FI-30) pre-flags which REQs are already
+   implemented inline / proposed-tag-blocked / HMI-only, a fast survey of where the genuinely-new
+   surface is. Both surface candidates; confirm each by reading, never rule from the tool alone.
    - **(a) Whole library block.** An existing site-proven block or admitted pattern instance
      already covers the group's REQ functionality as-is. Accept it even if it also does *more*
      than the group asks — extra capability an already-admitted block happens to carry is

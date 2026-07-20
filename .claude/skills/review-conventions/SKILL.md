@@ -8,6 +8,8 @@ allowed-tools:
   - Glob
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe review:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe review:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
 ---
 
 # /review-conventions — the conventions reviewer (C-0xx–C-5xx)
@@ -88,8 +90,10 @@ From the repo root, run the S4 tool over every file in scope:
 
 Invoke it as a single command (no `cd &&` chaining, no pipes); if the Release binary is missing,
 report the mechanical pass as blocked and get it built — never substitute memory of a previous
-run, and never skip to the AI pass as if the tool had run. **Bash exists in this skill for
-exactly this one command.** Quote the binary path and the exact invocation in your report header.
+run, and never skip to the AI pass as if the tool had run. **Bash exists in this skill for exactly
+two read-only commands: this `converter review` mechanical pass, and the `converter cross-check`
+cross-block facts used in Group 2 (FI-22).** Quote the binary path and the exact invocation in your
+report header.
 
 The contract:
 
@@ -181,6 +185,17 @@ output.
 
 Whole-project scope required; at reduced scope each of these gets an explicit "not checkable at
 this scope" line instead.
+
+**Mechanical assist (FI-22):** run `converter cross-check --project ir/<project>/` first — it emits,
+as verbatim facts over the whole export (same "embed, don't re-derive" contract as Step 0's
+`converter review`, and same "facts, not verdicts" status — *you* still adjudicate), the reference-graph
+tables three of these checks otherwise build by hand: the **C-308 multi-writer table** (every path with
+>1 writer, each writer's block/network/Set-Reset kind — you decide which are settings writes and which
+multi-writes are legit S/R pairs), the **C-304 physical-IO references** (each `DI/DQ/AI/AQ…`-rooted or
+raw `%I`/`%Q` reference with its block and direction — you exclude the Map FCs), and the **C-127 sibling
+references** (per block, its CALLs and any `iDB_*` root). Embed the relevant slice verbatim and reason
+over it. It does **not** cover C-307/C-115/C-114/the startup cluster (still hand-built below), and if the
+Release binary is missing, do the greps by hand as before.
 
 - **C-127 (error) — reusable FBs reference no siblings.** Inside every reusable equipment FB
   body: grep `iDB_` and `CALL` — any hit is a hardcoded instance dependency.

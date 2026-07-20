@@ -47,7 +47,12 @@ rather than proceeding on your own judgment.
   the pattern from a couple of examples, then explicitly re-check every remaining instance against
   it. Most real findings in this shape of block are a single instance quietly breaking the
   pattern (copy-paste drift) — invisible if you only describe the template from representative
-  examples instead of checking all of them.
+  examples instead of checking all of them. **`converter digest --fingerprint <file>` (FI-23)
+  mechanizes this:** it emits a per-network structural signature with tag names abstracted, so true
+  copies collapse to one identical hash and the drifted instance stands out as the lone differing
+  signature — a fast way to find the outlier before you read the networks. It's an orientation aid
+  for explanation (not a review shortcut, and never a substitute for reading the flagged network's
+  actual logic); if the Release binary is missing, fall back to comparing the instances by hand.
 - **If the block calls out to other blocks/FBs and a shared field's meaning isn't obvious from
   naming alone, check whether those dependencies already have exports/conversions sitting nearby**
   (same scratch/job folder, or ask whoever briefed you for the paths) **and read the actual logic

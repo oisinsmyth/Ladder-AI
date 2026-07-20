@@ -6,6 +6,8 @@ allowed-tools:
   - Read
   - Grep
   - Glob
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
 ---
 
 # /review-functional — the tier-1 reviewer (function)
@@ -105,11 +107,23 @@ named threshold member, not a literal.
 
 Enumerate what the corpus actually contains and map each item back to a REQ ID:
 
+**Mechanical assist for the dead-wiring bullets (FI-22):** run
+`converter cross-check --project ir/<project>/` — its **dead global-DB member** table is exactly the
+whole-project reader/writer set-difference this pass needs for the buffer-DB and `DB_Settings` bullets
+below: every such member with no writer (consumed-but-never-written — the in-cycle-lamp class) or no
+reader (written-but-never-consumed — the dead-selector class), computed mechanically instead of by hand
+grep. Treat it as verbatim facts you reason over (it never adjudicates a REQ — the mapping to a REQ ID,
+and whether a dead member is a real defect, stays yours). **Scope caveat:** it covers *global-DB*
+members only — the **interface-UDT member** bullet still needs the hand check (the iDB↔FB member
+correlation is a documented cross-check follow-up, not yet mechanized). If the Release binary is
+missing, do the reader/writer greps by hand as before.
+
 - **Every network's evident function** (title + logic), every block.
 - **Every interface-UDT member** — declared members that no network reads or writes are findings.
-- **Every buffer-DB member** — check writers AND readers via grep, both directions:
-  **consumed-but-never-written** (the in-cycle-lamp class: an output fed by a member nothing
-  drives) and **written-but-never-consumed** (the dead-selector-input class: a mapped field
+  (Hand-checked — cross-check's dead-member table does not yet cover interface-UDT members.)
+- **Every buffer-DB member** — check writers AND readers (cross-check's dead-member table, or grep),
+  both directions: **consumed-but-never-written** (the in-cycle-lamp class: an output fed by a member
+  nothing drives) and **written-but-never-consumed** (the dead-selector-input class: a mapped field
   signal nothing reads) are both findings, whichever direction is dead.
 - **Every `DB_Settings` member's consumer** — a setting nothing reads is dead configuration.
 - **Every alarm bit** — each maps to an alarm-class REQ or is unrequested.
