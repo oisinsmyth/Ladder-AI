@@ -55,6 +55,10 @@ Does the project's own record of *what stage it is in and what is / isn't in sco
   (`docs/evidence/stage-S*.md`) against the code and tests actually present.
 - Confirm stage entry/exit criteria are evidenced where claimed, and that gate sign-offs that are still
   open are marked as *deliberately* open, not stale.
+- **FI-backlog accuracy:** recent history is dominated by future-ideas work, and `docs/16-future-ideas.md`
+  carries per-item verdicts and "backlog cleared" claims. Confirm each FI item's stated status
+  (proposed / accepted / built / cleared) matches the code and `CHANGELOG.md` — a "cleared" item with no
+  landing evidence, or a built one still shown as proposed, is the same drift class as a stale roadmap.
 - **Known failure mode:** a summary-table row describing a blocker the narrative below it already recorded
   as resolved (2026-07-11 finding #1); a "recovery point" doc (`AITODO.md`) describing in-progress work
   that was in fact finished and committed (2026-07-14 finding #1).
@@ -101,6 +105,11 @@ touches ladder.
   content that can never be committed, so the proof survives only as narrative in `stage-gates.md`. Report
   which supported constructs still have no committed golden-corpus coverage. (This reports *coverage of the
   tooling*, derived from test/fixture inventory — it does not read the ladder those tests exercise.)
+- **Build-environment reproducibility:** the `net48`-vs-modern-.NET split is load-bearing (modern .NET
+  "builds fine but fails at runtime" against `Siemens.Engineering.dll`, per `CLAUDE.md`); that DLL is a
+  machine-local, unversioned dependency; package pins live in `Directory.Build.props`. With no CI to catch
+  a regression, confirm the target frameworks and pins are intact and the runtime-critical `net48`
+  constraint is still honoured where it matters (R-02/R-12 in the risk register flag this).
 - Report positives too (the prior audit did) — a clean bill on a dimension is a finding worth recording.
 
 ### D5 — Compliance (opt-in; not run unless requested)
@@ -113,7 +122,8 @@ default assumption.
 - **Data-boundary compliance** — Amber-tier usage stayed inside a recorded per-project approval in
   `docs/13-data-boundary.md`; no identifying data outside an approval. Note that 2026-07-14 #5
   *flagged* a data-governance scope question here but, correctly, did not resolve it unilaterally — see the
-  fixed-vs-flagged rule below.
+  fixed-vs-flagged rule below. (The cheap mechanical *leak grep* is not gated here — it runs every audit as
+  Method rule 7; D5 is the deeper judgement of whether recorded approval scope actually covers what happened.)
 
 ### D6 — Cross-reference / dead-link integrity
 Do the project's internal pointers still resolve? Distinct from D2: D2 checks whether *claims* agree; this
@@ -149,8 +159,39 @@ itself a first-class audit target — auditing this layer is not the same as rea
 - **Hard-rule coherence:** the 8 hard rules still describe the tooling as it now is (e.g. commands they
   reference exist; the dispatch model in rule 8 matches the actual skill/agent set) — a coherence check on
   the rules' text, separate from D5's compliance-with-them.
+- **Enforcement-hook coherence:** the committed hookify rules that *mechanically* enforce the hard rules —
+  the safety-F-block-content block (rule 2) and the SimaticML-edit block (rule 7) — still match the rule
+  they guard and the code they reference. These back the two most integrity-critical hard rules via regex
+  and source assumptions (e.g. a safety-prefix classifier, a converter-path carve-out); if that underlying
+  logic changes, the enforcer silently diverges. This extends the text-only "hard-rule coherence" check to
+  the enforcers themselves.
 - **Telemetry / process artefacts:** the generation-pipeline telemetry convention (`docs/notes/gen-telemetry.md`,
   `gen/<project>/telemetry.log`) is being followed where the pipeline claims to run.
+
+### D9 — Governance-record currency (ADRs, risk register, assumption log)
+Are the project's *decision and risk* records still true, and are their self-declared obligations met?
+Distinct from D6 (which only checks these files are linkable) and D1 (stage/goals): this checks the
+*content* of the governance backbone.
+- **ADRs (`docs/adr/`):** each *accepted* ADR still describes the system as built; *reserved* or
+  *superseded* slots are resolved or still-deliberately-open (e.g. ADR-0003 is reserved for the
+  data-boundary decision — confirm it's still intentionally pending, not forgotten); and the ADR index in
+  `docs/00-README.md` lists every ADR that now exists.
+- **Risk register + assumption log (`docs/09`):** the register says it is "reviewed at every stage gate" —
+  confirm it reflects current reality, that materialised risks (e.g. solo-project bus factor, cloud-AI data
+  policy) are marked as such, and that "verify before stage X" assumptions were actually verified when that
+  stage was reached rather than silently carried past their checkpoint.
+
+### D10 — Repository & git hygiene
+The single most recurring finding across both prior audits — `CHANGELOG.md` missing whole milestones, and
+complete-but-uncommitted/undocumented work — is fundamentally a git-workflow smell, and deserves a named
+home rather than living only as a D3 footnote.
+- **CHANGELOG-vs-`git log` reconciliation:** every substantial commit since the last entry has a matching,
+  correctly-placed changelog entry (newest-first), and no committed milestone is missing one.
+- **Branch & worktree hygiene:** stale or orphaned branches, and whether the parallel-subagent-worktree
+  model has left direct-to-`master` commits or unmerged tracks that should be reconciled. (Respect the
+  deliberate local-only / no-remote posture — flag drift, don't propose a remote.)
+- **Uncommitted / untracked state:** work that is finished but sitting uncommitted (the exact 2026-07-11 #2
+  / 2026-07-14 #1 failure mode), or generated artefacts that should be either committed or gitignored.
 
 ## Method — standing rules for every audit
 
@@ -167,12 +208,17 @@ itself a first-class audit target — auditing this layer is not the same as rea
 6. **Never read ladder to judge it** (the scope boundary). An audit reasons about docs, tooling code, tests,
    git history, and process artefacts directly. If a finding needs a block opened, explained, or reviewed,
    that is a hand-off to `lad-coder` / the review skills, not an audit finding.
+7. **Always run the baseline leak grep** — every audit, regardless of scope. Grep tracked files for known
+   identifying strings (real names, the live project/asset identifiers the `test-project001`
+   de-identification was meant to remove) and flag any hit in Green-tier committed content. It's cheap,
+   mechanical, high-consequence, and needs no ladder reading — so it is baseline, not gated behind D5's
+   opt-in compliance round. Deeper data-boundary governance (approval-scope adequacy) stays in D5.
 
 ## Output contract — what an audit produces
 
 One report named `docs/audit/YYYY-MM-DD-<short-scope>.md`, containing:
 
-- **Header:** who requested it, the chosen scope (dimensions D1–D8), anything offered-but-excluded, and the
+- **Header:** who requested it, the chosen scope (dimensions D1–D10), anything offered-but-excluded, and the
   baseline (which prior audit it continues + what shipped since).
 - **Findings**, grouped by dimension and **ranked by severity within each group** (most consequential
   first — the prior audits ordered implicitly; make it explicit so triage is obvious). Each finding states
