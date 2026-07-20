@@ -459,6 +459,34 @@ it, sharing one outgoing wire from the TON's Q. FB_MotorFwdRevSystem byte-exact;
 are committed readable-only, guarded by `FrozenAnswerKeyRoundTripTests`. No sidecar-carrying synthesizable
 block remains.
 
+## Gap I — synthesized `<Parts>` not in TIA's required flow order (Normalizer-masked; blocks import) — OPEN, PRIORITY
+
+**Symptom (2026-07-20, MotorDOL→MotorVSDSystem validation).** TIA rejects a synthesized block on **import**:
+`Cannot create ... CompileUnit ID '3' ... element with UId 56 ... The elements must be sorted according to
+the current flow.` The block never lands (atomic import failure), so the compile gate can't even run.
+
+**Root.** Within a network's `<Parts>`, TIA requires elements in **wire-graph flow (topological) order** — a
+producer's consumer placed per flow, not separated from it by an independent rung. `FlgNetWriter` emits parts
+in **UId order**. Real exports only *look* UId-sorted because TIA's own UId numbering follows flow; the
+**synthesizer's** UId numbering does not, so UId order ≠ flow order for synthesized blocks. Concretely on
+`MotorStarter`/`MotorVSDSystem` NW3: a reset-coil (UId 56) reading a **same-network TON's `.Q`** (UId 30) is
+separated from that TON by an independent coil rung (UId 52) in UId order → rejected.
+
+**Why it hid.** The `Normalizer` **sorts `<Parts>` before comparing** (order isn't semantic), so the parity
+harness, own-sidecar oracle, and `NoSidecarEquivalenceTests` all pass a block whose synthesized part *order*
+is TIA-invalid. `f3ad4ca` fixed the **Access-subgroup** UId-ordering (a genuine, byte-stable, tested sub-fix
+— `FlgNetWriterPartOrderTests`) but **not** this deeper instruction-Part flow-order case.
+
+**Consequences.** (1) `MotorVSDSystem` compile gate stays blocked (hard rule 4). (2) **The `MotorStarter`
+sidecar-drop (ADR-0006 phase 4) is TIA-import-unverified** — only ever Normalizer-checked, which masks
+exactly this; re-verify (or restore its sidecar) once fixed. Any committed readable-only block with the
+same-network-timer-`.Q`-consumer shape is suspect.
+
+**Fix (substantial, PC-side).** Emit `<Parts>` in a wire-graph topological order matching TIA's convention —
+derive the exact rule from real exports (a topo sort with a TIA-matching tie-break, not raw UId). Add a
+raw-order test over this shape (Normalizer can't guard it). **Highest-priority converter task** — gates both
+the MotorVSDSystem gate close and the sidecar-drop re-verification.
+
 ## Where this is tracked
 `AITODO.md` "Recently landed" → the wired-CALL bullet's two-follow-ups line points here; the parity
 matrix (`tests/golden/synthesis-parity-matrix.md`) is the live scoreboard. Update both when a gap lands.

@@ -70,9 +70,14 @@ tally so far: 1 of 10** (fix waves excluded — keep this count here as the live
   and even improved on the real block (explicit Int→Real speed conversions the real block lacks). 1
   genuine minor skill gap (NW9 fail-to-stop ignores `RunRev`, reverse-only). **All three coding skills
   now exercised end-to-end this session.** The compile gate surfaced a real converter bug — synthesized
-  fan-out `<Parts>` emitted a constant out of UId order, TIA-import-rejected, **Normalizer-masked** — now
-  **FIXED (`f3ad4ca`)**, which also de-risks the MotorStarter sidecar-drop (was never TIA-import-verified,
-  only Normalizer-equivalent). Fixture: `gen/_validation/MotorVSDSystem-purpose/` (answer key gitignored).
+  fan-out `<Parts>` emitted parts out of the order TIA import requires, **Normalizer-masked**. `f3ad4ca`
+  fixed the **Access-subgroup** UId-ordering (a real, byte-stable, tested improvement) but that was
+  **INCOMPLETE** (correcting my premature "resolved/de-risks" claim): the block still fails TIA import on a
+  reset-coil that reads a *same-network TON's `.Q`* — the instruction-`<Parts>` need **wire-graph flow
+  order**, not raw UId order (the synthesizer's UId numbering doesn't follow flow the way TIA's does). So
+  the fan-out import blocker is **NOT resolved**, and the MotorStarter sidecar-drop is **still
+  TIA-import-unverified**. New converter-gaps entry: Part flow-order. Fixture:
+  `gen/_validation/MotorVSDSystem-purpose/` (answer key gitignored).
 
 ## Current task: none in-flight — **but a small Portal-bound tail is pending** (checkpointed 2026-07-20)
 
@@ -84,9 +89,16 @@ pileup friction):
    TIA (`GenProject1`) → refresh `simatic-ml/test-project001/`. (Lesson: an S7 modify of a block with a
    committed export must refresh the export; the integration dispatch didn't, and golden wasn't re-run
    after `b763faf`.)
-2. **MotorVSDSystem compile-gate confirm (optional).** The `f3ad4ca` fix provably unblocks it — all 19 networks
-   now synthesize UId-ordered — but the actual TIA import+compile of `MotorVSDSystem` hasn't run. Import to
-   `SampleProject` (UDT→FB→iDB→`compile --block MotorVSDSystem`) to close hard rule 4 for the validation.
+2. **MotorVSDSystem compile gate — STILL BLOCKED by a deeper converter gap (not optional; re-diagnosed 2026-07-20).**
+   Re-tried against TIA with the `f3ad4ca` fix in — the block import fails on the **identical** error
+   (CompileUnit 3, UId 56 "must be sorted according to the current flow"). Root: `MotorVSDSystem` NW3 (an
+   invariant DOL network) has a reset-coil that reads a same-network TON's `.Q`; UId-sorted instruction
+   `<Parts>` interleave an independent rung between the TON and its `.Q`-consumer, which TIA rejects. **The
+   real fix is a converter change: emit `<Parts>` in wire-graph flow (topological) order, not UId order**
+   — a substantial change needing TIA's exact flow-order convention reverse-engineered against real
+   exports. Deferred to a focused converter session. Until then the compile gate can't close (hard rule 4),
+   though the modify-purpose **fidelity** grade (strong pass) stands independently. This is the priority
+   converter task; see the tooling tail.
 
 **Recently landed (2026-07-19 session — fan-out annotation + derive-always completion; full record in git + the ADRs):**
 - **ADR-0006 — contact fan-out is now recorded per-node in the readable IR (`{split N}`/`{recv N}`), fully
