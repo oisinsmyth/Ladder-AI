@@ -26,8 +26,10 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 
 ## Implementation status — 2026-07-20
 
-A large build wave landed on 2026-07-20 (a value/leverage survey of this doc → three tiers, built with
-parallel subagents). Current state (each entry below carries its own authoritative status; this is the index):
+**Milestone: the mechanical-tooling backlog from this doc is essentially CLEARED (2026-07-20).** A large
+build wave (a value/leverage survey → tiers, built in file-disjoint parallel subagent tracks) shipped every
+ranked buildable-now item; what's left is AI-by-design, externally gated, or owner-held (see the two
+sections below). Current state (each entry carries its own authoritative status; this is the index):
 
 - **Implemented (tooling shipped):** FI-13 `preflight`, FI-14 compile-error playbook, FI-15 `digest`,
   FI-16 telemetry, FI-19/FI-20 doc splits (all earlier) — plus the **2026-07-20 wave**: FI-24 `tagstatus`
