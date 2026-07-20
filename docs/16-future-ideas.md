@@ -289,7 +289,8 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
   `FB_ShredderSequencer`, `FB_PusherControl`, `DB_Settings`, and 3 iDBs; `reference` is clean) → green
   now, red the moment an in-sync block silently drifts. Clearing a baseline entry means re-exporting
   that block from TIA (a live-Portal step, the owner's call — the detector makes the drift visible). 3
-  unit tests + 2 golden.
+  unit tests + 2 golden. **The 6 stale blocks are consciously deferred — `docs/notes/deferred-items.md`
+  D-7 (owner, 2026-07-20).**
 - **Raised:** 2026-07-20 · **Source:** the 2026-07-20 housekeeping scan. The committed `simatic-ml/<project>/*.xml` exports can silently drift from their `ir/<project>/*.ir` after a fix that is never re-exported — hit this session: `FB_ShredderSequencer.ir` carried the B-5/REQ-028 re-arming fix while its `.xml` still had the pre-fix logic, which poisoned the synthesis-parity audit (diffs that looked like real synthesis gaps were partly stale-XML noise, e.g. `PusherControl 543→198`). The team worked around it by switching the oracle from synth-vs-external-XML to synth-vs-own-sidecar (`CommittedBlocksRoundTripTests`/`FrozenAnswerKeyRoundTripTests`) — i.e. *tolerated* the drift rather than detecting it.
 **Merits:** A `converter` check (or a golden test) that Normalizer-compares each committed `ir/<proj>/<block>.ir` against its paired `simatic-ml/<proj>/<block>.xml` and **fails on semantic divergence** turns silent drift into a red build instead of an invisible landmine that amplifies into every downstream audit. All machinery already exists — `Normalizer` (`Converter.SimaticMl`), `to-xml`, both parsers.
 **Costs / risks:** The committed round-trip tests deliberately *tolerate* the drift (own-sidecar oracle) — this is the complementary *detector*, not a replacement. Must pair files correctly and skip unpaired ones (some `ir/` blocks have no `simatic-ml/` counterpart and vice-versa) so it never false-fails.

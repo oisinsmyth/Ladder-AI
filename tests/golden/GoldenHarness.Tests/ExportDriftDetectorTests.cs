@@ -15,9 +15,10 @@ namespace GoldenHarness;
 /// deliberately *tolerate* this drift via an own-sidecar oracle; this is the detector they don't provide.
 ///
 /// The baseline is the drift that already exists from the B-5/REQ-028 re-arming fix (and its interface
-/// cascade into the instance DBs and DB_Settings) never being re-exported to <c>simatic-ml/</c>. To
-/// clear an entry: re-export that block from TIA, commit the fresh .xml, and remove it here. A NEW name
-/// appearing means a block drifted unexpectedly — investigate, don't just add it.
+/// cascade into the instance DBs and DB_Settings) never being re-exported to <c>simatic-ml/</c>. This is
+/// CONSCIOUSLY DEFERRED — docs/notes/deferred-items.md D-7 (owner, 2026-07-20). To clear an entry:
+/// re-export that block from TIA, commit the fresh .xml, and remove it here. A NEW name appearing means a
+/// block drifted unexpectedly — investigate, don't just add it.
 /// </summary>
 public class ExportDriftDetectorTests
 {

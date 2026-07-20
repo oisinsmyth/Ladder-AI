@@ -82,6 +82,27 @@ task 03's "rebase onto in-flight sidecar-stripped drafts" step — the whole-fil
 `to-xml --synthesize` ran clean on the first try, verified directly (not just `preflight`). Not yet
 imported/compiled (still waiting on its own queue slot), but D-6 is not what's blocking it.
 
+## D-7 — Stale `simatic-ml/test-project001` exports (ir↔simatic-ml drift)
+
+**What:** `converter drift-check` (FI-26, built 2026-07-20) surfaced **6** test-project001 blocks whose
+committed `simatic-ml/*.xml` has drifted from the fixed `.ir`: `FB_ShredderSequencer`, `FB_PusherControl`,
+`DB_Settings`, `iDB_MotorFwdRevSystem_Shredder`, `iDB_PusherControl`, `iDB_ShredderSequencer`. The cause is
+the B-5/REQ-028 re-arming fix and its interface cascade (into the instance DBs and `DB_Settings`) landing in
+the `.ir` but never being re-exported. Closing it = refreshing those `.xml` from **real TIA output** (the
+`simatic-ml/` corpus is reviewer-skill validation data, deliberately *not* a converter-regenerable cache),
+which is a live-Portal round trip.
+
+**Why deferred:** owner ruling, 2026-07-20 — chose to defer rather than open a Portal session now. The drift
+is already consciously tolerated by the own-sidecar round-trip oracle (`FrozenAnswerKeyRoundTripTests`), and
+`ExportDriftDetectorTests`' known-drift baseline pins exactly these 6 so the build stays green until they're
+cleared (a 7th drifting block, or any of these ceasing to drift, turns the baseline test red — the nudge to
+revisit).
+
+**Revisit trigger:** next live-Portal session on GenProject1. **Open question to settle then:** does the live
+TIA project already carry the re-arming fix (→ a plain `openness-cli export` refresh) or not (→ import the
+fixed `.ir` → compile gate → export)? When cleared, re-run `drift-check` to confirm MATCH and prune the 6
+from `ExportDriftDetectorTests`' baseline. `docs/16-future-ideas.md` FI-26 is the tool record.
+
 ## Q-04 (test-project001) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,
