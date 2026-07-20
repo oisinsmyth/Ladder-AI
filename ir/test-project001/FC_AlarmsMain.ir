@@ -35,3 +35,6 @@ NETWORK 8 "Shredder - Blocked, Too Many Reversals - Reset Required"
 
 NETWORK 9 "Discharge Conveyor - Timeout Starting - Check Conveyor/Feedback"
   COIL DB_Alarms.ShredderAlarm0.%X8 := iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault
+
+NETWORK 10 "Shredder Hopper - Blocked, Not Clearing - Reset Required"
+  COIL DB_Alarms.ShredderAlarm0.%X9 := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm

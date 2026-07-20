@@ -67,8 +67,8 @@ processes (CLAUDE.md's existing guidance) and check this table for a stale `in-p
 
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
-| 1 | S6 req#1 hopper-blockage-alarm — F1/F2/S1 fix (up-accumulator rebuild NW3-5) | done | — | yes |
-<!-- Row 1: Stage-3 build + C-605 fix + F1/F2/S1 fix all DONE 2026-07-19/20. gen-block-modify-fix: NW3-5 rebuilt as clean up-accumulator; converter diff --only 3 4 5 exit 0 (NW1/2/6 identical); FB block compile 0 errors (FB50). review-findings F1/F2/S1 RESOLVED. Not committed (coordinator handles). -->
+| 1 | S6 req#1 hopper-blockage-alarm — alarm-live integration (CALL in FC_ControlMain + annunciate in FC_AlarmsMain) | done | — | yes |
+<!-- Row 1: build + C-605 + F1/F2/S1 fix + alarm-live integration all DONE 2026-07-19/20. Integration: FC_ControlMain NW8/9 (wiring+CALL), FC_AlarmsMain NW10 (%X9 alarm); invariance diff --only exit 0 both; FC3+FC4 block compile 0 errors. Alarm live in scan. Stop demand unwired (owner scope, documented later step). Not committed (coordinator handles). -->
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**
 

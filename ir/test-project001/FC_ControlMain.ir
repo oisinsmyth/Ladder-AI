@@ -85,3 +85,12 @@ NETWORK 7 "Output Mapping"
   COIL DB_Output.Pusher_Extend := iDB_PusherControl.IO.Extend
   COIL DB_Output.Pusher_Retract := iDB_PusherControl.IO.Retract
   COIL DB_Output.Run_PowerPack := iDB_PusherControl.IO.RunPowerPack
+
+NETWORK 8 "Hopper-Blockage Monitor Input Wiring"
+  COMMENT "Integration of the hopper-blockage supervisor (S6 request #1). Appended after the output map to keep NETWORK 1-7 byte-identical (S7 invariance discipline); functionally safe - this FB's outputs feed only FC_AlarmsMain's annunciation, never NETWORK 7's buffer output map, so its scan position relative to NETWORK 7 is immaterial. PlantRunning is the confirmed shredder-running feedback, either direction (REQ-069 honesty - field feedback, not command). The FB's HopperBlockStopReq stop demand is deliberately left unwired for now (owner scope call - alarm-only integration)."
+  COIL iDB_HopperBlockageMonitor.IO.HopperLevelHigh := DB_Input.Hopper_Level_High
+  COIL iDB_HopperBlockageMonitor.IO.PlantRunning := DB_Input.Shredder_Run_Fwd_FB OR DB_Input.Shredder_Run_Rev_FB
+  COIL iDB_HopperBlockageMonitor.IO.FaultReset := DB_Controls.FaultReset
+
+NETWORK 9 "Call Hopper-Blockage Monitor"
+  CALL FB_HopperBlockageMonitor(iDB_HopperBlockageMonitor, EN := TRUE)
