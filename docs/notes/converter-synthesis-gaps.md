@@ -459,7 +459,17 @@ it, sharing one outgoing wire from the TON's Q. FB_MotorFwdRevSystem byte-exact;
 are committed readable-only, guarded by `FrozenAnswerKeyRoundTripTests`. No sidecar-carrying synthesizable
 block remains.
 
-## Gap I — synthesized `<Parts>` not in TIA's required flow order (Normalizer-masked; blocks import) — OPEN, PRIORITY
+## Gap I — synthesized `<Parts>` not in TIA's required flow order (Normalizer-masked; blocks import) — DONE 2026-07-20 (`7694fdf`)
+
+**FIXED.** `FlgNetWriter` now emits the instruction Part group in **wire-graph flow order (DFS from the power
+rail along producer→consumer edges)** instead of raw UId order — a producer's downstream consumer is grouped
+with it. Byte-stable (588 converter + 35 golden green — reproduces every real export's part order exactly,
+since real exports have flow == UId, so the DFS matches TIA's traversal) and **live-validated**: `MotorVSDSystem`
+now imports into TIA (exit 0) and compiles 0 errors; the UId-56 "current flow" rejection is gone. Guarded by
+`FlgNetWriterPartOrderTests` (raw-order, since the Normalizer masks it). The same-shape `MotorStarter`
+sidecar-drop is thereby TIA-import-de-risked. `f3ad4ca` (Access-subgroup UId sort) stays as the correct
+sub-fix beneath it. Original diagnosis below (kept for the record).
+
 
 **Symptom (2026-07-20, MotorDOL→MotorVSDSystem validation).** TIA rejects a synthesized block on **import**:
 `Cannot create ... CompileUnit ID '3' ... element with UId 56 ... The elements must be sorted according to
