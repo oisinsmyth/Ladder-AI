@@ -24,9 +24,35 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 **Verdict / revisit trigger:** the outcome, or what reopens the debate.
 ```
 
+## Implementation status — 2026-07-20
+
+A large build wave landed on 2026-07-20 (a value/leverage survey of this doc → three tiers, built with
+parallel subagents). Current state (each entry below carries its own authoritative status; this is the index):
+
+- **Implemented (tooling shipped):** FI-13 `preflight`, FI-14 compile-error playbook, FI-15 `digest`,
+  FI-16 telemetry, FI-19/FI-20 doc splits (all earlier) — plus the **2026-07-20 wave**: FI-24 `tagstatus`
+  (tag-status half; gen-architecture adopts it), FI-29 `reuse-scan`, FI-30 `target-scan`, FI-26
+  `drift-check`, FI-27 `preflight` flow-order check, FI-28 `openness-cli portal-status`, FI-22
+  `cross-check`, FI-23 `digest --fingerprint`. Skills wired to the new tools (explain-plc-block,
+  review-conventions, review-functional, gen-architecture).
+- **Partial:** FI-09 — C-408/C-001 (earlier) + **C-103/C-121 inline** (2026-07-20) are mechanical
+  `converter review` checks; the audit re-scoped the rest (C-107/C-402 subsumed by FI-22's writer table;
+  C-118/C-125 need cross-file UDT resolution — now feasible on FI-22's `ProjectIndex` direction;
+  C-119/120/122 need AI sequencer-identification first). FI-24 — provenance-header wrapper still open.
+- **Open, actionable next (no external gate):** **FI-25** forward-pass tracer (reuses FI-22's usage graph
+  — the natural Tier C completion); FI-17 explanation sidecars (pilot); FI-22 follow-up (iDB↔FB dead-wiring
+  aliasing to complete the interface-UDT member half).
+- **Gated (waiting on a stage/event/measurement):** FI-08 (first real S6 tag-proposal loop), FI-11
+  (`generate` orchestrator), FI-12 (FI-16 measurement), FI-18 (owner scoping), FI-06 (S8 grounded example),
+  FI-10 (S5), FI-02 (real OB content), FI-01 (S9), FI-03 (grounded example).
+- **Parked / deferred:** FI-05 (blind target — `deferred-items.md` D-5), FI-07 (owner-parked; FI-28 is its
+  read-only half), FI-31 (against telemetry discipline). Related: `deferred-items.md` **D-7** — the 6 stale
+  `simatic-ml/test-project001` exports FI-26 surfaced (needs a live-Portal re-export).
+
 ## Prioritization snapshot — 2026-07-16
 
-A point-in-time ranking, not a living order: it reflects the entries and project state as of this date and is not maintained as verdicts land. Method: each idea was ranked twice (ease of implementation; logical implementation order given dependencies and leverage), score = sum of the two positions, lowest first, ties broken by logic position. An idea hard-gated by another FI is nested under its gate instead of holding its own slot; external gates (stages/events) are noted inline. FI-04 excluded (Rejected).
+**Superseded by "Implementation status — 2026-07-20" above and by each entry's own status — kept as the
+original ranking record.** A point-in-time ranking, not a living order: it reflects the entries and project state as of this date and is not maintained as verdicts land. Method: each idea was ranked twice (ease of implementation; logical implementation order given dependencies and leverage), score = sum of the two positions, lowest first, ties broken by logic position. An idea hard-gated by another FI is nested under its gate instead of holding its own slot; external gates (stages/events) are noted inline. FI-04 excluded (Rejected).
 
 1. **FI-16** telemetry — 1+1 = **2**
    - ⛓ **FI-12(a)** batch import/compile — 7+6 = **13**: build only once FI-16's data shows project-open cost dominates
@@ -248,8 +274,10 @@ judgment (C-113) identifies the block as a stepped sequencer — all deferred wi
   (review-functional Pass-2 dead-wiring, both directions), physical-IO references (C-304), per-block
   sibling references (C-127). Exit 0 (facts dump). Dead-wiring scoped to global-DB members
   (unambiguous addressing); **iDB/interface-UDT member aliasing (instance→FB correlation) is a
-  documented follow-up**, as is wiring the dump into the review skills (they still hand-build the
-  tables meanwhile). Real-corpus piloted (surfaces `DB_Input.Pusher_Local_Remote` dead input, unused
+  documented follow-up**. **Wired into the review skills 2026-07-20:** `review-conventions` Group 2
+  (embeds the C-308/C-304/C-127 facts) and `review-functional` Pass 2 (the dead-member table for the
+  buffer-DB / DB_Settings bullets; the interface-UDT-member bullet stays hand-checked pending the
+  aliasing follow-up). Real-corpus piloted (surfaces `DB_Input.Pusher_Local_Remote` dead input, unused
   overcurrent setpoints). 5 tests.
 - **Raised:** 2026-07-18 · **Source:** a read-only skill/tooling audit (preserved in git history, commit `eede95d`, then folded here). `converter review` is per-file, so the review skills do project-wide reference-graph analysis by hand — but the infrastructure already exists: `Preflight/PreflightRunner.cs` builds a `ProjectIndex` (`Preflight/ProjectIndex.cs`) over the whole export (verified 2026-07-18: `ProjectIndex.Build` / `ResolvesAsTagRoot`).
 **Merits:** A `converter review --project ir/<project>/` (or a new `cross-check` subcommand) reusing that index could emit — as verbatim tool output the reviewer reasons over, same status as today's `converter review` dump, **not** a new judgment source:
