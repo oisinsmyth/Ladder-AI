@@ -61,10 +61,32 @@ tally so far: 1 of 10** (fix waves excluded — keep this count here as the live
   (its first real application, `7c842fd`) — root rebuild of NW3/4/5 to a clean up-accumulator, invariance
   proven, compile-clean, **fresh re-review confirmed resolved + no regression**. Block is now correct +
   readable. Proved live: `Time >= Time` compare synthesizes (Gap E fix works) and generic `ADD` accepts
-  Time in TIA. Not yet wired into the scan (integration = deferred follow-on). Record:
+  Time in TIA. Not yet wired into the scan — **now wired alarm-live** (`b763faf`: CALL in
+  `FC_ControlMain` + annunciation to `ShredderAlarm0.%X9`; stop-demand consumption deferred). Record:
   `gen/test-project001/hopper-blockage-alarm/`, `docs/evidence/stage-S6.md`.
+- **`gen-block-modify-purpose` VALIDATED (blind MotorDOL→MotorVSDSystem, 2026-07-20, `f588fcf`)** — the last
+  coding skill. From a behavioural spec + the DOL source (never seeing the quarantined real MotorVSDSystem),
+  it produced a VSD implementing all 22 REQs, no gold-plating, NW1–5 byte-identical (invariance held),
+  and even improved on the real block (explicit Int→Real speed conversions the real block lacks). 1
+  genuine minor skill gap (NW9 fail-to-stop ignores `RunRev`, reverse-only). **All three coding skills
+  now exercised end-to-end this session.** The compile gate surfaced a real converter bug — synthesized
+  fan-out `<Parts>` emitted a constant out of UId order, TIA-import-rejected, **Normalizer-masked** — now
+  **FIXED (`f3ad4ca`)**, which also de-risks the MotorStarter sidecar-drop (was never TIA-import-verified,
+  only Normalizer-equivalent). Fixture: `gen/_validation/MotorVSDSystem-purpose/` (answer key gitignored).
 
-## Current task: none — nothing in-flight
+## Current task: none in-flight — **but a small Portal-bound tail is pending** (checkpointed 2026-07-20)
+
+Two follow-ups, both needing a clean Portal session (deferred here after ~35 turns + recurring Portal
+pileup friction):
+1. **Golden regression from `b763faf` (real, mine).** The alarm-live integration modified
+   `FC_ControlMain`/`FC_AlarmsMain`, so their `simatic-ml/test-project001/*.xml` exports are now stale →
+   2 `CommittedBlocksRoundTripTests` fail (synth ≠ stale export). **Fix:** re-export those 2 blocks from
+   TIA (`GenProject1`) → refresh `simatic-ml/test-project001/`. (Lesson: an S7 modify of a block with a
+   committed export must refresh the export; the integration dispatch didn't, and golden wasn't re-run
+   after `b763faf`.)
+2. **MotorVSDSystem compile-gate confirm (optional).** The `f3ad4ca` fix provably unblocks it — all 19 networks
+   now synthesize UId-ordered — but the actual TIA import+compile of `MotorVSDSystem` hasn't run. Import to
+   `SampleProject` (UDT→FB→iDB→`compile --block MotorVSDSystem`) to close hard rule 4 for the validation.
 
 **Recently landed (2026-07-19 session — fan-out annotation + derive-always completion; full record in git + the ADRs):**
 - **ADR-0006 — contact fan-out is now recorded per-node in the readable IR (`{split N}`/`{recv N}`), fully
