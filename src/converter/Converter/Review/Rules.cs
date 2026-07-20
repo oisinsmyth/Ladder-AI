@@ -952,6 +952,197 @@ public static class Rules
         }
     }
 
+    // C-125 (warn) — CROSS-FILE (FI-09). A dwell-timeout timer's own fault bit lives in the block's
+    // caller-visible interface UDT, HMI-exposed (docs/06 C-125: "HMI exposure is satisfied by
+    // C-118's placement plus … any C-122 timeout's own fault bit living in the same interface UDT,
+    // not a private Static"). Resolving the fault bit's home needs the referenced interface UDT, so
+    // — exactly like C-118/C-122 — the whole rule is recorded NotApplicable when no --project index
+    // is supplied (ReviewRunner gates it).
+    //
+    // CONTRAPOSITIVE framing, to avoid false positives: rather than asserting "every dwell timer
+    // must drive a fault in the UDT" (which would wrongly flag a dwell timer whose Q drives a
+    // legitimate HOLD, not a fault — e.g. FB_PusherControl's PressureConfirmTimer.Q → PressureHold),
+    // this identifies bits ALREADY provably timeout faults, then checks ONLY their home. A coil is a
+    // timeout-fault bit when ALL of:
+    //   (1) its Condition reads `<T>.Q` for a C-122-subject timer <T> — a timer whose IN carries a
+    //       Step comparison (the same ExprHasStepGuard subject test C-122 uses to pick dwell timers);
+    //   (2) its CoilTag leaf name ends with `Fault`;
+    //   (3) it is a self-latch cleared by `NOT <...>FaultReset` — its Condition references its own
+    //       CoilTag AND references a `FaultReset` tag beneath a NOT (the C-123 clear discipline).
+    // A HOLD bit (no `Fault` in its name, cleared by another timer's Q rather than FaultReset) is
+    // never a subject, so PressureHold is correctly not flagged.
+    public static IEnumerable<Finding> CheckC125TimeoutFaultInInterfaceUdt(IrBlock block, TagTypeRegistry udtIndex)
+    {
+        // C-122 subject timers' `.Q` read paths — what a timeout-fault coil latches off.
+        var subjectTimerQPaths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var network in block.Networks)
+        {
+            foreach (var timer in network.Timers)
+            {
+                if (ExprHasStepGuard(timer.In))
+                {
+                    subjectTimerQPaths.Add($"{timer.InstancePath}.Q");
+                }
+            }
+        }
+
+        if (subjectTimerQPaths.Count == 0)
+        {
+            yield break;
+        }
+
+        var interfaceMembers = TopLevelInterfaceMembers(block).ToList();
+
+        foreach (var network in block.Networks)
+        {
+            foreach (var assignment in network.Assignments)
+            {
+                if (!IsTimeoutFaultCoil(assignment, subjectTimerQPaths))
+                {
+                    continue;
+                }
+
+                // Home resolution mirrors C-118 exactly: a `Root.Fault` whose Root is a UDT-typed
+                // interface member is the correct HMI-exposed home (clean); anything else — a bare
+                // block-local `Fault`, a DB member, or an unresolvable root — is the C-125 candidate.
+                if (FaultBitHomeIsInterfaceUdt(assignment.CoilTag, interfaceMembers, udtIndex))
+                {
+                    continue;
+                }
+
+                yield return new Finding(
+                    "C-125",
+                    FindingSeverity.Warn,
+                    block.Name,
+                    network.Number,
+                    $"Timeout-fault bit '{assignment.CoilTag}' (network {network.Number}) appears to live in a private Static/DB rather than the block's interface UDT — C-125 wants a C-122 dwell-timeout timer's own fault bit HMI-exposed as a member of the interface UDT (per C-118's placement), not a bare private Static or DB member. Confirm.",
+                    "Declare this timeout-fault bit as a member of the block's caller-visible interface UDT and reference it through the UDT-typed interface member (e.g. `IO.<...>Fault`), so its HMI exposure is satisfied per C-125.");
+            }
+        }
+    }
+
+    // A coil is a timeout-fault bit per C-125's three conditions (see CheckC125 doc comment).
+    private static bool IsTimeoutFaultCoil(CoilAssignment assignment, IReadOnlySet<string> subjectTimerQPaths)
+    {
+        // (2) CoilTag leaf name ends with "Fault".
+        if (!LeafEndsWith(assignment.CoilTag, "Fault"))
+        {
+            return false;
+        }
+
+        var conditionTags = CollectTagRefPaths(assignment.Condition).ToList();
+
+        // (1) Condition reads a C-122-subject timer's `.Q`.
+        if (!conditionTags.Any(subjectTimerQPaths.Contains))
+        {
+            return false;
+        }
+
+        // (3a) Self-latch: Condition references its own CoilTag.
+        if (!conditionTags.Contains(assignment.CoilTag, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        // (3b) Cleared by `NOT <...>FaultReset`.
+        return ExprHasNegatedFaultReset(assignment.Condition);
+    }
+
+    // True when the fault bit's home is a top-level interface member typed as a UDT the index knows
+    // — the C-125 clean case. A bare block-local leaf, a DB member, or an unresolvable root is not.
+    private static bool FaultBitHomeIsInterfaceUdt(string coilTag, IReadOnlyList<DbMember> interfaceMembers, TagTypeRegistry udtIndex)
+    {
+        var components = coilTag.Split('.');
+        if (components.Length == 1)
+        {
+            return false; // bare block-local (private Static), not the interface UDT
+        }
+
+        var root = StripSubscriptComponent(components[0]);
+        var rootMember = interfaceMembers.FirstOrDefault(m => string.Equals(m.Name, root, StringComparison.Ordinal));
+        return rootMember is not null && udtIndex.TryGetUdt(rootMember.Datatype.Trim('"'), out _);
+    }
+
+    // The last dot-separated component's own tail — used to test a CoilTag leaf against "Fault" and
+    // a cleared-by tag against "FaultReset" without matching a same-named intermediate component.
+    private static bool LeafEndsWith(string tag, string suffix)
+    {
+        var lastDot = tag.LastIndexOf('.');
+        var leaf = lastDot < 0 ? tag : tag[(lastDot + 1)..];
+        return leaf.EndsWith(suffix, StringComparison.Ordinal);
+    }
+
+    // Every TagRef path anywhere in an Expr tree (And/Or/Not/Compare recursion, same shape as
+    // ExprHasStepGuard). Used by C-125 to test what a fault coil's Condition reads.
+    private static IEnumerable<string> CollectTagRefPaths(Expr expr)
+    {
+        switch (expr)
+        {
+            case Expr.TagRef tagRef:
+                yield return tagRef.Path;
+                break;
+            case Expr.And and:
+                foreach (var operand in and.Operands)
+                {
+                    foreach (var path in CollectTagRefPaths(operand))
+                    {
+                        yield return path;
+                    }
+                }
+
+                break;
+            case Expr.Or or:
+                foreach (var operand in or.Operands)
+                {
+                    foreach (var path in CollectTagRefPaths(operand))
+                    {
+                        yield return path;
+                    }
+                }
+
+                break;
+            case Expr.Not not:
+                foreach (var path in CollectTagRefPaths(not.Operand))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.Compare compare:
+                foreach (var path in CollectTagRefPaths(compare.Left))
+                {
+                    yield return path;
+                }
+
+                foreach (var path in CollectTagRefPaths(compare.Right))
+                {
+                    yield return path;
+                }
+
+                break;
+        }
+    }
+
+    // True when the Expr tree contains a NOT whose operand subtree references a `<...>FaultReset`
+    // tag — C-123's clear discipline, the third signal that a coil is a genuine timeout-fault latch.
+    private static bool ExprHasNegatedFaultReset(Expr expr)
+    {
+        switch (expr)
+        {
+            case Expr.Not not:
+                return CollectTagRefPaths(not.Operand).Any(p => LeafEndsWith(p, "FaultReset"))
+                    || ExprHasNegatedFaultReset(not.Operand);
+            case Expr.And and:
+                return and.Operands.Any(ExprHasNegatedFaultReset);
+            case Expr.Or or:
+                return or.Operands.Any(ExprHasNegatedFaultReset);
+            case Expr.Compare compare:
+                return ExprHasNegatedFaultReset(compare.Left) || ExprHasNegatedFaultReset(compare.Right);
+            default:
+                return false;
+        }
+    }
+
     // The block's step-number set — the union of (1) every literal MOVEd into a Step register (a
     // transition's target step) and (2) every literal compared against a Step register inside a
     // transition MOVE's EN or a timer's IN (a transition's from-step / a dwell gate). Step literals
