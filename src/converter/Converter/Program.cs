@@ -4,6 +4,7 @@ using Converter.Diff;
 using Converter.Digest;
 using Converter.DriftCheck;
 using Converter.Ir;
+using Converter.IrHash;
 using Converter.Preflight;
 using Converter.ReuseScan;
 using Converter.Review;
@@ -54,6 +55,11 @@ internal static class Program
             return RunReuseScan(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "ir-hash")
+        {
+            return RunIrHash(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "target-scan")
         {
             return RunTargetScan(args[1..]);
@@ -87,6 +93,7 @@ internal static class Program
             Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
             Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
+            Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
@@ -600,6 +607,40 @@ internal static class Program
         Console.WriteLine(json ? ReuseScanOutputFormatter.FormatJson(report) : ReuseScanOutputFormatter.FormatText(report));
 
         return report.HasMatches ? 1 : 0;
+    }
+
+    private static int RunIrHash(string[] args)
+    {
+        var json = false;
+        var files = new List<string>();
+
+        foreach (var arg in args)
+        {
+            if (arg == "--json")
+            {
+                json = true;
+            }
+            else if (arg.StartsWith("--", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine($"Unexpected argument: {arg}");
+                return 1;
+            }
+            else
+            {
+                files.Add(arg);
+            }
+        }
+
+        if (files.Count == 0)
+        {
+            Console.Error.WriteLine("Usage: converter ir-hash <file> [<file> ...] [--json]");
+            return 1;
+        }
+
+        var report = IrHashRunner.Run(files);
+        Console.WriteLine(json ? IrHashOutputFormatter.FormatJson(report) : IrHashOutputFormatter.FormatText(report));
+
+        return report.HasErrors ? 1 : 0;
     }
 
     private static int RunTargetScan(string[] args)

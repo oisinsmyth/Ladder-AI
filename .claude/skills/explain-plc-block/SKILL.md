@@ -74,3 +74,12 @@ otherwise. Return the explanation directly as your response — organize it howe
 controls engineer reviewing it. For a repeating-template block, that's usually: one-paragraph
 summary, the template described once, a per-instance table, then genuinely distinctive logic and
 findings called out separately from the boilerplate.
+
+- **Optional — explanation sidecar (FI-17 pilot).** You *may* cache this explanation next to the
+  block as `<Block>.explain.md` for cross-session orientation, per
+  `docs/notes/explanation-sidecars.md`: stamp it with `derived-from: <converter ir-hash output>`,
+  and any later consumer recomputes `converter ir-hash <block>.ir` and discards the sidecar on
+  mismatch (hash-on-read invalidation). A sidecar is **orientation only** — "which block do I open" —
+  **never a substitute for reading the actual logic**, and never a review input. The default above
+  (conversation-only, nothing written) stays the norm; only cache when a sidecar was explicitly
+  asked for or clearly useful across sessions.
