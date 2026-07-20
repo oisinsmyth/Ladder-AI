@@ -9,7 +9,10 @@ public enum TagDirection
     Write,
 }
 
-public readonly record struct DirectedTagUsage(string Path, TagDirection Direction, CoilKind? SetResetKind = null);
+// Guard (FI-25 v2): for a WRITE, the guarding condition expression (the coil condition / instruction EN)
+// — so a consumer can tell whether the write is armed or disarmed (e.g. gated by `NOT AlwaysTrue`). Null
+// for reads, and for writes whose gate is an ENO-chain (EnSource.PrecedingEno) with no local condition.
+public readonly record struct DirectedTagUsage(string Path, TagDirection Direction, CoilKind? SetResetKind = null, Expr? Guard = null);
 
 // A small, scoped helper enumerating every real tag reference in a network — built for S4's
 // convention-review rules (C-005, C-301), which both need to inspect every name actually used,
@@ -616,13 +619,13 @@ public static class TagReferences
     {
         foreach (var assignment in network.Assignments)
         {
-            yield return new DirectedTagUsage(assignment.CoilTag, TagDirection.Write, assignment.Kind);
+            yield return new DirectedTagUsage(assignment.CoilTag, TagDirection.Write, assignment.Kind, assignment.Condition);
             foreach (var u in Reads(assignment.Condition)) yield return u;
         }
 
         foreach (var timer in network.Timers)
         {
-            yield return new DirectedTagUsage(timer.InstancePath, TagDirection.Write);
+            yield return new DirectedTagUsage(timer.InstancePath, TagDirection.Write, Guard: timer.In);
             foreach (var u in Reads(timer.In)) yield return u;
             foreach (var u in Reads(timer.Pt)) yield return u;
             if (timer.Reset is not null)
@@ -633,14 +636,14 @@ public static class TagReferences
 
         foreach (var move in network.Moves)
         {
-            yield return new DirectedTagUsage(move.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(move.DestTag, TagDirection.Write, Guard: move.En);
             foreach (var u in Reads(move.En)) yield return u;
             foreach (var u in Reads(move.In)) yield return u;
         }
 
         foreach (var wand in network.WordAnds)
         {
-            yield return new DirectedTagUsage(wand.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(wand.DestTag, TagDirection.Write, Guard: wand.En);
             foreach (var u in Reads(wand.En)) yield return u;
             foreach (var input in wand.Inputs)
             {
@@ -652,7 +655,7 @@ public static class TagReferences
         {
             if (call.InstancePath is not null)
             {
-                yield return new DirectedTagUsage(call.InstancePath, TagDirection.Write);
+                yield return new DirectedTagUsage(call.InstancePath, TagDirection.Write, Guard: call.En);
             }
 
             foreach (var u in Reads(call.En)) yield return u;
@@ -664,7 +667,7 @@ public static class TagReferences
                         foreach (var u in Reads(input.Value)) yield return u;
                         break;
                     case CallArgument.OutputArg output:
-                        yield return new DirectedTagUsage(output.DestTag, TagDirection.Write);
+                        yield return new DirectedTagUsage(output.DestTag, TagDirection.Write, Guard: call.En);
                         break;
                 }
             }
@@ -672,7 +675,7 @@ public static class TagReferences
 
         foreach (var mul in network.Muls)
         {
-            yield return new DirectedTagUsage(mul.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(mul.DestTag, TagDirection.Write, Guard: GuardOf(mul.En));
             foreach (var u in Reads(mul.En)) yield return u;
             foreach (var input in mul.Inputs)
             {
@@ -682,28 +685,28 @@ public static class TagReferences
 
         foreach (var convert in network.Converts)
         {
-            yield return new DirectedTagUsage(convert.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(convert.DestTag, TagDirection.Write, Guard: GuardOf(convert.En));
             foreach (var u in Reads(convert.En)) yield return u;
             foreach (var u in Reads(convert.In)) yield return u;
         }
 
         foreach (var swap in network.Swaps)
         {
-            yield return new DirectedTagUsage(swap.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(swap.DestTag, TagDirection.Write, Guard: GuardOf(swap.En));
             foreach (var u in Reads(swap.En)) yield return u;
             foreach (var u in Reads(swap.In)) yield return u;
         }
 
         foreach (var abs in network.AbsStatements)
         {
-            yield return new DirectedTagUsage(abs.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(abs.DestTag, TagDirection.Write, Guard: GuardOf(abs.En));
             foreach (var u in Reads(abs.En)) yield return u;
             foreach (var u in Reads(abs.In)) yield return u;
         }
 
         foreach (var limit in network.Limits)
         {
-            yield return new DirectedTagUsage(limit.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(limit.DestTag, TagDirection.Write, Guard: GuardOf(limit.En));
             foreach (var u in Reads(limit.En)) yield return u;
             foreach (var u in Reads(limit.Min)) yield return u;
             foreach (var u in Reads(limit.In)) yield return u;
@@ -712,7 +715,7 @@ public static class TagReferences
 
         foreach (var tsub in network.TSubs)
         {
-            yield return new DirectedTagUsage(tsub.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(tsub.DestTag, TagDirection.Write, Guard: GuardOf(tsub.En));
             foreach (var u in Reads(tsub.En)) yield return u;
             foreach (var u in Reads(tsub.In1)) yield return u;
             foreach (var u in Reads(tsub.In2)) yield return u;
@@ -720,14 +723,14 @@ public static class TagReferences
 
         foreach (var tconv in network.TConvs)
         {
-            yield return new DirectedTagUsage(tconv.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(tconv.DestTag, TagDirection.Write, Guard: GuardOf(tconv.En));
             foreach (var u in Reads(tconv.En)) yield return u;
             foreach (var u in Reads(tconv.In)) yield return u;
         }
 
         foreach (var calc in network.Calcs)
         {
-            yield return new DirectedTagUsage(calc.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(calc.DestTag, TagDirection.Write, Guard: GuardOf(calc.En));
             foreach (var u in Reads(calc.En)) yield return u;
             foreach (var input in calc.Inputs)
             {
@@ -737,8 +740,8 @@ public static class TagReferences
 
         foreach (var mbv in network.MoveBlkVariants)
         {
-            yield return new DirectedTagUsage(mbv.RetValTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mbv.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(mbv.RetValTag, TagDirection.Write, Guard: GuardOf(mbv.En));
+            yield return new DirectedTagUsage(mbv.DestTag, TagDirection.Write, Guard: GuardOf(mbv.En));
             foreach (var u in Reads(mbv.En)) yield return u;
             foreach (var u in Reads(mbv.Src)) yield return u;
             foreach (var u in Reads(mbv.Count)) yield return u;
@@ -754,7 +757,7 @@ public static class TagReferences
 
         foreach (var fill in network.FillBlockIs)
         {
-            yield return new DirectedTagUsage(fill.DestTag, TagDirection.Write);
+            yield return new DirectedTagUsage(fill.DestTag, TagDirection.Write, Guard: GuardOf(fill.En));
             foreach (var u in Reads(fill.En)) yield return u;
             foreach (var u in Reads(fill.In)) yield return u;
             foreach (var u in Reads(fill.Count)) yield return u;
@@ -762,11 +765,12 @@ public static class TagReferences
 
         foreach (var mm in network.ModbusMasters)
         {
-            yield return new DirectedTagUsage(mm.InstancePath, TagDirection.Write);
-            yield return new DirectedTagUsage(mm.DoneTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mm.BusyTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mm.ErrorTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mm.StatusTag, TagDirection.Write);
+            var mmGuard = GuardOf(mm.En);
+            yield return new DirectedTagUsage(mm.InstancePath, TagDirection.Write, Guard: mmGuard);
+            yield return new DirectedTagUsage(mm.DoneTag, TagDirection.Write, Guard: mmGuard);
+            yield return new DirectedTagUsage(mm.BusyTag, TagDirection.Write, Guard: mmGuard);
+            yield return new DirectedTagUsage(mm.ErrorTag, TagDirection.Write, Guard: mmGuard);
+            yield return new DirectedTagUsage(mm.StatusTag, TagDirection.Write, Guard: mmGuard);
             foreach (var u in Reads(mm.En)) yield return u;
             foreach (var u in Reads(mm.Req)) yield return u;
             foreach (var u in Reads(mm.MbAddr)) yield return u;
@@ -778,10 +782,11 @@ public static class TagReferences
 
         foreach (var mcl in network.ModbusCommLoads)
         {
-            yield return new DirectedTagUsage(mcl.InstancePath, TagDirection.Write);
-            yield return new DirectedTagUsage(mcl.DoneTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mcl.ErrorTag, TagDirection.Write);
-            yield return new DirectedTagUsage(mcl.StatusTag, TagDirection.Write);
+            var mclGuard = GuardOf(mcl.En);
+            yield return new DirectedTagUsage(mcl.InstancePath, TagDirection.Write, Guard: mclGuard);
+            yield return new DirectedTagUsage(mcl.DoneTag, TagDirection.Write, Guard: mclGuard);
+            yield return new DirectedTagUsage(mcl.ErrorTag, TagDirection.Write, Guard: mclGuard);
+            yield return new DirectedTagUsage(mcl.StatusTag, TagDirection.Write, Guard: mclGuard);
             foreach (var u in Reads(mcl.En)) yield return u;
             foreach (var u in Reads(mcl.Req)) yield return u;
             foreach (var u in Reads(mcl.Port)) yield return u;
@@ -791,6 +796,9 @@ public static class TagReferences
             foreach (var u in Reads(mcl.MbDb)) yield return u;
         }
     }
+
+    // The guard Expr behind an EnSource: the condition itself, or null for an ENO-chain (PrecedingEno).
+    private static Expr? GuardOf(EnSource en) => en is EnSource.Condition c ? c.Value : null;
 
     private static IEnumerable<DirectedTagUsage> Reads(Expr expr) =>
         FromExpr(expr).Select(p => new DirectedTagUsage(p, TagDirection.Read));

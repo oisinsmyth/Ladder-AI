@@ -117,6 +117,45 @@ public class TraceTests : IDisposable
     }
 
     [Fact]
+    public void Run_DisarmedWriter_YieldsDisarmed_ArmedYieldsOk()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"trace-disarm-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // FB_D drives Armed_Out normally and Disarmed_Out gated `NOT AlwaysTrue` (built but switched off).
+            var block = new IrBlock("0", "FB", "FB_D", 1, "LAD", null, new[]
+            {
+                new IrNetwork(1, "writes", new[]
+                {
+                    new CoilAssignment("Armed_Out", new Expr.TagRef("Enable")),
+                    new CoilAssignment("Disarmed_Out", new Expr.Not(new Expr.TagRef("AlwaysTrue"))),
+                }),
+            });
+            var sidecars = block.Networks
+                .Select(n => new NetworkSidecar(n.Number, n.Number.ToString(), Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>()))
+                .ToArray();
+            File.WriteAllText(Path.Combine(dir, "FB_D.ir"), IrSerializer.SerializeBlock(block, sidecars));
+
+            var bindingPath = Path.Combine(dir, "b.json");
+            File.WriteAllText(bindingPath, """
+            { "bindings": [
+              { "req": "D1", "out_tag": "Disarmed_Out" },
+              { "req": "A1", "out_tag": "Armed_Out" }
+            ] }
+            """);
+
+            var report = TraceRunner.Run(bindingPath, dir);
+            Assert.Equal(Verdict.Disarmed, report.Requirements.Single(r => r.Req == "D1").Hops.Single().Verdict);
+            Assert.Equal(Verdict.Ok, report.Requirements.Single(r => r.Req == "A1").Hops.Single().Verdict);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FormatText_And_Json_Render()
     {
         var report = TraceRunner.Run(_bindingPath, _dir);

@@ -16,6 +16,7 @@ public enum Verdict
     Ok,             // the hop's expectation holds (still needs the AI's semantic confirm)
     Unimplemented,  // out_tag has no writer — no output path
     BrokenChain,    // iface_member has no writer — the in-cycle-lamp class
+    Disarmed,       // every writer is placeholder-gated (NOT AlwaysTrue) — built but switched off (FI-25 v2)
     Contradicted,   // number constraint present and DB start value != spec
     Partial,        // number constraint present but member has no start value (cite the REQ's Q)
     NotApplicable,  // the binding did not name this hop's anchor (not emitted; reserved)

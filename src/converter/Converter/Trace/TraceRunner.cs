@@ -59,7 +59,22 @@ public static class TraceRunner
             .Distinct(StringComparer.Ordinal)
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToList();
-        return new HopResult(hop, Verdict.Ok, $"{path}: written by {writers.Count} site(s)", writers);
+
+        // FI-25 v2 disarmed hop: a write can never fire if its guard is a placeholder-false (NOT
+        // AlwaysTrue). If EVERY writer of the path is disarmed, the path is built-but-switched-off →
+        // Disarmed (which review-functional treats as NOT implemented). A mix (some armed) stays Ok, with
+        // the disarmed count noted so the reviewer can still see it.
+        var disarmedCount = usage.Writers.Count(w => DisarmAnalysis.IsProvablyFalse(w.Guard));
+        if (disarmedCount == usage.Writers.Count)
+        {
+            return new HopResult(hop, Verdict.Disarmed,
+                $"{path}: written by {writers.Count} site(s), all gated NOT AlwaysTrue — built but switched off", writers);
+        }
+
+        var okDetail = disarmedCount > 0
+            ? $"{path}: written by {writers.Count} site(s) ({disarmedCount} disarmed)"
+            : $"{path}: written by {writers.Count} site(s)";
+        return new HopResult(hop, Verdict.Ok, okDetail, writers);
     }
 
     private static HopResult NumberHop(NumberConstraint number, IReadOnlyDictionary<string, string?> startValues)

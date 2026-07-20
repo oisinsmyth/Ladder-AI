@@ -12,7 +12,9 @@ namespace Converter.CrossCheck;
 public sealed class ProjectUsageGraph
 {
     // One occurrence of a tag being read or written, located to its block + network (+ Set/Reset kind).
-    public sealed record UsageSite(string Block, int Network, CoilKind? Kind);
+    // Guard (FI-25 v2) is the write's guarding condition Expr (null for reads / ENO-chained writes), so a
+    // consumer can tell an armed write from a disarmed one (e.g. `NOT AlwaysTrue`).
+    public sealed record UsageSite(string Block, int Network, CoilKind? Kind, Expr? Guard = null);
 
     public sealed record PathUsage(List<UsageSite> Writers, List<UsageSite> Readers);
 
@@ -95,7 +97,7 @@ public sealed class ProjectUsageGraph
 
             foreach (var usage in TagReferences.AllDirectedUsages(network))
             {
-                var site = new UsageSite(block.Name, network.Number, usage.SetResetKind);
+                var site = new UsageSite(block.Name, network.Number, usage.SetResetKind, usage.Guard);
                 var entry = GetOrAdd(usage.Path);
                 if (usage.Direction == TagDirection.Write)
                 {
