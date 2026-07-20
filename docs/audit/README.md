@@ -324,5 +324,6 @@ rule 1) and makes no changes, so there is no "after" run to reconfirm.
 |------|-------|--------|
 | 2026-07-11 | D1 stage/goals + D2 doc consistency (full suite → S1 item 7) | [`2026-07-11-stage-and-docs-audit.md`](2026-07-11-stage-and-docs-audit.md) |
 | 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (compliance excluded by owner) | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
+| 2026-07-20 | Full project audit — all dimensions D1–D10 from zero (read-only; 19 fix-list items, 0 blocker) | [`2026-07-20-full-project-audit.md`](2026-07-20-full-project-audit.md) · [fixlist](2026-07-20-full-project-audit-fixlist.md) |
 
 Add a row here whenever a new audit lands.
