@@ -7,9 +7,10 @@ namespace Converter.Trace;
 
 // Layer B of FI-25: given a binding file, walk each REQ's anchors over FI-22's reader/writer graph
 // (`ProjectUsageGraph`, read-only) plus the project's DB start values, and emit per-hop facts +
-// candidate verdicts. v1 hops: (1) output-path, (2) interface-chain, (4) number-constraint. The
-// "disarmed" (write-condition) and timing (s→ms) hops are deferred — they need the graph to carry
-// write conditions / net-new dataflow analysis (see docs/16 FI-25).
+// candidate verdicts. Hops: (1) output-path, (2) interface-chain, disarmed (v2, on 1/2 — every writer
+// gated NOT AlwaysTrue), (4) number-constraint, (5) timing (v2 — the seconds member reaches the timer's
+// PT via the ×1000 s→ms MUL/CONVERT chain; structural/name-correspondence — the MUL↔CONVERT sidecar-wire
+// pairing is a documented refinement, not verified here).
 public static class TraceRunner
 {
     public static TraceReport Run(string bindingPath, string projectDir)
@@ -17,6 +18,7 @@ public static class TraceRunner
         var bindingFile = BindingFile.Load(bindingPath);
         var graph = ProjectUsageGraph.Build(projectDir);
         var startValues = LoadStartValues(projectDir);
+        var blocks = ParseBlocks(projectDir); // for the timing hop's statement walk (graph has no structure)
 
         var traces = new List<ReqTrace>(bindingFile.Bindings.Count);
         foreach (var binding in bindingFile.Bindings)
@@ -40,10 +42,125 @@ public static class TraceRunner
                 hops.Add(NumberHop(number, startValues));
             }
 
+            if (binding.Timing is { } timing)
+            {
+                hops.Add(TimingHop(timing, blocks));
+            }
+
             traces.Add(new ReqTrace(binding.Req, hops));
         }
 
         return new TraceReport(traces, graph.Warnings);
+    }
+
+    // The timing chain: seconds member → MUL(×1000) => <intermediate> → CONVERT => <ms member> → timer.PT.
+    // Anchored on the bound timer (the "right timer" endpoint) and disambiguated by the bound seconds member
+    // (which MUL feeds the chain), so it doesn't fall into the shared-scratch trap by tag alone. Honest
+    // limitation: the MUL↔CONVERT link is an EN:=ENO wire recorded only in the sidecar — this checks the
+    // pieces are present with the expected operands, NOT that the specific wire pairs them (a documented
+    // sidecar-level refinement). Facts + a candidate verdict.
+    private static HopResult TimingHop(TimingConstraint timing, IReadOnlyList<IrBlock> blocks)
+    {
+        // Find the timer and its owning block.
+        foreach (var block in blocks)
+        {
+            foreach (var network in block.Networks)
+            {
+                foreach (var timer in network.Timers)
+                {
+                    if (timer.InstancePath != timing.Timer)
+                    {
+                        continue;
+                    }
+
+                    return TraceTimerChain(timing, block, timer, network.Number);
+                }
+            }
+        }
+
+        return new HopResult(HopKind.Timing, Verdict.Unimplemented,
+            $"no timer named '{timing.Timer}' found — cannot trace the timing chain", Array.Empty<string>());
+    }
+
+    private static HopResult TraceTimerChain(TimingConstraint timing, IrBlock block, TimerBinding timer, int timerNetwork)
+    {
+        var loc = $"{block.Name} N{timerNetwork}";
+        if (timer.Pt is not Expr.TagRef ptRef)
+        {
+            return new HopResult(HopKind.Timing, Verdict.Contradicted,
+                $"'{timing.Timer}' PT is a literal/expression, not a converted ms member — cannot trace an s→ms chain",
+                new[] { loc });
+        }
+
+        var msTag = ptRef.Path;
+
+        // Primary linkage: the timer's UNIQUE PT ms-member name must correspond to the bound seconds member
+        // (strip a trailing "MS"). This is the disambiguator the shared MUL/CONVERT scratch tag cannot
+        // provide — the ms member is per-timer, so a name mismatch means this timer isn't fed by that member.
+        if (!string.Equals(StripMsSuffix(Leaf(msTag)), Leaf(timing.SecondsMember), StringComparison.OrdinalIgnoreCase))
+        {
+            return new HopResult(HopKind.Timing, Verdict.Contradicted,
+                $"'{timing.Timer}' PT is {msTag}, which does not correspond to seconds member {timing.SecondsMember} — " +
+                "this timer's preset is not the ms form of that member",
+                new[] { loc });
+        }
+
+        // Corroborate the ×1000 s→ms idiom for this member: a CONVERT writes msTag from an intermediate, and a
+        // MUL writes that intermediate with <seconds member> × 1000. The intermediate is often a shared scratch
+        // tag, so the specific MUL↔CONVERT wire pairing is NOT verified (a documented sidecar-level refinement).
+        var convert = block.Networks.SelectMany(n => n.Converts).FirstOrDefault(c => c.DestTag == msTag);
+        var hasMul = convert?.In is Expr.TagRef convertIn && block.Networks.SelectMany(n => n.Muls)
+            .Any(m => m.DestTag == convertIn.Path
+                && m.Inputs.Any(i => i is Expr.TagRef t && t.Path == timing.SecondsMember)
+                && m.Inputs.Any(IsThousandLiteral));
+
+        if (convert is null || !hasMul)
+        {
+            return new HopResult(HopKind.Timing, Verdict.Partial,
+                $"'{timing.Timer}' PT ({msTag}) corresponds to {timing.SecondsMember} by name, but the ×1000 s→ms " +
+                "MUL/CONVERT chain isn't fully present — the conversion may be missing or use a different idiom",
+                new[] { loc });
+        }
+
+        return new HopResult(HopKind.Timing, Verdict.Ok,
+            $"'{timing.Timer}' PT ({msTag}) is the ×1000 ms form of {timing.SecondsMember} — chain present " +
+            "(MUL↔CONVERT sidecar-wire pairing not verified)",
+            new[] { loc });
+    }
+
+    private static string Leaf(string path) => path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
+
+    private static string StripMsSuffix(string leaf) =>
+        leaf.EndsWith("MS", StringComparison.OrdinalIgnoreCase) ? leaf[..^2] : leaf;
+
+    private static bool IsThousandLiteral(Expr e) =>
+        e is Expr.Literal lit &&
+        double.TryParse(lit.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) &&
+        Math.Abs(v - 1000.0) < 1e-9;
+
+    private static List<IrBlock> ParseBlocks(string projectDir)
+    {
+        var blocks = new List<IrBlock>();
+        foreach (var path in Directory.EnumerateFiles(projectDir, "*.ir", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var text = File.ReadAllText(path);
+                if (!text.StartsWith("BLOCK ", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                blocks.Add(IrParser.HasSidecarSection(text) ? IrParser.ParseBlock(text).Block : IrParser.ParseBlockWithoutSidecar(text));
+            }
+            catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException
+                                           or NonReducibleNetworkException or IrFormatException)
+            {
+                // Unparseable — skip; a timing binding naming a timer in it just won't resolve.
+            }
+        }
+
+        return blocks;
     }
 
     // Hops 1 & 2 share the "is this path written anywhere?" shape — only the failure verdict differs.

@@ -40,6 +40,20 @@ public sealed class Binding
 
     // Hop 4: a numeric setpoint constraint — the DB member and the spec-stated value.
     public NumberConstraint? Number { get; set; }
+
+    // Hop 5 (v2): a timing constraint — the seconds settings member must reach the named timer's PT via
+    // the site ×1000 s→ms MUL/CONVERT idiom. (Value is left to the number hop; this checks the chain.)
+    public TimingConstraint? Timing { get; set; }
+}
+
+public sealed class TimingConstraint
+{
+    // The timer whose PT the seconds value must reach (e.g. "OvercurrentMediumTimer") — the "right timer"
+    // endpoint the s→ms pair-crossing trap is about.
+    public string Timer { get; set; } = string.Empty;
+
+    // The seconds settings member that should feed it via ×1000 (e.g. "DB_Settings.OvercurrentMediumDelay").
+    public string SecondsMember { get; set; } = string.Empty;
 }
 
 public sealed class NumberConstraint

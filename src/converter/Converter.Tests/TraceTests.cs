@@ -156,6 +156,48 @@ public class TraceTests : IDisposable
     }
 
     [Fact]
+    public void Run_TimingHop_CorrespondingMemberOk_WrongMemberContradicted_NoTimerUnimplemented()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"trace-timing-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // The s→ms idiom: MUL(FooDelay × 1000) => Time; CONVERT(Time) => FooDelayMS; TON(FooTimer, PT := FooDelayMS).
+            var tru = new Expr.And(Array.Empty<Expr>());
+            var block = new IrBlock("0", "FB", "FB_T", 1, "LAD", null, new[]
+            {
+                new IrNetwork(1, "conv", Array.Empty<CoilAssignment>(),
+                    Muls: new[] { new MulStatement(new EnSource.Condition(tru), new Expr[] { new Expr.TagRef("DB_Settings.FooDelay"), new Expr.Literal("1000.0") }, "Time") },
+                    Converts: new[] { new ConvertStatement(new EnSource.PrecedingEno(), new Expr.TagRef("Time"), "FooDelayMS") }),
+                new IrNetwork(2, "timer", Array.Empty<CoilAssignment>(),
+                    Timers: new[] { new TimerBinding("FooTimer", tru, new Expr.TagRef("FooDelayMS")) }),
+            });
+            var sidecars = block.Networks
+                .Select(n => new NetworkSidecar(n.Number, n.Number.ToString(), Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>()))
+                .ToArray();
+            File.WriteAllText(Path.Combine(dir, "FB_T.ir"), IrSerializer.SerializeBlock(block, sidecars));
+
+            var bindingPath = Path.Combine(dir, "b.json");
+            File.WriteAllText(bindingPath, """
+            { "bindings": [
+              { "req": "T1", "timing": { "timer": "FooTimer", "seconds_member": "DB_Settings.FooDelay" } },
+              { "req": "T2", "timing": { "timer": "FooTimer", "seconds_member": "DB_Settings.BarDelay" } },
+              { "req": "T3", "timing": { "timer": "NoTimer", "seconds_member": "DB_Settings.FooDelay" } }
+            ] }
+            """);
+
+            var report = TraceRunner.Run(bindingPath, dir);
+            Assert.Equal(Verdict.Ok, report.Requirements.Single(r => r.Req == "T1").Hops.Single().Verdict);
+            Assert.Equal(Verdict.Contradicted, report.Requirements.Single(r => r.Req == "T2").Hops.Single().Verdict);
+            Assert.Equal(Verdict.Unimplemented, report.Requirements.Single(r => r.Req == "T3").Hops.Single().Verdict);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FormatText_And_Json_Render()
     {
         var report = TraceRunner.Run(_bindingPath, _dir);

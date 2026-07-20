@@ -9,6 +9,7 @@ public enum HopKind
     OutputPath,       // hop 1: is out_tag written anywhere?
     InterfaceChain,   // hop 2: is iface_member written anywhere?
     NumberConstraint, // hop 4: DB start value vs spec
+    Timing,           // hop 5 (v2): seconds member reaches the timer's PT via the ×1000 s→ms chain
 }
 
 public enum Verdict

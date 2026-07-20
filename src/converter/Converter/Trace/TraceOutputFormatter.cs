@@ -46,6 +46,7 @@ public static class TraceOutputFormatter
         HopKind.OutputPath => "output-path",
         HopKind.InterfaceChain => "interface-chain",
         HopKind.NumberConstraint => "number-constraint",
+        HopKind.Timing => "timing",
         _ => hop.ToString(),
     };
 
