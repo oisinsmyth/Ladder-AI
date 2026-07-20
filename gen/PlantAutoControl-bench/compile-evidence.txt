@@ -1,0 +1,9 @@
+STATE: Warning
+ERRORS: 0  WARNINGS: 1
+
+[Warning] PLC1 6ES7 214-1AG40-0XB0: 
+[Success] Program blocks: 
+[Success] PlantAutoControl (FC100): Block was successfully compiled.
+[Warning] General warnings: 
+[Warning] Inputs or outputs are used that do not exist in the configured hardware.
+[Warning] Compiling finished (errors: 0; warnings: 1)
