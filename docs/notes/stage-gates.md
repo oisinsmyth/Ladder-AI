@@ -1,6 +1,6 @@
 # Stage gates
 
-**Active stage: S0 — Foundation** (see `docs/02-roadmap.md` for entry/exit criteria).
+**Active stages: S5 — Data extraction and S6 — Generation** (see the table below for full per-stage status, and `docs/02-roadmap.md` for entry/exit criteria). *(S0 remains formally open — exit criteria met, gate sign-off pending, see the S0 row — but work has long since moved to S5/S6.)*
 
 Claude Code: do not perform capabilities from stages that haven't passed their gate.
 

@@ -1,6 +1,6 @@
 ---
 name: gen-architecture
-description: The Design-stage skill (docs/15 pipeline skill #5) that turns analysis artifacts into gen/<project>/architecture.md — the block manifest the engineer signs off BEFORE any block is coded (docs/15 hard gate 1). Use when asked to architect or structure a generation project, break a request down into blocks, design UDT interfaces or the DB landscape, plan OB1 call order, or whenever ANY generation request needs its manifest or mini-manifest — every request that creates new blocks or interfaces does, before gen-block-coding may start. Ladder-AI project.
+description: The Design-stage skill (docs/15 pipeline skill #5) that turns analysis artifacts into gen/<project>/architecture.md — the block manifest the engineer signs off BEFORE any block is coded (docs/15 hard gate 1). Use when asked to architect or structure a generation project, break a request down into blocks, design UDT interfaces or the DB landscape, plan OB1 call order, or whenever ANY generation request needs its manifest or mini-manifest — every request that creates new blocks or interfaces does, before the Build coding stage (gen-block-new / the modify pair) may start. Ladder-AI project.
 user-invocable: true
 allowed-tools:
   - Read
@@ -24,7 +24,8 @@ apply throughout.
 **You are a designer — not a coder, not a reviewer.**
 
 - **No logic is written at this stage.** No IR blocks, no networks, no imports, no compiles, no
-  `openness-cli` anything. The compile gate (hard rule 4) lives downstream in `gen-block-coding`;
+  `openness-cli` anything. The compile gate (hard rule 4) lives downstream in the Build coding stage
+  (`gen-block-new` / the S7 modify pair);
   this stage's output is a markdown artifact and nothing else.
 - **Bash exists in this skill for exactly two read-only commands**: `converter digest` (brownfield
   orientation — see Method) and `converter review` (only to note the current mechanical-findings
@@ -211,8 +212,8 @@ Method requires one. Then exactly these sections:
 
 End the artifact with a **gate-1 sign-off block**: a pending line for the engineer's name/date
 per `docs/11-review-workflow.md`. The artifact is a proposal until that line is signed; nothing
-downstream (`gen-alarm-design` may proceed in parallel; `gen-block-coding` may NOT) starts before
-the yes.
+downstream (`gen-alarm-design` may proceed in parallel; the Build coding stage — `gen-block-new` /
+the modify pair — may NOT) starts before the yes.
 
 **The manifest's own readability answers to the stricter bar** (doc 06 preamble, applied to the
 artifact): an engineer reads it in one pass. Tables over prose, one line per fact, no repeated

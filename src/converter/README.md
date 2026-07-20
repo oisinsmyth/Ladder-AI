@@ -1414,12 +1414,17 @@ one recursive walk with a single per-network monotonic UId counter. Safe because
 every Wire/Access/Part UId on its own Import()/Compile()/Export() cycle regardless of what's
 written — confirmed independently three times for each of those three element kinds (see
 `docs/notes/stage-gates.md`): "TIA relocates/renumbers freely, only the topology matters." The one
-invariant minting order has to get right on its own (nothing here is copying it off a real
-document): `FlgNetBuilder` sorts the final Parts list by ascending UId and trusts that to already
-be TIA's own required signal-flow order (a real, quoted `Import()` validator rule) — every
-`Or`/`Not` mints its own Part UId only *after* recursing into whatever feeds it, and every
-AND-chain leaf mints in rail-to-coil order, so ascending UId already matches signal-flow order by
-construction.
+invariant the serializer has to get right on its own (nothing here is copying it off a real
+document) is the **Parts-list order**, which TIA's `Import()` validator requires to follow signal
+flow ("the elements must be sorted according to the current flow"). Ascending UId does **not**
+reliably match that for a *synthesized* block — the synthesizer's own UId numbering can separate a
+producer from the consumer it feeds by an independent rung (**Gap I**,
+`docs/notes/converter-synthesis-gaps.md`; the real MotorVSDSystem import rejection on UId 56). So
+`FlgNetWriter` emits instruction Parts in **wire-graph flow order — a DFS from the power rail along
+producer→consumer wire edges** (`7694fdf`), grouping each producer with its downstream consumers
+before the next rail-rooted rung; Access/Constant UIds keep their own separate ascending-UId sort.
+(A real export happens to have UId==flow because TIA numbers along the flow; a synthesized block
+does not, which is why the writer can't lean on UId order.)
 
 **Scope, v1 (2026-07-15)**: `Expr.TagRef`/`And`/`Or`/`Not` and `CoilAssignment`
 (`COIL`/`SCOIL`/`RCOIL`) only — the plain contact/OR-merge/NOT-merge chain, arbitrary nesting
@@ -1441,6 +1446,19 @@ mismatch hard-errors; InOut params are not yet supported. Still out of
 scope, still a deliberate, named future follow-on: WAND, SWAP, ABS, LIMIT, T_SUB, T_CONV, CALC,
 MOVE_BLK_VARIANT, WAIT, FILLBLOCKI, MODBUS_MASTER/MODBUS_COMM_LOAD — hard-errors by name
 (`UnsupportedSynthesisConstructException`), same discipline as v1.
+
+**Scope, current (2026-07-20) — supersedes the dated v1/v2 snapshots above for the live subset.** The
+synthesizable subset has grown well past the 2026-07-15 snapshots as the parity harness closed gaps
+(`docs/notes/converter-synthesis-gaps.md`, CHANGELOG). It now covers: **TON/TONR/TOF** (Gap C),
+**MUL/ADD/SUB/DIV** (SignalConditioning green), **ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT**
+(SignalConditioning + DataHandling green → 14/14 corpus), **registry-typed CONVERT** (the `TagTypeRegistry`,
+Gap B — no longer scoped to only the Real→DInt idiom), typed **comparisons incl. Real tag-vs-tag** (Gap E),
+and a Timer's own `.Q` read **either** via an ordinary Access **or** the same-network `TimerOutputStep`
+direct-wire shape (Gap G2). Instruction Parts are emitted in **wire-graph flow order**, not ascending UId
+(Gap I, `7694fdf` — see the `SidecarSynthesizer`/`FlgNetWriter` note above). Genuinely still out of subset,
+hard-erroring by name (`UnsupportedSynthesisConstructException`): **`LIMIT`, `WAIT`, `FILLBLOCKI`,
+`MODBUS_MASTER`/`MODBUS_COMM_LOAD`**, and InOut CALL params. The CLAUDE.md command table is the one-line
+current summary.
 
 Two v2-specific design notes, both in `SidecarSynthesizer.cs`'s own doc comments in full: (1) a
 Mul/Convert "EN := ENO" chained pair (the real HMI-seconds idiom, confirmed real in `MotorStarter`'s

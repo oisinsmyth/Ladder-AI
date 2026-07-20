@@ -22,6 +22,13 @@ namespace Converter.Ir;
 /// FILLBLOCKI, MODBUS_MASTER/MODBUS_COMM_LOAD — this hard-errors on all of them rather than
 /// guessing.
 ///
+/// Scope, current (2026-07-20 — supersedes the v2 snapshot above): the subset has since grown as the
+/// parity harness closed gaps (docs/notes/converter-synthesis-gaps.md). Now also covers TONR/TOF (Gap C),
+/// SUB/DIV, ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT, registry-typed CONVERT and comparisons
+/// (incl. Real tag-vs-tag, via <see cref="TagTypeRegistry"/> — Gaps B/E), and wired-argument CALLs (types
+/// from the callee interface). Genuinely still hard-errored: LIMIT, WAIT, FILLBLOCKI, MODBUS_*, and InOut
+/// CALL params. Parts are serialized in wire-graph flow order, not ascending UId (Gap I, FlgNetWriter).
+///
 /// UId values are minted from a single, per-<see cref="Synthesize"/>-call monotonic counter —
 /// never threaded across networks (UId numbering is scoped per network, confirmed real,
 /// docs/notes/stage-gates.md's "UId numbering restarts per network" finding). This is safe

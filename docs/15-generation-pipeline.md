@@ -71,8 +71,8 @@ artifact, the docs that bind it, and stop conditions (missing info → a questio
 Skills 8–9 (the modify pair) share a **modification-choreography reference** — the common
 procedure for scoping a touch to named network(s), proving the untouched-network invariance
 check, and presenting the before/after diff (CLAUDE.md "Workflow for modifying existing logic").
-Not itself numbered as a skill; documented inline in each until a dedicated reference doc is
-worth splitting out.
+Not itself numbered as a skill; split out to `docs/notes/modification-choreography.md` (2026-07-18),
+which both modify skills reference.
 
 Checks apply to *artifacts*, not just code: staging concentrates trust in artifacts, so an error in
 `requirements.md` is amplified by every stage that consumes it — that is what `audit-artifact`
@@ -104,7 +104,7 @@ exists for.
   keeps only the analysis, verdict, and a link to it. This keeps the constantly-read notes and the
   `stage-gates.md` status index lean while preserving every line of raw evidence verbatim — the
   property that makes it usable for drift checks and blind-review transparency. Born in the right
-  shape, not split by hand later. The three reviewer skills (9–12) instruct this in their
+  shape, not split by hand later. The three reviewer skills (11–13) instruct this in their
   Report-structure sections; origin and rationale: `docs/16-future-ideas.md` FI-19/FI-20.
 
 ## Isolation model
@@ -114,15 +114,15 @@ exists for.
   - The three reviewers + `audit-artifact` run with fresh context and **read-only tools**, given
     only the artifact under review and its binding docs — never the author's reasoning. Blind
     review is the standard this project already holds pattern admissions to; this is its AI form.
-  - The analysis skills (1–2) may run isolated so bulk spec/drawing content doesn't ride along
+  - The analysis skills (1–4) may run isolated so bulk spec/drawing content doesn't ride along
     into design and coding contexts.
 - CLAUDE.md's hard rules bind every agent regardless; each skill additionally restates the ones it
   is most likely to trip (e.g. `gen-io-tags`: never invent addresses).
-- **Digest vs full IR (decided 2026-07-16 — FI-15):** the reviewers (skills 9–12) always read
+- **Digest vs full IR (decided 2026-07-16 — FI-15):** the reviewers (skills 11–13) always read
   **full IR** — a digest is never review input (the S2 lesson: exhaustiveness, not summaries,
-  caught the real bugs; `converter digest`'s own contract says the same). Analysis (1–2), design
+  caught the real bugs; `converter digest`'s own contract says the same). Analysis (1–4), design
   (5–6), and the `generate` entry skill may use `converter digest` for orientation and
-  cross-block indexing — "which block do I need to open?" — and the build skills (7–8) read the
+  cross-block indexing — "which block do I need to open?" — and the build skills (7–10) read the
   full IR of anything they touch. Digests are derived fresh on every run and never stored, so
   they cannot go stale by construction.
 

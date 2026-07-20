@@ -141,12 +141,14 @@ time on the first run if you don't know them going in:
   commutative, so lead with it (the conventional LAD shape). Bites most when adding a permissive to an
   existing chain.
 - **The synthesizable subset is narrower than the converter's read side.** `--synthesize` covers plain
-  Contact/Coil (incl. SCoil/RCoil, OR/NOT), **TON only** (no TONR/TOF), MOVE, **MUL/ADD/CONVERT** (no
-  SUB/DIV/etc.), comparisons and literals (now magnitude-typed, so UDInt/DInt constants work — fixed
-  2026-07-18), and **CALLs** — zero-argument (STATIC-struct convention) **or with wired Input/Output
-  arguments** (2026-07-18; the argument types come from the callee, so its `.ir` must be in the same
-  `--synthesize` batch or a `--project <ir-dir>`). Still out of subset: `TONR`/`TOF`, InOut call params,
-  and a Word→Int CONVERT (only Real→DInt is typed today). Anything outside that hard-errors at synthesis. If your design
+  Contact/Coil (incl. SCoil/RCoil, OR/NOT), **TON/TONR/TOF**, MOVE, **MUL/ADD/SUB/DIV**,
+  **ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT**, comparisons and literals (magnitude- and
+  registry-typed via the `TagTypeRegistry`, so UDInt/DInt constants **and** Real tag-vs-tag compares work —
+  Gaps B/E), **registry-typed CONVERT** (typed from operand types, no longer only Real→DInt), and **CALLs**
+  — zero-argument (STATIC-struct convention) **or with wired Input/Output arguments** (the argument types
+  come from the callee, so its `.ir` must be in the same `--synthesize` batch or a `--project <ir-dir>`).
+  Still out of subset: **InOut call params, and `Limit`/`Wait`/`FillBlockI`/`Modbus*`**. Anything outside
+  that hard-errors at synthesis. If your design
   needs a construct the synthesizer can't mint, that's a **converter gap to report** (hard rule 7 —
   never hand-patch the XML), not a coding failure; note it and, where the register allows, ship the
   supported equivalent with the gap flagged.
@@ -202,8 +204,7 @@ never backfill or rewrite rows). Then **stop.** The Check stage and gate 2 (fina
   genuinely covers the REQ group beats freeform every time (freeform is where obtuseness breeds,
   docs/15 cause 3). Never widen scope beyond the item's REQ(s) — C-606: added capability needs a REQ
   or a cited convention, never "it seemed useful".
-- **Manual-coding note:** until this skill is validated, ad hoc manual coding to the CLAUDE.md 5-step
-  contract still needs a per-case owner waiver (docs/15 Boundaries, A-3). Once validated, this skill
-  is the path; a manual run needs the waiver.
+- **Manual-coding note:** this skill is validated — it is the path for new-block coding. Ad hoc manual
+  coding to the CLAUDE.md 5-step contract still needs a per-case owner waiver (docs/15 Boundaries, A-3).
 - **Telemetry always**, including a run that stopped at a gap — a stopped run with a named blocker is
   a more useful row than a silent one.

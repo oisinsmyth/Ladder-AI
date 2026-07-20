@@ -237,7 +237,13 @@ checks the first component against the local-name set, but doesn't strip the `[i
 `RisingEdgeFlags[3]`'s first component isn't recognised as a local member. **Fix:** strip a trailing
 `[…]` subscript before the local-name lookup in `ScopeFor` (small, self-contained). Add a fixture test.
 
-## Gap E — tag-vs-tag comparison `SrcType` defaults to `Int` (mis-types Real)
+## Gap E — tag-vs-tag comparison `SrcType` defaults to `Int` (mis-types Real) — DONE 2026-07-19 (`e7e4980`)
+
+**Fixed.** `InferCompareSrcType` now takes the `TagTypeRegistry` and resolves each operand's type from it
+(a literal by magnitude, a tag by its registry-resolved type; the widest present type wins — Real outranks
+the integer widths). A tag-vs-tag comparison whose tags resolve now types from them, closing the wide-tag
+gap; one with no resolvable type still falls back to `Int` (unchanged). In `SidecarSynthesizer.cs`
+(`InferCompareSrcType`/`OperandType`/`TypeRank`). Original writeup:
 
 **Symptom.** A comparison between two tags with no literal (`SpeedPerc < MinSpd`, both Real) synthesizes as
 `SrcType="Int"` → Real-actual vs Int-formal compile error. `InferCompareSrcType` (the 2026-07-18 UDInt fix)
@@ -281,8 +287,9 @@ old Real→DInt default only when a type is unknown — strictly better, never w
 `Program.cs` alongside the callee registry. **ABS/SWAP — DONE 2026-07-18** (SignalConditioning green): both resolve `SrcType` from the operand type
 (hard-error if unresolvable — no safe default). The registry was extended to also index the **block's
 own interface members** (`WithLocalMembers`, layered on in `SynthesizeBlock`), since these operands are
-TEMP/STATIC members, not DB members. **Remaining consumers (queued):** WAND (Gap F) and comparison
-`SrcType` (Gap E, replace the magnitude heuristic). Original design detail below (kept for the
+TEMP/STATIC members, not DB members. **All registry consumers now landed:** WAND (Gap F, DONE 2026-07-18)
+and comparison `SrcType` (Gap E, DONE 2026-07-19 — the magnitude heuristic now prefers a registry-resolved
+tag type). Original design detail below (kept for the
 operand-resolution reasoning):
 
 ### Original framing — Word→Int CONVERT is mis-typed (bigger; needs a tag-type symbol table)

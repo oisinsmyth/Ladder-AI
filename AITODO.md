@@ -212,9 +212,11 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   box-EN / constant-typing / timer-Q-fan-out work. So the **whole-file strip-and-synthesize works on a real
   block**, and the **D-6 scoped merge is no longer the critical build** (derive-always retired D-6 anyway,
   ADR-0005). The **wide tag-vs-tag comparison** typing gap is now **FIXED too** (2026-07-19, `e7e4980` —
-  `InferCompareSrcType` resolves operand types from the `TagTypeRegistry`). Remaining synthesis-typing gaps
-  are the earlier **Word→Int CONVERT** and **UDT-typed-param inline-nesting** cases (tracked in
-  `docs/notes/converter-synthesis-gaps.md`, workarounds in use).
+  `InferCompareSrcType` resolves operand types from the `TagTypeRegistry`). Remaining items are the
+  **Word→Int CONVERT live-recompile verification** (the registry typing is built and wired into
+  `BuildConvertSidecar`; only the genval2 REQ-002 re-run to confirm it compiles clean is pending) and the
+  **UDT-typed-param inline-nesting** case (Gap A — bare-type-ref workaround in use); both tracked in
+  `docs/notes/converter-synthesis-gaps.md`.
 - **Follow-ups from the gen-block-new validation (queued, not yet done):**
   - Fold the **reviewer-calibration rule** into `review-functional`/`review-simplicity`: never infer
     TIA execution order from IR source-text order for ENO-chained MUL/ADD→CONVERT pairs (shared TEMP is
@@ -231,10 +233,9 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   constraints (candidate-prep, not auto-admission).
 
 **Deferred — decided in principle, owner's call on timing (`docs/notes/deferred-items.md`):**
-- D-2 settings rework wave; D-6 converter can't add a statement to an already-exported network
-  (whole-file-strip workaround proven; a scoped `SidecarSynthesizer` is the real fix); Q-04 per-type
-  overcurrent setpoint numbers (owner has the real numbers); D-5 `chained-permissive-enable` blind-draft
-  gap (needs a genuine blind target).
+- D-2 settings rework wave; Q-04 per-type overcurrent setpoint numbers (owner has the real numbers); D-5
+  `chained-permissive-enable` blind-draft gap (needs a genuine blind target). *(D-6 removed — resolved by
+  ADR-0005 derive-always, no longer deferred; see `docs/notes/deferred-items.md` D-6.)*
 
 **Open register questions — need owner input (`gen/test-project001/requirements.md` Open Questions):**
 - `Q-03` local/remote selector semantics (HMI-boundary — see FI-18), `Q-05` motor count / per-motor id,
