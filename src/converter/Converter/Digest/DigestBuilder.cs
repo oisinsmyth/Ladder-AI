@@ -88,7 +88,7 @@ public static class DigestBuilder
             .ToList();
 
         var networks = block.Networks
-            .Select(n => new NetworkDigest(n.Number, n.Title, SummarizeStatements(n)))
+            .Select(n => new NetworkDigest(n.Number, n.Title, SummarizeStatements(n), NetworkSignature.Compute(n)))
             .ToList();
 
         var tagRoots = block.Networks

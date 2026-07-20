@@ -213,5 +213,111 @@ public class DigestTests : IDisposable
         Assert.Equal("FB_Demo", file.GetProperty("name").GetString());
         Assert.Equal(2, file.GetProperty("networks").GetArrayLength());
         Assert.Equal(8, file.GetProperty("tagRoots").GetArrayLength());
+        // FI-23: the structural signature is always present in JSON, regardless of --fingerprint.
+        var sig = file.GetProperty("networks")[0].GetProperty("signature").GetString();
+        Assert.False(string.IsNullOrEmpty(sig));
+    }
+
+    // ---- FI-23: per-network structural signatures ----
+
+    private static IrNetwork CoilNet(string coilTag, Expr condition) =>
+        new(1, "title", new[] { new CoilAssignment(coilTag, condition) });
+
+    [Fact]
+    public void Signature_IdenticalStructureDifferentTagsNumbersTitles_AreEqual()
+    {
+        // Same shape (AND of two contacts into a coil), every tag/name/number/title different.
+        var a = new IrNetwork(1, "Run seal-in", new[]
+        {
+            new CoilAssignment("Motor_Run", new Expr.And(new Expr[] { new Expr.TagRef("Start_PB"), new Expr.TagRef("Enable") })),
+        });
+        var b = new IrNetwork(42, "Pump interlock", new[]
+        {
+            new CoilAssignment("Pump_Run", new Expr.And(new Expr[] { new Expr.TagRef("Foo"), new Expr.TagRef("Bar") })),
+        });
+
+        Assert.Equal(NetworkSignature.Compute(a), NetworkSignature.Compute(b));
+    }
+
+    [Fact]
+    public void Signature_AndOperandOrder_IsCanonicalizedAway()
+    {
+        // A comparison and a plain contact AND-ed together, in the two possible operand orders:
+        // canon children are sorted, so the signature is order-independent.
+        var cmp = new Expr.Compare(">=", new Expr.TagRef("Level"), new Expr.Literal("5"));
+        var a = CoilNet("X", new Expr.And(new Expr[] { cmp, new Expr.TagRef("b") }));
+        var b = CoilNet("X", new Expr.And(new Expr[] { new Expr.TagRef("b"), cmp }));
+
+        Assert.Equal(NetworkSignature.Compute(a), NetworkSignature.Compute(b));
+    }
+
+    [Fact]
+    public void Signature_ExtraStatement_DiffersFromBaseline()
+    {
+        var baseline = CoilNet("A", new Expr.TagRef("x"));
+        var withExtra = new IrNetwork(1, "title", new[]
+        {
+            new CoilAssignment("A", new Expr.TagRef("x")),
+            new CoilAssignment("B", new Expr.TagRef("y")),
+        });
+
+        Assert.NotEqual(NetworkSignature.Compute(baseline), NetworkSignature.Compute(withExtra));
+    }
+
+    [Fact]
+    public void Signature_DifferentCompareOperator_Differs()
+    {
+        var ge = CoilNet("A", new Expr.Compare(">=", new Expr.TagRef("v"), new Expr.Literal("5")));
+        var le = CoilNet("A", new Expr.Compare("<=", new Expr.TagRef("v"), new Expr.Literal("5")));
+
+        Assert.NotEqual(NetworkSignature.Compute(ge), NetworkSignature.Compute(le));
+    }
+
+    [Fact]
+    public void Signature_DifferentBooleanStructure_Differs()
+    {
+        // AND vs OR of the same two leaves is a genuinely different shape.
+        var and = CoilNet("A", new Expr.And(new Expr[] { new Expr.TagRef("a"), new Expr.TagRef("b") }));
+        var or = CoilNet("A", new Expr.Or(new Expr[] { new Expr.TagRef("a"), new Expr.TagRef("b") }));
+
+        Assert.NotEqual(NetworkSignature.Compute(and), NetworkSignature.Compute(or));
+
+        // Nesting depth matters too: a AND (b OR c) is not a AND b AND c.
+        var nested = CoilNet("A", new Expr.And(new Expr[]
+        {
+            new Expr.TagRef("a"),
+            new Expr.Or(new Expr[] { new Expr.TagRef("b"), new Expr.TagRef("c") }),
+        }));
+        var flat = CoilNet("A", new Expr.And(new Expr[] { new Expr.TagRef("a"), new Expr.TagRef("b"), new Expr.TagRef("c") }));
+
+        Assert.NotEqual(NetworkSignature.Compute(nested), NetworkSignature.Compute(flat));
+    }
+
+    [Fact]
+    public void Signature_LiteralValueDrift_Differs_CopyPasteDriftCatch()
+    {
+        // Two step-copy networks differing ONLY in the constant written (Step = 10 vs Step = 20).
+        // Literal values are KEPT in the signature, so this drift surfaces as a different hash.
+        var step10 = new IrNetwork(1, "step", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(new Expr.TagRef("go"), new Expr.Literal("10"), "Step") });
+        var step20 = new IrNetwork(1, "step", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(new Expr.TagRef("go"), new Expr.Literal("20"), "Step") });
+
+        Assert.NotEqual(NetworkSignature.Compute(step10), NetworkSignature.Compute(step20));
+    }
+
+    [Fact]
+    public void FormatText_Fingerprint_ShowsSigLineOnlyWhenRequested()
+    {
+        var path = WriteTempIrFile(SerializeWithEmptySidecars(BlockWithCallAndTimer()));
+        var report = DigestBuilder.DigestFiles(new[] { path }, ignoreErrors: false);
+
+        var plain = DigestOutputFormatter.FormatText(report);
+        Assert.DoesNotContain("SIG:", plain);
+
+        var withFingerprint = DigestOutputFormatter.FormatText(report, fingerprint: true);
+        Assert.Contains("SIG:", withFingerprint);
+        // The signature carried in the record is what the formatter prints.
+        Assert.Contains(report.Files[0].Networks[0].Signature, withFingerprint);
     }
 }

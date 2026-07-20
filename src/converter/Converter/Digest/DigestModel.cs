@@ -12,10 +12,13 @@ public sealed record SectionDigest(string Section, IReadOnlyList<string> Members
 /// <summary>All CALLs of one callee across the whole block, with the distinct instance paths.</summary>
 public sealed record CallSiteDigest(string BlockName, int CallCount, IReadOnlyList<string> Instances);
 
-/// <summary>One network: number, title, and a "coil:2, timer:1" statement summary ("-" if the
-/// network reduced to no statements). Statement-level only — comparisons/contacts live inside
-/// condition expressions and are deliberately not counted.</summary>
-public sealed record NetworkDigest(int Number, string Title, string Statements);
+/// <summary>One network: number, title, a "coil:2, timer:1" statement summary ("-" if the network
+/// reduced to no statements; statement-level only — comparisons/contacts live inside condition
+/// expressions and are deliberately not counted), and a normalized structural Signature (FI-23) — a
+/// short hash of the network's canonical shape (statement kinds + order + tag-abstracted expression
+/// structure). Copy-pasted networks share a Signature; a drifted outlier differs. Always computed
+/// (it's cheap); its display is gated behind digest's --fingerprint flag.</summary>
+public sealed record NetworkDigest(int Number, string Title, string Statements, string Signature);
 
 public sealed record FileDigest(
     string FilePath,
