@@ -278,7 +278,18 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
 **Verdict / revisit trigger:** Open — the maximal *honest* mechanization of the functional review: AI binds once, script traces deterministically. Worth piloting once FI-22's reader/writer index exists, since Layer B reuses it.
 
 ### FI-26 — `ir` ↔ `simatic-ml` export-drift check
-- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; a session-proven gap).
+- **Status:** IMPLEMENTED 2026-07-20 as `converter drift-check --project <ir-dir> --exports
+  <simatic-ml-dir>` (`src/converter/Converter/DriftCheck/`, `src/converter/README.md`) plus the
+  `ExportDriftDetectorTests` golden guard (`tests/golden/GoldenHarness.Tests/`). Pairs each committed
+  `.ir` with its `.xml` by basename, rebuilds the SimaticML in-memory via the shared
+  `BuildXmlFromIrText` (the same path `to-xml` uses — factored out of `ConvertToXml` so there's one
+  code path), and `Normalizer`-compares: MATCH / DRIFTED / SKIPPED (unpaired) / ERROR. Exit non-zero
+  on any drift. The golden test asserts the drift set equals a documented KNOWN-drift baseline (the 6
+  test-project001 blocks stale from the B-5/REQ-028 re-arming fix never being re-exported —
+  `FB_ShredderSequencer`, `FB_PusherControl`, `DB_Settings`, and 3 iDBs; `reference` is clean) → green
+  now, red the moment an in-sync block silently drifts. Clearing a baseline entry means re-exporting
+  that block from TIA (a live-Portal step, the owner's call — the detector makes the drift visible). 3
+  unit tests + 2 golden.
 - **Raised:** 2026-07-20 · **Source:** the 2026-07-20 housekeeping scan. The committed `simatic-ml/<project>/*.xml` exports can silently drift from their `ir/<project>/*.ir` after a fix that is never re-exported — hit this session: `FB_ShredderSequencer.ir` carried the B-5/REQ-028 re-arming fix while its `.xml` still had the pre-fix logic, which poisoned the synthesis-parity audit (diffs that looked like real synthesis gaps were partly stale-XML noise, e.g. `PusherControl 543→198`). The team worked around it by switching the oracle from synth-vs-external-XML to synth-vs-own-sidecar (`CommittedBlocksRoundTripTests`/`FrozenAnswerKeyRoundTripTests`) — i.e. *tolerated* the drift rather than detecting it.
 **Merits:** A `converter` check (or a golden test) that Normalizer-compares each committed `ir/<proj>/<block>.ir` against its paired `simatic-ml/<proj>/<block>.xml` and **fails on semantic divergence** turns silent drift into a red build instead of an invisible landmine that amplifies into every downstream audit. All machinery already exists — `Normalizer` (`Converter.SimaticMl`), `to-xml`, both parsers.
 **Costs / risks:** The committed round-trip tests deliberately *tolerate* the drift (own-sidecar oracle) — this is the complementary *detector*, not a replacement. Must pair files correctly and skip unpaired ones (some `ir/` blocks have no `simatic-ml/` counterpart and vice-versa) so it never false-fails.
@@ -286,7 +297,16 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
 **Verdict / revisit trigger:** Open — cheap and high-value; the clearest win from the scan.
 
 ### FI-27 — Static Part flow-order / import-validity check in `preflight`
-- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; extends FI-13).
+- **Status:** IMPLEMENTED 2026-07-20 as the `flow-order` check in `converter preflight`
+  (`Preflight/FlowOrderCheck.cs`, wired into `PreflightRunner`'s per-network synthesis loop). The
+  DFS-from-rail rule was exposed as `FlgNetWriter.FlowOrderedPartUIds` (one source of truth; the
+  writer keeps using it), and the check validates each synthesized network's serialized `<Part>`/
+  `<Call>` order against it — catching offline (the Normalizer masks raw Part order from every
+  equivalence oracle) a writer regression that would otherwise only surface as a live-import
+  rejection. Pure/parameterized helper so it's testable both ways (the writer always applies the
+  rule, so the positive case is reached via an injected order). Paired with a
+  `compile-error-playbook.md` "must be sorted according to the current flow" entry under Import stage.
+  4 unit tests. Scope held to the flow-order rule (not TIA's whole import validator), per this FI.
 - **Raised:** 2026-07-20 · **Source:** the scan. Whether a synthesized block's `<Parts>` are in TIA's required wire-graph flow order was only discoverable by a *live* TIA import — the MotorVSDSystem purpose-change import was rejected ("the elements must be sorted according to the current flow… element with UId 56"), costing a compile-gate cycle. Root cause: the `Normalizer` sorts `<Parts>` before comparing, so the parity harness, the own-sidecar oracle, and `NoSidecarEquivalenceTests` all **structurally mask** this whole class; only a raw-order test catches it. The specific bug is fixed (`7694fdf`, guarded by `FlgNetWriterPartOrderTests`), but the *general* blind spot remains — any future flow-order regression is invisible offline.
 **Merits:** A `preflight` check validating synthesized `<Parts>` raw order against the DFS-from-rail rule `7694fdf` now implements catches this class **before** a Portal round trip instead of on import rejection (which is atomic — the block never lands, so the compile gate can't even run). Pair it with a `compile-error-playbook.md` entry for the "must be sorted according to the current flow" message (there is none today).
 **Costs / risks:** Only meaningful for synthesized / derive-always blocks; scope to the flow-order rule, don't reimplement TIA's whole import validator.
@@ -294,7 +314,13 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
 **Verdict / revisit trigger:** Open — the Normalizer hides this from every equivalence oracle, so a dedicated offline guard is the only cheap way to catch regressions.
 
 ### FI-28 — `openness-cli portal-status`: read-only Portal-process diagnostic
-- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; the read-only sibling of FI-07).
+- **Status:** IMPLEMENTED 2026-07-20 as `openness-cli portal-status` (read-only; classifies
+  `TiaPortal.GetProcesses()` output vs `LaunchedInstanceRegistry` into in-use / self-launched-orphan /
+  stray-empty, with a pileup-vs-first-connect-dialog note; reads `ProjectPath`/`Id` without `Attach()`;
+  never attaches/launches/opens/kills; always exits 0). Split for testability — a Siemens-free
+  `PortalProcessInfo` POCO + a pure `PortalStatusClassifier` (21 unit tests, no COM) behind a thin
+  gateway enumerator. Killing stays FI-07 (Parked); this is the safe read-only half. Built in parallel
+  with FI-26/27 (`src/openness-cli/`).
 - **Raised:** 2026-07-20 · **Source:** the scan. Stale `Siemens.Automation.Portal.exe` pileup is diagnosed by hand via `tasklist` + human judgment on which to close. It blocked/delayed work in ≥3 runs this session (the hopper Stage-3 compile gate was blocked on a 3-min connect timeout with 2 stale processes; fix-wave-2 lost roundtrips). `sanity-check` checks *project* health; nothing reports Portal *process* health.
 **Merits:** A read-only `openness-cli portal-status` enumerating Portal processes and cross-referencing the CLI's `LaunchedInstanceRegistry` to separate self-launched orphans (self-healing) from strays — reporting the likely first-connect-dialog vs pileup cause — gives the human a precise picture without the CLI killing anything. Read-only sidesteps the permission-classifier problem that denied the kill remedies this session (fix-wave-2 telemetry).
 **Costs / risks:** Read-only only — *killing* stays FI-07 (Parked; needs the `--yes`/dry-run pattern and a safe "idle" definition so a mid-compile Portal is never touched). This is deliberately the safe subset of FI-07, buildable now without FI-07's irreversibility risk.

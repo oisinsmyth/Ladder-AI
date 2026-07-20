@@ -33,6 +33,7 @@ openness-cli compile       <project> [--device <name>] [--block <name> | --type 
 openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                       # block-consistency + compile health — run this first if export/import/compile misbehave
+openness-cli portal-status                                                 # read-only Portal-process health: classifies running Portal processes vs the self-launch registry (in-use/orphan/stray); never attaches/launches/kills. Complements sanity-check (project health)
 converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, comparisons (Eq/Ge/Lt/Ne/Gt/Le), TON/TONR/TOF, MOVE, CALL, SCoil/RCoil, MUL/ADD/SUB/DIV/CONVERT,
                                     # ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
                                     # this slice is a correct hard error, not a bug — see docs/evidence/stage-S1.md for exactly what's covered.
@@ -44,6 +45,7 @@ converter tagstatus <name...> --project <ir-dir> [--json]     # classify tag nam
 converter diff <old.ir> <new.ir> [--only <network>...] [--json] # which networks changed, rest provably identical in IR (S7 invariance check); with --only, exit 1 on any change outside the set
 converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found
 converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built, bucketed candidate/likely-impl/disqualified (FI-30); exit 1 if no clean candidate
+converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect silent ir<->simatic-ml export drift, Normalizer-compared (FI-26); exit 1 if any block drifted
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 

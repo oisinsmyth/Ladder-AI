@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Converter.Diff;
 using Converter.Digest;
+using Converter.DriftCheck;
 using Converter.Ir;
 using Converter.Preflight;
 using Converter.ReuseScan;
@@ -56,6 +57,11 @@ internal static class Program
             return RunTargetScan(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "drift-check")
+        {
+            return RunDriftCheck(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
@@ -70,6 +76,7 @@ internal static class Program
             Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
+            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
             return 1;
         }
 
@@ -607,6 +614,55 @@ internal static class Program
         return report.HasCandidates ? 0 : 1;
     }
 
+    private static int RunDriftCheck(string[] args)
+    {
+        string? projectDir = null;
+        string? exportsDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--exports":
+                    exportsDir = RequireValue(args, ref i, "--exports");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || exportsDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        if (!Directory.Exists(exportsDir))
+        {
+            Console.Error.WriteLine($"--exports directory not found: {exportsDir}");
+            return 1;
+        }
+
+        var report = DriftCheckRunner.Run(projectDir, exportsDir);
+        Console.WriteLine(json ? DriftCheckOutputFormatter.FormatJson(report) : DriftCheckOutputFormatter.FormatText(report));
+
+        return report.HasDrift ? 1 : 0;
+    }
+
     // Parses a single --only token: one network number or a comma-separated list ("1" or "1,2,3").
     // Returns false (so --only stops consuming) for anything not all-integer — the next flag or a path.
     private static bool TryParseNetworkList(string token, out List<int> networks)
@@ -770,7 +826,7 @@ internal static class Program
     // (only "BLOCK …" files — DBs/UDTs/tag-tables have no callable interface) plus any --project export.
     // A file that won't parse is skipped here; a wired CALL that actually needs it then fails with a
     // clear error at synthesis time.
-    private static CalleeInterfaceRegistry BuildCalleeRegistry(IEnumerable<string> files, string? projectDir)
+    internal static CalleeInterfaceRegistry BuildCalleeRegistry(IEnumerable<string> files, string? projectDir)
     {
         var texts = new List<string>();
         foreach (var file in files)
@@ -816,7 +872,7 @@ internal static class Program
     // files plus any --project export. TagTypeRegistry.FromFiles picks out the DB/UDT/tag-table files
     // (a block file contributes no operand types) and skips anything unparseable — an operand whose
     // type can't be resolved simply falls back to the builder's default rather than erroring here.
-    private static TagTypeRegistry BuildTagTypeRegistry(IEnumerable<string> files, string? projectDir)
+    internal static TagTypeRegistry BuildTagTypeRegistry(IEnumerable<string> files, string? projectDir)
     {
         var paths = new List<string>();
         foreach (var file in files)
@@ -840,41 +896,36 @@ internal static class Program
         CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var irText = File.ReadAllText(sourcePath);
+        var xml = BuildXmlFromIrText(irText, synthesize, callees, tagTypes);
 
+        var outPath = Path.ChangeExtension(sourcePath, ".xml");
+        xml.Save(outPath);
+        Console.WriteLine($"{sourcePath} -> {outPath}");
+    }
+
+    // The full `.ir` text -> SimaticML XDocument dispatch, in-memory (no disk write). One code path for
+    // every kind (DB / UDT / tag table / code block), shared by `to-xml` (which saves the result) and
+    // `drift-check` (which Normalizer-compares it to a committed export). Block sidecar decision matches
+    // ConvertToXml's original: `--synthesize` OR a sidecar-less input derives the sidecar (ADR-0005);
+    // a stored SIDECAR is used as-is. Parse/synthesis exceptions propagate to the caller.
+    internal static XDocument BuildXmlFromIrText(
+        string irText, bool synthesize, CalleeInterfaceRegistry? callees, TagTypeRegistry? tagTypes)
+    {
         if (irText.StartsWith("DB ", StringComparison.Ordinal))
         {
-            var db = DbIrParser.ParseDb(irText);
-            var dbXml = DbSourceWriter.Write(db);
-            var dbOutPath = Path.ChangeExtension(sourcePath, ".xml");
-            dbXml.Save(dbOutPath);
-            Console.WriteLine($"{sourcePath} -> {dbOutPath}");
-            return;
+            return DbSourceWriter.Write(DbIrParser.ParseDb(irText));
         }
 
         if (irText.StartsWith("TYPE ", StringComparison.Ordinal))
         {
-            var type = TypeIrParser.ParseType(irText);
-            var typeXml = PlcTypeSourceWriter.Write(type);
-            var typeOutPath = Path.ChangeExtension(sourcePath, ".xml");
-            typeXml.Save(typeOutPath);
-            Console.WriteLine($"{sourcePath} -> {typeOutPath}");
-            return;
+            return PlcTypeSourceWriter.Write(TypeIrParser.ParseType(irText));
         }
 
         if (irText.StartsWith("TAGTABLE ", StringComparison.Ordinal))
         {
-            var tagTable = TagTableIrParser.ParseTagTable(irText);
-            var tagTableXml = PlcTagTableSourceWriter.Write(tagTable);
-            var tagTableOutPath = Path.ChangeExtension(sourcePath, ".xml");
-            tagTableXml.Save(tagTableOutPath);
-            Console.WriteLine($"{sourcePath} -> {tagTableOutPath}");
-            return;
+            return PlcTagTableSourceWriter.Write(TagTableIrParser.ParseTagTable(irText));
         }
 
-        // Derive-always (ADR-0005): a block with no stored SIDECAR is synthesized from its readable form;
-        // one that still carries a sidecar (an unsynthesizable construct, or an older file) uses it.
-        // `--synthesize` forces the derive path (and errors if a sidecar is present) — an explicit assert
-        // that this input is sidecar-less, kept for back-compat and intent.
         IrBlock block;
         IReadOnlyList<NetworkSidecar> sidecars;
         if (synthesize || !IrParser.HasSidecarSection(irText))
@@ -887,11 +938,7 @@ internal static class Program
             (block, sidecars) = IrParser.ParseBlock(irText);
         }
 
-        var xml = BuildBlockXml(block, sidecars);
-
-        var outPath = Path.ChangeExtension(sourcePath, ".xml");
-        xml.Save(outPath);
-        Console.WriteLine($"{sourcePath} -> {outPath}");
+        return BuildBlockXml(block, sidecars);
     }
 
     // Rebuild the SimaticML XDocument for a block from its (stored or synthesized) sidecars — the shared

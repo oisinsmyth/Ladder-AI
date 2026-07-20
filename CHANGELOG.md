@@ -2,6 +2,33 @@
 
 ## 2026-07-20
 
+**Tier B correctness/friction wins — export-drift detector, preflight flow-order check, read-only portal-status (FI-26/27/28)**
+
+The next band from the value/leverage survey of `docs/16-future-ideas.md`: three cheap, session-proven
+items, each with a documented "this cost real time this session" grounding, all reusing built
+machinery. Converter track (FI-26/27) and openness-cli track (FI-28) built in parallel.
+
+- **`converter drift-check --project <ir-dir> --exports <simatic-ml-dir>` (FI-26)** — detects silent
+  ir↔simatic-ml export drift (a fix that landed in the `.ir` but was never re-exported). Rebuilds each
+  `.ir` in-memory via the shared `BuildXmlFromIrText` (factored out of `ConvertToXml` — one code path)
+  and `Normalizer`-compares to the committed `.xml`: MATCH / DRIFTED / SKIPPED / ERROR, exit non-zero
+  on drift. `Converter/DriftCheck/`. Plus an `ExportDriftDetectorTests` golden guard asserting the
+  drift set equals a documented KNOWN-drift baseline (green now, red on new drift). On the real corpus
+  it correctly surfaces the 6 test-project001 blocks stale from the re-arming fix; `reference` clean.
+- **`preflight` `flow-order` check (FI-27)** — validates each synthesized network's serialized
+  instruction `<Parts>` are in TIA's DFS-from-rail flow order, catching offline (the Normalizer masks
+  raw Part order from every equivalence oracle) a regression that would otherwise only surface as a
+  live-import rejection. Exposed `FlgNetWriter.FlowOrderedPartUIds` as the single source of truth;
+  pure `FlowOrderCheck` (`Converter/Preflight/`). Playbook entry added for "must be sorted according
+  to the current flow".
+- **`openness-cli portal-status` (FI-28)** — read-only Portal-process diagnostic: classifies
+  `TiaPortal.GetProcesses()` output vs `LaunchedInstanceRegistry` into in-use / self-launched-orphan /
+  stray-empty, with a pileup-vs-first-connect note; reads `ProjectPath`/`Id` without `Attach()`; never
+  attaches/launches/kills; always exits 0. Split into a Siemens-free `PortalProcessInfo` POCO + pure
+  `PortalStatusClassifier` behind a thin gateway enumerator. The safe read-only half of FI-07 (Parked).
+- Tests: 3 `DriftCheckTests` + 4 `FlowOrderCheckTests` + 2 `ExportDriftDetectorTests` golden (converter
+  605/605), and 21 `PortalStatusTests` (openness-cli 122/122).
+
 **Tier A S6-loop accelerators — `reuse-scan` + `target-scan` converter subcommands, `gen-architecture` adopts `tagstatus` (FI-24/29/30)**
 
 The three highest-leverage items from a value/leverage survey of `docs/16-future-ideas.md`, chosen

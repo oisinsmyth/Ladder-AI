@@ -1580,6 +1580,11 @@ Checks, per file:
 4. **call** — every CALL's callee resolves to a block in the project or batch.
 5. **instanceof** — an instance DB's `INSTANCEOF` target resolves to a block.
 6. **review:C-xxx** — `converter review`'s findings folded in, prefixed by rule.
+7. **flow-order** (FI-27) — each synthesized network's instruction `<Parts>` must serialize in TIA's
+   DFS-from-rail wire-graph order, or a live import rejects it ("the elements must be sorted according
+   to the current flow"). The `Normalizer` sorts `<Parts>` before comparing, so *no* equivalence
+   oracle sees raw Part order — this validates the emitted order against the single-source-of-truth
+   rule (`FlgNetWriter.FlowOrderedPartUIds`), catching a writer regression offline on any real block.
 
 `--project <ir-dir>` is the current export (`ir/<project>/`), scanned non-recursively; files that
 fail to index are surfaced as `INDEX WARNING`s. Exit non-zero on any finding. Deliberately *not*
@@ -1727,6 +1732,35 @@ DISQUALIFIED (mechanical):
     reasons: out-of-scope
 ...
 SUMMARY: 19 candidate(s), 35 likely-implemented, 15 disqualified, 0 withdrawn          # exit 0
+```
+
+## `drift-check` — ir↔simatic-ml export-drift detector (2026-07-20, FI-26)
+
+`converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]`
+
+Detects **silent export drift**: a fix that landed in a committed `ir/<proj>/*.ir` but was never
+re-exported, leaving its `simatic-ml/<proj>/<name>.xml` stale (the exact landmine that poisoned a
+synthesis-parity audit — a stale `FB_ShredderSequencer.xml` made real synth gaps indistinguishable
+from noise). The committed round-trip tests deliberately *tolerate* this via an own-sidecar oracle;
+this is the complementary **detector** they don't provide.
+
+For each `ir/<proj>/*.ir`, pairs it with `<exports>/<name>.xml` by basename, rebuilds the SimaticML
+in-memory (the *same* code path `to-xml` uses — `BuildXmlFromIrText`, all four `.ir` kinds), and
+`Normalizer.AreSemanticallyEquivalent`-compares it to the committed export. Per block: `MATCH`,
+`DRIFTED`, `SKIPPED` (no paired `.xml` — an ir-only block), or `ERROR` (the `.ir` couldn't be
+converted). Decoupled — no knowledge of which drift is "known/tolerated" (that lives in the
+`ExportDriftDetectorTests` golden-test baseline, which excludes the answer-key blocks). **Exit
+non-zero if any block DRIFTED.**
+
+```
+$ converter drift-check --project ir/test-project001 --exports simatic-ml/test-project001
+DRIFTED: DB_Settings  (semantic divergence between .ir and committed export)
+DRIFTED: FB_ShredderSequencer  (semantic divergence between .ir and committed export)
+...
+SKIPPED: FB_HopperBlockageMonitor  (no paired .xml in exports dir)
+MATCH: DB_Alarms
+...
+SUMMARY: 6 drifted, 17 match, 3 skipped, 0 error          # exit 1
 ```
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)

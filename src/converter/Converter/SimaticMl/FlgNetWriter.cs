@@ -261,9 +261,18 @@ public static class FlgNetWriter
     private static IEnumerable<PartNode> FlowOrderedParts(FlgNetwork network)
     {
         var partByUId = network.Parts.ToDictionary(p => p.UId);
+        return FlowOrderedPartUIds(network).Select(uid => partByUId[uid]);
+    }
+
+    // The flow-order rule as a bare UId sequence — the single source of truth for the ordering, so
+    // `preflight`'s FlowOrderCheck (FI-27) can validate a serialized block's <Part> order against
+    // exactly what `Write` emits, catching offline a regression the Normalizer masks (it sorts <Parts>).
+    internal static IReadOnlyList<int> FlowOrderedPartUIds(FlgNetwork network)
+    {
+        var partByUId = network.Parts.ToDictionary(p => p.UId);
         if (partByUId.Count <= 1)
         {
-            return network.Parts;
+            return network.Parts.Select(p => p.UId).ToList();
         }
 
         // Producer -> consumer adjacency among Parts, plus the rail-connected roots. Each wire lists its
@@ -294,7 +303,7 @@ public static class FlgNetWriter
             }
         }
 
-        var order = new List<PartNode>(partByUId.Count);
+        var order = new List<int>(partByUId.Count);
         var visited = new HashSet<int>();
 
         void Visit(int uid)
@@ -304,7 +313,7 @@ public static class FlgNetWriter
                 return;
             }
 
-            order.Add(partByUId[uid]);
+            order.Add(uid);
             foreach (var consumer in adjacency[uid])
             {
                 Visit(consumer);

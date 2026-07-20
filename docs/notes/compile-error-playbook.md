@@ -79,6 +79,12 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 - **Fix:** this class is fixed; a recurrence is a new converter bug — report it, never hand-patch the XML (hard rule 7).
 - **Source:** CHANGELOG 2026-07-13/14 (FlgNetBuilder fixes; full-cycle verification pass).
 
+### "the elements must be sorted according to the current flow" (…"element with UId N")
+- **Where:** live import of converter-synthesized XML (hit on the MotorVSDSystem purpose-change import). Distinct from the UId-sort note above — that was the `<Access>` data-leaf group; this is the *instruction* `<Part>` group.
+- **Cause:** a synthesized network's instruction `<Parts>` weren't in TIA's wire-graph flow order — a producer's downstream consumer was separated from it by an independent rung (Gap I). The synthesizer's UId numbering doesn't follow flow, so the parts needed reordering. Import is atomic, so the block never lands and the compile gate can't even run.
+- **Fix:** fixed class — `FlgNetWriter` now emits instruction Parts in DFS-from-rail flow order (`7694fdf`). **Caught offline before a Portal round trip** by `converter preflight`'s `flow-order` check (FI-27) — the Normalizer sorts `<Parts>` so no equivalence oracle sees this; preflight validates the raw emitted order against the rule. A `flow-order` preflight finding, or a recurrence at import, is a new converter bug — report it, never hand-patch the XML (hard rule 7).
+- **Source:** commit `7694fdf` (Gap I fix); `FlgNetWriterPartOrderTests` / `FlowOrderCheckTests`; FI-27 (`docs/16-future-ideas.md`).
+
 ### "Interface: A structure without components is not allowed"
 - **Where:** compile after importing a block/DB whose anonymous `Struct` members arrived empty.
 - **Cause:** was a real converter parser gap (nested `<Member>` without `<Sections>` wrapper silently dropped) — fixed recursively for arbitrary depth.

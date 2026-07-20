@@ -96,7 +96,17 @@ public static class PreflightRunner
                 var network = block.Networks[i];
                 try
                 {
-                    FlgNetBuilder.Build(network, sidecars[i]);
+                    var flgNet = FlgNetBuilder.Build(network, sidecars[i]);
+
+                    // FI-27: the built FlgNet serialized to XML must carry its instruction <Parts> in
+                    // wire-graph flow order (else a live TIA import rejects it). Validated here, offline,
+                    // because the Normalizer masks raw Part order from every equivalence oracle.
+                    var emitted = FlowOrderCheck.ReadEmittedPartUIds(FlgNetWriter.Write(flgNet));
+                    var flowFinding = FlowOrderCheck.Validate(network.Number, flgNet, emitted);
+                    if (flowFinding is not null)
+                    {
+                        findings.Add(flowFinding);
+                    }
                 }
                 catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
                 {
