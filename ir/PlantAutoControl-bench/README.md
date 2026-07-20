@@ -9,4 +9,8 @@ Blocks (all sanitized via `sanitization/<name>.map.json`, leakage-gated):
 `Control` (→PlantControl), `HMIControlSignals` (→HMIControlSignals), `Input` (→DiscreteInputs),
 `Output` (→DiscreteOutputs), `PLC` (→InterlockData), `Timings` (→ProcessTimings).
 
-Deferred to Phase 2 (compile): the 8 equipment FB types + 20 instance DBs (given library blocks).
+Phase-2 boundary now present (added 2026-07-20): the 8 equipment FB types (`MotorDOL`, `MotorVSDSystem`,
+`MotorFwdRevSystem`, `AirStar`, `TomraControlSystem`, `FilterUnitSystem`, `EquipmentControlSystem`, `ShredderControlSystem`) and the
+20 instance DBs (`MotorStarterInst7`, `MotorVSDInst2`, … `TomraControlInst1`) — sanitized via
+`sanitization/<name>.map.json`, leakage-gated. These are the given library blocks the Candidate
+reuses and compiles against; they are NOT regeneration targets.

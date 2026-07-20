@@ -1,0 +1,192 @@
+DB ShredderControlInst1
+  ROOTID 0
+  NUMBER 25
+  INSTANCEOF ShredderControlSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    Inputs : Struct RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      PreStartDone : Bool = FALSE
+      InhibitMotor : Bool = FALSE
+      FaultReset : Bool = FALSE
+      FTTime : Real = 10.0
+      EnableUPSTime : Real = 3.5
+      HandIntervention : Bool = FALSE
+      RecentStart : Bool = FALSE
+      Shutdown : Bool = FALSE
+      ShutdownTime : Real = 10.0
+      ProgramSelection : Int = 0
+    Outputs : Struct
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm : Word
+      Name : String
+      UPSEnable : Bool
+      TryRun : Bool
+      ShutdownComplete : Bool
+      FaultActive : Bool
+      Stop : Bool
+      ShredderRunning : Bool
+      Run : Bool
+    ComsOutByte500 : Struct
+      LifeBit : Bool
+      ResetOverload : Bool
+      StopAuto : Bool
+      HoldAuto : Bool
+      StartAuto : Bool
+    ComsOutByte501 : Struct
+      Program1 : Bool
+      Program2 : Bool
+      Program3 : Bool
+      Program4 : Bool
+      Program5 : Bool
+      Program6 : Bool
+      ComsOutByte1 : Struct
+        Program1 : Bool
+        Program2 : Bool
+        Program3 : Bool
+        Program4 : Bool
+        Program5 : Bool
+        Program6 : Bool
+      ComsOutByte2 : Struct
+        Program1 : Bool
+        Program2 : Bool
+        Program3 : Bool
+        Program4 : Bool
+        Program5 : Bool
+        Program6 : Bool
+      ComsOutByte3 : Struct
+        Program1 : Bool
+        Program2 : Bool
+        Program3 : Bool
+        Program4 : Bool
+        Program5 : Bool
+        Program6 : Bool
+      ComsOutByte4 : Struct
+        Program1 : Bool
+        Program2 : Bool
+        Program3 : Bool
+        Program4 : Bool
+        Program5 : Bool
+        Program6 : Bool
+        ComsOutByte1 : Struct
+          Program1 : Bool
+          Program2 : Bool
+          Program3 : Bool
+          Program4 : Bool
+          Program5 : Bool
+          Program6 : Bool
+        ComsOutByte2 : Struct
+          Program1 : Bool
+          Program2 : Bool
+          Program3 : Bool
+          Program4 : Bool
+          Program5 : Bool
+          Program6 : Bool
+        ComsOutByte3 : Struct
+          Program1 : Bool
+          Program2 : Bool
+          Program3 : Bool
+          Program4 : Bool
+          Program5 : Bool
+          Program6 : Bool
+    ComsOutByte502 : Struct
+      Release4Op : Bool
+      StartHorn : Bool
+      RadioControlPermit : Bool
+    ComsInByte500 : Struct
+      Ready : Bool
+      RotorOn : Bool
+      RotorStandby : Bool
+      ReleaseFeeding : Bool
+      ProgramP1 : Bool
+      ProgramP2 : Bool
+    ComsInByte501 : Struct
+      ProgramP3 : Bool
+      ProgramP4 : Bool
+      ProgramP5 : Bool
+      ProgramP6 : Bool
+      FlashBit : Bool
+      LifeBitMirror : Bool
+      LocalMode : Bool
+      MaintenanceOn : Bool
+    ComsInByte502 : Struct
+      BypassActive : Bool
+      CuttingUnitRemote : Bool
+      TouchPanelShredder : Bool
+      TouchPanelMainCabnet : Bool
+      RadioModeOn : Bool
+      Drive1Ready : Bool
+      Drive2Ready : Bool
+    ComsInByte503 : Struct
+      OilCoolerRunning : Bool
+      AutoModeOn : Bool
+      ServiceModeOn : Bool
+      Selector1Local : Bool
+      Selector1Remote : Bool
+    ComsInWord508 : Word
+    ComsInWord528 : Word
+    ComsInWord532 : Word
+    ActualSpeed : Int
+    MotorAmps1 : Int
+    MotorAmps2 : Int
+    ShutdownTimeMS : DInt
+    EnableUPSTimeMS : DInt
+    FTTimeMS : DInt
+    RisingEdgeFlags : Array[0..7] of Bool
+    NegitiveSignalEdge : Array[0..7] of Bool
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time = T#1H
+      ET : Time
+      IN : Bool = FALSE
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    LifeBitTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimerReset : Bool SETPOINT
+    LostLifeBit : Bool
+    PreStartMemory : Bool
+    HandPosEdge : Bool
+    HandNegEdge : Bool

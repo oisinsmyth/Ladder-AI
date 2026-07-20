@@ -1,0 +1,133 @@
+DB AirStarInst1
+  ROOTID 0
+  NUMBER 19
+  INSTANCEOF AirStarSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    ComsInputs : Struct
+      InRemote : Bool
+      RemoteControlTerminals : Bool
+      RemoteControlBus : Bool
+      MachineRunning : Bool
+      MachineFault : Bool
+      InLifeBit : Bool
+    Inputs : Struct RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      InhibitGeneral : Bool = FALSE
+      SystemHealthy : Bool = TRUE
+      HandIntervention : Bool = FALSE
+      PreStartDone : Bool = FALSE
+      Stop : Bool = FALSE
+      RecentStart : Bool = FALSE
+      ShutdownTime : Real = 30.0
+      EnableUPSTime : Real = 18.0
+      FTTime : Real = 10.0
+      ComsTimeOut : Real = 5.0
+      FaultReset : Bool = FALSE
+      Shutdown : Bool = FALSE
+      Program : Int = 1
+    Internal : Struct
+      TryRun : Bool
+      Run : Bool
+    Outputs : Struct
+      ShutdownComplete : Bool
+      FTR : Bool
+      FTS : Bool
+      FaultActive : Bool
+      ComsFault : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm : Word
+      EnableUPS : Bool
+    ComsOutputs : Struct
+      Reset : Bool
+      OutLifebit : Bool
+      Program1 : Bool
+      Program2 : Bool
+      Program3 : Bool
+      Program4 : Bool
+      Program5 : Bool
+      Program6 : Bool
+      Program7 : Bool
+      Program8 : Bool
+      Program9 : Bool
+    RisingEdgeFlags : Array[0..8] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    HrTotaliserTimerReset : Bool
+    ShutdownTimeMS : DInt
+    EnableUPSTimeMS : DInt
+    FTTimeMS : DInt
+    ComsTimeOutMS : DInt
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ComsTimeoutTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    LifeBitOnTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    LifeBitOffTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PulseResetTimer : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PulseProgramTimer : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PreStartMemory : Bool SETPOINT
+    ComMemory : Bool
+    ProgramMemory : Int RETAIN = 1
+    HandPosEdge : Bool
+    HandNegEdge : Bool
