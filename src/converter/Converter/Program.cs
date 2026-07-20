@@ -81,7 +81,7 @@ internal static class Program
             Console.Error.WriteLine("       converter to-ir    # keeps the stored SIDECAR by default (safe); --no-sidecar omits it for a block already verified derivable (errors if unsynthesizable)");
             Console.Error.WriteLine("       converter to-xml <file> --synthesize   # force the derive path (errors if a SIDECAR is present)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
-            Console.Error.WriteLine("       converter review <file> [<file> ...] [--ignore-errors] [--json]");
+            Console.Error.WriteLine("       converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]   # --project enables cross-file rules (C-118 interface-UDT Step, FI-09)");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
             Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
@@ -266,10 +266,11 @@ internal static class Program
         var files = new List<string>();
         var ignoreErrors = false;
         var json = false;
+        string? projectDir = null;
 
-        foreach (var arg in args)
+        for (var i = 0; i < args.Length; i++)
         {
-            switch (arg)
+            switch (args[i])
             {
                 case "--ignore-errors":
                     ignoreErrors = true;
@@ -277,22 +278,40 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
                 default:
-                    files.Add(arg);
+                    files.Add(args[i]);
                     break;
             }
         }
 
         if (files.Count == 0)
         {
-            Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--ignore-errors] [--json]");
+            Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]");
             return 1;
+        }
+
+        // --project (optional) enables the cross-file rules (C-118, FI-09): a UDT/DB/tag index over
+        // the export, resolving the interface UDT a block's Step register lives in. Absent, C-118 is
+        // reported NotApplicable per block — every other rule is single-file and unaffected.
+        TagTypeRegistry? udtIndex = null;
+        if (projectDir is not null)
+        {
+            if (!Directory.Exists(projectDir))
+            {
+                Console.Error.WriteLine($"--project directory not found: {projectDir}");
+                return 1;
+            }
+
+            udtIndex = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(projectDir, "*.ir"));
         }
 
         ReviewReport report;
         try
         {
-            report = ReviewRunner.ReviewFiles(files, ignoreErrors);
+            report = ReviewRunner.ReviewFiles(files, ignoreErrors, udtIndex);
         }
         catch (ReviewFileException ex)
         {

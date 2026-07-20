@@ -702,4 +702,138 @@ public static class Rules
 
     private static bool IsStepTagRef(Expr expr) =>
         expr is Expr.TagRef tagRef && HasStepLeaf(tagRef.Path);
+
+    // C-118 (error) — CROSS-FILE (FI-09). A stepped sequence's phase is exactly one `Step : Int`
+    // member living inside the block's caller-visible interface UDT — never a bare private Static,
+    // never a `DB_Controls`/`DB_Settings` member (docs/06 C-118). The Step member lives in a
+    // SEPARATE file (the referenced UDT), so this is the first review rule needing a second file:
+    // it resolves the UDT a top-level interface member is typed as via the --project index
+    // (TagTypeRegistry). Without an index the enclosing UDT can't be resolved, so ReviewRunner
+    // records the rule NotApplicable rather than calling this at all.
+    //
+    // Trigger: the block actually uses a Step register — some tag it reads or writes has leaf
+    // "Step" (HasStepLeaf, the same phase-tag convention C-121 keys off). A block that never
+    // touches a Step register has no stepped sequence for C-118 to place, so it yields nothing.
+    // Findings key off WHERE the referenced Step register lives: a bare `Step` is block-local; a
+    // `Root.Step` whose Root is a UDT-typed interface member is the correct home (checked for
+    // exactly-one and Int); a `Root.Step` whose Root is a known DB is the forbidden Controls/
+    // Settings placement; anything else is present-but-unresolvable.
+    public static IEnumerable<Finding> CheckC118StepInterfaceUdt(IrBlock block, TagTypeRegistry udtIndex)
+    {
+        var stepPaths = block.Networks
+            .SelectMany(TagReferences.AllTagPaths)
+            .Where(HasStepLeaf)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (stepPaths.Count == 0)
+        {
+            yield break;
+        }
+
+        var interfaceMembers = TopLevelInterfaceMembers(block).ToList();
+
+        foreach (var path in stepPaths)
+        {
+            var components = path.Split('.');
+
+            // Bare `Step` — a block-local (private Static/Temp) register, not the interface UDT.
+            if (components.Length == 1)
+            {
+                yield return new Finding(
+                    "C-118",
+                    FindingSeverity.Error,
+                    block.Name,
+                    null,
+                    $"The step register is referenced as a bare '{path}', a block-local variable — C-118 requires the phase to live as a `Step : Int` member inside the block's caller-visible interface UDT, never a bare private Static.",
+                    "Declare `Step : Int` inside the block's interface UDT and reference it through that UDT-typed interface member (e.g. `IO.Step`).");
+                continue;
+            }
+
+            var root = StripSubscriptComponent(components[0]);
+            var rootMember = interfaceMembers.FirstOrDefault(m => string.Equals(m.Name, root, StringComparison.Ordinal));
+
+            // Root is a top-level interface member typed as a UDT the index knows — the correct
+            // home. Descend into that UDT and check its Step member(s): exactly one, typed Int.
+            if (rootMember is not null && udtIndex.TryGetUdt(rootMember.Datatype.Trim('"'), out var udt))
+            {
+                var udtName = rootMember.Datatype.Trim('"');
+                var steps = udt.Members.Where(m => string.Equals(m.Name, "Step", StringComparison.Ordinal)).ToList();
+
+                if (steps.Count == 0)
+                {
+                    yield return new Finding(
+                        "C-118",
+                        FindingSeverity.Error,
+                        block.Name,
+                        null,
+                        $"The step register '{path}' is referenced through interface member '{root}' (type '{udtName}'), but that UDT declares no `Step` member — C-118's `Step : Int` cannot be resolved.",
+                        "Add `Step : Int` to the interface UDT, or reference the correct interface member.");
+                    continue;
+                }
+
+                if (steps.Count > 1)
+                {
+                    yield return new Finding(
+                        "C-118",
+                        FindingSeverity.Error,
+                        block.Name,
+                        null,
+                        $"Interface UDT '{udtName}' declares {steps.Count} members named `Step` — C-118 requires exactly one phase register.",
+                        "Keep a single `Step : Int` phase member in the interface UDT and remove the duplicates.");
+                }
+
+                foreach (var step in steps.Where(s => !string.Equals(s.Datatype.Trim('"'), "Int", StringComparison.Ordinal)))
+                {
+                    yield return new Finding(
+                        "C-118",
+                        FindingSeverity.Error,
+                        block.Name,
+                        null,
+                        $"The `Step` member of interface UDT '{udtName}' is '{step.Datatype}', not `Int` — C-118 requires `Step : Int`.",
+                        "Declare the phase register as `Step : Int` inside the interface UDT.");
+                }
+
+                continue;
+            }
+
+            // Root resolves to a DB the index knows (e.g. DB_Controls/DB_Settings) — the wrong home.
+            if (udtIndex.IsKnownDb(root))
+            {
+                yield return new Finding(
+                    "C-118",
+                    FindingSeverity.Error,
+                    block.Name,
+                    null,
+                    $"The step register '{path}' lives in DB '{root}', not the block's interface UDT — C-118 forbids placing the phase in a `DB_Controls`/`DB_Settings` (or any) DB.",
+                    "Declare `Step : Int` inside the block's caller-visible interface UDT and reference it there instead of via a DB.");
+                continue;
+            }
+
+            // Present but unresolvable: step logic exists, but its register's root is neither a
+            // UDT-typed interface member nor a known DB — no interface-UDT `Step : Int` to point to.
+            yield return new Finding(
+                "C-118",
+                FindingSeverity.Error,
+                block.Name,
+                null,
+                $"The step register '{path}' does not resolve to a `Step : Int` member of the block's interface UDT — root '{root}' is neither a UDT-typed interface member nor a DB known to the --project index.",
+                "Ensure the phase is a `Step : Int` member of the block's caller-visible interface UDT, referenced through the UDT-typed interface member.");
+        }
+    }
+
+    // Every top-level (non-nested) interface member across all sections — the candidates for the
+    // UDT-typed member C-118 resolves the interface UDT through.
+    private static IEnumerable<DbMember> TopLevelInterfaceMembers(IrBlock block) =>
+        (block.InputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.InOutMembers)
+            .Concat(block.StaticMembers ?? Array.Empty<DbMember>())
+            .Concat(block.TempMembers)
+            .Concat(block.ConstantMembers ?? Array.Empty<DbMember>());
+
+    private static string StripSubscriptComponent(string component)
+    {
+        var idx = component.IndexOf('[');
+        return idx < 0 ? component : component[..idx];
+    }
 }

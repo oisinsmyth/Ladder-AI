@@ -8,9 +8,12 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-121", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-121", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
-    public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors)
+    // udtIndex (optional) resolves cross-file references — today only C-118's interface-UDT Step
+    // (FI-09), built from `--project` when supplied. Null means the caller ran `review` without
+    // `--project`: C-118 can't resolve the enclosing UDT and is recorded NotApplicable per file.
+    public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors, TagTypeRegistry? udtIndex = null)
     {
         var results = new List<FileReviewResult>();
 
@@ -18,7 +21,7 @@ public static class ReviewRunner
         {
             try
             {
-                results.Add(ReviewFile(path));
+                results.Add(ReviewFile(path, udtIndex));
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
             {
@@ -34,7 +37,7 @@ public static class ReviewRunner
         return new ReviewReport(results);
     }
 
-    private static FileReviewResult ReviewFile(string path)
+    private static FileReviewResult ReviewFile(string path, TagTypeRegistry? udtIndex)
     {
         var text = File.ReadAllText(path);
 
@@ -62,10 +65,10 @@ public static class ReviewRunner
         var block = IrParser.HasSidecarSection(text)
             ? IrParser.ParseBlock(text).Block
             : IrParser.ParseBlockWithoutSidecar(text);
-        return ReviewBlock(path, block);
+        return ReviewBlock(path, block, udtIndex);
     }
 
-    private static FileReviewResult ReviewBlock(string path, IrBlock block)
+    private static FileReviewResult ReviewBlock(string path, IrBlock block, TagTypeRegistry? udtIndex)
     {
         var findings = new List<Finding>();
         var statuses = new List<RuleStatusEntry>();
@@ -83,6 +86,18 @@ public static class ReviewRunner
         Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005Charset(block));
 
         Record(statuses, findings, "C-103", RuleCheckStatus.Checked, Rules.CheckC103SetResetPairing(block));
+
+        // C-118 is cross-file (FI-09): it resolves the block's interface UDT from the --project
+        // index. Without one it can't run — recorded NotApplicable so it's never silently absent.
+        if (udtIndex is not null)
+        {
+            Record(statuses, findings, "C-118", RuleCheckStatus.Checked, Rules.CheckC118StepInterfaceUdt(block, udtIndex));
+        }
+        else
+        {
+            statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "C-118 needs --project to resolve the block's interface UDT (cross-file)"));
+        }
+
         Record(statuses, findings, "C-121", RuleCheckStatus.Checked, Rules.CheckC121StepTransition(block));
 
         var headerFindings = Rules.CheckC201HeaderComment(block.Name, block.Comment).ToList();
@@ -127,6 +142,7 @@ public static class ReviewRunner
 
         // No networks in a DB file - nothing for these to inspect.
         statuses.Add(new RuleStatusEntry("C-103", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/coils"));
+        statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no interface UDT / step logic"));
         statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-301", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));

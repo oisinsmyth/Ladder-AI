@@ -46,6 +46,17 @@ public sealed class TagTypeRegistry
     public TagTypeRegistry WithLocalMembers(IEnumerable<DbMember> localMembers) =>
         new(_tagTypes, _dbs, _udts, localMembers.ToList());
 
+    // Resolve a UDT body by name (quotes on the name are tolerated, e.g. a member's raw
+    // Datatype string `"UDT_Foo"`). Public so cross-file rules — C-118's interface-UDT Step
+    // resolution (FI-09) — can descend into the referenced type, the first review rule needing a
+    // second file. Returns false (udt null) for an unknown name.
+    public bool TryGetUdt(string name, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out PlcTypeSource udt) =>
+        _udts.TryGetValue(StripQuotes(name), out udt);
+
+    // Whether a name is a DB the registry knows (quotes tolerated). Lets C-118 flag a Step that
+    // lives in a Controls/Settings DB rather than the interface UDT.
+    public bool IsKnownDb(string name) => _dbs.ContainsKey(StripQuotes(name));
+
     public static TagTypeRegistry FromSources(
         IEnumerable<DbSource> dbs, IEnumerable<PlcTypeSource> udts, IEnumerable<PlcTagSource> tags)
     {
