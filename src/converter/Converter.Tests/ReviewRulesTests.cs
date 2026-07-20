@@ -644,4 +644,107 @@ public class ReviewRulesTests
 
         Assert.Empty(Rules.CheckC121StepTransition(block));
     }
+
+    // ---- C-118: the phase register is one `Step : Int` inside the block's interface UDT (cross-file) ----
+
+    // A block whose Step logic writes/reads `IO.Step`, where interface member `IO` is typed as a UDT
+    // the resolver knows, carrying a single `Step : Int`. Mirrors FB_ShredderSequencer's real shape.
+    private static IrBlock MakeSequencerBlock(string udtTypeName)
+    {
+        var ioMember = new DbMember("IO", $"\"{udtTypeName}\"", Retain: true, StartValue: null, SetPoint: true);
+        var en = new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal("0"));
+        var network = new IrNetwork(6, "Step 0 (Idle) - Transition", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(en, new Expr.Literal("10"), "IO.Step") });
+        return new IrBlock("0", "FB", "FB_Sequencer", 1, "LAD", "A stepped sequence.", new[] { network },
+            StaticMembers: new[] { ioMember });
+    }
+
+    private static TagTypeRegistry IndexWithUdt(string udtName, params DbMember[] members) =>
+        TagTypeRegistry.FromSources(
+            Array.Empty<DbSource>(),
+            new[] { new PlcTypeSource("0", udtName, null, members) },
+            Array.Empty<PlcTagSource>());
+
+    // True negative: `Step : Int` inside the resolvable interface UDT is clean (no false positive) —
+    // this is the exact FB_ShredderSequencer / UDT_ShredderSequencerIO shape.
+    [Fact]
+    public void CheckC118_StepIntInInterfaceUdt_Clean()
+    {
+        var block = MakeSequencerBlock("UDT_SeqIO");
+        var index = IndexWithUdt("UDT_SeqIO",
+            new DbMember("CycleStart", "Bool", false, null),
+            new DbMember("Step", "Int", false, null));
+
+        Assert.Empty(Rules.CheckC118StepInterfaceUdt(block, index));
+    }
+
+    // True positive: a Step register referenced as a bare block-local `Step` (a private Static),
+    // not through the interface UDT.
+    [Fact]
+    public void CheckC118_BareBlockLocalStep_Flags()
+    {
+        var en = new Expr.Compare("=", new Expr.TagRef("Step"), new Expr.Literal("0"));
+        var network = new IrNetwork(1, "Bad: bare Step", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(en, new Expr.Literal("10"), "Step") });
+        var block = new IrBlock("0", "FB", "FB_Bad", 1, "LAD", "c", new[] { network },
+            StaticMembers: new[] { new DbMember("Step", "Int", false, null) });
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "Int", false, null));
+
+        var finding = Assert.Single(Rules.CheckC118StepInterfaceUdt(block, index));
+        Assert.Equal("C-118", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("bare", finding.Description);
+    }
+
+    // True positive: `Step` lives in the interface UDT but is not `Int`.
+    [Fact]
+    public void CheckC118_StepNonIntInUdt_Flags()
+    {
+        var block = MakeSequencerBlock("UDT_SeqIO");
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "DInt", false, null));
+
+        var finding = Assert.Single(Rules.CheckC118StepInterfaceUdt(block, index));
+        Assert.Equal("C-118", finding.RuleId);
+        Assert.Contains("not `Int`", finding.Description);
+    }
+
+    // True positive: the phase register lives in a Controls/Settings DB, not the interface UDT.
+    [Fact]
+    public void CheckC118_StepInControlsDb_Flags()
+    {
+        var en = new Expr.Compare("=", new Expr.TagRef("DB_Controls.Step"), new Expr.Literal("0"));
+        var network = new IrNetwork(1, "Bad: Step in DB", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(en, new Expr.Literal("10"), "DB_Controls.Step") });
+        var block = new IrBlock("0", "FB", "FB_Bad", 1, "LAD", "c", new[] { network });
+        var index = TagTypeRegistry.FromSources(
+            new[] { new DbSource("0", "DB_Controls", 1, InstanceOfName: null, Comment: null, Members: new[] { new DbMember("Step", "Int", false, null) }) },
+            Array.Empty<PlcTypeSource>(),
+            Array.Empty<PlcTagSource>());
+
+        var finding = Assert.Single(Rules.CheckC118StepInterfaceUdt(block, index));
+        Assert.Contains("DB_Controls", finding.Description);
+    }
+
+    // True positive: more than one `Step` member in the interface UDT.
+    [Fact]
+    public void CheckC118_MultipleStepMembers_Flags()
+    {
+        var block = MakeSequencerBlock("UDT_SeqIO");
+        var index = IndexWithUdt("UDT_SeqIO",
+            new DbMember("Step", "Int", false, null),
+            new DbMember("Step", "Int", false, null));
+
+        Assert.Contains(Rules.CheckC118StepInterfaceUdt(block, index), f => f.Description.Contains("declares 2"));
+    }
+
+    // True negative: a block with no Step logic at all yields nothing (rule has nothing to place).
+    [Fact]
+    public void CheckC118_NoStepLogic_Clean()
+    {
+        var network = new IrNetwork(1, "Plain", new[] { new CoilAssignment("Motor", new Expr.TagRef("RunCmd")) });
+        var block = MakeBlock("FB", "FB_Plain", new[] { network });
+        var index = IndexWithUdt("UDT_SeqIO", new DbMember("Step", "Int", false, null));
+
+        Assert.Empty(Rules.CheckC118StepInterfaceUdt(block, index));
+    }
 }

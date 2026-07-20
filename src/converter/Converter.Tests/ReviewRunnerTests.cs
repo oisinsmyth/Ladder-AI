@@ -25,7 +25,7 @@ public class ReviewRunnerTests : IDisposable
         return path;
     }
 
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-118", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public void Dispose()
     {
@@ -235,6 +235,53 @@ public class ReviewRunnerTests : IDisposable
         {
             Assert.Contains(file.RuleStatuses, s => s.RuleId == id && s.Status == RuleCheckStatus.NotApplicable);
         }
+    }
+
+    // C-118 is cross-file: without a --project index the enclosing interface UDT can't be resolved,
+    // so it is recorded NotApplicable (never silently absent) on a block that does use a Step register.
+    [Fact]
+    public void ReviewFiles_StepBlockNoProjectIndex_C118NotApplicable()
+    {
+        var path = WriteTempIrFile(SerializeSequencerBlock());
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-118" && s.Status == RuleCheckStatus.NotApplicable);
+    }
+
+    // With a --project index resolving the interface UDT (Step : Int inside it), C-118 runs Checked
+    // and finds nothing — the real FB_ShredderSequencer / UDT_ShredderSequencerIO shape is clean.
+    [Fact]
+    public void ReviewFiles_StepBlockWithProjectIndex_C118CheckedAndClean()
+    {
+        var path = WriteTempIrFile(SerializeSequencerBlock());
+        var index = TagTypeRegistry.FromSources(
+            Array.Empty<DbSource>(),
+            new[] { new PlcTypeSource("0", "UDT_SeqIO", null, new[] { new DbMember("Step", "Int", false, null) }) },
+            Array.Empty<PlcTagSource>());
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false, index);
+        var file = Assert.Single(report.Files);
+
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-118" && s.Status == RuleCheckStatus.Checked);
+        Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-118");
+    }
+
+    // A block whose Step register is referenced through a UDT-typed interface member `IO.Step`.
+    private string SerializeSequencerBlock()
+    {
+        var ioMember = new DbMember("IO", "\"UDT_SeqIO\"", Retain: true, StartValue: null, SetPoint: true,
+            NestedMembers: new[] { new DbMember("Step", "Int", false, null) });
+        var block = new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "A stepped sequence.", new[]
+        {
+            new IrNetwork(1, "In cycle", new[]
+            {
+                new CoilAssignment("InCycle", new Expr.Compare("<>", new Expr.TagRef("IO.Step"), new Expr.Literal("0"))),
+            }),
+        }, StaticMembers: new[] { ioMember });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        return IrSerializer.SerializeBlock(block, new[] { sidecar });
     }
 
     // Physical-IO tags keep their underscores by design, so C-001 must not fire on tag-table
