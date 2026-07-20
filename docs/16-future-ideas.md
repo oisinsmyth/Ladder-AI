@@ -33,15 +33,17 @@ parallel subagents). Current state (each entry below carries its own authoritati
   FI-16 telemetry, FI-19/FI-20 doc splits (all earlier) — plus the **2026-07-20 wave**: FI-24 `tagstatus`
   (tag-status half; gen-architecture adopts it), FI-29 `reuse-scan`, FI-30 `target-scan`, FI-26
   `drift-check`, FI-27 `preflight` flow-order check, FI-28 `openness-cli portal-status`, FI-22
-  `cross-check`, FI-23 `digest --fingerprint`. Skills wired to the new tools (explain-plc-block,
-  review-conventions, review-functional, gen-architecture).
-- **Partial:** FI-09 — C-408/C-001 (earlier) + **C-103/C-121 inline** (2026-07-20) are mechanical
-  `converter review` checks; the audit re-scoped the rest (C-107/C-402 subsumed by FI-22's writer table;
-  C-118/C-125 need cross-file UDT resolution — now feasible on FI-22's `ProjectIndex` direction;
-  C-119/120/122 need AI sequencer-identification first). FI-24 — provenance-header wrapper still open.
-- **Open, actionable next (no external gate):** **FI-25** forward-pass tracer (reuses FI-22's usage graph
-  — the natural Tier C completion); FI-17 explanation sidecars (pilot); FI-22 follow-up (iDB↔FB dead-wiring
-  aliasing to complete the interface-UDT member half).
+  `cross-check`, FI-23 `digest --fingerprint`, **FI-25 `trace`** (forward-pass tracer, v1), **FI-22
+  aliasing follow-up** (dead-wiring now covers interface-UDT members). Skills wired to the new tools
+  (explain-plc-block, review-conventions, review-functional [incl. `trace`], gen-architecture).
+- **Partial:** FI-09 — C-408/C-001, **C-103/C-121 inline**, and **C-118** (cross-file UDT, 2026-07-20) are
+  mechanical `converter review` checks; the audit re-scoped the rest (C-107/C-402 subsumed by FI-22's writer
+  table; C-125 blocked on un-mechanized C-122; C-119/120/122 need AI sequencer-identification first). FI-25 —
+  the disarmed (write-condition) and timing (s→ms) hops are documented v2. FI-24 — provenance-header wrapper
+  still open.
+- **Open, actionable next (no external gate):** FI-17 explanation sidecars (pilot); FI-25 v2 hops (disarmed
+  needs the graph to carry write conditions; timing needs new dataflow analysis); FI-09 C-119/120/122 (need a
+  sequencer-identification seam).
 - **Gated (waiting on a stage/event/measurement):** FI-08 (first real S6 tag-proposal loop), FI-11
   (`generate` orchestrator), FI-12 (FI-16 measurement), FI-18 (owner scoping), FI-06 (S8 grounded example),
   FI-10 (S5), FI-02 (real OB content), FI-01 (S9), FI-03 (grounded example).
@@ -161,7 +163,11 @@ the named-equivalent-bit form stays AI). **A 2026-07-20 audit refined the rest:*
 (edge-memory single-writer) is subsumed by FI-22's C-308 multi-writer table (built — don't duplicate
 in `Rules.cs`); C-118/C-125 need **cross-file UDT resolution** (FI-22's ProjectIndex direction, not the
 per-file `Rules.cs` seam); C-119/C-120/C-122 are structurally mechanizable only once an upstream AI
-judgment (C-113) identifies the block as a stepped sequencer — all deferred with dependencies recorded.
+judgment (C-113) identifies the block as a stepped sequencer — all deferred with dependencies recorded. **C-118 landed 2026-07-20** — the
+first cross-file review rule: `converter review --project <ir-dir>` builds a `TagTypeRegistry` UDT/DB index
+and `Rules.CheckC118StepInterfaceUdt` verifies the phase is exactly one `Step:Int` in the block's interface
+UDT (flags bare-Static / `DB_Controls`/`DB_Settings` placement / non-Int; NotApplicable without `--project`).
+C-125 stays deferred (blocked on the un-mechanized C-122).
 
 ### FI-10 — HMI-importable alarm exports from S5
 - **Status:** Parked
@@ -273,8 +279,12 @@ judgment (C-113) identifies the block as a stepped sequencer — all deferred wi
   verdicts): multi-writer paths (C-308, with Set/Reset kind), dead global-DB members
   (review-functional Pass-2 dead-wiring, both directions), physical-IO references (C-304), per-block
   sibling references (C-127). Exit 0 (facts dump). Dead-wiring scoped to global-DB members
-  (unambiguous addressing); **iDB/interface-UDT member aliasing (instance→FB correlation) is a
-  documented follow-up**. **Wired into the review skills 2026-07-20:** `review-conventions` Group 2
+  (unambiguous addressing); **iDB/interface-UDT member aliasing (instance→FB correlation) was the
+  one documented follow-up — **DONE 2026-07-20**: `ProjectUsageGraph` gained additive
+  `InstanceToFb`/`InstanceMemberPaths` and the dead-member pass now pools writers/readers across the
+  FB-internal bare form and every `iDB.<suffix>` alias, so interface-UDT members are covered
+  (`[interface]` scope), no false positives on the real corpus (e.g. `FB_ShredderSequencer.IO.InCycle`,
+  comment-confirmed "superseded, no longer wired"). The dead-wiring table is now complete. **Wired into the review skills 2026-07-20:** `review-conventions` Group 2
   (embeds the C-308/C-304/C-127 facts) and `review-functional` Pass 2 (the dead-member table for the
   buffer-DB / DB_Settings bullets; the interface-UDT-member bullet stays hand-checked pending the
   aliasing follow-up). Real-corpus piloted (surfaces `DB_Input.Pusher_Local_Remote` dead input, unused
@@ -323,7 +333,17 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
 (above) remains open.**
 
 ### FI-25 — `review-functional` forward-pass verdict tracer (AI binding → scripted decision tree)
-- **Status:** Raised (2026-07-18, follow-up to the skill/tooling audit — net-new).
+- **Status:** IMPLEMENTED (v1) 2026-07-20 as `converter trace --binding <bindings.json> --project
+  <ir-dir>` (`src/converter/Converter/Trace/`, `src/converter/README.md`), wired into `review-functional`
+  Pass 1. Layer A (AI reviewer) emits a per-REQ binding (out_tag / iface_member / number-constraint —
+  its own evidence-carrying anchors, NOT architecture.md's table); Layer B walks it over FI-22's
+  `ProjectUsageGraph` (read-only) + DB start values and returns per-hop **candidate** verdicts (facts,
+  never an adjudicated pass). **v1 hops:** output-path (out_tag written? → unimplemented), interface-chain
+  (iface_member written? → broken-chain / in-cycle-lamp class), number-constraint (DB start value vs spec
+  → ok/contradicted/partial). **Deferred v2:** the **disarmed** hop needs the graph to carry each write's
+  condition Expr (a `UsageSite` extension; the AlwaysTrue test is the empty-`And` "TRUE" sentinel); the
+  **timing** ×1000 s→ms MUL/CONVERT-chain hop is net-new dataflow analysis. Binding is a snake_case JSON
+  DTO. Real-corpus smoke passed (REQ-004 discharge conveyor). 4 tests.
 - **Raised:** 2026-07-18 · **Source:** conversation follow-up — "is there a way to mechanize the functional review more, like a scripted decision tree?" The answer decomposes the review into two layers with a clean seam, and only one layer is a decision tree.
 **Merits:** The per-REQ verdict genuinely *is* the same decision tree every run — but only *below* the one step that is irreducibly semantic. Split it:
 - **Layer A (stays AI — the semantic anchor):** a per-REQ *trace binding* mapping the natural-language REQ to concrete IR anchors — expected output tag, expected interface source member, any number/polarity constraint. Evidence-carrying, and the reviewer owns it (it must **not** just trust `architecture.md` §7's REQ→block table, or the review stops being blind). No decision tree can produce this from register text — that is the whole reason an AI reviewer exists.

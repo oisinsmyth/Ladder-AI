@@ -2,6 +2,30 @@
 
 ## 2026-07-20
 
+**FI-25 forward-pass tracer + two parallel unblocked follow-ups (FI-09 C-118, FI-22 aliasing)**
+
+The next actionable band after Tier C, built as three file-disjoint parallel tracks (FI-25 on the main
+track; FI-09 C-118 and FI-22 aliasing as concurrent subagents), merged clean.
+
+- **`converter trace --binding <bindings.json> --project <ir-dir>` (FI-25)** — the review-functional
+  forward-pass verdict tracer. The reviewer emits a per-REQ binding (out_tag / iface_member /
+  number-constraint); the tracer walks it over FI-22's `ProjectUsageGraph` (read-only) + DB start values
+  and emits per-hop FACTS + candidate verdicts (never an adjudicated pass). v1 hops: output-path
+  (unimplemented), interface-chain (broken-chain / in-cycle-lamp), number-constraint
+  (ok/contradicted/partial). Disarmed + timing hops deferred to v2 (need write-condition storage /
+  net-new dataflow). `Converter/Trace/`. Wired into review-functional Pass 1. 4 tests.
+- **`converter review --project <ir-dir>` C-118 (FI-09)** — the first cross-file review rule: builds a
+  `TagTypeRegistry` UDT/DB index and verifies a stepped sequence's phase is exactly one `Step:Int` in the
+  block's interface UDT (flags bare-Static / DB_Controls/DB_Settings placement / non-Int). NotApplicable
+  without `--project`. C-125 deferred (blocked on un-mechanized C-122).
+- **cross-check dead-wiring completed (FI-22 aliasing follow-up)** — the dead-member table now covers FB
+  interface-UDT members, not just global-DB: writers/readers are pooled across the FB-internal bare form
+  and every `iDB.<suffix>` alias (via `DbSource.InstanceOfName`) before the deadness test, so a member
+  written internally and read via an iDB is correctly not dead. `[global-db]`/`[interface]` scope labels in
+  the output. Real corpus surfaces genuine dead interface members (e.g. `FB_ShredderSequencer.IO.InCycle`)
+  with no false positives.
+- Converter suite **639/639**; golden suite unaffected.
+
 **Tier C review mechanization — cross-check facts, digest fingerprints, two more review rules (FI-22/23/09)**
 
 The last band from the value/leverage survey of `docs/16-future-ideas.md`: review-mechanization tooling

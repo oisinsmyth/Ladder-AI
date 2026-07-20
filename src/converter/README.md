@@ -1803,17 +1803,41 @@ reader/writer index, reused by FI-25). Four fact tables:
 
 - **Multi-writer paths** (C-308): every full path written by >1 site, each writer with its block +
   network + Set/Reset kind — the AI distinguishes a legit S/R pair from conflicting writes.
-- **Dead global-DB members** (review-functional Pass-2 dead-wiring): each global-DB member with no
-  writer (consumed-but-never-written / fully unused) or no reader (written-but-never-consumed) — the
-  in-cycle-lamp / dead-selector bug classes as a mechanical set-difference. Scoped to global-DB
-  members (unambiguous full-path addressing); iDB/interface-UDT member aliasing needs instance→FB
-  correlation (a documented follow-up).
+- **Dead members** (review-functional Pass-2 dead-wiring): each member with no writer
+  (consumed-but-never-written / fully unused) or no reader (written-but-never-consumed) — the
+  in-cycle-lamp / dead-selector bug classes as a mechanical set-difference. Covers **global-DB
+  members** (`[global-db]`, unambiguous full-path) **and FB interface-UDT members** (`[interface]`,
+  FI-22 aliasing follow-up): an interface member's writers/readers are pooled across the FB-internal
+  bare form and every `iDB.<suffix>` alias (via `DbSource.InstanceOfName`) before the deadness test,
+  so a member written inside the FB and read via an iDB is correctly *not* dead. Real corpus surfaces
+  e.g. `FB_ShredderSequencer.IO.InCycle` ("superseded, no longer wired") with no false positives.
 - **Physical-IO references** (C-304): each `DI/DQ/AI/AQ…`-rooted or raw `%I`/`%Q` reference with its
   block + direction — the AI excludes the Map FCs and flags any other block touching raw IO.
 - **Sibling references** (C-127): per block, the blocks it CALLs and any `iDB_*` root it references.
 
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
+
+## `trace` — forward-pass REQ verdict tracer (2026-07-20, FI-25)
+
+`converter trace --binding <bindings.json> --project <ir-dir> [--json]`
+
+Layer B of the functional review's forward pass. The `review-functional` reviewer emits a per-REQ
+**binding** (Layer A — the semantic anchor: REQ → concrete IR anchors); `trace` walks it over FI-22's
+`ProjectUsageGraph` (read-only) + DB start values and emits **facts + candidate verdicts per hop —
+never an adjudicated pass** (the reviewer confirms each candidate semantically). Binding is a
+snake_case JSON list of `{ req, out_tag?, iface_member?, number?: { member, expected } }`.
+
+v1 hops:
+- **output-path**: `out_tag` written anywhere? no → `unimplemented (no output path)`.
+- **interface-chain**: `iface_member` written anywhere? no → `broken-chain` (the in-cycle-lamp class).
+- **number-constraint**: DB member start value vs spec → `ok` / `contradicted` / `partial` (no start value).
+
+Deferred v2 (documented, `docs/16` FI-25): the **disarmed** hop (a writer gated by a non-rail condition)
+needs the graph to carry write conditions; the **timing** hop (×1000 s→ms MUL/CONVERT chain reaching a
+timer's `PT`) is net-new dataflow. **Exit 0 always** — a facts provider. Example on `ir/test-project001`:
+a binding for REQ-004 shows `DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0
+matching spec; a fake output → unimplemented; the unset `OvercurrentSetpointHigh` → partial.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

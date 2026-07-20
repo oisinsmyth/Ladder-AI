@@ -8,6 +8,8 @@ allowed-tools:
   - Glob
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe cross-check:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe trace:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe trace:*)
 ---
 
 # /review-functional — the tier-1 reviewer (function)
@@ -71,6 +73,17 @@ buffer member → output-map FC → output tag. **A REQ implemented inside an FB
 wiring hop is NOT implemented** — the in-cycle-lamp failure lived at a wiring hop, not in a
 block's logic. Grep every hop; never assume a member is wired because its name matches.
 
+**Mechanical assist (FI-25):** emit a per-REQ **binding** (`{ req, out_tag?, iface_member?, number?:
+{member, expected} }` — the concrete IR anchors you derive from the REQ; **your** evidence-carrying
+mapping, NOT `architecture.md`'s REQ→block table, or the review stops being blind) and run
+`converter trace --binding <file> --project ir/<project>/`. It walks the reader/writer graph + DB start
+values and returns **candidate** verdicts per hop — `unimplemented` (out_tag has no writer),
+`broken-chain` (iface_member written nowhere — the in-cycle-lamp class), `contradicted`/`partial`
+(number vs DB start value). Embed the facts verbatim and **confirm each candidate semantically** (the
+tool never adjudicates a REQ — it reports what the graph says). It covers hops 1/2/4 only; the
+**disarmed** (`NOT AlwaysTrue` gating) and **timing** (×1000 s→ms chain) checks below stay hand-traced
+(documented v2). Missing binary → hand-trace as before.
+
 Verdict vocabulary — exactly one per REQ:
 
 - **implemented** — the full chain exists and does what the REQ text says.
@@ -113,14 +126,15 @@ whole-project reader/writer set-difference this pass needs for the buffer-DB and
 below: every such member with no writer (consumed-but-never-written — the in-cycle-lamp class) or no
 reader (written-but-never-consumed — the dead-selector class), computed mechanically instead of by hand
 grep. Treat it as verbatim facts you reason over (it never adjudicates a REQ — the mapping to a REQ ID,
-and whether a dead member is a real defect, stays yours). **Scope caveat:** it covers *global-DB*
-members only — the **interface-UDT member** bullet still needs the hand check (the iDB↔FB member
-correlation is a documented cross-check follow-up, not yet mechanized). If the Release binary is
-missing, do the reader/writer greps by hand as before.
+and whether a dead member is a real defect, stays yours). It now covers **both** `[global-db]` members
+AND `[interface]` (FB interface-UDT) members — the iDB↔FB aliasing is correlated (writers/readers pooled
+across the FB-internal bare form and every `iDB.<suffix>` alias before the deadness test), so all three
+bullets below are mechanically supported. If the Release binary is missing, do the reader/writer greps
+by hand as before.
 
 - **Every network's evident function** (title + logic), every block.
-- **Every interface-UDT member** — declared members that no network reads or writes are findings.
-  (Hand-checked — cross-check's dead-member table does not yet cover interface-UDT members.)
+- **Every interface-UDT member** — declared members that no network reads or writes are findings
+  (cross-check's `[interface]`-scope dead-member table now covers these).
 - **Every buffer-DB member** — check writers AND readers (cross-check's dead-member table, or grep),
   both directions: **consumed-but-never-written** (the in-cycle-lamp class: an output fed by a member
   nothing drives) and **written-but-never-consumed** (the dead-selector-input class: a mapped field
