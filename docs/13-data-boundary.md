@@ -167,6 +167,21 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     downstream artifact stays Green and committable. This extends the S6 generation-validation scope from
     the `gen-block-new` skill to the `gen-block-modify-purpose` skill; it does **not** authorize production
     S7 modification of any real production block (that stays gated behind "S6 done").
+  - **2026-07-20 — further extended to the S6-Killer-Plan `PlantAutoControl` answer-key validation (same
+    sanitize-first, Green, blind-isolation handling).** Project owner's own explicit choice, this
+    session: implement the S6-Killer-Plan (`docs/notes/S6-Killer-Plan.md`) — derive an intent-level
+    requirements register from the real **`PlantAutoControl`** orchestration block **plus its full
+    dependency closure** (the 8 equipment FBs and their DB/UDT/tag roots), regenerate it blind through
+    the pipeline, and grade against the original as an answer key. This **extends the 2026-07-18
+    single-FB `gen-block-new` scope up to `PlantAutoControl` + closure** — an orchestration block, larger
+    than a single equipment FB. Handling is unchanged and mandatory: **sanitize-to-Green first** —
+    export the closure from JOB9002, `converter sanitize` with the existing `sanitization/*.map.json`
+    maps (`PlantAutoControl.map.json` et al., already present from the 2026-07-11–14 round-trip work) into
+    invented names **before** any spec work; the only Amber access is the export read; every committed
+    artifact (`ir/PlantAutoControl-bench/`, the sealed answer key under `docs/evidence/`, the derived
+    register `gen/PlantAutoControl-bench/requirements.md`) is Green. Same genericization rule — no real
+    JOB9002 name reaches any committed file, enforced by a map-key leakage grep before commit. Does
+    **not** authorize production S7 modification of any real production block.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's
