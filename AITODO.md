@@ -249,6 +249,11 @@ proper look / detailed plan here (entry criteria long met, S1 done; was parked b
   review used to error "Expected a 'SIDECAR' section" on a `.ir` with no `SIDECAR` (e.g. `OB100.ir`),
   leaving that block invisible to convention review. `ReviewRunner.ReviewFile` now branches on the
   consolidated `IrParser.HasSidecarSection` like preflight does; the whole corpus reviews.
+- **`preflight` `--project` not threaded into its synth check** (2026-07-20 housekeeping scan) —
+  `preflight`'s convert/synthesizability check doesn't resolve cross-file references the way its tag check
+  already does, so a batch that is actually fine can produce a spurious `[convert]` finding the human must
+  recognize and discount (seen on the MotorVSDSystem run, telemetry line 2). Thread `--project` into the synth
+  check; small, self-contained; removes a false finding that erodes the zero-findings-bar's signal.
 
 **S1 carryover — needs owner:** `Modbus_Master`/`Modbus_Comm_Load` live-compile blocked by a confirmed
 general Openness limitation — source-side `JOB9002` fix vs. accept as a documented permanent limitation
@@ -263,7 +268,10 @@ home). **From the 2026-07-18 skill/tooling audit:** FI-22 (whole-project cross-c
 FI-24 (`gen-architecture` helpers — **`tagstatus` built 2026-07-18**, CHANGELOG; provenance wrapper
 still open); FI-09 (**C-408 + C-001 mechanized 2026-07-18** — `.ET`-in-comparison, and
 member/variable PascalCase across DB/iDB/UDT/block-vars; C-121/C-118–125/C-103/C-107/C-402 still
-open). FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/10 parked.
+open). **From the 2026-07-20 housekeeping tooling scan:** FI-26 (`ir`↔`simatic-ml` drift check), FI-27
+(static Part flow-order check in `preflight`), FI-28 (read-only `openness-cli portal-status`), FI-29
+(reuse-first duplicate finder), FI-30 (S6 target gap-hunter); FI-31 (telemetry validator) parked as
+against-discipline. FI-13/14/15/16/19/20 done; FI-04 rejected; FI-01/02/03/07/10/31 parked.
 
 `docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever opens.
 

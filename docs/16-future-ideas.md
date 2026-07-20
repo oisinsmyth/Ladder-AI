@@ -257,6 +257,7 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Costs / risks:** Low — both are small, deterministic, and reuse existing primitives.
 **Dependencies:** `ProjectIndex` (built).
 **Verdict / revisit trigger:** Open — small quick wins; `tagstatus` is the more useful (anti-laundering support).
+**Adoption gap (2026-07-20 housekeeping scan):** the built `tagstatus` is called by `gen-block-new` but **not yet adopted in `gen-architecture`'s own tag-status pass** — that skill still hand-greps (its SKILL.md tag-status steps, and its Bash allowance omits `tagstatus`). Wiring it in (and reusing its non-zero-exit "all tags exist" gate) is a zero-build skill edit, the natural close for this FI's tag-status half.
 
 ### FI-25 — `review-functional` forward-pass verdict tracer (AI binding → scripted decision tree)
 - **Status:** Raised (2026-07-18, follow-up to the skill/tooling audit — net-new).
@@ -268,3 +269,51 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Costs / risks:** A wrong binding yields a false `implemented` — the tree removes *tracing* mistakes (a wiring hop a tired hand-grep skipped), **not** *binding* mistakes; the AI still owns the binding and the final semantic confirm. Some verdicts resist the tree: polarity "can't-work" contradictions (a stop button held permanently asserted) can be *flagged as candidates* but not ruled (NC-vs-NO intent is judgment); `not-statically-checkable` is judgment by definition. Emit facts + candidate classifications, never an adjudicated pass — same discipline as the mechanical `converter review` dump.
 **Dependencies:** FI-22's `ProjectIndex` reader/writer graph (the shared substrate); a small structured binding format the reviewer emits. Complements FI-22 (reverse pass) as its forward-pass counterpart.
 **Verdict / revisit trigger:** Open — the maximal *honest* mechanization of the functional review: AI binds once, script traces deterministically. Worth piloting once FI-22's reader/writer index exists, since Layer B reuses it.
+
+### FI-26 — `ir` ↔ `simatic-ml` export-drift check
+- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; a session-proven gap).
+- **Raised:** 2026-07-20 · **Source:** the 2026-07-20 housekeeping scan. The committed `simatic-ml/<project>/*.xml` exports can silently drift from their `ir/<project>/*.ir` after a fix that is never re-exported — hit this session: `FB_ShredderSequencer.ir` carried the B-5/REQ-028 re-arming fix while its `.xml` still had the pre-fix logic, which poisoned the synthesis-parity audit (diffs that looked like real synthesis gaps were partly stale-XML noise, e.g. `PusherControl 543→198`). The team worked around it by switching the oracle from synth-vs-external-XML to synth-vs-own-sidecar (`CommittedBlocksRoundTripTests`/`FrozenAnswerKeyRoundTripTests`) — i.e. *tolerated* the drift rather than detecting it.
+**Merits:** A `converter` check (or a golden test) that Normalizer-compares each committed `ir/<proj>/<block>.ir` against its paired `simatic-ml/<proj>/<block>.xml` and **fails on semantic divergence** turns silent drift into a red build instead of an invisible landmine that amplifies into every downstream audit. All machinery already exists — `Normalizer` (`Converter.SimaticMl`), `to-xml`, both parsers.
+**Costs / risks:** The committed round-trip tests deliberately *tolerate* the drift (own-sidecar oracle) — this is the complementary *detector*, not a replacement. Must pair files correctly and skip unpaired ones (some `ir/` blocks have no `simatic-ml/` counterpart and vice-versa) so it never false-fails.
+**Dependencies:** `Normalizer`, `to-xml` (both built).
+**Verdict / revisit trigger:** Open — cheap and high-value; the clearest win from the scan.
+
+### FI-27 — Static Part flow-order / import-validity check in `preflight`
+- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; extends FI-13).
+- **Raised:** 2026-07-20 · **Source:** the scan. Whether a synthesized block's `<Parts>` are in TIA's required wire-graph flow order was only discoverable by a *live* TIA import — the MotorVSDSystem purpose-change import was rejected ("the elements must be sorted according to the current flow… element with UId 56"), costing a compile-gate cycle. Root cause: the `Normalizer` sorts `<Parts>` before comparing, so the parity harness, the own-sidecar oracle, and `NoSidecarEquivalenceTests` all **structurally mask** this whole class; only a raw-order test catches it. The specific bug is fixed (`7694fdf`, guarded by `FlgNetWriterPartOrderTests`), but the *general* blind spot remains — any future flow-order regression is invisible offline.
+**Merits:** A `preflight` check validating synthesized `<Parts>` raw order against the DFS-from-rail rule `7694fdf` now implements catches this class **before** a Portal round trip instead of on import rejection (which is atomic — the block never lands, so the compile gate can't even run). Pair it with a `compile-error-playbook.md` entry for the "must be sorted according to the current flow" message (there is none today).
+**Costs / risks:** Only meaningful for synthesized / derive-always blocks; scope to the flow-order rule, don't reimplement TIA's whole import validator.
+**Dependencies:** `FlgNetWriter`'s flow-order pass (built, `7694fdf`); `preflight` (FI-13, built).
+**Verdict / revisit trigger:** Open — the Normalizer hides this from every equivalence oracle, so a dedicated offline guard is the only cheap way to catch regressions.
+
+### FI-28 — `openness-cli portal-status`: read-only Portal-process diagnostic
+- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new; the read-only sibling of FI-07).
+- **Raised:** 2026-07-20 · **Source:** the scan. Stale `Siemens.Automation.Portal.exe` pileup is diagnosed by hand via `tasklist` + human judgment on which to close. It blocked/delayed work in ≥3 runs this session (the hopper Stage-3 compile gate was blocked on a 3-min connect timeout with 2 stale processes; fix-wave-2 lost roundtrips). `sanity-check` checks *project* health; nothing reports Portal *process* health.
+**Merits:** A read-only `openness-cli portal-status` enumerating Portal processes and cross-referencing the CLI's `LaunchedInstanceRegistry` to separate self-launched orphans (self-healing) from strays — reporting the likely first-connect-dialog vs pileup cause — gives the human a precise picture without the CLI killing anything. Read-only sidesteps the permission-classifier problem that denied the kill remedies this session (fix-wave-2 telemetry).
+**Costs / risks:** Read-only only — *killing* stays FI-07 (Parked; needs the `--yes`/dry-run pattern and a safe "idle" definition so a mid-compile Portal is never touched). This is deliberately the safe subset of FI-07, buildable now without FI-07's irreversibility risk.
+**Dependencies:** `LaunchedInstanceRegistry` (built).
+**Verdict / revisit trigger:** Open — distinct from FI-07 (diagnosis, not action); the cheap, safe half, worth doing first.
+
+### FI-29 — Reuse-first duplicate-logic finder (digest-backed corpus query)
+- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new).
+- **Raised:** 2026-07-20 · **Source:** the scan. The reuse-first carving pass (`gen-architecture` / `gen-spec-analysis`) is a manual grep over the corpus. An entire spec-analysis cycle was wasted this session: the `discharge-conv-monitor` request (#1/10, ~20m, 10 REQs, 6 RFIs) was analysed then **abandoned** because it duplicated the discharge-timeout fault already in `FB_ShredderSequencer` — caught by the owner, not tooling; the hopper pivot then needed the same manual "does this already exist?" grep.
+**Merits:** A `digest`-backed query — "which blocks reference tag T / implement a timeout/fault on T" — over the whole `ir/<proj>/` corpus surfaces the candidate blocks a human/AI must check, deterministically. `digest` already extracts CALL sites, tag roots, and per-network statement kinds; this is an index + query on top.
+**Costs / risks:** Won't fully judge *semantic* duplication (that stays human/AI) — it surfaces candidates, never rules "already exists." Keep it an orientation aid, consistent with digest's policy (never review input, `docs/15` isolation model).
+**Dependencies:** `DigestBuilder` / `ProjectIndex` (built).
+**Verdict / revisit trigger:** Open — one full analysis cycle abandoned this session for exactly this; the reuse grep recurs every request. Related to FI-30 (both corpus cross-checks).
+
+### FI-30 — S6 new-block target gap-hunter (REQ × tag-status × as-built cross-join)
+- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new).
+- **Raised:** 2026-07-20 · **Source:** the scan. Finding a clean new-block-only landing spot is manual cross-referencing of unimplemented REQs × tag status × as-built inline coverage. Two consecutive `gen-architecture` runs (~55m combined this session) were spent almost entirely on this ("honest survey found NO clean REQ-grounded new-block-only target — all proposed-tag-blocked or Q-11-disarmed or HMI-only"). With the reuse-first bar rejecting obvious asks, targets are scarce (test-project001 is fully implemented).
+**Merits:** A script/subcommand cross-joining `requirements.md` REQs against `tagstatus` (proposed-blocked?) and `digest` (already implemented inline? HMI-only?) emits a candidate-target table with each disqualification reason pre-computed — turning a manual survey into a filtered list a human confirms.
+**Costs / risks:** Needs `requirements.md` in a parseable-enough shape (REQ IDs are already structured); reuse the `tagstatus` and `digest` primitives, don't rebuild them.
+**Dependencies:** `tagstatus` (built, FI-24), `digest` / `ProjectIndex` (built).
+**Verdict / revisit trigger:** Open — high per-occurrence cost (~55m/build) and it recurs at the top of every S6 request; timely given the S6-exit tally still needs 9 more requests.
+
+### FI-31 — Telemetry line-format validator (shape only, not authoring)
+- **Status:** Parked (2026-07-20) — against `gen-telemetry.md`'s own stated discipline; captured for completeness, not recommended now. **Revisit trigger:** malformed telemetry rows actually start appearing in practice.
+- **Raised:** 2026-07-20 · **Source:** the scan. Every stage hand-writes a 7-field pipe-separated telemetry line. `gen-telemetry.md` explicitly defers tooling ("A log, not a dashboard… No tooling until the log itself proves too slow to read") — a deliberate anti-goal, so any authoring/dashboard tool would violate stated discipline.
+**Merits:** If anything, a cheap non-intrusive *validator* only — check the 7-field shape, ISO date, and the `outcome` enum (`clean|findings|blocked|abandoned`) on an appended row. Not an author, not a dashboard.
+**Costs / risks:** Even a validator edges against the "no tooling until the log proves too slow/error-prone" rule; premature at a two-project sample size.
+**Dependencies:** None.
+**Verdict / revisit trigger:** Parked — noted so it isn't re-proposed cold; revisit only if malformed rows actually appear.
