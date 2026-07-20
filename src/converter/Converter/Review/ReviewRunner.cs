@@ -8,7 +8,7 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-121", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
 
     public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors)
     {
@@ -82,6 +82,9 @@ public static class ReviewRunner
         Record(statuses, findings, "C-003", RuleCheckStatus.Checked, Rules.CheckC003BlockPrefix(block));
         Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005Charset(block));
 
+        Record(statuses, findings, "C-103", RuleCheckStatus.Checked, Rules.CheckC103SetResetPairing(block));
+        Record(statuses, findings, "C-121", RuleCheckStatus.Checked, Rules.CheckC121StepTransition(block));
+
         var headerFindings = Rules.CheckC201HeaderComment(block.Name, block.Comment).ToList();
         var titleFindings = Rules.CheckC201NetworkTitles(block).ToList();
         Record(statuses, findings, "C-201", RuleCheckStatus.Checked, headerFindings.Concat(titleFindings));
@@ -123,6 +126,8 @@ public static class ReviewRunner
         Record(statuses, findings, "C-201", RuleCheckStatus.Checked, Rules.CheckC201HeaderComment(db.Name, db.Comment));
 
         // No networks in a DB file - nothing for these to inspect.
+        statuses.Add(new RuleStatusEntry("C-103", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/coils"));
+        statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-301", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
 

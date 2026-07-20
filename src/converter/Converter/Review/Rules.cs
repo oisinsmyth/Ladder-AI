@@ -479,4 +479,227 @@ public static class Rules
                 break;
         }
     }
+
+    // C-103 (warn) — Set/Reset pairs live in the same block, ideally adjacent networks. Mechanized
+    // per-file: collect every CoilTag written as a Set (SCOIL, CoilKind.Set) and every one written
+    // as a Reset (RCOIL, CoilKind.Reset) across the block's networks, then flag each Set-target with
+    // no matching Reset-target in this same block, and each Reset-target with no matching Set-target.
+    //
+    // Deliberately worded as a *candidate*, never a hard-asserted defect: the owner-ruled exception
+    // (a fault-style bit intentionally Set from OUTSIDE a reusable FB by the orchestrating FC while
+    // the FB Resets it internally, or vice versa) is genuinely cross-block, so a per-file tool cannot
+    // distinguish it from a real unpaired Set/Reset — it can only surface the candidate for a human
+    // to confirm against the intent comment. Findings carry the network where the unpaired coil first
+    // appears (first-seen wins for a target written in several networks), so the reader lands on it
+    // directly rather than getting a bare block-level pointer.
+    public static IEnumerable<Finding> CheckC103SetResetPairing(IrBlock block)
+    {
+        // First-seen network per target, insertion-ordered for deterministic output.
+        var setTargets = new List<KeyValuePair<string, int>>();
+        var resetTargets = new List<KeyValuePair<string, int>>();
+        var setSeen = new HashSet<string>(StringComparer.Ordinal);
+        var resetSeen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var network in block.Networks)
+        {
+            foreach (var assignment in network.Assignments)
+            {
+                switch (assignment.Kind)
+                {
+                    case CoilKind.Set when setSeen.Add(assignment.CoilTag):
+                        setTargets.Add(new KeyValuePair<string, int>(assignment.CoilTag, network.Number));
+                        break;
+                    case CoilKind.Reset when resetSeen.Add(assignment.CoilTag):
+                        resetTargets.Add(new KeyValuePair<string, int>(assignment.CoilTag, network.Number));
+                        break;
+                }
+            }
+        }
+
+        foreach (var (tag, networkNumber) in setTargets)
+        {
+            if (!resetSeen.Contains(tag))
+            {
+                yield return new Finding(
+                    "C-103",
+                    FindingSeverity.Warn,
+                    block.Name,
+                    networkNumber,
+                    $"Set coil (SCOIL) on '{tag}' has no matching Reset (RCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception — confirm the intent comment.",
+                    $"Add the paired Reset of '{tag}' in this block (ideally an adjacent network), or — if the pairing is intentionally cross-block (reusable-FB pattern) — record that intent in a comment so the split is deliberate, not an oversight.");
+            }
+        }
+
+        foreach (var (tag, networkNumber) in resetTargets)
+        {
+            if (!setSeen.Contains(tag))
+            {
+                yield return new Finding(
+                    "C-103",
+                    FindingSeverity.Warn,
+                    block.Name,
+                    networkNumber,
+                    $"Reset coil (RCOIL) on '{tag}' has no matching Set (SCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception — confirm the intent comment.",
+                    $"Add the paired Set of '{tag}' in this block (ideally an adjacent network), or — if the pairing is intentionally cross-block (reusable-FB pattern) — record that intent in a comment so the split is deliberate, not an oversight.");
+            }
+        }
+    }
+
+    // C-121 (error) — a step transition is a plain MOVE to the Step register whose EN carries an
+    // inline `Step = <from>` guard: `MOVE(EN := Step = <from> AND <condition>, IN := <to>) => Step`.
+    // Never a coil, JMP/LBL, or other statement. Two mechanically-checkable failure modes (INLINE
+    // form only — the owner-clarified named-bit-equivalent of `Step = <from>` is not mechanically
+    // verifiable and is deferred to AI):
+    //   (a) a Step register (DestTag leaf == "Step", per C-118) written by anything OTHER than a
+    //       plain MoveStatement (a coil or a box instruction) — a hard defect, the transition isn't a
+    //       MOVE at all;
+    //   (b) a MOVE to Step whose EN tree contains no `Step = <from>` comparison guard — worded as a
+    //       candidate, since a named bit that is a genuine equivalent of `Step = <from>` is a
+    //       judgment call this tool cannot confirm.
+    public static IEnumerable<Finding> CheckC121StepTransition(IrBlock block)
+    {
+        foreach (var network in block.Networks)
+        {
+            // Case (a): any non-MOVE statement whose write target is a Step register.
+            foreach (var (kind, destTag) in NonMoveDestWrites(network))
+            {
+                if (HasStepLeaf(destTag))
+                {
+                    yield return new Finding(
+                        "C-121",
+                        FindingSeverity.Error,
+                        block.Name,
+                        network.Number,
+                        $"Network {network.Number} writes the Step register '{destTag}' with a {kind}, not a MOVE — a Step transition must be a plain MOVE (C-121: MOVE(EN := Step = <from> AND <condition>, IN := <to>) => Step; never a coil/JMP/LBL/box instruction).",
+                        "Express the transition as a plain MOVE to Step gated by `Step = <from> AND <condition>` in its EN.");
+                }
+            }
+
+            // Case (b): a MOVE to Step with no inline `Step = <from>` guard in its EN.
+            foreach (var move in network.Moves)
+            {
+                if (!HasStepLeaf(move.DestTag))
+                {
+                    continue;
+                }
+
+                if (!ExprHasStepGuard(move.En))
+                {
+                    yield return new Finding(
+                        "C-121",
+                        FindingSeverity.Error,
+                        block.Name,
+                        network.Number,
+                        $"Network {network.Number}'s MOVE to Step ('{move.DestTag}') has no inline `Step = <from>` guard in its EN; C-121 requires it unless a named bit is a genuine equivalent of `Step = <from>` (that form is a judgment call — confirm).",
+                        "Gate the transition MOVE with `Step = <from> AND <condition>` in its EN, or confirm that a named bit standing in for `Step = <from>` is intended (deferred to human/AI review, not mechanically verifiable).");
+                }
+            }
+        }
+    }
+
+    // The C-118 phase tag is named "Step" — a Step register write is any DestTag whose leaf
+    // (last dot-separated component) is exactly "Step" (a bare "Step", or a member like "IO.Step").
+    private static bool HasStepLeaf(string tag) =>
+        tag == "Step" || tag.EndsWith(".Step", StringComparison.Ordinal);
+
+    // Every non-MOVE statement kind that writes a destination tag, paired with an IR-facing kind
+    // label — used by C-121 case (a) to catch a Step register written by anything other than a plain
+    // MOVE. MoveStatement is deliberately excluded (case (b) handles genuine MOVEs); MOVE_BLK_VARIANT
+    // is included because it is not a plain scalar MOVE. Modbus multi-write instructions are omitted:
+    // their destinations are Done/Busy/Error/Status status bits, never a Step register.
+    private static IEnumerable<(string Kind, string DestTag)> NonMoveDestWrites(IrNetwork network)
+    {
+        foreach (var assignment in network.Assignments)
+        {
+            var kind = assignment.Kind switch
+            {
+                CoilKind.Set => "Set coil (SCOIL)",
+                CoilKind.Reset => "Reset coil (RCOIL)",
+                _ => "coil (COIL)",
+            };
+            yield return (kind, assignment.CoilTag);
+        }
+
+        foreach (var wordAnd in network.WordAnds)
+        {
+            yield return ("WAND", wordAnd.DestTag);
+        }
+
+        foreach (var mul in network.Muls)
+        {
+            yield return (mul.Kind.ToString().ToUpperInvariant(), mul.DestTag);
+        }
+
+        foreach (var convert in network.Converts)
+        {
+            yield return ("CONVERT", convert.DestTag);
+        }
+
+        foreach (var swap in network.Swaps)
+        {
+            yield return ("SWAP", swap.DestTag);
+        }
+
+        foreach (var abs in network.AbsStatements)
+        {
+            yield return ("ABS", abs.DestTag);
+        }
+
+        foreach (var limit in network.Limits)
+        {
+            yield return ("LIMIT", limit.DestTag);
+        }
+
+        foreach (var tSub in network.TSubs)
+        {
+            yield return ("T_SUB", tSub.DestTag);
+        }
+
+        foreach (var tConv in network.TConvs)
+        {
+            yield return ("T_CONV", tConv.DestTag);
+        }
+
+        foreach (var calc in network.Calcs)
+        {
+            yield return ("CALC", calc.DestTag);
+        }
+
+        foreach (var fill in network.FillBlockIs)
+        {
+            yield return ("FillBlockI", fill.DestTag);
+        }
+
+        foreach (var moveBlk in network.MoveBlkVariants)
+        {
+            yield return ("MOVE_BLK_VARIANT", moveBlk.DestTag);
+            yield return ("MOVE_BLK_VARIANT", moveBlk.RetValTag);
+        }
+    }
+
+    // True when the EN Expr tree contains a comparison (Expr.Compare) with a `Step` register on one
+    // side — the inline `Step = <from>` guard C-121 requires. Walks And/Or/Not/Compare recursively,
+    // mirroring EtOperandsInComparisons's traversal style. Any comparison operator counts: a genuine
+    // `Step = <from>` uses `=`, but flagging only `=` would false-negative a hand-written `Step <> n`
+    // style guard; presence of a Step-vs-value comparison in EN is the mechanizable signal.
+    private static bool ExprHasStepGuard(Expr expr)
+    {
+        switch (expr)
+        {
+            case Expr.Compare compare:
+                return IsStepTagRef(compare.Left) || IsStepTagRef(compare.Right)
+                    || ExprHasStepGuard(compare.Left) || ExprHasStepGuard(compare.Right);
+            case Expr.And and:
+                return and.Operands.Any(ExprHasStepGuard);
+            case Expr.Or or:
+                return or.Operands.Any(ExprHasStepGuard);
+            case Expr.Not not:
+                return ExprHasStepGuard(not.Operand);
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsStepTagRef(Expr expr) =>
+        expr is Expr.TagRef tagRef && HasStepLeaf(tagRef.Path);
 }

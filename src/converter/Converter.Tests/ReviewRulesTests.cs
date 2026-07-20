@@ -520,4 +520,128 @@ public class ReviewRulesTests
         var finding = Assert.Single(Rules.CheckC001MemberNames("DB_X", new[] { parent }));
         Assert.Contains("Bad_Name", finding.Description);
     }
+
+    // ---- C-103: Set/Reset pairing within a block (candidate, per-file) ----
+
+    // True positive: a Set (SCOIL) with no matching Reset in the same block is flagged (Warn).
+    [Fact]
+    public void CheckC103_SetWithoutReset_Flags()
+    {
+        var network = new IrNetwork(1, "Latch fault", new[]
+        {
+            new CoilAssignment("FaultLatch", new Expr.TagRef("Trip"), CoilKind.Set),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC103SetResetPairing(block));
+        Assert.Equal("C-103", finding.RuleId);
+        Assert.Equal(FindingSeverity.Warn, finding.Severity);
+        Assert.Equal(1, finding.NetworkNumber);
+        Assert.Contains("FaultLatch", finding.Description);
+    }
+
+    // True positive: a Reset (RCOIL) with no matching Set in the same block is flagged too.
+    [Fact]
+    public void CheckC103_ResetWithoutSet_Flags()
+    {
+        var network = new IrNetwork(1, "Clear fault", new[]
+        {
+            new CoilAssignment("FaultLatch", new Expr.TagRef("Ack"), CoilKind.Reset),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC103SetResetPairing(block));
+        Assert.Contains("no matching Set", finding.Description);
+    }
+
+    // True negative: a Set and its matching Reset in the same block (different networks) are clean.
+    [Fact]
+    public void CheckC103_PairedSetAndReset_Clean()
+    {
+        var setNet = new IrNetwork(1, "Latch", new[]
+        {
+            new CoilAssignment("FaultLatch", new Expr.TagRef("Trip"), CoilKind.Set),
+        });
+        var resetNet = new IrNetwork(2, "Unlatch", new[]
+        {
+            new CoilAssignment("FaultLatch", new Expr.TagRef("Ack"), CoilKind.Reset),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { setNet, resetNet });
+
+        Assert.Empty(Rules.CheckC103SetResetPairing(block));
+    }
+
+    // True negative: plain (Assign) coils are not Set/Reset and never trip C-103.
+    [Fact]
+    public void CheckC103_PlainCoilsOnly_Clean()
+    {
+        var network = new IrNetwork(1, "Outputs", new[]
+        {
+            new CoilAssignment("Motor", new Expr.TagRef("RunCmd")),
+            new CoilAssignment("Lamp", new Expr.TagRef("Fault")),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC103SetResetPairing(block));
+    }
+
+    // ---- C-121: step transition is a plain MOVE to Step guarded by inline `Step = <from>` ----
+
+    // True positive (case b): a MOVE to Step with no inline `Step = <from>` guard in its EN.
+    [Fact]
+    public void CheckC121_MoveToStepWithoutGuard_Flags()
+    {
+        var network = new IrNetwork(1, "Bad transition", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(new Expr.TagRef("StartCond"), new Expr.Literal("10"), "IO.Step") });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC121StepTransition(block));
+        Assert.Equal("C-121", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("no inline", finding.Description);
+    }
+
+    // True positive (case a): a Step register written by a coil, not a MOVE, is a hard defect.
+    [Fact]
+    public void CheckC121_CoilWritesStep_Flags()
+    {
+        var network = new IrNetwork(1, "Wrong: coil to Step", new[]
+        {
+            new CoilAssignment("Step", new Expr.TagRef("SomeCond")),
+        });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var finding = Assert.Single(Rules.CheckC121StepTransition(block));
+        Assert.Equal("C-121", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("not a MOVE", finding.Description);
+    }
+
+    // True negative: a properly-guarded MOVE-to-Step transition (the real sequencer shape:
+    // `MOVE(EN := ... AND IO.Step = 10, IN := 20) => IO.Step`) is clean.
+    [Fact]
+    public void CheckC121_GuardedMoveToStep_Clean()
+    {
+        var en = new Expr.And(new Expr[]
+        {
+            new Expr.TagRef("PreStartTimer.Q"),
+            new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal("10")),
+        });
+        var network = new IrNetwork(1, "Step 10 transition", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(en, new Expr.Literal("20"), "IO.Step") });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC121StepTransition(block));
+    }
+
+    // True negative: MOVEs to non-Step destinations (e.g. a ReversalCount reset) are ignored.
+    [Fact]
+    public void CheckC121_MoveToNonStepDest_Clean()
+    {
+        var network = new IrNetwork(1, "Reset counter", Array.Empty<CoilAssignment>(),
+            Moves: new[] { new MoveStatement(new Expr.TagRef("FaultReset"), new Expr.Literal("0"), "ReversalCount") });
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC121StepTransition(block));
+    }
 }
