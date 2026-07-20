@@ -1531,7 +1531,7 @@ one would.
 
 ## `digest` — compact structural summary (2026-07-16, FI-15)
 
-`converter digest <file.ir> [<file.ir> ...] [--ignore-errors] [--json]`
+`converter digest <file.ir> [<file.ir> ...] [--ignore-errors] [--json] [--fingerprint]`
 
 A deterministic, mechanically-derived orientation summary of `.ir` content — "what shape is this
 block?" at a fraction of the tokens of the full IR, per FI-15 (`docs/16-future-ideas.md`). Derived
@@ -1554,6 +1554,33 @@ lesson); this is for finding *which* file to open.
   own contract.
 - Piloted against all 14 `ir/reference/*.ir`, a pattern example DB, and `test-project001`'s
   `FC_ControlMain` (calls/instances/network map/DB roots all correct at a glance).
+
+### `--fingerprint` — per-network structural signatures (2026-07-20, FI-23)
+
+Adds a `SIG: <hash>` line under each network: a normalized structural signature (12 hex chars,
+SHA-256 of a canonical string). Where the statement counts above are *shape-blind* (`coil:2,
+timer:1` says nothing about the rung shapes), the signature captures statement **kinds + order**
+plus the canonicalized structure of every condition/operand `Expr` tree — so **N copy-pasted
+networks collapse to one hash and the drifted outlier stands out**. Serves the explain-plc-block
+skill's "describe the template once, verify EVERY instance" method (done by hand today).
+
+- **Tag-name-independent**: every tag ref / bare dest / instance path abstracts to `TAG`, so two
+  networks with identical shape but different wiring share a signature.
+- **Literal values are KEPT** (`LIT:<value>`): a network that copied a template but changed a
+  constant (`Step = 10` vs `Step = 20`) gets a *different* signature — that's exactly the
+  copy-paste drift worth surfacing. (`CalcStatement.Equation` is excluded — free-text that embeds
+  operand names, same reason `TagReferences` skips it.)
+- **Canonical**: `And`/`Or` operands are sorted (order-independent); `Compare` stays ordered
+  (`>=`/`<=` aren't symmetric); statement order within the network matters (it's part of the
+  shape).
+- The signature is **always present in `--json`** (a machine consumer grouping by shape wants it
+  unconditionally); the flag only gates the text `SIG:` line. Default text output (no flag) is
+  byte-identical to before FI-23. Same "derived fresh, orientation-only, never review input"
+  posture as the rest of `digest` — a fingerprint is an explanation aid, not a policy change.
+- Pilot: `FB_ShredderSequencer` (15 networks, several with repeating step-transition shapes) — all
+  15 signatures distinct; notably nets 9 and 13 share the *count* summary `timer:1, move:3` but get
+  different signatures because their guard structure and step literals genuinely differ. The
+  fingerprint separates hand-differentiated steps that the count view can't tell apart.
 
 ## `preflight` — static checks before any Portal round trip (2026-07-16, FI-13)
 

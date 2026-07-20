@@ -6,7 +6,12 @@ namespace Converter.Digest;
 // Mirrors ReviewOutputFormatter's "one record, two renderers" pattern.
 public static class DigestOutputFormatter
 {
-    public static string FormatText(DigestReport report)
+    public static string FormatText(DigestReport report) => FormatText(report, fingerprint: false);
+
+    // fingerprint: when true, each network line is followed by a "SIG: <hash>" line (FI-23) so
+    // copy-pasted networks visibly share a signature and a drifted outlier stands out. Default text
+    // output (fingerprint: false) is byte-identical to before FI-23.
+    public static string FormatText(DigestReport report, bool fingerprint)
     {
         var sb = new StringBuilder();
 
@@ -69,6 +74,10 @@ public static class DigestOutputFormatter
                 foreach (var network in file.Networks)
                 {
                     sb.Append("    ").Append(network.Number).Append(" \"").Append(network.Title).Append("\" ").Append(network.Statements).Append('\n');
+                    if (fingerprint)
+                    {
+                        sb.Append("      SIG: ").Append(network.Signature).Append('\n');
+                    }
                 }
             }
 
@@ -107,7 +116,9 @@ public static class DigestOutputFormatter
                 fileError = f.FileError,
                 sections = f.Sections.Select(s => new { section = s.Section, members = s.Members }),
                 calls = f.Calls.Select(c => new { blockName = c.BlockName, callCount = c.CallCount, instances = c.Instances }),
-                networks = f.Networks.Select(n => new { number = n.Number, title = n.Title, statements = n.Statements }),
+                // signature (FI-23) is always present in JSON — a machine consumer grouping networks
+                // by shape wants it unconditionally; the --fingerprint flag only gates the text view.
+                networks = f.Networks.Select(n => new { number = n.Number, title = n.Title, statements = n.Statements, signature = n.Signature }),
                 tagRoots = f.TagRoots,
             }),
         };

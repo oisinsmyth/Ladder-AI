@@ -277,6 +277,7 @@ internal static class Program
         var files = new List<string>();
         var ignoreErrors = false;
         var json = false;
+        var fingerprint = false;
 
         foreach (var arg in args)
         {
@@ -288,6 +289,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--fingerprint":
+                    fingerprint = true;
+                    break;
                 default:
                     files.Add(arg);
                     break;
@@ -296,7 +300,7 @@ internal static class Program
 
         if (files.Count == 0)
         {
-            Console.Error.WriteLine("Usage: converter digest <file> [<file> ...] [--ignore-errors] [--json]");
+            Console.Error.WriteLine("Usage: converter digest <file> [<file> ...] [--ignore-errors] [--json] [--fingerprint]");
             return 1;
         }
 
@@ -311,7 +315,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine(json ? DigestOutputFormatter.FormatJson(report) : DigestOutputFormatter.FormatText(report));
+        Console.WriteLine(json ? DigestOutputFormatter.FormatJson(report) : DigestOutputFormatter.FormatText(report, fingerprint));
 
         return report.Files.Any(f => f.FileError is not null) ? 1 : 0;
     }
