@@ -1,0 +1,227 @@
+BLOCK FB MotorVSDSystem
+ROOTID 0
+NUMBER 2
+LANGUAGE LAD
+COMMENT "Variable-speed-drive motor control. Repurposed from the DOL MotorStarter FB: keeps its start/stop arbitration, hand-intervention, prestart, delayed shutdown, fail-to-run/stop, fault aggregation, upstream-enable, hours-run, telemetry and alarm behaviour, but swaps the single on/off contactor feedback for a bidirectional drive (forward/reverse run + direction-specific running feedback and drive fault), and layers speed control on top (source select, min-speed floor, scaling to engineering units, and a startup/settle grace window that gates fail-to-run)."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    IO : "MotorVSDIOSet" RETAIN SETPOINT
+      InHand : Bool
+      AutoStartSignal : Bool
+      HandStartSignal : Bool
+      RunningFwdFB : Bool
+      RunningRevFB : Bool
+      VSDError : Bool
+      SystemHealthy : Bool
+      PreStartDone : Bool
+      InhibitMotor : Bool
+      FaultReset : Bool
+      FTTime : Real
+      EnableUPSTime : Real
+      FaultActive : Bool
+      Run : Bool
+      RunRev : Bool
+      UPSEnable : Bool
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm : Word
+      Name : String
+      HandIntervention : Bool
+      TryRunMotor : Bool
+      RecentStart : Bool
+      ShutdownComplete : Bool
+      ShutdownTime : Real
+      Shutdown : Bool
+      StopMotor : Bool
+      VSDWarning : Bool
+      HandSpeedInput : Real
+      AutoSpeedInput : Real
+      SpeedOutput : Int
+      SpeedPerc : Real
+      SpeedFB : Int
+      SpeedReached : Bool
+      AmpsFB : Real
+      OverTempFault : Bool
+      ThermalOLFault : Bool
+      TorqueLimitOk : Bool
+      VSDReady : Bool
+      VSDOpEnable : Bool
+      VSDOverSpeed : Bool
+      VSDUnderSpeed : Bool
+      RotationSensor : Bool
+      StartUpTime : Real
+      MaxRPM : Int
+      MinSpeed : Real
+    RisingEdgeFlags : Array[0..3] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    HrTotaliserTimerReset : Bool
+    EnableUPSTimeMS : DInt
+    ShutdownTimeMS : DInt
+    FTTimeMS : DInt
+    StartUpTimeMS : DInt
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    StartUpTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PreStartMemory : Bool
+    HandNegEdge : Bool
+    HandPosEdge : Bool
+    MotorRunning : Bool
+    LastSpeed : Real
+    RunRevEdge : Bool
+    RunRevPrev : Bool
+  TEMP
+    Time : Real
+    MaxRPMReal : Real
+    SpeedRefReal : Real
+  CONSTANT
+
+NETWORK 1 "DOL Motor Start / Stop"
+  COIL IO.TryRunMotor := ((NOT IO.InHand OR IO.InHand AND NOT IO.HandIntervention) AND IO.AutoStartSignal OR IO.InHand AND IO.HandIntervention AND IO.HandStartSignal) AND NOT IO.InhibitMotor AND NOT IO.FaultActive AND IO.SystemHealthy
+  COIL IO.Run := (IO.TryRunMotor{split 1} AND PreStartMemory AND IO.RecentStart OR IO.TryRunMotor{recv 1} AND IO.Run) AND NOT IO.StopMotor AND NOT IO.Shutdown
+
+NETWORK 2 "Hand Intervention Logic"
+  COMMENT "Must Have Set Bit (#IO.HandIntervention)On Hand Control Buttons Press/Release On HMI"
+  RCOIL IO.HandIntervention := NOT IO.InHand
+  RCOIL IO.HandStartSignal := NOT IO.InHand OR NOT IO.HandIntervention OR IO.FaultActive OR IO.InhibitMotor
+
+NETWORK 3 "Start Signal After Inhibit/Fault"
+  COMMENT "Must Have Set Bit (#IO.RecentStart)On Auto/Hand Start Buttons Press/Release On HMI"
+  TON(GeneralDelayTimer, IN := ((NOT PreStartMemory OR NOT IO.RecentStart) AND IO.HandStartSignal OR IO.TryRunMotor) AND IO.InHand AND NOT IO.Run, PT := T#100MS)
+  COIL IO.RecentStart := IO.RecentStart AND NOT IO.Run AND PreStartMemory AND NOT IO.FaultActive
+  RCOIL IO.HandStartSignal := GeneralDelayTimer.Q
+
+NETWORK 4 "Hand Selector Edges And Prestart Timeout"
+  TON(InHandReqPreStart, IN := PreStartMemory AND NOT IO.PreStartDone AND IO.InHand, PT := T#30S)
+  COIL HandPosEdge := IO.InHand{split 1} AND NOT RisingEdgeFlags[3]
+  COIL RisingEdgeFlags[3] := IO.InHand{recv 1}
+  COIL HandNegEdge := (IO.InHand{split 3} OR NegitiveSignalEdge[1]{split 4}){split 2} AND NOT IO.InHand
+  COIL NegitiveSignalEdge[1] := (IO.InHand{recv 3} OR NegitiveSignalEdge[1]{recv 4}){recv 2} AND NOT HandNegEdge
+
+NETWORK 5 "Prestart Hold On Until Motor Run Signal"
+  COIL PreStartMemory := IO.PreStartDone OR PreStartMemory AND NOT IO.FaultActive AND NOT IO.Run AND NOT InHandReqPreStart.Q AND NOT HandPosEdge AND NOT HandNegEdge
+
+NETWORK 6 "HMI Times"
+  COMMENT "HMI-set times on the IO struct are Real seconds for operator legibility; the HMI-tunable timers below need their PT in DInt ms - one MUL+CONVERT pair per preset, in order: ShutdownTime to ShutdownTimeMS, EnableUPSTime to EnableUPSTimeMS, FTTime to FTTimeMS (one preset, shared by both Fail To Run and Fail To Stop), StartUpTime to StartUpTimeMS (the VSD startup/settle window). Kept as one block up front rather than repeated at each timer, so the x1000 idiom is visibly consistent and only ever done once (C-126 documented exception)."
+  MUL(EN := TRUE, IN1 := IO.ShutdownTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := IO.EnableUPSTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := IO.FTTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := IO.StartUpTime, IN2 := 1000.0) => Time
+  CONVERT(EN := ENO, IN := Time) => ShutdownTimeMS
+  CONVERT(EN := ENO, IN := Time) => EnableUPSTimeMS
+  CONVERT(EN := ENO, IN := Time) => FTTimeMS
+  CONVERT(EN := ENO, IN := Time) => StartUpTimeMS
+
+NETWORK 7 "DOL Motor Shutdown"
+  TON(ShutdownTimer, IN := IO.StopMotor, PT := ShutdownTimeMS)
+  SCOIL IO.StopMotor := IO.Shutdown{split 1} AND NOT RisingEdgeFlags[1]
+  COIL RisingEdgeFlags[1] := IO.Shutdown{recv 1}
+  COIL IO.ShutdownComplete := ShutdownTimer.Q AND NOT MotorRunning OR IO.ShutdownComplete AND NOT IO.Run OR IO.InHand AND IO.HandIntervention AND NOT IO.HandStartSignal OR IO.FaultActive
+  RCOIL IO.StopMotor := IO.ShutdownComplete AND NOT IO.Shutdown
+
+NETWORK 8 "Fail To Run"
+  COMMENT "Fail-to-run is armed off the startup-window completion (StartUpTimer.Q, network 19) instead of directly off the run command, so drive ramp-up and commanded-speed / direction changes do not cause nuisance FTR trips (REQ-V5); running is the direction-derived MotorRunning (REQ-V6)."
+  TON(FaultTripTimer, IN := IO.Run AND StartUpTimer.Q AND NOT MotorRunning, PT := FTTimeMS)
+  COIL IO.FTR := FaultTripTimer.Q OR IO.FTR AND NOT IO.FaultReset
+
+NETWORK 9 "Fail To Stop"
+  TON(FTSTimer, IN := NOT IO.Run AND MotorRunning, PT := FTTimeMS)
+  COIL IO.FTS := FTSTimer.Q OR IO.FTS AND NOT IO.FaultReset
+
+NETWORK 10 "Faults"
+  COIL IO.FaultActive := IO.FTR OR IO.FTS OR IO.VSDError OR IO.FaultActive AND NOT IO.FaultReset
+
+NETWORK 11 "Motor Running, Enable Upstream Component"
+  TON(EnableUpstreamTimer, IN := (NOT IO.InHand OR NOT IO.HandIntervention) AND IO.Run AND MotorRunning, PT := EnableUPSTimeMS)
+  COIL IO.UPSEnable := EnableUpstreamTimer.Q
+
+NETWORK 12 "Hours Run Counter"
+  TONR(HrTotaliserTimer, IN := IO.Run AND MotorRunning, PT := T#1H, R := HrTotaliserTimerReset)
+  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q{split 1}
+  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q{recv 1}
+  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2]{split 2} AND IO.HrsRun = 4294967295, IN := 0) => IO.HrsRun
+  ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2]{recv 2} AND IO.HrsRun < 4294967295, IN1 := 1, IN2 := IO.HrsRun) => IO.HrsRun
+
+NETWORK 13 "HMI Motor Status Telemetry"
+  MOVE(EN := NOT IO.FaultActive{split 1}, IN := 0) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive{recv 1} AND IO.Run{split 2}, IN := 1) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive AND IO.Run{recv 2} AND MotorRunning{split 3}, IN := 2) => IO.Telemetry
+  MOVE(EN := NOT IO.FaultActive AND IO.Run AND MotorRunning{recv 3} AND IO.UPSEnable OR NOT IO.FaultActive AND IO.Run AND MotorRunning{recv 3} AND IO.InHand, IN := 3) => IO.Telemetry
+  MOVE(EN := IO.FaultActive, IN := -1) => IO.Telemetry
+
+NETWORK 14 "Alarm"
+  COIL IO.Alarm.%X0 := IO.FTR
+  COIL IO.Alarm.%X1 := IO.FTS
+  COIL IO.Alarm.%X2 := IO.VSDError
+
+NETWORK 15 "VSD Max-Speed Range"
+  COMMENT "AnalogScale's range parameters are Real, but MaxRPM is an Int setpoint - convert it once here so network 16 can pass it as Scaled_Max (REQ-V3). Separate network because statement kind-order puts a CALL before a CONVERT, so a convert feeding the CALL cannot share its network."
+  CONVERT(EN := TRUE, IN := IO.MaxRPM) => MaxRPMReal
+
+NETWORK 16 "VSD Speed Reference"
+  COMMENT "Speed setpoint pipeline (REQ-V1/V2/V3): pick the active 0-100% source by hand/auto selector, floor the selected value at the configured minimum runnable speed so the drive is never commanded below it, then scale 0-100% to 0..MaxRPM engineering units via AnalogScale. The scaled Real result becomes the Int SpeedOutput in network 17."
+  MOVE(EN := NOT IO.InHand, IN := IO.AutoSpeedInput) => IO.SpeedPerc
+  MOVE(EN := IO.InHand, IN := IO.HandSpeedInput) => IO.SpeedPerc
+  MOVE(EN := IO.SpeedPerc < IO.MinSpeed, IN := IO.MinSpeed) => IO.SpeedPerc
+  CALL AnalogScale(EN := TRUE, Input := IO.SpeedPerc, Input_Min := 0.0, Input_Max := 100.0, Scaled_Min := 0.0, Scaled_Max := MaxRPMReal, Output => SpeedRefReal)
+
+NETWORK 17 "VSD Speed Output"
+  COMMENT "Convert the scaled Real speed reference to the Int SpeedOutput the drive consumes (REQ-V3). Split from network 16 because a CALL must be the last statement in its network (statement kind-order), so the Real-to-Int convert of the CALL result lands here."
+  CONVERT(EN := TRUE, IN := SpeedRefReal) => IO.SpeedOutput
+
+NETWORK 18 "VSD Running State"
+  COMMENT "Derived running condition for the bidirectional drive (REQ-V6): the motor is running if either the forward or reverse feedback is present. Everything that consumed the DOL's single RunningFB (shutdown-complete, fail-to-run, fail-to-stop, upstream-enable, hours-run, telemetry) now reads this one bit, so the direction-specific feedback is combined in exactly one place."
+  COIL MotorRunning := IO.RunningFwdFB OR IO.RunningRevFB
+
+NETWORK 19 "VSD Startup / Speed-Settle Window"
+  COMMENT "Startup/ramp grace window (REQ-V4/V5/V7): the timer runs only while the drive is commanded to run, the commanded speed setpoint is stable (equal to last scan) and there was no reverse-command edge this scan - a setpoint change or a direction change re-arms it. Its Q gates fail-to-run (network 8) so ramp-up and speed/direction changes do not nuisance-trip FTR. LastSpeed stores this scan's setpoint for next scan's stability test; RunRevEdge/RunRevPrev are the constructed reverse-command edge (C-004 idiom)."
+  TON(StartUpTimer, IN := IO.Run AND IO.SpeedPerc = LastSpeed AND NOT RunRevEdge, PT := StartUpTimeMS)
+  COIL RunRevEdge := IO.RunRev AND NOT RunRevPrev OR NOT IO.RunRev AND RunRevPrev
+  COIL RunRevPrev := IO.RunRev
+  MOVE(EN := TRUE, IN := IO.SpeedPerc) => LastSpeed
