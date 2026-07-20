@@ -11,6 +11,7 @@ using Converter.Sanitize;
 using Converter.SimaticMl;
 using Converter.TagStatus;
 using Converter.TargetScan;
+using Converter.Trace;
 
 namespace Converter;
 
@@ -68,6 +69,11 @@ internal static class Program
             return RunCrossCheck(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "trace")
+        {
+            return RunTrace(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
@@ -84,6 +90,7 @@ internal static class Program
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
+            Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0");
             return 1;
         }
 
@@ -662,6 +669,71 @@ internal static class Program
         Console.WriteLine(json ? CrossCheckOutputFormatter.FormatJson(report) : CrossCheckOutputFormatter.FormatText(report));
 
         // A facts provider, not a gate — always exit 0 (like the `converter review` dump the skills embed).
+        return 0;
+    }
+
+    private static int RunTrace(string[] args)
+    {
+        string? bindingPath = null;
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--binding":
+                    bindingPath = RequireValue(args, ref i, "--binding");
+                    break;
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (bindingPath is null || projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter trace --binding <bindings.json> --project <ir-dir> [--json]");
+            return 1;
+        }
+
+        if (!File.Exists(bindingPath))
+        {
+            Console.Error.WriteLine($"--binding file not found: {bindingPath}");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        TraceReport report;
+        try
+        {
+            report = TraceRunner.Run(bindingPath, projectDir);
+        }
+        catch (BindingFileException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            Console.Error.WriteLine($"--binding file is not valid JSON: {ex.Message}");
+            return 1;
+        }
+
+        Console.WriteLine(json ? TraceOutputFormatter.FormatJson(report) : TraceOutputFormatter.FormatText(report));
+
+        // A facts provider, not a gate — exit 0 (candidate verdicts are for the reviewer to confirm).
         return 0;
     }
 
