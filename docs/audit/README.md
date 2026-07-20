@@ -3,8 +3,9 @@
 The standing charter for periodic audits of this project. An audit is a **deliberate, owner-requested
 health check**, run occasionally (not on every change), that gives a strong overview of the project's
 state — verifying its documented picture of itself against what the code, tests, and git history actually
-say, and, when requested, reviewing tooling quality, process, and compliance. Each audit produces one
-dated report in this folder.
+say, and, when requested, reviewing tooling quality, process, and compliance. It is **read-only**: it
+changes nothing in the repo, and produces two dated files in this folder — a findings report and an
+actionable fix list.
 
 This document formalises **what an audit may cover, how it is run, and what it must produce**. It is
 derived from the two audits that predate it, whose criteria it generalises:
@@ -33,6 +34,23 @@ reasoning about ladder logic. The moment a finding would require a block to be *
 semantically reviewed**, it is out of the audit's lane: dispatch it to `lad-coder` / the review skills
 (hard rule 8), and record it as a hand-off, not an audit finding.
 
+## The audit is read-only
+
+**An audit never modifies the repository — no edits, no fixes, no commits.** It reads, verifies, and
+reports. This is a change from the two founding audits, which fixed mechanical issues inline; going forward
+the auditor and the fixer are kept separate, so the thing that *judges* the project is never also the thing
+that *changes* it (auditor independence — and it means an audit can be run at any time without disturbing
+in-flight work).
+
+Concretely: the only things an audit runs are read/observe actions — reading files, `grep`, `git log`,
+`dotnet test`, and the read-only tooling commands (`converter tagstatus`/`diff`/`digest`/`drift-check`,
+`openness-cli list`/`compile`/`sanity-check`/`portal-status`). It writes **only** its own two output files
+under `docs/audit/` (the report and the fix list). It does not touch the code, docs, or IR it is auditing.
+
+Every issue the audit finds becomes an entry on the **fix list** (its own file — see the output contract),
+with a precise recommended action. Actually applying those fixes is a **separate, later step** — done by
+the owner or a follow-up working session against the fix list — explicitly outside the audit itself.
+
 ## How an audit is scoped
 
 **The owner picks the scope from the dimension menu below; the auditor does not silently expand it.**
@@ -40,8 +58,10 @@ This is how the 2026-07-14 audit ran — the owner chose two of the offered dime
 excluded compliance auditing that round. State the chosen dimensions at the top of the report, and name
 anything offered-but-excluded so the exclusion is on the record, not an oversight.
 
-Each report also states its **baseline**: which prior audit it picks up from (so the doc suite is covered
-continuously, not re-read from zero each time) and what had shipped since.
+Each report also states its **prior-audit baseline**: which earlier audit it picks up from (so the doc
+suite is covered continuously, not re-read from zero each time) and what had shipped since. ("Baseline" is
+also used in one other, distinct sense — the *test baseline*, the recorded green test counts at audit time;
+see Method rule 1. The two are unrelated.)
 
 ## Audit dimensions (the criteria)
 
@@ -121,9 +141,10 @@ default assumption.
   git history, dispatch records — not by reading the ladder that resulted.
 - **Data-boundary compliance** — Amber-tier usage stayed inside a recorded per-project approval in
   `docs/13-data-boundary.md`; no identifying data outside an approval. Note that 2026-07-14 #5
-  *flagged* a data-governance scope question here but, correctly, did not resolve it unilaterally — see the
-  fixed-vs-flagged rule below. (The cheap mechanical *leak grep* is not gated here — it runs every audit as
-  Method rule 7; D5 is the deeper judgement of whether recorded approval scope actually covers what happened.)
+  *flagged* a data-governance scope question here but, correctly, did not resolve it unilaterally — such
+  items become **decide**-disposition entries on the fix list, never actioned by the audit. (The cheap
+  mechanical *leak grep* is not gated here — it runs every audit as Method rule 7; D5 is the deeper judgement
+  of whether recorded approval scope actually covers what happened.)
 
 ### D6 — Cross-reference / dead-link integrity
 Do the project's internal pointers still resolve? Distinct from D2: D2 checks whether *claims* agree; this
@@ -140,13 +161,13 @@ checks whether *references* are live.
 ### D7 — Prior-findings follow-through
 Did the *previous* audit's outcomes actually land? A meta-check the earlier audits couldn't run because
 nothing preceded them.
-- Walk the prior report's **Flagged, not fixed** and deferred items and classify each as: resolved /
-  still-deferred-on-purpose (with the deferral still justified) / silently dropped.
+- Walk the prior audit's **fix list** and classify each item as: done (the recommended action was executed) /
+  still-open / silently dropped. For the two founding audits, which pre-date the fix-list format and applied
+  mechanical fixes inline, walk their **Flagged, not fixed** items the same way and confirm their inline
+  **Fixed directly** changes are still in place and weren't quietly reverted.
 - Standing carry-forward items to track until closed: `docs/13-data-boundary.md`'s JOB9002 approval-scope
   record (2026-07-14 #5), the `Normalizer` Part-UId-volatility gap, the committed reference-corpus growth
   for live-TIA coverage, and any `PartNode`/`DbMember` restructure decision.
-- Also confirm each prior audit's **Fixed directly** changes are still in place and weren't quietly
-  reverted.
 
 ### D8 — AI-operational surface
 The deliverable is "an AI capable of programming ladder logic," so the layer that *produces* ladder is
@@ -195,9 +216,10 @@ home rather than living only as a D3 footnote.
 
 ## Method — standing rules for every audit
 
-1. **Bracket with green tests.** Confirm all three PC-side suites pass *before* starting and *after* any
-   change (`dotnet test`: converter, openness-cli, golden-harness; state the counts). A doc-only pass still
-   re-confirms them.
+1. **Capture the test baseline.** Run all three PC-side suites once (`dotnet test`: converter, openness-cli,
+   golden-harness) and record the pass counts — this is the *test baseline*, a state fact reported in the
+   project-state summary and D4. Because the audit changes nothing, there is nothing to re-verify
+   afterward; a red suite at this point is itself a finding, not a blocker to fix mid-audit.
 2. **Verify empirically; don't trust either side of a contradiction.** When docs disagree with each other or
    with code, run the tests / read the source / check `git log` and let the result decide — as 2026-07-11 #2
    did by running all three suites rather than believing the doc *or* the diff.
@@ -211,15 +233,16 @@ home rather than living only as a D3 footnote.
 7. **Always run the baseline leak grep** — every audit, regardless of scope. Grep tracked files for known
    identifying strings (real names, the live project/asset identifiers the `test-project001`
    de-identification was meant to remove) and flag any hit in Green-tier committed content. It's cheap,
-   mechanical, high-consequence, and needs no ladder reading — so it is baseline, not gated behind D5's
+   mechanical, high-consequence, and needs no ladder reading — so it runs by default, not gated behind D5's
    opt-in compliance round. Deeper data-boundary governance (approval-scope adequacy) stays in D5.
 
-## Report naming convention
+## File naming convention
 
-Every audit produces exactly one report file, named:
+Every audit produces exactly **two files**, sharing one dated stem so they sort together:
 
 ```
-docs/audit/YYYY-MM-DD-<short-scope>.md
+docs/audit/YYYY-MM-DD-<short-scope>.md            # the report (findings + project-state summary)
+docs/audit/YYYY-MM-DD-<short-scope>-fixlist.md    # the actionable fix list
 ```
 
 Firm rules:
@@ -230,41 +253,70 @@ Firm rules:
   capitals, or non-ASCII), 2–5 words, plainly naming what the round covered, and **ending in `-audit`**.
   Follow the established form: `stage-and-docs-audit`, `code-quality-and-docs-audit`. Describe the scope in
   plain terms rather than by raw dimension codes (write `stage-and-docs-audit`, not `d1-d2-audit`).
-- **One file per audit.** A landed report is a point-in-time record — never rewritten except to fix a typo.
-  New findings, or a re-check later, mean a *new* dated report, not an edit to an old one.
+- **The fix list is the same stem plus `-fixlist`.** So `2026-08-01-full-project-audit.md` pairs with
+  `2026-08-01-full-project-audit-fixlist.md`. If a round somehow finds nothing actionable, still create the
+  fix list and state "no actions" — its presence is the proof the audit produced one.
+- **Both files are point-in-time records** — a landed report or fix list is never rewritten except to fix a
+  typo. New findings, or a re-check later, mean a *new* dated pair, not an edit to an old one. (The fix
+  list records the *recommended* actions as of audit time; whether/when they were executed is tracked by
+  the next audit's D7, not by editing this one.)
 - **Two audits in one day** — give each a distinct `<short-scope>` (the natural case, since same-day audits
-  differ in scope); only if scopes are genuinely identical, suffix `-2`, `-3`.
+  differ in scope); only if scopes are genuinely identical, suffix `-2`, `-3` on the stem.
 
 ## Output contract — what an audit produces
 
-The report opens with a project-state snapshot, then the scoped findings. Structure:
+The audit is read-only (see above); its entire output is the two files below. Nothing else in the repo is
+touched.
+
+### File 1 — the report (`…-<short-scope>.md`)
+
+The findings-of-record. It opens with the project-state snapshot, then the scoped findings. Structure:
 
 - **Project state summary — the strong overview** *(required, first, every audit regardless of scope).*
   A concise at-a-glance description of **the state the project is in at audit time**, so a reader who opens
   only this section understands where the project stands. Cover: the active roadmap stage and what is
   in-flight / blocked / awaiting a gate; the high-water mark of what has shipped (and what shipped since the
-  baseline audit); an overall health read across the areas the audit touched (a short per-area
-  green/amber/red-style verdict is ideal); the test-suite baseline (the three suites' pass counts); and the
-  headline open decisions or risks. This is a *description grounded in what the audit verified* — not an
-  unchecked restatement of what the docs claim. Precedent: the 2026-07-11 report's "Stage/goals summary at
-  time of audit" section, now made a standing requirement.
+  prior-audit baseline); an overall health read across the areas the audit touched (a short per-area
+  green/amber/red-style verdict is ideal); the test baseline (the three suites' pass counts); and the
+  headline open decisions or risks. Close it with a one-line pointer to the fix list and the count of items
+  by severity. This is a *description grounded in what the audit verified* — not an unchecked restatement of
+  what the docs claim. Precedent: the 2026-07-11 report's "Stage/goals summary at time of audit" section,
+  now made a standing requirement.
 - **Header:** who requested it, the chosen scope (dimensions D1–D10), anything offered-but-excluded, and the
-  baseline (which prior audit it continues + what shipped since).
+  prior-audit baseline (which earlier audit it continues + what shipped since).
 - **Findings**, grouped by dimension and **ranked by severity within each group** (most consequential
   first — the prior audits ordered implicitly; make it explicit so triage is obvious). Each finding states
-  what was checked, what was found, and — critically — which of the two dispositions it got:
-  - **Fixed directly** — only safe, mechanical corrections with no design or governance decision involved
-    (stale text, missing changelog entries, self-contradictions, dead links). Say exactly what changed and
-    cite the commit if one was made.
-  - **Flagged, not fixed** — anything requiring an owner decision: design trade-offs, data-governance
-    records, scope calls. The auditor surfaces these, never resolves them unilaterally (2026-07-14 #5 is
-    the template: a compliance-relevant scope entry left for the owner to write).
+  what was checked and what was found, with evidence (file/line, grep hit, test/command output), and carries
+  a **fix-list ID** (`F-01`, `F-02`, …) linking to its action entry. Findings describe; they never claim a
+  fix was made — the audit makes none.
 - **Positives / clean-bill notes** — dimensions checked with no issue found are recorded, not omitted.
-- **Prior-findings status (D7)** — if D7 was in scope, an explicit table of previous flagged/deferred items
-  and their current disposition.
+- **Prior-findings status (D7)** — if D7 was in scope, an explicit table of the previous audit's fix-list
+  items and flagged/deferred items, each classified done / still-open / silently-dropped.
 - **Outcome + process recommendations** — a short close-out, plus any standing-habit recommendation the
   round surfaced (e.g. the whole-file reconcile rule, promoted here from 2026-07-14's recommendation).
-- **Re-confirm tests green** at the end and state the counts.
+
+### File 2 — the fix list (`…-<short-scope>-fixlist.md`)
+
+The actionable, self-contained work list a follow-up session or the owner executes **after** the audit. It
+is not narrative — it is a ranked table of discrete actions, each turnkey enough to hand off without
+re-reading the whole report. One row per action:
+
+| Field | Contents |
+|-------|----------|
+| **ID** | `F-01`, `F-02`, … — matches the finding's ID in the report |
+| **Severity** | blocker / high / medium / low — table sorted by this, worst first |
+| **Dimension** | which D-dimension it came from (D1–D10) |
+| **Problem** | one line: what's wrong |
+| **Recommended action** | the precise fix — exact file(s) and what to change — written so it can be applied without rediscovery |
+| **Disposition** | **fix** (mechanical, safe, no decision needed — the old "fixed directly", now *recommended* not applied) · **decide** (needs an owner call: design / governance / scope — never resolved unilaterally, 2026-07-14 #5 is the template) · **accept** (acknowledged, no action / deliberately deferred, with the reason) |
+| **Effort / risk** | a rough size and any blast-radius note |
+
+If the round finds nothing actionable, the file still exists and says "no actions". Executing these items —
+editing code/docs, committing — is a **separate step outside the audit**; the audit only recommends. Every
+executed item is then verifiable by the next audit's D7 against this list.
+
+Confirm the **test baseline** counts appear in the state summary; the audit runs the suites once (Method
+rule 1) and makes no changes, so there is no "after" run to reconfirm.
 
 ## Record of audits
 
