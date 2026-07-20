@@ -57,10 +57,12 @@ tally so far: 1 of 10** (fix waves excluded — keep this count here as the live
   (analyse → gate 1 → build → check → gate 2); **compile-clean** on scratch, invariance proven
   (3 additive blocks, nothing existing edited). Stage-4 review caught two real correctness edges
   (F1 reset history-dependence, F2 re-arm race) + readability (S1), all rooted in the countdown-budget
-  Gap-E workaround — **owner accepted as documented known limitations** (not silently shipped), now a
-  `gen-block-modify-fix` validation-corpus candidate (clean fix = rebuild NW3 post-`e7e4980`). Not yet
-  wired into the scan (integration = deferred follow-on). Record: `gen/test-project001/hopper-blockage-alarm/`,
-  `docs/evidence/stage-S6.md`.
+  Gap-E workaround; C-605 (UDT comments) fixed. **F1/F2/S1 then FIXED via `gen-block-modify-fix`**
+  (its first real application, `7c842fd`) — root rebuild of NW3/4/5 to a clean up-accumulator, invariance
+  proven, compile-clean, **fresh re-review confirmed resolved + no regression**. Block is now correct +
+  readable. Proved live: `Time >= Time` compare synthesizes (Gap E fix works) and generic `ADD` accepts
+  Time in TIA. Not yet wired into the scan (integration = deferred follow-on). Record:
+  `gen/test-project001/hopper-blockage-alarm/`, `docs/evidence/stage-S6.md`.
 
 ## Current task: none — nothing in-flight
 

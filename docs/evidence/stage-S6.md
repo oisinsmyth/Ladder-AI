@@ -859,3 +859,22 @@ them — including a fail-safe convention subtlety grounded against rule text. T
 to prove. Process note for the record: the build ran **manual-to-contract**, not via the `gen-block-new`
 skill wrapper (design locked at gate 1; build needed converter-capability reconciliation the wrapper wouldn't
 automate) — an acceptable path per docs/15, flagged for transparency. Counts as **S6 request 1 of 10**.
+
+**Follow-on same day — `gen-block-modify-fix` first real application closes F1/F2/S1 (2026-07-20).** The owner
+elected to fix the documented limitations immediately via the next build-order skill. `gen-block-modify-fix`
+rebuilt the cumulative-timer mechanism (NW3/4/5) from the fragile countdown remaining-budget into a clean
+**up-accumulator** — `AccumulatedElapsed` banked across pauses by two provably-disjoint writers, trip on
+`CumulativeElapsed ≥ BlockedTimeThreshold` — dissolving all three linked findings at their shared root rather
+than patching. F1 fixed by gating the NW5 latch entirely on `NOT FaultReset` (the old `Q OR (latch AND NOT
+reset)` precedence let a still-true trip defeat the reset); F2/S1/S2 fixed by deleting the dual-written
+`RemainingTime` (NW4 dropped 5→2 statements). **Two live capability datapoints proven:** the tag-vs-tag
+`Time ≥ Time` comparison synthesizes (Gap E's `e7e4980` fix confirmed working end-to-end), and TIA accepts
+**generic `ADD` on `Time`** operands (no `T_ADD` builder needed) — both useful for future cumulative-timer
+logic. One import-shape workaround (bare `T#0S` in MOVE rejected → zero from an unwritten `ZeroTime` member).
+Gates: invariance `converter diff --only 3 4 5` = INVARIANCE OK (NW1/2/6 byte-identical, UDT untouched);
+preflight 0 findings; block compile `State=Success, 0 errors`; **fresh-context re-review confirmed F1/F2
+RESOLVED with no regression** (pause-resume timing, disjoint writers, and `ZeroTime`-never-written all traced
+clean). Commit `7c842fd`. **`gen-block-modify-fix` is now validated on a genuine reviewer-found bug corpus**
+(beyond its 2026-07-18 genval2 validation) — two coding skills exercised end-to-end from one plain-language
+request. The block is now correct + readable; the only residual is integration (CALL + annunciation), still a
+deferred follow-on.
