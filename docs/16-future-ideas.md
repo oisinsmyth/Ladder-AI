@@ -33,18 +33,20 @@ parallel subagents). Current state (each entry below carries its own authoritati
   FI-16 telemetry, FI-19/FI-20 doc splits (all earlier) — plus the **2026-07-20 wave**: FI-24 `tagstatus`
   (tag-status half; gen-architecture adopts it), FI-29 `reuse-scan`, FI-30 `target-scan`, FI-26
   `drift-check`, FI-27 `preflight` flow-order check, FI-28 `openness-cli portal-status`, FI-22
-  `cross-check`, FI-23 `digest --fingerprint`, **FI-25 `trace`** (forward-pass tracer, v1 **+ v2 disarmed
-  hop**), **FI-22 aliasing follow-up** (dead-wiring now covers interface-UDT members). Skills wired to the
-  new tools (explain-plc-block, review-conventions, review-functional [incl. `trace`], gen-architecture).
-- **Partial:** FI-09 — C-408/C-001, **C-103/C-121 inline**, **C-118**, and **C-119/C-120/C-122** (sequencer
-  structural, 2026-07-20) are mechanical `converter review` checks; the remainder is by-design AI (C-107/C-402
-  edge-memory judgment — the mechanical half is FI-22's writer table; C-119's returned-to / C-122's Q→fault /
-  C-113 paradigm). **C-125** is now feasible (its C-122 blocker is built). FI-25 — only the **timing** hop
-  is documented v2 (disarmed shipped). FI-24 — provenance-header wrapper HELD (owner: keep the converter
-  pure — no external-process shell-out).
-- **Open, actionable next (no external gate):** FI-17 explanation sidecars (pilot); FI-25 v2 **timing** hop
-  (net-new s→ms dataflow); FI-09 **C-125** (dwell-timeout fault bit in the interface UDT — now that C-122 is
-  built).
+  `cross-check`, FI-23 `digest --fingerprint`, **FI-25 `trace`** (forward-pass tracer — **all 5 hops:
+  output-path / interface-chain / disarmed / number-constraint / timing**), **FI-22 aliasing follow-up**
+  (dead-wiring now covers interface-UDT members), **FI-17** `ir-hash` + explanation-sidecar convention
+  (pilot). Skills wired to the new tools (explain-plc-block, review-conventions, review-functional [incl.
+  `trace`], gen-architecture).
+- **Partial:** FI-09 — C-408/C-001, **C-103/C-121 inline**, and the **C-118–125 sequencer family** (C-118,
+  C-119, C-120, C-122, C-125, 2026-07-20) are mechanical `converter review` checks; the remainder is
+  **by-design AI** and needs no tooling (C-107/C-402 edge-memory judgment — mechanical half is FI-22's
+  writer table; C-119's returned-to; C-122/C-123 Q-drives-a-fault; C-113 paradigm). FI-24 —
+  provenance-header wrapper HELD (owner: keep the converter pure — no external-process shell-out).
+- **Open, actionable next (no external gate):** **essentially cleared** — the mechanical-tooling backlog is
+  done. Only the FI-25 timing hop's *sidecar-exact MUL↔CONVERT wire* refinement remains as a low-value
+  deepening (the current hop verifies name/operand correspondence). Everything else is AI-by-design, gated,
+  or held.
 - **Gated (waiting on a stage/event/measurement):** FI-08 (first real S6 tag-proposal loop), FI-11
   (`generate` orchestrator), FI-12 (FI-16 measurement), FI-18 (owner scoping), FI-06 (S8 grounded example),
   FI-10 (S5), FI-02 (real OB content), FI-01 (S9), FI-03 (grounded example).
@@ -58,21 +60,20 @@ The living order over what's *left* after the 2026-07-20 build wave (supersedes 
 below). Ranked by value × leverage ÷ effort; items hard-gated by an external event are listed separately,
 unranked, because timing isn't ours to choose.
 
-**Buildable now (ranked):**
+**Buildable now (ranked):** the mechanical-tooling backlog is **essentially cleared** — FI-09 C-125,
+FI-17, and the FI-25 timing hop (this batch) were the last three ranked items, all shipped. What remains:
 
-1. **FI-09 C-125.** Smallest, now-unblocked win: with C-122 built, "the dwell-timeout's fault bit lives in
-   the same interface UDT" is a structural check on the same `review --project` seam (resolve the timer's
-   `.Q`-consumer bit's home via the UDT index). Low effort/risk.
-2. **FI-17 — explanation sidecars (pilot).** Independent; its old gate (FI-15 digest hygiene) is resolved.
-   Cache the S2 explanation per IR hash, orientation-only, never review input. Start by caching what normal
-   work already produces before building tooling.
-3. **FI-25 v2 — the `timing` hop.** The last tracer hop and the heaviest: net-new dataflow to trace a timer's
-   `PT` back through the ×1000 s→ms `MUL`/`CONVERT` chain and recognise the multiplier. Narrower value than
-   the shipped hops; do when the s→ms pair-crossing trap is worth mechanizing.
+1. **FI-25 timing hop — sidecar-exact MUL↔CONVERT refinement** (low value). The shipped hop verifies the
+   timer's PT is the ×1000 ms form of the bound seconds member by name/operand correspondence; a deepening
+   would resolve the exact `EN:=ENO` wire (sidecar `PrecedingEnoSidecar.PrecedingPartUId`) to also catch a
+   subtle shared-scratch wire-crossing. Only worth doing if that trap ever actually bites.
 
-*(Done this batch: FI-25 v2 **disarmed** hop and FI-09 **C-119/C-120/C-122** — see Implemented above. FI-09
-C-107/C-402 need no separate work — the mechanical single-writer signal is FI-22's `cross-check` multi-writer
-table. **FI-24** provenance wrapper is HELD by owner decision, kept off this list.)*
+Otherwise nothing is buildable without an external trigger. **FI-24** provenance wrapper stays HELD (owner:
+keep the converter pure). The FI-09 remainder (C-107/C-402, C-119-returned-to, C-122/C-123 Q-drives-a-fault,
+C-113) is **AI-by-design — not tooling work**.
+
+*(Shipped across this session's batches: FI-25 v1 + v2 disarmed + v2 timing, FI-09 C-103/C-118/C-119/C-120/
+C-122/C-125, FI-17, FI-22 aliasing — see Implemented above.)*
 
 **Gated — build when the trigger fires (unranked; blocked on an external event):**
 
@@ -210,7 +211,12 @@ present, Error), C-120 (steps ascend ×10, Warn), C-122 (dwell-timer shape: IN g
 instance not `DB_Timers`, PT a UDT settings member — the PT-home part `NotApplicable` without `--project`).
 Clean on the real steppers (`FB_ShredderSequencer`/`FB_PusherControl`), no false positives. The AI-deferred
 halves stay AI: C-119's "returned-to on stop/fault/restart" (C-124), C-122's "Q drives a fault" (C-123),
-and C-125 (blocked on… now C-122 is built, so C-125 becomes feasible next — see prioritization).
+and **C-125 landed 2026-07-20** — `Rules.CheckC125TimeoutFaultInInterfaceUdt`: a C-122 dwell-timeout timer's
+own fault bit (identified via the safe contrapositive: reads a C-122-subject timer's `.Q`, `CoilTag` leaf
+ends `Fault`, self-latch cleared by `NOT …FaultReset`) must live in the interface UDT, not a bare private
+Static/DB (warn, candidate; NotApplicable without `--project`). Clean on both real steppers, no `PressureHold`
+false positive. **The C-118–125 sequencer rule family is now complete** except the by-design-AI clauses
+(C-119 returned-to, C-122/C-123 Q-drives-a-fault semantics, C-113 paradigm).
 
 ### FI-10 — HMI-importable alarm exports from S5
 - **Status:** Parked
@@ -269,7 +275,15 @@ and C-125 (blocked on… now C-122 is built, so C-125 becomes feasible next — 
 **Verdict / revisit trigger:** Open — cheapest of this batch; a candidate to adopt informally (manual notes per run) before building anything.
 
 ### FI-17 — Explanation sidecars: cached AI block explanations, keyed to IR hash
-- **Status:** Raised
+- **Status:** PILOT LANDED 2026-07-20 — the key/invalidate helper `converter ir-hash <file>`
+  (`Converter/IrHash/`, `src/converter/README.md`): `SHA-256(SerializeBlockReadable(block))`, a stable
+  content hash over the *readable* logic only, immune to SIDECAR/UId churn (deliberately not
+  `digest --fingerprint`, which abstracts tags → wouldn't invalidate on a rename). Plus the convention doc
+  `docs/notes/explanation-sidecars.md` (storage: `<Block>.explain.md` stamped `derived-from: <ir-hash>`;
+  use-boundary: **orientation only, never review input, hash-on-read invalidation** — the ADR-0005 discipline
+  applied to an AI artifact, `TimerSample` stale-sidecar the precedent) + an optional `explain-plc-block`
+  caching note. Pilot stance per this entry: hand-cache during normal work; the helper keys/validates it.
+  5 tests.
 - **Raised:** 2026-07-16 · **Source:** conversation — the analysis-cache counterpart to FI-15's mechanical digests. Precedent on both sides: ADR-0004's pipeline artifacts are exactly "one expensive AI pass, written down, consumed downstream" (with `audit-artifact` as the safety net), and S2's explanation capability already produces the content.
 **Merits:** One exhaustive AI read per block *version*, cached beside the IR with the hash it was derived from, reused across sessions and stages for orientation — "which block do I need to open?" — instead of re-reading full IR every time. Saves tokens and latency on the most repeated read in the project.
 **Costs / risks:** Cached AI judgment that is subtly wrong poisons every consumer that trusts it instead of looking — plausible-looking errors, unlike a mechanical digest's detectable ones. Hard constraints: invalidated by IR hash on any change (the `TimerSample` stale-sidecar bug is the mild mechanical precedent); orientation use only, **never review input** — reviewers read full IR per the S2 exhaustiveness lesson; an explanation is a claim about the block, not ground truth.
@@ -387,9 +401,14 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
   guard Expr (additive `Guard` on `DirectedTagUsage`/`UsageSite`), and a pure three-valued constant-fold
   (`Trace/DisarmAnalysis.cs`, `AlwaysTrue⇒true`) returns `disarmed` when every writer of a path is gated
   `NOT AlwaysTrue` (built but switched off — the correction: the idiom is `NOT AlwaysTrue`, a negated real
-  tag, not `NOT TRUE`). Real corpus: `IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed. **Only the
-  **timing** ×1000 s→ms MUL/CONVERT-chain hop remains v2** (net-new dataflow). Binding is a snake_case JSON
-  DTO. 4 (v1) + 8 (v2) tests.
+  tag, not `NOT TRUE`). Real corpus: `IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed. **v2 `timing` hop
+  DONE 2026-07-20 — the tracer is now complete (all 5 hops).** `timing: { timer, seconds_member }` verifies
+  the timer's PT is the ×1000 ms form of the bound seconds member, keyed on the timer's *unique* PT
+  ms-member name (`OvercurrentMediumDelayMS` ↔ `OvercurrentMediumDelay`) — the shared `Time` scratch can't
+  distinguish members, so a wrong-member binding is correctly `contradicted`. **Documented limitation:** the
+  specific MUL↔CONVERT `EN:=ENO` wire (sidecar-only) isn't verified — a sidecar-level refinement, the one
+  remaining timing-hop deepening. Binding is a snake_case JSON DTO. 4 (v1) + 8 (v2 disarmed) + 1 (timing)
+  tests.
 - **Raised:** 2026-07-18 · **Source:** conversation follow-up — "is there a way to mechanize the functional review more, like a scripted decision tree?" The answer decomposes the review into two layers with a clean seam, and only one layer is a decision tree.
 **Merits:** The per-REQ verdict genuinely *is* the same decision tree every run — but only *below* the one step that is irreducibly semantic. Split it:
 - **Layer A (stays AI — the semantic anchor):** a per-REQ *trace binding* mapping the natural-language REQ to concrete IR anchors — expected output tag, expected interface source member, any number/polarity constraint. Evidence-carrying, and the reviewer owns it (it must **not** just trust `architecture.md` §7's REQ→block table, or the review stops being blind). No decision tree can produce this from register text — that is the whole reason an AI reviewer exists.

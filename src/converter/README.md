@@ -1836,12 +1836,30 @@ Hops:
   (`Trace/DisarmAnalysis.cs`, `AlwaysTrue⇒true`); catches `NOT AlwaysTrue` standalone or ANDed; a bare
   `AlwaysTrue` stays armed. A mixed path (some armed) stays `ok` with the disarmed count noted.
 - **number-constraint**: DB member start value vs spec → `ok` / `contradicted` / `partial` (no start value).
+- **timing** (v2, `timing: { timer, seconds_member }`): the timer's PT must be the ×1000 ms form of the
+  bound seconds member — keyed on the timer's *unique* PT ms-member name corresponding to the seconds
+  member (`OvercurrentMediumDelayMS` ↔ `OvercurrentMediumDelay`), since the shared `Time` scratch tag can't
+  distinguish which member feeds which timer. Name mismatch → `contradicted`; corresponding + the
+  MUL/CONVERT idiom present → `ok`; corresponding but chain absent → `partial`; no such timer →
+  `unimplemented`. **Documented limitation:** the specific MUL↔CONVERT `EN:=ENO` wire (sidecar-only) is not
+  verified — a sidecar-level refinement.
 
-Deferred v2 (documented, `docs/16` FI-25): the **timing** hop (×1000 s→ms MUL/CONVERT chain reaching a
-timer's `PT`) is net-new dataflow. **Exit 0 always** — a facts provider. Examples on `ir/test-project001`:
-a binding for REQ-004 shows `DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0
-matching spec; `iDB_MotorFwdRevSystem_Shredder.IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed; a fake
-output → unimplemented; the unset `OvercurrentSetpointHigh` → partial.
+**Exit 0 always** — a facts provider. Examples on `ir/test-project001`: a binding for REQ-004 shows
+`DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0 matching spec;
+`IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed; `OvercurrentMediumTimer` + `OvercurrentMediumDelay` →
+timing ok, but + `OvercurrentHighDelay` (wrong member) → contradicted.
+
+## `ir-hash` — stable readable-IR content hash (2026-07-20, FI-17)
+
+`converter ir-hash <file.ir> [<file.ir> ...] [--json]`
+
+Emits `SHA-256(SerializeBlockReadable(block))` per block — a stable content key over the *readable* logic
+only (interface + networks), so it invalidates on any logic/interface/comment change but is **immune to
+SIDECAR/UId churn** (a re-export doesn't change it). The key for **FI-17 explanation sidecars**
+(`docs/notes/explanation-sidecars.md`): a cached explanation stamps `derived-from: <ir-hash>`, and every
+consumer recomputes the hash and discards the cache on mismatch (hash-on-read, the ADR-0005 discipline).
+Deliberately **not** `digest --fingerprint` (that abstracts tag names → a rename wouldn't invalidate). Exit
+1 on a missing/unparseable/non-block file.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

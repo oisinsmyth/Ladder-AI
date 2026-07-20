@@ -2,6 +2,28 @@
 
 ## 2026-07-20
 
+**FI-25 timing hop + FI-09 C-125 + FI-17 sidecars (three parallel tracks) — mechanical-tooling backlog cleared**
+
+Three file-disjoint parallel tracks; the last three ranked buildable-now items.
+
+- **`converter trace` timing hop (FI-25 v2 — tracer now complete, all 5 hops)** — `timing: { timer,
+  seconds_member }` verifies the timer's PT is the ×1000 ms form of the bound seconds member. Keyed on the
+  timer's UNIQUE PT ms-member name (`OvercurrentMediumDelayMS` ↔ `OvercurrentMediumDelay`), not the shared
+  `Time` scratch tag — so a wrong-member binding is correctly `contradicted` (the shared-scratch
+  pair-crossing). Walks the timer's block's Timers/Converts/Muls directly. Documented limitation: the exact
+  MUL↔CONVERT `EN:=ENO` sidecar wire isn't verified (a sidecar-level refinement). `Trace/`.
+- **`converter review` C-125 (FI-09)** — a C-122 dwell-timeout timer's fault bit must live in the interface
+  UDT, not a private Static/DB. Safe contrapositive framing (fault bit = reads a C-122-subject timer's `.Q`,
+  `CoilTag` ends `Fault`, self-latch cleared by `NOT …FaultReset`), then C-118's UDT-home check; warn,
+  NotApplicable without `--project`. Clean on both real steppers, no `PressureHold` false positive. Completes
+  the C-118–125 sequencer family (bar the by-design-AI clauses). `Review/`.
+- **`converter ir-hash` + explanation-sidecar convention (FI-17 pilot)** — `SHA-256(SerializeBlockReadable)`,
+  a stable readable-IR content key immune to SIDECAR/UId churn (not `digest --fingerprint`, which abstracts
+  tags), + `docs/notes/explanation-sidecars.md` (orientation-only / never-review-input / hash-on-read
+  invalidation, the ADR-0005 discipline) + an optional explain-plc-block caching note. `Converter/IrHash/`.
+- Converter suite **671/671**; golden unaffected. The mechanical-tooling backlog from the future-ideas
+  survey is now essentially cleared; the FI-09 remainder is AI-by-design.
+
 **FI-25 v2 disarmed hop + FI-09 sequencer rules C-119/120/122 (two parallel tracks)**
 
 Two file-disjoint parallel tracks (FI-25 v2 on the main track; FI-09 C-119/120/122 as a subagent).
