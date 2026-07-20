@@ -51,10 +51,51 @@ parallel subagents). Current state (each entry below carries its own authoritati
   read-only half), FI-31 (against telemetry discipline). Related: `deferred-items.md` **D-7** — the 6 stale
   `simatic-ml/test-project001` exports FI-26 surfaced (needs a live-Portal re-export).
 
+## Prioritization — remaining work (2026-07-20)
+
+The living order over what's *left* after the 2026-07-20 build wave (supersedes the 2026-07-16 snapshot
+below). Ranked by value × leverage ÷ effort; items hard-gated by an external event are listed separately,
+unranked, because timing isn't ours to choose.
+
+**Buildable now (ranked):**
+
+1. **FI-25 v2 — the `disarmed` hop.** Highest: extends the just-shipped forward tracer to its most valuable
+   missing verdict — "built but switched off" (`NOT AlwaysTrue` gating), which `review-functional` treats as
+   explicitly *not implemented*. Bounded: extend `UsageSite` to carry each write's condition Expr, then the
+   test is the trivial empty-`And` `"TRUE"`/rail sentinel. Completes 4 of the tracer's 5 hops.
+2. **FI-24 — provenance-header wrapper.** Small quick win closing FI-24's remaining half: a wrapper emitting
+   the whole `git log -1 --format=%h` provenance block `gen-architecture` now hand-repeats. Low effort/risk.
+3. **FI-17 — explanation sidecars (pilot).** Independent; its old gate (FI-15 digest hygiene) is resolved.
+   Cache the S2 explanation per IR hash, orientation-only, never review input. Start by caching what normal
+   work already produces before building tooling.
+4. **FI-09 C-119 / C-120 / C-122 (+ then C-125).** Now unblocked: C-118 established the cross-file
+   `review --project` path and the `HasStepLeaf` sequencer trigger, so step-0-present / ascend-by-10 /
+   dwell-timer-shape become structural checks on that same seam. C-122 first unblocks C-125.
+5. **FI-25 v2 — the `timing` hop.** Heaviest and narrowest: net-new dataflow to trace a timer's `PT` back
+   through the ×1000 s→ms `MUL`/`CONVERT` chain. Do after the disarmed hop.
+
+*(FI-09 C-107/C-402 need no separate work — the mechanical single-writer signal they wanted is FI-22's
+`cross-check` multi-writer table; only the AI edge-memory judgment remains, by design.)*
+
+**Gated — build when the trigger fires (unranked; blocked on an external event):**
+
+- **FI-08** proposed-tags approval path — first real S6 tag-proposal loop.
+- **FI-11** presentation bundler — the `generate` orchestrator's design (may fold into it, not be separate).
+- **FI-12** persistent Portal session — FI-16 telemetry measuring that project-open still dominates.
+- **FI-18** HMI-interface skill — owner scoping room (test-project001 has the open HMI-boundary questions).
+- **FI-06** edge-detection pattern kind — a grounded example (S8 harvest).
+- **FI-10** HMI alarm exports — S5 extractors proven.
+- **FI-02** OB1 round-trip — real production OB content. **FI-01** pattern testing hook — S9 opens (R-07).
+  **FI-03** Modbus multi-instance — a grounded example.
+
+**Parked / deferred:** FI-05 (blind target, `deferred-items.md` D-5), FI-07 (owner-parked; FI-28 is its
+read-only half), FI-31 (against telemetry discipline). **D-7** (`deferred-items.md`) — the 6 stale
+`simatic-ml/test-project001` exports; needs a live-Portal re-export (owner).
+
 ## Prioritization snapshot — 2026-07-16
 
-**Superseded by "Implementation status — 2026-07-20" above and by each entry's own status — kept as the
-original ranking record.** A point-in-time ranking, not a living order: it reflects the entries and project state as of this date and is not maintained as verdicts land. Method: each idea was ranked twice (ease of implementation; logical implementation order given dependencies and leverage), score = sum of the two positions, lowest first, ties broken by logic position. An idea hard-gated by another FI is nested under its gate instead of holding its own slot; external gates (stages/events) are noted inline. FI-04 excluded (Rejected).
+**Superseded by "Prioritization — remaining work (2026-07-20)" and "Implementation status — 2026-07-20"
+above, and by each entry's own status — kept as the original ranking record.** A point-in-time ranking, not a living order: it reflects the entries and project state as of this date and is not maintained as verdicts land. Method: each idea was ranked twice (ease of implementation; logical implementation order given dependencies and leverage), score = sum of the two positions, lowest first, ties broken by logic position. An idea hard-gated by another FI is nested under its gate instead of holding its own slot; external gates (stages/events) are noted inline. FI-04 excluded (Rejected).
 
 1. **FI-16** telemetry — 1+1 = **2**
    - ⛓ **FI-12(a)** batch import/compile — 7+6 = **13**: build only once FI-16's data shows project-open cost dominates
