@@ -214,10 +214,40 @@ home rather than living only as a D3 footnote.
    mechanical, high-consequence, and needs no ladder reading — so it is baseline, not gated behind D5's
    opt-in compliance round. Deeper data-boundary governance (approval-scope adequacy) stays in D5.
 
+## Report naming convention
+
+Every audit produces exactly one report file, named:
+
+```
+docs/audit/YYYY-MM-DD-<short-scope>.md
+```
+
+Firm rules:
+
+- **`YYYY-MM-DD`** — the ISO calendar date the audit was run, and it must match the date in the report's own
+  header and its row in the Record of audits below.
+- **`<short-scope>`** — lowercase **kebab-case** (words joined by single hyphens; no spaces, underscores,
+  capitals, or non-ASCII), 2–5 words, plainly naming what the round covered, and **ending in `-audit`**.
+  Follow the established form: `stage-and-docs-audit`, `code-quality-and-docs-audit`. Describe the scope in
+  plain terms rather than by raw dimension codes (write `stage-and-docs-audit`, not `d1-d2-audit`).
+- **One file per audit.** A landed report is a point-in-time record — never rewritten except to fix a typo.
+  New findings, or a re-check later, mean a *new* dated report, not an edit to an old one.
+- **Two audits in one day** — give each a distinct `<short-scope>` (the natural case, since same-day audits
+  differ in scope); only if scopes are genuinely identical, suffix `-2`, `-3`.
+
 ## Output contract — what an audit produces
 
-One report named `docs/audit/YYYY-MM-DD-<short-scope>.md`, containing:
+The report opens with a project-state snapshot, then the scoped findings. Structure:
 
+- **Project state summary — the strong overview** *(required, first, every audit regardless of scope).*
+  A concise at-a-glance description of **the state the project is in at audit time**, so a reader who opens
+  only this section understands where the project stands. Cover: the active roadmap stage and what is
+  in-flight / blocked / awaiting a gate; the high-water mark of what has shipped (and what shipped since the
+  baseline audit); an overall health read across the areas the audit touched (a short per-area
+  green/amber/red-style verdict is ideal); the test-suite baseline (the three suites' pass counts); and the
+  headline open decisions or risks. This is a *description grounded in what the audit verified* — not an
+  unchecked restatement of what the docs claim. Precedent: the 2026-07-11 report's "Stage/goals summary at
+  time of audit" section, now made a standing requirement.
 - **Header:** who requested it, the chosen scope (dimensions D1–D10), anything offered-but-excluded, and the
   baseline (which prior audit it continues + what shipped since).
 - **Findings**, grouped by dimension and **ranked by severity within each group** (most consequential
