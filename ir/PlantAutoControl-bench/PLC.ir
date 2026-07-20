@@ -1,0 +1,24 @@
+DB InterlockData
+  ROOTID 0
+  NUMBER 2
+  MEMBERS
+    Simulation : Bool
+    SystemDateTime : DTL VERSION 1.0
+    JOB9001Interlock : Bool
+    JOB9001ShutdownComplete : Bool
+    NotFirstScan : Bool
+    UpStreamEnable : Bool
+    Error : Bool
+    JOB9001LifeBitLost : Bool
+    JOB9001Status : Int
+    LinkOut3rdParty : Bool = true
+    PreStartReqFlt : Bool
+    SystemInterlock : Bool = true
+    PartInHand : Bool
+    ShredderFeedLost : Bool
+    OldPlantEStopZone1 : Bool
+    OldPlantEStopZone2 : Bool
+    OldPlantEStopZone3 : Bool
+    JOB9001ReadyToStop : Bool
+    JOB9002ReadyToStop : Bool
+    PlantPartialRunning : Bool

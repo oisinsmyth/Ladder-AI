@@ -1,0 +1,32 @@
+DB DiscreteOutputs
+  ROOTID 0
+  NUMBER 16
+  MEMBERS
+    Test : Array[0..26] of Bool
+    HFLCStart : Bool
+    AirStarFCStart : Bool
+    FMCCStart : Bool
+    OverbandMagStart : Bool
+    OSDrumSepStart : Bool
+    OSECStart : Bool
+    OSRCStart : Bool
+    DiskSpreader1Start : Bool
+    DiskSpreader2Start : Bool
+    SFCRunFwd : Bool
+    SFCRunRev : Bool
+    SDCStart : Bool
+    RunPreStart : Bool
+    PlantRunning : Bool
+    EStopActive : Bool
+    ControlHealthy : Bool
+    FilterUnit1Start : Bool
+    FilterUnit1Reset : Bool
+    FilterUnit2Start : Bool
+    FilterUnit2Reset : Bool
+    ECSAutoStart : Bool
+    ECSReset : Bool
+    CycloneDustFilterStart : Bool
+    CycloneDustFilterReset : Bool
+    VSDFaulrReset : Bool
+    TomraRun : Bool
+    EStopReset : Bool

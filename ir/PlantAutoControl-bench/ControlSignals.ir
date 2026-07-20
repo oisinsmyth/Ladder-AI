@@ -1,0 +1,29 @@
+DB HMIControlSignals
+  ROOTID 0
+  NUMBER 38
+  MEMBERS
+    SystemStart : Bool
+    SystemStop : Bool
+    SystemReset : Bool
+    RunPreStart : Bool
+    RunAntiConNxtStart : Bool
+    SkipAntiConNxtStart : Bool
+    HandFansShutdown : Bool
+    AntiConEnabled : Bool
+    GlobalFTTimeOverwrite : Bool
+    GlobalUPSEnableTimeOverwrite : Bool
+    GlobalShutdownCompleteTimeOverwrite : Bool
+    GlobalVSDStartUpTimeOverwrite : Bool
+    GlobalVSDAutoSpeedOverwrite : Bool
+    GlobalVSDHandSpeedOverwrite : Bool
+    GlobalFwdRevDOLRevDelayTimeOverwrite : Bool
+    GlobalFwdRevDOLFTRIgnoreTimeOverwrite : Bool
+    GlobalSetAllToAuto : Bool
+    BypassHFLCRotSen : Bool RETAIN
+    BypassFMCCRotSen : Bool RETAIN
+    BypassOSECRotSen : Bool RETAIN
+    BypassOSRCRotSen : Bool RETAIN
+    BypassSFCRotSen : Bool RETAIN
+    BypassSDCRotSen : Bool RETAIN
+    BypassIFCRotSen : Bool RETAIN
+    BypassAirStarDCRotSen : Bool RETAIN
