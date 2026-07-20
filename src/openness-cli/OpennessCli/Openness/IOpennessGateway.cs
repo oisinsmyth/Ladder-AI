@@ -8,6 +8,18 @@ public interface IOpennessGateway : IDisposable
 {
     void Connect(TimeSpan timeout);
 
+    /// <summary>
+    /// Read-only Portal-process diagnostic for `portal-status`: enumerates every running
+    /// <c>Siemens.Automation.Portal.exe</c> via <c>TiaPortal.GetProcesses()</c> and maps each to a
+    /// Siemens-free <see cref="PortalProcessInfo"/>, stamping <c>MarkedByThisTool</c> from
+    /// <c>LaunchedInstanceRegistry</c>. Deliberately does NOT go through <see cref="Connect"/> —
+    /// it never calls <c>Attach()</c>, <c>new TiaPortal(...)</c>, or <c>Projects.Open()</c>, so it
+    /// can't trigger the first-connect dialog or add to the very pileup it is meant to diagnose.
+    /// <c>Id</c>/<c>ProjectPath</c>/<c>Mode</c>/<c>AcquisitionTime</c> are all readable off
+    /// <c>TiaPortalProcess</c> without attaching (docs/notes/openness-api-surface-v20.md).
+    /// </summary>
+    IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses();
+
     void OpenProject(string projectIdentifier, TimeSpan timeout);
 
     IReadOnlyList<BlockInfo> EnumerateBlocks();

@@ -32,6 +32,17 @@ internal static class Program
         using IOpennessGateway gateway = new OpennessGateway();
         try
         {
+            // portal-status is the one command that must NOT go through Connect(): attaching risks
+            // the first-connect approval dialog, and launching a fresh Portal is the exact opposite
+            // of a pileup diagnostic. It only reads TiaPortal.GetProcesses(), so it runs here —
+            // before, and instead of, the Connect()-first flow every other command relies on. (It
+            // still needs TiaInstallLocator.Resolve above, which already ran, so the Siemens
+            // assembly can load for the static GetProcesses() call.)
+            if (parseResult is ParseResult.PortalStatusSuccess portalStatus)
+            {
+                return RunPortalStatus(gateway, portalStatus.Options);
+            }
+
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds));
 
             switch (parseResult)
@@ -203,6 +214,19 @@ internal static class Program
         return result.IsHealthy ? ExitCodes.Success : ExitCodes.SanityCheckFailed;
     }
 
+    private static int RunPortalStatus(IOpennessGateway gateway, PortalStatusOptions options)
+    {
+        // No Connect()/OpenProject() — see the seam comment in Main. Read-only diagnosis, so it's
+        // purely informational: always exit 0. Strays are frequently legitimate human windows, so a
+        // non-zero-on-stray gate would just be noise; this is not a compile-style gate.
+        var processes = gateway.EnumeratePortalProcesses();
+        var report = PortalStatusClassifier.Classify(processes);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatPortalStatusJson(report)
+            : OutputFormatter.FormatPortalStatusTable(report));
+        return ExitCodes.Success;
+    }
+
     private static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) CommonOptions(ParseResult result) => result switch
     {
         ParseResult.ListSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -212,6 +236,7 @@ internal static class Program
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 }

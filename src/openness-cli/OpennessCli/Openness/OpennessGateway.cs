@@ -79,6 +79,29 @@ public sealed class OpennessGateway : IOpennessGateway
             () => new ConnectTimeoutException(timeout));
     }
 
+    // Read-only Portal-process enumeration for `portal-status`. Independent of Connect()/_tiaPortal
+    // on purpose (see IOpennessGateway's own doc comment): it only calls the static
+    // TiaPortal.GetProcesses() and reads each process's own properties — Id/ProjectPath/Mode/
+    // AcquisitionTime are all readable WITHOUT Attach() (docs/notes/openness-api-surface-v20.md,
+    // confirmed 2026-07-14), so nothing here attaches, launches, opens, or closes anything. All
+    // Siemens types stay quarantined in this method; only the POCO leaves it.
+    public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses()
+    {
+        var results = new List<PortalProcessInfo>();
+        foreach (TiaPortalProcess process in TiaPortal.GetProcesses())
+        {
+            var projectPath = process.ProjectPath?.FullName;
+            results.Add(new PortalProcessInfo(
+                process.Id,
+                string.IsNullOrEmpty(projectPath) ? null : projectPath,
+                process.AcquisitionTime,
+                process.Mode == TiaPortalMode.WithUserInterface,
+                LaunchedInstanceRegistry.IsMarkedAsLaunchedByThisTool(process.Id)));
+        }
+
+        return results;
+    }
+
     public void OpenProject(string projectIdentifier, TimeSpan timeout)
     {
         if (_tiaPortal is null)
