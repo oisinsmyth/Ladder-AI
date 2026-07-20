@@ -38,7 +38,7 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, compa
                                     # ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
                                     # this slice is a correct hard error, not a bug — see docs/evidence/stage-S1.md for exactly what's covered.
 converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
-converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs; --project enables cross-file rules (C-118 interface-UDT Step, FI-09)
+converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs; --project enables cross-file rules (C-118 interface-UDT Step + C-122 dwell-timer PT-home; C-119 idle=step0 / C-120 steps x10 run single-file too, FI-09)
 converter digest    <file...> [--ignore-errors] [--json] [--fingerprint]   # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR). --fingerprint adds a per-network tag-abstracted structural signature so copy-pasted networks collapse to one hash and the outlier stands out (FI-23, explanation aid)
 converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
 converter tagstatus <name...> --project <ir-dir> [--json]     # classify tag names exists/proposed against the export (anti-laundering, hard rule 3); exit 1 if any proposed
@@ -47,7 +47,7 @@ converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--j
 converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built, bucketed candidate/likely-impl/disqualified (FI-30); exit 1 if no clean candidate
 converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect silent ir<->simatic-ml export drift, Normalizer-compared (FI-26); exit 1 if any block drifted
 converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0
-converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/number-constraint) over the reader/writer graph (FI-25); facts not verdicts; exit 0
+converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 

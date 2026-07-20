@@ -80,8 +80,9 @@ mapping, NOT `architecture.md`'s REQ→block table, or the review stops being bl
 values and returns **candidate** verdicts per hop — `unimplemented` (out_tag has no writer),
 `broken-chain` (iface_member written nowhere — the in-cycle-lamp class), `contradicted`/`partial`
 (number vs DB start value). Embed the facts verbatim and **confirm each candidate semantically** (the
-tool never adjudicates a REQ — it reports what the graph says). It covers hops 1/2/4 only; the
-**disarmed** (`NOT AlwaysTrue` gating) and **timing** (×1000 s→ms chain) checks below stay hand-traced
+tool never adjudicates a REQ — it reports what the graph says). It now also returns **`disarmed`** — a
+path whose every writer is gated `NOT AlwaysTrue` (built but switched off; treat exactly as the disarmed
+verdict below, i.e. NOT implemented). Only the **timing** hop (×1000 s→ms chain) stays hand-traced
 (documented v2). Missing binary → hand-trace as before.
 
 Verdict vocabulary — exactly one per REQ:

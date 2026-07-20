@@ -33,17 +33,18 @@ parallel subagents). Current state (each entry below carries its own authoritati
   FI-16 telemetry, FI-19/FI-20 doc splits (all earlier) — plus the **2026-07-20 wave**: FI-24 `tagstatus`
   (tag-status half; gen-architecture adopts it), FI-29 `reuse-scan`, FI-30 `target-scan`, FI-26
   `drift-check`, FI-27 `preflight` flow-order check, FI-28 `openness-cli portal-status`, FI-22
-  `cross-check`, FI-23 `digest --fingerprint`, **FI-25 `trace`** (forward-pass tracer, v1), **FI-22
-  aliasing follow-up** (dead-wiring now covers interface-UDT members). Skills wired to the new tools
-  (explain-plc-block, review-conventions, review-functional [incl. `trace`], gen-architecture).
-- **Partial:** FI-09 — C-408/C-001, **C-103/C-121 inline**, and **C-118** (cross-file UDT, 2026-07-20) are
-  mechanical `converter review` checks; the audit re-scoped the rest (C-107/C-402 subsumed by FI-22's writer
-  table; C-125 blocked on un-mechanized C-122; C-119/120/122 need AI sequencer-identification first). FI-25 —
-  the disarmed (write-condition) and timing (s→ms) hops are documented v2. FI-24 — provenance-header wrapper
-  still open.
-- **Open, actionable next (no external gate):** FI-17 explanation sidecars (pilot); FI-25 v2 hops (disarmed
-  needs the graph to carry write conditions; timing needs new dataflow analysis); FI-09 C-119/120/122 (need a
-  sequencer-identification seam).
+  `cross-check`, FI-23 `digest --fingerprint`, **FI-25 `trace`** (forward-pass tracer, v1 **+ v2 disarmed
+  hop**), **FI-22 aliasing follow-up** (dead-wiring now covers interface-UDT members). Skills wired to the
+  new tools (explain-plc-block, review-conventions, review-functional [incl. `trace`], gen-architecture).
+- **Partial:** FI-09 — C-408/C-001, **C-103/C-121 inline**, **C-118**, and **C-119/C-120/C-122** (sequencer
+  structural, 2026-07-20) are mechanical `converter review` checks; the remainder is by-design AI (C-107/C-402
+  edge-memory judgment — the mechanical half is FI-22's writer table; C-119's returned-to / C-122's Q→fault /
+  C-113 paradigm). **C-125** is now feasible (its C-122 blocker is built). FI-25 — only the **timing** hop
+  is documented v2 (disarmed shipped). FI-24 — provenance-header wrapper HELD (owner: keep the converter
+  pure — no external-process shell-out).
+- **Open, actionable next (no external gate):** FI-17 explanation sidecars (pilot); FI-25 v2 **timing** hop
+  (net-new s→ms dataflow); FI-09 **C-125** (dwell-timeout fault bit in the interface UDT — now that C-122 is
+  built).
 - **Gated (waiting on a stage/event/measurement):** FI-08 (first real S6 tag-proposal loop), FI-11
   (`generate` orchestrator), FI-12 (FI-16 measurement), FI-18 (owner scoping), FI-06 (S8 grounded example),
   FI-10 (S5), FI-02 (real OB content), FI-01 (S9), FI-03 (grounded example).
@@ -59,23 +60,19 @@ unranked, because timing isn't ours to choose.
 
 **Buildable now (ranked):**
 
-1. **FI-25 v2 — the `disarmed` hop.** Highest: extends the just-shipped forward tracer to its most valuable
-   missing verdict — "built but switched off" (`NOT AlwaysTrue` gating), which `review-functional` treats as
-   explicitly *not implemented*. Bounded: extend `UsageSite` to carry each write's condition Expr, then the
-   test is the trivial empty-`And` `"TRUE"`/rail sentinel. Completes 4 of the tracer's 5 hops.
-2. **FI-24 — provenance-header wrapper.** Small quick win closing FI-24's remaining half: a wrapper emitting
-   the whole `git log -1 --format=%h` provenance block `gen-architecture` now hand-repeats. Low effort/risk.
-3. **FI-17 — explanation sidecars (pilot).** Independent; its old gate (FI-15 digest hygiene) is resolved.
+1. **FI-09 C-125.** Smallest, now-unblocked win: with C-122 built, "the dwell-timeout's fault bit lives in
+   the same interface UDT" is a structural check on the same `review --project` seam (resolve the timer's
+   `.Q`-consumer bit's home via the UDT index). Low effort/risk.
+2. **FI-17 — explanation sidecars (pilot).** Independent; its old gate (FI-15 digest hygiene) is resolved.
    Cache the S2 explanation per IR hash, orientation-only, never review input. Start by caching what normal
    work already produces before building tooling.
-4. **FI-09 C-119 / C-120 / C-122 (+ then C-125).** Now unblocked: C-118 established the cross-file
-   `review --project` path and the `HasStepLeaf` sequencer trigger, so step-0-present / ascend-by-10 /
-   dwell-timer-shape become structural checks on that same seam. C-122 first unblocks C-125.
-5. **FI-25 v2 — the `timing` hop.** Heaviest and narrowest: net-new dataflow to trace a timer's `PT` back
-   through the ×1000 s→ms `MUL`/`CONVERT` chain. Do after the disarmed hop.
+3. **FI-25 v2 — the `timing` hop.** The last tracer hop and the heaviest: net-new dataflow to trace a timer's
+   `PT` back through the ×1000 s→ms `MUL`/`CONVERT` chain and recognise the multiplier. Narrower value than
+   the shipped hops; do when the s→ms pair-crossing trap is worth mechanizing.
 
-*(FI-09 C-107/C-402 need no separate work — the mechanical single-writer signal they wanted is FI-22's
-`cross-check` multi-writer table; only the AI edge-memory judgment remains, by design.)*
+*(Done this batch: FI-25 v2 **disarmed** hop and FI-09 **C-119/C-120/C-122** — see Implemented above. FI-09
+C-107/C-402 need no separate work — the mechanical single-writer signal is FI-22's `cross-check` multi-writer
+table. **FI-24** provenance wrapper is HELD by owner decision, kept off this list.)*
 
 **Gated — build when the trigger fires (unranked; blocked on an external event):**
 
@@ -208,7 +205,12 @@ judgment (C-113) identifies the block as a stepped sequencer — all deferred wi
 first cross-file review rule: `converter review --project <ir-dir>` builds a `TagTypeRegistry` UDT/DB index
 and `Rules.CheckC118StepInterfaceUdt` verifies the phase is exactly one `Step:Int` in the block's interface
 UDT (flags bare-Static / `DB_Controls`/`DB_Settings` placement / non-Int; NotApplicable without `--project`).
-C-125 stays deferred (blocked on the un-mechanized C-122).
+**C-119/C-120/C-122 landed 2026-07-20** — sequencer structural rules on the same seam: C-119 (idle = step 0
+present, Error), C-120 (steps ascend ×10, Warn), C-122 (dwell-timer shape: IN gated `Step=<n>`, Static
+instance not `DB_Timers`, PT a UDT settings member — the PT-home part `NotApplicable` without `--project`).
+Clean on the real steppers (`FB_ShredderSequencer`/`FB_PusherControl`), no false positives. The AI-deferred
+halves stay AI: C-119's "returned-to on stop/fault/restart" (C-124), C-122's "Q drives a fault" (C-123),
+and C-125 (blocked on… now C-122 is built, so C-125 becomes feasible next — see prioritization).
 
 ### FI-10 — HMI-importable alarm exports from S5
 - **Status:** Parked
@@ -381,10 +383,13 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
   `ProjectUsageGraph` (read-only) + DB start values and returns per-hop **candidate** verdicts (facts,
   never an adjudicated pass). **v1 hops:** output-path (out_tag written? → unimplemented), interface-chain
   (iface_member written? → broken-chain / in-cycle-lamp class), number-constraint (DB start value vs spec
-  → ok/contradicted/partial). **Deferred v2:** the **disarmed** hop needs the graph to carry each write's
-  condition Expr (a `UsageSite` extension; the AlwaysTrue test is the empty-`And` "TRUE" sentinel); the
-  **timing** ×1000 s→ms MUL/CONVERT-chain hop is net-new dataflow analysis. Binding is a snake_case JSON
-  DTO. Real-corpus smoke passed (REQ-004 discharge conveyor). 4 tests.
+  → ok/contradicted/partial). **v2 `disarmed` hop DONE 2026-07-20** — the graph now carries each write's
+  guard Expr (additive `Guard` on `DirectedTagUsage`/`UsageSite`), and a pure three-valued constant-fold
+  (`Trace/DisarmAnalysis.cs`, `AlwaysTrue⇒true`) returns `disarmed` when every writer of a path is gated
+  `NOT AlwaysTrue` (built but switched off — the correction: the idiom is `NOT AlwaysTrue`, a negated real
+  tag, not `NOT TRUE`). Real corpus: `IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed. **Only the
+  **timing** ×1000 s→ms MUL/CONVERT-chain hop remains v2** (net-new dataflow). Binding is a snake_case JSON
+  DTO. 4 (v1) + 8 (v2) tests.
 - **Raised:** 2026-07-18 · **Source:** conversation follow-up — "is there a way to mechanize the functional review more, like a scripted decision tree?" The answer decomposes the review into two layers with a clean seam, and only one layer is a decision tree.
 **Merits:** The per-REQ verdict genuinely *is* the same decision tree every run — but only *below* the one step that is irreducibly semantic. Split it:
 - **Layer A (stays AI — the semantic anchor):** a per-REQ *trace binding* mapping the natural-language REQ to concrete IR anchors — expected output tag, expected interface source member, any number/polarity constraint. Evidence-carrying, and the reviewer owns it (it must **not** just trust `architecture.md` §7's REQ→block table, or the review stops being blind). No decision tree can produce this from register text — that is the whole reason an AI reviewer exists.

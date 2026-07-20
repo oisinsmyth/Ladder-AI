@@ -1828,16 +1828,20 @@ Layer B of the functional review's forward pass. The `review-functional` reviewe
 never an adjudicated pass** (the reviewer confirms each candidate semantically). Binding is a
 snake_case JSON list of `{ req, out_tag?, iface_member?, number?: { member, expected } }`.
 
-v1 hops:
+Hops:
 - **output-path**: `out_tag` written anywhere? no → `unimplemented (no output path)`.
 - **interface-chain**: `iface_member` written anywhere? no → `broken-chain` (the in-cycle-lamp class).
+- **disarmed** (v2, on output-path/interface-chain): every writer gated `NOT AlwaysTrue` (the S7 always-on
+  bit) → `disarmed` (built but switched off — NOT implemented). A pure three-valued constant-fold
+  (`Trace/DisarmAnalysis.cs`, `AlwaysTrue⇒true`); catches `NOT AlwaysTrue` standalone or ANDed; a bare
+  `AlwaysTrue` stays armed. A mixed path (some armed) stays `ok` with the disarmed count noted.
 - **number-constraint**: DB member start value vs spec → `ok` / `contradicted` / `partial` (no start value).
 
-Deferred v2 (documented, `docs/16` FI-25): the **disarmed** hop (a writer gated by a non-rail condition)
-needs the graph to carry write conditions; the **timing** hop (×1000 s→ms MUL/CONVERT chain reaching a
-timer's `PT`) is net-new dataflow. **Exit 0 always** — a facts provider. Example on `ir/test-project001`:
+Deferred v2 (documented, `docs/16` FI-25): the **timing** hop (×1000 s→ms MUL/CONVERT chain reaching a
+timer's `PT`) is net-new dataflow. **Exit 0 always** — a facts provider. Examples on `ir/test-project001`:
 a binding for REQ-004 shows `DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0
-matching spec; a fake output → unimplemented; the unset `OvercurrentSetpointHigh` → partial.
+matching spec; `iDB_MotorFwdRevSystem_Shredder.IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed; a fake
+output → unimplemented; the unset `OvercurrentSetpointHigh` → partial.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

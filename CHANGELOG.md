@@ -2,6 +2,23 @@
 
 ## 2026-07-20
 
+**FI-25 v2 disarmed hop + FI-09 sequencer rules C-119/120/122 (two parallel tracks)**
+
+Two file-disjoint parallel tracks (FI-25 v2 on the main track; FI-09 C-119/120/122 as a subagent).
+
+- **`converter trace` disarmed hop (FI-25 v2)** — the forward tracer now flags logic that is *built but
+  switched off*: a path whose every writer is gated `NOT AlwaysTrue` (the S7 always-on bit) → `disarmed`
+  (which review-functional treats as NOT implemented). The graph carries each write's guard Expr (additive
+  `Guard` on `DirectedTagUsage`/`UsageSite`); a pure three-valued constant-fold (`Trace/DisarmAnalysis.cs`,
+  `AlwaysTrue⇒true`) detects `NOT AlwaysTrue` standalone or ANDed, leaving a bare `AlwaysTrue` armed. Real
+  corpus: `IO.HandReverse` (`:= NOT AlwaysTrue`) → disarmed. Only the timing hop remains v2.
+- **`converter review` C-119/C-120/C-122 (FI-09)** — sequencer structural rules on the C-118 `--project`
+  seam: C-119 (idle = step 0 present, Error), C-120 (steps ascend ×10, Warn), C-122 (dwell-timer shape — IN
+  gated `Step=<n>`, Static instance not `DB_Timers`, PT a UDT settings member; PT-home NotApplicable without
+  `--project`). Careful subject-filtering (only Step-gated timers are C-122 subjects) → clean on the real
+  steppers, no false positives.
+- Converter suite **659/659**; golden suite unaffected.
+
 **FI-25 forward-pass tracer + two parallel unblocked follow-ups (FI-09 C-118, FI-22 aliasing)**
 
 The next actionable band after Tier C, built as three file-disjoint parallel tracks (FI-25 on the main
