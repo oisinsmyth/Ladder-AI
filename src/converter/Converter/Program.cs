@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
 using Converter.DriftCheck;
@@ -62,6 +63,11 @@ internal static class Program
             return RunDriftCheck(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "cross-check")
+        {
+            return RunCrossCheck(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
@@ -77,6 +83,7 @@ internal static class Program
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             return 1;
         }
 
@@ -612,6 +619,46 @@ internal static class Program
         Console.WriteLine(json ? TargetScanOutputFormatter.FormatJson(report) : TargetScanOutputFormatter.FormatText(report));
 
         return report.HasCandidates ? 0 : 1;
+    }
+
+    private static int RunCrossCheck(string[] args)
+    {
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter cross-check --project <ir-dir> [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = CrossCheckRunner.Run(projectDir);
+        Console.WriteLine(json ? CrossCheckOutputFormatter.FormatJson(report) : CrossCheckOutputFormatter.FormatText(report));
+
+        // A facts provider, not a gate — always exit 0 (like the `converter review` dump the skills embed).
+        return 0;
     }
 
     private static int RunDriftCheck(string[] args)
