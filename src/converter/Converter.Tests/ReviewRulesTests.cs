@@ -747,4 +747,193 @@ public class ReviewRulesTests
 
         Assert.Empty(Rules.CheckC118StepInterfaceUdt(block, index));
     }
+
+    // ---- C-119: idle/home is always step 0 (single-file step-number census) ----
+
+    // A stepper whose step set is exactly the transitions used, with the given IN literals. Each
+    // transition MOVE is `MOVE(EN := Step = <from>, IN := <to>) => IO.Step` — so the union of the
+    // MOVE-IN literals and the EN `Step = <from>` literals is the block's step-number set.
+    private static IrBlock MakeStepperWithTransitions(params (int From, int To)[] transitions)
+    {
+        var moves = transitions
+            .Select(t => new MoveStatement(
+                new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal(t.From.ToString())),
+                new Expr.Literal(t.To.ToString()),
+                "IO.Step"))
+            .ToArray();
+        var network = new IrNetwork(1, "Transitions", Array.Empty<CoilAssignment>(), Moves: moves);
+        return MakeBlock("FB", "FB_Seq", new[] { network });
+    }
+
+    // True positive: a stepped sequence with no step 0 (steps 10, 20, 30) is flagged.
+    [Fact]
+    public void CheckC119_NoStepZero_Flags()
+    {
+        var block = MakeStepperWithTransitions((10, 20), (20, 30));
+
+        var finding = Assert.Single(Rules.CheckC119IdleIsStepZero(block));
+        Assert.Equal("C-119", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("no step 0", finding.Description);
+    }
+
+    // True negative: a stepped sequence that includes step 0 is clean.
+    [Fact]
+    public void CheckC119_HasStepZero_Clean()
+    {
+        var block = MakeStepperWithTransitions((0, 10), (10, 20));
+
+        Assert.Empty(Rules.CheckC119IdleIsStepZero(block));
+    }
+
+    // True negative: a block with no step logic at all yields nothing (nothing to place).
+    [Fact]
+    public void CheckC119_NoStepLogic_Clean()
+    {
+        var network = new IrNetwork(1, "Plain", new[] { new CoilAssignment("Motor", new Expr.TagRef("RunCmd")) });
+        var block = MakeBlock("FB", "FB_Plain", new[] { network });
+
+        Assert.Empty(Rules.CheckC119IdleIsStepZero(block));
+    }
+
+    // ---- C-120: steps ascend in multiples of 10 (single-file) ----
+
+    // True positive: step 15 (not a multiple of 10) is flagged.
+    [Fact]
+    public void CheckC120_StepNotMultipleOfTen_Flags()
+    {
+        var block = MakeStepperWithTransitions((0, 10), (10, 15));
+
+        var finding = Assert.Single(Rules.CheckC120StepsMultipleOfTen(block));
+        Assert.Equal("C-120", finding.RuleId);
+        Assert.Equal(FindingSeverity.Warn, finding.Severity);
+        Assert.Contains("15", finding.Description);
+    }
+
+    // True negative: all steps multiples of 10 → clean.
+    [Fact]
+    public void CheckC120_AllMultiplesOfTen_Clean()
+    {
+        var block = MakeStepperWithTransitions((0, 10), (10, 20), (20, 30));
+
+        Assert.Empty(Rules.CheckC120StepsMultipleOfTen(block));
+    }
+
+    // ---- C-122: step-dwell timer shape (cross-file for the PT-home part) ----
+
+    // A step-dwell timer network: one TON whose IN is `Step = <step>` (subject + specific-step
+    // gate), instanced at `instancePath`, PT from `pt`.
+    private static IrBlock MakeDwellTimerBlock(string udtTypeName, string instancePath, Expr pt, Expr? inGate = null)
+    {
+        var gate = inGate ?? new Expr.Compare("=", new Expr.TagRef("IO.Step"), new Expr.Literal("10"));
+        var network = new IrNetwork(1, "Step 10 dwell", Array.Empty<CoilAssignment>(),
+            Timers: new[] { new TimerBinding(instancePath, gate, pt) });
+        var ioMember = new DbMember("IO", $"\"{udtTypeName}\"", Retain: true, StartValue: null, SetPoint: true);
+        return new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "A stepped sequence.", new[] { network },
+            StaticMembers: new[] { ioMember, new DbMember(instancePath.Split('.')[0], "TON_TIME", false, null) });
+    }
+
+    // The interface UDT carrying both Step:Int and a settings member DwellTime:Time (the C-122
+    // per-instance PT home).
+    private static TagTypeRegistry DwellIndex(string udtName = "UDT_SeqIO") =>
+        IndexWithUdt(udtName,
+            new DbMember("Step", "Int", false, null),
+            new DbMember("DwellTime", "Time", false, null));
+
+    // True negative: a well-formed dwell timer — IN gated `Step = 10`, multi-instance in Static,
+    // PT from a UDT settings member (IO.DwellTime) — is clean (no false positive).
+    [Fact]
+    public void CheckC122_WellFormedDwellTimer_Clean()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DwellTimer", new Expr.TagRef("IO.DwellTime"));
+
+        Assert.Empty(Rules.CheckC122DwellTimerShape(block, DwellIndex()));
+    }
+
+    // True negative: a bare block-local converted setpoint PT (a Static DInt member, the
+    // MUL+CONVERT ms-idiom) is NOT flagged — this is FB_ShredderSequencer's real shape.
+    [Fact]
+    public void CheckC122_LocalConvertedSetpointPt_Clean()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DwellTimer", new Expr.TagRef("DwellTimeMS"));
+
+        Assert.Empty(Rules.CheckC122DwellTimerShape(block, DwellIndex()));
+    }
+
+    // True negative: a timer with no Step relationship in its IN is not a C-122 subject — skipped
+    // entirely, no findings (mirrors UpstreamEnableTimer, fed by another timer's Q).
+    [Fact]
+    public void CheckC122_NonDwellTimerInStepper_Skipped()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DerivedTimer", new Expr.TagRef("DB_Timers.Foo"),
+            inGate: new Expr.TagRef("InfeedRunning"));
+
+        Assert.Empty(Rules.CheckC122DwellTimerShape(block, DwellIndex()));
+    }
+
+    // True positive (a): a step-dwell timer whose IN is Step-gated but only by a NON-equality
+    // comparison (`Step >= 30`) — can't self-reset per step.
+    [Fact]
+    public void CheckC122_InGateNotEquality_Flags()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DwellTimer", new Expr.TagRef("IO.DwellTime"),
+            inGate: new Expr.Compare(">=", new Expr.TagRef("IO.Step"), new Expr.Literal("30")));
+
+        var finding = Assert.Single(Rules.CheckC122DwellTimerShape(block, DwellIndex()));
+        Assert.Equal("C-122", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("equality gate", finding.Description);
+    }
+
+    // True positive (b): a step-dwell timer instanced in DB_Timers rather than the block's Static.
+    [Fact]
+    public void CheckC122_InstancedInDbTimers_Flags()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DB_Timers.DwellTimer", new Expr.TagRef("IO.DwellTime"));
+
+        var finding = Assert.Single(Rules.CheckC122DwellTimerShape(block, DwellIndex()));
+        Assert.Equal("C-122", finding.RuleId);
+        Assert.Contains("DB_Timers", finding.Description);
+    }
+
+    // True positive (c): PT sourced directly from a DB, not a UDT settings member.
+    [Fact]
+    public void CheckC122_PtFromDb_Flags()
+    {
+        var block = MakeDwellTimerBlock("UDT_SeqIO", "DwellTimer", new Expr.TagRef("DB_Settings.DwellTime"));
+        var index = TagTypeRegistry.FromSources(
+            new[] { new DbSource("0", "DB_Settings", 1, InstanceOfName: null, Comment: null, Members: new[] { new DbMember("DwellTime", "Time", false, null) }) },
+            new[] { new PlcTypeSource("0", "UDT_SeqIO", null, new[] { new DbMember("Step", "Int", false, null) }) },
+            Array.Empty<PlcTagSource>());
+
+        var finding = Assert.Single(Rules.CheckC122DwellTimerShape(block, index));
+        Assert.Equal("C-122", finding.RuleId);
+        Assert.Contains("DB_Settings", finding.Description);
+    }
+
+    // Cross-file gating: reviewed without a --project index, C-122 is recorded NotApplicable (its
+    // PT-home part can't resolve the interface UDT) — never silently absent. Goes through
+    // ReviewRunner, the only place the NotApplicable status is produced.
+    [Fact]
+    public void ReviewFiles_NoProjectIndex_C122NotApplicable()
+    {
+        var block = new IrBlock("0", "FB", "FB_Seq", 1, "LAD", "c", new[]
+        {
+            new IrNetwork(1, "T", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        var path = Path.Combine(Path.GetTempPath(), $"c122-na-{Guid.NewGuid():N}.ir");
+        File.WriteAllText(path, IrSerializer.SerializeBlock(block, new[] { sidecar }));
+        try
+        {
+            var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+
+            var file = Assert.Single(report.Files);
+            Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-122" && s.Status == RuleCheckStatus.NotApplicable);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

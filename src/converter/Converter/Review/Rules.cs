@@ -821,6 +821,249 @@ public static class Rules
         }
     }
 
+    // C-119 (error) — SINGLE-FILE. Idle/home is always step 0. Mechanized narrowly: collect the
+    // block's step-number set (CollectBlockStepNumbers) and assert 0 is present; a stepped sequence
+    // with no step 0 is flagged. ONLY step-0 PRESENCE is mechanized — C-119's other half ("returned
+    // to explicitly on stop, fault recovery, and restart", tied to C-124) is a judgment call this
+    // tool cannot verify, so it is deliberately NOT checked (and the finding says so). A block with
+    // no step logic at all yields nothing (rule has nothing to place).
+    public static IEnumerable<Finding> CheckC119IdleIsStepZero(IrBlock block)
+    {
+        var steps = CollectBlockStepNumbers(block);
+        if (steps.Count == 0)
+        {
+            yield break;
+        }
+
+        if (!steps.Contains(0))
+        {
+            yield return new Finding(
+                "C-119",
+                FindingSeverity.Error,
+                block.Name,
+                null,
+                $"Stepped sequence has no step 0 — idle/home must be step 0 (C-119). Steps present: {string.Join(", ", steps.OrderBy(n => n))}. (Only step-0 presence is checked mechanically; C-119's 'returned to explicitly on stop/fault/restart' half — C-124 — is a judgment call not verified here.)",
+                "Number the idle/home state step 0, and route stop/fault-recovery/restart back to it (C-124).");
+        }
+    }
+
+    // C-120 (warn) — SINGLE-FILE. Steps ascend in multiples of 10, so a later revision can insert
+    // one without renumbering. Mechanized narrowly: every distinct step number in the block's set
+    // must be a multiple of 10; any that isn't is flagged. The step-legend-comment (C-201) and
+    // one-sentence-phase (C-101) clauses of C-120 are judgment calls — deliberately NOT mechanized.
+    public static IEnumerable<Finding> CheckC120StepsMultipleOfTen(IrBlock block)
+    {
+        foreach (var n in CollectBlockStepNumbers(block).Where(n => n % 10 != 0).OrderBy(n => n))
+        {
+            yield return new Finding(
+                "C-120",
+                FindingSeverity.Warn,
+                block.Name,
+                null,
+                $"Step {n} is not a multiple of 10 (C-120: steps ascend by 10 so a later revision can insert one without renumbering).",
+                $"Renumber step {n} to a multiple of 10. (C-120's step-legend and one-sentence-phase clauses are judgment calls, not checked here.)");
+        }
+    }
+
+    // C-122 (error) — CROSS-FILE (FI-09). A step's own maximum-dwell timer has a specific shape
+    // (docs/06 C-122): (a) IN gated by `Step = <n>` so it self-resets the instant the step changes;
+    // (b) it lives multi-instance in the owning block's own Static (per C-407), never in DB_Timers;
+    // (c) its PT comes from a settings member of the block's own interface UDT (C-307 per-instance
+    // scope) — DB_Settings only when the timing is genuinely plant-wide.
+    //
+    // SCOPE (conservative, to avoid false positives on real steppers): only timers that look like
+    // step-dwell timers are subjects — a timer whose IN is gated by ANY Step comparison
+    // (ExprHasStepGuard, the same signal C-121 keys off). A timer with no Step relationship in its
+    // IN (e.g. a chained/derived timer fed by another timer's Q — FB_ShredderSequencer's own
+    // UpstreamEnableTimer) is NOT a C-122 subject and is skipped entirely. This is what keeps a
+    // legitimate non-dwell timer inside a stepper block from being flagged.
+    //
+    // Part (c) resolves the referenced interface UDT via the --project index, so — exactly like
+    // C-118 — the whole rule is recorded NotApplicable when no index is supplied (ReviewRunner
+    // gates it). The "Q always drives a fault (C-123)" clause is a judgment call (fault-bit
+    // identification) and is deliberately NOT mechanized.
+    public static IEnumerable<Finding> CheckC122DwellTimerShape(IrBlock block, TagTypeRegistry udtIndex)
+    {
+        var interfaceMembers = TopLevelInterfaceMembers(block).ToList();
+
+        foreach (var network in block.Networks)
+        {
+            foreach (var timer in network.Timers)
+            {
+                // Subject test: only a Step-gated timer is a step-dwell timer.
+                if (!ExprHasStepGuard(timer.In))
+                {
+                    continue;
+                }
+
+                // (a) IN must carry a specific-step `Step = <n>` equality gate. A subject gated only
+                // by a non-equality Step comparison (e.g. `Step >= 30`, or `Step = <a variable>`)
+                // can't self-reset per step the way C-122 requires.
+                if (!HasStepEqualityGuard(timer.In))
+                {
+                    yield return new Finding(
+                        "C-122",
+                        FindingSeverity.Error,
+                        block.Name,
+                        network.Number,
+                        $"Step-dwell timer '{timer.InstancePath}' (network {network.Number}) has no `Step = <n>` equality gate on its IN — C-122 requires IN gated by `Step = <that step>` so the timer self-resets the instant the step changes.",
+                        "Gate the timer's IN with `Step = <that step>` (an equality against the specific step number), not a range or other Step comparison.");
+                }
+
+                // (b) Multi-instance in the block's own Static — never DB_Timers.
+                var instanceRoot = StripSubscriptComponent(timer.InstancePath.Split('.')[0]);
+                if (string.Equals(instanceRoot, "DB_Timers", StringComparison.Ordinal))
+                {
+                    yield return new Finding(
+                        "C-122",
+                        FindingSeverity.Error,
+                        block.Name,
+                        network.Number,
+                        $"Step-dwell timer '{timer.InstancePath}' (network {network.Number}) is instanced in DB_Timers — C-122/C-407 require a step-dwell timer to be multi-instance in the owning block's own Static section (it belongs to this instance, not a shared DB_Timers).",
+                        "Declare the timer as a multi-instance member in the block's Static section instead of in DB_Timers.");
+                }
+
+                // (c) PT from a settings member of the block's own interface UDT. Only checkable when
+                // PT is a tag reference. A PT whose root is a top-level interface member typed as a
+                // UDT the index knows is the correct per-instance home — clean. A bare block-local
+                // converted setpoint (a Static member whose type is neither a UDT nor a known DB —
+                // the accepted MUL+CONVERT ms-idiom in FB_ShredderSequencer) is NOT flagged
+                // (conservative). A PT sourced directly from a DB is surfaced as a candidate: C-122
+                // wants the per-instance PT to be a UDT settings member, and a genuinely plant-wide
+                // DB_Settings timing is the documented judgment exception.
+                if (timer.Pt is Expr.TagRef ptRef)
+                {
+                    var ptRoot = StripSubscriptComponent(ptRef.Path.Split('.')[0]);
+                    var ptRootMember = interfaceMembers.FirstOrDefault(m => string.Equals(m.Name, ptRoot, StringComparison.Ordinal));
+                    var isUdtSettingsMember = ptRootMember is not null && udtIndex.TryGetUdt(ptRootMember.Datatype.Trim('"'), out _);
+
+                    if (!isUdtSettingsMember && udtIndex.IsKnownDb(ptRoot))
+                    {
+                        yield return new Finding(
+                            "C-122",
+                            FindingSeverity.Error,
+                            block.Name,
+                            network.Number,
+                            $"Step-dwell timer '{timer.InstancePath}' (network {network.Number}) takes its PT '{ptRef.Path}' from DB '{ptRoot}', not a settings member of the block's own interface UDT — C-122 wants the PT per-instance (C-307). If this timing is genuinely plant-wide with no single owning block, DB_Settings is the documented exception — confirm.",
+                            "Source the PT from a settings member of the block's interface UDT (per-instance), or confirm the timing is genuinely plant-wide (the DB_Settings exception).");
+                    }
+                }
+            }
+        }
+    }
+
+    // The block's step-number set — the union of (1) every literal MOVEd into a Step register (a
+    // transition's target step) and (2) every literal compared against a Step register inside a
+    // transition MOVE's EN or a timer's IN (a transition's from-step / a dwell gate). Step literals
+    // are NOT in TagReferences.AllTagPaths (it excludes Expr.Literal), so they are collected here
+    // directly from those two shapes. Used by C-119 (is 0 present) and C-120 (all multiples of 10).
+    private static IReadOnlySet<int> CollectBlockStepNumbers(IrBlock block)
+    {
+        var steps = new HashSet<int>();
+
+        foreach (var network in block.Networks)
+        {
+            // Shape 1: MOVE(..., IN := <literal>) => <Step register>.
+            foreach (var move in network.Moves)
+            {
+                if (HasStepLeaf(move.DestTag) && move.In is Expr.Literal lit && TryParseStep(lit.Value, out var target))
+                {
+                    steps.Add(target);
+                }
+            }
+
+            // Shape 2: `Step <op> <literal>` comparisons in transition ENs and timer INs.
+            foreach (var move in network.Moves)
+            {
+                foreach (var n in StepComparisonLiterals(move.En, equalityOnly: false))
+                {
+                    steps.Add(n);
+                }
+            }
+
+            foreach (var timer in network.Timers)
+            {
+                foreach (var n in StepComparisonLiterals(timer.In, equalityOnly: false))
+                {
+                    steps.Add(n);
+                }
+            }
+        }
+
+        return steps;
+    }
+
+    // True when the Expr tree contains a `Step = <literal>` equality guard (C-122's per-step
+    // self-reset signal) — the equality-and-literal-only counterpart of ExprHasStepGuard, which
+    // accepts any Step comparison.
+    private static bool HasStepEqualityGuard(Expr expr) => StepComparisonLiterals(expr, equalityOnly: true).Any();
+
+    // Every literal step number that appears in a `Step <op> <literal>` comparison anywhere in an
+    // Expr tree. Mirrors ExprHasStepGuard's And/Or/Not/Compare traversal but returns the literal
+    // ints instead of a bool. equalityOnly restricts to the `=` operator (C-122's specific-step
+    // gate); false accepts any comparison operator (the C-119/C-120 step-number census).
+    private static IEnumerable<int> StepComparisonLiterals(Expr expr, bool equalityOnly)
+    {
+        switch (expr)
+        {
+            case Expr.Compare compare:
+                if (!equalityOnly || compare.Operator == "=")
+                {
+                    if (IsStepTagRef(compare.Left) && compare.Right is Expr.Literal rl && TryParseStep(rl.Value, out var r))
+                    {
+                        yield return r;
+                    }
+
+                    if (IsStepTagRef(compare.Right) && compare.Left is Expr.Literal ll && TryParseStep(ll.Value, out var l))
+                    {
+                        yield return l;
+                    }
+                }
+
+                foreach (var n in StepComparisonLiterals(compare.Left, equalityOnly))
+                {
+                    yield return n;
+                }
+
+                foreach (var n in StepComparisonLiterals(compare.Right, equalityOnly))
+                {
+                    yield return n;
+                }
+
+                break;
+            case Expr.And and:
+                foreach (var operand in and.Operands)
+                {
+                    foreach (var n in StepComparisonLiterals(operand, equalityOnly))
+                    {
+                        yield return n;
+                    }
+                }
+
+                break;
+            case Expr.Or or:
+                foreach (var operand in or.Operands)
+                {
+                    foreach (var n in StepComparisonLiterals(operand, equalityOnly))
+                    {
+                        yield return n;
+                    }
+                }
+
+                break;
+            case Expr.Not not:
+                foreach (var n in StepComparisonLiterals(not.Operand, equalityOnly))
+                {
+                    yield return n;
+                }
+
+                break;
+        }
+    }
+
+    private static bool TryParseStep(string value, out int result) =>
+        int.TryParse(value.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out result);
+
     // Every top-level (non-nested) interface member across all sections — the candidates for the
     // UDT-typed member C-118 resolves the interface UDT through.
     private static IEnumerable<DbMember> TopLevelInterfaceMembers(IrBlock block) =>
