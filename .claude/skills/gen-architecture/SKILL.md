@@ -10,6 +10,8 @@ allowed-tools:
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe digest:*)
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe review:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe review:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
 ---
 
 # /gen-architecture — the Design-stage manifest builder (gate 1's input)
@@ -27,11 +29,13 @@ apply throughout.
   `openness-cli` anything. The compile gate (hard rule 4) lives downstream in the Build coding stage
   (`gen-block-new` / the S7 modify pair);
   this stage's output is a markdown artifact and nothing else.
-- **Bash exists in this skill for exactly two read-only commands**: `converter digest` (brownfield
-  orientation — see Method) and `converter review` (only to note the current mechanical-findings
-  state of an as-built block the manifest proposes to touch). Nothing else — zero TIA/Portal
-  contact. If the Release binary is missing, skip them (both are optional aids), say so, and read
-  the IR files directly instead; never build tooling mid-run.
+- **Bash exists in this skill for exactly three read-only commands**: `converter digest` (brownfield
+  orientation — see Method), `converter review` (only to note the current mechanical-findings
+  state of an as-built block the manifest proposes to touch), and `converter tagstatus` (the
+  section-9 tag-status classification — EXISTS/PROPOSED against the export, the anti-laundering
+  check the skill otherwise hand-greps). Nothing else — zero TIA/Portal contact. If the Release
+  binary is missing, skip them (all three are optional aids), say so, and fall back to reading the
+  IR files / grepping the export directly instead; never build tooling mid-run.
 - **Never invent tags, addresses, DB numbers, or hardware** (hard rule 3 — the rule this stage is
   most likely to trip, because designing interfaces begs for "obviously there must be a sensor").
   Everything the design needs but cannot grep in `ir/<project>/` is `proposed`: a named gap the
@@ -65,9 +69,12 @@ apply throughout.
   contradictions surface here as open questions instead of resolved answers. A register-only
   project is a fully supported input state, not an error.
 - **The current `ir/<project>/` export** — two distinct uses, kept distinct:
-  - **Tag status, always:** every tag or DB member the design names is grep-verified against the
-    export at write time (`exists`) or marked `proposed`. The register's own marks are re-verified,
-    not trusted from memory — docs/15's anti-laundering rule.
+  - **Tag status, always:** every tag or DB member the design names is classified against the
+    export at write time — `converter tagstatus <names…> --project ir/<project>/` (EXISTS/PROPOSED,
+    root-level; falls back to a grep if the binary is missing). The register's own marks are
+    re-verified this way, not trusted from memory — docs/15's anti-laundering rule. Classification
+    is root-level (does the tag/DB root resolve?), matching what `preflight` checks; member-level
+    existence within a DB stays TIA's compile-time check.
   - **Brownfield inventory, when the project has as-built content the request extends:** what
     exists, what the manifest touches, what it must leave alone.
 - **`patterns/` + `docs/07-pattern-library-spec.md`** — the composition vocabulary for section 6.
@@ -124,14 +131,16 @@ beautifully and still misses requirements, because the trace was fitted, not der
 6. Wire on paper: the command-flow/enable graph (C-114/C-116), all cross-instance facts in the
    orchestrating FC (C-127), OB1 order (C-110).
 7. Map every manifest item to its step-3 tier — (a)/(b) pattern, (c) modify-candidate, or (d)
-   `freeform`; compute the freeform share; trace every REQ to its item(s); grep every named tag;
-   collect open questions.
+   `freeform`; compute the freeform share; trace every REQ to its item(s); classify every named
+   tag with `converter tagstatus <names…> --project ir/<project>/` (EXISTS/PROPOSED); collect open
+   questions.
 
 **Digest policy (docs/15, FI-15):** on a brownfield corpus, orient with `converter digest`
 ("which blocks exist, which do I need to open?") — derived fresh, never stored. Anything the
 manifest **changes** (an interface to extend, a block to rework) is read as **full IR** before the
 design commits to the change — a digest is never the basis for an interface-change decision.
-Greenfield contact with the corpus is the tag-status grep, nothing more.
+Greenfield contact with the corpus is the tag-status classification (`converter tagstatus`),
+nothing more.
 
 **Stop conditions.** Missing information becomes a named open question in the artifact — never an
 invented answer, never a silently-picked side of a source contradiction. If the register is
@@ -141,7 +150,8 @@ this skill never self-authorizes freeform.
 
 **Independence.** Design from the register, not from the as-built code: on a corpus that predates
 its register (retroactive runs), do not read as-built block logic before the design is written —
-as-built contact is tag-status greps plus whatever the register itself records. If this session
+as-built contact is the tag-status classification (`converter tagstatus`) plus whatever the
+register itself records. If this session
 already contains the corpus author's reasoning, review findings for the same corpus, or an
 earlier design discussion, declare that in the provenance header ("informed, not independent")
 so the gate-1 reviewer can weigh it.
@@ -202,10 +212,15 @@ Method requires one. Then exactly these sections:
    inputs, buffer members to interface members, fan-ins to shared outputs). A reusable FB that
    would need a sibling's name inside its own logic is a design error caught here, not a review
    finding later.
-9. **Tag status.** Every tag and DB member the design names: `exists` (grep-verified against
-   `ir/<project>/` at write time — state the corpus commit) or `proposed` (named gap; the
-   engineer creates tags — hard rule 3). New interface members and new blocks the design itself
-   defines are `proposed` by definition until a fresh export shows them.
+9. **Tag status.** Every tag and DB root the design names, classified by `converter tagstatus
+   <names…> --project ir/<project>/` at write time (state the corpus commit): `exists` (EXISTS —
+   resolves in the export) or `proposed` (PROPOSED — named gap; the engineer creates tags — hard
+   rule 3). Classification is root-level, matching `preflight`; a DB member's existence *within* an
+   existing DB stays TIA's compile-time check, so note member-level assumptions explicitly. New
+   interface members and new blocks the design itself defines are `proposed` by definition until a
+   fresh export shows them. **A `proposed` result is an expected, recorded outcome here — a named
+   gap for the engineer, never a run-stopping gate** (unlike `gen-block-new`, where PROPOSED halts
+   coding: this stage *designs against* gaps, it does not write logic).
 10. **Open questions.** Register questions carried (cite `Q-nn`; any stage may append, none may
     silently resolve — resolution is a recorded owner answer), plus this design's own new
     questions, clearly marked NEW.
@@ -233,7 +248,8 @@ conversation-only). It may be one paragraph; it may never omit:
   makes it a gate-1 matter at all).
 - **Pattern or freeform** — per touched item, with the >20% flag if it applies.
 - **REQ refs** — which register REQ(s) it implements (new ask = register it first).
-- **Tag status** — any tag it names, `exists`/`proposed`, same rule as the full form.
+- **Tag status** — any tag it names, `exists`/`proposed` via `converter tagstatus`, same rule as
+  the full form.
 - **A gate-1 sign-off line** — pending until the engineer signs.
 
 Never scaled away (docs/15): the two gates, the compile gate downstream, the tag-status rule,

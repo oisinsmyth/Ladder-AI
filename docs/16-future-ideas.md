@@ -257,7 +257,14 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Costs / risks:** Low — both are small, deterministic, and reuse existing primitives.
 **Dependencies:** `ProjectIndex` (built).
 **Verdict / revisit trigger:** Open — small quick wins; `tagstatus` is the more useful (anti-laundering support).
-**Adoption gap (2026-07-20 housekeeping scan):** the built `tagstatus` is called by `gen-block-new` but **not yet adopted in `gen-architecture`'s own tag-status pass** — that skill still hand-greps (its SKILL.md tag-status steps, and its Bash allowance omits `tagstatus`). Wiring it in (and reusing its non-zero-exit "all tags exist" gate) is a zero-build skill edit, the natural close for this FI's tag-status half.
+**Adoption gap CLOSED (2026-07-20).** `gen-architecture/SKILL.md` now calls `converter tagstatus`
+in its tag-status pass (Inputs "Tag status, always", Method step 7, section-9 output, and the
+mini-manifest), with a `tagstatus:*` Bash allowance added alongside the existing `digest`/`review`
+pairs and the prose "exactly two read-only commands" updated to three. One behavioural difference
+from `gen-block-new` preserved: a `PROPOSED` result is an *expected, recorded* section-9 outcome
+(a named gap the engineer resolves), not a run-stopping gate — the design stage designs against
+gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provenance-header wrapper
+(above) remains open.**
 
 ### FI-25 — `review-functional` forward-pass verdict tracer (AI binding → scripted decision tree)
 - **Status:** Raised (2026-07-18, follow-up to the skill/tooling audit — net-new).
@@ -295,7 +302,15 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — distinct from FI-07 (diagnosis, not action); the cheap, safe half, worth doing first.
 
 ### FI-29 — Reuse-first duplicate-logic finder (digest-backed corpus query)
-- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new).
+- **Status:** IMPLEMENTED 2026-07-20 as `converter reuse-scan --project <ir-dir> [--tag <tag>…]
+  [--kind <kind>…]` (`src/converter/Converter/ReuseScan/`, `src/converter/README.md`). A
+  digest-backed query over the whole export: `--tag` matches a block's tag roots, `--kind` matches a
+  network's statement kind, ANDed across groups (`--tag T --kind timer` = blocks referencing `T` with
+  a timer network). Composition on `DigestBuilder` only; surfaces candidate blocks, never rules
+  "duplicate" (digest's orientation-only policy). Exit non-zero if any candidate found (the
+  reuse-first alarm). Smoke-tested against `ir/test-project001/`: `--kind timer` surfaces
+  `FB_ShredderSequencer` network 8 "Step 20 (DischargeStart) – Timer, Timeout Fault" — exactly the
+  discharge-timeout logic the `discharge-conv-monitor` request duplicated. 5 unit tests.
 - **Raised:** 2026-07-20 · **Source:** the scan. The reuse-first carving pass (`gen-architecture` / `gen-spec-analysis`) is a manual grep over the corpus. An entire spec-analysis cycle was wasted this session: the `discharge-conv-monitor` request (#1/10, ~20m, 10 REQs, 6 RFIs) was analysed then **abandoned** because it duplicated the discharge-timeout fault already in `FB_ShredderSequencer` — caught by the owner, not tooling; the hopper pivot then needed the same manual "does this already exist?" grep.
 **Merits:** A `digest`-backed query — "which blocks reference tag T / implement a timeout/fault on T" — over the whole `ir/<proj>/` corpus surfaces the candidate blocks a human/AI must check, deterministically. `digest` already extracts CALL sites, tag roots, and per-network statement kinds; this is an index + query on top.
 **Costs / risks:** Won't fully judge *semantic* duplication (that stays human/AI) — it surfaces candidates, never rules "already exists." Keep it an orientation aid, consistent with digest's policy (never review input, `docs/15` isolation model).
@@ -303,7 +318,21 @@ A point-in-time ranking, not a living order: it reflects the entries and project
 **Verdict / revisit trigger:** Open — one full analysis cycle abandoned this session for exactly this; the reuse grep recurs every request. Related to FI-30 (both corpus cross-checks).
 
 ### FI-30 — S6 new-block target gap-hunter (REQ × tag-status × as-built cross-join)
-- **Status:** Raised (2026-07-20, housekeeping tooling scan — net-new).
+- **Status:** IMPLEMENTED 2026-07-20 as `converter target-scan --requirements <register.md>
+  --project <ir-dir>` (`src/converter/Converter/TargetScan/`, `src/converter/README.md`).
+  Cross-joins the register against a fresh `ProjectIndex` classification and the corpus digest,
+  bucketing each REQ: **DISQUALIFIED** (mechanical, precise — `hmi-only`/`out-of-scope`/
+  `proposed-tag-blocked`/`q-open`, each with the specific blocking names/questions), **LIKELY-
+  IMPLEMENTED** (a deliberately-separate *heuristic* bucket — mechanically clean but the REQ's
+  exists-tags already appear in an as-built block, shown with the overlapping roots so the human
+  judges strength), **CANDIDATE** (mechanically clean + no inline hint), **WITHDRAWN**. The mechanical
+  layer is precise; the "already implemented" signal stays soft/semantic and never becomes a
+  mechanical verdict — the boundary the project's mechanization discipline requires. Exit non-zero if
+  zero candidates (the fast "no clean target" signal). Register parsing is a focused reader of the
+  register's own strict `## Format` contract, not general markdown. Smoke-tested on the real 69-REQ
+  test-project001 register: 15 mechanically disqualified + 35 likely-implemented pre-cleared (with
+  evidence), 19 to confirm — matching the FI narrative (proposed-blocked / Q-disarmed / HMI-only /
+  already-built). 5 unit tests.
 - **Raised:** 2026-07-20 · **Source:** the scan. Finding a clean new-block-only landing spot is manual cross-referencing of unimplemented REQs × tag status × as-built inline coverage. Two consecutive `gen-architecture` runs (~55m combined this session) were spent almost entirely on this ("honest survey found NO clean REQ-grounded new-block-only target — all proposed-tag-blocked or Q-11-disarmed or HMI-only"). With the reuse-first bar rejecting obvious asks, targets are scarce (test-project001 is fully implemented).
 **Merits:** A script/subcommand cross-joining `requirements.md` REQs against `tagstatus` (proposed-blocked?) and `digest` (already implemented inline? HMI-only?) emits a candidate-target table with each disqualification reason pre-computed — turning a manual survey into a filtered list a human confirms.
 **Costs / risks:** Needs `requirements.md` in a parseable-enough shape (REQ IDs are already structured); reuse the `tagstatus` and `digest` primitives, don't rebuild them.

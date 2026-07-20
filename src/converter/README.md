@@ -1657,6 +1657,78 @@ CHANGED network 1 "Perimeter Safety Alarm Bit Mapping"
 INVARIANCE OK: all changes confined to --only {1}          # exit 0
 ```
 
+## `reuse-scan` — reuse-first duplicate-logic finder (2026-07-20, FI-29)
+
+`converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]`
+
+A digest-backed corpus query for the reuse-first carving pass (`gen-architecture` /
+`gen-spec-analysis`): "which blocks reference tag T / implement a statement kind (a timeout, a coil,
+a call) — anything I might be about to re-build?" Surfaces the **candidate** blocks a human/AI then
+checks for semantic duplication; it never rules "already exists" (orientation only, matching
+`digest`'s policy — `docs/15` isolation model). Composition on top of `DigestBuilder` — no new IR
+traversal; tag roots are extracted with the *same* `AccessNode.FromDottedPath` primitive, so a
+literal-dot tag (`Clock_0.5Hz`) is never mis-split.
+
+`--tag` matches at **block level** (the block's tag roots — that's digest's granularity); `--kind`
+matches at **network level** (a network whose statement summary contains that kind). Each flag may
+repeat; within a group the match is "any", and the two groups are ANDed — so `--tag T --kind timer`
+finds blocks that reference `T` *and* have a timer network. `--kind` must be one of the digest
+statement labels (`coil timer move wand call arith convert swap abs limit tsub tconv calc moveblk
+wait fillblk mb-master mb-commload`); an unknown kind is a hard error listing the valid set. At
+least one `--tag` or `--kind` is required. **Exit non-zero if any candidate is found** (the
+reuse-first alarm — `reuse-scan … && <build>` stops you to look before building new logic).
+
+```
+$ converter reuse-scan --project ir/test-project001/ --kind timer
+QUERY: tags=[(none)] kinds=[timer]
+MATCH: FB_ShredderSequencer (FB)  ir/test-project001/FB_ShredderSequencer.ir
+  network 8 "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions" — timer
+  ...
+SUMMARY: 4 block(s) matched          # exit 1
+```
+
+## `target-scan` — S6 new-block target gap-hunter (2026-07-20, FI-30)
+
+`converter target-scan --requirements <register.md> --project <ir-dir> [--json]`
+
+Cross-joins a `requirements.md` register against a **fresh** tag-status classification
+(anti-laundering — never trusts the register's own `exists`/`proposed` marks; re-derived via the
+same `ProjectIndex` primitive `tagstatus`/`preflight` use) and the as-built corpus, pre-computing
+each REQ's *mechanical* disqualifiers so a human confirms a short filtered list instead of surveying
+every REQ by hand. Each REQ lands in one bucket:
+
+- **DISQUALIFIED** (mechanical, precise): class `HMI` (`hmi-only`) or `out-of-scope`; any named tag
+  classifies `PROPOSED` (`proposed-tag-blocked`, with the specific names); or a linked `Q-nn` is
+  `Still open` / `Partially resolved` (`q-open`, with the question + status).
+- **LIKELY-IMPLEMENTED** (heuristic — kept deliberately *separate* from the mechanical layer):
+  mechanically clean, but the REQ's `exists`-tags already appear in an as-built block's tag roots.
+  Shown with the block(s) and the overlapping roots so the human judges the hint's strength. This is
+  a soft, semantic signal — never a mechanical verdict; confirm with `reuse-scan` or a read.
+- **CANDIDATE**: mechanically clean *and* no as-built block references its tags — a genuine
+  new-block-only target the human then confirms.
+- **WITHDRAWN**: the register marks the REQ withdrawn (carried for completeness).
+
+The register parser is a focused line/regex reader of the register's own strict `## Format` contract
+(`### REQ-nnn — <title>` headers, `- **Class:**` / `- **Notes:**` bullets, `## Open questions` with
+`- **Q-nn — … <STATUS>`), not a general markdown parser. Named tags are the back-ticked identifiers
+in each REQ's text/notes; classification is **root-level** (like `preflight`) — a bare interface
+member may over-report as proposed, which the shown name lets the human sanity-check. **Exit
+non-zero if there are zero candidates** — the fast "no clean new-block target here" signal the
+manual survey used to reach by hand.
+
+```
+$ converter target-scan --requirements gen/test-project001/requirements.md --project ir/test-project001/
+REQUIREMENTS: 69 parsed | CANDIDATES: 19
+...
+DISQUALIFIED (mechanical):
+  REQ-020  [control]  Overcurrent on either motor
+    reasons: q-open [Q-05 (Still open)]
+  REQ-061  [out-of-scope]  E-stop stops everything (hardwired)
+    reasons: out-of-scope
+...
+SUMMARY: 19 candidate(s), 35 likely-implemented, 15 disqualified, 0 withdrawn          # exit 0
+```
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

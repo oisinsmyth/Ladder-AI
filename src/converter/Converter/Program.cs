@@ -3,10 +3,12 @@ using Converter.Diff;
 using Converter.Digest;
 using Converter.Ir;
 using Converter.Preflight;
+using Converter.ReuseScan;
 using Converter.Review;
 using Converter.Sanitize;
 using Converter.SimaticMl;
 using Converter.TagStatus;
+using Converter.TargetScan;
 
 namespace Converter;
 
@@ -44,6 +46,16 @@ internal static class Program
             return RunDiff(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "reuse-scan")
+        {
+            return RunReuseScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "target-scan")
+        {
+            return RunTargetScan(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
@@ -56,6 +68,8 @@ internal static class Program
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
             Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
             Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
+            Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
+            Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             return 1;
         }
 
@@ -470,6 +484,127 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunReuseScan(string[] args)
+    {
+        string? projectDir = null;
+        var tags = new List<string>();
+        var kinds = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--tag":
+                    var tag = RequireValue(args, ref i, "--tag");
+                    if (tag is null)
+                    {
+                        return 1;
+                    }
+
+                    tags.Add(tag);
+                    break;
+                case "--kind":
+                    var kind = RequireValue(args, ref i, "--kind");
+                    if (kind is null)
+                    {
+                        return 1;
+                    }
+
+                    kinds.Add(kind);
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        if (tags.Count == 0 && kinds.Count == 0)
+        {
+            Console.Error.WriteLine("reuse-scan needs at least one --tag or --kind to query for.");
+            return 1;
+        }
+
+        var unknownKinds = kinds.Where(k => !ReuseScanRunner.KnownKinds.Contains(k)).ToList();
+        if (unknownKinds.Count > 0)
+        {
+            Console.Error.WriteLine($"Unknown --kind value(s): {string.Join(", ", unknownKinds)}. Known kinds: {string.Join(", ", ReuseScanRunner.KnownKinds)}");
+            return 1;
+        }
+
+        var report = ReuseScanRunner.Run(projectDir, tags, kinds);
+        Console.WriteLine(json ? ReuseScanOutputFormatter.FormatJson(report) : ReuseScanOutputFormatter.FormatText(report));
+
+        return report.HasMatches ? 1 : 0;
+    }
+
+    private static int RunTargetScan(string[] args)
+    {
+        string? requirementsPath = null;
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--requirements":
+                    requirementsPath = RequireValue(args, ref i, "--requirements");
+                    break;
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (requirementsPath is null || projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter target-scan --requirements <register.md> --project <ir-dir> [--json]");
+            return 1;
+        }
+
+        if (!File.Exists(requirementsPath))
+        {
+            Console.Error.WriteLine($"--requirements file not found: {requirementsPath}");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = TargetScanRunner.Run(requirementsPath, projectDir);
+        Console.WriteLine(json ? TargetScanOutputFormatter.FormatJson(report) : TargetScanOutputFormatter.FormatText(report));
+
+        return report.HasCandidates ? 0 : 1;
     }
 
     // Parses a single --only token: one network number or a comma-separated list ("1" or "1,2,3").

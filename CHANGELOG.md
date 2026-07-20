@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-07-20
+
+**Tier A S6-loop accelerators — `reuse-scan` + `target-scan` converter subcommands, `gen-architecture` adopts `tagstatus` (FI-24/29/30)**
+
+The three highest-leverage items from a value/leverage survey of `docs/16-future-ideas.md`, chosen
+because each shaves cost off a step at the front of *every* S6 generation request (9 still to run
+before the S6-exit gate). All reuse existing primitives (`ProjectIndex`, `DigestBuilder`,
+`tagstatus`) — tooling-side only, no roadmap/ADR change.
+
+- **`converter reuse-scan --project <ir-dir> [--tag …] [--kind …]` (FI-29)** — digest-backed
+  reuse-first query: which blocks reference a tag and/or implement a statement kind. `--tag`
+  (block-level roots) and `--kind` (network-level statement) ANDed across groups; unknown `--kind`
+  is a hard error. Surfaces candidates, never rules "duplicate". Exit non-zero if any candidate
+  found. `src/converter/Converter/ReuseScan/`. Would have caught the `discharge-conv-monitor`
+  overlap with `FB_ShredderSequencer` up front (a full analysis cycle was abandoned to it).
+- **`converter target-scan --requirements <register.md> --project <ir-dir>` (FI-30)** — the S6
+  new-block target gap-hunter. Cross-joins register REQs against a fresh tag-status classification
+  and the corpus, bucketing each REQ Candidate / LikelyImplemented / Disqualified / Withdrawn with
+  the mechanical disqualifier (hmi-only / out-of-scope / proposed-tag-blocked / q-open) pre-computed.
+  The "already implemented inline" signal is a *separate heuristic* bucket, never folded into the
+  mechanical layer. Exit non-zero if zero candidates. Register parsing is a focused reader of the
+  register's strict `## Format` contract. `src/converter/Converter/TargetScan/`. On the real 69-REQ
+  test-project001 register: 50 of 69 pre-cleared, 19 to confirm.
+- **`gen-architecture` adopts `converter tagstatus` (FI-24 tag-status half)** — the design skill's
+  tag-status pass (Inputs, Method step 7, section-9 output, mini-manifest) now calls the built
+  `tagstatus` tool instead of hand-grepping; `tagstatus:*` added to its Bash allowance. A `PROPOSED`
+  result stays an expected section-9 outcome (a named gap), not a run-stopping gate.
+- 10 new tests (`ReuseScanTests`, `TargetScanTests`); converter suite **598/598** green.
+
 ## 2026-07-18
 
 **`converter diff` — sidecar-less inputs + `--only` multi-network parsing (gen-block-modify-fix findings)**
