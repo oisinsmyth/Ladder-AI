@@ -56,6 +56,10 @@ sanitization/
 SpecSheet.xlsx
 FuncDesc.docx
 
+# HMI alarm-import workbook (Amber-tier, docs/13-data-boundary.md 2026-07-29) — real JOB9003 alarm
+# text, equipment names and trigger tags. Engineering output for a real job, local-only.
+HMIAlarms.xlsx*
+
 # OS / editor
 Thumbs.db
 Desktop.ini

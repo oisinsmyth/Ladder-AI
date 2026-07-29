@@ -193,3 +193,28 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
   S0 entry (superseded by JOB9002 as this project's own reference project) — this is new material
   from it (a spec/functional-description pair, not TIA project data), used only as real-world
   input to an invented design, not reopening JOB9003 as an active data source.
+
+- **2026-07-29 — "JOB9003 - K150 Demo" TIA project data, Amber, approved read-only and task-scoped.**
+  Explicit per-project approval given by the project owner in conversation, and deliberately narrow:
+  it **supersedes only the last clause** of the 2026-07-15 entry above ("not reopening JOB9003 as an
+  active data source") **for this one task**, and does not otherwise widen that entry — JOB9003 is not
+  a general Amber source the way JOB9002 is. Offered to the owner as scoped-vs-broad; scoped was chosen.
+  - **Scope, as approved:** read-only extraction of alarm definitions from the live project's own
+    blocks (`FC_AlarmsMain`, `FB_MotorDOL`, `FB_MotorFwdRevDOL`, plus `DB_Alarms` and the instance
+    DBs needed to resolve per-equipment wiring), for the purpose of generating HMI discrete-alarm
+    rows in the owner's local `HMIAlarms.xlsx`. Export/convert/read only — no import, no compile
+    against the live project, no modification of any block.
+  - **Output rule:** real tag names, equipment names, alarm wording, and network titles may appear
+    in conversation and in `HMIAlarms.xlsx` (local, gitignored — see below). **Nothing verbatim from
+    this project goes into any committed repo doc** — same rule as the JOB9002 entry's 2026-07-14/07-15
+    read-only extensions, which this mirrors deliberately. The raw exports live in `scratch/`
+    (gitignored) and are not committed.
+  - **Noted at approval time, and the owner's call to make:** every prior approval here was scoped to
+    advancing a stage of *this* project (S0 spikes, S1 grounding, S2 explanation, S4 review, S6
+    generation-validation). This one is not — it is production engineering output for a real job,
+    using the knowledge base rather than building it. Recorded explicitly so that difference is
+    visible in the record rather than folded silently into a boundary approval.
+  - **Not authorized by this entry:** any write to the JOB9003 project, any use of its logic as
+    generation input or as a committed example, and any further JOB9003 work beyond the alarm
+    extraction above — re-confirm with the owner first, per the same "per-project, not blanket"
+    rule the JOB9002 entry states.

@@ -557,3 +557,27 @@ including why the live-race approach didn't pan out and how verification was act
 `Siemens.Automation.Portal.exe` and close idle instances by hand if any pile up regardless — process
 hygiene remains the first line of defense against the pileup state that correlates with connection
 hangs, even though orphan accumulation specifically is now self-healing on the next invocation.
+
+## `export --out` must be an absolute path (2026-07-29)
+
+`openness-cli export` with a relative `--out` fails on every block type with:
+
+```
+EngineeringTargetInvocationException: Error when calling method 'Export' of type
+'Siemens.Engineering.SW.Blocks.FC'. The argument 'path' cannot be a relative path.
+```
+
+The rejection comes from Siemens's own `Export()`, not from `openness-cli`, so it surfaces as a
+type-qualified engineering exception rather than an argument-validation message — the "relative
+path" sentence is the last line and easy to skim past when the exception name suggests something
+went wrong inside Portal. Reproduced against `FC`, `FB` and `GlobalDB` in the same run, so it's the
+path check, not anything block-specific.
+
+Fix is just to pass an absolute path. Worth knowing because a shell loop over several blocks with a
+relative `--out` fails **identically on every block**, which reads like a project/connection problem
+rather than a bad argument. Nothing was written and no state changed — the check happens before
+`Export()` does anything.
+
+*(Candidate `openness-cli` improvement: resolve `--out` against the working directory itself before
+calling `Export()`, so the caller doesn't have to. Not done — recorded here rather than fixed
+because it came up mid-job on unrelated work.)*
