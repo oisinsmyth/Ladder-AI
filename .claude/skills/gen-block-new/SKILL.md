@@ -71,6 +71,12 @@ reality into code. Report the gap and stop; don't improvise the DB.
   line not signed → stop and say gate 1 must be signed first (docs/15 gate 1 is never skipped). A
   tier-(c) item is not yours — route it to `gen-block-modify-purpose`. Never code from a remembered
   or conversation-supplied design.
+- **`gen/<project>/code-structure.md` §D3 — REQUIRED where the project was specified through the
+  A–D rungs.** The per-instance render is the term-level contract: every term carries the relation id
+  it satisfies, and you implement **all** of them. Fitting the render to the nearest pattern shape and
+  shedding the residue is the documented generation failure
+  (`docs/evidence/PlantAutoControl-bench-autopsy.md` cause 2) — a term you cannot place in the pattern is a
+  stop-and-report, never a drop.
 - **`patterns/` + `docs/07-pattern-library-spec.md`** — your composition vocabulary. Read the
   relevant pattern's `pattern.md` in full, including its **admission status** and its `examples/`.
   The three kinds behave differently (below).

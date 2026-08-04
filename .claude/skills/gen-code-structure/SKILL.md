@@ -121,6 +121,10 @@ STOPs without a gate-1-signed `architecture.md`, so a project structured through
 coded at all unless this view exists. Rung C's derived `requirements.md` is the trace target its
 REQ→block table cites.
 
+Each manifest item in the emitted `architecture.md` **embeds its D3 render verbatim**, with the
+relation-id tag on every term, and cites its D2 ledger rows. The manifest is the coder's only required
+input; a render that lives only in `code-structure.md` does not reach the coder.
+
 ## Calibration
 
 - **Ambiguity is never resolved silently.** If a spec relation admits two renderings, stop and raise

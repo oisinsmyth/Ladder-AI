@@ -114,6 +114,14 @@ OPEN:    Q-01 (BLOCKING) — shutdown behaviour conflict A vs B4
 functionally reviewed at all unless this view exists. The per-relation set is a strictly better trace
 target than prose REQs — it hands the reviewer the per-instance interlock list directly.
 
+The derived register is **complete by set-difference, and it says so**: the REQ set must
+set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
+`gen/<project>/equipment-specs/`, and both counts are stated explicitly in the register's provenance
+header. *A relation that exists in the specs but not in the register is still rendered by rung D
+(which reads the specs) — so the loss does not break the code, it breaks the review: the reviewer
+traces a register that never mentions the relation, and its reverse pass then reports the correctly
+rendered term as unrequested logic (C-606). A lossy register can recommend deleting a real interlock.*
+
 ## Calibration
 
 - **This is a CONTROL spec.** **Alarms are out of scope** — a separate artifact, defined later.
