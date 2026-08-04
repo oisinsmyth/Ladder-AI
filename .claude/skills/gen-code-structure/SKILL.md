@@ -53,16 +53,44 @@ FB / to be wired by orchestration. Group the per-instance specs into FB types + 
 **Settings:** honour the spec's owner field — an HMI-owned setting is left at its instance default,
 never cyclically copied onto (the C-308 scan-copy trap).
 
+**Binding audit (mandatory).** For every rung-C binding, check it against the FB interface you have
+just read. If the FB exposes a signal that satisfies the relation **more broadly or more strongly**
+than C's binding (an aggregated `FaultActive` vs a raw comms fault; a confirmed-running member vs a
+ready member), you may **neither** silently keep C's binding **nor** silently re-bind: record a
+`rebind` ledger entry naming both candidates, state what the FB does with each member, and prefer the
+**stronger/broader guard**. Rung C had to choose a signal before this interface was ground truth;
+this is the sanctioned back-edge.
+
+**Undriven-input audit.** Enumerate the chosen FB's input/interface members and mark each **driven**
+(cite the D3 term) or **defaulted** (state why). An undriven input whose name matches an unclaimed IO
+signal is a **HARD FAIL**. *A real VSD FB declares `IO.RotationSensor : Bool`; a generation left it
+undriven while its bypass tag sat unreferenced (`docs/evidence/PlantAutoControl-bench-grading.md`,
+REQ-012).*
+
 ### D2 — Discharge ledger (the safety-critical section)
 Every spec relation (`C-nn`, `P-nn`) must be accounted for exactly once:
 - **rendered** — it becomes an explicit term in D3; or
 - **satisfied inside the reused block** — cite the FB and its mechanism; or
 - **discharged by a declared shape** — cite the D0 shape, its argument and preconditions.
 
-**A discharge must be explicit, argued, and preconditioned.** An undeclared discharge — quietly
-dropping a term because "something else probably covers it" — is the documented cause of a real
-dropped-interlock regression (`docs/evidence/PlantAutoControl-bench-autopsy.md`). Silence is the defect;
-a stated argument is the fix. **A relation with neither a term nor a ledger entry is a HARD FAIL.**
+**A discharge must be explicit, argued, and preconditioned — and its precondition must be VERIFIABLE
+FROM ARTIFACTS IN SCOPE.** Classify every precondition as one of: **`verified-in-block`** (cite the
+network), **`verified-cross-block`** (cite the block, file and line in `ir/<project>/`), or
+**`unverifiable`**. **An `unverifiable` precondition is not a valid discharge — render the relation
+as a term instead.** *"The plant flag probably already encodes the neighbour's shutdown-complete" is
+exactly such an argument: the flag is computed in another block, outside this generation's boundary,
+and the real regression it would have licensed is recorded in
+`docs/evidence/PlantAutoControl-bench-grading.md` §4-A. Plausibility is not verification.*
+
+An undeclared discharge — quietly dropping a term because "something else probably covers it" — is
+the documented cause of that regression (`docs/evidence/PlantAutoControl-bench-autopsy.md`). Silence is
+the defect; a verified argument is the fix. **A relation with neither a term nor a ledger entry is a
+HARD FAIL.**
+
+**Emit the ledger as a machine-checkable table** — one row per relation:
+`relation-id | disposition (rendered / in-FB / discharged / rebind) | evidence | precondition class`.
+The relation-id column must set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
+`gen/<project>/equipment-specs/`. State both counts explicitly in the artifact.
 
 ### D3 — Render, per instance
 Explicit boolean over the real interface members. **The ladder carries only what is needed to satisfy
@@ -86,11 +114,20 @@ Provenance header, then **D0 shape declarations**, **D1 block-fit + grouping**, 
 ledger**, **D3 per-instance render**, then open questions. Ends with a gate-1 sign-off block (the
 engineer signs before the Build coding stage starts — `docs/11-review-workflow.md`).
 
+**Also emit/update `gen/<project>/architecture.md`** — the block manifest in `gen-architecture`'s own
+output shape (manifest, interfaces, DB landscape, OB1 order, pattern/tier mapping, REQ→block trace,
+cross-instance wiring, tag status). **This is a handoff requirement, not a nicety:** `gen-block-new`
+STOPs without a gate-1-signed `architecture.md`, so a project structured through these rungs cannot be
+coded at all unless this view exists. Rung C's derived `requirements.md` is the trace target its
+REQ→block table cites.
+
 ## Calibration
 
 - **Ambiguity is never resolved silently.** If a spec relation admits two renderings, stop and raise
-  it; where forced to choose on a safety interlock, prefer the **stronger/fail-safe** guard and record
-  the choice (FI-34).
+  it; where forced to choose on **any protective term — interlock, permissive, inhibit or fault
+  gate** — prefer the **stronger/fail-safe** guard and record the choice (FI-34). *(In this repo
+  "safety" means F-content that must be refused outright, hard rule 2 — this rule is about ordinary
+  process protection, which is exactly where the documented misses happened.)*
 - **Only as complex as the spec needs** — the skeptic's single reading must succeed (C-601/C-602).
   A 19-term enumerated chain that a declared shape could discharge is a defect of this stage, not
   fidelity.

@@ -48,13 +48,22 @@ Read `CLAUDE.md` first; its hard rules bind you.
    direction, an extra permissive) or **minus** something. Deltas are FIRST-CLASS: a named field per
    instance, never buried in prose. *Outliers are where guards get lost — an unrecorded delta is the
    failure mode this field exists to prevent.*
+   **`deltas : none` is NEVER written bare.** Write `deltas : none-found — searched: <sources>`,
+   naming what you actually checked (layout notes, class reference §, equipment schedule). *A bare
+   `none` records an absence of looking, not an absence of deltas — and rung A cannot see the IO
+   table, so a delta carried only by an operator/bypass signal is invisible here by construction and
+   must be re-hunted at rung C (`gen-equipment-spec` §8).*
 5. **Tag provenance** on every relation (which layout element / which reference it came from).
 
 ## Explicitness rules (non-negotiable — FI-33)
 
-- **One relation per line.** Never join two conditions with an ambiguous separator (`/`, "and/or",
-  a comma). Two conditions = two lines. *A `/` joining two hold-conditions is the documented cause of
-  a real dropped-interlock regression (`docs/evidence/PlantAutoControl-bench-autopsy.md`).*
+- **One relation per line — on the way in as well as the way out.** Never join two conditions with
+  an ambiguous separator (`/`, "and/or", a comma) in what you write; and **never resolve one by
+  reading** in what you consume. An ambiguous separator in a SOURCE is **split into two relations,
+  both retained** (the default), or raised as a blocking `Q-nn`. **Dropping either side always
+  requires the `Q-nn`** — an appositive reading ("A, i.e. B") is a resolution and is never taken
+  silently. *A `/` joining two hold-conditions, read as one, is the documented cause of a real
+  dropped-interlock regression (`docs/evidence/PlantAutoControl-bench-autopsy.md`).*
 - **Full enumeration.** Where a relation spans a set of machines, list them. Compactness is rung D's
   problem to solve (by a declared, argued discharge), never this rung's to fudge.
 - **Underspecified = blocking `Q-nn`.** If the layout does not settle a relation, raise a question.
@@ -74,7 +83,7 @@ Conveyor-07 : dol-motor
   interlock     : a fault on Conveyor-08 stops this machine
   interlock     : a fault on Conveyor-09 stops this machine
   ...
-  deltas        : none
+  deltas        : none-found — searched: layout notes, dol-motor reference §3, equipment schedule
   provenance    : interlocks <- layout flow order; class reqs <- dol-motor reference v1
 ```
 

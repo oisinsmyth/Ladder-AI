@@ -42,6 +42,13 @@ your blindness note and re-derive every verdict from the IR itself, never from a
 
 ## Inputs
 
+- **`gen/<project>/code-structure.md`'s discharge ledger, where one exists — consumed, never
+  trusted.** On a project built through the structured spec pipeline (rungs A–D), every `discharged`
+  row is a **claim to be independently re-derived from the IR**, never accepted as stated: check the
+  cited precondition actually holds, and that an `unverifiable` precondition never licensed a dropped
+  term. *The agent that wrote a discharge cannot be the agent that clears it — an undeclared discharge
+  is the documented cause of a real dropped-interlock regression
+  (`docs/evidence/PlantAutoControl-bench-autopsy.md`), and a declared-but-unchecked one fails the same way.*
 - **The requirements register: `gen/<project>/requirements.md` — REQUIRED.** Its REQ-nnn entries
   are the trace targets; its tag-status marks, open questions, and C-113 sequence classifications
   are review inputs. **Stop condition:** if no register exists for the project, STOP and say so —
