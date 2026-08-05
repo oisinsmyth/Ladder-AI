@@ -8,10 +8,17 @@ allowed-tools:
   - Glob
   - Write
   - Edit
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe:*)
+  # tagstatus, candidate-scan and signal-sweep are covered by the wildcard above; named here so the
+  # wiring is greppable. signal-sweep is the mandatory pre-finish self-check below — it was missing
+  # from this list until 2026-08-05, so the rung could not run its own required check.
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe candidate-scan:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe candidate-scan:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe signal-sweep:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe signal-sweep:*)
 ---
 
 # /gen-equipment-spec — rung C: the per-equipment control spec
@@ -45,6 +52,10 @@ Read `CLAUDE.md` first; its hard rules bind you.
   root-level-only check would launder an invented one.
 - **The equipment engineering references** — the per-class standard control requirement set. These
   give **completeness by construction**: every instance inherits its class's full requirement set.
+  **Status caveat — nominal, not delivered.** Every reference currently in `references/` self-declares
+  as derived from as-built code rather than from an engineering standard, so the completeness it
+  confers is only as complete as one plant's existing code. Treat the inherited set as a floor to
+  check against, never as proof that nothing is missing (rung A raises this as a blocking `Q-nn`).
 
 ## Method
 
@@ -147,32 +158,70 @@ Read `CLAUDE.md` first; its hard rules bind you.
 
 ## Output — `gen/<project>/equipment-specs/<Instance>.md` (one per instance)
 
-```
-EQUIPMENT SPEC — Conveyor-07
-  class: dol-motor (ref v1)     fed-by: Conveyor-06     discharges-to: Conveyor-08
+**The spec file's own shape is a CONTRACT.** Two mechanical-floor checks parse these files, and both
+fail *quietly* on a malformed one — so a spec that merely reads well is not enough:
 
-IO BINDING                                             [io]
-  run command       DQ_11
-  running confirm   DI_23
-  isolator healthy  DI_24
-  motor fault       DI_25
+| What | Read by | Required shape | If you get it wrong |
+|---|---|---|---|
+| **The instance** | `relation-reconcile` | the **filename** — `<Instance>.md`, matching the instance id exactly | the instance reconciles against nothing |
+| **Every relation** | `relation-reconcile` | a markdown bullet `- **C1**` / `- **P12**` — hyphen, bold, unhyphenated id, at the start of the line | `parsed 0 relations … refusing to report a clean reconcile`, a hard error |
+| **Every signal name** | `signal-sweep` | wrapped in **backticks**, everywhere it appears — the IO table, relation text, disposition tables | `claimed = 0`, and the run **warns rather than errors**: every signal silently reads as unaccounted |
 
-CONTROL REQUIREMENTS   (complete by construction from the class reference)
-  C1  run output driven while the machine is commanded to run           [ref]
-  C2  running confirmed from DI_23                                      [ref+io]
-  ...
-PLANT INTERLOCKS   (fully enumerated, one relation per line)
-  P1  start permitted only while Conveyor-08 is confirmed running       [A]
-  P3  on controlled shutdown, hold until Conveyor-08 reports complete   [A]   (Q-01)
-  P4  a fault on Conveyor-08 stops this machine                         [B5+A]
-  P5  a fault on Conveyor-09 stops this machine                         [B5+A]
-  ...
-SETTINGS
-  start-confirm-time   owner: HMI   default: 10 s   reference-proposed    [ref]
-UNCLAIMED IO (§8 sweep)
-  (none — every scoped signal bound above)
-DELTAS:  none-found — searched: rung-A deltas, class reference §3, §8 unclaimed sweep
-OPEN:    Q-01 (BLOCKING) — shutdown behaviour conflict A vs B4
+The backtick rule is the dangerous one, because nothing stops the run. Write signals as
+`` `DiscreteOutputs.FilterUnit1Start` ``, never bare. Continuation lines of a relation are indented
+under its bullet and are not parsed — put the id and its statement on the bullet line itself.
+
+```markdown
+# EQUIPMENT SPEC — Conveyor-07 (Sorter Infeed Conveyor)
+
+    class: dol-motor (ref v1)
+    fed-by: Conveyor-06 [A]      discharges-to: Conveyor-08 [A]
+
+## IO BINDING [io]
+
+| Role | Signal | Status |
+|---|---|---|
+| run command out | `DiscreteOutputs.Conveyor7Run` | EXISTS |
+| running feedback | `DiscreteInputs.Conveyor7Running` | EXISTS |
+| isolator healthy | `DiscreteInputs.Conveyor7IsoFB` | EXISTS |
+| motor fault | `DiscreteInputs.Conveyor7Flt` | EXISTS |
+
+`converter tagstatus --project ir/<project> <all of the above>` → 0 proposed, 0 member-not-found.
+
+## CONTROL REQUIREMENTS (complete by construction from the class reference)
+
+- **C1** the run output is driven while the machine is commanded to run [ref DOL-01]
+- **C2** running is confirmed from `DiscreteInputs.Conveyor7Running` [ref DOL-02 + io]
+- **C3** the machine does not start while it is isolated [ref DOL-03]
+  → binding unresolved — two candidates, neither scoped to this machine.
+  **BLOCKING Q-C02.** Not dropped, not invented.
+
+## PLANT INTERLOCKS (fully enumerated, one relation per line)
+
+- **P1** start permitted only while Conveyor-08 (`Conveyor8Inst`) is confirmed running [A rel-1]
+- **P2** on controlled shutdown, hold until Conveyor-08 reports its shutdown complete [A rel-2]
+  → **P1 and P2 stay two lines.** They resolve to different signals, so §5 does not permit a merge.
+- **P3** a fault on Conveyor-08 stops this machine [B-05 + A rel-3]
+
+## SETTINGS
+
+| Setting | Owner | Value | Basis |
+|---|---|---|---|
+| start-confirm time | HMI | **10 s** | reference-proposed [ref DOL-07] |
+
+## UNCLAIMED IO (§8(a) per-instance sweep)
+
+| Signal | Disposition |
+|---|---|
+| `DiscreteInputs.Conveyor7Ready` | bound — C2 |
+
+## DELTAS
+
+- **none-found** — searched: rung-A deltas, class reference §3, the §8 unclaimed sweep.
+
+## OPEN
+
+- **Q-C02 (BLOCKING)** — isolation binding unresolved; two candidates, neither instance-scoped.
 ```
 
 **Also emit `gen/<project>/requirements.md`** — a register view derived from the `C-nn`/`P-nn` sets

@@ -39,4 +39,128 @@ owner answers) is fully resolved. Where things landed:
 
 ---
 
-*(No open batch right now.)*
+# OPEN BATCH — 2026-08-05 audit: the 13 `decide` items
+
+Opened 2026-08-05 by the audit fix wave. Source: `docs/audit/2026-08-05-full-project-audit.md` and its
+fix list. The audit found 53 items; the 36 mechanical `fix` items and 4 `accept` notes were executed
+without you. **These 13 need your word** — an auditor must not resolve governance, scope or
+data-boundary questions unilaterally, so none of them were touched.
+
+Each item cites where its evidence lives. Answer in any order; nothing here blocks anything else.
+
+**Claim discipline (this folder's own lesson, 2026-07-17):** a one-time sign-off needs the same
+claim/release care as a Portal slot — two concurrent sessions once asked you the *same* gate-1
+question and got two *different* answers. So: this batch is the single place these 13 get asked. If a
+session wants one of these decided, it reads the answer from here rather than re-asking you.
+
+## A — Governance (highest value; A-1 is the cheapest big win on the list)
+
+- **A-1 · F-05 · The risk register has never been reviewed.** `docs/09-risk-register.md:3` says
+  "Reviewed at every stage gate"; `git log` shows **one commit, 2026-07-10** — zero edits across four
+  gate sign-offs and 26 days. Four risks have materialised while still rated prospectively: **R-04**
+  (AI hallucination — a graded REGRESSION shipped, and hard rule 3's own gate had a live hole until
+  2026-08-05), **R-06** (Openness friction — heavily mitigated since, none of it recorded), **R-08**
+  (cloud-AI/NDA — its mitigation says the boundary would be agreed *before* real data flows; data has
+  flowed since 2026-07-10 and now includes Red-confidentiality material), **R-11** (bus factor).
+  Assumption **A-02**'s own checkpoint ("test before S3 leans on this") was passed without a record,
+  though `compile-error-playbook.md`'s 21 real entries are de-facto verification. **A-04** is still
+  unverified while the pipeline runs on real jobs.
+  → **Needed:** one review sitting. Mark what has materialised, re-rate or re-word, record a review
+  date, and close or restate A-02/A-04. *An auditor cannot re-rate your risks.*
+
+- **A-2 · F-07 · The four-rung spec pipeline has no ADR.** It was designed, built, validated twice and
+  exercised on three runs; `docs/03-development-plan.md:30` says decisions with lasting consequences
+  get an ADR "even if only a paragraph". It changes **where signals and booleans may enter the
+  artifact chain** and adds four formats now parsed as contracts by five converter checks — and it
+  runs *alongside* `gen-architecture`, a relationship asserted only in CLAUDE.md prose. ADR-0004 is
+  still the accepted record of "the" generation pipeline.
+  → **Needed:** may I write `adr-0007-structured-spec-pipeline.md`, and at what status? If you judge
+  the design still provisional, **Proposed** is the correct record — the absence of one is not.
+
+- **A-3 · F-16 · `docs/13-data-boundary.md` still opens "DRAFT — needs a decision".** Its header says
+  a decision is needed *"before real project data flows to any AI"*, and `:24–26` still states the
+  interim rule "Only Green-tier content goes near Claude Code" — while `:240–307` grants, as a settled
+  decision, full unsanitized working access to Red-confidentiality material, and a live job runs under
+  it. No `adr-0003-*.md` exists; `adr-0004:5` still records the slot as deliberately reserved.
+  → **Needed:** either take the decision and record ADR-0003, or re-affirm the reservation with a
+  dated note. Either way the header should describe the doc as it now is.
+
+- **A-4 · F-17 · What happens to the older per-project approvals?** The live-runs regime says live runs
+  "do not follow" the older Amber process, but not whether the existing named approvals are
+  superseded, still live in parallel, or frozen. The 2026-07-29 entry recorded the precedent that
+  matters — *"every prior approval here was scoped to advancing a stage of **this** project … This one
+  is not — it is production engineering output for a real job"* — and the live-runs section
+  generalises exactly that shift without saying so. **No breach was found**; the gap is definitional.
+  → **Needed:** which regime governs new work on the previously-approved projects, and are the
+  real names already committed in Green-tier content re-affirmed as-is or slated for genericization?
+
+- **A-5 · F-53 · May the governance ledger name the job code?** `docs/13:317–318` records the live job
+  by its code, in the same two lines that say *"Job identity, scope and all content live in the job
+  folder only."* This was the **only** real-identifier hit in tracked content across a 456-term sweep
+  of every tracked file and the full git history — everything else is clean, so this is a wording
+  question, not a leak.
+  → **Needed:** is a bare job code permitted in the ledger (and nothing else — no site, plant,
+  equipment or tag), or should the register move to codenames as `test-project001` did?
+
+## B — Process & convention (small, but each closes a recurring finding)
+
+- **B-1 · F-18 · Hard rule 8 cannot be evidenced.** `docs/notes/gen-telemetry.md:16`'s row format has
+  **no field recording whether a run was dispatched to `lad-coder`**, the dispatch board is empty, and
+  `AITODO.md:41–43` records that agents read the rung SKILL.md files directly rather than via the Skill
+  tool. So the charter's method for auditing the project's central process control cannot be applied.
+  → **Needed:** add an `agent` field (`lad-coder` / `inline` / `manual`)? Or should rule-8 compliance
+  be evidenced some other way — self-attestation in telemetry may not be worth much.
+
+- **B-2 · F-47 · Are audit artefacts deliberately not changelogged?** Zero CHANGELOG entries for any of
+  three audits or the charter, consistently, across five weeks. The practice looks intentional; it has
+  just never been written down, so every audit re-derives it as a finding.
+  → **Needed:** declare it a convention in `docs/audit/README.md` (recommended — closes it
+  permanently), or start logging them.
+
+- **B-3 · F-35 · The ADR lifecycle rule is contradicted by every entry that follows it.**
+  `docs/16:9` says promotion "requires an ADR"; FI-13/14/15/16 each independently state an exception
+  the rule does not contain, and 11 IMPLEMENTED entries never went through `Accepted` at all.
+  → **Needed:** confirm the carve-out — ADR required for roadmap/scope or cross-cutting design
+  changes; tooling-, docs- and convention-only builds owner-directed and recorded in the entry.
+
+- **B-4 · F-44 · S0's gate.** Still "ACTIVE — gate review pending" after 26 days, and its own TODO says
+  sign-off must happen *"before … starting S1"* — while S1–S4 are all signed off. The situation is
+  disclosed at the top of the file, so this is unreconciled rather than hidden.
+  → **Needed:** sign it off retroactively on the 2026-07-10 evidence, or keep it open and drop the
+  now-false precondition clause.
+
+- **B-5 · F-46 · Extend design-philosophy §10 to the spec layer?** §10 already says ambiguity is a hard
+  error, not a warning — *"silent best-effort conversion is how a debounce timer becomes a latch"* —
+  but is scoped to the converter. The autopsy's root cause is the same principle violated one layer up.
+  FI-37/38 enforce it at the spec layer; the philosophy doc doesn't say so, which makes the rung rules
+  read as ad hoc rather than derived.
+  → **Needed:** may I add one sentence? *Editing a founding principles doc is your call even when
+  purely additive.*
+
+## C — Corpus & scope (C-1 gates the other two)
+
+- **C-1 · F-19 · Is `ir/PlantAutoControl-bench/` in the committed corpus or not?** 34 tracked `.ir` files —
+  the largest IR corpus in the repo, and the one the entire four-rung pipeline was validated against —
+  with **no** matching exports and no entry in either round-trip or drift test. Nothing anywhere states
+  whether that is deliberate.
+  → **Needed:** if it is a spec-pipeline fixture never taken through TIA, this is a one-paragraph doc
+  fix. If those blocks were ever imported/compiled, it wants exports committed and both tests extended
+  — which needs Portal and a `lad-coder` dispatch.
+
+- **C-2 · F-20 · Grow the committed corpus to close the live-TIA gap?** The two live-cycle proofs are
+  still un-automated `static` classes never run by `dotnet test`; `ir/reference` has not grown since
+  2026-07-20. *(The cheap half — making the silent exclusion loud — is being done now without you.)*
+  → **Needed:** invest in genericized blocks covering the uncovered construct families, or accept the
+  gap and keep the live proofs as point-in-time narrative?
+
+- **C-3 · F-48 · One re-export hand-off.** `simatic-ml/test-project001/DB_Settings.xml:288` carries a
+  rename residue pointing at a directory that no longer exists. Hard rule 7 forbids hand-patching the
+  XML, so the fix is a source-side correction plus re-export — a `lad-coder` dispatch that also
+  touches the `ExportDriftDetectorTests` known-drift baseline.
+  → **Needed:** worth a Portal cycle, or accept it as a frozen-export residue and record that so the
+  next audit stops re-deriving it?
+
+---
+
+**Pre-resolved, so you are not asked:** F-37 (warning enforcement) was contingent on the real warning
+count — measured 2026-08-05: the Release builds report **0 warnings**, so it became a plain fix.

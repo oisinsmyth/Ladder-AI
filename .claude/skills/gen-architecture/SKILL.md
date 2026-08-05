@@ -68,7 +68,7 @@ apply throughout.
   design from remembered, improvised, or conversation-supplied requirements. Same rule at request
   granularity: a request not covered by any register REQ gets its REQ(s) registered first — this
   skill never invents REQ IDs.
-- **`gen/<project>/process-topology.md`, `io-map.md`, `rfi.md` — consumed if present.** Each one
+- **`gen/<project>/equipment-topology.md`, `io-map.md`, `rfi.md` — consumed if present.** Each one
   absent produces an explicit line in the provenance header: *"designed without `<artifact>` —
   the following decisions are provisional on it: <list>"* — never a silent omission. Topology
   absence makes material-flow direction (section 4) provisional; io-map absence means physical
@@ -202,8 +202,8 @@ Method requires one. Then exactly these sections:
    owner-waiver citation.** No recorded waiver, no omission: absence of startup reset is how S/R
    state survives a power cycle (C-403's site incident).
 4. **Enable-chain / command-flow graph.** Per C-114/C-116: nodes, directed enable edges, and the
-   acyclicity argument. Direction comes from material flow **where `process-topology.md`
-   exists**; otherwise from register text, marked provisional. Interlock/status edges are
+   acyclicity argument. Direction comes from material flow **where `equipment-topology.md`
+   exists** (rung A's output); otherwise from register text, marked provisional. Interlock/status edges are
    labeled as such (C-114's scope note — they may run against flow; enables may not).
    Bidirectional equipment: one chain per direction, explicit mutually-exclusive mode selection,
    C-117's stopped-before-mode-change permissive. For a stepped plant (C-113 "yes"), this section

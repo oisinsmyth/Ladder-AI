@@ -878,3 +878,61 @@ clean). Commit `7c842fd`. **`gen-block-modify-fix` is now validated on a genuine
 (beyond its 2026-07-18 genval2 validation) — two coding skills exercised end-to-end from one plain-language
 request. The block is now correct + readable; the only residual is integration (CALL + annunciation), still a
 deferred follow-on.
+
+## S6-Killer-Plan: answer-key validation, the autopsy it produced, and the mechanical floor (2026-08-05)
+
+The largest S6 wave since the stage opened, landed on `master` as merge `242e5e2` (~25 commits). It is a
+**validation fixture, not an S6-exit request** — the tally stays at **1 of 10** (D-4: fix waves and
+validation fixtures don't count). This entry is deliberately an index: the full record lives in the files
+named below and is not restated here.
+
+**What was run** (`docs/notes/S6-Killer-Plan.md`, five phases): seal a Green answer key from a real block
+and its dependency closure, freeze a 22-REQ reverse-derived register, generate `PlantAutoControl` blind from
+that register alone (20 networks, compile-clean, 0 errors), review it with the three reviewer skills, then
+grade it against the sealed key. Role separation — Examiner (sees the key), Candidate (never does), Grader
+(sees both) — enforced by the orchestrator controlling what each `lad-coder` dispatch received.
+
+**Score — it fails the match-or-better bar: MATCH 14 · IMPROVEMENT 1 · DEFECT 3 · REGRESSION 1 ·
+SPEC-GAP 3.** Grading: `docs/evidence/PlantAutoControl-bench-grading.md`; scorecard
+`gen/PlantAutoControl-bench/scorecard.md`; the honesty record of where deriving the spec from the real block was
+lossy: `docs/evidence/PlantAutoControl-bench-derivation-notes.md`; reviewer passes:
+`docs/evidence/PlantAutoControl-bench-review-{conventions,functional,simplicity}.md`; sealed key:
+`docs/evidence/PlantAutoControl-answerkey/`.
+
+**Root cause — worth more than the score** (`docs/evidence/PlantAutoControl-bench-autopsy.md`): *an AI reviewer
+reading the same register as the AI coder is a **correlated** check, not an independent one.* An ambiguous
+`/` joining two hold-conditions was collapsed to one term identically by coder and reviewer, and
+`review-functional` graded the resulting dropped interlock **MATCH**. Every gap traced to ambiguity, silence
+or looseness in the register — and on every ambiguous protective term the coder resolved toward the fewest
+guards, silently.
+
+**What the wave then produced:**
+
+1. **The four-rung structured spec pipeline** (`448251c`) — **A** `gen-pid-analysis` → **B**
+   `gen-functional-analysis` → **C** `gen-equipment-spec` → **D** `gen-code-structure`, running alongside
+   (not replacing) `gen-architecture`; signals enter at C, booleans and interface members at D and nowhere
+   earlier. Adversarially validated twice — `docs/evidence/four-rung-design-validation.md` and
+   `…-round2.md`, whose verdict (*every remaining check is self-judged; no mechanical floor anywhere*)
+   motivated item 2.
+2. **The FI-36/FI-39 mechanical floor** — checks that survive an agent choosing not to look: `trace`'s
+   guard-containment hop (FI-36-min), `candidate-scan`, `undriven-scan`, `relation-reconcile`,
+   `signal-sweep`; the rung artifact formats became converter-parsed **contracts** (`361c0e0`). 707 tests.
+   Each check was verified against its own graded failure on the `PlantAutoControl-bench` fixture, not only in
+   unit tests. Design study, per-check calibrations and the two open refinements: `docs/16` FI-36/FI-39 and
+   `docs/notes/fi-39-candidate-scan-design.md`.
+3. **A correctness fix to a hard-rule-3 gate:** `converter tagstatus` resolved only to the DB root, so an
+   invented *member* of a real DB passed the check; it now resolves to member level (`f50753a`).
+
+**Three real pipeline runs** (`gen/PlantAutoControl-bench-rerun{,2,3}/`), all stopped at rung D3 — no `.ir` was
+written, nothing reached ladder. `rerun` predates the `tagstatus` fix and its "0 proposed" pass was
+member-blind; `rerun2` self-disclosed that defect and grep-verified bindings instead; `rerun3`, post-fix,
+immediately surfaced 5 `member-not-found` and raised them as blocking. The mechanical floor's own effect is
+visible across them: `signal-sweep`'s unaccounted residue fell from 54 (rerun2) to 1 (rerun3), and
+`relation-reconcile` reconciles 174/174/174 (rerun2) and 168/168/168 (rerun3), 0 differences.
+
+**Caveats carried forward.** Everything above is fitted to **one plant** across three runs — a different
+plant is the real completeness test, and until then the rung rules should be read as well-fitted rather than
+general. Rung A's "completeness by construction" is **nominal, not delivered** while every
+`references/<class>/` entry self-disclaims as derived-from-as-built rather than standards-grounded. Both,
+plus FI-39's two named tool refinements and the rung-skill dispatch-registration question, are tracked as
+open in `AITODO.md`.

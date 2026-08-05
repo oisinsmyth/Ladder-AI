@@ -4,11 +4,16 @@ Candidate ideas under debate: analysed here for merits and costs until they earn
 
 ## Lifecycle
 
-Statuses: **Raised → Under debate → Accepted | Rejected | Parked**.
+Statuses: **Raised → Under debate → Accepted | Rejected | Parked | Deferred | Implemented | Implemented (partial)**.
+The last three are terminal states this doc has been using in practice; they are declared here (2026-08-05)
+so the set matches the entries.
 
 - **Accepted** — promotion into the plan requires an ADR (`docs/adr/`), consistent with `10-non-goals.md`'s "revisit only via ADR" rule, followed by the roadmap/scope edit. The entry stays here with a pointer to the ADR; the ADR is the decision record, this entry is the analysis that led to it.
 - **Rejected** — verdict and reason recorded in the entry. If the rejection is a "never", the item also moves to `10-non-goals.md` (with the ADR, per that doc's own rule); a plain "not needed" stays here.
 - **Parked** — neither pursued nor dead. Must carry an explicit **revisit trigger** (an event, not a date): what would have to become true for the debate to reopen.
+- **Deferred** — decided in principle, only the *timing* is the owner's open call; the item is tracked in `docs/notes/deferred-items.md` with a `D-n` id. Distinct from Parked, where nothing is decided.
+- **Implemented** — built and in use. The entry keeps its analysis and records what shipped (tool/skill + commit + date); many tooling-, docs- and convention-only builds land here directly from Raised without passing through Accepted. *(That is observed practice, not a declared carve-out to the Accepted bullet's ADR rule — whether it should become one is open, `docs/audit/2026-08-05-full-project-audit-fixlist.md` F-35.)* Entries render it inline as `IMPLEMENTED <date>` — that is the same status.
+- **Implemented (partial)** — the useful half shipped, a **named** half is still open; the entry must say which. This subsumes the ad-hoc `PILOT LANDED` and `Partially done` labels earlier entries used.
 
 IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), and `E-xx` (explanation checklist). Numbers are never reused.
 
@@ -16,7 +21,7 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 
 ```
 ### FI-xx — Title
-- **Status:** Raised | Under debate | Accepted (ADR-NNNN) | Rejected | Parked
+- **Status:** Raised | Under debate | Accepted (ADR-NNNN) | Rejected | Parked | Deferred (D-n) | Implemented <date> | Implemented (partial) — <which half is open>
 - **Raised:** YYYY-MM-DD · **Source:** where it came from
 **Merits:** what it buys.
 **Costs / risks:** what it costs, what could go wrong.
@@ -24,7 +29,48 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 **Verdict / revisit trigger:** the outcome, or what reopens the debate.
 ```
 
+## Implementation status — 2026-08-05
+
+**Supersedes the two 2026-07-20 sections below** ("Implementation status — 2026-07-20" and
+"Prioritization — remaining work (2026-07-20)"), which are kept as the dated record of where the backlog
+stood then. Each entry still carries its own authoritative status; this is the index.
+
+**Milestone: a second build wave shipped a mechanical floor under the spec pipeline (2026-08-05).** It came
+out of the S6-Killer-Plan autopsy (`docs/evidence/PlantAutoControl-bench-autopsy.md`) rather than a backlog
+survey — the finding that an AI reviewer reading the same register as the AI coder is a **correlated**
+check, so prose discipline alone leaves holes an agent walks through by choosing not to look.
+
+- **Implemented this wave:** **FI-39** — all five checks (`candidate-scan`, `undriven-scan`,
+  `relation-reconcile`, `signal-sweep`, plus the probative-citation check folded into `relation-reconcile`)
+  and **FI-36-min** (`trace`'s guard-containment hop), 707 tests, wired into the rung skills with their
+  artifact formats made converter-parsed contracts. **FI-37** and **FI-38** (coder/spec-side halves) —
+  implemented as **skill rules, not tooling**, in the four-rung pipeline (`448251c`); see their entries for
+  exactly which clauses landed where.
+- **Buildable now, no external gate (the current ranked list — short by design):** FI-39's two named
+  refinements, both recorded in its entry and deliberately not rushed. (1) `relation-reconcile`'s citation
+  check **rewards a vaguer citation** than a precise one — the fix needs instance↔FB path resolution, not a
+  patch. (2) `signal-sweep`'s token regex excludes a real member name containing `/`, so its residue can
+  never reach zero on this project. Also still buildable: FI-25's low-value sidecar-exact MUL↔CONVERT timing
+  refinement (unchanged from 2026-07-20), and FI-35's `alarm-scan` **extraction** half.
+- **Open halves of shipped items:** **FI-36-full** (per-instance, driven off the D3 render) — real blocker
+  is **R12**, the render reaching the coder, not FI-37. **FI-38's gate-rule half** — "a functional *partial*
+  that drops a stated interlock is a **blocking** fail" — is **not enforced anywhere yet** (verified
+  2026-08-05: no such gate in the reviewer skills or `docs/15`).
+- **Live debates (owner-raised, undecided):** **FI-32** (replace IR with a restricted real language),
+  **FI-33** (authored per-block interface/object model), **FI-34** (programmatic pattern library — the most
+  alive of the three, with the safe/risky split recorded), **FI-35** (`alarm-scan` + HMI alarm-list
+  generation — the HMI half sits behind FI-18 and an unanswered Openness question).
+- **Unchanged from 2026-07-20:** the gated set (FI-08, FI-11, FI-12, FI-18, FI-06, FI-10, FI-02, FI-01,
+  FI-03), the parked set (FI-05, FI-07, FI-31), FI-21 (harvest-assist skill — owner-scoped, "tomorrow's
+  work"), FI-24's HELD provenance-wrapper half, and FI-09's remainder
+  — which is AI-by-design, not tooling work (see its entry; `converter review` now dispatches **18** C-IDs).
+
 ## Implementation status — 2026-07-20
+
+**Superseded by "Implementation status — 2026-08-05" above and by each entry's own status — kept as the
+dated record of the 2026-07-20 build wave. Its "essentially cleared / nothing buildable without an external
+trigger" reading no longer holds: FI-36-min and FI-39 shipped on 2026-08-05 and FI-39 records two open
+refinements buildable now.**
 
 **Milestone: the mechanical-tooling backlog from this doc is essentially CLEARED (2026-07-20).** A large
 build wave (a value/leverage survey → tiers, built in file-disjoint parallel subagent tracks) shipped every
@@ -58,7 +104,12 @@ sections below). Current state (each entry carries its own authoritative status;
 
 ## Prioritization — remaining work (2026-07-20)
 
-The living order over what's *left* after the 2026-07-20 build wave (supersedes the 2026-07-16 snapshot
+**Superseded by "Implementation status — 2026-08-05" above — kept as the dated ranking record. Its
+"nothing is buildable without an external trigger" line was true on 2026-07-20 and is not now: the
+2026-08-05 wave shipped FI-36-min + FI-39 and left two named FI-39 refinements buildable with no
+external gate.**
+
+The living order over what's *left* after the 2026-07-20 build wave (superseded the 2026-07-16 snapshot
 below). Ranked by value × leverage ÷ effort; items hard-gated by an external event are listed separately,
 unranked, because timing isn't ours to choose.
 
@@ -189,7 +240,12 @@ above, and by each entry's own status — kept as the original ranking record.**
 **Verdict / revisit trigger:** Debate properly once a real generation project has been through the tag-proposal loop at least once.
 
 ### FI-09 — Convention rules Phase 2: mechanize more of the remaining ~42
-- **Status:** Parked
+- **Status:** Implemented (partial) — ongoing, no longer Parked (corrected 2026-08-05). `converter review`
+  now dispatches **18** C-IDs (`ReviewRunner.AllRuleIds`: C-001/003/005/103/118/119/120/121/122/125/201/301/
+  501/406/408, plus C-102/401/404 recorded vacuous) against the 8 at S4 sign-off. The open half is
+  **AI-by-design, not tooling work** — C-113 (paradigm choice), C-124 (C-119's returned-to), C-123 (C-122's
+  Q-drives-a-fault), and the judgment clauses of C-103 and C-121; C-107/C-402 are covered mechanically by
+  FI-22's C-308 writer table and are deliberately not duplicated in `Rules.cs`. Rule-by-rule history below.
 - **Raised:** 2026-07-16 · **Source:** S4 Phase 1 shipped 8 of ~50 rules as mechanical checks; the rough re-estimate of the rest is in `docs/evidence/stage-S4.md`. `review-conventions` (pipeline skill 9) wraps `converter review` plus an AI pass over the non-mechanical rules. Specificity below added 2026-07-18 from a read-only skill/tooling audit (preserved in git history, commit `eede95d`, then folded here).
 **Merits:** Each mechanized rule is a deterministic, zero-hallucination check forever, and directly shrinks the AI-judgment surface `review-conventions` has to carry. Each landed rule *auto-retires the matching hand-sweep* via `review-conventions`' self-retiring NotApplicable clause — so growing the tool shrinks the skill with no skill edit per rule.
 **Which rules pay off (2026-07-18 audit).** `review-conventions` spells out exact mechanical recipes that are pure structural checks on the already-parsed IR model — the highest-leverage genuinely-mechanizable: **C-121** (a Step-write must be a `MOVE` whose `EN` carries `Step = <from> AND …`); **C-118/119/120/122/125** (sequencing structure — one `Int` Step in the interface UDT, step 0 present and explicitly returned to, ascend-by-10, dwell-timer shape); **C-408** (`.ET` inside a comparison — trivial over `Ir/TagReferences.cs` / `Expr.Compare`); **C-103** (SCOIL/RCOIL set-vs-reset pairing — `CoilAssignment.Kind` already carries Assign/Set/Reset); **C-107/C-402** (within-block edge-memory single-writer discipline); **C-001** non-prefix (PascalCase / no-underscore on members and variables). Each follows the existing one-method-per-rule pattern in `Rules.cs` + a `ReviewRulesTests.cs` fixture. `AITODO.md`'s F-3(b) (C-003's `iDB_<FBName>_<Instance>` sub-clause) is one such gap already flagged.
@@ -277,7 +333,7 @@ false positive. **The C-118–125 sequencer rule family is now complete** except
 **Verdict / revisit trigger:** Open — cheapest of this batch; a candidate to adopt informally (manual notes per run) before building anything.
 
 ### FI-17 — Explanation sidecars: cached AI block explanations, keyed to IR hash
-- **Status:** PILOT LANDED 2026-07-20 — the key/invalidate helper `converter ir-hash <file>`
+- **Status:** Implemented (partial) — the helper + convention landed 2026-07-20 as a **pilot**; what stays open is the pilot itself (hand-caching during normal work) and any tooling beyond it. The key/invalidate helper `converter ir-hash <file>`
   (`Converter/IrHash/`, `src/converter/README.md`): `SHA-256(SerializeBlockReadable(block))`, a stable
   content hash over the *readable* logic only, immune to SIDECAR/UId churn (deliberately not
   `digest --fingerprint`, which abstracts tags → wouldn't invalidate on a rename). Plus the convention doc
@@ -374,7 +430,7 @@ false positive. **The C-118–125 sequencer rule family is now complete** except
 **Verdict / revisit trigger:** Open — net-new; lower priority than FI-22 but cheap (extends existing digest machinery).
 
 ### FI-24 — `gen-architecture` bookkeeping helpers (provenance + tag-status)
-- **Status:** Partially done (2026-07-18). The **tag-status half is built** — `converter tagstatus <name…> --project <ir-dir> [--json]` (`src/converter/Converter/TagStatus/`, `src/converter/README.md`): classifies each name `EXISTS`/`PROPOSED` against the export via the same `ProjectIndex` + `AccessNode.FromDottedPath` primitive `preflight` uses, exit 1 if any proposed (a usable "all tags exist" gate). The **provenance-header wrapper is still open** (below). Originally raised 2026-07-18 from the skill/tooling audit — net-new, small tooling.
+- **Status:** Implemented (partial) — 2026-07-18; the provenance-header wrapper half is HELD (owner). The **tag-status half is built** — `converter tagstatus <name…> --project <ir-dir> [--json]` (`src/converter/Converter/TagStatus/`, `src/converter/README.md`): classifies each name `EXISTS`/`PROPOSED` against the export via the same `ProjectIndex` + `AccessNode.FromDottedPath` primitive `preflight` uses, exit 1 if any proposed (a usable "all tags exist" gate). **Corrected 2026-08-05 (`f50753a`):** it now resolves to **member** level — it previously stopped at the DB root, so an invented member of a real DB passed this hard-rule-3 gate; `--roots-only` restores the old root-level mode. The **provenance-header wrapper is still open** (below). Originally raised 2026-07-18 from the skill/tooling audit — net-new, small tooling.
 - **Raised:** 2026-07-18 · **Source:** the audit. Two rote, error-prone hand-steps in `gen-architecture`:
 **Merits:**
 - **Provenance header** currently needs `git log -1 --format=%h -- <path>` per input; a tiny wrapper emitting the whole provenance block removes a hand-repeated, easy-to-fumble step.
@@ -562,8 +618,8 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Dependencies:** Extraction half: none technical — `ProjectIndex`/`ProjectUsageGraph` and the IR already carry everything needed. Generation/HMI half: **FI-18** (PLC/HMI boundary) is a genuine prerequisite for the class-mapping and tag-naming contract — and alarm generation is arguably the best concrete case to scope FI-18 against, being small, bounded, and contract-shaped rather than screen-shaped.
 **Verdict / revisit trigger:** Open. Natural split: build `alarm-scan` (facts, C-501/C-503 aware, conformance hard errors) independently and now-ish — it stands alone as an explanation/review aid regardless of what happens HMI-side; hold the HMI-list *generation* half behind FI-18 and the Openness-HMI question in 5. Revisit when a second alarm-extraction job comes up, or when FI-18 is scoped.
 ### FI-36 — Per-instance interlock-completeness trace (review-functional's independent check)
-- **Status: FI-36-min IMPLEMENTED 2026-08-05** as `trace`'s `guard-containment` hop (`708ae21`) and made **mandatory** in `review-functional` for every REQ stating a condition (`decd2d5`) — placed there deliberately, since that pass is the one that graded the REGRESSION as MATCH. ~110 LOC on `BindingFile` + `UsageSite.Guard`. The **full** form (per-instance, driven off the D3 render) remains open and its real blocker is R12 (the render reaching the coder), not FI-37.
-- **Superseded status line:** Raised
+- **Status:** Implemented (partial) 2026-08-05 — **FI-36-min shipped**, the full form is open. FI-36-min is `trace`'s `guard-containment` hop (`708ae21`), made **mandatory** in `review-functional` for every REQ stating a condition (`decd2d5`) — placed there deliberately, since that pass is the one that graded the REGRESSION as MATCH. ~110 LOC on `BindingFile` + `UsageSite.Guard`. The **full** form (per-instance, driven off the D3 render) remains open and its real blocker is R12 (the render reaching the coder), not FI-37.
+- **Previous status:** Raised
 - **Raised:** 2026-07-20 · **Source:** the S6-Killer-Plan autopsy (`docs/evidence/PlantAutoControl-bench-autopsy.md`). The blind-generated `PlantAutoControl` shipped a REGRESSION (REQ-003: the filter cascade-hold's neighbour-`ShutdownComplete` term dropped on 3 machines) that `review-functional` **explicitly graded MATCH** — it verified the block against the register's own ambiguous `/`-joined condition and read it the same way the coder did.
 **Merits:** The functional reviewer, reading the same register as the coder, is a **correlated** check, not an independent one — it catches "unimplemented," never "implemented against a wrong shared reading." A mechanical **per-instance interlock-completeness trace** breaks the correlation: for each machine, take the register/spec's *explicit* condition list (the interlock table's starts-after / holds-until columns) and verify **every listed condition appears in the block's guard** — a set-difference, not a re-interpretation. Deterministic; would have caught REQ-003 regardless of how anyone "reads" the spec. Where a real job has no answer key, this trace is the answer key's stand-in. A companion **strongest-available-guard** check flags using a narrower interlock signal (raw `ComFlt`) when the wired FB exposes a broader one (`FaultActive`) — the REQ-017 miss.
 **Costs / risks:** Only as good as the spec's explicitness (needs FI-37's condition list to trace against — the two are complements). Must emit facts (missing condition X on machine Y), not verdicts.
@@ -572,7 +628,16 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Verdict / revisit trigger:** Open — the highest-leverage autopsy fix; the one thing that would have caught the REGRESSION deterministically. **Build FI-36-min first** — cheapest item in the study, strongest catch.
 
 ### FI-37 — Spec interlock explicitness: no ambiguous conjunctions, underspecified interlock = blocking Q
-- **Status:** Raised
+- **Status:** Implemented 2026-08-05 — **as skill rules, not tooling** (`448251c`). Both clauses landed in
+  the four-rung pipeline: (1) *no ambiguous conjunctions* is `.claude/skills/gen-pid-analysis/SKILL.md:65`'s
+  section, literally headed "Explicitness rules (non-negotiable — FI-37)" — one relation per line on the way
+  in as well as out, an ambiguous separator in a SOURCE split into two retained relations or raised, with a
+  carve-out forbidding split-and-retain where a side would assert an unestablished signal (hard rule 3);
+  (2) the *underspecified detail = blocking `Q-nn`* mechanism is rung C's (`gen-equipment-spec/SKILL.md`
+  §2/§3, the `CANDIDATES:` field plus a blocking `Q-nn` decided at D1). The register-format half is enforced
+  mechanically only insofar as FI-39's checks parse those artifacts; the explicitness rule itself is prose
+  discipline read by the executing agent.
+- **Previous status:** Raised
 - **Raised:** 2026-07-20 · **Source:** the autopsy. Every gap lived in the register's **ambiguity, silence, or looseness**: REQ-003's dual hold was written `"Fans-shutdown-ready / Air-separator VSD shut down"` (a `/` that both coder and reviewer collapsed to one term); REQ-017 said "not faulted" without pinning the signal; REQ-019's feedback pairing was left to inference.
 **Merits:** Removes the ambiguity the coder/reviewer correlation feeds on, at the source. Two `gen-spec-analysis` / `requirements.md`-format rules: (1) **no ambiguous conjunctions** in the interlock table — one explicit condition per cell, or spelled-out AND/OR/NOT, never a bare `/`; (2) an **underspecified interlock detail** (which fault signal? which feedback pairing?) is a **blocking `Q-nn`**, handled like a `proposed` tag — the coder may not silently pick a reading. Directly enables FI-36 (gives it an unambiguous condition list to trace).
 **Costs / risks:** More rigour up front in the Examiner/spec stage; the register grows more structured (a feature, not a cost). Risk of over-formalising prose requirements that are genuinely narrative — scope the rule to the *interlock/permissive* table, not all REQ text.
@@ -580,7 +645,17 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Verdict / revisit trigger:** Open — cheap, and it is where the REGRESSION was born.
 
 ### FI-38 — Interlock-safety disposition: surface ambiguity, don't silently under-constrain; dropped guard = blocking
-- **Status:** Raised
+- **Status:** Implemented (partial) 2026-08-05 — **as a skill rule, not tooling** (`448251c`). **Discipline (1)
+  landed:** `.claude/skills/gen-code-structure/SKILL.md:213–217` ("Calibration") requires that ambiguity is
+  never resolved silently and that a forced choice on **any protective term — interlock, permissive, inhibit
+  or fault gate** takes the stronger/fail-safe guard and records it, citing FI-38 by name and carrying the
+  same hard-rule-2 scope note this entry uses. **Discipline (2) — the gate rule — is NOT implemented:** a
+  functional "partial" that drops a stated interlock is still an ordinary `partial` verdict
+  (`review-functional/SKILL.md:117`), not a blocking fail; a repo-wide search on 2026-08-05 found no gate,
+  in any skill or in `docs/15`, that blocks presentation on a dropped stated interlock or requires a recorded
+  owner waiver first. That half is the open one — it is where the autopsy's shipped defects actually got
+  through.
+- **Previous status:** Raised
 - **Raised:** 2026-07-20 · **Source:** the autopsy's coder-disposition finding. On the *explicit* gaps (REQ-012 bypass, REQ-016 latch) the coder flagged its deviation honestly — those shipped only because a flagged "partial" was non-blocking. On the *ambiguous/underspecified* gaps (REQ-003/011/017/019) the coder **silently resolved every one toward the fewest guards** — the permissive reading of a safety interlock, with no flag.
 **Merits:** Two disciplines. (1) **`gen-block-new`:** when an interlock/permissive is ambiguous or underspecified, **stop-and-flag** (like a `proposed` tag) rather than silently pick the weaker reading; prefer the stronger/fail-safe guard when forced to choose on **any protective term — interlock, permissive, inhibit or fault gate** — and record the choice. *(Scope word matters: in this repo "safety" means F-content that must be refused outright per hard rule 2, so this rule is deliberately worded for ordinary **process** protection — which is where every documented miss actually happened.)* (2) **Gate rule (generated-code bar):** a functional **"partial" that drops a stated interlock is a blocking fail**, requiring implementation or an explicitly recorded owner waiver *before* presentation — not a footnote in the bundle. Together these stop the coder's characterised bias (it drops guards, never adds wrong ones) from reaching the engineer silently.
 **Costs / risks:** More Build-stage stops (a feature — a stopped run with a named interlock ambiguity is more useful than a silent under-implementation). Needs FI-37's blocking-Q mechanism to route the flags.
@@ -588,10 +663,10 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Verdict / revisit trigger:** Open — the coder-side counterpart to FI-36; the two together close the correlated-failure gap from both ends.
 
 ### FI-39 — `converter candidate-scan`: the mechanical floor under the spec-pipeline checks
-- **Status: IMPLEMENTED 2026-08-05 — all five checks + FI-36-min.** `trace`'s guard-containment hop (`708ae21`), `candidate-scan` + the shared `SignalInventory` (`6e28f5c`), `undriven-scan` (`febc8bf`), `relation-reconcile` (checks 2+3 folded, `e71b7fa`), `signal-sweep` (`79e8046`); wired into the rung skills (`decd2d5`) and their artifact formats made contracts (`361c0e0`). 707 tests. Each verified against its graded failure on the `PlantAutoControl-bench` fixture, not only in unit tests: guard-containment reports the REQ-003 term MISSING on the generated block and OK on the sealed answer key; `candidate-scan` surfaces both REQ-017 candidates and the REQ-019 family; `undriven-scan` reports REQ-012's `IO.RotationSensor` dead on every instance.
+- **Status:** Implemented 2026-08-05 — **all five checks + FI-36-min** (two named refinements open, below). `trace`'s guard-containment hop (`708ae21`), `candidate-scan` + the shared `SignalInventory` (`6e28f5c`), `undriven-scan` (`febc8bf`), `relation-reconcile` (checks 2+3 folded, `e71b7fa`), `signal-sweep` (`79e8046`); wired into the rung skills (`decd2d5`) and their artifact formats made contracts (`361c0e0`). 707 tests. Each verified against its graded failure on the `PlantAutoControl-bench` fixture, not only in unit tests: guard-containment reports the REQ-003 term MISSING on the generated block and OK on the sealed answer key; `candidate-scan` surfaces both REQ-017 candidates and the REQ-019 family; `undriven-scan` reports REQ-012's `IO.RotationSensor` dead on every instance.
   **Calibrations made against the real corpus, each because the design-as-written would have shipped noise:** `undriven-scan`'s `dead-interface` reports but never gates (gating produced 132 findings on one FB, since a reusable block legitimately exposes unused optional inputs) and its name-join hints are opt-in (they fired on every undriven member and buried the findings); `candidate-scan`'s exit keys on the **IO half** (a total-size trigger fired on every query, so the rule it drives degenerated to "always cite a basis"); `undriven-scan` excludes members the FB *writes* (FB outputs were being reported as undriven from the caller's side — ~2/3 noise, and it nearly caused a misreading).
   **Open refinements, deliberately not rushed:** (1) `relation-reconcile`'s citation check **rewards a vaguer citation** — bare `IO.UPSEnable` passes with "4 writers" while the more precise `FilterUnitInst2.IO.UPSEnable` is rejected as declaration-only, because the pooled FB-local path has writers and the instance-qualified one does not; the fix needs instance↔FB path resolution, not a patch. (2) `signal-sweep` can never reach zero on this project: `DiscreteInputs.CycloneDustAutoRunning/Stop` is a real member whose `/` its token regex excludes.
-- **Superseded status line:** Raised
+- **Previous status:** Raised
 - **Raised:** 2026-07-20 · **Source:** two adversarial validation rounds against the four-rung spec pipeline (`docs/evidence/four-rung-design-validation.md`, `…-round2.md`). Round 2's verdict: the prose amendments closed both silent-survival paths, but **every remaining check is self-judged** — candidate-set size, "plausibly", "same-shaped", "more broadly", the precondition class are all decided *and recorded* by the same agent. Round 2's RW-3: *"no mechanical floor anywhere; `converter` gained nothing this round."*
 **Merits:** Prose discipline has been pushed about as far as it goes — the residual holes are ones an agent walks through by **choosing not to look**. Only computed facts survive that. Five checks, all mechanizable on existing substrate, each tied to a documented real failure:
 - **Candidate set (`candidate-scan`)** — given a requirement phrase's target and an instance, compute **every** in-scope signal that could satisfy it: IO-table members plus the chosen FB's exposed status members (`TagReferences` + the interface parse). *Size > 1 becomes a computed fact, not a judgment* — this is what makes rung C §2's blocking-Q trigger real. Catches the REQ-017 narrowed-fault (`FaultActive` vs raw `ComFlt`) and the REQ-019 swapped pairing (two requirements, two same-shaped signals) — the two round-1 SURVIVES.

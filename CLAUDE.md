@@ -18,7 +18,7 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 - `ir/<project>/` — LAD blocks as IR text, actual project content. Touched only by `lad-coder` (hard rule 8), never by you directly.
 - `ir/SPEC.md` — the IR format/grammar itself. As the tool's capability grows, this and its converter/openness-cli support grow too — that's project development (like `src/converter/`), not ladder-coding: edit it directly, normal software rules apply.
 - `gen/<project>/` — S6 generation-pipeline artifacts (requirements.md, architecture.md, telemetry.log). Also `lad-coder`-only.
-- `simatic-ml/<project>/` — committed raw SimaticML export corpus (reviewer-skill validation data, not a regenerable cache) — check `git ls-files`/`.gitignore` before assuming anything here is disposable. `converter drift-check --project ir/<project> --exports simatic-ml/<project>` (FI-26) detects when these `.xml` exports have silently drifted from the `.ir` (a fix not re-exported); `ExportDriftDetectorTests` guards it in CI against a known-drift baseline.
+- `simatic-ml/<project>/` — committed raw SimaticML export corpus (reviewer-skill validation data, not a regenerable cache) — check `git ls-files`/`.gitignore` before assuming anything here is disposable. `converter drift-check --project ir/<project> --exports simatic-ml/<project>` (FI-26) detects when these `.xml` exports have silently drifted from the `.ir` (a fix not re-exported); `ExportDriftDetectorTests` guards it against a known-drift baseline (in the golden-harness suite, run by a local `dotnet test` — this project has no CI).
 - `patterns/` — proven LAD patterns, composed into generations (see workflow below). Also `lad-coder`-only.
 - `src/openness-cli/` (C#), `src/converter/` (C#, ADR-0002), `extract/` (Python, from S5), `tests/golden/` (round-trip harness) — PC-side tooling you may develop freely; normal software rules apply, hard rules above apply only to PLC logic.
 - `docs/` — the design suite. When in doubt: `04-design-philosophy.md` for principles, `02-roadmap.md` for what's in scope *now*, `10-non-goals.md` for what never is.
@@ -26,19 +26,24 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 ## Commands
 
 ```
-openness-cli list          <project>                                                     # enumerate blocks; F-/safety blocks flagged, never opened; --tagtables lists tag tables instead
+openness-cli list          <project> [--json]                                            # enumerate blocks; F-/safety blocks flagged, never opened; --tagtables lists tag tables instead
 openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>
-openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # non-zero exit on error
+openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json]   # non-zero exit on error (8 = CompileFailed; full table in src/openness-cli/README.md)
 openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
-openness-cli sanity-check  <project>                                       # block-consistency + compile health — run this first if export/import/compile misbehave
+openness-cli sanity-check  <project> [--json]                              # block-consistency + compile health — run this first if export/import/compile misbehave
 openness-cli portal-status                                                 # read-only Portal-process health: classifies running Portal processes vs the self-launch registry (in-use/orphan/stray); never attaches/launches/kills. Complements sanity-check (project health)
-converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, comparisons (Eq/Ge/Lt/Ne/Gt/Le), TON/TONR/TOF, MOVE, CALL, SCoil/RCoil, MUL/ADD/SUB/DIV/CONVERT,
-                                    # ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT; DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. Anything else outside
-                                    # this slice is a correct hard error, not a bug — see docs/evidence/stage-S1.md for exactly what's covered.
+converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, standalone Not, comparisons (Eq/Ge/Lt/Ne/Gt/Le), TON/TONR/TOF, MOVE, CALL, SCoil/RCoil, MUL/ADD/SUB/DIV/CONVERT,
+                                    # ABS/SWAP/WAND/CALC/T_SUB/T_CONV/MOVE_BLK_VARIANT, LIMIT/WAIT/FillBlockI/Modbus_Master/Modbus_Comm_Load; FC/FB parameter interfaces; fan-out markers
+                                    # (ADR-0006); DBs/UDTs/tag tables. Auto-detects block vs DB vs UDT vs tag-table content. The authoritative list is code, not this comment:
+                                    # FlgNetParser.SupportedPartNames (33 names) plus CALL, which is a <Call> sibling with its own parse path. Anything outside it is a correct hard error,
+                                    # not a bug — see docs/evidence/stage-S1.md. Conversion scope != synthesis scope: LIMIT/WAIT/FillBlockI/Modbus_* and InOut CALL params hard-error on the
+                                    # derive/--synthesize path (src/converter/README.md "Sidecar synthesis").
+converter to-ir <file> --no-sidecar # readable-only IR: VERIFIES the sidecar is derivable (Normalizer-compares synth vs the source export), then omits it; hard error if not (ADR-0005)
 converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
-converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs; --project enables cross-file rules (C-118 interface-UDT Step + C-122 dwell-timer PT-home + C-125 timeout-fault-bit-in-UDT; C-119 idle=step0 / C-120 steps x10 run single-file too, FI-09)
+converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks — 18 mechanized C-IDs as of 2026-08-05 (3 of them vacuous against
+                                    # current IR capability, so 15 substantive); the authoritative list is ReviewRunner.AllRuleIds, never a grep for C-nnn (that counts mentions, and yields 24); --project enables cross-file rules (C-118 interface-UDT Step + C-122 dwell-timer PT-home + C-125 timeout-fault-bit-in-UDT; C-119 idle=step0 / C-120 steps x10 run single-file too, FI-09)
 converter digest    <file...> [--ignore-errors] [--json] [--fingerprint]   # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR). --fingerprint adds a per-network tag-abstracted structural signature so copy-pasted networks collapse to one hash and the outlier stands out (FI-23, explanation aid)
 converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
 converter tagstatus <name...> --project <ir-dir> [--json] [--roots-only]   # classify names against the export (anti-laundering, hard rule 3): EXISTS / PROPOSED (root absent) / MEMBER-NOT-FOUND (root real, member invented) / MEMBER-UNCHECKED (namespace not enumerable — verify yourself); exit 1 on proposed or member-not-found. Resolves to MEMBER level since 2026-08-05 — it used to stop at the DB root, so an invented member passed the gate. --roots-only restores the old root-level mode (the Design stage's, which designs against gaps)
@@ -50,7 +55,7 @@ converter cross-check --project <ir-dir> [--json]   # whole-project cross-block 
 converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint/timing) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 converter ir-hash <file.ir...> [--json]   # stable readable-IR content hash (SerializeBlockReadable/SHA-256) keying FI-17 explanation sidecars; immune to SIDECAR/UId churn; exit 1 on error
 # --- the mechanical floor (FI-36/FI-39, 2026-08-05): checks that survive an agent choosing not to look ---
-converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix>...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement — IO half + the FB's own interface, direction COMPUTED from the usage graph (never the interface section); exit 1 when the IO half has >1 candidate, which is what makes an ambiguous binding non-discretionary. --phrase is advisory only and never narrows
+converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix>...] [--type <T>] [--direction status|command|any] [--instance <name>] [--json]   # --instance is PROVENANCE ONLY: it labels the report and never narrows the set (a candidate set is a property of the FB class, not an instance — unlike undriven-scan, where per-instance is the point). Compute every signal that could satisfy a requirement — IO half + the FB's own interface, direction COMPUTED from the usage graph (never the interface section); exit 1 when the IO half has >1 candidate, which is what makes an ambiguous binding non-discretionary. --phrase is advisory only and never narrows
 converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB>...] [--caller <file.ir>...] [--hints] [--json]   # PER-INSTANCE interface drive states: driven/disarmed/undriven(default X)/dead-interface. Per-instance is the point — cross-check pools across instances, so one driven instance masks an undriven sibling; exit 1 on undriven/disarmed (dead-interface reports, never gates)
 converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + check verified-cross-block citations actually cite something WRITTEN; an ABSENT leg (stopped D3) never gates, a leg parsing 0 rows is a hard error; exit 1 on any difference
 converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual coverage: exact denominator + residue, replacing self-reported approximations; exit 1 if any signal is in no spec and no disposition table
@@ -87,7 +92,9 @@ replacing) `gen-architecture`, a four-rung spec pipeline exists: **A** `gen-pid-
 per-instance interlocks, process language only) → **B** `gen-functional-analysis` (plant behaviours,
 grouped and scoped) → **C** `gen-equipment-spec` (merge A+B+IO into per-equipment control specs;
 **signals enter here**) → **D** `gen-code-structure` (shape → block fit → discharge ledger → boolean
-render; **booleans and interface members enter here, nowhere earlier**). Built after the S6-Killer-Plan
+render; **booleans and interface members enter here, nowhere earlier** — the one carve-out is rung C's
+`CANDIDATES:` field, which may **name** (never bind) an interface member for a contested binding, so that
+a discovered `{raw input, aggregated FB output}` choice can be written down instead of lost). Built after the S6-Killer-Plan
 autopsy found the root cause of a shipped REGRESSION: *an AI reviewer reading the same register as the
 AI coder is a **correlated** check, so both failed together on an ambiguous `/`*
 (`docs/evidence/PlantAutoControl-bench-autopsy.md`). Each rung's artifact formats are **contracts** parsed by
@@ -110,6 +117,7 @@ delivered (`docs/16-future-ideas.md`).
 - If the engineer renames or deletes a block themselves directly in TIA Portal while you're also working the same project, that needs to be said before your next `import` — Openness's import matches by name, so re-importing under the old name creates a duplicate rather than updating the renamed block, and there's no way to detect the rename from the tooling side alone.
 - **Codename note (2026-07-17):** the S6 sandbox/validation project is referred to as `test-project001` everywhere in docs and IR (`ir/test-project001/`, `gen/test-project001/`, `simatic-ml/test-project001/`) — a deliberate de-identification so it reads as the test fixture it is, not a live engineering job. The **live TIA Portal project folder on disk keeps its original name, `GenProject1/`** (renaming a live Openness-managed project folder wasn't worth the risk for a naming-only change) — if you're opening the actual `.ap20` file, that's still `GenProject1/GenProject1.ap20`; every other reference to this project uses `test-project001`.
 - This repo's docs cite each other by literal file path constantly (e.g. `gen/<project>/fix-wave-1.md §1`). After deleting or renaming any doc/file, grep the old filename repo-wide — a rename-only pass (bulk `sed`) won't catch dangling pointers left by deletions.
+- **Tracked text files here are CRLF, and `sed -i` silently converts the whole file to LF.** Worse, the obvious check does not catch it: `git diff --stat` still reports a small insert/delete count, because autocrlf normalises on staging — so a whole-file line-ending rewrite looks identical to a two-line edit. Prefer the Edit tool (it preserves the file's endings). If you must use `sed -i`/`awk` on a tracked file, verify with `file <path>` afterwards and expect to see `CRLF line terminators`. Bit twice on 2026-08-05.
 
 ## Data boundary
 

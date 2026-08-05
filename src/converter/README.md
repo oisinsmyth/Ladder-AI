@@ -6,7 +6,8 @@ anyway). Built in S1, `net8.0` (no `Siemens.Engineering` dependency, so unlike `
 it isn't pinned to `net48`).
 
 ```
-converter to-ir  <file>                                   # SimaticML → IR
+converter to-ir  <file>                                   # SimaticML → IR (keeps the stored SIDECAR)
+converter to-ir  <file> --no-sidecar                      # SimaticML → readable-only IR — omits the SIDECAR, but only after VERIFYING the block is derivable; errors otherwise
 converter to-xml <file>                                   # IR → SimaticML
 converter to-xml <file> --synthesize                      # IR (no SIDECAR needed) → SimaticML — see "Sidecar synthesis" below
 converter sanitize <file> --map <mapping.json> --out <path>  # SimaticML → sanitized SimaticML
@@ -16,15 +17,37 @@ converter diff <old.ir> <new.ir> [--only <network> ...] [--json]  # which networ
 `to-ir`/`to-xml`/`sanitize` all auto-detect DB vs code-block content (root element name for XML
 input, first line for IR/text input) and route accordingly — no separate flag needed.
 
-## Current scope (walking skeleton)
+## Current scope
 
-Deliberately narrow — **Contact/Coil and basic tag references, OR-merge (with recursive-chain
-branches) and negated contacts, TON, comparisons (Eq/Ge), MOVE, WAND (bitwise word AND), Not
-(standalone boolean inverter), CALL (FB/FC block calls), SCoil/RCoil (set/reset coils), and
-network/block-level Title** (S1 items 7–17, through 2026-07-12). No arithmetic
-(`Add`/`Sub`/`Mul`/`Div`/`Convert`/etc.) or FC/FB parameter-interface modeling yet. Anything
-outside scope is a hard error (`UnsupportedConstructException`), never a silent partial result —
-hitting that error on a real block is expected at this stage, not a bug.
+*(Corrected 2026-08-05. This section read "walking skeleton" and denied arithmetic and FC/FB
+parameter-interface support long after both shipped — contradicted by its own dated sections below.
+The authoritative list is code, not prose: `Converter/SimaticMl/FlgNetParser.cs`'s
+`SupportedPartNames` set — re-read it before editing this paragraph.)*
+
+**33 supported part names**, each added against a real export rather than guessed at:
+
+`Contact`, `Coil`, `SCoil`, `RCoil`, `O` (OR-merge, recursive-chain branches), `Not` (standalone
+boolean inverter), `And` (bitwise word AND — "WAND"); the full IEC comparison family
+`Eq`/`Ne`/`Gt`/`Ge`/`Lt`/`Le`; timers `TON`/`TONR`/`TOF`; `Move` and `MOVE_BLK_VARIANT`; arithmetic
+`Add`/`Sub`/`Mul`/`Div`; `Convert`, `Calc`, `Abs`, `Swap`, `LIMIT`, `T_SUB`, `T_CONV`, `WAIT`,
+`FillBlockI`, `Modbus_Master`, `Modbus_Comm_Load`.
+
+Supported alongside that set, not part of it: FB/FC **`CALL`** (a `<Call>` sibling of `<Part>` in
+the source XML, normalized internally to `PartNode(Name: "Call")`); negated operands; network- and
+block-level `Title`; **FC/FB parameter-interface modeling** (`Input`/`Output`/`InOut`/`Constant`
+sections); slice (`.%X15`) and array-index (`[n]`) addressing; per-node fan-out markers
+(`{split N}`/`{recv N}`, ADR-0006); and whole-document support for DBs, UDTs and PLC tag tables.
+
+Anything outside that is a hard error (`UnsupportedConstructException`), never a silent partial
+result — a correct refusal, not a bug. Per-construct grounding evidence, naming the real block each
+was confirmed against, is in `docs/evidence/stage-S1.md`; each construct also has its own dated
+section below.
+
+**Conversion scope is not synthesis scope.** `LIMIT`, `WAIT`, `FillBlockI`, `Modbus_Master` and
+`Modbus_Comm_Load` convert in both directions when a real sidecar is present, but are **not
+sidecar-synthesizable** — they hard-error (`UnsupportedSynthesisConstructException`) on the
+`--synthesize`/derive-always path, as do InOut `CALL` parameters. See "Sidecar synthesis" below for
+the current synthesizable subset.
 
 Confirmed against real exports (`JOB9002 - Tom White Waste`, under the data-boundary approval in
 `docs/13-data-boundary.md`) and handled explicitly, not guessed at:
@@ -1499,6 +1522,32 @@ confirmed by full-file audit that `FlgNetBuilder.Build` never computes a UId any
 replays whatever a sidecar already contains, so a synthesized one satisfies it exactly like a real
 one would.
 
+### `to-ir --no-sidecar` — store readable-only IR (2026-07-19, ADR-0005 follow-on)
+
+The write side of derive-always, and the only way a block legitimately enters the repo without a
+stored `SIDECAR` section. `to-ir` **keeps** the stored sidecar by default; `--no-sidecar` is the
+explicit opt-in to drop it.
+
+It is not a "trust me" flag — it **verifies** before omitting (`Program.SynthesizeReadableVerified`).
+For the block being converted it serializes the readable form, re-parses it, synthesizes a fresh
+sidecar exactly as a later `to-xml` would, rebuilds the SimaticML, and `Normalizer`-compares that
+against **the very export being converted** (so the comparison is self-consistent and
+staleness-immune). Readable-only text is returned only if the two are semantically equivalent.
+
+Two failure modes, both hard errors that leave the block with its sidecar:
+
+- **Not synthesizable** — an unsupported construct or an unresolvable operand type
+  (`UnsupportedSynthesisConstructException`, reframed with the `--no-sidecar` context and the
+  underlying reason preserved).
+- **Synthesizes but diverges** — synthesis succeeds and the derived XML is *not* semantically
+  equivalent to the source. This is the case ADR-0005's own `CriticalCaveat` is about, and why the
+  earlier auto-omit-on-`IsSynthesizable` behaviour was withdrawn: "synthesis didn't throw" is
+  necessary but not sufficient (array-index locals, Gap D). See
+  `docs/notes/converter-synthesis-gaps.md`.
+
+`--no-sidecar` is valid **only with `to-ir`** — passing it to `to-xml` is a usage error. Flipping the
+*default* to auto-omit-when-equivalent remains a separate, deferred owner decision.
+
 **Tests, three tiers**:
 1. `Converter.Tests/SidecarSynthesizerTests.cs` — hand-written IR text per shape (plain AND chain,
    the exact real OR-of-two-ANDs IO-mapping shape, nested OR, standalone NOT, negated leaf, bare
@@ -1959,6 +2008,12 @@ means** — that is the engineer's call.
 - **`--phrase` is advisory only.** Filtering by name resemblance is precisely the reasoning that
   produced the swapped-pairing defect, so the phrase subset is reported but the exit code keys off the
   **unfiltered** size.
+- **`--instance` is provenance only** — it labels the report header and the JSON, and never narrows
+  the candidate set (which is a property of the FB *class*, not of any one instance). Verified
+  against `CandidateScanRunner.Run` 2026-08-05: the value reaches the report record and nothing else;
+  neither `CollectIoCandidates` nor `CollectFbCandidates` receives it. Called out because the sibling
+  `undriven-scan` is emphatically per-instance, so the same flag name reads as if it filtered here
+  too.
 - The header states the **denominator** (files scanned) — in a partial export an empty set is a scope
   fact, not a finding.
 

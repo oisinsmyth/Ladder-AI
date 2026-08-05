@@ -213,3 +213,35 @@ exit code, which is non-zero for *any* non-`Success` state — including the sam
 hardware-config warning every block in this project shows, with 0 actual errors. Stricter than
 this project's own established "0 errors is clean, warnings are expected" bar used everywhere
 else in `stage-gates.md`. Now parses the JSON body and gates on the real error count.
+
+## Corpus and coverage as it now stands (2026-08-05)
+
+Two corrections to what the dated sections above imply, both found by the 2026-08-05 project audit.
+
+**The reference corpus is 15 `.ir` / 15 `.xml`, not 14.** "All 14 reference-project blocks — the full
+committed corpus" above describes *that pass's* `RunAllSettled` run (2026-07-14) and was accurate when
+written; it is not a standing count. The 15th is **`HandAuthorSplitsMerges`** (`FC`, hand-authored, added
+2026-07-19 for ADR-0006). It exists to pin down one thing the other 14 can't: **contact fan-out is a
+drawing choice, not derivable from the logic.** Each of its networks is paired with a split-free
+equivalent — byte-identical readable logic, different sidecars — which is exactly why the readable IR
+had to grow the per-node `{split N}`/`{recv N}` markers once ADR-0005 made the sidecar derived rather
+than stored. It is stored readable-only (regenerated from its export via `to-ir --no-sidecar`), and its
+byte-exact re-derivation is the guard on the marker grammar (`SynthesisParityTests`,
+`SidecarSynthesizerFanoutTests`, `FanoutMarkerGrammarTests`).
+
+**The automated harness covers two projects, not just `reference`.** Both committed-corpus tests pair
+`ir/<project>/` with `simatic-ml/<project>/` for **`reference` and `test-project001`**:
+
+- `CommittedBlocksRoundTripTests` — every *readable-only* `BLOCK` with a matching export must
+  synthesize to a semantically equivalent form (the ADR-0005 derive-always safety net). It
+  deliberately skips DB/UDT/tag-table `.ir` (no sidecar concept), sidecar-carrying blocks (allowed to
+  be non-derivable), and blocks with a committed frozen answer key (guarded by
+  `FrozenAnswerKeyRoundTripTests` instead, since their exports have drifted).
+- `ExportDriftDetectorTests` — runs `converter drift-check` per project and asserts the drifted set
+  equals a documented baseline: empty for `reference`, six known-drift blocks for `test-project001`
+  (`DB_Settings`, `FB_PusherControl`, `FB_ShredderSequencer` and their three instance DBs — the
+  consciously-deferred D-7 re-export, `docs/notes/deferred-items.md`). A *new* name appearing there
+  means a block drifted unexpectedly; investigate rather than extend the baseline.
+
+The live-cycle checks (`ReferenceProjectRoundTrip`, `SynthesizerLiveCheck`) remain manual-run `static`
+classes needing a Portal session, not `[Fact]`s — same convention as `RoundTripRunner.RunFull`.

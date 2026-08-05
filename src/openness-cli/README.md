@@ -16,7 +16,8 @@ openness-cli portal-status                                                     #
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
 
-Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell.
+Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell. The
+eleven codes and what each means: "Exit codes" at the end of this file.
 `export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-10 —
 see `docs/notes/stage-gates.md` S1.
 
@@ -127,6 +128,12 @@ and launching a fresh Portal is the exact opposite of a pileup diagnostic. It on
 — all readable **without** `Attach()` (`docs/notes/openness-api-surface-v20.md`). It takes **no
 `<project>`**; a positional argument is a usage error.
 
+`--timeout-connect` and `--timeout-open` are **accepted but inert** here. `ParsePortalStatus` parses
+them into `PortalStatusOptions` for shape-consistency with every other subcommand, but this command
+never connects and never opens a project, so neither value can affect anything — passing one is
+silently a no-op rather than an error. Documented rather than removed (2026-08-05, audit F-39):
+dropping them is a behaviour change to the argument surface, not a docs fix.
+
 Each running process is cross-referenced against the CLI's own `LaunchedInstanceRegistry` and
 classified into one of three buckets:
 
@@ -148,3 +155,30 @@ and **always exits 0**, in both table and `--json` form.
 
 The classification and formatting are pure and unit-tested (`PortalStatusTests`); the
 `GetProcesses()` enumeration itself is integration-only (needs a live Portal).
+
+## Exit codes
+
+Every code this CLI can return (`OpennessCli/Program.cs`, `ExitCodes`). Anything driving it from a
+shell should branch on these rather than on stderr text.
+
+| Code | Name | Meaning |
+|------|------|---------|
+| 0 | `Success` | The command did what it was asked. For `compile`, also means `State == Success`; for `sanity-check`, every block consistent and every device compiling clean. `portal-status` always exits 0 — it is informational, never a gate |
+| 1 | `UsageError` | Argument parsing failed before anything was touched: unknown subcommand, missing/duplicated flag value, an unexpected positional, mutually-exclusive flags together |
+| 2 | `EnvironmentError` | The TIA install couldn't be resolved (`TiaInstallNotFoundException`) — checked up front, before any Portal contact, so this never means a half-done operation. Fix `--tia-install` / `TIA_OPENNESS_PATH` |
+| 3 | `ConnectTimeout` | Attach/launch didn't respond within `--timeout-connect` (default 180s). Almost always the first-connect approval dialog waiting inside TIA Portal — check for it rather than retrying |
+| 4 | `ProjectOpenTimeout` | The project-open step exceeded `--timeout-open` (default 1800s). A large project legitimately takes minutes; raise the timeout before assuming a hang |
+| 5 | `UnexpectedError` | Catch-all for any exception not classified below. Prints the full inner-exception chain. Treat as "a bug or an unmodelled Openness failure", not as user error — but see the caveat below |
+| 6 | `SafetyRefused` | `SafetyContentRefusedException` — the command touched safety-classified content and was refused (hard rule 2). Not retryable, by design |
+| 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException` |
+| 8 | `CompileFailed` | `compile` ran to completion but returned `State != Success`. The diagnostics are on stdout (`--json` for structured form); the exit code alone doesn't distinguish errors from warnings-only states |
+| 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block, or at least one device failing to compile. Both lists are printed |
+| 10 | `NotConfirmed` | `delete` resolved the block and printed what it *would* delete, but `--yes` was absent. **Nothing was deleted.** The only subcommand with a confirmation gate, because it's the only irreversible one |
+
+**Known gap (2026-08-05, audit F-09): a mis-typed `--group` exits 5, not 7.** The group-resolution
+failures in `OpennessGateway` (`FindGroup`/`FindTypeGroup`/`FindTagTableGroup`) throw plain
+`InvalidOperationException`, which falls through the classified `catch` filter into the catch-all —
+so the commonest user mistake reports as an internal error. What you actually see is this CLI's own
+`No device item found under '<path>'` wrapped in the catch-all's inner-exception chain. The fix is a
+dedicated exception type added to the filter; until then, read a 5 from `import`/`create-instance-db`
+as "check the `--group` path against `list`'s `Path` column verbatim" first.

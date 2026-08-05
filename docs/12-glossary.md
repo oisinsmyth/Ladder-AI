@@ -25,3 +25,13 @@
 | S7-1200 G2 | Second-generation S7-1200 CPU family, primary hardware target, TIA V20+ |
 | ADR | Architecture Decision Record (`docs/adr/`) |
 | CLAUDE.md | Repo-root instruction file Claude Code reads at session start — the distilled operating manual |
+| Sidecar | The IR's machine-owned layer (UIds, wire identity, scopes, some type attributes) beneath the readable body; **derived** on demand rather than stored, since ADR-0005 |
+| Preflight | `converter preflight` — static parse/convert/tag/call/review checks run before any import; a filter *before* the compile gate, never a substitute for it (hard rule 4) |
+| Telemetry | One line appended to `gen/<project>/telemetry.log` when a pipeline stage run ends (`notes/gen-telemetry.md`); append-only, never backfilled |
+| Spec pipeline / rungs A–D | The four staged spec skills: **A** `gen-pid-analysis` (topology + interlocks) → **B** `gen-functional-analysis` (plant behaviours) → **C** `gen-equipment-spec` (signals enter here) → **D** `gen-code-structure` (booleans and interface members enter here). Runs alongside `gen-architecture`, not instead of it |
+| Mechanical floor | The converter checks that fire whether or not an agent chooses to look — `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, and `trace`'s guard-containment hop (FI-36/FI-39) |
+| Green / Amber / Red tier | Data classes in `13-data-boundary.md`. **Green**: this doc suite, tooling, IR spec, patterns, the purpose-built reference project — usable freely. **Amber**: real project logic carrying identifying data — sanitized, or under an explicit per-project approval. **Red**: confidentiality-restricted (never in committed repo content) or safety content (never anywhere, hard rule 2) |
+| Live Runs | `Live Runs/` — live engineering jobs worked end-to-end, gitignored. Full unsanitized working access, including confidentiality-Red material; nothing from it is ever committed or enters the knowledge base. The boundary is **retention, not access** (`13-data-boundary.md`) |
+| `lad-coder` | The sub-agent that performs *all* LAD/IR work — writing/editing `.ir`, the convert/import/compile loop, the review and explanation reads, `patterns/` edits. Hard rule 8: never done inline, no exception for size |
+| Skill | A packaged procedure in `.claude/skills/<name>/SKILL.md` an agent follows for one pipeline stage; the artifact formats a skill defines are contracts the converter parses, not suggestions |
+| FI item | A numbered candidate idea in `16-future-ideas.md` (FI-nn) — merits, costs, verdict, status; promotion into the plan is ADR-gated |
