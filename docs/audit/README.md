@@ -324,7 +324,8 @@ rule 1) and makes no changes, so there is no "after" run to reconfirm.
 |------|-------|--------|--------|
 | 2026-07-11 | D1 stage/goals + D2 doc consistency (full suite → S1 item 7) | applied inline | [`2026-07-11-stage-and-docs-audit.md`](2026-07-11-stage-and-docs-audit.md) |
 | 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (compliance excluded by owner) | applied inline; 4 items flagged for owner | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
-| 2026-07-20 | Full project audit — all dimensions D1–D10 from zero (read-only; 19 fix-list items, 0 blocker) | ⚠️ **unimplemented — out of date** (marked 2026-08-05) | [`2026-07-20-full-project-audit.md`](2026-07-20-full-project-audit.md) · [fixlist](2026-07-20-full-project-audit-fixlist.md) |
+| 2026-07-20 | Full project audit — all dimensions D1–D10 from zero (read-only; 19 fix-list items, 0 blocker) | ⚠️ **unimplemented — superseded** by the 2026-08-05 audit, whose D7 re-derived all 19 items (14 still valid, 2 overtaken, 2 recommendations reversed, 1 premise corrected) | [`2026-07-20-full-project-audit.md`](2026-07-20-full-project-audit.md) · [fixlist](2026-07-20-full-project-audit-fixlist.md) |
+| 2026-08-05 | Full project audit — all dimensions D1–D10, D5 compliance included, Method-7 leak grep run at live-run depth (read-only; 53 fix-list items, 0 blocker, 6 high) | **current — not yet actioned** | [`2026-08-05-full-project-audit.md`](2026-08-05-full-project-audit.md) · [fixlist](2026-08-05-full-project-audit-fixlist.md) |
 
 Add a row here whenever a new audit lands, and keep its **Status** current (see below).
 
