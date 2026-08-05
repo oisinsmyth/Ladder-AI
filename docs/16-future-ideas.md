@@ -774,3 +774,32 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   verification for a common shape. (3) is the one with design consequences. (2) and (4) are small.
 - **Verdict.** Open. (1) and (2) are both "extend the observed set and add a fixture"; the refusals are
   correctly conservative and should stay refusals for genuinely unobserved shapes.
+
+### FI-43 — `openness-cli`: no `delete --type`, and no way to update an object in place
+- **Status:** Raised (2026-08-05, owner-directed, from a live greenfield job). Supersedes FI-42's
+  item 4, which recorded only half of this.
+- **Problem, in two halves.**
+  1. **`delete` has only `--block`.** A PLC data type imported by mistake cannot be removed by the
+     CLI at all — it needs a human in the TIA UI. On a job that authored 14 UDTs and then renamed
+     every one of them, that stranded 14 superseded types in the scratch project with no
+     programmatic way to clear them. They were inert, but the project no longer matched the IR set,
+     and *"go and delete these fourteen by hand"* is not a step an automated stage can own.
+  2. **There is no update/overwrite path.** The working pattern today is delete-then-import, which
+     for types is now impossible (half 1) and for blocks is a destructive round trip that throws
+     away and recreates an object in order to change it. Openness import already has overwrite
+     semantics available; the CLI does not surface them.
+- **Why it matters more on a greenfield job.** Reading an existing project never creates an object
+  you then want to remove or replace. Authoring one does it constantly — a rename pass, a type
+  split, a corrected member. The gap is invisible until the tool is used to BUILD rather than to
+  READ, which is why it has not surfaced before.
+- **Proposal.**
+  1. `openness-cli delete <project> --type <name> [--device <name>] --yes` — same safety shape as
+     `--block`, same refusal on anything safety-related.
+  2. An explicit **overwrite/update** option on `import` (e.g. `--overwrite`), so an existing object
+     is replaced in place rather than requiring a delete first. Default stays non-destructive:
+     importing over an existing object without the flag should refuse and say so, not silently do
+     either thing.
+  3. Both should report what they actually did — deleted / replaced / created — because an
+     automated stage needs to verify the outcome rather than assume it.
+- **Verdict.** Open, and small. (1) is a near-copy of the existing `--block` path. (2) is the one
+  with real value: it removes a destructive round trip from the normal edit loop.
