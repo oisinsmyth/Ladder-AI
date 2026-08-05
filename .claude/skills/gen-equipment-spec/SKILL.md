@@ -49,6 +49,19 @@ Read `CLAUDE.md` first; its hard rules bind you.
    output, and a "running"/"remote-operational" pair facing two ambiguously-named feedbacks, are the
    two documented cases (`docs/evidence/PlantAutoControl-bench-autopsy.md` §2-C).* **Two requirements
    competing for two same-shaped signals is always a candidate-set of two, never a coin flip.**
+   **How to record it (the narrow carve-out).** Requirement lines stay **signal-level**: an interface
+   member may **never** appear in one. But an unresolved requirement carries a dedicated
+   **`CANDIDATES:`** field, and that field **may** name interface members, tagged `[iface,
+   named-only]` — **naming a candidate is never a binding**. The decision belongs to rung D's binding
+   audit, which has the interface as ground truth; this rung's job is to **prove the choice existed**
+   and raise the blocking `Q-nn`. *Without this field the rung that discovers a
+   `{raw input, aggregated FB output}` choice cannot write it down, and the discovery is lost.*
+   ```
+   C5  running confirmed from <unresolved>                                  [ref+io]
+       CANDIDATES: DiscreteInputs.FilterUnit1Op
+                   FilterUnitInst2.IO.RunningFB   [iface, named-only]
+       → BLOCKING Q-C01 — decision deferred to D1
+   ```
 3. **Carry rung A's interlocks** verbatim as `P-nn`, **fully enumerated**, one relation per line.
 4. **Layer rung B's behaviours** onto the instances in their `applies-to` scope.
 5. **Reconcile A vs B — never silently.** Where a rung-A relation and a rung-B behaviour describe the
@@ -63,19 +76,29 @@ Read `CLAUDE.md` first; its hard rules bind you.
    must be argued, never to this rung's merge. *A plant-level "fans ready to shut down" flag and a
    specific neighbour's "shutdown complete" are not the same fact; collapsing them here destroys the
    evidence D2 needs.*
+   **A candidate set spanning a signal and an interface member is never resolved by merge** — it is a
+   `CANDIDATES:` record (§2) plus a blocking `Q-nn`, decided at D1. This rung cannot see what the FB
+   does with either member, so any merge it made would be a guess wearing a merge's clothes.
 6. **Settings**: record each with its **owner** (HMI / engineering) and its value. A value supplied by
    the reference rather than the plant documents is marked `reference-proposed` (a tunable
    commissioning default — legitimate, unlike an invented tag).
 7. **Tag provenance** on every line: `[A]` topology · `[B]` behaviour id · `[io]` IO table ·
    `[ref]` class reference.
-8. **Unclaimed-signal sweep (the Pass-2 of this rung).** Sweep the IO table in the **opposite**
-   direction. Every signal in the IO table scoped to this instance is either **bound** to a
-   requirement above, or listed under `UNCLAIMED` with a reason. An unclaimed signal whose name
-   implies a control function — `Bypass*`, `*Select`, `*Inhibit`, `*Enable`, `*Override` — is a
-   **BLOCKING `Q-nn`** and a candidate **delta**, never a silent omission. *A discharge-VSD
-   rotation-sensor bypass tag sat unclaimed and unreferenced through a whole generation run
-   (`docs/evidence/PlantAutoControl-bench-grading.md`, REQ-012); binding requirements to signals without
-   ever sweeping signals for requirements is what let it.*
+8. **Unclaimed-signal sweep (the Pass-2 of this rung) — TWO passes, both required.**
+   Sweep the IO table in the **opposite** direction to the binding pass. *Binding requirements to
+   signals without ever sweeping signals for requirements is what let a discharge-VSD rotation-sensor
+   bypass tag sit unclaimed and unreferenced through a whole generation run
+   (`docs/evidence/PlantAutoControl-bench-grading.md`, REQ-012).*
+   - **(a) Per-instance.** Every signal scoped to this instance is either **bound** to a requirement
+     above, or listed under `UNCLAIMED` with a reason.
+   - **(b) Plant-level residual — run ONCE per project**, into `gen/<project>/unclaimed-signals.md`:
+     every IO / global-DB signal claimed by **no** instance spec, each with a reason or a blocking
+     `Q-nn`. *The richest findings are plant-scoped and ownerless — a plant health input, a shared
+     fault-reset output, whole unspecified feature sets, a production selector wired to a test array.
+     Per-instance sweeping alone either misses them or duplicates them into every affected spec.*
+   **A residual signal that implies a control function is BLOCKING regardless of its name.** Name
+   patterns (`Bypass*`, `*Select`, `*Inhibit`, `*Enable`, `*Override`) are a prompt for attention,
+   **never the test** — a differently-named control signal defeats a pattern list, so judge by role.
 
 ## Output — `gen/<project>/equipment-specs/<Instance>.md` (one per instance)
 

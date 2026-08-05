@@ -23,9 +23,17 @@ Read `CLAUDE.md` first; its hard rules bind you.
 
 ## Inputs
 
-- **The functional description / supplied spec — REQUIRED.** The behaviour source. **Stop
-  condition:** no source document → stop; never write requirements from memory or inference about
-  what a plant "probably" does.
+- **The functional description / supplied spec — REQUIRED.** The behaviour source. **Stop condition
+  is three-way, by source kind:**
+  - **No source at all → STOP.** Never write behaviours from memory or inference about what a plant
+    "probably" does.
+  - **A DERIVED source** (a reverse-derived register, an extracted summary — anything whose own
+    provenance says it was read out of the as-built) → **proceed, with a blocking `Q-nn` recording
+    the circularity**, and **mark every behaviour that has no independent citation**. *Stopping here
+    produces nothing while the circularity is exactly the interesting defect: a real run on a derived
+    register surfaced three behaviours with no source citation at all — including the up-to-speed
+    enable the entire start cascade rests on.*
+  - **A genuine independent source** → proceed normally.
 - **Rung A's `gen/<project>/equipment-topology.md` — consumed if present**, only so behaviours can be
   scoped to real instances (`applies-to`). **A must not be edited here**, and where B appears to
   contradict A, that is a Q for rung C, not a correction.

@@ -88,7 +88,13 @@ the defect; a verified argument is the fix. **A relation with neither a term nor
 HARD FAIL.**
 
 **Emit the ledger as a machine-checkable table** — one row per relation:
-`relation-id | disposition (rendered / in-FB / discharged / rebind) | evidence | precondition class`.
+`relation-id | disposition | evidence | precondition class`. **Dispositions:** `rendered` ·
+`in-FB` (satisfied inside the reused block) · `discharged` (by a declared D0 shape) · `rebind` (D1
+binding audit) · **`render-BLOCKED`** (would be a term, but a blocking `Q-nn` contests it — cite the
+Q) · **`out-of-scope-obligation`** (the relation's counterpart lives outside this run's scope — cite
+the owed obligation). The last two **count toward the set-difference**, are **never** discharges, and
+**never** carry a precondition class. *Without them a stopped run cannot produce a complete ledger at
+all — which is exactly when completeness matters most.*
 The relation-id column must set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
 `gen/<project>/equipment-specs/`. State both counts explicitly in the artifact.
 
@@ -124,6 +130,12 @@ REQ→block table cites.
 Each manifest item in the emitted `architecture.md` **embeds its D3 render verbatim**, with the
 relation-id tag on every term, and cites its D2 ledger rows. The manifest is the coder's only required
 input; a render that lives only in `code-structure.md` does not reach the coder.
+
+**Where D3 is stopped, emit the manifest in PARTIAL form** — this rung's own stop condition can
+legitimately prevent the render existing, and the requirement above must never become pressure to
+invent one. A partial manifest carries every determined item, states per affected item *"renders
+absent — D3 stopped, see `<Q-ids>`"*, and ends with a **NOT SIGNABLE** gate block. **Never fabricate a
+render to satisfy this section, and never emit a manifest that looks complete when it is not.**
 
 ## Calibration
 

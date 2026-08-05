@@ -64,6 +64,13 @@ Read `CLAUDE.md` first; its hard rules bind you.
   requires the `Q-nn`** — an appositive reading ("A, i.e. B") is a resolution and is never taken
   silently. *A `/` joining two hold-conditions, read as one, is the documented cause of a real
   dropped-interlock regression (`docs/evidence/PlantAutoControl-bench-autopsy.md`).*
+  **Carve-out — split-and-retain applies to CONDITIONS, not to candidate SIGNALS.** Retain both sides
+  only where both are conditions over signals whose existence is established. Where either side would
+  assert a **signal, device or channel** that is not established to exist, split-and-retain is
+  **forbidden** (hard rule 3 — it invents hardware): raise the blocking `Q-nn` instead. **State which
+  branch you took and why.** *A fault described across a `/` can mean two fault conditions (split) or
+  one fault with two candidate sources (Q) — retaining both in the second case asserts a second
+  physical input that may not exist.*
 - **Full enumeration.** Where a relation spans a set of machines, list them. Compactness is rung D's
   problem to solve (by a declared, argued discharge), never this rung's to fudge.
 - **Underspecified = blocking `Q-nn`.** If the layout does not settle a relation, raise a question.
