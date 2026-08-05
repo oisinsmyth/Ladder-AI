@@ -6,7 +6,7 @@
 > should not be worked through as-is.** It is retained as the record of what the 2026-07-20 audit
 > recommended.
 >
-> Since that audit, master gained the four-rung spec pipeline (rungs A–D), the FI-32/FI-35 mechanical-floor
+> Since that audit, master gained the four-rung spec pipeline (rungs A–D), the FI-36/FI-39 mechanical-floor
 > tooling, an FI renumbering (FI-32..35 → FI-36..39), a `tagstatus` hard-rule-3 fix, and a data-boundary
 > change (full Red-confidentiality access, zero retention) — which between them invalidate or move the
 > premises of several rows, notably **F-03** (FI status), **F-17/F-19** (data boundary), and the D8-derived

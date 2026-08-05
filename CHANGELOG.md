@@ -1,5 +1,268 @@
 # Changelog
 
+## 2026-08-05
+
+**Four-rung structured spec pipeline (A–D) — built, adversarially validated twice, re-run three times**
+
+The autopsy's answer to a correlated-check failure (see the S6-Killer-Plan entry below): split the one
+design step into four rungs whose artifacts are **contracts**, so what may enter at each rung is
+bounded. Additive alongside `gen-architecture`, which stays validated and in use.
+
+- **The four skills.** **A** `gen-pid-analysis` (topology + per-instance interlocks, process language
+  only) → **B** `gen-functional-analysis` (plant behaviours, grouped and scoped) → **C**
+  `gen-equipment-spec` (merge A+B+IO into per-equipment control specs; **signals enter here**) → **D**
+  `gen-code-structure` (shape → block fit → discharge ledger → boolean render; **booleans and
+  interface members enter here, nowhere earlier**). Mechanisms carried straight from the autopsy: one
+  relation per line / no ambiguous conjunctions, completeness-by-construction from class references,
+  deltas first-class, an A-vs-B conflict is a blocking Q and never a silent merge, and D's discharge
+  ledger so a term is never *silently* dropped — the documented cause of the REGRESSION.
+- **Two adversarial design validations before any run.** Round 1 walked the four real graded failures
+  through A–D: 0 prevented, 2 caught (both conditional), **2 survives** — rung C's ban on interface
+  members *forced* the wrong binding for one (the compliant answer was the buggy one), and the
+  discharge ledger is a coverage check, not a correctness check, so a swapped pairing is invisible by
+  construction. R1–R8 amendments applied. Round 2 closed both survives and found five new seam-level
+  weaknesses: a lossy derived register making `review-functional` recommend deleting a *correct*
+  interlock; the D3 render not reaching the coder at all; and RW-1 — "verified-cross-block" specified
+  citation *form*, not probative *force*, demonstrated by a tag whose only occurrence in the corpus is
+  a bare declaration. R11/R12 applied. Round 2's standing verdict — *every remaining check is
+  self-judged* — is what produced the mechanical floor below.
+  (`docs/evidence/four-rung-design-validation.md`, `…-round2.md`.)
+- **Three empirical re-runs on the six failure machines**, each blind to `docs/evidence/`
+  (`gen/PlantAutoControl-bench-rerun{,2,3}/`). Run 1 cleared all four graded failures — the unverifiable
+  discharge rejected, the undriven rotation input a HARD FAIL, a raw fault bit rebound to the broader
+  interface member, an ambiguous candidate set left blocking by design — and surfaced six friction
+  items, fixed in the skills. Run 2 exercised all six amendments with no regression and raised twelve
+  more, one of them the `tagstatus` member-blindness below. Run 3 exercised the wired mechanical floor
+  and earned its keep twice over: it caught two real artifact defects (two global DBs attributed to the
+  wrong files — not findable by reading) *and* three defects in the tools themselves.
+- **Artifact formats promoted from illustration to CONTRACT.** The wiring had landed the checkers, but
+  the skills never stated the formats those checkers *parse*, so a compliant run produced artifacts the
+  tools rejected — run 3's first ledger parsed as **0 rows**. Now contractual: rung D's ledger heading,
+  column header, `C1`/`P1` ids, em-dash empties, the STOPPED marker, and the requirement that an
+  evidence cell carry a backticked identifier that **resolves** (a cell citing only a network number is
+  an unfalsifiable claim — 60 such rows were flagged); rung C's derived-register and
+  full-disposition-table shapes, on the stated ground that a member dispositioned in *prose* is not
+  machine-checkable and reads as unaccounted. Vocabulary completed with **`render-stopped`** for the
+  uncontested majority of a stopped instance: two consecutive runs invented their own marker for that
+  case because the vocabulary lacked one, and a skill that forces invention is incomplete. Both C and D
+  now self-check — run `signal-sweep` / `relation-reconcile` on your own artifacts before finishing.
+- **Status, stated honestly in `CLAUDE.md`:** exercised on **one** plant across three runs, never yet on
+  a second — treat the rules as well-fitted to that plant until a different one tests them. The
+  `references/<class>/` library still self-disclaims as non-standards, so rung A's "completeness by
+  construction" is nominal, not delivered (recorded in `docs/16`, not quietly dropped).
+
+**The mechanical floor — five converter checks that survive an agent choosing not to look (FI-36 + FI-39)**
+
+Round 2's verdict was that prose discipline has been pushed about as far as it goes: the residual holes
+are ones an agent walks through by **choosing not to look**, and only computed facts survive that. A
+design study (`docs/notes/fi-39-candidate-scan-design.md`) sized all five checks at ~1800–2200 LOC and
+fixed the build order; items 1–3 read `.ir` only, so no skill edit can rot them (~45% of the effort for
+~85% of the demonstrated value). Every check emits **facts, never verdicts**, and each was verified
+against its own graded failure on the `PlantAutoControl-bench` fixture, not only in unit tests.
+
+- **`converter trace --binding <bindings.json> --project <ir-dir> [--json]` — guard-containment hop
+  (FI-36-min)** — every signal a REQ names as a condition must appear in that coil's guard: a
+  set-difference over signal *identity*, **not** a re-reading of the requirement. That is the whole
+  point — the REGRESSION shipped because the coder and the functional reviewer resolved the same
+  ambiguous `/` identically, so the review *confirmed* the defect instead of catching it. Reported per
+  writing site, never unioned (a term present in one network and absent in another is exactly the
+  multi-instance shape a union hides); a present term on a disarmed writer is reported present and
+  marked. `trace` stays exit 0 — a declared facts provider; a skill that wants to gate reads the JSON.
+  ~110 LOC on the FI-25 v2 substrate. Verified on the real graded pair: MISSING on the generated block,
+  OK on the sealed answer key, same binding.
+- **`converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix>...] [--type <T>]
+  [--direction status|command|any] [--json]`** — computes **every** signal that could satisfy a
+  requirement: the IO half from a new shared `SignalInventory` primitive, the FB half from the block's
+  own interface — so "more than one candidate" is a computed fact, not a judgment call. Two defects
+  shipped because a phrase admitted more than one signal and the single reader resolving it never
+  noticed a choice existed. Direction is **computed from the usage graph, never from the interface
+  section**: on the real corpus an FB's reportable status members live under STATIC inside
+  interface-UDT structs while INPUT/OUTPUT carry data-link words, so section-filtering is wrong on
+  exactly the block the defect concerns. `--phrase` is advisory only and never narrows. Exit 1 when the
+  IO half has more than one candidate — which is what makes an ambiguous binding non-discretionary.
+- **`converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB>...]
+  [--caller <file.ir>...] [--hints] [--json]`** — **per-instance** interface drive states: driven /
+  disarmed (all writers provably-false-guarded) / undriven (default X) / dead-interface. Per-instance is
+  the point: `cross-check` pools across every instance of an FB, so one driven instance masks an
+  undriven sibling — and a bypass dropped on *one* instance of a shared block is exactly that shape.
+  Exit 1 on undriven/disarmed; dead-interface reports and never gates.
+- **`converter relation-reconcile --specs <dir> --ledger <code-structure.md>
+  --register <requirements.md> [--project <ir-dir>] [--json]`** — reconciles (instance, relation-id)
+  sets across the relation-bearing artifacts and checks that each verified-cross-block precondition
+  cites something actually **written**, closing RW-1's citation-form-vs-probative-force loophole. Keyed
+  on (instance, id), never the bare id — two instances' `C1` are different relations, so a bare union is
+  vacuous. Two guards make it trustworthy rather than decorative: an **ABSENT** leg (a stopped D3)
+  reports ABSENT and never gates, because reporting "0 differences" for an artifact that does not exist
+  is the silent-green failure this check exists to avoid; and a leg parsing **zero rows is a hard
+  error**, because format drift is the whole risk. Exit 1 on any difference.
+- **`converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>]
+  [--json]`** — the project-level residual: computes the exact denominator (every global-DB leaf plus
+  tag-table tag) and classifies each signal claimed-by-spec / disposed / unaccounted, replacing an
+  artifact's self-reported "~190 swept / ~80 out-of-scope / ~40 safety" with computed integers. An
+  approximate denominator cannot support a completeness claim. Bare leaf names are qualified by their
+  enclosing heading before comparison — without that every leaf silently mismatches and the whole sweep
+  reads as unaccounted. Honest limitation stated in the output rather than papered over: a signal
+  dispositioned only in *prose* reads as unaccounted, and that pressure is the point. Exit 1 if any
+  signal is in no spec and no disposition table.
+- **Wired into the skills, because a tool nothing invokes changes nothing.** A grep after the build
+  showed **zero** skills referencing the new checks — the floor was inert. `review-functional` now
+  requires a `guard: { coil, must_contain }` anchor on every REQ stating a condition, and a
+  missing-term verdict is a finding to re-derive, never waved through (placed there deliberately: that
+  pass is the one that graded the REGRESSION as a match). `gen-equipment-spec` computes its candidate
+  set with `candidate-scan`, so exit 1 is the trigger that makes the blocking Q non-discretionary
+  rather than self-judged. `gen-code-structure` runs `undriven-scan` per instance. Each carries the
+  same honesty note: **the tool computes the FACT, the agent still owns the JUDGEMENT — a floor, not an
+  oracle.**
+- **Calibrations made against the real corpus** rather than in the abstract, each because the
+  design-as-written would have shipped noise: `dead-interface` reports but never gates (gating yielded
+  132 findings on one rich FB, since a reusable block legitimately exposes unused optional inputs);
+  `undriven-scan`'s name-token hints are opt-in and never part of the exit condition (they fired on
+  every undriven member and buried the real findings — a hint that is usually wrong trains readers to
+  ignore output); and `candidate-scan`'s exit keys on the **IO half** (a total-size trigger fired on
+  every query, degenerating the rule it drives into "always cite a basis"). A fourth followed from run
+  3: `undriven-scan` now excludes any member the FB itself writes — FB outputs read back internally were
+  being reported as "undriven (default FALSE)" from the caller's side, ~2/3 noise and actively
+  misleading (204 → 144 pairs). Two refinements left deliberately open and written down in `docs/16`
+  rather than quietly dropped.
+- Run 3 also found all four new subcommands **missing from `--help`** — they worked but were
+  undiscoverable. Fixed.
+- Converter suite **707/707** (671 → 707 across this wave: +3 `tagstatus`, +6 guard-containment, +8
+  `candidate-scan`, +6 `undriven-scan`, +7 `relation-reconcile`, +6 `signal-sweep`). openness-cli 122
+  and the golden harness 37 unaffected.
+
+**FI renumbering — this branch's FI-32..35 → FI-36..39**
+
+Master independently allocated FI-32..FI-35 to four *different* ideas (IR-as-restricted-language,
+authored object model, parameterized pattern library, `alarm-scan`) while the spec-pipeline branch was
+running, so merging as-is would have left `docs/16` with two of each. Owner's call: master's numbers are
+canonical — they are on the trunk and may already be cited — so the branch's four move.
+
+- FI-32 → **FI-36** per-instance interlock-completeness trace; FI-33 → **FI-37** spec interlock
+  explicitness; FI-34 → **FI-38** interlock-safety disposition; FI-35 → **FI-39** `candidate-scan` /
+  the mechanical floor.
+- 29 files updated (skills, `CLAUDE.md`, evidence docs, run artifacts, C# source and tests), and
+  `docs/notes/fi-35-candidate-scan-design.md` renamed to `fi-39-…` with its inbound reference fixed —
+  per `CLAUDE.md`'s rule to grep repo-wide after any doc rename. Verified: zero stale FI-32..35
+  references and zero references to the old filename remain.
+
+**`converter tagstatus` resolves DB members — a correctness fix to the hard-rule-3 anti-laundering gate**
+
+**A user-visible behaviour change.** `tagstatus` classified at **DB-root level only**, so an invented
+member passed the very gate that exists to stop it — `HMIControlSignals.CompletelyMadeUpMember → EXISTS
+… 0 proposed`. `gen-block-new` gates its run on that result, so the production coding skill's
+hard-rule-3 protection was weaker than documented. Found by a pipeline run that grep-verified members
+independently.
+
+- Member resolution reuses `TagTypeRegistry` (the cross-file DB/UDT index behind the C-118 rule) — one
+  implementation of "does `DB.member` exist", none to drift. Root resolution is unchanged
+  (`ProjectIndex` + `AccessNode.FromDottedPath`, so the `Clock_0.5Hz` literal-dot case still resolves
+  whole-name-first). Plus `TagTypeRegistry.TryGetDb`, so a member-less DB stub is not mistaken for
+  "member absent".
+- **Four states, not two**, so the fix cannot manufacture false gaps in the other direction: `EXISTS` /
+  `PROPOSED` (root absent) / `MEMBER-NOT-FOUND` (root real, member invented) / `MEMBER-UNCHECKED`
+  (namespace not enumerable — an unexported UDT, or a `create-instance-db` stub with no member tree).
+  Exit non-zero on `PROPOSED` or `MEMBER-NOT-FOUND`; `MEMBER-UNCHECKED` reports, never guesses. New
+  `--roots-only` restores the old root-level behaviour, which is the Design stage's mode — it designs
+  *against* gaps.
+- Skills updated: `gen-block-new` (the gate is now real), `gen-equipment-spec` (it binds members),
+  `gen-architecture` (`--roots-only` is its mode). Verified on the real corpus: the tag a run would have
+  laundered plus two invented members → `MEMBER-NOT-FOUND`, exit 1; real members including nested
+  instance-DB paths → `EXISTS`, exit 0. Converter suite 674/674 at this change.
+
+**Live-run data boundary — full Red-confidentiality access, zero retention**
+
+`Live Runs/` is now a different regime from the rest of the repo: the AI works against **everything** the
+owner puts in a job folder, including material that would elsewhere be Red-tier on confidentiality
+grounds (contract/NDA-restricted, commercially sensitive). No tier-triage, no per-file approval —
+placing the job there *is* the decision. The entire boundary for live-run data is **retention, not
+access**: use anything, commit nothing.
+
+- `docs/13` — the tier table's Red row split into **Red—confidentiality** (opened inside `Live Runs/`)
+  and **Red—safety** (never, everywhere; hard rule 2 stands, unchanged and explicitly *not* inferable
+  from "full access"). Retention prohibition 1 hardened: never narrow or negate the ignore patterns, no
+  `git add -f` — broad access is only safe because retention is zero, so the two halves are load-bearing
+  on each other. "Live runs opened" is now a **job-code-only** register; job identity and scope stay in
+  the gitignored folder.
+- `.gitignore` — live-run patterns unanchored and spelling-tolerant, so a live-run folder at *any* depth
+  is covered, not just the repo root. `CLAUDE.md` carries the same rule in short form so it lands
+  without opening `docs/13`.
+
+**S6-Killer-Plan — a blind regeneration graded against a sealed answer key (run 2026-07-20)**
+
+Seal a real 20-network orchestration FC as an answer key, reverse-derive a requirements register from it,
+hand a blind Candidate the complete given boundary, and grade what it produces against the original.
+Score: **MATCH 14 / IMPROVEMENT 1 / DEFECT 3 / REGRESSION 1 / SPEC-GAP 3** — it fails its own
+match-or-better bar. The failure *is* the value: everything above exists because of the autopsy it
+forced.
+
+- Phases 0–2: a sealed Green answer key plus six Green global DBs, all sanitized through the existing
+  maps and leakage-gated; a **FROZEN** reverse-derived 22-REQ register (ban-list clean — no HOW in REQ
+  text); and the complete Green given boundary, 28 dependencies (8 FB types + 20 instance DBs), as
+  `ir/PlantAutoControl-bench/`. Then a blind Candidate architecture, gate-1 approval, and a generated
+  20-network FC that **compiled clean, 0 errors**, through the real compile gate — composed from a
+  tier-(b) chained-permissive-enable pattern, tier-(a) CALLs and ~5% freeform.
+- The three review skills then ran fresh on it: functional cleared it 18/22 full with nothing
+  contradicted, disarmed or gold-plated; conventions raised two error-tensions and a naming finding;
+  simplicity cleared conditionally. **All three passed the block that carried the REGRESSION.**
+- **The autopsy (`docs/evidence/PlantAutoControl-bench-autopsy.md`) is the load-bearing artifact.** Every gap
+  traced back to the register — they were all in there, in varying forms. Three failure modes:
+  caught-but-not-blocking (flagged partial, shipped); **correlated misreading** — coder and reviewer both
+  collapsed the register's ambiguous `/` dual-hold, and the reviewer then recorded "verified match"
+  against its own reading; and underspecification absorbed as inference. Root cause, in one line: *an AI
+  reviewer reading the same register as the AI coder is a **correlated** check, not an independent one.*
+- Raised in `docs/16` as the autopsy fixes (later renumbered, above): **FI-36** a mechanical per-instance
+  interlock-completeness trace in `review-functional`, on the FI-22/FI-25 substrate; **FI-37** no
+  ambiguous conjunctions in the spec interlock table and an underspecified interlock is a blocking Q;
+  **FI-38** the coder surfaces interlock ambiguity instead of silently under-constraining, and a dropped
+  guard is a blocking fail.
+- Signal for the roadmap: pattern composition is strong; **freeform interlock reconstruction
+  under-constrains and sheds guards**. None of this counts toward S6's ten fresh generation requests.
+
+**`docs/16-future-ideas.md` — mechanical-tooling backlog marked cleared (milestone)**
+
+An explicit milestone line in the Implementation-status section: the value/leverage build wave shipped
+every ranked buildable-now item, and what remained was AI-by-design, externally gated, or owner-held.
+(The mechanical floor above is a *new* band raised after that line, not a leftover from it.)
+
+## 2026-07-29
+
+**HMI alarm-generation learnings — the knowledge base's first use for delivery, not development**
+
+First time this tooling produced output for a real job rather than advancing a stage of the project:
+extracting a live project's alarm definitions into an HMI discrete-alarm import spreadsheet. The
+spreadsheet itself is local-only (gitignored); what landed here is the learnings.
+
+- **`docs/notes/hmi-alarm-generation.md`** (new) — a grounded write-up of the run. Key finding: a project
+  has **two** correct alarm surfaces — C-501 category words in the alarms DB and C-503 per-instance UDT
+  alarm words — and C-503 says explicitly that category words are *not* duplicated per instance. Read
+  live as "the mapping is missing"; it wasn't. Recorded as a trap, because a tool flagging unmapped
+  instance alarm words as a defect would false-positive on every conformant project. Also: C-501's two
+  conditions (one bit per network, the title states the alarm text) are what make mechanical extraction
+  cheap; network titles are the *sole* text provenance (zero member/network comments existed); and
+  INCONSISTENT blocks cannot be exported at all, so an alarm sweep can be silently incomplete and must
+  say what it could not read.
+- **`docs/16-future-ideas.md` — FI-35 `converter alarm-scan` + HMI alarm-list generation.** Verdict is a
+  split: build the extraction half now-ish (facts, C-501/C-503 aware, hard-errors on non-conformance,
+  stands alone as an explain/review aid); hold the HMI-generation half behind FI-18, which owns the two
+  boundary questions this hit — HMI-side bit numbering within a Word trigger tag, and how C-506 severity
+  and C-507 acknowledgement both map onto the import format's single Class column. That last one bit
+  live: a blanket non-acknowledging fill matches C-507's default but contradicts C-507's own named E-Stop
+  exception. Open and deliberately not investigated: whether Openness can drive the HMI alarm list
+  directly instead of via the UI spreadsheet — no API was used this run, so there is no compile-gate
+  analogue on the HMI side.
+- **`docs/13-data-boundary.md`** — a scoped read-only Amber approval for the live TIA project data (owner
+  asked scoped-vs-broad, chose scoped). `lad-coder` correctly refused the work until the approval
+  existed, and separately flagged that every prior approval was scoped to advancing a stage of *this*
+  project while this one is production output for a real job — recorded as its own paragraph rather than
+  folded in.
+- **`docs/notes/openness-quirks.md`** — `export --out` must be **absolute**. Siemens's own `Export()`
+  rejects relative paths, surfacing as a type-qualified engineering exception whose *last* line is the
+  actual cause; a loop over several blocks then fails identically on all of them, which reads like a
+  connection problem.
+- Also carried three `docs/16` entries written 2026-07-27: **FI-32** replace IR with a restricted real
+  programming language, **FI-33** an authored interface/object model, **FI-34** a programmatic pattern
+  library.
+
 ## 2026-07-20
 
 **FI-25 timing hop + FI-09 C-125 + FI-17 sidecars (three parallel tracks) — mechanical-tooling backlog cleared**
