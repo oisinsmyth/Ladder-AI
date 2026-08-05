@@ -1,5 +1,24 @@
 # S6-Killer-Plan — PlantAutoControl answer-key validation
 
+> **STATUS: all five phases COMPLETE (2026-08-05).** Phase 0–1 sealed the Green answer key and froze a
+> 22-REQ reverse-derived register (`5cd2c71`); phase 2 generated `PlantAutoControl` blind — 20 networks,
+> compile-clean, 0 errors (`16fae23`) — and reviewed it (`1419065`); phases 3–4 graded it against the
+> sealed key and scored it (`53d1aa7`): **MATCH 14 · IMPROVEMENT 1 · DEFECT 3 · REGRESSION 1 ·
+> SPEC-GAP 3**. Headline: it **fails** the match-or-better bar and earns one real safety-relevant
+> improvement. Full grading `docs/evidence/PlantAutoControl-bench-grading.md`; scorecard
+> `gen/PlantAutoControl-bench/scorecard.md`.
+>
+> **What the experiment then produced, which is worth more than the score:** an autopsy
+> (`docs/evidence/PlantAutoControl-bench-autopsy.md`) locating the root cause — *an AI reviewer reading the
+> same register as the AI coder is a **correlated** check, so an ambiguous `/` was resolved identically
+> by both and the review confirmed the error* — and, from it, the four-rung spec pipeline
+> (`gen-pid-analysis` → `gen-functional-analysis` → `gen-equipment-spec` → `gen-code-structure`) plus
+> the FI-32/FI-35 mechanical floor that now enforces it. Both were adversarially validated twice
+> (`docs/evidence/four-rung-design-validation{,-round2}.md`) and exercised on three real runs
+> (`gen/PlantAutoControl-bench-rerun{,2,3}/`).
+>
+> **Caveat carried forward:** everything here is fitted to ONE plant. A second plant is the real test.
+
 A plan to turn JOB9002's `PlantAutoControl` block + its dependency graph into a **ground-truth-graded
 pipeline test**: derive an intent-level spec from the real block, generate blindly from that spec
 through the normal pipeline, then grade the generated blocks against the real block as an answer

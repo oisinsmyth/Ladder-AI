@@ -41,7 +41,7 @@ converter sanitize <file> --map <mapping.json> --out <path>   # real-project dat
 converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks (S4 subset of docs/06 rules), findings with rule IDs; --project enables cross-file rules (C-118 interface-UDT Step + C-122 dwell-timer PT-home + C-125 timeout-fault-bit-in-UDT; C-119 idle=step0 / C-120 steps x10 run single-file too, FI-09)
 converter digest    <file...> [--ignore-errors] [--json] [--fingerprint]   # compact structural orientation summary — derived fresh, never stored; NEVER review input (reviewers read full IR). --fingerprint adds a per-network tag-abstracted structural signature so copy-pasted networks collapse to one hash and the outlier stands out (FI-23, explanation aid)
 converter preflight <file...> --project <ir-dir> [--json]     # static pre-import checks (parse/convert/tag/call/instanceof + review) — a filter BEFORE the compile gate, never a substitute (hard rule 4)
-converter tagstatus <name...> --project <ir-dir> [--json]     # classify tag names exists/proposed against the export (anti-laundering, hard rule 3); exit 1 if any proposed
+converter tagstatus <name...> --project <ir-dir> [--json] [--roots-only]   # classify names against the export (anti-laundering, hard rule 3): EXISTS / PROPOSED (root absent) / MEMBER-NOT-FOUND (root real, member invented) / MEMBER-UNCHECKED (namespace not enumerable — verify yourself); exit 1 on proposed or member-not-found. Resolves to MEMBER level since 2026-08-05 — it used to stop at the DB root, so an invented member passed the gate. --roots-only restores the old root-level mode (the Design stage's, which designs against gaps)
 converter diff <old.ir> <new.ir> [--only <network>...] [--json] # which networks changed, rest provably identical in IR (S7 invariance check); with --only, exit 1 on any change outside the set
 converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found
 converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built, bucketed candidate/likely-impl/disqualified (FI-30); exit 1 if no clean candidate
@@ -49,6 +49,12 @@ converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   #
 converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0
 converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint/timing) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 converter ir-hash <file.ir...> [--json]   # stable readable-IR content hash (SerializeBlockReadable/SHA-256) keying FI-17 explanation sidecars; immune to SIDECAR/UId churn; exit 1 on error
+# --- the mechanical floor (FI-32/FI-35, 2026-08-05): checks that survive an agent choosing not to look ---
+converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix>...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement — IO half + the FB's own interface, direction COMPUTED from the usage graph (never the interface section); exit 1 when the IO half has >1 candidate, which is what makes an ambiguous binding non-discretionary. --phrase is advisory only and never narrows
+converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB>...] [--caller <file.ir>...] [--hints] [--json]   # PER-INSTANCE interface drive states: driven/disarmed/undriven(default X)/dead-interface. Per-instance is the point — cross-check pools across instances, so one driven instance masks an undriven sibling; exit 1 on undriven/disarmed (dead-interface reports, never gates)
+converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + check verified-cross-block citations actually cite something WRITTEN; an ABSENT leg (stopped D3) never gates, a leg parsing 0 rows is a hard error; exit 1 on any difference
+converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual coverage: exact denominator + residue, replacing self-reported approximations; exit 1 if any signal is in no spec and no disposition table
+# `trace` also carries the FI-32-min guard-containment hop: every signal a REQ names as a condition must appear in the coil's guard — a set-difference over signal identity, immune to how anyone READS an ambiguous requirement (docs/evidence/PlantAutoControl-bench-autopsy.md)
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
 ```
 
@@ -75,6 +81,21 @@ LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like
 ## Current stage
 
 Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perform capabilities from stages that haven't passed their gate — e.g. no logic generation while the project is still in S1–S5, even if asked casually; point to the roadmap instead.
+
+**Structured spec pipeline — four new rung skills, under development (2026-08-05).** Alongside (not
+replacing) `gen-architecture`, a four-rung spec pipeline exists: **A** `gen-pid-analysis` (topology +
+per-instance interlocks, process language only) → **B** `gen-functional-analysis` (plant behaviours,
+grouped and scoped) → **C** `gen-equipment-spec` (merge A+B+IO into per-equipment control specs;
+**signals enter here**) → **D** `gen-code-structure` (shape → block fit → discharge ledger → boolean
+render; **booleans and interface members enter here, nowhere earlier**). Built after the S6-Killer-Plan
+autopsy found the root cause of a shipped REGRESSION: *an AI reviewer reading the same register as the
+AI coder is a **correlated** check, so both failed together on an ambiguous `/`*
+(`docs/evidence/PlantAutoControl-bench-autopsy.md`). Each rung's artifact formats are **contracts** parsed by
+the converter checks above — read the SKILL before writing one. **Status: exercised on one plant across
+three runs (`gen/PlantAutoControl-bench-rerun{,2,3}/`), never yet on a second — treat the rules as
+well-fitted to that plant until a different one tests them.** Known-open: the `references/<class>/`
+library self-disclaims as non-standards, so rung A's "completeness by construction" is nominal, not
+delivered (`docs/16-future-ideas.md`).
 
 **S6/S7 sequencing is ruled (A-4 + D-4, 2026-07-18).** All three coding skills — `gen-block-new`, `gen-block-modify-fix`, `gen-block-modify-purpose` — are now **built and validated**, and `converter diff` (S7 invariance tool) is built. The roadmap's `S7 entry = "S6 done"` gate is kept as-is, so the remaining path is: close S6's exit criterion → open S7. S6 exit = **ten fresh plain-language generation requests** (fix waves don't count — tracked separately; live tally in `AITODO.md`'s Project stage / S6 section). Full record: `docs/evidence/stage-S6.md`. `agent-tasks/README.md` is the live dispatch board for queued work (currently empty); `docs/notes/owner-questions.md` is a reusable batch-questions doc, cleared when empty — check it first if it's non-empty; if empty, there's no open batch blocking anything.
 
