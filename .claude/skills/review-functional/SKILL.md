@@ -94,6 +94,23 @@ ms form of the bound seconds member (a mismatch → `contradicted`; caveat: the 
 isn't verified, only the name/operand correspondence). All the forward-trace hops now have a mechanical
 assist. Missing binary → hand-trace as before.
 
+**Interlock completeness — MANDATORY on every REQ that states a condition (FI-32-min).** For each such
+REQ, add a `guard: { coil, must_contain: [<every signal the REQ names as a condition>] }` anchor. The
+hop takes each write to `coil`, walks its guard expression, and **set-differences** your required terms
+against it — reporting present/missing **per writing site**. A `missingterm` verdict is a **finding to
+re-derive from the IR, never a candidate to wave through**.
+
+*Why this is mandatory and not optional:* the worst defect this review ever missed was a dropped
+cascade-hold term, and it was missed **by this pass** — the reviewer read the same ambiguous source as
+the coder ("`Fans-shutdown-ready / Air-separator VSD shut down`"), resolved the `/` the same way, and
+graded the block MATCH. Reading the spec more carefully cannot fix that: a reviewer sharing the coder's
+reading is a *correlated* check. The set-difference is immune to how anyone reads the requirement, which
+is exactly why it belongs here (`docs/evidence/PlantAutoControl-bench-autopsy.md`).
+
+**The tool computes the fact; you still own the judgement.** It can prove a term is absent from a guard.
+It cannot tell you the term was *required* — that is your reading of the REQ, and it is still the part
+that can be wrong.
+
 Verdict vocabulary — exactly one per REQ:
 
 - **implemented** — the full chain exists and does what the REQ text says.

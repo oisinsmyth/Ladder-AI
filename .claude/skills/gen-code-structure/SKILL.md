@@ -10,6 +10,10 @@ allowed-tools:
   - Edit
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe:*)
+  # undriven-scan (per-instance interface drive states) and candidate-scan are covered by the
+  # wildcard above; named here so the wiring is greppable.
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe undriven-scan:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe undriven-scan:*)
 ---
 
 # /gen-code-structure — rung D: shape, fit, discharge, render
@@ -61,11 +65,27 @@ ready member), you may **neither** silently keep C's binding **nor** silently re
 **stronger/broader guard**. Rung C had to choose a signal before this interface was ground truth;
 this is the sanctioned back-edge.
 
-**Undriven-input audit.** Enumerate the chosen FB's input/interface members and mark each **driven**
-(cite the D3 term) or **defaulted** (state why). An undriven input whose name matches an unclaimed IO
-signal is a **HARD FAIL**. *A real VSD FB declares `IO.RotationSensor : Bool`; a generation left it
-undriven while its bypass tag sat unreferenced (`docs/evidence/PlantAutoControl-bench-grading.md`,
-REQ-012).*
+**Undriven-input audit — COMPUTED, per instance.** Run
+```
+converter undriven-scan --project ir/<project>/ --fb <FBType> [--caller <generated-block.ir>]
+```
+It classifies every interface member of **every instance** as `driven` / `disarmed` (writers exist but
+all provably-false-gated) / `undriven (default X)` / `undriven` / `dead-interface` (no writer **and**
+the FB never reads it either). **Per-instance is the point:** the project-wide reference graph pools
+across all instances of an FB, so one driven instance masks an undriven sibling — and a dropped input on
+*one* instance of a shared block is exactly that shape (`docs/evidence/PlantAutoControl-bench-grading.md`,
+REQ-012, where a real VSD FB declares `IO.RotationSensor` that nothing wires and nothing reads).
+
+- **`undriven` / `disarmed` are HARD FACTS** (the tool exits 1): the FB consumes a value nothing sets.
+  Resolve or record each.
+- **`dead-interface` does NOT auto-fail** — a reusable block legitimately exposes optional inputs an
+  instance doesn't use. It is a fact to **cross against the spec**: if a `C-nn`/`P-nn` relation required
+  that capability, a dead interface member is how you find it was never wired.
+- `--hints` (name-token match against unreferenced project signals) is opt-in, heuristic, and never part
+  of the finding.
+
+Before the tool existed this audit was prose, and the run that wrote it as prose still missed the
+member — **the tool computes the fact; you still own whether the spec required it.**
 
 ### D2 — Discharge ledger (the safety-critical section)
 Every spec relation (`C-nn`, `P-nn`) must be accounted for exactly once:

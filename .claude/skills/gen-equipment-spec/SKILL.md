@@ -10,6 +10,8 @@ allowed-tools:
   - Edit
   - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
   - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe tagstatus:*)
+  - Bash(./src/converter/Converter/bin/Release/net8.0/converter.exe candidate-scan:*)
+  - Bash(src/converter/Converter/bin/Release/net8.0/converter.exe candidate-scan:*)
 ---
 
 # /gen-equipment-spec — rung C: the per-equipment control spec
@@ -44,12 +46,25 @@ Read `CLAUDE.md` first; its hard rules bind you.
 1. **For each instance from rung A**, start from its class reference and instantiate the **complete**
    standard requirement set (`C1…Cn`). A standard requirement is never omitted — if it does not apply
    to this instance, that is a recorded **delta**, not a silent absence.
-2. **Bind IO — with a candidate set.** For each requirement needing a signal, list **every** signal
-   in scope whose name, type or role could plausibly satisfy the phrase — the IO table **and** the
-   exposed status members of the block class the instance will use (read-only, for enumeration; you
-   still may not write an interface member into a requirement line). If the candidate set has **more
-   than one member**, the binding is a **BLOCKING `Q-nn`** unless a documentary basis is cited for
-   the choice. *"Not faulted" satisfied by both a raw comms-fault input and an aggregated FB fault
+2. **Bind IO — with a COMPUTED candidate set.** For each requirement needing a signal, run
+   ```
+   converter candidate-scan --project ir/<project>/ --fb <FBType> --scope <path-prefix> [--type <T>] [--direction status|command]
+   ```
+   It enumerates every in-scope signal that could satisfy the phrase — the IO half from the project's
+   signal inventory, the FB half from that block's own interface, with each member classified
+   status/command by **whether the FB writes or reads it** (computed, not read off the interface
+   section — the members that matter live under STATIC). **Exit 1 means the set has more than one
+   member, and that is the trigger: the binding is a BLOCKING `Q-nn`** unless a documentary basis is
+   cited for the choice. Missing binary → enumerate by hand to the same rule, and say you did.
+   *The point of computing it is that the size is no longer yours to judge.* Two defects shipped
+   because a phrase ("not faulted", "running feedback") admitted more than one signal and the single
+   reader resolving it never noticed a choice existed (`docs/evidence/PlantAutoControl-bench-autopsy.md`
+   §2-C). Note the `family` line too — N same-typed IO signals facing N FB members of matching
+   direction is the transposition signature a 1:1 by-name assignment gets wrong.
+   **`--phrase` is advisory only** and never narrows the set; the exit code keys off the unfiltered
+   size, because filtering by name resemblance is the very reasoning that produced the swapped pairing.
+   **The tool computes the fact; you still own the choice** — it says a choice exists, never which
+   signal the requirement means. *"Not faulted" satisfied by both a raw comms-fault input and an aggregated FB fault
    output, and a "running"/"remote-operational" pair facing two ambiguously-named feedbacks, are the
    two documented cases (`docs/evidence/PlantAutoControl-bench-autopsy.md` §2-C).* **Two requirements
    competing for two same-shaped signals is always a candidate-set of two, never a coin flip.**
