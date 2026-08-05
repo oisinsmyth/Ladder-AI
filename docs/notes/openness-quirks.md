@@ -581,3 +581,37 @@ rather than a bad argument. Nothing was written and no state changed — the che
 *(Candidate `openness-cli` improvement: resolve `--out` against the working directory itself before
 calling `Export()`, so the caller doesn't have to. Not done — recorded here rather than fixed
 because it came up mid-job on unrelated work.)*
+
+## Five TIA behaviours found building a DB/UDT set from scratch (2026-08-05)
+
+All five surfaced in one greenfield data-structure stage — the first time this project has
+created a full UDT and DB landscape rather than exporting one that already existed. None is a
+bug; all five are things the design had assumed otherwise, and each was cheap to absorb at
+declaration time and would have been expensive after logic was bound to it.
+
+**1. A DB cannot itself be an array.** A design that writes `MyBlock[x].Member` has to become
+`"MyBlock".Item[x].Member` — the array is a *member* of the DB, never the DB. This adds one level
+to every published path. It matters most where the path is an issued contract (an HMI tag list, a
+comms boundary): reissue the path list before the panel is built, not after.
+
+**2. Start values are per TYPE, not per array element.** Defaults declared on a UDT seed *every*
+element that uses it. There is no IR (or TIA source) way to give element 1 a different start value
+from element 2. Anything genuinely per-element — a seeded first recipe, a per-vessel physical
+constant — is a typed-in value or something a block writes at first run, not a start value.
+
+**3. TIA normalises trailing-zero REAL literals on export.** `0.30` returns as `0.3`, `0.60` as
+`0.6`. Numerically identical, but a naive text diff of sent-vs-returned XML reports it as a
+change. Compare parsed values, not literals, or the round-trip check cries wolf.
+
+**4. Every imported DB gets `MemoryReserve = 100` bytes, and `Optimized` access, by default.**
+Neither is expressible in the IR — `DbSourceWriter` emits no `MemoryLayout`, so TIA's default
+wins. If a design wants Standard access (for absolute-offset addressing, or to remove the
+download-without-reinitialisation hazard rather than merely detect it), that is a tick in the TIA
+properties dialog or converter work — it cannot be carried through this pipeline today.
+
+**5. Openness exposes no memory-usage data at all.** `compile --json` carries none, and there is no
+API surface for load/work/retentive memory. A retentive budget therefore cannot be verified
+programmatically — the retentive-memory dialog after first download is the only authority. Plan
+for a human to read it rather than assuming a check can assert it.
+
+*(Recorded from a live job; the behaviours are platform facts and carry nothing project-specific.)*

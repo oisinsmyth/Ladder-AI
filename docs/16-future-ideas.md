@@ -744,3 +744,33 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Dependencies.** None. Items 1–3 are string and set checks over a file the parser already reads.
 - **Verdict / revisit trigger.** Open, and cheap for 1–3. The trigger to build it is the next greenfield
   job, where the tag table is again the first thing written and again the thing everything else inherits.
+
+### FI-42 — four converter/CLI gaps that only appear when you BUILD a data landscape
+- **Status:** Raised (2026-08-05, from a greenfield UDT/DB stage — 14 UDTs and 12 DBs authored from
+  nothing, rather than exported from a project that already had them)
+- **Why they were never seen before.** Every prior run read structures OUT of an existing project.
+  Authoring them IN exercises paths the round-trip corpus does not: nested user types, DTL members,
+  block-access attributes, and deleting a type you created by mistake. All four below are *import- and
+  compile-clean* — they bite on the read-back and management side, which is exactly where a
+  round-trip verification lives.
+- **The four.**
+  1. **`to-ir` refuses a UDT whose member is itself a UDT-typed array.** TIA expands it into
+     `<Sections>` and the parser stops: *"has nested structured content (`<Sections>`) — not confirmed
+     real for a PLC data type's own member, refused rather than guessed at."* The refusal is the right
+     default for an unobserved shape, but it is now observed, and it is ordinary design vocabulary — a
+     history buffer inside a per-instance record. Until it parses, **an IR-level re-export diff is
+     impossible for any object containing one**, so the round-trip has to be verified as XML instead.
+  2. **`to-ir` refuses a nested DTL member carrying `Version="1.0"`.** *"unexpected attribute(s)
+     [Version] — only Name/Datatype/StartValue have been observed on this shape."* Same class: a real
+     attribute TIA emits, not yet in the observed set. Reproducible on a two-member throwaway DB.
+  3. **The IR cannot express block access (Standard vs Optimized) or `MemoryReserve`.**
+     `DbSourceWriter` emits no `MemoryLayout`, so every imported DB takes TIA's default (`Optimized`,
+     reserve 100). A design that needs Standard — absolute-offset addressing, or removing the
+     download-without-reinitialisation hazard rather than detecting it — cannot get there through this
+     pipeline at all. See also `docs/notes/openness-quirks.md`.
+  4. **`openness-cli delete` has no `--type`.** A UDT imported by mistake cannot be removed by the CLI;
+     it needs the TIA UI. Trivial to add and annoying exactly once per mistake.
+- **Ranking.** (1) is the one that actually blocks a workflow — it breaks IR-level round-trip
+  verification for a common shape. (3) is the one with design consequences. (2) and (4) are small.
+- **Verdict.** Open. (1) and (2) are both "extend the observed set and add a fixture"; the refusals are
+  correctly conservative and should stay refusals for genuinely unobserved shapes.
