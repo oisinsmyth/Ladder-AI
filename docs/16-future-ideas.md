@@ -803,3 +803,74 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
      automated stage needs to verify the outcome rather than assume it.
 - **Verdict.** Open, and small. (1) is a near-copy of the existing `--block` path. (2) is the one
   with real value: it removes a destructive round trip from the normal edit loop.
+
+### FI-44 — "empty is not clean": the mechanical floor exits 0 when it examined nothing
+- **Status:** Raised (2026-08-05, second-plant pilot of the four-rung pipeline). **Highest severity
+  item in this file.** The floor exists to be immune to an agent choosing not to look; these three
+  paths *reward* not looking.
+- **The class.** Three checks return success when they found nothing to check. Not "found nothing
+  wrong" — *examined nothing at all*. Reproduced directly:
+  1. **`candidate-scan --scope <token>`** → `CANDIDATE SET SIZE: 0`, **EXIT 0**. `--scope` matches a
+     path *prefix*, which assumes DB-qualified signals. Under C-001 a physical-IO tag is
+     `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` — the equipment token is the **second** segment, so no
+     prefix can express "scoped to this equipment". The scan silently returns nothing and passes.
+     Worse: the *only* way to make it exit 1 is to name the disputed signals explicitly — i.e. to
+     already know the answer. That inverts the tool's stated purpose ("the size is no longer yours
+     to judge").
+  2. **`undriven-scan --fb <name>`** → `0 pair(s)`, **EXIT 0**, for an FB *that does not exist*.
+     Verified with a deliberately invented name. A block never written passes the drive-state check.
+  3. **A D3 render leg whose instance ids match no other leg still parses**, so `relation-reconcile`
+     compares it against nothing and is satisfied. The skill's own D3 example makes this concrete —
+     it writes the iDB name where the parser keys on the spec filename, so following the
+     documentation produces exactly this silent non-comparison.
+- **The fix, and it is one principle not three.** **A check that examined nothing must not exit 0.**
+  Distinguish *"I examined N things and none were bad"* from *"I examined nothing"*, and give the
+  second its own non-zero exit.
+  1. `candidate-scan`: an empty candidate set becomes a hard error. Size 0 is not "unambiguous", it
+     is *unjudgeable* — either the scope was wrong or there is nothing there, and neither is
+     evidence a binding is safe. Independently, add scope matching that can address a C-001
+     equipment token (segment-aware, or a distinct `--equipment` flag) so the question can be
+     asked at all.
+  2. `undriven-scan`: resolve `--fb` against the corpus first; unknown name → hard error. There is
+     no legitimate reading of "scan a block that does not exist" that ends in success.
+  3. `relation-reconcile`: a leg that contributes zero matching keys is a hard error, not a
+     vacuous pass. Fix the skill's example to match the parser in the same edit.
+- **Why it went unseen.** All three prior runs of the pipeline stopped before D3, so the render leg
+  had never existed and the reconciler had never had four legs to compare. And every prior project
+  was read out of an existing plant, where a scope prefix happens to work because signals are
+  DB-qualified. The floor was never wrong before — it had never been asked these questions.
+- **Verdict.** Open, small, and the highest-value item here. Each fix is a guard clause. Same family
+  as FI-40: a check whose failure mode is silent success is worse than no check, because it is
+  *believed*.
+
+### FI-45 — the checks cannot parse two shapes that are ordinary, not exotic
+- **Status:** Raised (2026-08-05, same pilot). Coverage gaps rather than safety gaps — these fail
+  loudly, they just fail at correct input.
+- **1. `tagstatus` cannot resolve a member through an ARRAY OF UDT.** `DB.Item[0].Member` →
+  `MEMBER-NOT-FOUND`, exit 1; the unindexed form fails identically. A *named* UDT member
+  (`DB.Word0.Cond`) resolves fine, so the descent machinery exists — it just does not strip an
+  array subscript, nor continue resolving into the element type. Any project whose per-instance
+  data model is an array of UDT (the normal way to express N identical vessels) has **every**
+  per-instance binding read as an invented member: the exact laundering hard rule 3 exists to
+  catch, fired at correct code. That trains people to ignore the check, which is how an
+  anti-laundering gate dies.
+  **Fix:** in the member resolver, strip `[n]` from a path segment, resolve the member, and if its
+  type is a UDT in the corpus continue the walk into that type. Validate the index against the
+  declared bounds while there — an out-of-range subscript is a real finding nobody currently gets.
+- **2. `signal-sweep` cannot disposition a PLC tag-table signal at all.** Dispositions are qualified
+  `<heading>.<leaf>`; the inventory stores tag-table tags unqualified, and the parser only leaves a
+  token unqualified when it already contains a dot — which a tag name never does. So a tag-table
+  signal can never be matched to its disposition row. On a device with no buffer DBs this disables
+  the whole disposition half while the DB half works perfectly. Its `by DB` grouping also splits on
+  the first dot, so flat tags render as one-row "DBs" with broken alignment.
+  **Fix:** accept a bare token as matching a tag-table entry, or qualify tag-table tags as
+  `<TableName>.<TagName>` in the inventory — either, but consistently on both sides.
+- **3. `relation-reconcile` cannot tolerate five of its own seven ledger dispositions.**
+  `discharged`, `in-FB`, `render-BLOCKED`, `render-stopped` and `out-of-scope-obligation` all mean
+  *"this relation does not become a D3 term"* — yet the reconciler demands the render leg carry an
+  identical key set, so any such row exits 1. `render-BLOCKED` is unreachable if the check must
+  pass, which makes a documented disposition undeclarable.
+  **Fix:** partition the ledger by disposition and require key identity only on the render-bound
+  subset; report the rest as accounted-for rather than as differences.
+- **Verdict.** Open. (1) is the one that matters — it fires on correct code in any multi-instance
+  project, which is most of them.
