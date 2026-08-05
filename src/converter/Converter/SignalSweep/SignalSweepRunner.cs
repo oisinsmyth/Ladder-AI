@@ -4,7 +4,7 @@ using Converter.SignalInventory;
 
 namespace Converter.SignalSweep;
 
-// FI-35 check 5: the project-level residual sweep, computed.
+// FI-39 check 5: the project-level residual sweep, computed.
 //
 // Its value is EXACTNESS, not a catch — the study grades it Medium and it has no oracle. What it
 // replaces is an artifact's own self-reported approximations ("Named members swept: ~190",

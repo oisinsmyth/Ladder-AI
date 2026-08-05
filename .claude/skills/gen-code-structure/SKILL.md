@@ -212,7 +212,7 @@ result in your exit summary — a reconciliation you didn't run is not evidence.
 
 - **Ambiguity is never resolved silently.** If a spec relation admits two renderings, stop and raise
   it; where forced to choose on **any protective term — interlock, permissive, inhibit or fault
-  gate** — prefer the **stronger/fail-safe** guard and record the choice (FI-34). *(In this repo
+  gate** — prefer the **stronger/fail-safe** guard and record the choice (FI-38). *(In this repo
   "safety" means F-content that must be refused outright, hard rule 2 — this rule is about ordinary
   process protection, which is exactly where the documented misses happened.)*
 - **Only as complex as the spec needs** — the skeptic's single reading must succeed (C-601/C-602).

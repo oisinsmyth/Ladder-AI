@@ -132,7 +132,7 @@ have covered are rendered as terms instead. This is applied below without except
   candidate readings of the bypass behaviour (fall back to the drive's report / no confirmation at
   all) differ in exactly the failure the sensor exists to catch.
 - **Precondition class: `unverifiable` until Q-C08 is answered.** Not used. Relation render-BLOCKED.
-- **FI-34 note:** were this forced, the stronger/fail-safe reading (bypass does **not** synthesise a
+- **FI-38 note:** were this forced, the stronger/fail-safe reading (bypass does **not** synthesise a
   running confirmation) would be preferred and recorded. It is **not** being forced here — the
   relation is left blocked.
 
@@ -257,7 +257,7 @@ Every rung-C binding checked against the FB interface now that it is ground trut
 | `TomraControlInst1.Outputs.OSComFault` `[iface]` | N2 — link-aware comms fault (link-healthy: status bit AND hardwired; link-dead: hardwired alone). Broader than the raw input, narrower than `FaultActive`. |
 
 **Decision: rebind to `TomraControlInst1.Outputs.FaultActive`** — the **stronger/broader guard**
-(D1's own rule, and FI-34's protective-term preference: this is a start permissive on a conveyor
+(D1's own rule, and FI-38's protective-term preference: this is a start permissive on a conveyor
 feeding a sorter). With rung C's raw-input binding, a sorter with a standing *machine* fault and a
 healthy comms link would leave the permissive satisfied and let the feed conveyor start into it.
 **Q-C34 is closed by this audit** — it is closed by the mechanism Q-C34 itself deferred to (rung C
@@ -271,7 +271,7 @@ could not see the interface), not by a guess to keep moving. Ledger disposition:
 | `IO.SystemHealthy` (the Q-C27 alternative) | N1 only — a live permissive. A dropped system-OK would stop the unit and let it restart the instant the signal returned, with no operator involvement. |
 
 **Decision: rung C's binding CONFIRMED** (`IO.FaultFB`) — the latched path is the
-stronger/fail-safe guard (FI-34), and C-128 forbids automatic restart after a stop. Recorded as a
+stronger/fail-safe guard (FI-38), and C-128 forbids automatic restart after a stop. Recorded as a
 `rebind` row because the audit was performed and the alternative was live, not because the binding
 changed. **Q-C27 is narrowed, not closed:** the audit settles which member the *system-OK* signal
 should drive; it does not produce a source for `IO.SystemHealthy`, which stays blocked under Q-C05.
@@ -483,7 +483,7 @@ themselves in dispute and unblock automatically once the instance's cited questi
 |---|---|---|---|
 | C1 | render-BLOCKED | Q-C04 | — |
 | C2 | render-BLOCKED | Q-C03 | — |
-| C3 | **rebind** | rebind-2 — `NOT CycloneDustSysOk` → `IO.FaultFB` (latched, N10) preferred over `IO.SystemHealthy` (live permissive, N1); FI-34 stronger guard, C-128 no auto-restart | verified-in-block |
+| C3 | **rebind** | rebind-2 — `NOT CycloneDustSysOk` → `IO.FaultFB` (latched, N10) preferred over `IO.SystemHealthy` (live permissive, N1); FI-38 stronger guard, C-128 no auto-restart | verified-in-block |
 | C4 | render-BLOCKED | Q-C05 / Q-C27 — narrowed by rebind-2, still no health source | — |
 | C5 | render-BLOCKED | Q-C27 + rebind-3 — `CycloneDustRemOp` has no interface member to land on | — |
 | C6 | render-BLOCKED | instance-stop | — |
@@ -643,7 +643,7 @@ to call the FB at all. Per instance:
 its eight process-data words as FB **INPUT** parameters. Without `Tag_45`…`Tag_54` there is no legal
 call site, so no amount of answering the other questions would let this instance be rendered.
 
-**Nothing was rendered partially, and no term was written on a preferred reading.** Where FI-34
+**Nothing was rendered partially, and no term was written on a preferred reading.** Where FI-38
 would have applied (a forced choice on a protective term), the choice was **not** forced — the
 relation was left blocked and the fail-safe preference was recorded as the intended answer *if* the
 owner rules it must proceed:

@@ -1,8 +1,8 @@
-# FI-35 `candidate-scan` + FI-32 — grounded design & feasibility study
+# FI-39 `candidate-scan` + FI-36 — grounded design & feasibility study
 
 **Status:** design only. No code written. Written 2026-08-05 against the substrate as it reads today.
 
-**Scope.** FI-35's five mechanical checks (`docs/16-future-ideas.md` L544-555) plus FI-32's
+**Scope.** FI-39's five mechanical checks (`docs/16-future-ideas.md` L544-555) plus FI-36's
 per-instance interlock-completeness trace (L520-526). PC-side C# tooling in `src/converter/` — normal
 software rules, not LAD/IR work. Two constraints are load-bearing throughout and are honoured by
 every proposal below: the converter stays a **pure in-process file transformer** (no shell-out), and
@@ -19,17 +19,17 @@ same remedy — compute something.
 
 ## 0. Headline findings
 
-Three things this study changes about the FI-35 / FI-32 framing:
+Three things this study changes about the FI-39 / FI-36 framing:
 
-1. **FI-32 is not blocked on FI-33.** FI-32's stated dependency is "an unambiguous condition list to
-   trace against", assumed to come from FI-33's spec-explicitness discipline. But a condition list in
-   the exact shape FI-32 needs already has a home in the tooling: FI-25's `BindingFile`
+1. **FI-36 is not blocked on FI-37.** FI-36's stated dependency is "an unambiguous condition list to
+   trace against", assumed to come from FI-37's spec-explicitness discipline. But a condition list in
+   the exact shape FI-36 needs already has a home in the tooling: FI-25's `BindingFile`
    (`src/converter/Converter/Trace/BindingFile.cs`) is a per-REQ JSON anchor file whose every field is
-   optional. Adding one `guard` constraint to it gives FI-32's set-difference **today**, on existing
+   optional. Adding one `guard` constraint to it gives FI-36's set-difference **today**, on existing
    substrate, in roughly 80 lines. This is the smallest and highest-leverage item in the whole study
    and it would have caught REQ-003 deterministically. See §7.
 
-2. **Check 4 must read IR, not the D3 markdown render.** FI-35 frames the undriven-input audit as a
+2. **Check 4 must read IR, not the D3 markdown render.** FI-39 frames the undriven-input audit as a
    rung-D activity over `code-structure.md` §D3. In the fixture D3 does not exist (STOPPED, no render
    produced), and building a markdown-boolean-expression parser to read a render that a coder will
    immediately turn into IR is wasted work. Read the generated `.ir` instead — the walk already
@@ -37,11 +37,11 @@ Three things this study changes about the FI-35 / FI-32 framing:
    That is an honest scope reduction, not a loss — the defect it catches (REQ-012) still gets caught
    before presentation.
 
-3. **The `PlantAutoControl-bench` fixture is a strong regression fixture for checks 1, 4 and FI-32, and a
+3. **The `PlantAutoControl-bench` fixture is a strong regression fixture for checks 1, 4 and FI-36, and a
    weak one for checks 2, 3 and 5.** Checks 2 and 3 produce *empty* results on it (the rerun2
    artifacts already reconcile 174/174, and contain zero `verified-cross-block` rows). Check 5's
    expected output is a residue nobody has computed yet, so there is no known-correct answer to assert
-   against — only an exact number replacing the artifact's self-reported `~190`. FI-35's claim that
+   against — only an exact number replacing the artifact's self-reported `~190`. FI-39's claim that
    "all five checks have a known-correct expected answer" is true for three of them. §8 states each
    expected output concretely.
 
@@ -120,7 +120,7 @@ defensible rather than noisy.
 
 ### Feasibility — **buildable now.** The flagship; build it.
 
-Everything it needs exists. The only genuine design problem is the scope rule, and FI-35 already names
+Everything it needs exists. The only genuine design problem is the scope rule, and FI-39 already names
 the failure mode: *"the candidate set needs a defensible scope rule … or it degenerates to noise."*
 
 ### Design
@@ -361,7 +361,7 @@ partial export — and this project's exports are routinely partial.
 **Mandatory output discipline:** every no-writer fact states its denominator —
 `no writer among the 34 blocks in ir/PlantAutoControl-bench/ (partial exports are normal; this is a scope
 fact, not a defect)`. Same wording discipline `cross-check` uses for dead members. This applies to
-FI-32-min and check 4 equally.
+FI-36-min and check 4 equally.
 
 **CLI:** none of its own. Findings appear under `relation-reconcile`'s output as a `citations` section;
 they contribute to its exit-1 condition.
@@ -570,14 +570,14 @@ denominator is exact and stable across runs.
 
 ---
 
-## 7. FI-32 — per-instance interlock-completeness trace
+## 7. FI-36 — per-instance interlock-completeness trace
 
 > *"for each machine, take the spec's explicit condition list and verify every listed condition appears
 > in the block's guard — a set-difference, not a re-interpretation."*
 
 ### Feasibility — **the full form is blocked; a minimal form is buildable now and is the best item in this study**
 
-**Blocked, in its stated form.** FI-32 needs a per-instance list of *conditions over named signals*.
+**Blocked, in its stated form.** FI-36 needs a per-instance list of *conditions over named signals*.
 Today no artifact contains one:
 
 - The equipment specs' interlock lines are prose bullets over plant language —
@@ -585,16 +585,16 @@ Today no artifact contains one:
   shutdown complete \`[A + B-17]\` **(Q-C12)**`. A signal is sometimes backticked, often not, and the
   boolean structure is English.
 - `requirements.md` is derived from those and no more explicit.
-- **The D3 render is the artifact that would satisfy FI-32 exactly** — explicit boolean over real
+- **The D3 render is the artifact that would satisfy FI-36 exactly** — explicit boolean over real
   interface members with a relation-id tag per term. In the fixture D3 is `STOPPED`, and NW-3 records
   that the render never reaches the coder anyway.
 
-So FI-32's true dependency is not FI-33's prose discipline — it is **"a D3 render exists, in a form a
+So FI-36's true dependency is not FI-37's prose discipline — it is **"a D3 render exists, in a form a
 parser can read."** That is a more actionable statement of the blocker than the FI entry currently
-carries, and it means FI-32-full should be sequenced behind R12 (carry the render to the coder), not
-behind FI-33.
+carries, and it means FI-36-full should be sequenced behind R12 (carry the render to the coder), not
+behind FI-37.
 
-### FI-32-min — buildable today, ~80 lines, catches REQ-003
+### FI-36-min — buildable today, ~80 lines, catches REQ-003
 
 `Trace/BindingFile.cs` is already a per-REQ JSON anchor file with every field optional, consumed by a
 runner that walks `ProjectUsageGraph`. Add one constraint:
@@ -643,7 +643,7 @@ matters).
 
 ### Do not build: the "strongest-available-guard" companion
 
-FI-32 proposes flagging use of a narrow signal (`ComFlt`) when the FB exposes a broader one
+FI-36 proposes flagging use of a narrow signal (`ComFlt`) when the FB exposes a broader one
 (`FaultActive`). "Broader" is a semantic lattice over signal meaning; the converter cannot compute it
 without a hand-authored ontology, and a hand-authored ontology is an artifact somebody must maintain
 and can get wrong silently. **Check 1 already delivers the useful half mechanically** — it reports that
@@ -661,7 +661,7 @@ verdicts) together make a regression fixture. All facts below were grep-verified
 
 | Check | Command against the fixture | Expected output | Grade |
 |---|---|---|---|
-| **FI-32-min** | `trace` with `coil: FilterUnitInst2.IO.Shutdown`, `must_contain: [PlantControl.FansShutdownReady, AirStarInst1.Outputs.ShutdownComplete]` | present / **MISSING** — the REQ-003 REGRESSION, at `PlantAutoControl` N4 (L49); repeats at N3 (L48), N19 (L249) | **Strong** — deterministic catch of the worst failure |
+| **FI-36-min** | `trace` with `coil: FilterUnitInst2.IO.Shutdown`, `must_contain: [PlantControl.FansShutdownReady, AirStarInst1.Outputs.ShutdownComplete]` | present / **MISSING** — the REQ-003 REGRESSION, at `PlantAutoControl` N4 (L49); repeats at N3 (L48), N19 (L249) | **Strong** — deterministic catch of the worst failure |
 | **1 candidate-scan** (REQ-017) | `--project ir/PlantAutoControl-bench --fb TomraControlSystem --scope DiscreteInputs.Tomra --type Bool --direction status` | 3 IO (`TomraReady`, `TomraRunning`, `TomraComFlt`) + 9 FB status members incl. `Outputs.FaultActive` → **SIZE 12, exit 1**. The generated block bound 1 of 12 (`TomraComFlt`, L143) | **Strong** — makes C §2's blocking Q non-discretionary |
 | **1 candidate-scan** (REQ-019) | `--project ir/PlantAutoControl-bench --fb FilterUnitSystem --scope DiscreteInputs.FilterUnit1 --type Bool` | `FilterUnit1Flt`, `FilterUnit1Op`, `FilterUnit1Ready` (Input.ir L78-80) → **SIZE 3, exit 1**, plus `family: 3 same-typed IO : N FB command members` — the transposition signature | **Strong** — the swap had zero mechanical detector before |
 | **4 undriven-scan** | `--project ir/PlantAutoControl-bench --fb MotorVSDSystem --caller gen/PlantAutoControl-bench/PlantAutoControl.ir` | `MotorVSDInst1.IO.RotationSensor` (`MotorVSDSystem.ir:56`) **UNDRIVEN** — zero references in the caller (grep-confirmed: no hit for `RotationSensor` in `PlantAutoControl.ir`); name-join hint surfaces `DiscreteInputs.AirStarDCRotSen` and `HMIControlSignals.BypassAirStarDCRotSen`, both unreferenced by the caller. **exit 1** = REQ-012 | **Strong** |
@@ -676,10 +676,10 @@ checks that read IR rather than markdown.
 
 ## 9. Recommended build order
 
-1. **FI-32-min — guard-containment hop in `trace`.** Smallest item, existing subcommand, no new
+1. **FI-36-min — guard-containment hop in `trace`.** Smallest item, existing subcommand, no new
    parser, no new format dependency, and it deterministically catches the REGRESSION — the autopsy's
    own ranked-#1. If only one thing gets built, build this.
-2. **Check 1 — `candidate-scan` + `SignalInventory`.** The item FI-35 is named after. Produces the
+2. **Check 1 — `candidate-scan` + `SignalInventory`.** The item FI-39 is named after. Produces the
    shared `SignalInventory` primitive that checks 4 and 5 both need, and delivers computed candidate
    sets for both round-1 SURVIVES. Reads IR only — no markdown-format exposure.
 3. **Check 4 — `undriven-scan`.** Small once (2) exists; strong fixture case; closes the per-instance
@@ -710,8 +710,8 @@ formatters and CLI handlers, plus 30-40 unit tests. Items 1-3 are about 45% of t
 | **A markdown parser for the D3 render** (check 4's rung-D form) | D3 is a boolean expression language rendered as markdown. Parsing it means writing a second expression parser that will disagree with the IR one. Read the generated `.ir`. Accepted cost: the check moves from D1 to the check stage. |
 | **Check 3 as its own subcommand** | Same file, same reader, same pass as check 2. Two subcommands parsing `code-structure.md` will drift apart. |
 | **A parser for `unclaimed-signals.md`'s `### Q-Cnn` finding narratives** | They are argued prose with per-finding structure that varies (one has its own 3-column inner table). Only the per-DB disposition tables are machine-readable. Parse those; leave the findings to humans. |
-| **FI-32's "strongest-available-guard" lattice** | Requires a hand-maintained semantic ontology of which signal is "broader". Check 1 already reports the mechanical half (N candidates, 1 chosen). Ranking them is a verdict. |
-| **Breaking `trace`'s exit-0 contract** | `trace` and `cross-check` are declared facts providers that always exit 0. FI-32-min lands inside `trace`; leave the contract alone and let callers gate on the JSON. |
+| **FI-36's "strongest-available-guard" lattice** | Requires a hand-maintained semantic ontology of which signal is "broader". Check 1 already reports the mechanical half (N candidates, 1 chosen). Ranking them is a verdict. |
+| **Breaking `trace`'s exit-0 contract** | `trace` and `cross-check` are declared facts providers that always exit 0. FI-36-min lands inside `trace`; leave the contract alone and let callers gate on the JSON. |
 | **Extending `ProjectUsageGraph` with types/start values** | `TraceRunner` reads its shape as-is and its own comment declares the verbatim keying deliberate. Add a sibling reader (`SignalInventory`); do not perturb a load-bearing type for two extra fields. |
 | **A `presumed-block:` parser** | It does not exist. The string appears nowhere except as unapplied recommendation R15 in `round2.md:598`. The artifacts carry `FB type: <FBName>` on the class line instead — parse that, or take the FB as a CLI argument (preferred: fewer format dependencies). |
 

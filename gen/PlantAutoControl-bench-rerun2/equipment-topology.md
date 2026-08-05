@@ -466,7 +466,7 @@ because each is a place a downstream rung could silently pick a reading.
   Sorter Conveyor VSD ↔ Optical Sorter. Resolving one resolves the other; they cannot be resolved
   independently. Q-A13.
 
-## Explicitness decisions taken (FI-33 audit trail)
+## Explicitness decisions taken (FI-37 audit trail)
 
 Every ambiguous separator encountered in the source, and the branch taken:
 
@@ -480,7 +480,7 @@ Every ambiguous separator encountered in the source, and the branch taken:
 | E-6 | `Ejected & Residual conveyors enabled` | inventory row 11 (Optical Sorter) | **FULL ENUMERATION** — two separate start-permissive relations | As E-4. |
 | E-7 | `Shredder ready (fwd) / general enable (rev)` | inventory row 17 — **out of scope**, referenced only | **NOT RESOLVED, NOT USED** | The Feed Conveyor is not one of the six. Its `/` is recorded here so that a later run of the remaining machines does not meet it fresh. No reading taken. |
 | E-8 | `Discharge-Conveyor VSD + both Dust Filters enabled (or Discharge-Conveyor VSD + third-party link-out)` | inventory row 5 (Air-Separator VSD) — **out of scope**, but names two of the six | **RETAINED AS TWO ALTERNATIVE PATHS, no reading taken** | The source states the alternation explicitly (`or`), so this is not an ambiguous separator; it is recorded because it establishes that both Dust Filter Units serve the Air-Separator VSD on one path only. Whether the alternative path is a degraded mode is the source's own unresolved Q-08. |
-| E-9 | `faulted / stopped / commanded / running / enabled` | all three class references, status-indication requirement | **NOT SPLIT — read as an enumeration of the values of one indication, not as separate conditions** | This `/` separates the *states of a single status word*, not conditions of a relation. Stated explicitly here because the FI-33 rule is about conditions, and applying split-and-retain to a value enumeration would manufacture five indications where one exists. |
+| E-9 | `faulted / stopped / commanded / running / enabled` | all three class references, status-indication requirement | **NOT SPLIT — read as an enumeration of the values of one indication, not as separate conditions** | This `/` separates the *states of a single status word*, not conditions of a relation. Stated explicitly here because the FI-37 rule is about conditions, and applying split-and-retain to a value enumeration would manufacture five indications where one exists. |
 | E-10 | `remote-operational, running, and fault feedbacks` (REQ-019) | source REQ-019 | **FULL ENUMERATION into three separate reports**, and the "remote-operational" one raised as a candidate delta (Q-A08) rather than assumed to be the class's remote-mode permissive | A comma list of three feedbacks; treating "remote-operational" as identical to the class's remote/local permissive would be a resolution by reading. |
 
 ## Open questions

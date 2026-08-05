@@ -45,7 +45,7 @@ public sealed class Binding
     // the site ×1000 s→ms MUL/CONVERT idiom. (Value is left to the number hop; this checks the chain.)
     public TimingConstraint? Timing { get; set; }
 
-    // Hop 6 (FI-32-min): guard containment — every signal the spec lists as a condition on `coil` must
+    // Hop 6 (FI-36-min): guard containment — every signal the spec lists as a condition on `coil` must
     // actually appear in the guard of each write to it. A set-difference over signal identity, NOT a
     // re-interpretation of the requirement: the check the autopsy asked for, because it is immune to
     // however anyone reads an ambiguous source (`docs/evidence/PlantAutoControl-bench-autopsy.md`).

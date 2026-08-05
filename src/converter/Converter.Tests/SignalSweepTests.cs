@@ -6,7 +6,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-35 check 5 (2026-08-05): `converter signal-sweep` — the project-level residual sweep, computed.
+/// FI-39 check 5 (2026-08-05): `converter signal-sweep` — the project-level residual sweep, computed.
 ///
 /// Its value is EXACTNESS, not a catch (the design study grades it Medium, no oracle): it replaces an
 /// artifact's own self-reported approximations ("swept: ~190", "out-of-scope: ~80") with computed

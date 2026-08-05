@@ -10,7 +10,7 @@ public enum HopKind
     InterfaceChain,   // hop 2: is iface_member written anywhere?
     NumberConstraint, // hop 4: DB start value vs spec
     Timing,           // hop 5 (v2): seconds member reaches the timer's PT via the ×1000 s→ms chain
-    GuardContainment, // hop 6 (FI-32-min): every spec-listed condition appears in the coil's guard
+    GuardContainment, // hop 6 (FI-36-min): every spec-listed condition appears in the coil's guard
 }
 
 public enum Verdict

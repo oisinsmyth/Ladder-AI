@@ -94,7 +94,7 @@ ms form of the bound seconds member (a mismatch → `contradicted`; caveat: the 
 isn't verified, only the name/operand correspondence). All the forward-trace hops now have a mechanical
 assist. Missing binary → hand-trace as before.
 
-**Interlock completeness — MANDATORY on every REQ that states a condition (FI-32-min).** For each such
+**Interlock completeness — MANDATORY on every REQ that states a condition (FI-36-min).** For each such
 REQ, add a `guard: { coil, must_contain: [<every signal the REQ names as a condition>] }` anchor. The
 hop takes each write to `coil`, walks its guard expression, and **set-differences** your required terms
 against it — reporting present/missing **per writing site**. A `missingterm` verdict is a **finding to

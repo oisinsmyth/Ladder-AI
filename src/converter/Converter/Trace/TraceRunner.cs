@@ -199,7 +199,7 @@ public static class TraceRunner
         return new HopResult(hop, Verdict.Ok, okDetail, writers);
     }
 
-    // Hop 6 (FI-32-min): every signal the spec lists as a condition on `coil` must appear in the guard of
+    // Hop 6 (FI-36-min): every signal the spec lists as a condition on `coil` must appear in the guard of
     // each write to it. Pure set-difference over signal identity — it cannot be defeated by how anyone
     // *reads* an ambiguous requirement, which is the whole point: a dropped cascade-hold term shipped as a
     // REGRESSION because the coder and the reviewer resolved the same ambiguous source the same way

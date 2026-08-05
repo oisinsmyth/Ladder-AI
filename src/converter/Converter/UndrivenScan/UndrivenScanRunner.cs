@@ -4,7 +4,7 @@ using Converter.Trace;
 
 namespace Converter.UndrivenScan;
 
-// FI-35 check 4: for each INSTANCE of an FB, which of the interface members the FB reads actually
+// FI-39 check 4: for each INSTANCE of an FB, which of the interface members the FB reads actually
 // receive a value — driven / disarmed / defaulted / undriven, computed.
 //
 // The real new value over the project-wide reference graph is PER-INSTANCE resolution. That graph

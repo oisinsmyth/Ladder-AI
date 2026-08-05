@@ -385,7 +385,7 @@ and self-judged at every seam**: A decides whether a source separator is ambiguo
 "plausible" and "in scope", D classifies its own preconditions and cites its own evidence, and C writes
 the register the reviewer will trace. R7 adds an assigned reader for the ledger — real progress — but
 that reader reads C's derived register, so anything lost in C's derivation is invisible to both
-(NW-2), and reading the ledger anchors it on the author's own argument (NW-5). Meanwhile **FI-32 — the
+(NW-2), and reading the ledger anchors it on the author's own argument (NW-5). Meanwhile **FI-36 — the
 autopsy's own ranked-#1 fix, the per-instance interlock-completeness set-difference — is still
 `Open`/unbuilt** (`docs/16-future-ideas.md` L520-526: *"the highest-leverage autopsy fix; the one thing
 that would have caught the REGRESSION deterministically"*) and none of the four rungs implements it.
@@ -481,7 +481,7 @@ performs on itself and records in its own artifact: candidate-set size, "plausib
 "same-shaped", "more broadly or more strongly", precondition class, "with a reason". Not one of them is
 computed by a tool, and `converter` gained nothing in this amendment round. The autopsy's conclusion —
 *"the durable fixes are **mechanical completeness-tracing** (independent of interpretation) … not 'a
-better AI read of the same spec'"* — is not yet honoured; FI-32 remains unbuilt.
+better AI read of the same spec'"* — is not yet honoured; FI-36 remains unbuilt.
 
 **RW-4 (carried, unchanged) — W3: `references/` does not exist.** Still the largest unverified
 assumption in the design, and still a hard blocker on running the pipeline at all.
@@ -600,10 +600,10 @@ Closes NW-4.
 > whether it confirms or overrides each presumption; an override **re-opens every candidate set** that
 > was enumerated against the superseded interface.
 
-### R16 — build the mechanical floor (FI-32 + a candidate-set tool).
+### R16 — build the mechanical floor (FI-36 + a candidate-set tool).
 Closes RW-3 — the one weakness that no wording change can close.
 
-FI-32 (per-instance interlock-completeness set-difference) is still `Open` and is the autopsy's own
+FI-36 (per-instance interlock-completeness set-difference) is still `Open` and is the autopsy's own
 ranked-#1 fix. Add to it a cheap sibling: `converter candidate-scan --project <ir-dir> --instance
 <prefix> --phrase <keywords> [--json]` returning every same-typed signal in the instance's scoped name
 family plus the presumed FB's status members — i.e. the candidate set computed, not asserted. That
@@ -632,6 +632,6 @@ coder (NW-3) — and made the pipeline's only independent reviewer non-blind by 
 (NW-5).
 
 The autopsy's cause 1 is improved but not closed, and its own ranked-#1 remedy — a mechanical,
-interpretation-independent completeness trace (FI-32) — is still unbuilt. Until something in this
+interpretation-independent completeness trace (FI-36) — is still unbuilt. Until something in this
 pipeline is computed rather than asserted, its floor is the attentiveness of one reader per seam.
 R9, R11, R12 and R16 are the four that matter.

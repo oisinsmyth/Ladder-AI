@@ -88,7 +88,7 @@ three rungs later.
   `applies-to:` FilterUnitInst1, FilterUnitInst2, FilterUnitInst3
   `contradiction-watch:` this is the **second phrasing** of the condition rung A recorded as the
   unsettled `/` in Q-A1. The word *"also"* is suggestive of an additional (AND) term but **does not
-  settle it**, and taking it as settling would be exactly the silent resolution FI-33 forbids.
+  settle it**, and taking it as settling would be exactly the silent resolution FI-37 forbids.
   **Q-A1 stays open and is restated here as Q-B7.**
 
 - **B-07** `[D]` A machine's controlled shutdown is a different thing from an emergency stop; the
@@ -358,7 +358,7 @@ three rungs later.
   - `residual/discharge conveyors` joins two machine names with an ambiguous `/`. Split-and-retain
     would assert the gate on **both** the Residual Material Conveyor and a discharge conveyor; the
     appositive reading ("residual, i.e. discharge") would assert it on one. **Neither reading is
-    taken** (FI-33: dropping either side requires this question).
+    taken** (FI-37: dropping either side requires this question).
   - The plant has **two** machines whose name contains "discharge conveyor": the Discharge Conveyor
     (a starter) and the Discharge Conveyor VSD, `MotorVSDInst1`, **which is in scope for this run**.
     The plural *"conveyors"* does not disambiguate.

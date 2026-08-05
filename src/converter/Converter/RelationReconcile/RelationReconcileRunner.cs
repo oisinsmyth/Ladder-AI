@@ -3,7 +3,7 @@ using Converter.Trace;
 
 namespace Converter.RelationReconcile;
 
-// FI-35 checks 2 + 3 in one subcommand: reconcile the relation-id sets across the spec artifacts, and
+// FI-39 checks 2 + 3 in one subcommand: reconcile the relation-id sets across the spec artifacts, and
 // check that each `verified-cross-block` precondition actually cites something written.
 //
 // Check 2 buys a regression guard, not a catch: the fixture's three legs already reconcile. What it

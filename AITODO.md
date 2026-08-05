@@ -24,7 +24,7 @@ documented/committed, delete it from this file rather than letting it accumulate
 
 **Done and committed on that branch** (~25 commits; `git log --oneline master..worktree-s6-killer-plan`):
 the S6-Killer-Plan answer-key validation end-to-end (score: MATCH 14 / IMPROVEMENT 1 / DEFECT 3 /
-REGRESSION 1 / SPEC-GAP 3), its autopsy, the four-rung spec pipeline skills, the FI-32/FI-35 mechanical
+REGRESSION 1 / SPEC-GAP 3), its autopsy, the four-rung spec pipeline skills, the FI-36/FI-39 mechanical
 floor (5 converter checks, 707 tests), the `tagstatus` member-blindness fix, and three real runs of the
 pipeline. See `docs/notes/S6-Killer-Plan.md`'s status block for the map.
 
@@ -35,7 +35,7 @@ pipeline. See `docs/notes/S6-Killer-Plan.md`'s status block for the map.
    the property that makes a spec complete rather than merely careful — is **nominal, not delivered**.
    Rung A raises this as a blocking Q on every run. Highest-value remaining pipeline work; needs its own
    scoped proposal.
-2. **Two tool refinements** (detail in `docs/16-future-ideas.md` FI-35): `relation-reconcile`'s citation
+2. **Two tool refinements** (detail in `docs/16-future-ideas.md` FI-39): `relation-reconcile`'s citation
    check **rewards a vaguer citation** than a precise one; `signal-sweep` can never reach zero here
    because a real member name contains `/`.
 3. **The dispatch path** — the four rung skills weren't exposed to the Skill tool in the runs that used

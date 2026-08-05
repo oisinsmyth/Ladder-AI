@@ -62,7 +62,7 @@ Read `CLAUDE.md` first; its hard rules bind you.
    must be re-hunted at rung C (`gen-equipment-spec` §8).*
 5. **Tag provenance** on every relation (which layout element / which reference it came from).
 
-## Explicitness rules (non-negotiable — FI-33)
+## Explicitness rules (non-negotiable — FI-37)
 
 - **One relation per line — on the way in as well as the way out.** Never join two conditions with
   an ambiguous separator (`/`, "and/or", a comma) in what you write; and **never resolve one by

@@ -173,7 +173,7 @@ widths.**
 - `Outputs.FaultActive` — the FB's aggregated fault: 14 machine status bits ORed with loss of the
   data link (network 15).
 Binding the narrowest where the widest was meant silently deletes most of a protective permissive.
-**Recommendation: `Outputs.FaultActive`, the broader guard (FI-34: on a protective term, prefer the
+**Recommendation: `Outputs.FaultActive`, the broader guard (FI-38: on a protective term, prefer the
 stronger/fail-safe guard).** Again stated, not applied — Q-C12 blocks.
 
 **BA-5 — `TomraControlInst1` C18: dead interface confirms an unimplementable requirement.**

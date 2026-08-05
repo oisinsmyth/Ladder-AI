@@ -5,7 +5,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-32-min (2026-08-05): `converter trace`'s guard-containment hop — every signal the spec lists as a
+/// FI-36-min (2026-08-05): `converter trace`'s guard-containment hop — every signal the spec lists as a
 /// condition on a coil must actually appear in that write's guard. A set-difference over signal identity,
 /// which is what makes it immune to how anyone *reads* an ambiguous requirement.
 ///

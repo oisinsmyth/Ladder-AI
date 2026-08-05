@@ -246,10 +246,10 @@ correctly — the reused FB's exposed status outputs — is declared ground trut
   (each `C-nn` → satisfied inside the FB / wired by orchestration). There is no instruction to
   re-examine a rung-C binding against what D1 just learned, and no permitted back-edge to C.
 - D's calibration: *"where forced to choose on a **safety interlock**, prefer the **stronger/fail-safe**
-  guard and record the choice (FI-34)."* Two problems. First, D is **not** "forced to choose" — C
+  guard and record the choice (FI-38)."* Two problems. First, D is **not** "forced to choose" — C
   already chose, and D's job is to render C. Second, the word **"safety interlock"** is doing damage
   in a repo where hard rule 2 defines *safety* as F-content that must be refused outright; a strict
-  reader excludes a process interlock like this one from FI-34's scope entirely.
+  reader excludes a process interlock like this one from FI-38's scope entirely.
 
 The autopsy's own prescribed fix for this exact failure — *"Add a **'strongest-available-guard'
 check**: when a REQ says 'not faulted'/'not running' and the wired FB exposes both a narrow and a
@@ -554,7 +554,7 @@ ledger, where one exists — every `discharged` row is a claim to be independent
 IR, never accepted as stated."* **In fresh context**, per the autopsy's cause-1: the agent that wrote
 the discharge cannot be the agent that clears it.
 
-### R8 — fix FI-34's scope word. `gen-code-structure`, Calibration.
+### R8 — fix FI-38's scope word. `gen-code-structure`, Calibration.
 
 Replace *"where forced to choose on a **safety interlock**"* with *"where forced to choose on **any
 protective term — interlock, permissive, inhibit or fault gate**"*. In this repo "safety" means

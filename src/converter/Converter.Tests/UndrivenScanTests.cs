@@ -6,7 +6,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-35 check 4 (2026-08-05): `converter undriven-scan` — per INSTANCE, which interface members
+/// FI-39 check 4 (2026-08-05): `converter undriven-scan` — per INSTANCE, which interface members
 /// actually receive a value.
 ///
 /// The real new value over the project-wide reference graph is per-instance resolution: that graph

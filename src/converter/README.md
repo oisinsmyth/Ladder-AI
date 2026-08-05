@@ -1833,7 +1833,7 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
-## `signal-sweep` — project-level residual signal coverage (2026-08-05, FI-35 check 5)
+## `signal-sweep` — project-level residual signal coverage (2026-08-05, FI-39 check 5)
 
 ```
 converter signal-sweep --project <ir-dir> --specs <equipment-specs-dir>
@@ -1863,7 +1863,7 @@ approximate denominator cannot support a completeness claim; an exact one can.
 **Exit 1** if any swept signal is in neither a spec nor a disposition table. Whether an unaccounted
 signal *implies control* is the engineer's call — the tool reports coverage, never a verdict.
 
-## `relation-reconcile` — relation-set reconciliation + probative citations (2026-08-05, FI-35 checks 2+3)
+## `relation-reconcile` — relation-set reconciliation + probative citations (2026-08-05, FI-39 checks 2+3)
 
 ```
 converter relation-reconcile --specs <equipment-specs-dir> --ledger <code-structure.md>
@@ -1900,7 +1900,7 @@ computed ones, which is the "computed rather than asserted" principle this tooli
 **Exit 1** on any non-empty set-difference or citation finding. On the fixture: 174/174/174 with
 `render ABSENT`, exit 0; delete one ledger row and it names `FilterUnitInst2.C5`, exit 1.
 
-## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-35 check 4)
+## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-39 check 4)
 
 ```
 converter undriven-scan --project <ir-dir> --fb <FBName>
@@ -1932,7 +1932,7 @@ a spec that required the capability — which is what makes it useful for the dr
 (`RotationSensor` ↔ `…RotSen`). **Off by default and never part of the exit condition** — it is a
 labelled heuristic, and on a real corpus it fires often enough to bury the findings it sits beside.
 
-## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-35 check 1)
+## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-39 check 1)
 
 ```
 converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>]
@@ -1998,7 +1998,7 @@ Hops:
   MUL/CONVERT idiom present → `ok`; corresponding but chain absent → `partial`; no such timer →
   `unimplemented`. **Documented limitation:** the specific MUL↔CONVERT `EN:=ENO` wire (sidecar-only) is not
   verified — a sidecar-level refinement.
-- **guard-containment** (FI-32-min, 2026-08-05, `guard: { coil, must_contain: [...] }`): every signal the
+- **guard-containment** (FI-36-min, 2026-08-05, `guard: { coil, must_contain: [...] }`): every signal the
   spec lists as a condition on `coil` must appear in the guard of **each** write to it. Reported **per
   writing site**, never unioned — a term present in one network and absent in another is exactly the
   multi-instance shape a union would hide. Missing → `missingterm`, naming the site; a coil with no writer

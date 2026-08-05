@@ -13,7 +13,7 @@
 > same register as the AI coder is a **correlated** check, so an ambiguous `/` was resolved identically
 > by both and the review confirmed the error* — and, from it, the four-rung spec pipeline
 > (`gen-pid-analysis` → `gen-functional-analysis` → `gen-equipment-spec` → `gen-code-structure`) plus
-> the FI-32/FI-35 mechanical floor that now enforces it. Both were adversarially validated twice
+> the FI-36/FI-39 mechanical floor that now enforces it. Both were adversarially validated twice
 > (`docs/evidence/four-rung-design-validation{,-round2}.md`) and exercised on three real runs
 > (`gen/PlantAutoControl-bench-rerun{,2,3}/`).
 >

@@ -6,7 +6,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-35 check 1 (2026-08-05): `converter candidate-scan` — compute every signal that could satisfy a
+/// FI-39 check 1 (2026-08-05): `converter candidate-scan` — compute every signal that could satisfy a
 /// requirement, so "more than one candidate" is a COMPUTED fact rather than a judgement call.
 ///
 /// Why it exists: two defects shipped because a requirement phrase ("not faulted", "running feedback")

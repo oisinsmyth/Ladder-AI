@@ -4,7 +4,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-35 checks 2 + 3 (2026-08-05): `converter relation-reconcile` — reconcile the relation-id sets
+/// FI-39 checks 2 + 3 (2026-08-05): `converter relation-reconcile` — reconcile the relation-id sets
 /// across the spec artifacts, and check that each `verified-cross-block` precondition cites something
 /// actually written.
 ///

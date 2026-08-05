@@ -48,7 +48,7 @@ Taken verbatim from the source table's own legend, not invented here:
 Applied without exception below. Where an instance departs from 1–3, that departure is a **delta**,
 recorded in the instance's `deltas` field — never smoothed over to keep the convention tidy.
 
-## Ambiguous-separator dispositions (FI-33)
+## Ambiguous-separator dispositions (FI-37)
 
 | Source cell | Disposition | Why |
 |---|---|---|
@@ -314,7 +314,7 @@ none was resolved in order to keep moving.
 - **Q-A1 — BLOCKING — how do a filter unit's two shutdown-hold conditions combine?**
   The source writes the hold as `Fans-shutdown-ready / Air-separator VSD shut down` (rows 3, 4) and
   `Fans-shutdown-ready / Shredder shut down` (row 19). Both sides are retained above as separate
-  relations (FI-33 split-and-retain). What the source does **not** settle is whether the unit stops
+  relations (FI-37 split-and-retain). What the source does **not** settle is whether the unit stops
   when **both** are true (AND) or when **either** is true (OR). The readings are materially
   different: under OR, a filter unit stops as soon as the plant fans-shutdown-ready condition
   appears, even while the machine it is holding for is still shutting down.

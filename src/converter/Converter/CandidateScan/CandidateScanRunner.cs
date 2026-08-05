@@ -3,7 +3,7 @@ using Converter.SignalInventory;
 
 namespace Converter.CandidateScan;
 
-// FI-35 check 1: given a requirement's target scope and the FB an instance uses, COMPUTE every signal
+// FI-39 check 1: given a requirement's target scope and the FB an instance uses, COMPUTE every signal
 // that could satisfy it — the IO half from the project's signal inventory, the FB half from that block's
 // own interface. "More than one candidate" becomes a computed fact instead of a judgement call.
 //
