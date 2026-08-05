@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Converter.CandidateScan;
 using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
@@ -53,6 +54,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "reuse-scan")
         {
             return RunReuseScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "candidate-scan")
+        {
+            return RunCandidateScan(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -539,6 +545,91 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunCandidateScan(string[] args)
+    {
+        string? projectDir = null;
+        string? fb = null;
+        string? instance = null;
+        string? type = null;
+        var direction = "any";
+        var scopes = new List<string>();
+        var phrases = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--fb":
+                    fb = RequireValue(args, ref i, "--fb");
+                    break;
+                case "--instance":
+                    instance = RequireValue(args, ref i, "--instance");
+                    break;
+                case "--type":
+                    type = RequireValue(args, ref i, "--type");
+                    break;
+                case "--direction":
+                    direction = RequireValue(args, ref i, "--direction") ?? "any";
+                    break;
+                case "--scope":
+                    var scope = RequireValue(args, ref i, "--scope");
+                    if (scope is null)
+                    {
+                        return 1;
+                    }
+
+                    scopes.Add(scope);
+                    break;
+                case "--phrase":
+                    var phrase = RequireValue(args, ref i, "--phrase");
+                    if (phrase is null)
+                    {
+                        return 1;
+                    }
+
+                    phrases.Add(phrase);
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || fb is null)
+        {
+            Console.Error.WriteLine("Usage: converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>] [--scope <path-prefix> ...] [--type <TypeName>] [--direction status|command|any] [--phrase <word> ...] [--json]");
+            return 1;
+        }
+
+        if (direction is not ("status" or "command" or "any"))
+        {
+            Console.Error.WriteLine($"--direction must be status, command or any (got '{direction}')");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = CandidateScanRunner.Run(projectDir, fb, instance, scopes, type, direction, phrases);
+        Console.WriteLine(json
+            ? CandidateScanOutputFormatter.FormatJson(report)
+            : CandidateScanOutputFormatter.FormatText(report));
+
+        // Non-zero when the requirement could be satisfied by more than one signal — the mechanical
+        // trigger that makes an ambiguous binding non-discretionary.
+        return report.HasChoice ? 1 : 0;
     }
 
     private static int RunReuseScan(string[] args)

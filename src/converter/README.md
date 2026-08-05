@@ -1833,6 +1833,47 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
+## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-35 check 1)
+
+```
+converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>]
+                         [--scope <path-prefix> ...] [--type <TypeName>]
+                         [--direction status|command|any] [--phrase <word> ...] [--json]
+```
+
+Given a requirement's target scope and the FB an instance uses, **computes every signal that could
+satisfy it** — the IO half from the project's signal inventory, the FB half from that block's own
+interface. Makes *"more than one candidate"* a computed fact instead of a judgement call.
+
+Why: two defects shipped because a requirement phrase ("not faulted", "running feedback") admitted more
+than one signal and the single reader who resolved it never noticed there was a choice
+(`docs/evidence/PlantAutoControl-bench-autopsy.md` §2-C). Nothing computed a candidate set, so nothing could
+flag the ambiguity. **This tool reports what is in scope; it never says which one the requirement
+means** — that is the engineer's call.
+
+- **Direction is COMPUTED** (does the FB write this member, or read it?), never taken from the
+  interface section: on the real corpus a block's reportable status members sit under `STATIC` inside
+  interface-UDT structs while `INPUT`/`OUTPUT` carry data-link words, so section-filtering gets the
+  wrong answer on exactly the block the narrowed-fault-gate defect concerns.
+- **`family`** reports N same-typed in-scope IO signals vs N FB members of matching direction — the
+  transposition signature a 1:1 by-name-resemblance assignment silently gets wrong.
+- **`--phrase` is advisory only.** Filtering by name resemblance is precisely the reasoning that
+  produced the swapped-pairing defect, so the phrase subset is reported but the exit code keys off the
+  **unfiltered** size.
+- The header states the **denominator** (files scanned) — in a partial export an empty set is a scope
+  fact, not a finding.
+
+**Exit 1 when the candidate set size > 1** (the `tagstatus` convention) — the mechanical trigger that
+makes an ambiguous binding non-discretionary. On the fixture: `--fb TomraControlSystem --scope
+DiscreteInputs.Tomra --type Bool --direction status` surfaces `DiscreteInputs.TomraComFlt` **and**
+`Outputs.FaultActive` (the two candidates the defect was about); `--fb FilterUnitSystem --scope
+DiscreteInputs.FilterUnit1` surfaces the `Flt`/`Op`/`Ready` family.
+
+Shared primitive: `Converter/SignalInventory/SignalInventory.cs` — a typed signal walk
+(`Path, Root, Leaf, Type, IsRetain, Origin`) that keeps what `ProjectUsageGraph.CollectLeafPaths`
+discards. Deliberately a **sibling** of that graph, not an extension: `TraceRunner` reads its shape
+as-is and its comment declares the verbatim keying deliberate.
+
 ## `trace` — forward-pass REQ verdict tracer (2026-07-20, FI-25)
 
 `converter trace --binding <bindings.json> --project <ir-dir> [--json]`
