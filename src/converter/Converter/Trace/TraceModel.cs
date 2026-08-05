@@ -10,6 +10,7 @@ public enum HopKind
     InterfaceChain,   // hop 2: is iface_member written anywhere?
     NumberConstraint, // hop 4: DB start value vs spec
     Timing,           // hop 5 (v2): seconds member reaches the timer's PT via the ×1000 s→ms chain
+    GuardContainment, // hop 6 (FI-32-min): every spec-listed condition appears in the coil's guard
 }
 
 public enum Verdict
@@ -19,6 +20,7 @@ public enum Verdict
     BrokenChain,    // iface_member has no writer — the in-cycle-lamp class
     Disarmed,       // every writer is placeholder-gated (NOT AlwaysTrue) — built but switched off (FI-25 v2)
     Contradicted,   // number constraint present and DB start value != spec
+    MissingTerm,    // hop 6: a spec-listed condition is absent from the guard — the dropped-interlock class
     Partial,        // number constraint present but member has no start value (cite the REQ's Q)
     NotApplicable,  // the binding did not name this hop's anchor (not emitted; reserved)
 }

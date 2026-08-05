@@ -1858,6 +1858,20 @@ Hops:
   MUL/CONVERT idiom present → `ok`; corresponding but chain absent → `partial`; no such timer →
   `unimplemented`. **Documented limitation:** the specific MUL↔CONVERT `EN:=ENO` wire (sidecar-only) is not
   verified — a sidecar-level refinement.
+- **guard-containment** (FI-32-min, 2026-08-05, `guard: { coil, must_contain: [...] }`): every signal the
+  spec lists as a condition on `coil` must appear in the guard of **each** write to it. Reported **per
+  writing site**, never unioned — a term present in one network and absent in another is exactly the
+  multi-instance shape a union would hide. Missing → `missingterm`, naming the site; a coil with no writer
+  → `unimplemented` (the output-path fact, *not* "every term missing"); a present term whose writer is
+  disarmed is reported present and marked `[disarmed]`. Terms nested in a comparison count.
+
+  This hop is a **set-difference over signal identity, not a re-interpretation** — which is the point:
+  a dropped cascade-hold term shipped as a REGRESSION because the coder and the functional reviewer
+  resolved the same ambiguous source the same way, so the review confirmed the error instead of catching
+  it (`docs/evidence/PlantAutoControl-bench-autopsy.md`). This check cannot be defeated by how anyone reads the
+  requirement. Verified on the real graded pair: against the generated block it reports
+  `AirStarInst1.Outputs.ShutdownComplete` MISSING at `PlantAutoControl N3` (and the cyclone's at N19);
+  against the sealed answer key, the same binding reports `ok`.
 
 **Exit 0 always** — a facts provider. Examples on `ir/test-project001`: a binding for REQ-004 shows
 `DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0 matching spec;

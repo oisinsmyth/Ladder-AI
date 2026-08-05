@@ -44,6 +44,23 @@ public sealed class Binding
     // Hop 5 (v2): a timing constraint — the seconds settings member must reach the named timer's PT via
     // the site ×1000 s→ms MUL/CONVERT idiom. (Value is left to the number hop; this checks the chain.)
     public TimingConstraint? Timing { get; set; }
+
+    // Hop 6 (FI-32-min): guard containment — every signal the spec lists as a condition on `coil` must
+    // actually appear in the guard of each write to it. A set-difference over signal identity, NOT a
+    // re-interpretation of the requirement: the check the autopsy asked for, because it is immune to
+    // however anyone reads an ambiguous source (`docs/evidence/PlantAutoControl-bench-autopsy.md`).
+    public GuardConstraint? Guard { get; set; }
+}
+
+public sealed class GuardConstraint
+{
+    // The written path whose guard must contain the terms (e.g. "FilterUnitInst2.IO.Shutdown").
+    public string Coil { get; set; } = string.Empty;
+
+    // Every signal path the spec says must gate that write. Reported present/missing PER WRITING SITE
+    // — never unioned across sites: a term present in one network and absent in another is exactly the
+    // multi-instance shape a union would hide.
+    public List<string> MustContain { get; set; } = new();
 }
 
 public sealed class TimingConstraint
