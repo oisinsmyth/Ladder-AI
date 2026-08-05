@@ -39,6 +39,12 @@ public sealed record CandidateScanReport(
 
     // Finding-bearing when the requirement could be satisfied by more than one signal — the mechanical
     // trigger that makes a spec stage's "ambiguous binding" question non-discretionary instead of a
-    // judgement call. Keyed on the UNFILTERED size: a phrase filter never suppresses a finding.
-    public bool HasChoice => Size > 1;
+    // judgement call. Keyed on the UNFILTERED count: a phrase filter never suppresses a finding.
+    //
+    // Keyed on the IO half specifically. An FB's interface routinely exposes 16–51 members of a given
+    // direction, so a total-size trigger fired on EVERY query and carried no information — the rule it
+    // was meant to drive ("size > 1 → blocking question unless a basis is cited") degenerated to "always
+    // cite a basis". The genuine ambiguity a spec stage faces is *which field signal* satisfies the
+    // phrase; the FB half is context for that choice, not evidence of it. Reported in full either way.
+    public bool HasChoice => IoCandidates.Count > 1;
 }

@@ -59,7 +59,9 @@ public static class CandidateScanOutputFormatter
             sb.Append("WARNING: ").Append(warning).Append('\n');
         }
 
-        sb.Append("CANDIDATE SET SIZE: ").Append(report.Size);
+        sb.Append("CANDIDATE SET SIZE: ").Append(report.Size)
+            .Append("  (IO ").Append(report.IoCandidates.Count)
+            .Append(" — the exit condition; FB ").Append(report.FbCandidates.Count).Append(" — context)");
         if (report.PhraseMatches.Count > 0)
         {
             // Advisory, and labelled as such — the exit code keys off the unfiltered size.

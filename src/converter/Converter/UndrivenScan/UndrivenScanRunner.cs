@@ -43,6 +43,7 @@ public static class UndrivenScanRunner
             .Where(p => instances.Contains(p.InstanceDb, StringComparer.Ordinal))
             .Select(p => p.Suffix)
             .Distinct(StringComparer.Ordinal)
+            .Where(suffix => !IsWrittenByFb(graph, fbName, suffix))
             .Where(suffix => IsReadByFb(graph, fbName, suffix) || IsUntouchedByFb(graph, fbName, suffix))
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToList();
@@ -65,6 +66,14 @@ public static class UndrivenScanRunner
     private static bool IsReadByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
         graph.Usages.TryGetValue(suffix, out var usage)
         && usage.Readers.Any(r => string.Equals(r.Block, fbName, StringComparison.Ordinal));
+
+    // A member the FB WRITES is an output it reports, not an input the caller is meant to drive — even
+    // when the FB also reads it back (an internal latch exposed on the interface). Reporting those as
+    // "undriven (default FALSE)" from the caller's side was ~2/3 of this scan's output and actively
+    // misleading: a reader can mistake an FB output's default for a missing wire.
+    private static bool IsWrittenByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
+        graph.Usages.TryGetValue(suffix, out var usage)
+        && usage.Writers.Any(w => string.Equals(w.Block, fbName, StringComparison.Ordinal));
 
     // Declared on the interface but neither read nor written by the FB itself.
     private static bool IsUntouchedByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
