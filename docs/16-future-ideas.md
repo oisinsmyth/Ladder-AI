@@ -716,3 +716,31 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   highest-leverage item it found, precisely because it does not depend on anyone choosing to look — the
   same property that made the FI-36/FI-39 mechanical floor worth building for the spec pipeline. If a
   fourth audit finds this class again, that is the trigger to stop recommending it and build it.
+
+### FI-41 — `converter review`: TAGTABLE files pass vacuously, including on C-001 and C-005
+- **Status:** Raised (2026-08-05, from a greenfield generation run — the first time a tag table has been
+  the *first* artifact produced rather than something inherited from an existing project)
+- **Problem.** `converter review` on a tag-table `.ir` returns **zero findings**, and every rule reports
+  `not applicable (TAGTABLE rule support not implemented)` — **including C-001 and C-005, the two rules
+  that actually govern a tag table.** Zero findings reads as "checked and clean"; it means "not checked".
+  The output does not distinguish *this rule does not apply to this file kind* from *this rule is not
+  implemented for this file kind*, and that is precisely what makes the vacuous pass invisible.
+- **Why it matters more than it looks.** C-004 freezes the equipment-identifier list at project start and
+  C-001 fixes the physical-IO tag format. Those names then propagate into every instance DB, HMI tag,
+  alarm text and cross-reference for the life of the project — renaming is free the day the table is
+  written and expensive forever after. It is the highest-leverage naming moment in a job, and it
+  currently has no mechanical floor at all. On a greenfield project it is also the *first* artifact, so
+  the vacuous pass happens before any other check exists to catch it.
+- **Proposal.** Mechanize the tag-table-applicable rules against TAGTABLE files:
+  1. **C-001 physical-IO form** — `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>`, including the letters: `DQ`/`AQ`,
+     never `DO`/`AO` (the 2026-07-17 owner ruling, owner-questions C-8).
+  2. **C-005 charset** — letters, digits and underscore only, first character a letter.
+  3. **Duplicate tag name and duplicate address**, within a table and across the tables of one device.
+     Both are cheap set operations and both are silent-corruption classes.
+  4. **C-004 support** — an agreed equipment-identifier set, so a *second alias for the same equipment*
+     becomes a finding rather than a habit that is only noticed at HMI build.
+  Also: report unimplemented-for-this-file-kind distinctly from not-applicable, so a vacuous pass is
+  visible in the output rather than inferable only by reading the source.
+- **Dependencies.** None. Items 1–3 are string and set checks over a file the parser already reads.
+- **Verdict / revisit trigger.** Open, and cheap for 1–3. The trigger to build it is the next greenfield
+  job, where the tag table is again the first thing written and again the thing everything else inherits.
