@@ -240,8 +240,8 @@ Release binary is missing, do the greps by hand as before.
   directed graph; check for cycles. **Classify every backward edge enable-vs-interlock before
   flagging** — an interlock feeding back against flow (downstream-blocked stopping an upstream
   belt) is exempt by the rule's own scope; if you can't classify it, raise a question, not a
-  finding. The material-flow-direction half needs a process-topology artifact — declare it not
-  checkable when absent. If the project has no chained-permissive architecture at all, say so
+  finding. The material-flow-direction half needs a topology artifact
+  (`gen/<project>/equipment-topology.md`, rung A's output) — declare it not checkable when absent. If the project has no chained-permissive architecture at all, say so
   explicitly ("n/a — no enable chain in this project"); never a silent pass.
 - **C-116/C-117 (error) — direction modes.** Only if bidirectional/direction-mode equipment
   sections exist: one enable chain per direction, each independently acyclic; mode change
@@ -303,7 +303,7 @@ Release binary is missing, do the greps by hand as before.
 - **C-506 (warn):** severity-class assignment needs the project alarm list.
 - **HMI-side halves** of C-503 (faceplate binding), C-505 (actual alarm texts), C-125 (what the
   HMI displays), C-307 (settings pages): not in this medium.
-- **C-114's material-flow half:** needs a process-topology artifact.
+- **C-114's material-flow half:** needs a topology artifact (`gen/<project>/equipment-topology.md`).
 - **C-004's compliance half:** needs the frozen equipment-identifier list.
 
 ## Overlap boundary with /review-simplicity
