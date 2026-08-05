@@ -98,6 +98,10 @@ public sealed record DbSource(
 // quirk to record). Not yet extended to a structured member's own *nested* fields (ParseBareMember/
 // WriteBareMember's shape, one level deeper — a UDT-typed member's own inner fields, or a timer
 // instance's own PT/ET/IN/Q) — only top-level Static/Input/Output/Temp/DB members carry this so far.
+//
+// Field-count watch, resolved 2026-08-05 (audit F-51): 14 fields, UNCHANGED since 2026-07-20 — the
+// same finding, and the same disposition, as PartNode in Model.cs (see the note there for the
+// reasoning). REVISIT TRIGGER: this record passing 16 fields.
 public sealed record DbMember(
     string Name,
     string Datatype,

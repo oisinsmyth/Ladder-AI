@@ -65,30 +65,18 @@ internal static class Program
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
         }
-        catch (ConnectTimeoutException ex)
-        {
-            Console.Error.WriteLine(ex.Message);
-            return ExitCodes.ConnectTimeout;
-        }
-        catch (ProjectOpenTimeoutException ex)
-        {
-            Console.Error.WriteLine(ex.Message);
-            return ExitCodes.ProjectOpenTimeout;
-        }
-        catch (SafetyContentRefusedException ex)
-        {
-            Console.Error.WriteLine(ex.Message);
-            return ExitCodes.SafetyRefused;
-        }
-        catch (Exception ex) when (ex is BlockNotFoundException or AmbiguousBlockException or DeviceNotFoundException or ExportProducedNoFileException)
-        {
-            Console.Error.WriteLine(ex.Message);
-            return ExitCodes.CommandError;
-        }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"openness-cli {args[0]} failed: {DescribeWithInnerExceptions(ex)}");
-            return ExitCodes.UnexpectedError;
+            // One catch, one classification (2026-08-05, audit F-09). The chain of typed catch
+            // clauses this replaces had drifted: nine domain errors the user can act on were in no
+            // clause at all and fell through to the catch-all, so a mis-typed --group reported as an
+            // internal fault. ExitCodes.ForException is where the classification now lives, and it is
+            // unit-tested — the old form could only be checked by running the real CLI.
+            var exitCode = ExitCodes.ForException(ex);
+            Console.Error.WriteLine(exitCode == ExitCodes.UnexpectedError
+                ? $"openness-cli {args[0]} failed: {DescribeWithInnerExceptions(ex)}"
+                : ex.Message);
+            return exitCode;
         }
     }
 
@@ -241,7 +229,12 @@ internal static class Program
     };
 }
 
-internal static class ExitCodes
+/// <summary>
+/// The process exit codes, and the exception -> exit-code classification that chooses between them.
+/// Public (rather than internal, as it was until 2026-08-05) so the classification can be unit-tested
+/// without a live Portal session — see <c>ExitCodeMappingTests</c>.
+/// </summary>
+public static class ExitCodes
 {
     public const int Success = 0;
     public const int UsageError = 1;
@@ -254,4 +247,43 @@ internal static class ExitCodes
     public const int CompileFailed = 8;
     public const int SanityCheckFailed = 9;
     public const int NotConfirmed = 10;
+
+    /// <summary>
+    /// Which exit code an escaping exception earns (2026-08-05, audit F-09).
+    ///
+    /// CommandError (7) means "you named something that isn't there, or named it ambiguously" — the
+    /// user can fix it by re-running with a different argument, and the bare exception message is a
+    /// useful thing to print. Everything else is UnexpectedError (5), printed with its inner-exception
+    /// chain because it describes a state this tool did not expect to be in.
+    ///
+    /// The default is deliberately UnexpectedError: an unrecognized exception IS an unexpected one.
+    /// Defaulting the other way would silently reclassify genuine bugs — including the 15 "X must be
+    /// called before Y" precondition guards and the Openness-API invariant checks in OpennessGateway,
+    /// all of which still throw a bare InvalidOperationException and all of which should keep landing
+    /// here as faults rather than as user error.
+    /// </summary>
+    public static int ForException(Exception ex) => ex switch
+    {
+        ConnectTimeoutException => ConnectTimeout,
+        ProjectOpenTimeoutException => ProjectOpenTimeout,
+        SafetyContentRefusedException => SafetyRefused,
+
+        // Named-thing-not-found / named-thing-ambiguous. The type, tag-table and group members of
+        // this family were missing from the old catch clause and reported as internal faults.
+        BlockNotFoundException => CommandError,
+        AmbiguousBlockException => CommandError,
+        TypeNotFoundException => CommandError,
+        AmbiguousTypeException => CommandError,
+        TagTableNotFoundException => CommandError,
+        AmbiguousTagTableException => CommandError,
+        DeviceNotFoundException => CommandError,
+        GroupNotFoundException => CommandError,
+        NotAPlcSoftwareContainerException => CommandError,
+
+        // Not a naming mistake, but it was already classified this way and the message is actionable
+        // (it names the path and points at the quirks note).
+        ExportProducedNoFileException => CommandError,
+
+        _ => UnexpectedError,
+    };
 }
