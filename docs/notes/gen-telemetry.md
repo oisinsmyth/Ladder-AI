@@ -1,9 +1,13 @@
 # Generation-run telemetry convention (FI-16)
 
-A proposed format, not adopted pipeline behavior yet: the instrumentation itself happens inside
-pipeline runs (`docs/15-generation-pipeline.md`), so adoption lands with that work stream. This doc
-exists so measurement can start with the very next generation project instead of being designed
-mid-run. Purpose (per FI-16, `16-future-ideas.md`): ground the decisions this project keeps
+**Adopted, and in active use** (status corrected 2026-08-05 — this doc described itself as an
+unadopted proposal long after the pipeline had started keeping logs to it). Six
+`gen/<project>/telemetry.log` files are maintained under this format, and six skills require the
+append at stage end: `gen-pid-analysis`, `gen-functional-analysis`, `gen-equipment-spec` and
+`gen-code-structure` (the four spec rungs), plus `gen-architecture` and `gen-block-new`. A stage
+whose skill doesn't exist yet is performed manually to the same contract and appends the same line
+(`CLAUDE.md`, generation workflow). Purpose (per FI-16, `16-future-ideas.md`): ground the decisions
+this project keeps
 deferring to measurement — whether FI-12's Portal-session work is worth its risk, which pipeline
 stages deserve subagent isolation, where FI-15 digests actually pay.
 

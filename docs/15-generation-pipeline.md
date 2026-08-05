@@ -44,7 +44,9 @@ A finding of "correct but harder to read than it needs to be" is a real finding,
 ## Stages and skills
 
 Fifteen skills across five phases (raised from thirteen, 2026-07-17 — owner-questions A-2: the
-Build phase's coding skill split into three). Names are the planned `.claude/skills/` names:
+Build phase's coding skill split into three), **plus the three additional spec-pipeline rungs added
+2026-08-05** (see "The four-rung structured spec pipeline" below) — eighteen in total, twelve of them
+built. Names are the planned `.claude/skills/` names:
 pipeline-only skills carry a `gen-` prefix; the reviewers don't, because they are useful against
 *any* block, generated or not. Each skill's contract: declared input artifacts, one output
 artifact, the docs that bind it, and stop conditions (missing info → a question in the artifact's
@@ -53,7 +55,7 @@ artifact, the docs that bind it, and stop conditions (missing info → a questio
 | # | Skill | Phase | Consumes → Produces | Anchors |
 |---|-------|-------|---------------------|---------|
 | 1 | `gen-spec-analysis` | Analyse | Functional description → `requirements.md`: numbered register (REQ-nnn), equipment inventory, C-113 memory-test class per sequence | C-113; `13-data-boundary.md` at entry |
-| 2 | `gen-pid-analysis` | Analyse | P&ID / drawings → `process-topology.md`: equipment+instrument inventory, material-flow direction, interlock candidates | C-114/C-116 (chain direction = material flow) |
+| 2 | `gen-pid-analysis` | Analyse | P&ID / drawings → `equipment-topology.md`: per-instance topology + interlock relations, process language only | C-114/C-116 (chain direction = material flow) — **BUILT 2026-08-05, and it is rung A of the four-rung pipeline below** |
 | 3 | `gen-io-tags` | Analyse | Site IO list + owner's address table → `io-map.md` + proposed tag-table IR | C-001, C-304; addresses never invented (hard rule 3) |
 | 4 | `gen-reconcile` | Analyse | Artifacts 1–3 → `rfi.md`: three-way cross-check, gaps, contradictions, undefined edge cases (first scan, restart, E-stop recovery, simultaneous inputs) | `11-review-workflow.md` edge-case list |
 | 5 | `gen-architecture` | Design | Artifacts 1–4 → `architecture.md`: block manifest carved reuse-first (owner-questions A-1), UDT interfaces, DB landscape, enable-chain graph, OB1 order, pattern-tier mapping + freeform %, REQ→block trace | C-109/C-110/C-113/C-114/C-115/C-127, C-30x |
@@ -67,6 +69,36 @@ artifact, the docs that bind it, and stop conditions (missing info → a questio
 | 13 | `review-simplicity` | Check | IR + written simplicity rules → findings; one-sentence-per-network test | C-6xx (pending), C-101, C-126, the quality bar above |
 | 14 | `audit-artifact` | Check | Any stage artifact + its raw source → dropped/hallucinated-content findings | `14-s2-explanation-checklist.md` precedent |
 | 15 | `generate` | Entry | A request → stage selection, per-project state, gate enforcement, final presentation, S8 harvest | CLAUDE.md S6 workflow step 5 |
+
+### The four-rung structured spec pipeline (added 2026-08-05)
+
+Four skills that run **alongside `gen-architecture`, not replacing it**, covering the Analyse→Design
+span with a stricter artifact chain. They are deliberately *not* numbered into the table above: rung A
+is skill #2, and the other three are additions, so numbering them in-sequence would renumber skills
+whose own SKILL.md files cite their number. Use the rung letters.
+
+| Rung | Skill | Consumes → Produces | The rule that defines it |
+|---|---|---|---|
+| **A** | `gen-pid-analysis` (= #2) | P&ID / layout + equipment references → `equipment-topology.md` | **process relations only** — no signals, no IO, no booleans |
+| **B** | `gen-functional-analysis` | Supplied functional description → `plant-behaviours.md` | plant intent only, grouped and scoped to equipment |
+| **C** | `gen-equipment-spec` | A + B + the IO table → `equipment-specs/<Instance>.md` (+ `requirements.md`) | **signals enter here**; booleans and interface members do not |
+| **D** | `gen-code-structure` | C → `code-structure.md` (+ `architecture.md`) | **booleans and interface members enter here, and nowhere earlier** |
+
+**Why they exist.** The S6-Killer-Plan autopsy found the root cause of a shipped REGRESSION: *an AI
+reviewer reading the same register as the AI coder is a **correlated** check, so both failed together
+on an ambiguous `/`* (`docs/evidence/PlantAutoControl-bench-autopsy.md`). The rungs break that correlation by
+forcing each layer of meaning to enter at exactly one place, where it can be checked.
+
+**Their artifact formats are contracts, not conventions.** `converter relation-reconcile`,
+`signal-sweep`, `candidate-scan` and `undriven-scan` parse these files — the mechanical floor
+(FI-36/FI-39). Read the SKILL before writing one of these artifacts by hand: a malformed spec file
+either hard-errors or, worse, silently reads as zero coverage. The shapes are specified in each SKILL,
+not here, so there is one authority per contract.
+
+**Maturity — do not read this table as more settled than it is.** Exercised on **one plant across three
+runs** (`gen/PlantAutoControl-bench-rerun{,2,3}/`), never yet on a second. And every reference currently in
+`references/<class>/` self-declares as derived-from-as-built rather than from an engineering standard,
+so rung A's *completeness by construction* is **nominal, not delivered** — the binding open item.
 
 Skills 8–9 (the modify pair) share a **modification-choreography reference** — the common
 procedure for scoping a touch to named network(s), proving the untouched-network invariance
@@ -175,7 +207,7 @@ freeform surface the next build needs.
   compile gate before "done", review before the real project, IR only.
 - `13-data-boundary.md` is checked at the analysis skills' entry — that is where restricted material
   (specs, P&IDs, IO lists) enters the pipeline. P&ID reading from PDF drawings is additionally the
-  least reliable input medium; `process-topology.md` is a draft-for-confirmation, never ground
+  least reliable input medium; `equipment-topology.md` is a draft-for-confirmation, never ground
   truth.
 - REQ-nnn IDs are stable once assigned — S9 sim tests will trace to them.
 - **Manual coding is bounded** (owner ruling 2026-07-17 — owner-questions A-3): once
@@ -201,7 +233,8 @@ corpus: a reviewer skill that doesn't independently find the known problems isn'
 | 5 | `gen-architecture` | **Built + validated** 2026-07-16 (independent-reconvergence method; baseline artifact `gen/test-project001/architecture.md`; `docs/notes/gen-architecture-validation-2026-07-16.md`); reuse-first Method rewrite (A-1) landed 2026-07-17 |
 | 6 | `gen-block-new`, `gen-block-modify-purpose`, `gen-block-modify-fix` formalization (+ shared modification-choreography reference) — **pulled forward** ahead of the remaining analysis skills (owner ruling 2026-07-17, A-2/A-3: three coding waves ran manual-to-contract while this sat unbuilt at the old step 7) | **`gen-block-new` AUTHORED + VALIDATED 2026-07-18** (`.claude/skills/gen-block-new/SKILL.md`; two blind validations vs real blocks — FilterUnitSystem, ShredderControlSystem — `docs/evidence/stage-S6.md`). **`gen-block-modify-fix` AUTHORED + VALIDATED 2026-07-18** (`.claude/skills/gen-block-modify-fix/SKILL.md`; invariance gate = `converter diff --only`; validated on the genval2 fix corpus `gen/_validation/shredder/` — FR-1/FR-2 fixed compile-clean + invariance-proven, FR-3 correctly stop-and-routed). **`gen-block-modify-purpose` AUTHORED 2026-07-18 + VALIDATED 2026-07-20** (`.claude/skills/gen-block-modify-purpose/SKILL.md`) — the S7 purpose-change path (interface change + add/remove networks in scope); validated via a **blind MotorDOL→MotorVSDSystem purpose change** against a sanitized real answer key (`gen/_validation/MotorVSDSystem-purpose/`, `docs/evidence/stage-S6.md`): all 22 REQs implemented, NW1–5 byte-identical (invariance held), no gold-plating, even improved on the real block; 1 minor skill gap (NW9 reverse fail-to-stop). The compile gate surfaced a real converter part-order bug (Normalizer-masked): synthesized `<Parts>` weren't in TIA's required flow order. **Fixed** (`f3ad4ca` Access-subgroup + `7694fdf` the real fix: instruction parts now emit in wire-graph flow order via a DFS from the rail). **MotorVSDSystem then imports + compiles clean in TIA (0 errors)** — the compile gate is **CLOSED**, so both the compile gate and the fidelity grade confirm the validation. The fix (byte-stable on all real exports + live-validated) also de-risks the MotorStarter sidecar-drop. Gap I in `converter-synthesis-gaps.md` is done. **All three coding skills are now authored AND validated.** The shared modification choreography was split into **`docs/notes/modification-choreography.md`** (both modify skills reference it — the "worth splitting out" point, reached now that two exist). The 5-step manual loop (CLAUDE.md) remains the working seed until each skill is validated. **Internal sequencing ruled 2026-07-18 (A-4):** `gen-block-new` **first** (roadmap-fidelity — it's S6's own deliverable and S6-done is S7's entry gate; the earlier "S7 is the rush" premise that argued modify-first is retired), then `gen-block-modify-fix`, then `gen-block-modify-purpose`. **`converter diff` built now in parallel** as standalone tooling (S7 entry req; PC-side, no dependency) — done 2026-07-18. S7-gate timing ruled 2026-07-18 (D-4): roadmap S7 entry stays "S6 done" (kept as-is), so the path is `gen-block-new` → close S6's ten → open S7; full record in `docs/evidence/stage-S6.md` |
 | 7 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
-| 8 | `gen-pid-analysis`, `audit-artifact`, `gen-integration` formalization | Not built |
+| 8 | The **four-rung structured spec pipeline**: `gen-pid-analysis` (rung A), `gen-functional-analysis` (B), `gen-equipment-spec` (C), `gen-code-structure` (D) — pulled forward out of this step by the S6-Killer-Plan autopsy, which found a correlated-check root cause the existing chain could not fix | **All four BUILT 2026-08-05** (`448251c`, amended `b66c1f8`/`c48057b`/`decd2d5`/`361c0e0`). Adversarially validated twice (`docs/evidence/four-rung-design-validation{,-round2}.md`) and exercised on three runs (`gen/PlantAutoControl-bench-rerun{,2,3}/`). **Caveats, both live:** one plant only, never a second; and `references/<class>/` self-disclaims as non-standards, so rung A's completeness-by-construction is nominal, not delivered |
+| 8b | `audit-artifact`, `gen-integration` formalization | Not built |
 | 9 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |
 
 ## Relationship to existing docs

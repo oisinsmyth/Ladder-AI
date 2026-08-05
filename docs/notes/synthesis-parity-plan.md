@@ -108,7 +108,8 @@ locals, Word→Int convert, Real tag-vs-tag compare, UDT-param inline, SUB/DIV, 
 
 ## Stage 3 — flip to derive-always (the payoff) — LINED UP 2026-07-18
 
-**The decision is recorded: `docs/adr/adr-0005-derive-always-sidecar.md` (Proposed).** Readable IR is
+**The decision is recorded: `docs/adr/adr-0005-derive-always-sidecar.md` (Accepted (owner,
+2026-07-18)).** Readable IR is
 canonical; `to-xml` derives the sidecar by default; stored `SIDECAR` sections are deprecated — **D-6 and
 the scoped merge become moot.** The ADR is gated + phased; the remaining gates before any stored sidecar
 is dropped:
@@ -138,7 +139,8 @@ moot) when the modify skills are next touched.
 
 - Offline parity harness green over the full corpus (type-sensitive) — **DONE** (14/14).
 - `SynthesizerLiveCheck.RunCorpus` passes (import + compile) in a Portal session — **DONE** (10/10, 2026-07-18).
-- Derive-always ADR recorded — **DONE** (ADR-0005, Proposed); `converter-synthesis-gaps.md` reframed as
+- Derive-always ADR recorded — **DONE** (ADR-0005, Accepted (owner, 2026-07-18));
+  `converter-synthesis-gaps.md` reframed as
   the parity checklist — **DONE**.
 
 ## Tracking

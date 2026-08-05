@@ -50,12 +50,19 @@ Comments are the lowest-risk write: they cannot change logic. This is where the 
 *Deliverables:* AI composes new networks/blocks from the pattern library using real exported tags; automatic import+compile loop — AI iterates until clean compile before presenting anything.
 *Exit:* Ten plain-language requests produce compiling, human-approved LAD with zero invented tags. Freeform (non-pattern) rungs require explicit human opt-in per request.
 
+*Rulings (recorded here 2026-08-05; the decisions themselves are the project owner's, evidence in `docs/evidence/stage-S6.md`):*
+- **Entry — the "~10 patterns" seed target is approximate, and was satisfied at S6 entry by two well-proven pattern *kinds*** (equipment-instance FB/FC via `CALL`; documented repeated rung-shape), not by a literal count of ten. The library grows organically once S6 is running (owner's call, 2026-07-15).
+- **Exit — the ten are ten *fresh* plain-language generation requests.** Fix waves are tracked separately and do not count toward the ten, and neither do validation fixtures (ruling D-4, 2026-07-18). The live tally is kept in `AITODO.md`.
+
 ## S7 — Modify existing networks (Goal 8)
 
 Highest-risk capability: changes to existing logic.
 *Entry:* S6 done; diff tooling shows exactly which networks changed and proves the rest are identical in IR.
 *Deliverables:* Targeted network edit mode — AI changes only the named network(s); surrounding-logic invariance check; before/after diff for review.
 *Exit:* Ten modification tasks with zero unintended changes outside the target networks.
+
+*Ruling (recorded here 2026-08-05; owner's decision, evidence in `docs/evidence/stage-S6.md`):*
+- **The entry criterion stays "S6 done" deliberately** (ruling D-4, 2026-07-18) — it was considered and kept as-is, not left unrevised. So the path is: close S6's ten fresh requests, then open S7. The S7 coding/modify skills and the invariance tool (`converter diff`) were built ahead of that gate under ruling A-4; building them is not entering the stage.
 
 ## S8 — Pattern library maturation (Goal 9)
 

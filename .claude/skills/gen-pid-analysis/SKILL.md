@@ -39,6 +39,12 @@ Read `CLAUDE.md` first; its hard rules bind you.
   **complete by construction**: an instance of a class inherits the class's full requirement set, so
   a standard requirement cannot be silently forgotten. **Stop condition:** an equipment class with no
   reference → a blocking `Q-nn`, never an improvised requirement set.
+  **Status caveat — this property is nominal, not delivered.** Every reference currently in
+  `references/` opens by self-declaring *derived from as-built code, not from an engineering
+  standard*. A set derived from what one plant happened to build cannot establish what a class
+  *normally* requires, so it cannot make anything complete by construction. Raise it as a blocking
+  `Q-nn` on every run until a standards-grounded reference exists — do not let the phrase above
+  stand in for a completeness you have not got.
 
 ## Method
 
