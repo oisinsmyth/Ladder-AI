@@ -1,5 +1,22 @@
 # Fix list — 2026-07-20 full project audit
 
+> ## ⚠️ STATUS: UNIMPLEMENTED — OUT OF DATE (marked 2026-08-05)
+>
+> **None of the 19 items below were ever executed, and the project has since changed enough that this list
+> should not be worked through as-is.** It is retained as the record of what the 2026-07-20 audit
+> recommended.
+>
+> Since that audit, master gained the four-rung spec pipeline (rungs A–D), the FI-32/FI-35 mechanical-floor
+> tooling, an FI renumbering (FI-32..35 → FI-36..39), a `tagstatus` hard-rule-3 fix, and a data-boundary
+> change (full Red-confidentiality access, zero retention) — which between them invalidate or move the
+> premises of several rows, notably **F-03** (FI status), **F-17/F-19** (data boundary), and the D8-derived
+> rows **F-07/F-16** (skill inventory).
+>
+> Some rows are still likely valid — mostly the small doc corrections (F-01, F-06, F-08, F-14, F-15) and the
+> git/build hygiene items (F-10, F-12) — but **re-verify each against current `master` before acting**.
+> Preferred path: run a fresh audit and let it re-derive the list. See the status banner on the report for
+> the full picture.
+
 Actionable companion to `2026-07-20-full-project-audit.md`. Ranked worst-first. **The audit applied none of
 these** (read-only, owner chose recommend-only) — each row is a turnkey recommendation for a later,
 separate step. Disposition: **fix** = mechanical, safe, no decision needed · **decide** = needs an owner

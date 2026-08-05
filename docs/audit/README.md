@@ -320,10 +320,27 @@ rule 1) and makes no changes, so there is no "after" run to reconfirm.
 
 ## Record of audits
 
-| Date | Scope | Report |
-|------|-------|--------|
-| 2026-07-11 | D1 stage/goals + D2 doc consistency (full suite → S1 item 7) | [`2026-07-11-stage-and-docs-audit.md`](2026-07-11-stage-and-docs-audit.md) |
-| 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (compliance excluded by owner) | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
-| 2026-07-20 | Full project audit — all dimensions D1–D10 from zero (read-only; 19 fix-list items, 0 blocker) | [`2026-07-20-full-project-audit.md`](2026-07-20-full-project-audit.md) · [fixlist](2026-07-20-full-project-audit-fixlist.md) |
+| Date | Scope | Status | Report |
+|------|-------|--------|--------|
+| 2026-07-11 | D1 stage/goals + D2 doc consistency (full suite → S1 item 7) | applied inline | [`2026-07-11-stage-and-docs-audit.md`](2026-07-11-stage-and-docs-audit.md) |
+| 2026-07-14 | D3 docs-vs-code + D4 code quality/architecture (compliance excluded by owner) | applied inline; 4 items flagged for owner | [`2026-07-14-code-quality-and-docs-audit.md`](2026-07-14-code-quality-and-docs-audit.md) |
+| 2026-07-20 | Full project audit — all dimensions D1–D10 from zero (read-only; 19 fix-list items, 0 blocker) | ⚠️ **unimplemented — out of date** (marked 2026-08-05) | [`2026-07-20-full-project-audit.md`](2026-07-20-full-project-audit.md) · [fixlist](2026-07-20-full-project-audit-fixlist.md) |
 
-Add a row here whenever a new audit lands.
+Add a row here whenever a new audit lands, and keep its **Status** current (see below).
+
+## Marking an audit superseded
+
+A landed report is never rewritten (see the naming convention) — but its *status* is allowed to change, and
+must, or a stale report reads as current. When an audit's findings no longer describe the project, or its
+fix list is overtaken by events:
+
+- Add a **status banner at the top of both files** (report and fix list) stating: the status
+  (`out of date` / `superseded` / `unimplemented`), the date it was marked, and — concretely — **what
+  changed** since that makes it stale. Name the actual work (new skills, tooling, decisions), not just
+  "things moved on"; the next auditor uses this to judge what can still be reused.
+- Say explicitly whether the fix list was **executed, partly executed, or never actioned**.
+- Update the **Status** column in the Record of audits above.
+- Leave the findings, evidence, and counts themselves **unaltered** — the banner is an archival annotation
+  wrapping the record, never an edit to it.
+- A superseded fix list is not a to-do list. The next audit's **D7** should re-derive rather than tick it
+  off, treating still-plausible rows as leads to re-verify against current `master`.

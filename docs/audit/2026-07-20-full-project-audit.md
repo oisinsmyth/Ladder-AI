@@ -1,5 +1,31 @@
 # Audit — 2026-07-20: full project audit (all dimensions, from zero)
 
+> ## ⚠️ STATUS: OUT OF DATE — NOT IMPLEMENTED (marked 2026-08-05)
+>
+> **The findings below were true on 2026-07-20 and are retained as the historical record of that audit.
+> They should not be treated as the current state of the project, and the fix list was never executed.**
+>
+> - **Fix list: unimplemented.** None of the 19 items (F-01–F-19) were actioned. The audit was read-only
+>   by charter and the owner chose recommend-only; no follow-up execution pass was run.
+> - **Findings: stale.** The project changed substantially in the ~2 weeks after this audit — enough that
+>   re-verification, not selective reuse, is the right move. Concretely, since 2026-07-20 master gained:
+>   the **four-rung structured spec pipeline** (`gen-pid-analysis`, `gen-functional-analysis`,
+>   `gen-equipment-spec`, `gen-code-structure`) — so the D8 skill inventory and `docs/15` build-order
+>   findings no longer describe reality; the **FI-32/FI-35 "mechanical floor"** tooling (candidate-scan,
+>   undriven-scan, relation-reconcile, signal-sweep, trace guard-containment); an **FI renumbering**
+>   (FI-32..35 → FI-36..39) that invalidates the FI-status finding F-03; a **`tagstatus` hard-rule-3 fix**
+>   (DB-member resolution); and a **data-boundary change** ("live-run data boundary — full
+>   Red-confidentiality access, zero retention", `9971dbd`) that directly supersedes the premises of
+>   F-17 and F-19.
+> - **Do not action this fix list as-is.** Individual items may still be valid (several are simple doc
+>   corrections), but each needs re-checking against current `master` before being executed.
+> - **Next step:** run a fresh full audit under the charter when wanted. Its D7 (prior-findings
+>   follow-through) should treat this list as *unimplemented-and-superseded* — i.e. re-derive rather than
+>   tick off.
+>
+> *This banner is an archival status annotation. The audit's findings, evidence, and counts below are
+> unaltered from the original — per the charter, a landed report is never rewritten.*
+
 The first audit run under the standing charter (`docs/audit/README.md`). Read-only: this report and its
 paired fix list (`2026-07-20-full-project-audit-fixlist.md`) are the entire output — nothing else in the
 repo was changed, and no ladder logic was opened.
