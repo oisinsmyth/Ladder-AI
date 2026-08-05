@@ -1833,6 +1833,36 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
+## `signal-sweep` — project-level residual signal coverage (2026-08-05, FI-35 check 5)
+
+```
+converter signal-sweep --project <ir-dir> --specs <equipment-specs-dir>
+                       [--register <requirements.md>] [--unclaimed <unclaimed-signals.md>] [--json]
+```
+
+Computes the **denominator** (every global-DB leaf and tag-table tag in the corpus) and classifies each
+signal `claimed-by-spec` / `disposed` (listed in the residual artifact's per-DB disposition tables) /
+`unaccounted`.
+
+**Its value is exactness, not a catch** — it has no oracle, and the design study grades it Medium. What
+it converts is an artifact's own self-reported approximations into computed integers: on the fixture,
+**201 swept** against the artifact's `~190`, with an exact per-DB breakdown and an exact residue. An
+approximate denominator cannot support a completeness claim; an exact one can.
+
+- **Qualification matters:** the disposition tables list **bare leaf names** under a `### \`Db\``
+  heading, so each is qualified by its enclosing heading before comparison — without that, every leaf
+  silently fails to match and the whole sweep reads as unaccounted.
+- **"Mentioned in a spec" is the claimed test, deliberately coarse.** A spec that names a tag without
+  binding it is a different problem, and this check must not pretend to detect it.
+- **A signal dispositioned only in PROSE reads as unaccounted** (a row like `E-stop members | safety`).
+  That is not a false positive so much as a fact about the artifact: prose is not machine-checkable, and
+  backticking the member names is the fix. The output says so explicitly.
+- **Hard errors, never silent coverage:** an empty corpus, or an `--unclaimed` artifact whose tables
+  cannot be found, both fail loudly rather than reporting full coverage or blanket-unaccounted.
+
+**Exit 1** if any swept signal is in neither a spec nor a disposition table. Whether an unaccounted
+signal *implies control* is the engineer's call — the tool reports coverage, never a verdict.
+
 ## `relation-reconcile` — relation-set reconciliation + probative citations (2026-08-05, FI-35 checks 2+3)
 
 ```

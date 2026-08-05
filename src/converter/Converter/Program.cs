@@ -11,6 +11,7 @@ using Converter.ReuseScan;
 using Converter.RelationReconcile;
 using Converter.Review;
 using Converter.Sanitize;
+using Converter.SignalSweep;
 using Converter.SimaticMl;
 using Converter.TagStatus;
 using Converter.TargetScan;
@@ -71,6 +72,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "relation-reconcile")
         {
             return RunRelationReconcile(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "signal-sweep")
+        {
+            return RunSignalSweep(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -557,6 +563,73 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunSignalSweep(string[] args)
+    {
+        string? projectDir = null;
+        string? specs = null;
+        string? register = null;
+        string? unclaimed = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--specs":
+                    specs = RequireValue(args, ref i, "--specs");
+                    break;
+                case "--register":
+                    register = RequireValue(args, ref i, "--register");
+                    break;
+                case "--unclaimed":
+                    unclaimed = RequireValue(args, ref i, "--unclaimed");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || specs is null)
+        {
+            Console.Error.WriteLine("Usage: converter signal-sweep --project <ir-dir> --specs <equipment-specs-dir> [--register <requirements.md>] [--unclaimed <unclaimed-signals.md>] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir) || !Directory.Exists(specs))
+        {
+            Console.Error.WriteLine($"directory not found: {(Directory.Exists(projectDir) ? specs : projectDir)}");
+            return 1;
+        }
+
+        foreach (var path in new[] { register, unclaimed }.Where(p => p is not null && !File.Exists(p)))
+        {
+            Console.Error.WriteLine($"file not found: {path}");
+            return 1;
+        }
+
+        try
+        {
+            var report = SignalSweepRunner.Run(projectDir, specs, register, unclaimed);
+            Console.WriteLine(json
+                ? SignalSweepOutputFormatter.FormatJson(report)
+                : SignalSweepOutputFormatter.FormatText(report));
+
+            return report.HasFindings ? 1 : 0;
+        }
+        catch (SignalSweepFormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
     }
 
     private static int RunRelationReconcile(string[] args)
