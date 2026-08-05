@@ -12,7 +12,8 @@ Claude Code sends repo content and command output to Anthropic's API. Exported P
 |------|---------|-----------|
 | Green | This doc suite, tooling code, IR spec, pattern library, the purpose-built reference project | Yes |
 | Amber | Real project logic with identifying data (identifying names in comments, IP addresses, site names) | Only after sanitization, or with explicit per-project approval |
-| Red | Safety program content; anything a site contract forbids sharing | Never — also enforced in tooling for safety content |
+| Red — confidentiality | Anything a site contract, NDA or commercial sensitivity would otherwise keep off a shared repo | Never in committed repo content. **Full working access inside `Live Runs/`** (see "Live runs" below) — the restriction there is on *retention*, not on access |
+| Red — safety | Safety program content: F-blocks, F-runtime groups, the safety program | **Never, everywhere, no exception** — `CLAUDE.md` hard rule 2, also enforced in tooling. `Live Runs/` does not change this |
 
 ## Decisions needed (record as ADR-0003 when made)
 
@@ -23,6 +24,8 @@ Claude Code sends repo content and command output to Anthropic's API. Exported P
 ## Interim rule (until decided)
 
 Only Green-tier content goes near Claude Code. The reference project is purpose-built and contains nothing identifying — all development through S6 can proceed on Green data alone, so this decision does not block early stages.
+
+Two standing exceptions to that rule, both recorded below: the per-project Amber approvals, and — from 2026-08-04 — `Live Runs/`, which is governed by its own section and is *not* an approval-per-job process.
 
 ## Per-project approvals (Amber, pending ADR-0003)
 
@@ -218,3 +221,83 @@ Only Green-tier content goes near Claude Code. The reference project is purpose-
     generation input or as a committed example, and any further JOB9003 work beyond the alarm
     extraction above — re-confirm with the owner first, per the same "per-project, not blanket"
     rule the JOB9002 entry states.
+
+## Live runs (`Live Runs/`) — full working access, zero retention
+
+**Established 2026-08-04 by the project owner.** From this point the tooling is used on real
+live jobs worked end-to-end, not only on pipeline-development data. Those jobs live under
+`Live Runs/<job>/` and are governed by this section rather than by the per-project approval
+process above — no separate approval entry is needed per job; placing a job in `Live Runs/` **is**
+the approval.
+
+**Access — all of it, every tier of confidentiality (widened 2026-08-05).** Whatever the owner puts
+in `Live Runs/` — control specs, functional descriptions, the live TIA project, exports, I/O
+schedules, correspondence — the AI may read, reason over and work against **in full, unsanitized**.
+Real identifying names, site names, tag names, equipment names and comment text are all usable in
+conversation and in local working files inside `Live Runs/`. There is no read-only restriction:
+generation, import and compile against a live-run project are in scope when the owner asks for them,
+subject to the hard rules in `CLAUDE.md` (which are unchanged — in particular hard rule 5, engineer
+review before anything enters the real project).
+
+This access is **not limited to Green and Amber material**. Content that would elsewhere be
+Red-tier on confidentiality grounds — contract- or NDA-restricted, commercially sensitive, whatever
+would normally never go near a shared repo — is in scope inside `Live Runs/` on the same terms as
+everything else. The owner placing a job there is the decision that this material may be worked on;
+the AI does not tier-triage it, ask for a per-file approval, or hold back from using a document
+because it looks sensitive. **The entire boundary for live-run data is retention, not access:** it
+may be used freely and must never be committed or written into the knowledge base (below). The one
+carve-out is safety, which is a different axis entirely — see "Safety is unaffected".
+
+**Retention — the whole point of this section. Two prohibitions, both absolute:**
+
+1. **Nothing from a live run is ever committed.** `Live Runs/` is gitignored — unanchored, so a
+   live-run folder at any depth is covered, and spelling variants (`LiveRuns/`, `Live-Runs/`,
+   `live_runs/`) are ignored too. That must stay that way; never narrow those patterns and never
+   add a negation (`!`) that re-exposes anything under them. Do not commit its contents, do not
+   copy its contents to a committed path, do not `git add -f` any of it, and do not quote it
+   verbatim in a commit message, PR body or changelog entry. This applies with full force to the
+   Red-tier material the access rule above now admits: broad access is only safe because retention
+   is zero, so the two halves are load-bearing on each other.
+2. **Nothing from a live run is ever written into the knowledge base.** No committed doc, ADR,
+   note, skill, pattern, convention rule, test fixture, `CLAUDE.md` edit or Claude Code memory
+   file may carry live-run content — including tag names, block names, equipment names, comment
+   text, alarm wording, site/site names, or a paraphrase specific enough to identify any of
+   them. This bites hardest where it is least obvious: a "lesson learned" phrased in the job's own
+   vocabulary is still live-run content leaking into the repo.
+
+**How a lesson gets out.** Live runs will produce genuinely valuable learnings — converter gaps,
+convention rules, new patterns, spec-review heuristics. Those are not lost, but they are recorded
+**only after** one of:
+
+- **Sanitization.** The learning is restated in invented/generic vocabulary carrying no
+  site-specific identifier, on the same basis as the 2026-07-10 reference-project and 2026-07-15
+  Kestrel Shredder Systems entries: real structure may inform an invented artifact; real values never
+  appear. Where a name mapping is used it goes in `sanitization/` (gitignored), never committed.
+- **Explicit owner permission.** The owner may nominate a specific, defined item — one lesson, one
+  data shape, one example — and either approve it verbatim or direct that it be sanitized. The
+  permission is per-item and per-instance, not a standing grant for the job, and the item it
+  covers is named when it is given. Record the permission in this section when it happens.
+
+**Not automatic.** The AI does not decide on its own that something is generic enough to keep. If a
+live run surfaces something worth capturing, raise it with the owner and ask; the default while
+unanswered is that it stays inside `Live Runs/` and is not written down anywhere else. Working
+notes for a live run belong in that job's own folder, where they are gitignored along with it.
+
+**Safety is unaffected.** This section grants confidentiality access, not safety access — the two
+Red rows in the table above are separate axes and only the confidentiality one is opened here.
+`CLAUDE.md` hard rule 2 stands in full: F-blocks, F-runtime groups and the safety program are never
+read, written, converted, explained or referenced, in a live run exactly as anywhere else, however
+freely the rest of the same project may be worked on. If the owner wants that changed it is a
+deliberate separate decision (hard-rule change + ADR), never something inferred from "full access to
+all data provided".
+
+### Live runs opened
+
+Job codes only. The site/site name, equipment scope and any other job detail stay in the job's
+own gitignored folder and are deliberately not restated here — prohibition 2 applies to this
+register like it applies to everything else. Note the difference from the per-project approval
+entries above, which do name their projects: those predate this section and were recorded under
+the older Amber process; live runs do not follow it.
+
+- **2026-08-04 — job `JOB9004`.** First live run; owner is reviewing each step. Job identity, scope
+  and all content live in `Live Runs/JOB9004/` only. Governed entirely by this section.

@@ -42,6 +42,21 @@ SampleProject/
 # original on-disk name (GenProject1/) for Openness continuity — see CLAUDE.md's codename note.
 /GenProject1/
 
+# Live runs — live engineering jobs worked end-to-end (docs/13-data-boundary.md, "Live runs" section,
+# 2026-08-04). The AI has full working access to everything in here, Red-tier included; NOTHING in
+# here is ever committed, and nothing verbatim from it is written into a committed doc, skill,
+# pattern, memory or note. Covers the whole tree: specs, TIA projects, exports, working notes,
+# correspondence — every file type, at every depth, no exceptions carved out below this line.
+#
+# Deliberately UNANCHORED and spelling-tolerant (2026-08-05): the root `Live Runs/` is where jobs
+# actually live, but a live-run folder created at any depth (e.g. a job's own nested working copy,
+# or an exports staging dir someone drops under scratch/) must be ignored too. A live-run leak is
+# unrecoverable once pushed — the cost of a few redundant patterns is nothing next to that.
+Live Runs/
+LiveRuns/
+Live-Runs/
+live_runs/
+
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
 Siemens.Engineering*.dll
 
