@@ -31,7 +31,11 @@ Read `CLAUDE.md` first; its hard rules bind you.
 - **`gen/<project>/plant-behaviours.md`** (rung B) — `B-nn` behaviours with their `applies-to` scope.
 - **The IO table** — the real signals. **Stop condition:** a requirement needing a signal the IO table
   does not contain → the tag is `proposed`; record it as a **blocking `Q-nn`** and never invent it
-  (hard rule 3). Verify with `converter tagstatus` where an IR export exists.
+  (hard rule 3). Verify with `converter tagstatus` where an IR export exists — it classifies to
+  **member** level, so `MEMBER-NOT-FOUND` means the DB is real but the member you named is not.
+  A `MEMBER-UNCHECKED` result is *not* a pass: it means the tool could not enumerate that namespace,
+  so verify by reading the type before binding. This rung binds **members**, which is exactly where a
+  root-level-only check would launder an invented one.
 - **The equipment engineering references** — the per-class standard control requirement set. These
   give **completeness by construction**: every instance inherits its class's full requirement set.
 

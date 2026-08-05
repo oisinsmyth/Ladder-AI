@@ -1625,31 +1625,46 @@ zero false unresolved-tag findings.
 
 ## `tagstatus` — classify tag names exists/proposed (2026-07-18, FI-24)
 
-`converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]`
+`converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]`
 
 Mechanizes the pipeline's anti-laundering classification (`docs/15-generation-pipeline.md`
-"Artifacts"; CLAUDE.md hard rule 3): each name is `EXISTS` (present in the current export) or
-`PROPOSED` (a named gap the engineer resolves). Built for `gen-architecture`'s tag-status step,
-which otherwise hand-greps the export. Composition only — reuses `ProjectIndex` and the *same*
-`AccessNode.FromDottedPath` root extraction `preflight` uses, so the two never disagree.
+"Artifacts"; CLAUDE.md hard rule 3). Built for `gen-architecture`'s tag-status step and for the
+Build stage's run-stopping gate, both of which otherwise hand-grep the export. Composition only —
+root resolution reuses `ProjectIndex` and the *same* `AccessNode.FromDottedPath` extraction
+`preflight` uses; **member** resolution reuses `TagTypeRegistry` (the cross-file DB/UDT index behind
+the C-118 review rule), so "does `DB.member` exist" has one implementation, not a second to drift.
+
+Four states, because a root can resolve while its member namespace is genuinely unknowable:
+
+| Status | Meaning | Gate |
+|---|---|---|
+| `EXISTS` | the whole dotted path resolves (or a bare name resolves as a tag/DB) | pass |
+| `PROPOSED` | the **root** does not resolve — a named gap the engineer creates | **fail** |
+| `MEMBER-NOT-FOUND` | root resolves, members **are** enumerable, this member is absent | **fail** |
+| `MEMBER-UNCHECKED` | root resolves, member namespace not enumerable (unexported UDT, or an instance-DB stub from `create-instance-db` with no member tree) | pass, reported |
 
 Each name is resolved by checking the whole name first (catches bare tag-table tags whose own name
-contains a dot, e.g. `Clock_0.5Hz`, and DB names) then its root (catches `DB.member` /
-`Block.member` references — classification is by root, exactly like `preflight`'s `exists`/`proposed`
-line). `--project <ir-dir>` is the current export, scanned non-recursively; unindexable files
-surface as `INDEX WARNING`s. **Exit non-zero if any name is `proposed`** — so
+contains a dot, e.g. `Clock_0.5Hz`, and DB names), then its root, then the member path.
+`--project <ir-dir>` is the current export, scanned non-recursively; unindexable files surface as
+`INDEX WARNING`s. **Exit non-zero if any name is `PROPOSED` or `MEMBER-NOT-FOUND`** — so
 `converter tagstatus … --project … && <build>` is a usable "all tags exist" gate.
+`--roots-only` restores root-level-only classification for the Design stage, which classifies at
+root level because it designs *against* gaps rather than coding against them.
 
 ```
-$ converter tagstatus DB_Input.Cycle_Start DI3_SYS_CycleStart MadeUpTag --project ir/test-project001
+$ converter tagstatus DB_Input.Cycle_Start DI3_SYS_CycleStart MadeUpTag DB_Input.Invented --project ir/test-project001
 DB_Input.Cycle_Start -> EXISTS (root: DB_Input)
 DI3_SYS_CycleStart -> EXISTS
 MadeUpTag -> PROPOSED
-SUMMARY: 3 name(s), 1 proposed          # exit 1
+DB_Input.Invented -> MEMBER-NOT-FOUND (root: DB_Input)
+SUMMARY: 4 name(s), 1 proposed, 1 member-not-found, 0 member-unchecked      # exit 1
 ```
 
-Note: classification is root-level (does `DB_Input` exist?), not member-level — the same scope
-`preflight` checks; member existence within a DB is TIA's own compile-time check.
+**History (2026-08-05):** classification used to stop at the root, so `DB_Input.Invented` reported
+`EXISTS` — the gate protecting hard rule 3 blessed invented DB members, and `gen-block-new` gates its
+run on that result. Found by a pipeline run that independently grep-verified every member; the
+member check closes it, and `MEMBER-UNCHECKED` keeps the fix from manufacturing false gaps in the
+other direction.
 
 ## `diff` — network-level IR invariance (2026-07-18, S7 entry requirement)
 

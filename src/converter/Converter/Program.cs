@@ -90,7 +90,7 @@ internal static class Program
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]   # --project enables cross-file rules (C-118 interface-UDT Step, FI-09)");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
-            Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
+            Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]   # classify names against the export (FI-24): EXISTS / PROPOSED (root absent) / MEMBER-NOT-FOUND (root resolves, member absent) / MEMBER-UNCHECKED (member namespace not enumerable); exit 1 if any proposed or member-not-found. --roots-only restores root-level-only classification");
             Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
@@ -426,6 +426,7 @@ internal static class Program
         var names = new List<string>();
         string? projectDir = null;
         var json = false;
+        var rootsOnly = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -437,6 +438,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--roots-only":
+                    rootsOnly = true;
+                    break;
                 default:
                     names.Add(args[i]);
                     break;
@@ -445,7 +449,7 @@ internal static class Program
 
         if (names.Count == 0 || projectDir is null)
         {
-            Console.Error.WriteLine("Usage: converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]");
+            Console.Error.WriteLine("Usage: converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]");
             return 1;
         }
 
@@ -455,10 +459,10 @@ internal static class Program
             return 1;
         }
 
-        var report = TagStatusRunner.Run(names, projectDir);
+        var report = TagStatusRunner.Run(names, projectDir, rootsOnly);
         Console.WriteLine(json ? TagStatusOutputFormatter.FormatJson(report) : TagStatusOutputFormatter.FormatText(report));
 
-        return report.HasProposed ? 1 : 0;
+        return report.HasBlocking ? 1 : 0;
     }
 
     private static int RunDiff(string[] args)
