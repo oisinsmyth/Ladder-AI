@@ -22,7 +22,7 @@ public enum MemberPathOutcome
     NotEnumerable,
 }
 
-// Outcome plus, where it helps a reader, what exactly was wrong ("Silo[7] outside Array[0..3]").
+// Outcome plus, where it helps a reader, what exactly was wrong ("Unit[7] outside Array[0..3]").
 public sealed record MemberPathResolution(MemberPathOutcome Outcome, string? Detail = null);
 
 // Array-aware member-path resolution for `tagstatus` (FI-45 item 1, 2026-08-05).

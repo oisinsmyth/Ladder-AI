@@ -142,11 +142,11 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void TagTableSignal_IsDispositionedByItsTagTableHeading()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteTagTable("IO_Line", "DI1_LineHealthy", "DQ1_LineRun");
         WriteSpec("- **C1** bound to `DB_In.Bound` [io]\n");
         var unclaimed = WriteUnclaimed(
-            "## Full disposition table\n\n### `IO_Plant`\n\n| Members | Disposition |\n|---|---|\n" +
-            "| `DI1_PlantHealthy`, `DQ1_PlantRun` | out-of-scope-pilot |\n" +
+            "## Full disposition table\n\n### `IO_Line`\n\n| Members | Disposition |\n|---|---|\n" +
+            "| `DI1_LineHealthy`, `DQ1_LineRun` | out-of-scope-pilot |\n" +
             "\n### `DB_In` (DB 1)\n\n| Members | Disposition |\n|---|---|\n" +
             "| `Disposed`, `Nobody` | out-of-scope-instance |\n");
 
@@ -181,19 +181,19 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void TagTableSignal_WithNoDispositionRow_StillReportsUnaccounted()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteTagTable("IO_Line", "DI1_LineHealthy", "DQ1_LineRun");
         WriteSpec("- **C1** bound to `DB_In.Bound` [io]\n");
         var unclaimed = WriteUnclaimed(
-            "### `IO_Plant`\n\n| Members | Disposition |\n|---|---|\n| `DI1_PlantHealthy` | out-of-scope-pilot |\n" +
+            "### `IO_Line`\n\n| Members | Disposition |\n|---|---|\n| `DI1_LineHealthy` | out-of-scope-pilot |\n" +
             "\n### `DB_In` (DB 1)\n\n| Members | Disposition |\n|---|---|\n" +
-            "| `Disposed`, `Nobody`, `DQ1_PlantRun` | out-of-scope-instance |\n");
+            "| `Disposed`, `Nobody`, `DQ1_LineRun` | out-of-scope-instance |\n");
 
         var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
 
         Assert.True(report.HasFindings);
         var unaccounted = Assert.Single(report.Unaccounted);
-        Assert.Equal("DQ1_PlantRun", unaccounted.Path);
-        Assert.Equal("IO_Plant", unaccounted.Container);
+        Assert.Equal("DQ1_LineRun", unaccounted.Path);
+        Assert.Equal("IO_Line", unaccounted.Container);
         Assert.Equal(SignalContainerKind.TagTable, unaccounted.Kind);
     }
 
@@ -201,8 +201,8 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void TagTableSignal_ClaimedBareBySpec_CountsAsClaimed()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy");
-        WriteSpec("- **C1** bound to `DI1_PlantHealthy` [io]\n");
+        WriteTagTable("IO_Line", "DI1_LineHealthy");
+        WriteSpec("- **C1** bound to `DI1_LineHealthy` [io]\n");
 
         var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
 
@@ -215,9 +215,9 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void MixedDbAndTagTableInventory_AttributesEachSignalToItsOwnContainer()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteTagTable("IO_Line", "DI1_LineHealthy", "DQ1_LineRun");
         WriteTagTable("IO_Units", "DI2_UnitLevel");
-        WriteSpec("- **C1** `DB_In.Bound`, `DI1_PlantHealthy`\n");
+        WriteSpec("- **C1** `DB_In.Bound`, `DI1_LineHealthy`\n");
 
         var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
 
@@ -227,10 +227,10 @@ public class SignalSweepTests : IDisposable
         var byName = report.ByContainer.ToDictionary(c => c.Container, StringComparer.Ordinal);
         Assert.Equal(3, byName["DB_In"].Swept);
         Assert.Equal(SignalContainerKind.Db, byName["DB_In"].Kind);
-        Assert.Equal(2, byName["IO_Plant"].Swept);
-        Assert.Equal(SignalContainerKind.TagTable, byName["IO_Plant"].Kind);
+        Assert.Equal(2, byName["IO_Line"].Swept);
+        Assert.Equal(SignalContainerKind.TagTable, byName["IO_Line"].Kind);
         Assert.Equal(1, byName["IO_Units"].Swept);
-        Assert.Equal(1, byName["IO_Plant"].Claimed);
+        Assert.Equal(1, byName["IO_Line"].Claimed);
     }
 
     // The presentation half of FI-45 item 2: the old grouping split on the first dot, so N flat tags
@@ -238,28 +238,28 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void GroupedOutput_RendersATagTableAsOneTable_NotOneRowPerTag()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun", "DQ2_PlantStop");
+        WriteTagTable("IO_Line", "DI1_LineHealthy", "DQ1_LineRun", "DQ2_LineStop");
         WriteSpec("- **C1** `DB_In.Bound`\n");
 
         var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
         var text = SignalSweepOutputFormatter.FormatText(report);
 
         Assert.Contains("by container (DB / tag table)", text);
-        Assert.Contains("tag table IO_Plant", text);
+        Assert.Contains("tag table IO_Line", text);
 
         // One row for the table, not one per tag.
-        var rows = text.Split('\n').Where(l => l.Contains("IO_Plant") && l.Contains("swept")).ToList();
+        var rows = text.Split('\n').Where(l => l.Contains("IO_Line") && l.Contains("swept")).ToList();
         Assert.Single(rows);
-        Assert.DoesNotContain("DI1_PlantHealthy   swept", text);
+        Assert.DoesNotContain("DI1_LineHealthy   swept", text);
 
         // And the unaccounted list names the table a tag belongs to, since the tag name cannot.
-        Assert.Contains("DI1_PlantHealthy   (tag table IO_Plant)", text);
+        Assert.Contains("DI1_LineHealthy   (tag table IO_Line)", text);
 
         var json = SignalSweepOutputFormatter.FormatJson(report);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var containers = doc.RootElement.GetProperty("byContainer").EnumerateArray().ToList();
         Assert.Equal(2, containers.Count);
-        Assert.Contains(containers, c => c.GetProperty("container").GetString() == "IO_Plant"
+        Assert.Contains(containers, c => c.GetProperty("container").GetString() == "IO_Line"
                                          && c.GetProperty("kind").GetString() == "tag table"
                                          && c.GetProperty("swept").GetInt32() == 3);
     }
@@ -269,14 +269,14 @@ public class SignalSweepTests : IDisposable
     [Fact]
     public void DispositionHeadingNamingNoContainer_IsWarnedAbout()
     {
-        WriteTagTable("IO_Plant", "DI1_PlantHealthy");
+        WriteTagTable("IO_Line", "DI1_LineHealthy");
         WriteSpec("- **C1** `DB_In.Bound`, `DB_In.Disposed`, `DB_In.Nobody`\n");
         var unclaimed = WriteUnclaimed(
-            "### `IO_Tags`\n\n| Members | Disposition |\n|---|---|\n| `DI1_PlantHealthy` | out-of-scope |\n");
+            "### `IO_Tags`\n\n| Members | Disposition |\n|---|---|\n| `DI1_LineHealthy` | out-of-scope |\n");
 
         var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
 
-        Assert.Equal("DI1_PlantHealthy", Assert.Single(report.Unaccounted).Path);
+        Assert.Equal("DI1_LineHealthy", Assert.Single(report.Unaccounted).Path);
         Assert.Contains(report.Warnings, w => w.Contains("'IO_Tags' names no global DB or tag table"));
     }
 

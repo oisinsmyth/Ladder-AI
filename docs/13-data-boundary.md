@@ -293,6 +293,42 @@ convention rules, new patterns, spec-review heuristics. Those are not lost, but 
   permission is per-item and per-instance, not a standing grant for the job, and the item it
   covers is named when it is given. Record the permission in this section when it happens.
 
+### How leaks actually happen (recorded 2026-08-05, from four real ones in one day)
+
+The first live run produced four leaks into tracked files inside a single working day, every one
+caught by a mechanical grep before it was committed, and none of them by anyone being careless
+about confidentiality. They are recorded because the *shape* of them is not what the rule above
+leads you to expect.
+
+**None of the four was a identifying name, an alarm text, or a block of copied content.** All four
+were fragments that felt generic:
+
+  - an example in a command's own documentation, using the job's equipment token
+  - a unit-test fixture named after one of the job's tag tables
+  - a code comment illustrating an error message with the job's equipment noun
+  - a convention rule whose worked example used the job's word for one of its operations
+
+**THE TEST IS NOT "DOES THIS SOUND GENERIC". IT IS "DID THIS STRING COME FROM THE JOB FOLDER".**
+Three of the four read as perfectly ordinary industrial vocabulary in isolation. That is exactly
+why they got written: a term that has been in front of you all day stops looking like it belongs to
+anyone. The word had a source, and the source was the job.
+
+**Where they occur is predictable, and it is not where you would guard.** Nobody pastes a spec into
+a commit. What leaks is the *illustrative* material — examples, fixtures, comments, error strings —
+because that is the writing where you reach for a concrete case, and the concrete case you have to
+hand is the one you have been working on. Prose about the job is easy to notice and rare. An
+example is neither.
+
+**So: grep before every commit that touches a tracked file, during a live run.** Not when it feels
+warranted — every time. It costs one command. All four of these were found by the grep and not by
+the author re-reading their own work, including one written by the reviewing engineer who had
+already written the boundary rules. Re-reading finds prose; it does not find a fixture name.
+
+**A wide grep will also produce false positives, and that is fine.** The same sweep flagged
+`drum separator` across a dozen committed files — a waste-processing machine in an unrelated
+corpus, two weeks older than the live run. Confirming a hit is innocent costs a `git log`; assuming
+one is innocent is how a real one survives. Prefer the noisy pattern.
+
 **Not automatic.** The AI does not decide on its own that something is generic enough to keep. If a
 live run surfaces something worth capturing, raise it with the owner and ask; the default while
 unanswered is that it stays inside `Live Runs/` and is not written down anywhere else. Working
