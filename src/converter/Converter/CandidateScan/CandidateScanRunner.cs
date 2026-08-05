@@ -52,6 +52,35 @@ public static class CandidateScanRunner
             typeFilter, direction, io, fb, family, phraseMatches, warnings);
     }
 
+    // FI-44. --scope was a pure path PREFIX, which silently assumes DB-qualified signals
+    // ("DiscreteInputs."). Under C-001 a physical-IO tag is <DI|DQ|AI|AQ><n>_<Equipment>_<Signal>,
+    // so the equipment token sits in the MIDDLE and no prefix can address it. The result was not a
+    // missing feature but a false clean: scoping to a piece of equipment returned zero candidates
+    // and exit 0 on a genuinely contested binding, and the only way to get a finding was to name the
+    // disputed signals - i.e. to already know the answer, which inverts the tool's purpose.
+    //
+    // Deliberately NOT generic segment matching: splitting every path on every separator would let
+    // "--scope DB" match the whole corpus. This matches the C-001 equipment POSITION specifically,
+    // and only on tag-table signals, so DB path behaviour is untouched.
+    private static bool MatchesScope(SignalLeaf leaf, string scope)
+    {
+        if (leaf.Path.StartsWith(scope, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return leaf.Origin == SignalOrigin.TagTable
+               && string.Equals(C001EquipmentToken(leaf.Path), scope, StringComparison.Ordinal);
+    }
+
+    // The <Equipment> field of a C-001 physical-IO tag, or null if the name is not in that form.
+    private static string? C001EquipmentToken(string path)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(
+            path, @"^(?:DI|DQ|AI|AQ)\d+_([A-Za-z0-9]+)_");
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
     private static List<IoCandidate> CollectIoCandidates(
         SignalInventory.SignalInventory inventory,
         ProjectUsageGraph graph,
@@ -65,7 +94,7 @@ public static class CandidateScanRunner
 
         return inventory.Leaves
             .Where(l => l.Origin is SignalOrigin.GlobalDb or SignalOrigin.TagTable)
-            .Where(l => scopes.Any(s => l.Path.StartsWith(s, StringComparison.Ordinal)))
+            .Where(l => scopes.Any(s => MatchesScope(l, s)))
             .Where(l => typeFilter is null || string.Equals(l.Type, typeFilter, StringComparison.OrdinalIgnoreCase))
             .OrderBy(l => l.Path, StringComparer.Ordinal)
             .Select(l => new IoCandidate(l.Path, l.Type, ReadersOf(graph, l.Path)))

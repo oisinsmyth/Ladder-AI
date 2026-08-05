@@ -805,9 +805,11 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   with real value: it removes a destructive round trip from the normal edit loop.
 
 ### FI-44 — "empty is not clean": the mechanical floor exits 0 when it examined nothing
-- **Status:** Raised (2026-08-05, second-plant pilot of the four-rung pipeline). **Highest severity
-  item in this file.** The floor exists to be immune to an agent choosing not to look; these three
-  paths *reward* not looking.
+- **Status:** **IMPLEMENTED 2026-08-05** — all three paths closed the day they were raised, on the
+  second-plant pilot of the four-rung pipeline. **Was the highest severity item in this file:** the
+  floor exists to be immune to an agent choosing not to look, and these three *rewarded* not
+  looking. Each now exits **2** — deliberately distinct from both success and from a real finding,
+  because "the plant is wrong" and "the question was wrong" call for different actions.
 - **The class.** Three checks return success when they found nothing to check. Not "found nothing
   wrong" — *examined nothing at all*. Reproduced directly:
   1. **`candidate-scan --scope <token>`** → `CANDIDATE SET SIZE: 0`, **EXIT 0**. `--scope` matches a
@@ -835,18 +837,43 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
      no legitimate reading of "scan a block that does not exist" that ends in success.
   3. `relation-reconcile`: a leg that contributes zero matching keys is a hard error, not a
      vacuous pass. Fix the skill's example to match the parser in the same edit.
+     **Implemented 2026-08-05.** A PRESENT leg that parsed relations but shares **not one key** with
+     any other present leg is now reported as *"this leg was compared against nothing"* and exits
+     **2** — the same "examined nothing" code as (1) and (2), distinct from a real difference (1).
+     The check is computed on the RAW keys, deliberately **before** FI-45's disposition partition
+     narrows anything, so the partition cannot become a second silent route to the same pass. The
+     **ABSENT** leg keeps its exemption and still never gates: absence is a parse fact about an
+     artifact that is not there (a stopped D3) and the tool says so; *matched nothing* is a
+     comparison fact about an artifact that is there — different situations, reported differently.
+     The skill's D3 example is fixed in the same change (`instance:` is the **spec instance**, the
+     key the four legs join on — not the iDB name, which now appears only in the `CALL`), with the
+     rule stated in prose beside it. `RelationDispositions.cs` + runner/formatter/model, 25 new
+     tests including the iDB-keyed render (fails), the absent leg (still does not gate), and a
+     one-key-shared render (a difference, *not* a matched-nothing — the true positive is untouched).
 - **Why it went unseen.** All three prior runs of the pipeline stopped before D3, so the render leg
   had never existed and the reconciler had never had four legs to compare. And every prior project
   was read out of an existing plant, where a scope prefix happens to work because signals are
   DB-qualified. The floor was never wrong before — it had never been asked these questions.
-- **Verdict.** Open, small, and the highest-value item here. Each fix is a guard clause. Same family
-  as FI-40: a check whose failure mode is silent success is worse than no check, because it is
-  *believed*.
+- **Verdict.** **CLOSED 2026-08-05.** Each fix was a guard clause, as predicted. Verified against the
+  live corpus that raised them: an invented `--fb` and an empty `--scope` both exit 2 where they
+  exited 0, and `--scope <equipment>` now returns **7 candidates where it returned 0** — the scope
+  fix did not merely stop lying, it made the tool answer the question it was always for, and the 7
+  are a genuine ambiguity it now flags.
+  Same family as FI-40, and worth restating as the lesson: **a check whose failure mode is silent
+  success is worse than no check, because it is believed.** All three had been passing happily for
+  three prior runs — they had simply never been asked a question they could not answer.
+- **Residual, not closed by this work.** `ParseRender`'s `instance:` regex matches any line
+  containing that substring, so prose ("Per instance: `X`") in a stopped-D3 artifact can build a
+  *phantom* render leg. It does not fire on the committed corpus, and the new matched-nothing check
+  catches the common form (phantom keys are usually disjoint, so exit 2 rather than silence).
+  Tightening it to true D3 network headers needs a corpus-measured pattern and is a follow-up.
 
 ### FI-45 — the checks cannot parse two shapes that are ordinary, not exotic
-- **Status:** Raised (2026-08-05, same pilot). Coverage gaps rather than safety gaps — these fail
-  loudly, they just fail at correct input.
-- **1. `tagstatus` cannot resolve a member through an ARRAY OF UDT.** `DB.Item[0].Member` →
+- **Status:** **IMPLEMENTED 2026-08-05** — all three items closed the day they were raised, same
+  pilot. Coverage gaps rather than safety gaps: these failed loudly, they just failed at *correct
+  input*, which trains people to ignore the check and is how a gate dies quietly.
+- **1. `tagstatus` cannot resolve a member through an ARRAY OF UDT.** **Implemented 2026-08-05.**
+  `DB.Item[0].Member` →
   `MEMBER-NOT-FOUND`, exit 1; the unindexed form fails identically. A *named* UDT member
   (`DB.Word0.Cond`) resolves fine, so the descent machinery exists — it just does not strip an
   array subscript, nor continue resolving into the element type. Any project whose per-instance
@@ -854,23 +881,94 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   per-instance binding read as an invented member: the exact laundering hard rule 3 exists to
   catch, fired at correct code. That trains people to ignore the check, which is how an
   anti-laundering gate dies.
-  **Fix:** in the member resolver, strip `[n]` from a path segment, resolve the member, and if its
-  type is a UDT in the corpus continue the walk into that type. Validate the index against the
-  declared bounds while there — an out-of-range subscript is a real finding nobody currently gets.
-- **2. `signal-sweep` cannot disposition a PLC tag-table signal at all.** Dispositions are qualified
+  **Fix as built:** the member walk moved out of a null-check on `TagTypeRegistry.Resolve` into
+  `TagStatus/MemberPathResolver.cs`, which answers a four-way question ("does it exist, and if not,
+  what is wrong?") rather than a two-way one, while still reading its facts from the same
+  `TagTypeRegistry` corpus — one index, only the diagnosis is local. It strips a subscript from any
+  segment and continues into the element type, recursively (`DB.Vessel[0].Sensor[1].Reading`). The
+  **unindexed** form resolves identically, deliberately: it is a legitimate *type-level* question
+  ("does every element carry this member?") — the form a spec, requirements register or binding table
+  uses — and `MEMBER-NOT-FOUND` there would call something real invented, which is the whole defect.
+  It asserts nothing about *which* element; bounds are checked only against a subscript actually
+  written. Out-of-range gets its own status, **`INDEX-OUT-OF-RANGE`** (blocking, exit 1), because the
+  member IS real and "member not found" would send the engineer hunting the wrong thing; it speaks
+  only when both index and declared bounds are integer literals, so a symbolic index (`[#i]`),
+  `Array[*]` or a dimension-count mismatch is left alone rather than guessed at — a bounds check that
+  guesses would recreate the crying-wolf failure this entry is about. Two side effects worth naming:
+  `TagTypeRegistry.Resolve` was blind to the same shape and is fixed too (so an operand inside an
+  array of UDT now types correctly for `to-xml --synthesize` and C-118), and the walk being
+  depth-aware means an unknown type three levels down now reports `MEMBER-UNCHECKED` at that depth
+  instead of the old unconditional `MEMBER-NOT-FOUND` for the whole path. Verified against the pilot
+  data that raised it (indexed, unindexed, out-of-range, invented-member-inside-the-element-type all
+  classify correctly); +8 tests, none weakening the true positive.
+- **2. `signal-sweep` cannot disposition a PLC tag-table signal at all.** **Implemented 2026-08-05.**
+  Dispositions are qualified
   `<heading>.<leaf>`; the inventory stores tag-table tags unqualified, and the parser only leaves a
   token unqualified when it already contains a dot — which a tag name never does. So a tag-table
   signal can never be matched to its disposition row. On a device with no buffer DBs this disables
   the whole disposition half while the DB half works perfectly. Its `by DB` grouping also splits on
   the first dot, so flat tags render as one-row "DBs" with broken alignment.
-  **Fix:** accept a bare token as matching a tag-table entry, or qualify tag-table tags as
-  `<TableName>.<TagName>` in the inventory — either, but consistently on both sides.
+  **Fix as built:** the inventory keeps the tag's `Path` **bare** — that is how a tag is written in
+  IR, and `ProjectUsageGraph`/`candidate-scan`/`undriven-scan` all key on it, so qualifying it there
+  would have broken three working checks to fix one. The table name rides alongside as
+  `SignalLeaf.Container`, and `signal-sweep` qualifies to `<TableName>.<TagName>` on its own side to
+  meet the disposition row. Matching stays **strict equality** — a bare-name match against any
+  heading would let a same-named DB member disposition a tag nobody accounted for — and the residual
+  risk that strictness carries (a heading spelled unlike its container) is now a stated warning
+  rather than a silent miss. Grouping is by container with a `DB`/`tag table` kind column and a
+  computed column width; the JSON `byDb`/`db` keys become `byContainer`/`container` + `kind`. The
+  heading regex also accepts any backticked heading, so a table really called `Default tag table` is
+  dispositionable at all. The disposition-artifact contract is **unchanged** — one `### `<name>``
+  heading per container was always the rule; it simply now works when the container is a tag table.
+  Verified on the pilot run that raised this: 38 falsely-unaccounted → **0**, and 62 one-row "DBs" →
+  3 tag tables. +7 tests.
 - **3. `relation-reconcile` cannot tolerate five of its own seven ledger dispositions.**
+  **Implemented 2026-08-05.**
   `discharged`, `in-FB`, `render-BLOCKED`, `render-stopped` and `out-of-scope-obligation` all mean
   *"this relation does not become a D3 term"* — yet the reconciler demands the render leg carry an
   identical key set, so any such row exits 1. `render-BLOCKED` is unreachable if the check must
   pass, which makes a documented disposition undeclarable.
   **Fix:** partition the ledger by disposition and require key identity only on the render-bound
   subset; report the rest as accounted-for rather than as differences.
-- **Verdict.** Open. (1) is the one that matters — it fires on correct code in any multi-instance
-  project, which is most of them.
+  **Fix as built.** `RelationDispositions.Classify` reads the D2 vocabulary out of the ledger cell and
+  answers one question — *does this row owe a D3 term?* Only `rendered` and `rebind` do. Key identity
+  is now required only INTO the render (`from.Keys ∩ render-bound`); out of it nothing is filtered, so
+  a term tagged with a relation no artifact declares is still the C-606 finding it always was. The
+  other five report in a new `ledger dispositions` block as *accounted for — not a D3 term, not a
+  difference*, so `render-BLOCKED` is declarable in an artifact that passes its own self-check.
+  Measured against the real cells, not the SKILL alone: the corpus writes `render` (not `rendered`),
+  `**rebind**`, `discharged (S5)`, ``render-BLOCKED `[contested]` `` and compounds like
+  `in-FB + render(driver)` — so classification scans for tokens and a render-bound token anywhere in
+  the cell wins. An **unrecognized** disposition is treated as render-bound (fail closed) and warned
+  about: the SKILL records runs inventing dispositions, and an invented word must never be the cheap
+  way out of the render obligation. On the committed corpus (rerun2/rerun3) the partition is
+  informative and the result unchanged: 174/174/174 and 168/168/168, render ABSENT, exit 0.
+- **Verdict.** **CLOSED 2026-08-05**, all three. (1) was the one that mattered — it fired on correct
+  code in any multi-instance project, which is most of them. It also turned out to run deeper than
+  reported: `TagTypeRegistry.Resolve` had the *same* blindness, so an operand inside an array of UDT
+  was **typeless for `to-xml --synthesize` and for C-118**, not merely misreported by `tagstatus`.
+  Fixed there too, strictly additively.
+  Verified on real data rather than fixtures: 639 existing member paths still EXISTS, the 5 known
+  true-positive MEMBER-NOT-FOUND names still fail, 91 nested/array paths now resolve — and 3 came
+  back INDEX-OUT-OF-RANGE **correctly**, because the probe used `[0]` on arrays whose declared lower
+  bound is not 0. A new check catching a real mistake on its first run is the evidence worth having.
+
+### FI-46 — three residuals from the FI-44/FI-45 wave, found but deliberately not fixed
+- **Status:** Raised (2026-08-05). Each was found while fixing something else, and each was left
+  alone on purpose: fixing a thing you were not sent to fix, in a shared tree, without a corpus
+  measurement, is how a clean wave acquires an unreviewed change.
+- **1. Bit-slice components read as members.** `DB.SomeWord.%X0` reports MEMBER-NOT-FOUND.
+  `AccessNode.FromDottedPath` explicitly models a trailing `.%X0` slice, but the member walk treats
+  `%X0` as a member name. Pre-existing — the pre-FI-45 code did the same — and the same
+  false-positive family as FI-45 item 1: a real path reading as invented. **Fix:** drop a leading-`%`
+  final component before walking. Cheap.
+- **2. `converter review` / `preflight` were never checked for the same array blindness.**
+  `TagTypeRegistry` is now fixed, so anything resolving through it inherits the fix — but any rule
+  doing its *own* member walk still has the defect, and nobody has looked. **Fix:** audit the rules
+  for independent member walks; route them through the registry.
+- **3. `ParseRender`'s `instance:` regex is too loose** — it matches any line containing that
+  substring, so prose in a legitimately-stopped D3 artifact can build a phantom render leg. Does not
+  fire on the committed corpus; the new FI-44 matched-nothing check catches the common form. **Fix:**
+  tighten to true D3 network headers, which needs a corpus-measured pattern first.
+- **Verdict.** Open. (1) is the cheapest and has a live false positive today. (2) is the one with
+  unknown extent, which is its own argument for looking.

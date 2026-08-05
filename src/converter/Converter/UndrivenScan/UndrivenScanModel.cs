@@ -24,13 +24,23 @@ public sealed record MemberDrive(
     IReadOnlyList<string> Writers,
     IReadOnlyList<string> NameJoinHints);
 
+// FI-44 - why the scan produced no rows. A scan that examined nothing must not report success, and
+// the two ways of examining nothing need different words because they need different actions.
+public enum ScanScope
+{
+    Scanned,          // the FB exists and has instances; the rows below are a real result
+    UnknownBlock,     // no block of this name in the corpus - a typo, or a block not written yet
+    NoInstances,      // the block exists but nothing instantiates it - nothing to resolve per-instance
+}
+
 public sealed record UndrivenScanReport(
     string ProjectDir,
     int FilesScanned,
     string FbName,
     IReadOnlyList<string> Callers,
     IReadOnlyList<MemberDrive> Members,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    ScanScope Scope = ScanScope.Scanned)
 {
     // Exit-bearing on hard facts only: the FB READS this member and nothing writes it, so it consumes an
     // unset value — or every writer is disarmed, which is the same thing with extra steps.
@@ -42,4 +52,15 @@ public sealed record UndrivenScanReport(
     // failure mode this tooling exists to avoid.
     public bool HasFindings =>
         Members.Any(m => m.State is DriveState.Undriven or DriveState.Disarmed);
+
+    // FI-44 - "empty is not clean". Before this, an unknown --fb produced zero rows, zero findings
+    // and EXIT 0: a block that had never been written passed the drive-state check. Verified with a
+    // deliberately invented name. There is no reading of "scan a block that does not exist" that
+    // ends in success, and the same holds for a block nothing instantiates - per-instance resolution
+    // over zero instances has resolved nothing.
+    //
+    // Kept SEPARATE from HasFindings on purpose. A finding is a defect in the plant; this is a
+    // defect in the question. They deserve different exit codes and different words, because the
+    // action differs: fix the wiring, versus fix what you asked.
+    public bool ExaminedNothing => Scope is not ScanScope.Scanned;
 }

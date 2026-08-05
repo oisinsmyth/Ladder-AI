@@ -46,7 +46,10 @@ Read `CLAUDE.md` first; its hard rules bind you.
 - **The IO table** — the real signals. **Stop condition:** a requirement needing a signal the IO table
   does not contain → the tag is `proposed`; record it as a **blocking `Q-nn`** and never invent it
   (hard rule 3). Verify with `converter tagstatus` where an IR export exists — it classifies to
-  **member** level, so `MEMBER-NOT-FOUND` means the DB is real but the member you named is not.
+  **member** level, so `MEMBER-NOT-FOUND` means the DB is real but the member you named is not, and
+  `INDEX-OUT-OF-RANGE` means the member is real but that array element does not exist (fix the
+  binding — it is not a gap to raise as a `Q-nn`). Members inside an array of UDT — the usual shape
+  for N identical vessels — resolve indexed or unindexed (`DB.Vessel[0].MaxNet`, `DB.Vessel.MaxNet`).
   A `MEMBER-UNCHECKED` result is *not* a pass: it means the tool could not enumerate that namespace,
   so verify by reading the type before binding. This rung binds **members**, which is exactly where a
   root-level-only check would launder an invented one.
@@ -147,7 +150,10 @@ Read `CLAUDE.md` first; its hard rules bind you.
      | **`OSCRotSen`** | **UNCLAIMED — Q-C09** |
      ```
 
-     One `### \`<Db>\`` heading per DB (the qualifier for the bare leaf names beneath it), and
+     One `### \`<Container>\`` heading per **DB *or PLC tag table*** — the heading is the qualifier
+     for the bare names beneath it, so it must be spelled exactly as the export spells that container
+     (a tag is qualified by its TAG TABLE, never by a DB). A heading matching no container in the
+     export is reported as a warning, and everything under it reads as unaccounted. And
      **every member name in backticks**. A member dispositioned in PROSE — a row reading
      `E-stop members | safety` — is **not machine-checkable and will read as unaccounted**, so
      backtick them even when the disposition is "excluded". Narrative `### Q-nn` findings stay
@@ -186,7 +192,8 @@ under its bullet and are not parsed — put the id and its statement on the bull
 | isolator healthy | `DiscreteInputs.Conveyor7IsoFB` | EXISTS |
 | motor fault | `DiscreteInputs.Conveyor7Flt` | EXISTS |
 
-`converter tagstatus --project ir/<project> <all of the above>` → 0 proposed, 0 member-not-found.
+`converter tagstatus --project ir/<project> <all of the above>` → 0 proposed, 0 member-not-found,
+0 index-out-of-range.
 
 ## CONTROL REQUIREMENTS (complete by construction from the class reference)
 

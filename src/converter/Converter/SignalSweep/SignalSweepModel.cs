@@ -10,15 +10,30 @@ public enum Accounting
     Unaccounted,     // in neither — nobody has said anything about this signal at all
 }
 
-public sealed record SweptSignal(string Path, string Root, Accounting Accounting);
+// What kind of container a swept signal was declared in. Kept explicit because the two are shaped
+// differently — a DB member's path is qualified, a tag's is bare — and a report that called a tag
+// table "a DB" rendered N flat tags as N one-row DBs (FI-45 item 2).
+public enum SignalContainerKind
+{
+    Db,
+    TagTable,
+}
 
-public sealed record DbBreakdown(string Db, int Swept, int Claimed, int Disposed, int Unaccounted);
+public sealed record SweptSignal(string Path, string Container, SignalContainerKind Kind, Accounting Accounting);
+
+public sealed record ContainerBreakdown(
+    string Container,
+    SignalContainerKind Kind,
+    int Swept,
+    int Claimed,
+    int Disposed,
+    int Unaccounted);
 
 public sealed record SignalSweepReport(
     string ProjectDir,
     int FilesScanned,
     IReadOnlyList<SweptSignal> Signals,
-    IReadOnlyList<DbBreakdown> ByDb,
+    IReadOnlyList<ContainerBreakdown> ByContainer,
     bool DispositionTableRead,
     IReadOnlyList<string> Warnings)
 {

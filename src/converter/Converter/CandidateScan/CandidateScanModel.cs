@@ -47,4 +47,14 @@ public sealed record CandidateScanReport(
     // cite a basis". The genuine ambiguity a spec stage faces is *which field signal* satisfies the
     // phrase; the FB half is context for that choice, not evidence of it. Reported in full either way.
     public bool HasChoice => IoCandidates.Count > 1;
+
+    // FI-44 - "empty is not clean". A scope was asked for and matched NOTHING. That is not evidence
+    // the binding is unambiguous; it is evidence the question did not land. Size 0 is unjudgeable,
+    // not clean, and reporting it as success is the failure this check exists to prevent - it
+    // silently cleared a genuinely contested binding on a real plant.
+    //
+    // Separate from HasChoice because the two demand different actions: HasChoice means the plant
+    // offers a choice a human must make; this means the scope is wrong, or the signals are not there
+    // yet, and either way nothing has been checked.
+    public bool ScopedButFoundNothing => Scopes.Count > 0 && IoCandidates.Count == 0;
 }

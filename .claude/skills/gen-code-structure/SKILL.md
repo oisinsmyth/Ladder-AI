@@ -127,7 +127,7 @@ shape is a CONTRACT, not an illustration — write it exactly:
   citing only a network number (`N1`, `N10`) carries no checkable claim, and the citation check will
   flag the row. Cite the member, not just where you looked.
 
-**Dispositions** — the complete vocabulary; do not invent a sixth:
+**Dispositions** — the complete vocabulary; do not invent an eighth:
 
 | Disposition | Meaning |
 |---|---|
@@ -144,6 +144,12 @@ stopped instance**, which has no Q to cite. *Two consecutive runs invented their
 this state because the vocabulary lacked it — if you find yourself inventing a disposition, the gap is
 in this contract and belongs in a friction report.* The last three **count toward the set-difference**,
 are **never** discharges, and **never** carry a precondition class.
+
+**Only `rendered` and `rebind` are RENDER-BOUND** — only those two oblige a D3 term. The other five
+each mean *"this relation does not become a term"*, and `relation-reconcile` partitions the ledger on
+exactly that line (FI-45): it requires the render leg's key set to match the **render-bound subset**
+and reports the rest as *accounted for*. A disposition outside this vocabulary is treated as
+render-bound (fail closed) and warned about — inventing a word is not a way out of the obligation.
 The relation-id column must set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
 `gen/<project>/equipment-specs/`. State both counts explicitly in the artifact.
 
@@ -153,11 +159,17 @@ the spec**: every term traces to an undischarged relation, and a term tracing to
 (unjustified capability, C-606). Tag each term with the relation id it satisfies.
 
 The render is also machine-read (`relation-reconcile`'s fourth leg), so its shape is a contract too:
-each network states `instance: <iDB>` on its header line, and **every term carries its relation-id tag**
-`[C2]` / `[P1,P2]`.
+each network states `instance: <SpecInstance>` on its header line, and **every term carries its
+relation-id tag** `[C2]` / `[P1,P2]`.
+
+**`instance:` is the SPEC INSTANCE — the same string as the spec filename and as the backticked name in
+this instance's `## Ledger` heading — NOT the instance-DB name.** That is the key the reconciler joins
+the four legs on. An iDB name here produces a render leg that intersects nothing, which used to reconcile
+against nothing and *report success*; since FI-44 it is a hard error ("this leg was compared against
+nothing"). The iDB name still appears — in the `CALL`, where it belongs.
 
 ```
-NETWORK "Conveyor-07 Automatic Control"        instance: iDB_MotorDOL_Conv07
+NETWORK "Conveyor-07 Automatic Control"        instance: `Conveyor07`
   .RunningFB       := DI_23                                                    [C2]
   .InhibitMotor    := DI_24                                                    [C3]
   .AutoStartSignal := PlantRunning AND Conveyor08.UPSEnable AND PreStartComplete  [P1,P2]
@@ -202,8 +214,8 @@ converter relation-reconcile --specs gen/<project>/equipment-specs --ledger gen/
                              --register gen/<project>/requirements.md --project ir/<project>/
 ```
 
-**A leg it cannot parse, a non-empty set-difference, or a citation finding is a defect in YOUR
-artifacts, not in the tool** — fix and re-run before finishing. *A real run's first ledger was rejected
+**A leg it cannot parse, a leg it reports as having *compared nothing*, a non-empty set-difference, or
+a citation finding is a defect in YOUR artifacts, not in the tool** — fix and re-run before finishing. *A real run's first ledger was rejected
 outright (0 rows parsed) and then showed 60 citation findings whose evidence cells named only network
 numbers; both were genuine and both were fixed before the artifact was presented.* Report the final
 result in your exit summary — a reconciliation you didn't run is not evidence.

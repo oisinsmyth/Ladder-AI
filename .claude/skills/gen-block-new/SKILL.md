@@ -117,7 +117,9 @@ reality into code. Report the gap and stop; don't improvise the DB.
    `converter tagstatus <every tag you will write> --project ir/<project>/`. It classifies to
    **member** level: `PROPOSED` (root absent) **and** `MEMBER-NOT-FOUND` (root exists, member
    invented) both **stop the run** — report the gap; the engineer creates it, you never code against
-   it. A `MEMBER-UNCHECKED` result means the export cannot enumerate that namespace (an unexported
+   it. So does `INDEX-OUT-OF-RANGE` (the member is real, the array element you subscripted is not) —
+   that one is a fix to your own binding, not a gap for the engineer.
+   A `MEMBER-UNCHECKED` result means the export cannot enumerate that namespace (an unexported
    UDT, an instance-DB stub): the tool did not verify it, so **you** must, by reading the type.
    Re-verify the manifest's own `exists` marks here — trust the tool, not the artifact's memory.
    *(Until 2026-08-05 this check was root-level only and would pass an invented member; do not rely

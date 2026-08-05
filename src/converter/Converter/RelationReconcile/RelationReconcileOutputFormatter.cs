@@ -18,7 +18,53 @@ public static class RelationReconcileOutputFormatter
         {
             sb.Append("  ").Append(leg.Kind.ToString().ToLowerInvariant().PadRight(10));
             sb.Append(leg.Present ? $"{leg.Count} relation(s)" : "ABSENT");
+            if (report.UncomparedLegs.Any(u => u.Kind == leg.Kind))
+            {
+                sb.Append("   MATCHED NOTHING");
+            }
+
             sb.Append('\n');
+        }
+
+        // Loud, and above the differences: when a leg matched nothing, the difference list below it is
+        // an artefact of the mismatch, not a diagnosis.
+        if (report.UncomparedLegs.Count > 0)
+        {
+            sb.Append('\n').Append("legs that compared nothing\n");
+            foreach (var u in report.UncomparedLegs)
+            {
+                var kind = u.Kind.ToString().ToLowerInvariant();
+                sb.Append("  ").Append(kind).Append(": ").Append(u.Count)
+                    .Append(" relation(s) parsed, NOT ONE shared with any other leg — this leg was compared against nothing.\n");
+                foreach (var key in u.SampleKeys)
+                {
+                    sb.Append("      ").Append(key).Append('\n');
+                }
+
+                if (u.Count > u.SampleKeys.Count)
+                {
+                    sb.Append("      … ").Append(u.Count - u.SampleKeys.Count).Append(" more\n");
+                }
+
+                if (u.Kind == LegKind.Render)
+                {
+                    sb.Append("      the render's `instance:` must be the SPEC INSTANCE — the same string as the spec\n")
+                        .Append("      filename and the `## Ledger — ` heading — not the instance-DB name.\n");
+                }
+            }
+
+            sb.Append("  (an ABSENT leg is a legitimate stopped rung and never gates; a leg that is PRESENT and\n")
+                .Append("   matches nothing is a different thing, and does.)\n");
+        }
+
+        if (report.LedgerDispositions.Count > 0)
+        {
+            sb.Append('\n').Append("ledger dispositions\n");
+            foreach (var group in report.LedgerDispositions)
+            {
+                sb.Append("  ").Append(group.Disposition.PadRight(24))
+                    .Append(group.Count.ToString().PadLeft(4)).Append("  ").Append(Describe(group.Class)).Append('\n');
+            }
         }
 
         var real = report.Differences.Where(d => d.MissingInTo.Count > 0).ToList();
@@ -26,6 +72,7 @@ public static class RelationReconcileOutputFormatter
         if (real.Count == 0)
         {
             sb.Append("  none — every present leg carries the same (instance, relation) set\n");
+            sb.Append("         (the render leg is held to the RENDER-BOUND subset only; the rest are accounted for above)\n");
         }
         else
         {
@@ -78,10 +125,18 @@ public static class RelationReconcileOutputFormatter
         }
 
         sb.Append("\nSUMMARY: ").Append(real.Sum(d => d.MissingInTo.Count)).Append(" difference(s), ")
-            .Append(report.CitationFindings.Count).Append(" citation finding(s)\n");
+            .Append(report.CitationFindings.Count).Append(" citation finding(s), ")
+            .Append(report.UncomparedLegs.Count).Append(" leg(s) that compared nothing\n");
 
         return sb.ToString().TrimEnd('\n', '\r');
     }
+
+    private static string Describe(DispositionClass cls) => cls switch
+    {
+        DispositionClass.RenderBound => "render-bound — must appear as a D3 term",
+        DispositionClass.AccountedFor => "accounted for — not a D3 term, not a difference",
+        _ => "UNRECOGNIZED — outside the D2 vocabulary, held to the render obligation anyway",
+    };
 
     // Every absence claim carries its denominator: a partial export is normal here, so "no writer"
     // is a scope fact rather than a defect on its own.
@@ -102,6 +157,19 @@ public static class RelationReconcileOutputFormatter
                 leg = l.Kind.ToString().ToLowerInvariant(),
                 present = l.Present,
                 count = l.Count,
+            }),
+            uncomparedLegs = report.UncomparedLegs.Select(u => new
+            {
+                leg = u.Kind.ToString().ToLowerInvariant(),
+                count = u.Count,
+                sampleKeys = u.SampleKeys.Select(k => new { instance = k.Instance, id = k.Id }),
+            }),
+            ledgerDispositions = report.LedgerDispositions.Select(g => new
+            {
+                disposition = g.Disposition,
+                @class = g.Class.ToString().ToLowerInvariant(),
+                renderBound = g.Class != DispositionClass.AccountedFor,
+                count = g.Count,
             }),
             differences = report.Differences.Where(d => d.MissingInTo.Count > 0).Select(d => new
             {

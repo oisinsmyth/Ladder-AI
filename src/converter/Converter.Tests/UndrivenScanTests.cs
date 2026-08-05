@@ -161,4 +161,51 @@ public class UndrivenScanTests : IDisposable
 
         Assert.All(without.Members, m => Assert.Empty(m.NameJoinHints));
     }
+
+    // FI-44 — "empty is not clean". Before this, scanning a block that had never been written
+    // produced zero rows, zero findings and EXIT 0: an FB that did not exist passed the
+    // drive-state check. A check whose failure mode is silent success is worse than no check,
+    // because it is believed.
+    [Fact]
+    public void UnknownBlock_IsNotAPass_ItIsAnUnansweredQuestion()
+    {
+        var report = UndrivenScanRunner.Run(_dir, "FB_NeverWritten", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.Equal(ScanScope.UnknownBlock, report.Scope);
+        Assert.True(report.ExaminedNothing);
+        Assert.Empty(report.Members);
+
+        // Kept distinct from HasFindings: a finding is a defect in the plant, this is a defect in
+        // the question, and they call for different actions.
+        Assert.False(report.HasFindings);
+    }
+
+    // The other way to examine nothing, and it needs different words because it needs a different
+    // fix: the block is real, but per-instance resolution over zero instances has resolved nothing.
+    [Fact]
+    public void BlockWithNoInstances_IsAlsoNotAPass()
+    {
+        WriteBlock("FB_Uninstantiated.ir", "FB_Uninstantiated",
+            statics: new[] { new DbMember("IO", "Struct", false, null, NestedMembers: new[]
+            {
+                new DbMember("Cmd", "Bool", Retain: false, StartValue: null),
+            }) },
+            networks: Array.Empty<IrNetwork>());
+
+        var report = UndrivenScanRunner.Run(_dir, "FB_Uninstantiated", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.Equal(ScanScope.NoInstances, report.Scope);
+        Assert.True(report.ExaminedNothing);
+    }
+
+    // Guard the true positive: fixing the false clean must not weaken the real check.
+    [Fact]
+    public void RealBlockWithInstances_StillScansAndStillReportsFindings()
+    {
+        var report = UndrivenScanRunner.Run(_dir, "FB_M", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.Equal(ScanScope.Scanned, report.Scope);
+        Assert.False(report.ExaminedNothing);
+        Assert.NotEmpty(report.Members);
+    }
 }

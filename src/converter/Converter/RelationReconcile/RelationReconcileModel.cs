@@ -43,20 +43,39 @@ public sealed record CitationRow(RelationKey Relation, string Evidence, IReadOnl
 
 public sealed record PairDifference(LegKind From, LegKind To, IReadOnlyList<RelationKey> MissingInTo);
 
+// How many ledger rows carried each disposition, and whether that disposition obliges a D3 term
+// (FI-45 item 3). The five non-render-bound dispositions are ACCOUNTED FOR, not differences.
+public sealed record DispositionGroup(string Disposition, DispositionClass Class, int Count);
+
+// A leg that parsed relations and shares NOT ONE key with any other present leg — so every
+// comparison it took part in compared nothing (FI-44 item 3).
+//
+// This is a different situation from an ABSENT leg and must report differently. ABSENT means the
+// artifact is not there (a stopped D3): the check knows it did not look, says so, and deliberately
+// does not gate. UNCOMPARED means the artifact IS there, parsed, and was measured against a set it
+// cannot intersect — the demonstrated cause being a render leg keyed on the instance-DB name while
+// every other leg is keyed on the spec instance. Nothing was compared, and unlike ABSENT nothing
+// said so. That is the silent success FI-44 exists to kill.
+public sealed record UncomparedLeg(LegKind Kind, int Count, IReadOnlyList<RelationKey> SampleKeys);
+
 public sealed record RelationReconcileReport(
     IReadOnlyList<Leg> Legs,
     IReadOnlyList<PairDifference> Differences,
     IReadOnlyList<CitationRow> Citations,
     string? ProjectDir,
     int FilesScanned,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<DispositionGroup> LedgerDispositions,
+    IReadOnlyList<UncomparedLeg> UncomparedLegs)
 {
     public IReadOnlyList<CitationRow> CitationFindings => Citations.Where(c => c.IsFinding).ToList();
 
-    // Exit-bearing: any relation present in one leg and missing from another, or a citation that cites
-    // no written member. An ABSENT leg does not gate — a stopped rung is a legitimate state, not a drift.
+    // Exit-bearing: any relation present in one leg and missing from another, a citation that cites no
+    // written member, or a leg that compared against nothing. An ABSENT leg does not gate — a stopped
+    // rung is a legitimate state, not a drift — but a PRESENT leg matching nothing is not the same
+    // thing and does gate.
     public bool HasFindings =>
-        Differences.Any(d => d.MissingInTo.Count > 0) || CitationFindings.Count > 0;
+        Differences.Any(d => d.MissingInTo.Count > 0) || CitationFindings.Count > 0 || UncomparedLegs.Count > 0;
 }
 
 // A leg that parsed zero rows is a hard error, never a clean reconcile: format drift that silently

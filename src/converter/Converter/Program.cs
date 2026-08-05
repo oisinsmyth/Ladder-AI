@@ -703,6 +703,18 @@ internal static class Program
                 ? RelationReconcileOutputFormatter.FormatJson(report)
                 : RelationReconcileOutputFormatter.FormatText(report));
 
+            // FI-44 — "empty is not clean". A leg that PARSED but shares no key with any other leg was
+            // compared against nothing; that exits 2, distinct from both success and a real difference.
+            // An ABSENT leg (a stopped D3) is a different thing and deliberately still does not gate.
+            if (report.UncomparedLegs.Count > 0)
+            {
+                Console.Error.WriteLine(
+                    "relation-reconcile: " +
+                    string.Join(", ", report.UncomparedLegs.Select(u => u.Kind.ToString().ToLowerInvariant())) +
+                    " leg(s) shared no relation key with any other leg - nothing was compared.");
+                return 2;
+            }
+
             return report.HasFindings ? 1 : 0;
         }
         catch (RelationReconcileFormatException ex)
@@ -785,6 +797,17 @@ internal static class Program
         Console.WriteLine(json
             ? UndrivenScanOutputFormatter.FormatJson(report)
             : UndrivenScanOutputFormatter.FormatText(report));
+
+        // FI-44 - "empty is not clean". A scan that examined nothing exits 2, distinct from both
+        // success and from a real finding: the question was wrong, not the plant. Before this it
+        // exited 0 and an FB that had never been written passed the check.
+        if (report.ExaminedNothing)
+        {
+            Console.Error.WriteLine(report.Scope == ScanScope.UnknownBlock
+                ? $"undriven-scan: no block named '{fb}' in {projectDir} - nothing was examined."
+                : $"undriven-scan: block '{fb}' has no instances in {projectDir} - nothing was examined.");
+            return 2;
+        }
 
         // Hard facts only: an interface input with no armed writer. The name-join hints never gate.
         return report.HasFindings ? 1 : 0;
@@ -869,6 +892,18 @@ internal static class Program
         Console.WriteLine(json
             ? CandidateScanOutputFormatter.FormatJson(report)
             : CandidateScanOutputFormatter.FormatText(report));
+
+        // FI-44 — a scope that matched nothing exits 2, distinct from both success and a real
+        // finding. Before this it exited 0, and scoping to a piece of equipment on a plant whose
+        // tags follow C-001 always matched nothing — so the check reported clean on the one binding
+        // that was actually contested.
+        if (report.ScopedButFoundNothing)
+        {
+            Console.Error.WriteLine(
+                $"candidate-scan: scope [{string.Join(", ", report.Scopes)}] matched no IO signal in {projectDir} - nothing was examined. " +
+                "A scope matching nothing is not evidence the binding is unambiguous.");
+            return 2;
+        }
 
         // Non-zero when the requirement could be satisfied by more than one signal — the mechanical
         // trigger that makes an ambiguous binding non-discretionary.

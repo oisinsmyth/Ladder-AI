@@ -24,6 +24,22 @@ public static class UndrivenScanRunner
         var graph = ProjectUsageGraph.Build(projectDir, callerFiles);
         var inventory = SignalInventory.SignalInventory.Build(projectDir);
 
+        // FI-44 - resolve --fb against the corpus BEFORE scanning. Without this the two "found
+        // nothing" cases below fell through to an empty row set and reported success.
+        if (!graph.BlockNames.Contains(fbName))
+        {
+            return new UndrivenScanReport(projectDir, inventory.FilesScanned, fbName, callerFiles,
+                Array.Empty<MemberDrive>(), inventory.Warnings.Concat(graph.Warnings).ToList(),
+                ScanScope.UnknownBlock);
+        }
+
+        if (!graph.InstanceToFb.Values.Any(v => string.Equals(v, fbName, StringComparison.Ordinal)))
+        {
+            return new UndrivenScanReport(projectDir, inventory.FilesScanned, fbName, callerFiles,
+                Array.Empty<MemberDrive>(), inventory.Warnings.Concat(graph.Warnings).ToList(),
+                ScanScope.NoInstances);
+        }
+
         // Every instance DB of this FB, unless the caller narrowed it.
         var instances = graph.InstanceToFb
             .Where(kv => string.Equals(kv.Value, fbName, StringComparison.Ordinal))

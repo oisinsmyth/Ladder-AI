@@ -32,6 +32,13 @@ public sealed class ProjectUsageGraph
     private readonly Dictionary<string, string> _instanceToFb = new(StringComparer.Ordinal);
     private readonly List<(string InstanceDb, string Suffix)> _instanceMemberPaths = new();
 
+    // FI-44: every block name the corpus actually contains. Exists so a check can tell
+    // "this block is not here" from "this block is here and has nothing wrong with it" — the
+    // difference between those two is the whole of FI-44, and no other index carries it. `_flat`
+    // and `_calls` come close but only hold blocks that reference a tag or make a call, so a
+    // block that does neither would read as absent.
+    private readonly HashSet<string> _blockNames = new(StringComparer.Ordinal);
+
     public IReadOnlyDictionary<string, PathUsage> Usages => _usages;
     public IReadOnlyList<string> GlobalDbMemberPaths => _globalDbMemberPaths;
     public IReadOnlyList<(string Block, int Network, string Path, TagDirection Direction)> Flat => _flat;
@@ -40,6 +47,9 @@ public sealed class ProjectUsageGraph
 
     // iDB name -> the FB it instantiates (one-to-one; the FB->iDB direction is one-to-many).
     public IReadOnlyDictionary<string, string> InstanceToFb => _instanceToFb;
+
+    // FI-44. Read this before concluding a scan found nothing wrong.
+    public IReadOnlyCollection<string> BlockNames => _blockNames;
 
     // Every leaf interface member of every instance DB, as (iDB name, member suffix relative to the
     // iDB root) — e.g. ("iDB_ShredderSequencer", "IO.Step"), ("iDB_ShredderSequencer", "StopCmd").
@@ -98,6 +108,9 @@ public sealed class ProjectUsageGraph
 
     private void AddBlock(IrBlock block)
     {
+        _blockNames.Add(block.Name); // FI-44 — recorded before any usage walk, so a block with no
+                                     // tag references and no calls is still known to exist.
+
         foreach (var network in block.Networks)
         {
             foreach (var call in network.Calls)

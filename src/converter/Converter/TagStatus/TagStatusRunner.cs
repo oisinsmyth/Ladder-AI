@@ -8,10 +8,12 @@ namespace Converter.TagStatus;
 // for the pipeline's anti-laundering rule (CLAUDE.md hard rule 3, docs/15 "Artifacts").
 //
 // Root resolution reuses ProjectIndex + AccessNode.FromDottedPath so it stays identical to
-// `preflight`'s own (FI-24). MEMBER resolution reuses TagTypeRegistry — the same cross-file DB/UDT
-// index the C-118 review rule already depends on — so "does DB.member exist" has one implementation,
-// not a second to drift. Before member checking existed, `SomeDb.InventedMember` classified EXISTS on
-// the strength of its root alone: the gate protecting hard rule 3 blessed invented members.
+// `preflight`'s own (FI-24). MEMBER resolution walks the same cross-file DB/UDT index the C-118
+// review rule depends on (TagTypeRegistry), through MemberPathResolver — one indexed corpus, so
+// "does DB.member exist" can't drift from "what type is DB.member". Before member checking existed,
+// `SomeDb.InventedMember` classified EXISTS on the strength of its root alone: the gate protecting
+// hard rule 3 blessed invented members. Since FI-45 item 1 the walk also crosses ARRAY OF UDT
+// members, which used to make every per-instance binding on a multi-vessel project read as invented.
 public static class TagStatusRunner
 {
     public static TagStatusReport Run(IReadOnlyList<string> names, string projectDir, bool rootsOnly = false)
@@ -27,7 +29,8 @@ public static class TagStatusRunner
         var entries = new List<TagStatusEntry>(names.Count);
         foreach (var name in names)
         {
-            entries.Add(new TagStatusEntry(name, RootOf(name), Classify(name, index, registry, rootsOnly)));
+            var (status, detail) = Classify(name, index, registry, rootsOnly);
+            entries.Add(new TagStatusEntry(name, RootOf(name), status, detail));
         }
 
         return new TagStatusReport(entries, index.Warnings);
@@ -39,54 +42,40 @@ public static class TagStatusRunner
     private static string RootOf(string name) =>
         AccessNode.FromDottedPath(0, "GlobalVariable", name).ComponentPath[0];
 
-    private static TagStatusKind Classify(string name, ProjectIndex index, TagTypeRegistry registry, bool rootsOnly)
+    private static (TagStatusKind Status, string? Detail) Classify(
+        string name, ProjectIndex index, TagTypeRegistry registry, bool rootsOnly)
     {
         // Whole-name first: catches bare tag-table tags that contain a literal dot (Clock_0.5Hz) and
         // bare DB names, neither of which has a member part to check.
         if (index.ResolvesAsTagRoot(name))
         {
-            return TagStatusKind.Exists;
+            return (TagStatusKind.Exists, null);
         }
 
         var root = RootOf(name);
         if (!index.ResolvesAsTagRoot(root))
         {
-            return TagStatusKind.Proposed;
+            return (TagStatusKind.Proposed, null);
         }
 
         // Root resolves. Root-level classification stops here — what the Design stage wants, since it
         // designs *against* gaps rather than coding against them (gen-architecture section 9).
         if (rootsOnly)
         {
-            return TagStatusKind.Exists;
+            return (TagStatusKind.Exists, null);
         }
 
-        if (registry.Resolve(name) is not null)
+        // The member walk (MemberPathResolver) is array-aware and diagnoses WHERE a path failed, so
+        // an unresolvable path is no longer flattened to one root-level "are members enumerable?"
+        // question — an unknown type three levels down now reports unchecked at that depth instead of
+        // an unconditional MEMBER-NOT-FOUND for the whole path.
+        var resolution = MemberPathResolver.Resolve(name, registry);
+        return resolution.Outcome switch
         {
-            return TagStatusKind.Exists;
-        }
-
-        return MembersAreEnumerable(root, registry)
-            ? TagStatusKind.MemberNotFound
-            : TagStatusKind.MemberUnchecked;
-    }
-
-    // Members are enumerable when the root is a DB whose member tree the export actually carries, or
-    // a tag whose own datatype is a known UDT. Anything else — a tag typed by an unexported UDT, or
-    // an instance-DB stub written by `create-instance-db` and not yet re-exported (no member tree at
-    // all) — cannot be checked, and is reported as unchecked rather than failed. Treating an
-    // unknowable namespace as "member absent" would manufacture false gaps, the opposite failure to
-    // the one member checking exists to fix.
-    private static bool MembersAreEnumerable(string root, TagTypeRegistry registry)
-    {
-        if (registry.TryGetDb(root, out var db))
-        {
-            return db.Members.Count > 0
-                || (db.InputMembers?.Count ?? 0) > 0
-                || (db.OutputMembers?.Count ?? 0) > 0
-                || db.InOutMembers.Count > 0;
-        }
-
-        return registry.Resolve(root) is string rootType && registry.TryGetUdt(rootType, out _);
+            MemberPathOutcome.Resolved => (TagStatusKind.Exists, null),
+            MemberPathOutcome.MemberAbsent => (TagStatusKind.MemberNotFound, resolution.Detail),
+            MemberPathOutcome.IndexOutOfRange => (TagStatusKind.IndexOutOfRange, resolution.Detail),
+            _ => (TagStatusKind.MemberUnchecked, resolution.Detail),
+        };
     }
 }

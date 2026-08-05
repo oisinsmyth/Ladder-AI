@@ -1680,10 +1680,12 @@ Mechanizes the pipeline's anti-laundering classification (`docs/15-generation-pi
 "Artifacts"; CLAUDE.md hard rule 3). Built for `gen-architecture`'s tag-status step and for the
 Build stage's run-stopping gate, both of which otherwise hand-grep the export. Composition only —
 root resolution reuses `ProjectIndex` and the *same* `AccessNode.FromDottedPath` extraction
-`preflight` uses; **member** resolution reuses `TagTypeRegistry` (the cross-file DB/UDT index behind
-the C-118 review rule), so "does `DB.member` exist" has one implementation, not a second to drift.
+`preflight` uses; **member** resolution walks the `TagTypeRegistry` corpus (the cross-file DB/UDT
+index behind the C-118 review rule), so "does `DB.member` exist" reads the same indexed facts as
+"what type is `DB.member`" and the two cannot drift.
 
-Four states, because a root can resolve while its member namespace is genuinely unknowable:
+Five states, because a root can resolve while its member namespace is genuinely unknowable, and
+because a subscript outside an array's declared bounds is a different fault from an invented member:
 
 | Status | Meaning | Gate |
 |---|---|---|
@@ -1691,11 +1693,21 @@ Four states, because a root can resolve while its member namespace is genuinely 
 | `PROPOSED` | the **root** does not resolve — a named gap the engineer creates | **fail** |
 | `MEMBER-NOT-FOUND` | root resolves, members **are** enumerable, this member is absent | **fail** |
 | `MEMBER-UNCHECKED` | root resolves, member namespace not enumerable (unexported UDT, or an instance-DB stub from `create-instance-db` with no member tree) | pass, reported |
+| `INDEX-OUT-OF-RANGE` | every component is a real member, but a written subscript falls outside the declared bounds (`Vessel[7]` of `Array[0..3] of "UDT_Vessel"`) | **fail** |
 
 Each name is resolved by checking the whole name first (catches bare tag-table tags whose own name
 contains a dot, e.g. `Clock_0.5Hz`, and DB names), then its root, then the member path.
+**Array-of-UDT members are walked through** (2026-08-05, FI-45 item 1): a subscript is stripped, the
+member resolved, and the walk continues into the element type's own members, recursively
+(`DB.Vessel[0].Sensor[1].Reading`). The **unindexed** form (`DB.Vessel.Reading`) resolves identically
+and deliberately — it is a legitimate *type-level* question ("does every element carry this
+member?"), the form a spec or binding table uses, and answering `MEMBER-NOT-FOUND` there would call
+something real invented. Bounds are only ever checked against a subscript actually written, and only
+when both the index and the declared bounds are integer literals — a symbolic index (`Vessel[#i]`),
+`Array[*]`, or a dimension-count mismatch is left alone rather than guessed at.
 `--project <ir-dir>` is the current export, scanned non-recursively; unindexable files surface as
-`INDEX WARNING`s. **Exit non-zero if any name is `PROPOSED` or `MEMBER-NOT-FOUND`** — so
+`INDEX WARNING`s. **Exit non-zero if any name is `PROPOSED`, `MEMBER-NOT-FOUND` or
+`INDEX-OUT-OF-RANGE`** — so
 `converter tagstatus … --project … && <build>` is a usable "all tags exist" gate.
 `--roots-only` restores root-level-only classification for the Design stage, which classifies at
 root level because it designs *against* gaps rather than coding against them.
@@ -1706,14 +1718,27 @@ DB_Input.Cycle_Start -> EXISTS (root: DB_Input)
 DI3_SYS_CycleStart -> EXISTS
 MadeUpTag -> PROPOSED
 DB_Input.Invented -> MEMBER-NOT-FOUND (root: DB_Input)
-SUMMARY: 4 name(s), 1 proposed, 1 member-not-found, 0 member-unchecked      # exit 1
+SUMMARY: 4 name(s), 1 proposed, 1 member-not-found, 0 member-unchecked, 0 index-out-of-range   # exit 1
 ```
+
+A blocking entry that can say something more precise than its status carries a short detail after an
+em dash (`… -> INDEX-OUT-OF-RANGE (root: DB_Params) — Vessel[7] is outside Array[0..3] of
+"UDT_Vessel"`); `--json` carries the same string as `detail`.
 
 **History (2026-08-05):** classification used to stop at the root, so `DB_Input.Invented` reported
 `EXISTS` — the gate protecting hard rule 3 blessed invented DB members, and `gen-block-new` gates its
 run on that result. Found by a pipeline run that independently grep-verified every member; the
 member check closes it, and `MEMBER-UNCHECKED` keeps the fix from manufacturing false gaps in the
 other direction.
+
+**History (2026-08-05, FI-45 item 1):** the member walk then turned out to stop dead at an array
+subscript — `DB.Vessel[0].MaxNet` and its unindexed form both reported `MEMBER-NOT-FOUND` while a
+named-UDT member resolved fine. An array of UDT is the ordinary way to express N identical vessels,
+so on such a project **every** per-instance binding read as invented: hard rule 3's gate firing at
+correct code, which is exactly how a gate gets trained out of use. The walk now crosses arrays at any
+depth, and the bounds check it needed anyway became a finding nobody previously got
+(`INDEX-OUT-OF-RANGE`). Same pass fixed `TagTypeRegistry.Resolve`, which was blind to the same shape,
+so an operand inside an array of UDT now types correctly for `to-xml --synthesize` too.
 
 ## `diff` — network-level IR invariance (2026-07-18, S7 entry requirement)
 
@@ -1937,6 +1962,24 @@ computed ones, which is the "computed rather than asserted" principle this tooli
 - **A leg that parses zero rows is a HARD ERROR**, never a clean pass — format drift is the whole risk
   here (five documented divergences between a SKILL written this month and an artifact produced this
   week), so the parsers are strict and say so loudly when the shape is missing.
+- **A leg that MATCHED NOTHING exits 2** (FI-44, 2026-08-05). A leg that parsed relations but shares
+  **not one key** with any other present leg took part in comparisons that examined nothing. The
+  demonstrated cause was the SKILL's own D3 example: it wrote `instance: iDB_MotorDOL_Conv07` while
+  every other leg is keyed on the **spec instance**, so following the documentation produced a render
+  that could not intersect anything. *Absent* and *matched nothing* are different situations and report
+  differently — absence is a parse fact about an artifact that is not there and still never gates;
+  matched-nothing is a comparison fact about an artifact that is. Computed on the raw keys, before the
+  disposition partition below narrows anything.
+- **The ledger is partitioned by disposition** (FI-45, 2026-08-05). Only `rendered` and `rebind` are
+  **render-bound**; `in-FB`, `discharged`, `render-BLOCKED`, `render-stopped` and
+  `out-of-scope-obligation` all mean *"this relation does not become a D3 term"*. Key identity is
+  required only **into** the render, against that subset; the other five report in a `ledger
+  dispositions` block as *accounted for*. Before this, one such row exited 1 and `render-BLOCKED` was
+  undeclarable in an artifact that had to pass its own self-check. Out of the render nothing is
+  filtered: a term tagged with a relation no artifact declares is still a difference. Cells are matched
+  as they really occur — `render`, `**rebind**`, `discharged (S5)`, ``render-BLOCKED `[contested]` ``,
+  `in-FB + render(driver)` — and an **unrecognized** disposition is treated as render-bound (fail
+  closed) and warned about.
 - **Citations (check 3):** for each `verified-cross-block` row, every backticked identifier-shaped token
   in the evidence cell is classified — *resolves with N writers* / *writers all disarmed* / *declared
   with no writer in this export* / *does not resolve*. A row where **no** token resolves to a written
@@ -1946,7 +1989,8 @@ computed ones, which is the "computed rather than asserted" principle this tooli
 - **Denominator, always:** "no writer" means *no writer among the N blocks in this export* — partial
   exports are normal here, so that is a scope fact, not a defect.
 
-**Exit 1** on any non-empty set-difference or citation finding. On the fixture: 174/174/174 with
+**Exit 1** on any non-empty set-difference or citation finding; **exit 2** when a leg was compared
+against nothing (that question is unanswerable, not clean). On the fixture: 174/174/174 with
 `render ABSENT`, exit 0; delete one ledger row and it names `FilterUnitInst2.C5`, exit 1.
 
 ## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-39 check 4)

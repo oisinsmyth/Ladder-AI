@@ -18,6 +18,11 @@ public static class TagStatusOutputFormatter
                 sb.Append(" (root: ").Append(e.Root).Append(')');
             }
 
+            if (!string.IsNullOrEmpty(e.Detail))
+            {
+                sb.Append(" — ").Append(e.Detail);
+            }
+
             sb.Append('\n');
         }
 
@@ -29,11 +34,14 @@ public static class TagStatusOutputFormatter
         var proposed = Count(report, TagStatusKind.Proposed);
         var memberNotFound = Count(report, TagStatusKind.MemberNotFound);
         var memberUnchecked = Count(report, TagStatusKind.MemberUnchecked);
+        var indexOutOfRange = Count(report, TagStatusKind.IndexOutOfRange);
 
+        // New counter appended, never inserted: the summary line is something scripts and skills grep.
         sb.Append("SUMMARY: ").Append(report.Entries.Count).Append(" name(s), ")
             .Append(proposed).Append(" proposed, ")
             .Append(memberNotFound).Append(" member-not-found, ")
-            .Append(memberUnchecked).Append(" member-unchecked\n");
+            .Append(memberUnchecked).Append(" member-unchecked, ")
+            .Append(indexOutOfRange).Append(" index-out-of-range\n");
 
         return sb.ToString().TrimEnd('\n', '\r');
     }
@@ -47,6 +55,7 @@ public static class TagStatusOutputFormatter
                 name = e.Name,
                 root = e.Root,
                 status = Label(e.Status),
+                detail = e.Detail,
                 // Retained so existing consumers keep working; `status` is the precise field.
                 exists = e.Exists,
                 blocking = e.IsBlocking,
@@ -66,6 +75,7 @@ public static class TagStatusOutputFormatter
         TagStatusKind.Proposed => "PROPOSED",
         TagStatusKind.MemberNotFound => "MEMBER-NOT-FOUND",
         TagStatusKind.MemberUnchecked => "MEMBER-UNCHECKED",
+        TagStatusKind.IndexOutOfRange => "INDEX-OUT-OF-RANGE",
         _ => "UNKNOWN",
     };
 }

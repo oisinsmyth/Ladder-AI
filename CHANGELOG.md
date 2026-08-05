@@ -2,6 +2,48 @@
 
 ## 2026-08-05
 
+**The mechanical floor could exit 0 having examined nothing — FI-44, FI-45 fixed; FI-46 raised**
+
+Found on the **first run of the four-rung pipeline against a plant it was not tuned on**. CLAUDE.md's
+own caveat — *"exercised on one plant across three runs, never yet on a second; treat the rules as
+well-fitted to that plant until a different one tests them"* — turned out to be exactly right.
+
+- **FI-44, three silent false-cleans, all now exit 2.** `candidate-scan --scope <token>` returned 0
+  candidates and **exit 0**: `--scope` was a path *prefix*, so under C-001 (`<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>`,
+  equipment in the middle) it could not address a piece of equipment at all, and the only way to get
+  a finding was to name the disputed signals — i.e. to already know the answer. `undriven-scan --fb`
+  returned **exit 0 for a block that did not exist** (verified with an invented name). And a D3
+  render leg matching no other leg still parsed, so `relation-reconcile` compared it against nothing
+  and was satisfied — which the `gen-code-structure` D3 **example itself produced**, keying on the
+  iDB name where the parser keys on the spec instance. One principle: **a check that examined
+  nothing must not exit 0.** Exit 2 throughout, distinct from a finding, because "the plant is
+  wrong" and "the question was wrong" need different actions.
+- **The scope fix answers the question, not just fails loudly.** `--scope <equipment>` now returns
+  **7 candidates where it returned 0** on the corpus that raised it, and correctly exits 1 — a real
+  ambiguity that had been reading as clean. Matching is C-001-position-specific, not generic segment
+  matching, so `--scope DB` cannot match the whole corpus and DB-qualified behaviour is unchanged.
+- **FI-45, three coverage gaps — failing at *correct* input, which is how a gate dies quietly.**
+  `tagstatus` could not walk an ARRAY OF UDT, so **every per-instance binding in a multi-instance
+  project read as invented** — precisely the laundering hard rule 3 exists to catch, fired at correct
+  code. It ran deeper than reported: `TagTypeRegistry.Resolve` had the same blindness, so an operand
+  inside an array of UDT was **typeless for `to-xml --synthesize` and C-118** too. New
+  **INDEX-OUT-OF-RANGE** status (its own, because the member is real and the element is not), which
+  speaks only when index and bounds are both integer literals — a bounds check that guessed would
+  recreate the crying-wolf failure being fixed. `signal-sweep` could not disposition a tag-table
+  signal *at all* (dispositions qualified, inventory bare, and the parser only leaves a token bare if
+  it contains a dot — which a tag name never does): **38 falsely-unaccounted → 0** on the live
+  artifacts. `relation-reconcile` could not tolerate five of its own seven ledger dispositions,
+  making `render-BLOCKED` undeclarable.
+- **Every fix guards the true positive as well as the false one.** Fixing a false clean by weakening
+  the real check would be the worse outcome. Verified on real data, not only fixtures: 639 existing
+  member paths still EXISTS, the 5 known true-positive MEMBER-NOT-FOUND names still fail, and 3 new
+  INDEX-OUT-OF-RANGE hits were **correct** — a probe using `[0]` on arrays whose lower bound is not 0.
+- **FI-46 raised** for three residuals found while fixing these and deliberately left alone: bit-slice
+  components (`DB.Word.%X0`) still read as members; `review`/`preflight` never checked for the same
+  array blindness; `ParseRender`'s `instance:` regex loose enough to build a phantom leg from prose.
+- **Tests: 707 → 766 converter** (+59), golden 39, openness-cli 140 — all green, 0 failed. Four
+  parallel workstreams in one tree; this is the single reconciled figure.
+
 **Four-rung structured spec pipeline (A–D) — built, adversarially validated twice, re-run three times**
 
 The autopsy's answer to a correlated-check failure (see the S6-Killer-Plan entry below): split the one

@@ -48,6 +48,17 @@ public class SignalSweepTests : IDisposable
 
     private void WriteSpec(string body) => File.WriteAllText(Path.Combine(_specs, "InstA.md"), body);
 
+    // A tag table under whatever name the export gives it. Tag names are BARE — a PLC tag never
+    // contains a dot, which is the whole of FI-45 item 2.
+    private void WriteTagTable(string tableName, params string[] tagNames)
+    {
+        var tags = tagNames.Select((t, i) =>
+            new PlcTagSource($"9{i}", t, "Bool", $"%I0.{i}", true, true, true, null)).ToList();
+
+        File.WriteAllText(Path.Combine(_project, $"TT_{tagNames[0]}.ir"),
+            TagTableIrSerializer.Serialize(new PlcTagTableSource("9", tableName, tags)));
+    }
+
     private string WriteUnclaimed(string body)
     {
         var path = Path.Combine(_dir, "unclaimed-signals.md");
@@ -123,6 +134,150 @@ public class SignalSweepTests : IDisposable
         Assert.False(report.DispositionTableRead);
         Assert.Equal(0, report.Disposed);
         Assert.Contains("disposed' is 0 by construction", SignalSweepOutputFormatter.FormatText(report));
+    }
+
+    // FI-45 item 2, the defect itself: dispositions are qualified `<heading>.<leaf>` and the inventory
+    // keys a tag BARE, so before the fix a tag-table signal could never match its own disposition row —
+    // it was swept, it was dispositioned in the artifact, and it still reported as unaccounted.
+    [Fact]
+    public void TagTableSignal_IsDispositionedByItsTagTableHeading()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteSpec("- **C1** bound to `DB_In.Bound` [io]\n");
+        var unclaimed = WriteUnclaimed(
+            "## Full disposition table\n\n### `IO_Plant`\n\n| Members | Disposition |\n|---|---|\n" +
+            "| `DI1_PlantHealthy`, `DQ1_PlantRun` | out-of-scope-pilot |\n" +
+            "\n### `DB_In` (DB 1)\n\n| Members | Disposition |\n|---|---|\n" +
+            "| `Disposed`, `Nobody` | out-of-scope-instance |\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
+
+        Assert.Equal(5, report.Swept);
+        Assert.Equal(1, report.Claimed);
+        Assert.Equal(4, report.Disposed);
+        Assert.Empty(report.Unaccounted);
+        Assert.False(report.HasFindings);
+    }
+
+    // A real tag table is routinely called "Default tag table" — a heading regex that only accepted an
+    // identifier made that container undispositionable by construction.
+    [Fact]
+    public void TagTableWithSpacesInItsName_IsStillDispositionable()
+    {
+        WriteTagTable("Default tag table", "DI9_Spare");
+        WriteSpec("- **C1** `DB_In.Bound`, `DB_In.Disposed`, `DB_In.Nobody`\n");
+        var unclaimed = WriteUnclaimed(
+            "### `Default tag table`\n\n| Members | Disposition |\n|---|---|\n| `DI9_Spare` | unused spare |\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
+
+        Assert.Equal(1, report.Disposed);
+        Assert.Empty(report.Unaccounted);
+    }
+
+    // The true positive must survive the fix: a tag nobody dispositioned still reports. Matching is
+    // strict on `<TableName>.<TagName>` — a same-named member dispositioned under a DIFFERENT container
+    // does not account for the tag.
+    [Fact]
+    public void TagTableSignal_WithNoDispositionRow_StillReportsUnaccounted()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteSpec("- **C1** bound to `DB_In.Bound` [io]\n");
+        var unclaimed = WriteUnclaimed(
+            "### `IO_Plant`\n\n| Members | Disposition |\n|---|---|\n| `DI1_PlantHealthy` | out-of-scope-pilot |\n" +
+            "\n### `DB_In` (DB 1)\n\n| Members | Disposition |\n|---|---|\n" +
+            "| `Disposed`, `Nobody`, `DQ1_PlantRun` | out-of-scope-instance |\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
+
+        Assert.True(report.HasFindings);
+        var unaccounted = Assert.Single(report.Unaccounted);
+        Assert.Equal("DQ1_PlantRun", unaccounted.Path);
+        Assert.Equal("IO_Plant", unaccounted.Container);
+        Assert.Equal(SignalContainerKind.TagTable, unaccounted.Kind);
+    }
+
+    // A spec claims a tag by its bare name — that leg worked before and must keep working.
+    [Fact]
+    public void TagTableSignal_ClaimedBareBySpec_CountsAsClaimed()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy");
+        WriteSpec("- **C1** bound to `DI1_PlantHealthy` [io]\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
+
+        Assert.Equal(4, report.Swept);
+        Assert.Equal(1, report.Claimed);
+        Assert.Equal(3, report.Unaccounted.Count);
+    }
+
+    // Mixed corpus: both legs counted, each signal attributed to the container that declares it.
+    [Fact]
+    public void MixedDbAndTagTableInventory_AttributesEachSignalToItsOwnContainer()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun");
+        WriteTagTable("IO_Units", "DI2_UnitLevel");
+        WriteSpec("- **C1** `DB_In.Bound`, `DI1_PlantHealthy`\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
+
+        Assert.Equal(6, report.Swept);
+        Assert.Equal(3, report.ByContainer.Count);
+
+        var byName = report.ByContainer.ToDictionary(c => c.Container, StringComparer.Ordinal);
+        Assert.Equal(3, byName["DB_In"].Swept);
+        Assert.Equal(SignalContainerKind.Db, byName["DB_In"].Kind);
+        Assert.Equal(2, byName["IO_Plant"].Swept);
+        Assert.Equal(SignalContainerKind.TagTable, byName["IO_Plant"].Kind);
+        Assert.Equal(1, byName["IO_Units"].Swept);
+        Assert.Equal(1, byName["IO_Plant"].Claimed);
+    }
+
+    // The presentation half of FI-45 item 2: the old grouping split on the first dot, so N flat tags
+    // rendered as N one-row "DBs". A report nobody can read is not a report.
+    [Fact]
+    public void GroupedOutput_RendersATagTableAsOneTable_NotOneRowPerTag()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy", "DQ1_PlantRun", "DQ2_PlantStop");
+        WriteSpec("- **C1** `DB_In.Bound`\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: null);
+        var text = SignalSweepOutputFormatter.FormatText(report);
+
+        Assert.Contains("by container (DB / tag table)", text);
+        Assert.Contains("tag table IO_Plant", text);
+
+        // One row for the table, not one per tag.
+        var rows = text.Split('\n').Where(l => l.Contains("IO_Plant") && l.Contains("swept")).ToList();
+        Assert.Single(rows);
+        Assert.DoesNotContain("DI1_PlantHealthy   swept", text);
+
+        // And the unaccounted list names the table a tag belongs to, since the tag name cannot.
+        Assert.Contains("DI1_PlantHealthy   (tag table IO_Plant)", text);
+
+        var json = SignalSweepOutputFormatter.FormatJson(report);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var containers = doc.RootElement.GetProperty("byContainer").EnumerateArray().ToList();
+        Assert.Equal(2, containers.Count);
+        Assert.Contains(containers, c => c.GetProperty("container").GetString() == "IO_Plant"
+                                         && c.GetProperty("kind").GetString() == "tag table"
+                                         && c.GetProperty("swept").GetInt32() == 3);
+    }
+
+    // Strictness has a cost: a heading that names no real container qualifies its rows into nothing.
+    // Said out loud that is a five-second fix; unsaid it is the same silent noise all over again.
+    [Fact]
+    public void DispositionHeadingNamingNoContainer_IsWarnedAbout()
+    {
+        WriteTagTable("IO_Plant", "DI1_PlantHealthy");
+        WriteSpec("- **C1** `DB_In.Bound`, `DB_In.Disposed`, `DB_In.Nobody`\n");
+        var unclaimed = WriteUnclaimed(
+            "### `IO_Tags`\n\n| Members | Disposition |\n|---|---|\n| `DI1_PlantHealthy` | out-of-scope |\n");
+
+        var report = SignalSweepRunner.Run(_project, _specs, registerPath: null, unclaimedPath: unclaimed);
+
+        Assert.Equal("DI1_PlantHealthy", Assert.Single(report.Unaccounted).Path);
+        Assert.Contains(report.Warnings, w => w.Contains("'IO_Tags' names no global DB or tag table"));
     }
 
     [Fact]

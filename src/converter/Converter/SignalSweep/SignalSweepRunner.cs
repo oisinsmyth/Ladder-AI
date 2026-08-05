@@ -15,7 +15,12 @@ public static class SignalSweepRunner
     // `### `DiscreteInputs` (DB 15)` — the qualification source. The disposition tables list BARE leaf
     // names, so without the enclosing heading every leaf silently fails to match the inventory's
     // fully-qualified paths.
-    private static readonly Regex DbHeading = new(@"^###\s+`([A-Za-z_][A-Za-z0-9_]*)`", RegexOptions.Compiled);
+    //
+    // Any backticked heading, not just an identifier-shaped one: a real PLC tag table is routinely
+    // called "Default tag table", and an identifier-only pattern made that container undispositionable
+    // by construction. A heading that names no container in the export is warned about below, so
+    // widening the match cannot turn a mismatch into a silent pass.
+    private static readonly Regex ContainerHeading = new(@"^###\s+`([^`]+)`", RegexOptions.Compiled);
 
     private static readonly Regex TableRow = new(@"^\|(.+)\|", RegexOptions.Compiled);
 
@@ -25,11 +30,13 @@ public static class SignalSweepRunner
         var inventory = SignalInventory.SignalInventory.Build(projectDir);
 
         // Denominator: every global-DB leaf and tag-table tag in the corpus. Exact and cheap.
+        // Kept as LEAVES rather than paths: a tag-table tag's path is bare, so its container (the
+        // qualifier a disposition heading supplies) is only knowable from the leaf.
         var swept = inventory.Leaves
             .Where(l => l.Origin is SignalOrigin.GlobalDb or SignalOrigin.TagTable)
-            .Select(l => l.Path)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(p => p, StringComparer.Ordinal)
+            .GroupBy(l => l.Path, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .OrderBy(l => l.Path, StringComparer.Ordinal)
             .ToList();
 
         if (swept.Count == 0)
@@ -40,9 +47,10 @@ public static class SignalSweepRunner
         }
 
         var claimed = CollectClaimed(specsDir, registerPath, warnings);
-        var (disposed, tableRead) = unclaimedPath is null
-            ? (new HashSet<string>(StringComparer.Ordinal), false)
+        var (disposed, headings) = unclaimedPath is null
+            ? (new HashSet<string>(StringComparer.Ordinal), new List<string>())
             : CollectDisposed(unclaimedPath);
+        var tableRead = headings.Count > 0;
 
         if (unclaimedPath is not null && !tableRead)
         {
@@ -51,31 +59,61 @@ public static class SignalSweepRunner
                 "Refusing to report signals as unaccounted when the disposition leg was not read.");
         }
 
+        var containers = swept.Select(l => l.ContainerName).ToHashSet(StringComparer.Ordinal);
+        foreach (var heading in headings.Where(h => !containers.Contains(h)).Distinct(StringComparer.Ordinal))
+        {
+            // A heading naming no container qualifies its rows into nothing, and every signal beneath it
+            // then reads as unaccounted for a reason the report otherwise never states. Said out loud,
+            // the mismatch is a five-second fix; unsaid, it is exactly the silent noise FI-45 is about.
+            warnings.Add(
+                $"sweep: disposition heading '{heading}' names no global DB or tag table in the export — " +
+                "its rows qualify against nothing, so the signals under it will read as unaccounted.");
+        }
+
         var signals = swept
-            .Select(p => new SweptSignal(p, p.Split('.')[0], Classify(p, claimed, disposed)))
+            .Select(l =>
+            {
+                var kind = l.Origin == SignalOrigin.TagTable ? SignalContainerKind.TagTable : SignalContainerKind.Db;
+
+                // The FI-45 item 2 fix. A disposition row is qualified `<heading>.<leaf>`; a DB member's
+                // own path already IS that, but a tag-table tag's path is bare (deliberately — see
+                // SignalLeaf). So qualify the tag here, on the sweep side only, using its real table
+                // name. Strict equality both sides: a bare-name match against ANY heading would let a
+                // same-named DB member disposition a tag that nobody has actually accounted for.
+                var dispositionKey = kind == SignalContainerKind.TagTable
+                    ? $"{l.ContainerName}.{l.Leaf}"
+                    : l.Path;
+
+                return new SweptSignal(l.Path, l.ContainerName, kind, Classify(l.Path, dispositionKey, claimed, disposed));
+            })
             .ToList();
 
-        var byDb = signals
-            .GroupBy(s => s.Root, StringComparer.Ordinal)
-            .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => new DbBreakdown(g.Key, g.Count(),
+        var byContainer = signals
+            .GroupBy(s => (s.Container, s.Kind))
+            .OrderBy(g => g.Key.Kind)
+            .ThenBy(g => g.Key.Container, StringComparer.Ordinal)
+            .Select(g => new ContainerBreakdown(g.Key.Container, g.Key.Kind, g.Count(),
                 g.Count(s => s.Accounting == Accounting.ClaimedBySpec),
                 g.Count(s => s.Accounting == Accounting.Disposed),
                 g.Count(s => s.Accounting == Accounting.Unaccounted)))
             .ToList();
 
         warnings.AddRange(inventory.Warnings);
-        return new SignalSweepReport(projectDir, inventory.FilesScanned, signals, byDb, tableRead, warnings);
+        return new SignalSweepReport(projectDir, inventory.FilesScanned, signals, byContainer, tableRead, warnings);
     }
 
-    private static Accounting Classify(string path, HashSet<string> claimed, HashSet<string> disposed)
+    // `path` is what a spec writes (bare for a tag, qualified for a DB member); `dispositionKey` is what
+    // a disposition table's heading qualifies it to. They differ only for a tag-table tag.
+    private static Accounting Classify(string path, string dispositionKey, HashSet<string> claimed, HashSet<string> disposed)
     {
-        if (claimed.Contains(path))
+        if (claimed.Contains(path) || claimed.Contains(dispositionKey))
         {
             return Accounting.ClaimedBySpec;
         }
 
-        return disposed.Contains(path) ? Accounting.Disposed : Accounting.Unaccounted;
+        return disposed.Contains(path) || disposed.Contains(dispositionKey)
+            ? Accounting.Disposed
+            : Accounting.Unaccounted;
     }
 
     // "Mentioned in a spec" is the honest containment test — deliberately coarse. A spec that NAMES a tag
@@ -110,22 +148,25 @@ public static class SignalSweepRunner
 
     // The per-DB disposition tables are the only machine-readable part of the residual artifact; the
     // `### Q-Cnn` narrative findings stay narrative and are deliberately not parsed.
-    private static (HashSet<string>, bool) CollectDisposed(string unclaimedPath)
+    // Returns the qualified disposition keys plus every heading that actually carried parsed rows — the
+    // latter so a heading naming no real container can be reported instead of silently qualifying
+    // nothing.
+    private static (HashSet<string>, List<string>) CollectDisposed(string unclaimedPath)
     {
         var disposed = new HashSet<string>(StringComparer.Ordinal);
-        string? db = null;
-        var sawTable = false;
+        var headingsWithRows = new List<string>();
+        string? container = null;
 
         foreach (var line in File.ReadLines(unclaimedPath))
         {
-            var heading = DbHeading.Match(line);
+            var heading = ContainerHeading.Match(line);
             if (heading.Success)
             {
-                db = heading.Groups[1].Value;
+                container = heading.Groups[1].Value.Trim();
                 continue;
             }
 
-            if (db is null || !TableRow.IsMatch(line))
+            if (container is null || !TableRow.IsMatch(line))
             {
                 continue;
             }
@@ -135,17 +176,22 @@ public static class SignalSweepRunner
             var cells = line.Trim('|').Split('|');
             foreach (var token in RelationArtifactParsers.EvidenceTokens(cells[0]))
             {
-                sawTable = true;
+                if (!headingsWithRows.Contains(container, StringComparer.Ordinal))
+                {
+                    headingsWithRows.Add(container);
+                }
 
-                // Bare leaf under a DB heading -> qualify. An already-qualified token is taken as-is.
-                disposed.Add(token.Contains('.') ? token : $"{db}.{token}");
+                // Bare leaf under a container heading -> qualify. An already-qualified token is taken
+                // as-is. A tag-table tag is bare by nature, so the heading is the ONLY qualifier it can
+                // ever get — which is why the sweep side qualifies the tag to match (FI-45 item 2).
+                disposed.Add(token.Contains('.') ? token : $"{container}.{token}");
 
                 // `Test : Array[0..75]` style entries name an array root whose leaves the inventory
                 // expands individually; record the root so its leaves match too.
-                disposed.Add($"{db}.{token.Split(' ')[0]}");
+                disposed.Add($"{container}.{token.Split(' ')[0]}");
             }
         }
 
-        return (disposed, sawTable);
+        return (disposed, headingsWithRows);
     }
 }

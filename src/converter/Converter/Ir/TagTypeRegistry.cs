@@ -168,7 +168,7 @@ public sealed class TagTypeRegistry
 
         // A tag whose own type is a UDT, then further members into that UDT.
         if (_tagTypes.TryGetValue(root, out var rootTagType)
-            && _udts.TryGetValue(StripQuotes(rootTagType), out var rootUdt))
+            && _udts.TryGetValue(StripQuotes(ArrayElementType(rootTagType) ?? rootTagType), out var rootUdt))
         {
             return ResolveInMembers(rootUdt.Members, rest);
         }
@@ -204,8 +204,13 @@ public sealed class TagTypeRegistry
             return ResolveInMembers(nested, rest);
         }
 
-        // Otherwise the member's own type may name a UDT whose members we can descend into.
-        if (_udts.TryGetValue(StripQuotes(member.Datatype), out var udt))
+        // Otherwise the member's own type may name a UDT whose members we can descend into — via its
+        // ELEMENT type when the member is an array of UDT (`Array[0..3] of "UDT_Vessel"`), the
+        // ordinary way to express N identical vessels. Descending on the element type covers the
+        // indexed path (`Vessel[0].MaxNet`) and the unindexed, type-level one (`Vessel.MaxNet`)
+        // alike; before FI-45 neither resolved, which left every per-instance operand on such a
+        // project typeless here and an invented member over in `tagstatus`.
+        if (_udts.TryGetValue(StripQuotes(ArrayElementType(member.Datatype) ?? member.Datatype), out var udt))
         {
             return ResolveInMembers(udt.Members, rest);
         }

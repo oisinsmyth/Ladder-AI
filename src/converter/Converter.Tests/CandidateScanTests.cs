@@ -175,4 +175,65 @@ public class CandidateScanTests : IDisposable
         Assert.True(doc.RootElement.GetProperty("hasChoice").GetBoolean());
         Assert.Equal(2, doc.RootElement.GetProperty("family").GetProperty("sameTypedIoSignals").GetInt32());
     }
+
+    // ---- FI-44: --scope could not address a C-001 physical-IO tag, and said "clean" about it ----
+
+    // C-001 physical-IO form is <DI|DQ|AI|AQ><n>_<Equipment>_<Signal>, so the equipment token sits in
+    // the MIDDLE. --scope was a pure path prefix, so scoping to a piece of equipment matched nothing
+    // and returned EXIT 0 — a silent false clean on precisely the binding a spec stage needs judged.
+    [Fact]
+    public void ScopeMatchesTheC001EquipmentToken_NotOnlyAPathPrefix()
+    {
+        WriteProjectFile("IO_Unit.ir", TagTableIrSerializer.Serialize(
+            new PlcTagTableSource("7", "IO_Unit", new[]
+            {
+                new PlcTagSource("1", "DQ8_UnitX_ValveOpen", "Bool", "%Q0.7", true, true, true, null),
+                new PlcTagSource("2", "DQ9_UnitX_PumpRun", "Bool", "%Q1.0", true, true, true, null),
+                new PlcTagSource("3", "DQ10_UnitY_ValveOpen", "Bool", "%Q1.1", true, true, true, null),
+            })));
+
+        var report = CandidateScanRunner.Run(_dir, "FB_Unit", instance: null,
+            scopes: new[] { "UnitX" }, typeFilter: "Bool", direction: "any", phrases: Array.Empty<string>());
+
+        Assert.Equal(2, report.IoCandidates.Count);
+        Assert.True(report.HasChoice);           // two signals could satisfy it — the real answer
+        Assert.False(report.ScopedButFoundNothing);
+        Assert.DoesNotContain(report.IoCandidates, c => c.Path.Contains("UnitY", StringComparison.Ordinal));
+    }
+
+    // The guard itself. A scope that matches nothing is not evidence the binding is unambiguous —
+    // it is evidence the question did not land, and it must not read as success.
+    [Fact]
+    public void ScopeMatchingNothing_IsUnjudgeable_NotClean()
+    {
+        var report = Run("NoSuchEquipment");
+
+        Assert.Empty(report.IoCandidates);
+        Assert.True(report.ScopedButFoundNothing);
+        Assert.False(report.HasChoice);  // distinct signals: "ambiguous" and "unasked" are not the same
+    }
+
+    // Asking no scope at all is a different thing again: the caller did not ask about IO, so there is
+    // nothing unanswered. This must stay a clean pass or every FB-only query starts failing.
+    [Fact]
+    public void NoScopeGiven_IsNotAnUnansweredQuestion()
+    {
+        var report = Run(scope: null);
+
+        Assert.Empty(report.IoCandidates);
+        Assert.False(report.ScopedButFoundNothing);
+    }
+
+    // Guard the true positive: the prefix form still works, so DB-qualified scopes are untouched.
+    [Fact]
+    public void PathPrefixScope_StillMatches()
+    {
+        var report = Run("DB_In.Unit1", type: "Bool");
+
+        Assert.Equal(2, report.IoCandidates.Count);
+        Assert.False(report.ScopedButFoundNothing);
+    }
+
+    private void WriteProjectFile(string fileName, string content) =>
+        File.WriteAllText(Path.Combine(_dir, fileName), content);
 }

@@ -23,7 +23,19 @@ public sealed record SignalLeaf(
     string Type,
     bool IsRetain,
     SignalOrigin Origin,
-    string? StartValue = null);
+    string? StartValue = null,
+    string? Container = null)
+{
+    // The DECLARING container's name: the DB/block for a member, the TAG TABLE for a tag.
+    //
+    // A tag-table tag is the one leaf whose `Path` cannot carry its container: a tag is referenced
+    // BARE everywhere in IR (`"MotorRun"`, never `IO_Tags.MotorRun`), so ProjectUsageGraph,
+    // candidate-scan and undriven-scan all key on the bare name and the inventory must match them.
+    // The container is therefore carried alongside rather than folded into the path — anything that
+    // needs to GROUP or QUALIFY (signal-sweep's disposition headings) reads this, and anything that
+    // needs to LOOK UP a reference keeps reading `Path`. For every other origin the two agree.
+    public string ContainerName => Container ?? Root;
+}
 
 // A typed inventory of every signal leaf in a project export.
 //
@@ -86,9 +98,14 @@ public sealed class SignalInventory
 
             if (text.StartsWith("TAGTABLE ", StringComparison.Ordinal))
             {
-                foreach (var tag in TagTableIrParser.ParseTagTable(text).Tags)
+                var table = TagTableIrParser.ParseTagTable(text);
+                foreach (var tag in table.Tags)
                 {
-                    _leaves.Add(new SignalLeaf(tag.Name, tag.Name, tag.Name, tag.DataTypeName, false, SignalOrigin.TagTable));
+                    // Path stays BARE — that is how a tag is written in IR and how the usage graph keys
+                    // it. The table name rides in `Container` (see SignalLeaf) so a consumer that needs
+                    // the qualifier has it without the lookup key changing meaning.
+                    _leaves.Add(new SignalLeaf(tag.Name, tag.Name, tag.Name, tag.DataTypeName, false,
+                        SignalOrigin.TagTable, StartValue: null, Container: table.Name));
                 }
 
                 return;
