@@ -253,6 +253,23 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
     first saw an alarm (view-time) distinct from when it appeared and when it was fixed — that is
     a logging/traceability feature, not the same thing as requiring acknowledgment to clear, and
     doesn't change an alarm's ack-required status under this rule.
+- C-508 *(error)* — **Every alarm bit latches in the PLC until an explicit reset, whatever its
+  severity class.** *(Owner ruling, 2026-08-05, from a live job.)* C-123 already makes this
+  universal for **fault** bits — latched, cleared only by a named `FaultReset`, no exceptions.
+  This rule states the same default for the other two C-506 classes, because nothing previously
+  did: a **Warning** or an **Info/Event** that appears and clears between two HMI polls is
+  otherwise invisible, and "this was true at some point" is the entire reason the bit exists.
+  Reading a Warning's bit lifetime out of a rule about faults was an inference nobody should have
+  to make.
+  **Orthogonal to C-507, and this is the pairing that keeps being conflated.** Latching is
+  *PLC-side bit lifetime*; acknowledgment is an *HMI gesture*. An alarm latches **and** requires no
+  acknowledgment — both at once, and that is the normal case, not an exception to either rule. The
+  reset that clears the latch is not an acknowledgment: a project may have a plant-wide reset, a
+  per-area reset or a per-alarm `FaultReset` (C-123) and still be fully C-507-compliant with no
+  ack anywhere.
+  **Not a licence to latch a hold.** A live, self-clearing condition that freezes a step is a
+  *hold*, which C-123 keeps as a separate non-latching bit. Holds are not alarms and this rule does
+  not reach them.
 
 ## Simplicity & readability
 
