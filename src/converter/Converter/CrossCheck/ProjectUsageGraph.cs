@@ -45,11 +45,21 @@ public sealed class ProjectUsageGraph
     // iDB root) — e.g. ("iDB_ShredderSequencer", "IO.Step"), ("iDB_ShredderSequencer", "StopCmd").
     public IReadOnlyList<(string InstanceDb, string Suffix)> InstanceMemberPaths => _instanceMemberPaths;
 
-    public static ProjectUsageGraph Build(string projectDir)
+    public static ProjectUsageGraph Build(string projectDir) => Build(projectDir, Array.Empty<string>());
+
+    // Additive overload mirroring ProjectIndex.Build(projectDir, batchPaths): extra .ir files outside the
+    // export contribute their usages too, so a freshly-generated block can be analysed against the corpus
+    // before it has been imported. Shapes and keying are untouched — existing callers are unaffected.
+    public static ProjectUsageGraph Build(string projectDir, IReadOnlyList<string> extraFiles)
     {
         var graph = new ProjectUsageGraph();
         foreach (var path in Directory.EnumerateFiles(projectDir, "*.ir", SearchOption.TopDirectoryOnly)
                      .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            graph.AddFile(path);
+        }
+
+        foreach (var path in extraFiles)
         {
             graph.AddFile(path);
         }

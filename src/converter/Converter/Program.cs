@@ -14,6 +14,7 @@ using Converter.SimaticMl;
 using Converter.TagStatus;
 using Converter.TargetScan;
 using Converter.Trace;
+using Converter.UndrivenScan;
 
 namespace Converter;
 
@@ -59,6 +60,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "candidate-scan")
         {
             return RunCandidateScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "undriven-scan")
+        {
+            return RunUndrivenScan(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -545,6 +551,82 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunUndrivenScan(string[] args)
+    {
+        string? projectDir = null;
+        string? fb = null;
+        var instances = new List<string>();
+        var callers = new List<string>();
+        var json = false;
+        var hints = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--fb":
+                    fb = RequireValue(args, ref i, "--fb");
+                    break;
+                case "--instance":
+                    var instance = RequireValue(args, ref i, "--instance");
+                    if (instance is null)
+                    {
+                        return 1;
+                    }
+
+                    instances.Add(instance);
+                    break;
+                case "--caller":
+                    var caller = RequireValue(args, ref i, "--caller");
+                    if (caller is null)
+                    {
+                        return 1;
+                    }
+
+                    callers.Add(caller);
+                    break;
+                case "--hints":
+                    hints = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || fb is null)
+        {
+            Console.Error.WriteLine("Usage: converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        foreach (var caller in callers.Where(c => !File.Exists(c)))
+        {
+            Console.Error.WriteLine($"--caller file not found: {caller}");
+            return 1;
+        }
+
+        var report = UndrivenScanRunner.Run(projectDir, fb, instances, callers, hints);
+        Console.WriteLine(json
+            ? UndrivenScanOutputFormatter.FormatJson(report)
+            : UndrivenScanOutputFormatter.FormatText(report));
+
+        // Hard facts only: an interface input with no armed writer. The name-join hints never gate.
+        return report.HasFindings ? 1 : 0;
     }
 
     private static int RunCandidateScan(string[] args)

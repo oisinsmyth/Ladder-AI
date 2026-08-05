@@ -1833,6 +1833,38 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
+## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-35 check 4)
+
+```
+converter undriven-scan --project <ir-dir> --fb <FBName>
+                        [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]
+```
+
+For each **instance** of an FB, which of its interface members actually receive a value. The new value
+over `cross-check` is **per-instance resolution**: that command canonicalizes to `(FB, member)` and pools
+across every instance — correct for its own question, wrong for this one, because if one instance drives
+a member and another does not the pooled view shows the member alive and the gap disappears. A dropped
+bypass on one instance of a shared block is exactly that shape.
+
+States, all computed: **`driven`** (an armed writer) · **`disarmed`** (writers exist, all
+provably-false-guarded) · **`undriven (default X)`** (no writer, but the instance DB's start value is
+then the effective constant) · **`undriven`** · **`dead-interface`** (no writer **and** the FB never
+reads it either — inert on both sides).
+
+`--caller <file.ir>` merges a block outside the export into the graph (the `ProjectIndex` batch idiom),
+so a freshly generated block can be analysed before import. Consequence: this runs at the check stage,
+after IR exists — it reads IR, never a markdown render.
+
+**Exit 1 on `undriven` or `disarmed` only.** `dead-interface` is reported but does **not** gate: a
+reusable library block legitimately exposes optional inputs a given instance doesn't use, so gating on it
+would emit findings by the hundred and train readers to ignore the output. It is a fact to cross against
+a spec that required the capability — which is what makes it useful for the dropped-bypass case, where
+`IO.RotationSensor` is declared, unwired, and unread on every instance.
+
+`--hints` opts into a name-token match between an unreferenced project signal and an undriven member
+(`RotationSensor` ↔ `…RotSen`). **Off by default and never part of the exit condition** — it is a
+labelled heuristic, and on a real corpus it fires often enough to bury the findings it sits beside.
+
 ## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-35 check 1)
 
 ```
