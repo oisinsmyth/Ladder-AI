@@ -107,14 +107,43 @@ the documented cause of that regression (`docs/evidence/PlantAutoControl-bench-a
 the defect; a verified argument is the fix. **A relation with neither a term nor a ledger entry is a
 HARD FAIL.**
 
-**Emit the ledger as a machine-checkable table** — one row per relation:
-`relation-id | disposition | evidence | precondition class`. **Dispositions:** `rendered` ·
-`in-FB` (satisfied inside the reused block) · `discharged` (by a declared D0 shape) · `rebind` (D1
-binding audit) · **`render-BLOCKED`** (would be a term, but a blocking `Q-nn` contests it — cite the
-Q) · **`out-of-scope-obligation`** (the relation's counterpart lives outside this run's scope — cite
-the owed obligation). The last two **count toward the set-difference**, are **never** discharges, and
-**never** carry a precondition class. *Without them a stopped run cannot produce a complete ledger at
-all — which is exactly when completeness matters most.*
+**Emit the ledger as a machine-checkable table.** `converter relation-reconcile` parses this, so the
+shape is a CONTRACT, not an illustration — write it exactly:
+
+```
+## Ledger — `FilterUnitInst2` (Dust Filter Unit 1)
+
+| relation | disposition | evidence | precondition class |
+|---|---|---|---|
+| C1 | render-BLOCKED | Q-C04 — no hand/auto source | — |
+| C3 | in-FB | `FilterUnitSystem.ir` N1 (`NOT IO.FaultActive`) | verified-in-block |
+```
+
+- One `## Ledger — \`<Instance>\`` heading per instance — the instance is read from the **backticks**.
+- The header row's first cell is literally `relation`; the last is `precondition class`.
+- Relation ids are **`C1`/`P1`** — unhyphenated, unpadded. (`C-nn` is prose for the *set*, never an id.)
+- An empty precondition cell is an em-dash `—`.
+- **Evidence must contain at least one backticked identifier that resolves in the export.** A cell
+  citing only a network number (`N1`, `N10`) carries no checkable claim, and the citation check will
+  flag the row. Cite the member, not just where you looked.
+
+**Dispositions** — the complete vocabulary; do not invent a sixth:
+
+| Disposition | Meaning |
+|---|---|
+| `rendered` | it becomes an explicit term in D3 |
+| `in-FB` | satisfied inside the reused block (cite the FB network) |
+| `discharged` | covered by a declared D0 shape (cite the shape) |
+| `rebind` | D1's binding audit moved it to a stronger signal |
+| `render-BLOCKED` | would be a term, but a **blocking `Q-nn` contests it** — cite the Q |
+| `render-stopped` | would be a term; **no Q contests it**, but the whole instance's render is stopped |
+| `out-of-scope-obligation` | the counterpart lives outside this run's scope — cite the owed obligation |
+
+`render-BLOCKED` requires a contesting `Q-nn`; **`render-stopped` is for the uncontested majority of a
+stopped instance**, which has no Q to cite. *Two consecutive runs invented their own marker for exactly
+this state because the vocabulary lacked it — if you find yourself inventing a disposition, the gap is
+in this contract and belongs in a friction report.* The last three **count toward the set-difference**,
+are **never** discharges, and **never** carry a precondition class.
 The relation-id column must set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
 `gen/<project>/equipment-specs/`. State both counts explicitly in the artifact.
 
@@ -122,6 +151,10 @@ The relation-id column must set-difference to **empty** against the union of all
 Explicit boolean over the real interface members. **The ladder carries only what is needed to satisfy
 the spec**: every term traces to an undischarged relation, and a term tracing to nothing is a finding
 (unjustified capability, C-606). Tag each term with the relation id it satisfies.
+
+The render is also machine-read (`relation-reconcile`'s fourth leg), so its shape is a contract too:
+each network states `instance: <iDB>` on its header line, and **every term carries its relation-id tag**
+`[C2]` / `[P1,P2]`.
 
 ```
 NETWORK "Conveyor-07 Automatic Control"        instance: iDB_MotorDOL_Conv07
@@ -133,6 +166,11 @@ NETWORK "Conveyor-07 Automatic Control"        instance: iDB_MotorDOL_Conv07
   DQ_11            := .Run                                                     [C1]
   CALL MotorDOL(iDB_MotorDOL_Conv07)
 ```
+
+**When D3 is stopped**, say so with a heading containing the word `STOPPED` (e.g.
+`## **STOPPED — all six instances. No render produced.**`). The reconciler then reports the render leg
+as **`ABSENT`** rather than as a leg that trivially agrees — which is the difference between "this rung
+legitimately stopped" and "this rung produced nothing and nobody noticed."
 
 ## Output — `gen/<project>/code-structure.md`
 
@@ -156,6 +194,19 @@ legitimately prevent the render existing, and the requirement above must never b
 invent one. A partial manifest carries every determined item, states per affected item *"renders
 absent — D3 stopped, see `<Q-ids>`"*, and ends with a **NOT SIGNABLE** gate block. **Never fabricate a
 render to satisfy this section, and never emit a manifest that looks complete when it is not.**
+
+## Self-check before you finish — run the checkers on your OWN artifacts
+
+```
+converter relation-reconcile --specs gen/<project>/equipment-specs --ledger gen/<project>/code-structure.md \
+                             --register gen/<project>/requirements.md --project ir/<project>/
+```
+
+**A leg it cannot parse, a non-empty set-difference, or a citation finding is a defect in YOUR
+artifacts, not in the tool** — fix and re-run before finishing. *A real run's first ledger was rejected
+outright (0 rows parsed) and then showed 60 citation findings whose evidence cells named only network
+numbers; both were genuine and both were fixed before the artifact was presented.* Report the final
+result in your exit summary — a reconciliation you didn't run is not evidence.
 
 ## Calibration
 

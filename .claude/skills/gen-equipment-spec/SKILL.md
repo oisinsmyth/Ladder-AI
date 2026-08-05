@@ -26,6 +26,11 @@ Read `CLAUDE.md` first; its hard rules bind you.
 - **Banned here:** `AND` / `OR` / `NOT` expressions, interface members (`.UPSEnable`, `.Run`), block
   names, network structure. Those are rung D. *Writing the boolean form here is the abstraction leak
   this pipeline exists to prevent.*
+- **Carve-out — signal POLARITY is a signal fact, not a logic shape.** "The fault is asserted when the
+  system-OK signal is low" or "`DI4` is a normally-closed contact" states what the field device *does*;
+  it is not a rung-D expression and must not be paraphrased away. The ban is on composing conditions
+  (`A AND NOT B`), not on describing one signal's sense. *A run phrased around this rule and produced
+  something more obscure than the plain sentence — that is the rule failing, not the writer.*
 
 ## Inputs (all REQUIRED unless stated)
 
@@ -108,13 +113,34 @@ Read `CLAUDE.md` first; its hard rules bind you.
    signals without ever sweeping signals for requirements is what let a discharge-VSD rotation-sensor
    bypass tag sit unclaimed and unreferenced through a whole generation run
    (`docs/evidence/PlantAutoControl-bench-grading.md`, REQ-012).*
-   - **(a) Per-instance.** Every signal scoped to this instance is either **bound** to a requirement
-     above, or listed under `UNCLAIMED` with a reason.
+   - **(a) Per-instance — SCOPED signals only.** Every signal scoped to *this* instance is either
+     **bound** to a requirement above, or listed under `UNCLAIMED` with a reason. **A plant-scoped
+     signal does not belong here** — point at (b) instead. *Listing plant-wide signals per instance
+     copies the same finding into three-to-five specs, which is longer to review and drifts apart.*
    - **(b) Plant-level residual — run ONCE per project**, into `gen/<project>/unclaimed-signals.md`:
      every IO / global-DB signal claimed by **no** instance spec, each with a reason or a blocking
      `Q-nn`. *The richest findings are plant-scoped and ownerless — a plant health input, a shared
      fault-reset output, whole unspecified feature sets, a production selector wired to a test array.
-     Per-instance sweeping alone either misses them or duplicates them into every affected spec.*
+     Per-instance sweeping alone cannot reach them.*
+
+     **Its disposition tables are a CONTRACT** — `converter signal-sweep` parses them:
+
+     ```
+     ## Full disposition table
+
+     ### `DiscreteInputs` (DB 15)
+
+     | Members | Disposition |
+     |---|---|
+     | `FilterUnit1Ready`, `FilterUnit1Op` | bound — `FilterUnitInst2` |
+     | **`OSCRotSen`** | **UNCLAIMED — Q-C09** |
+     ```
+
+     One `### \`<Db>\`` heading per DB (the qualifier for the bare leaf names beneath it), and
+     **every member name in backticks**. A member dispositioned in PROSE — a row reading
+     `E-stop members | safety` — is **not machine-checkable and will read as unaccounted**, so
+     backtick them even when the disposition is "excluded". Narrative `### Q-nn` findings stay
+     narrative; only these tables are parsed.
    **A residual signal that implies a control function is BLOCKING regardless of its name.** Name
    patterns (`Bypass*`, `*Select`, `*Inhibit`, `*Enable`, `*Override`) are a prompt for attention,
    **never the test** — a differently-named control signal defeats a pattern list, so judge by role.
@@ -156,6 +182,18 @@ OPEN:    Q-01 (BLOCKING) — shutdown behaviour conflict A vs B4
 functionally reviewed at all unless this view exists. The per-relation set is a strictly better trace
 target than prose REQs — it hands the reviewer the per-instance interlock list directly.
 
+**Its shape is a CONTRACT** — `converter relation-reconcile` parses it, so write it exactly: one
+`### \`<Instance>\`` heading per instance (instance read from the **backticks**), over a table whose
+**second column is the relation id**:
+
+```
+### `FilterUnitInst2` — Dust Filter Unit 1 (FilterUnitSystem)
+
+| REQ | Rel | Text | Class | Provenance | Open |
+|---|---|---|---|---|---|
+| REQ-001 | C1 | Runs on the plant automatic start command … | mode | ref FU-01 | **Q-C04** |
+```
+
 The derived register is **complete by set-difference, and it says so**: the REQ set must
 set-difference to **empty** against the union of all `C-nn`/`P-nn` ids in
 `gen/<project>/equipment-specs/`, and both counts are stated explicitly in the register's provenance
@@ -163,6 +201,20 @@ header. *A relation that exists in the specs but not in the register is still re
 (which reads the specs) — so the loss does not break the code, it breaks the review: the reviewer
 traces a register that never mentions the relation, and its reverse pass then reports the correctly
 rendered term as unrequested logic (C-606). A lossy register can recommend deleting a real interlock.*
+
+## Self-check before you finish — run the checker on your OWN artifacts
+
+```
+converter signal-sweep --project ir/<project>/ --specs gen/<project>/equipment-specs \
+                       --register gen/<project>/requirements.md --unclaimed gen/<project>/unclaimed-signals.md
+```
+
+It computes the exact denominator and residue, replacing any approximate count you were about to
+write ("~190 swept") with an integer. **An unaccounted signal is a gap in YOUR coverage** — bind it,
+disposition it, or raise its `Q-nn`; then re-run. *A real run's sweep revealed two global DBs
+attributed to the wrong files — a fact nobody had caught by reading, and one the tool surfaced as 32
+unaccounted signals.* Report the final counts; an approximate denominator cannot support a
+completeness claim.
 
 ## Calibration
 

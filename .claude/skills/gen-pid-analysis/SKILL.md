@@ -27,6 +27,13 @@ Read `CLAUDE.md` first; its hard rules bind you.
 
 - **The P&ID / plant layout / equipment list — REQUIRED.** The topology source: what equipment exists
   and what feeds what. **Stop condition:** no layout source → stop; do not infer a plant.
+- **When ONE document serves both rung A and rung B, declare a fence.** On a brownfield project the
+  same source often carries topology (a table) and behaviour (prose). Say in the provenance header
+  which part of it is rung-A material and which is reserved for rung B — e.g. *"inventory table only;
+  REQ prose reserved for B"* — and hold to it. Without a stated fence, A and B silently read the same
+  sentences and their "independent" agreement proves nothing, which is the correlated-reading failure
+  this pipeline exists to break. If the two parts disagree, that is a `Q-nn` for rung C, not something
+  either rung resolves.
 - **The equipment engineering references** (`references/<class>/reference.md`) — the per-class
   standard control requirement set ("how a DOL motor is normally controlled"). These make the output
   **complete by construction**: an instance of a class inherits the class's full requirement set, so
