@@ -11,7 +11,7 @@
 >   re-verification, not selective reuse, is the right move. Concretely, since 2026-07-20 master gained:
 >   the **four-rung structured spec pipeline** (`gen-pid-analysis`, `gen-functional-analysis`,
 >   `gen-equipment-spec`, `gen-code-structure`) — so the D8 skill inventory and `docs/15` build-order
->   findings no longer describe reality; the **FI-32/FI-35 "mechanical floor"** tooling (candidate-scan,
+>   findings no longer describe reality; the **FI-36/FI-39 "mechanical floor"** tooling (candidate-scan,
 >   undriven-scan, relation-reconcile, signal-sweep, trace guard-containment); an **FI renumbering**
 >   (FI-32..35 → FI-36..39) that invalidates the FI-status finding F-03; a **`tagstatus` hard-rule-3 fix**
 >   (DB-member resolution); and a **data-boundary change** ("live-run data boundary — full
