@@ -1625,31 +1625,46 @@ zero false unresolved-tag findings.
 
 ## `tagstatus` — classify tag names exists/proposed (2026-07-18, FI-24)
 
-`converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]`
+`converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]`
 
 Mechanizes the pipeline's anti-laundering classification (`docs/15-generation-pipeline.md`
-"Artifacts"; CLAUDE.md hard rule 3): each name is `EXISTS` (present in the current export) or
-`PROPOSED` (a named gap the engineer resolves). Built for `gen-architecture`'s tag-status step,
-which otherwise hand-greps the export. Composition only — reuses `ProjectIndex` and the *same*
-`AccessNode.FromDottedPath` root extraction `preflight` uses, so the two never disagree.
+"Artifacts"; CLAUDE.md hard rule 3). Built for `gen-architecture`'s tag-status step and for the
+Build stage's run-stopping gate, both of which otherwise hand-grep the export. Composition only —
+root resolution reuses `ProjectIndex` and the *same* `AccessNode.FromDottedPath` extraction
+`preflight` uses; **member** resolution reuses `TagTypeRegistry` (the cross-file DB/UDT index behind
+the C-118 review rule), so "does `DB.member` exist" has one implementation, not a second to drift.
+
+Four states, because a root can resolve while its member namespace is genuinely unknowable:
+
+| Status | Meaning | Gate |
+|---|---|---|
+| `EXISTS` | the whole dotted path resolves (or a bare name resolves as a tag/DB) | pass |
+| `PROPOSED` | the **root** does not resolve — a named gap the engineer creates | **fail** |
+| `MEMBER-NOT-FOUND` | root resolves, members **are** enumerable, this member is absent | **fail** |
+| `MEMBER-UNCHECKED` | root resolves, member namespace not enumerable (unexported UDT, or an instance-DB stub from `create-instance-db` with no member tree) | pass, reported |
 
 Each name is resolved by checking the whole name first (catches bare tag-table tags whose own name
-contains a dot, e.g. `Clock_0.5Hz`, and DB names) then its root (catches `DB.member` /
-`Block.member` references — classification is by root, exactly like `preflight`'s `exists`/`proposed`
-line). `--project <ir-dir>` is the current export, scanned non-recursively; unindexable files
-surface as `INDEX WARNING`s. **Exit non-zero if any name is `proposed`** — so
+contains a dot, e.g. `Clock_0.5Hz`, and DB names), then its root, then the member path.
+`--project <ir-dir>` is the current export, scanned non-recursively; unindexable files surface as
+`INDEX WARNING`s. **Exit non-zero if any name is `PROPOSED` or `MEMBER-NOT-FOUND`** — so
 `converter tagstatus … --project … && <build>` is a usable "all tags exist" gate.
+`--roots-only` restores root-level-only classification for the Design stage, which classifies at
+root level because it designs *against* gaps rather than coding against them.
 
 ```
-$ converter tagstatus DB_Input.Cycle_Start DI3_SYS_CycleStart MadeUpTag --project ir/test-project001
+$ converter tagstatus DB_Input.Cycle_Start DI3_SYS_CycleStart MadeUpTag DB_Input.Invented --project ir/test-project001
 DB_Input.Cycle_Start -> EXISTS (root: DB_Input)
 DI3_SYS_CycleStart -> EXISTS
 MadeUpTag -> PROPOSED
-SUMMARY: 3 name(s), 1 proposed          # exit 1
+DB_Input.Invented -> MEMBER-NOT-FOUND (root: DB_Input)
+SUMMARY: 4 name(s), 1 proposed, 1 member-not-found, 0 member-unchecked      # exit 1
 ```
 
-Note: classification is root-level (does `DB_Input` exist?), not member-level — the same scope
-`preflight` checks; member existence within a DB is TIA's own compile-time check.
+**History (2026-08-05):** classification used to stop at the root, so `DB_Input.Invented` reported
+`EXISTS` — the gate protecting hard rule 3 blessed invented DB members, and `gen-block-new` gates its
+run on that result. Found by a pipeline run that independently grep-verified every member; the
+member check closes it, and `MEMBER-UNCHECKED` keeps the fix from manufacturing false gaps in the
+other direction.
 
 ## `diff` — network-level IR invariance (2026-07-18, S7 entry requirement)
 
@@ -1818,6 +1833,146 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
+## `signal-sweep` — project-level residual signal coverage (2026-08-05, FI-39 check 5)
+
+```
+converter signal-sweep --project <ir-dir> --specs <equipment-specs-dir>
+                       [--register <requirements.md>] [--unclaimed <unclaimed-signals.md>] [--json]
+```
+
+Computes the **denominator** (every global-DB leaf and tag-table tag in the corpus) and classifies each
+signal `claimed-by-spec` / `disposed` (listed in the residual artifact's per-DB disposition tables) /
+`unaccounted`.
+
+**Its value is exactness, not a catch** — it has no oracle, and the design study grades it Medium. What
+it converts is an artifact's own self-reported approximations into computed integers: on the fixture,
+**201 swept** against the artifact's `~190`, with an exact per-DB breakdown and an exact residue. An
+approximate denominator cannot support a completeness claim; an exact one can.
+
+- **Qualification matters:** the disposition tables list **bare leaf names** under a `### \`Db\``
+  heading, so each is qualified by its enclosing heading before comparison — without that, every leaf
+  silently fails to match and the whole sweep reads as unaccounted.
+- **"Mentioned in a spec" is the claimed test, deliberately coarse.** A spec that names a tag without
+  binding it is a different problem, and this check must not pretend to detect it.
+- **A signal dispositioned only in PROSE reads as unaccounted** (a row like `E-stop members | safety`).
+  That is not a false positive so much as a fact about the artifact: prose is not machine-checkable, and
+  backticking the member names is the fix. The output says so explicitly.
+- **Hard errors, never silent coverage:** an empty corpus, or an `--unclaimed` artifact whose tables
+  cannot be found, both fail loudly rather than reporting full coverage or blanket-unaccounted.
+
+**Exit 1** if any swept signal is in neither a spec nor a disposition table. Whether an unaccounted
+signal *implies control* is the engineer's call — the tool reports coverage, never a verdict.
+
+## `relation-reconcile` — relation-set reconciliation + probative citations (2026-08-05, FI-39 checks 2+3)
+
+```
+converter relation-reconcile --specs <equipment-specs-dir> --ledger <code-structure.md>
+                             --register <requirements.md> [--project <ir-dir>] [--json]
+```
+
+Reconciles the `(instance, relation-id)` sets across the four relation-bearing artifacts — the specs'
+`- **C1**` bullets, the D2 ledger rows, the derived register's `Rel` column, and the D3 render's `[C1]`
+term tags — and reports every pairwise difference.
+
+**The key is `(instance, relation-id)`, never the bare id:** two instances' `C1` are different
+relations, so a bare union across specs is vacuous and would let one instance's relation satisfy
+another's.
+
+What it buys is honest: on a clean artifact set it is a **regression guard, not a catch** — but it
+converts three **hand-asserted counts inside the artifact** (`| Rows in this ledger | 174 |`) into
+computed ones, which is the "computed rather than asserted" principle this tooling exists for.
+
+- **An `ABSENT` leg is not a reconciling leg.** A stopped D3 reports `ABSENT`; reporting "0 differences"
+  for an artifact that does not exist is the silent-green failure the check exists to avoid. An absent
+  leg alone does **not** gate.
+- **A leg that parses zero rows is a HARD ERROR**, never a clean pass — format drift is the whole risk
+  here (five documented divergences between a SKILL written this month and an artifact produced this
+  week), so the parsers are strict and say so loudly when the shape is missing.
+- **Citations (check 3):** for each `verified-cross-block` row, every backticked identifier-shaped token
+  in the evidence cell is classified — *resolves with N writers* / *writers all disarmed* / *declared
+  with no writer in this export* / *does not resolve*. A row where **no** token resolves to a written
+  member is the finding. The cell is free prose (file names, network labels, expression fragments), so
+  the tool never guesses which token is "the tag" — it reports per token. It also never judges whether
+  the guard *entails* the claim; that stays a human duty. Needs `--project`.
+- **Denominator, always:** "no writer" means *no writer among the N blocks in this export* — partial
+  exports are normal here, so that is a scope fact, not a defect.
+
+**Exit 1** on any non-empty set-difference or citation finding. On the fixture: 174/174/174 with
+`render ABSENT`, exit 0; delete one ledger row and it names `FilterUnitInst2.C5`, exit 1.
+
+## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-39 check 4)
+
+```
+converter undriven-scan --project <ir-dir> --fb <FBName>
+                        [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]
+```
+
+For each **instance** of an FB, which of its interface members actually receive a value. The new value
+over `cross-check` is **per-instance resolution**: that command canonicalizes to `(FB, member)` and pools
+across every instance — correct for its own question, wrong for this one, because if one instance drives
+a member and another does not the pooled view shows the member alive and the gap disappears. A dropped
+bypass on one instance of a shared block is exactly that shape.
+
+States, all computed: **`driven`** (an armed writer) · **`disarmed`** (writers exist, all
+provably-false-guarded) · **`undriven (default X)`** (no writer, but the instance DB's start value is
+then the effective constant) · **`undriven`** · **`dead-interface`** (no writer **and** the FB never
+reads it either — inert on both sides).
+
+`--caller <file.ir>` merges a block outside the export into the graph (the `ProjectIndex` batch idiom),
+so a freshly generated block can be analysed before import. Consequence: this runs at the check stage,
+after IR exists — it reads IR, never a markdown render.
+
+**Exit 1 on `undriven` or `disarmed` only.** `dead-interface` is reported but does **not** gate: a
+reusable library block legitimately exposes optional inputs a given instance doesn't use, so gating on it
+would emit findings by the hundred and train readers to ignore the output. It is a fact to cross against
+a spec that required the capability — which is what makes it useful for the dropped-bypass case, where
+`IO.RotationSensor` is declared, unwired, and unread on every instance.
+
+`--hints` opts into a name-token match between an unreferenced project signal and an undriven member
+(`RotationSensor` ↔ `…RotSen`). **Off by default and never part of the exit condition** — it is a
+labelled heuristic, and on a real corpus it fires often enough to bury the findings it sits beside.
+
+## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-39 check 1)
+
+```
+converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>]
+                         [--scope <path-prefix> ...] [--type <TypeName>]
+                         [--direction status|command|any] [--phrase <word> ...] [--json]
+```
+
+Given a requirement's target scope and the FB an instance uses, **computes every signal that could
+satisfy it** — the IO half from the project's signal inventory, the FB half from that block's own
+interface. Makes *"more than one candidate"* a computed fact instead of a judgement call.
+
+Why: two defects shipped because a requirement phrase ("not faulted", "running feedback") admitted more
+than one signal and the single reader who resolved it never noticed there was a choice
+(`docs/evidence/PlantAutoControl-bench-autopsy.md` §2-C). Nothing computed a candidate set, so nothing could
+flag the ambiguity. **This tool reports what is in scope; it never says which one the requirement
+means** — that is the engineer's call.
+
+- **Direction is COMPUTED** (does the FB write this member, or read it?), never taken from the
+  interface section: on the real corpus a block's reportable status members sit under `STATIC` inside
+  interface-UDT structs while `INPUT`/`OUTPUT` carry data-link words, so section-filtering gets the
+  wrong answer on exactly the block the narrowed-fault-gate defect concerns.
+- **`family`** reports N same-typed in-scope IO signals vs N FB members of matching direction — the
+  transposition signature a 1:1 by-name-resemblance assignment silently gets wrong.
+- **`--phrase` is advisory only.** Filtering by name resemblance is precisely the reasoning that
+  produced the swapped-pairing defect, so the phrase subset is reported but the exit code keys off the
+  **unfiltered** size.
+- The header states the **denominator** (files scanned) — in a partial export an empty set is a scope
+  fact, not a finding.
+
+**Exit 1 when the candidate set size > 1** (the `tagstatus` convention) — the mechanical trigger that
+makes an ambiguous binding non-discretionary. On the fixture: `--fb TomraControlSystem --scope
+DiscreteInputs.Tomra --type Bool --direction status` surfaces `DiscreteInputs.TomraComFlt` **and**
+`Outputs.FaultActive` (the two candidates the defect was about); `--fb FilterUnitSystem --scope
+DiscreteInputs.FilterUnit1` surfaces the `Flt`/`Op`/`Ready` family.
+
+Shared primitive: `Converter/SignalInventory/SignalInventory.cs` — a typed signal walk
+(`Path, Root, Leaf, Type, IsRetain, Origin`) that keeps what `ProjectUsageGraph.CollectLeafPaths`
+discards. Deliberately a **sibling** of that graph, not an extension: `TraceRunner` reads its shape
+as-is and its comment declares the verbatim keying deliberate.
+
 ## `trace` — forward-pass REQ verdict tracer (2026-07-20, FI-25)
 
 `converter trace --binding <bindings.json> --project <ir-dir> [--json]`
@@ -1843,6 +1998,20 @@ Hops:
   MUL/CONVERT idiom present → `ok`; corresponding but chain absent → `partial`; no such timer →
   `unimplemented`. **Documented limitation:** the specific MUL↔CONVERT `EN:=ENO` wire (sidecar-only) is not
   verified — a sidecar-level refinement.
+- **guard-containment** (FI-36-min, 2026-08-05, `guard: { coil, must_contain: [...] }`): every signal the
+  spec lists as a condition on `coil` must appear in the guard of **each** write to it. Reported **per
+  writing site**, never unioned — a term present in one network and absent in another is exactly the
+  multi-instance shape a union would hide. Missing → `missingterm`, naming the site; a coil with no writer
+  → `unimplemented` (the output-path fact, *not* "every term missing"); a present term whose writer is
+  disarmed is reported present and marked `[disarmed]`. Terms nested in a comparison count.
+
+  This hop is a **set-difference over signal identity, not a re-interpretation** — which is the point:
+  a dropped cascade-hold term shipped as a REGRESSION because the coder and the functional reviewer
+  resolved the same ambiguous source the same way, so the review confirmed the error instead of catching
+  it (`docs/evidence/PlantAutoControl-bench-autopsy.md`). This check cannot be defeated by how anyone reads the
+  requirement. Verified on the real graded pair: against the generated block it reports
+  `AirStarInst1.Outputs.ShutdownComplete` MISSING at `PlantAutoControl N3` (and the cyclone's at N19);
+  against the sealed answer key, the same binding reports `ok`.
 
 **Exit 0 always** — a facts provider. Examples on `ir/test-project001`: a binding for REQ-004 shows
 `DQ5_DIS_Run` written by `FC_Outputs` and `DischargeConveyorTimeout`=10.0 matching spec;

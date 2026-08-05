@@ -1,0 +1,121 @@
+DB TomraControlInst1
+  ROOTID 0
+  NUMBER 26
+  INSTANCEOF TomraControlSystem
+  INPUT
+    inputWord0 : Word
+    inputWord1 : Word
+    inputWord2 : Word
+    inputWord3 : Word
+    inputWord4 : Word
+    inputWord5 : Word
+    inputWord6 : Word
+    inputWord7 : Word
+  OUTPUT
+    OutputWord0 : Word
+    OutputWord1 : Word
+  MEMBERS
+    StatusWord0 : Word
+    StatusWord1 : Word
+    StatusWord2 : Word
+    StatusWord3 : Word
+    StatusWord4 : Word
+    StatusWord5 : Word
+    StatusWord6 : Word
+    StatusWord7 : Word
+    ControlWord0 : Word
+    ControlWord1 : Word
+    HardWireSignals : Struct
+      Ready : Bool
+      Running : Bool
+      ComError : Bool
+      Run : Bool
+    Inputs : Struct RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      PreStartDone : Bool = FALSE
+      InhibitMotor : Bool = FALSE
+      FaultReset : Bool = FALSE
+      FTTime : Real = 3.0
+      EnableUPSTime : Real = 2.0
+      HandIntervention : Bool = FALSE
+      RecentStart : Bool = FALSE
+      Shutdown : Bool = FALSE
+      ShutdownTime : Real = 2.0
+      ProgramSelection : Int = 0
+      Belt1OnDelay : Real = 0.0
+      Belt1OffDelay : Real = 0.0
+    Outputs : Struct
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm0 : Word
+      Alarm1 : Word
+      Alarm2 : Word
+      Name : String
+      UPSEnable : Bool
+      TryRun : Bool
+      ShutdownComplete : Bool
+      FaultActive : Bool
+      Stop : Bool
+      OSRunning : Bool
+      OSComFault : Bool
+    ShutdownTimeMS : DInt
+    EnableUPSTimeMS : DInt
+    FTTimeMS : DInt
+    Belt1OnDelayMS : DInt
+    Belt1OffDelayMS : DInt
+    RisingEdgeFlags : Array[0..4] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time = T#1H
+      ET : Time
+      IN : Bool = FALSE
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    LifeBitTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimerReset : Bool SETPOINT
+    LostLifeBit : Bool
+    PreStartMemory : Bool
+    HandPosEdge : Bool
+    HandNegEdge : Bool

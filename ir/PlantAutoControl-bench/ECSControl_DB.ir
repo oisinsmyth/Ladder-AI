@@ -1,0 +1,94 @@
+DB ECSControlInst1
+  ROOTID 0
+  NUMBER 24
+  INSTANCEOF EquipmentControlSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    Inputs : Struct RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      RunningFB : Bool = FALSE
+      PreStartDone : Bool = FALSE
+      InhibitMotor : Bool = FALSE
+      FaultReset : Bool = FALSE
+      FTTime : Real = 3.0
+      EnableUPSTime : Real = 2.0
+      HandIntervention : Bool = FALSE
+      RecentStart : Bool = FALSE
+      Shutdown : Bool = FALSE
+      ShutdownTime : Real = 20.0
+      ReadyFB : Bool = TRUE
+      MSHandMode : Bool = FALSE
+      MSAutoMode : Bool = TRUE
+      MSSettingMode : Bool = FALSE
+      SumFlt : Bool = FALSE
+      FCRotorFault : Bool = FALSE
+      FltRotorRevs : Bool = FALSE
+      FCConveyorBeltFlt : Bool = FALSE
+      InterlockingFeeder : Bool = TRUE
+      MaterialChargeEnabled : Bool = FALSE
+    Outputs : Struct
+      ECSRun : Bool
+      ECSReset : Bool
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm : Word
+      Name : String
+      UPSEnable : Bool
+      TryRun : Bool
+      ShutdownComplete : Bool
+      FaultActive : Bool
+      Stop : Bool
+    ShutdownTimeMS : DInt
+    EnableUPSTimeMS : DInt
+    FTTimeMS : DInt
+    RisingEdgeFlags : Array[0..7] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time = T#1H
+      ET : Time
+      IN : Bool = FALSE
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimerReset : Bool SETPOINT
+    PreStartMemory : Bool
+    HandPosEdge : Bool
+    HandNegEdge : Bool
+    InHandReqPreStart : TONR_TIME VERSION 1.0
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

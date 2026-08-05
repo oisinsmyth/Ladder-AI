@@ -77,8 +77,11 @@ apply throughout.
   project is a fully supported input state, not an error.
 - **The current `ir/<project>/` export** — two distinct uses, kept distinct:
   - **Tag status, always:** every tag or DB member the design names is classified against the
-    export at write time — `converter tagstatus <names…> --project ir/<project>/` (EXISTS/PROPOSED,
-    root-level; falls back to a grep if the binary is missing). The register's own marks are
+    export at write time — `converter tagstatus <names…> --project ir/<project>/ --roots-only`
+    (`--roots-only` is this stage's mode: root-level EXISTS/PROPOSED, since the design stage designs
+    *against* gaps rather than coding against them; falls back to a grep if the binary is missing).
+    Downstream Build-stage checks deliberately run *without* it, so an invented DB **member** stops
+    coding there. The register's own marks are
     re-verified this way, not trusted from memory — docs/15's anti-laundering rule. Classification
     is root-level (does the tag/DB root resolve?), matching what `preflight` checks; member-level
     existence within a DB stays TIA's compile-time check.

@@ -1,0 +1,2590 @@
+BLOCK FB TomraControlSystem
+ROOTID 0
+NUMBER 5
+LANGUAGE LAD
+
+INTERFACE
+  INPUT
+    inputWord0 : Word
+    inputWord1 : Word
+    inputWord2 : Word
+    inputWord3 : Word
+    inputWord4 : Word
+    inputWord5 : Word
+    inputWord6 : Word
+    inputWord7 : Word
+  OUTPUT
+    OutputWord0 : Word
+    OutputWord1 : Word
+  STATIC
+    StatusWord0 : Word
+    StatusWord1 : Word
+    StatusWord2 : Word
+    StatusWord3 : Word
+    StatusWord4 : Word
+    StatusWord5 : Word
+    StatusWord6 : Word
+    StatusWord7 : Word
+    ControlWord0 : Word
+    ControlWord1 : Word
+    HardWireSignals : Struct
+      Ready : Bool
+      Running : Bool
+      ComError : Bool
+      Run : Bool
+    Inputs : Struct RETAIN
+      InHand : Bool
+      AutoStartSignal : Bool
+      HandStartSignal : Bool
+      PreStartDone : Bool
+      InhibitMotor : Bool
+      FaultReset : Bool
+      FTTime : Real
+      EnableUPSTime : Real
+      HandIntervention : Bool
+      RecentStart : Bool
+      Shutdown : Bool
+      ShutdownTime : Real
+      ProgramSelection : Int
+      Belt1OnDelay : Real
+      Belt1OffDelay : Real
+    Outputs : Struct
+      FTR : Bool
+      FTS : Bool
+      HrsRun : UDInt
+      Telemetry : Int
+      Alarm0 : Word
+      Alarm1 : Word
+      Alarm2 : Word
+      Name : String
+      UPSEnable : Bool
+      TryRun : Bool
+      ShutdownComplete : Bool
+      FaultActive : Bool
+      Stop : Bool
+      OSRunning : Bool
+      OSComFault : Bool
+    ShutdownTimeMS : DInt
+    EnableUPSTimeMS : DInt
+    FTTimeMS : DInt
+    Belt1OnDelayMS : DInt
+    Belt1OffDelayMS : DInt
+    RisingEdgeFlags : Array[0..4] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    LifeBitTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimerReset : Bool SETPOINT
+    LostLifeBit : Bool
+    PreStartMemory : Bool
+    HandPosEdge : Bool
+    HandNegEdge : Bool
+  TEMP
+    Time : Real
+    Words : Array[0..1] of Byte
+  CONSTANT
+
+NETWORK 1 "Byte Swap Status"
+  MOVE(EN := TRUE, IN := inputWord0) => StatusWord0
+  MOVE(EN := TRUE, IN := inputWord1) => StatusWord1
+  MOVE(EN := TRUE, IN := inputWord2) => StatusWord2
+  MOVE(EN := TRUE, IN := inputWord3) => StatusWord3
+  MOVE(EN := TRUE, IN := inputWord4) => StatusWord4
+  MOVE(EN := TRUE, IN := inputWord5) => StatusWord5
+  MOVE(EN := TRUE, IN := inputWord6) => StatusWord6
+  MOVE(EN := TRUE, IN := inputWord7) => StatusWord7
+
+NETWORK 2 "Optical Sorter "
+  COIL Outputs.OSComFault := NOT LostLifeBit AND StatusWord0.%X2 AND HardWireSignals.ComError OR LostLifeBit AND HardWireSignals.ComError
+  COIL StatusWord0.%X2 := PlantControl.Test[7]
+
+NETWORK 3 "Optical Sorter Reset"
+  COIL ControlWord0.%X7 := Inputs.FaultReset
+
+NETWORK 4 "Optical Sorter Running Logic"
+  COIL Outputs.OSRunning := NOT LostLifeBit AND StatusWord0.%X3 AND HardWireSignals.Running OR LostLifeBit AND HardWireSignals.Running
+
+NETWORK 5 "Life Bit Logic And Monitoring"
+  TON(LifeBitTimer, IN := NOT StatusWord0.%X10, PT := T#5S)
+  COIL LostLifeBit := LifeBitTimer.Q OR LostLifeBit AND NOT Inputs.FaultReset
+
+NETWORK 6 "Optical Sorter Start / Stop"
+  COIL Outputs.TryRun := ((NOT Inputs.InHand OR Inputs.InHand AND NOT Inputs.HandIntervention) AND Inputs.AutoStartSignal OR Inputs.InHand AND Inputs.HandIntervention AND Inputs.HandStartSignal) AND NOT Inputs.InhibitMotor AND NOT Outputs.FTR AND NOT Outputs.FaultActive
+  COIL ControlWord0.%X0 := (Outputs.TryRun{split 4} AND PreStartMemory{split 5} AND Inputs.RecentStart{split 6} OR Outputs.TryRun{recv 4} AND HardWireSignals.Run{split 7} OR Outputs.TryRun{recv 4} AND ControlWord0.%X0{split 8}){split 1} AND NOT Outputs.Stop{split 2} AND NOT Inputs.Shutdown{split 3}
+  COIL HardWireSignals.Run := (Outputs.TryRun AND PreStartMemory AND Inputs.RecentStart{recv 6} OR Outputs.TryRun AND HardWireSignals.Run{recv 7} OR Outputs.TryRun AND ControlWord0.%X0{recv 8}) AND NOT Outputs.Stop AND NOT Inputs.Shutdown{recv 3}
+
+NETWORK 7 "Hand Intervention Logic"
+  COMMENT "Must Have Set Bit (#IO.HandIntervention)On Hand Control Buttons Press/Release On HMI"
+  RCOIL Inputs.HandIntervention := NOT Inputs.InHand
+  COIL Inputs.HandStartSignal := Inputs.InHand AND NOT Inputs.HandIntervention AND Outputs.FaultActive
+
+NETWORK 8 "Start Signal After Inhibit/Fault"
+  COMMENT "Must Have Set Bit (#IO.RecentStart)On Auto/Hand Start Buttons Press/Release On HMI"
+  TON(GeneralDelayTimer, IN := ((NOT PreStartMemory OR NOT Inputs.RecentStart) AND Inputs.HandStartSignal OR Outputs.TryRun) AND Inputs.InHand AND NOT ControlWord0.%X0 AND NOT HardWireSignals.Run, PT := T#100MS)
+  COIL Inputs.RecentStart := Inputs.RecentStart AND NOT ControlWord0.%X0 AND NOT HardWireSignals.Run AND NOT Outputs.FaultActive
+  RCOIL Inputs.HandStartSignal := GeneralDelayTimer.Q
+
+NETWORK 9 ""
+  TON(InHandReqPreStart, IN := PreStartMemory AND NOT Inputs.PreStartDone AND Inputs.InHand, PT := T#30S)
+  COIL HandPosEdge := Inputs.InHand{split 1} AND NOT RisingEdgeFlags[4]
+  COIL RisingEdgeFlags[4] := Inputs.InHand{recv 1}
+  COIL HandNegEdge := (Inputs.InHand{split 3} OR NegitiveSignalEdge[1]{split 4}){split 2} AND NOT Inputs.InHand
+  COIL NegitiveSignalEdge[1] := (Inputs.InHand{recv 3} OR NegitiveSignalEdge[1]{recv 4}){recv 2} AND NOT HandNegEdge
+
+NETWORK 10 "Prestart Hold On Until Shredder Run Signal"
+  COIL PreStartMemory := Inputs.PreStartDone OR PreStartMemory AND NOT ControlWord0.%X0 AND NOT HardWireSignals.Run AND NOT InHandReqPreStart.Q AND NOT HandPosEdge AND NOT Outputs.FaultActive AND NOT HandNegEdge
+
+NETWORK 11 "HMI Times"
+  MUL(EN := TRUE, IN1 := Inputs.ShutdownTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := Inputs.EnableUPSTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := Inputs.FTTime, IN2 := 1000.0) => Time
+  MUL(EN := TRUE, IN1 := Inputs.Belt1OffDelay, IN2 := 1000.0) => Time
+  CONVERT(EN := ENO, IN := Time) => ShutdownTimeMS
+  CONVERT(EN := ENO, IN := Time) => EnableUPSTimeMS
+  CONVERT(EN := ENO, IN := Time) => FTTimeMS
+  CONVERT(EN := ENO, IN := Time) => Belt1OffDelayMS
+
+NETWORK 12 "DOL Motor Shutdown"
+  TON(ShutdownTimer, IN := Outputs.Stop, PT := ShutdownTimeMS)
+  SCOIL Outputs.Stop := Inputs.Shutdown{split 1} AND NOT RisingEdgeFlags[1]
+  COIL RisingEdgeFlags[1] := Inputs.Shutdown{recv 1}
+  COIL Outputs.ShutdownComplete := ShutdownTimer.Q AND NOT Outputs.OSRunning
+  RCOIL Outputs.Stop := Outputs.ShutdownComplete AND NOT Inputs.Shutdown
+
+NETWORK 13 "Fail To Run"
+  TON(FaultTripTimer, IN := ControlWord0.%X0 AND ControlWord0.%X1 AND NOT Outputs.OSRunning, PT := FTTimeMS)
+  COIL Outputs.FTR := FaultTripTimer.Q OR Outputs.FTR AND NOT Inputs.FaultReset
+
+NETWORK 14 "Fail To Stop"
+  TON(FTSTimer, IN := NOT ControlWord0.%X0 AND Outputs.OSRunning, PT := FTTimeMS)
+  COIL Outputs.FTS := FTSTimer.Q OR Outputs.FTS AND NOT Inputs.FaultReset
+
+NETWORK 15 "Faults"
+  COIL Outputs.FaultActive := Outputs.FTR OR Outputs.FTS OR LostLifeBit OR StatusWord0.%X2 OR StatusWord0.%X8 OR StatusWord0.%X9 OR StatusWord1.%X0 OR StatusWord1.%X1 OR StatusWord1.%X3 OR StatusWord5.%X2 OR StatusWord5.%X3 OR StatusWord5.%X8 OR StatusWord5.%X9 OR StatusWord5.%X10 OR Outputs.FaultActive AND NOT Inputs.FaultReset
+
+NETWORK 16 "Motor Running, Enable Upstream Component"
+  TON(EnableUpstreamTimer, IN := NOT Inputs.InHand AND StatusWord0.%X0 AND Outputs.OSRunning, PT := EnableUPSTimeMS)
+  COIL Outputs.UPSEnable := EnableUpstreamTimer.Q AND Outputs.OSRunning
+
+NETWORK 17 "Hours Run Counter"
+  TONR(HrTotaliserTimer, IN := StatusWord0.%X0 AND Outputs.OSRunning, PT := T#1H, R := HrTotaliserTimerReset)
+  COIL RisingEdgeFlags[2] := HrTotaliserTimer.Q{split 1}
+  COIL HrTotaliserTimerReset := HrTotaliserTimer.Q{recv 1}
+  MOVE(EN := HrTotaliserTimer.Q{recv 1} AND NOT RisingEdgeFlags[2]{split 2} AND Outputs.HrsRun = 4294967295, IN := 0) => Outputs.HrsRun
+  ADD(EN := HrTotaliserTimer.Q AND NOT RisingEdgeFlags[2]{recv 2} AND Outputs.HrsRun < 4294967295, IN1 := 1, IN2 := Outputs.HrsRun) => Outputs.HrsRun
+
+NETWORK 18 "HMI Motor Status Telemetry"
+  MOVE(EN := NOT Outputs.FaultActive{split 1}, IN := 0) => Outputs.Telemetry
+  MOVE(EN := NOT Outputs.FaultActive{recv 1} AND Outputs.OSRunning{split 2}, IN := 1) => Outputs.Telemetry
+  MOVE(EN := (NOT Outputs.FaultActive AND Outputs.OSRunning{recv 2} AND NOT LostLifeBit{split 4} AND StatusWord0.%X3{split 5} AND HardWireSignals.Running{split 6} OR NOT Outputs.FaultActive AND Outputs.OSRunning{recv 2} AND LostLifeBit{split 7} AND HardWireSignals.Running{split 8}){split 3}, IN := 2) => Outputs.Telemetry
+  MOVE(EN := (NOT Outputs.FaultActive AND Outputs.OSRunning AND NOT LostLifeBit AND StatusWord0.%X3 AND HardWireSignals.Running{recv 6} OR NOT Outputs.FaultActive AND Outputs.OSRunning AND LostLifeBit AND HardWireSignals.Running{recv 8}){recv 3} AND Outputs.UPSEnable OR (NOT Outputs.FaultActive AND Outputs.OSRunning AND NOT LostLifeBit AND StatusWord0.%X3 AND HardWireSignals.Running{recv 6} OR NOT Outputs.FaultActive AND Outputs.OSRunning AND LostLifeBit AND HardWireSignals.Running{recv 8}){recv 3} AND Inputs.InHand, IN := 3) => Outputs.Telemetry
+  MOVE(EN := Outputs.FaultActive, IN := -1) => Outputs.Telemetry
+
+NETWORK 19 "Alarms"
+  COIL Outputs.Alarm0.%X0 := Outputs.FTR
+  COIL Outputs.Alarm0.%X1 := Outputs.FTS
+  COIL Outputs.Alarm0.%X2 := LostLifeBit
+  COIL Outputs.Alarm0.%X3 := NOT StatusWord0.%X0
+  COIL Outputs.Alarm0.%X4 := StatusWord0.%X1
+  COIL Outputs.Alarm0.%X5 := StatusWord0.%X2
+  COIL Outputs.Alarm0.%X6 := StatusWord0.%X6
+  COIL Outputs.Alarm0.%X7 := StatusWord0.%X7
+  COIL Outputs.Alarm0.%X8 := StatusWord0.%X8
+  COIL Outputs.Alarm0.%X9 := StatusWord0.%X9
+  COIL Outputs.Alarm0.%X10 := StatusWord0.%X11
+  COIL Outputs.Alarm0.%X11 := StatusWord0.%X12
+  COIL Outputs.Alarm0.%X12 := StatusWord0.%X13
+  COIL Outputs.Alarm0.%X13 := StatusWord5.%X14
+  COIL Outputs.Alarm0.%X14 := StatusWord5.%X15
+  COIL Outputs.Alarm0.%X15 := StatusWord0.%X0
+  COIL Outputs.Alarm1.%X0 := StatusWord0.%X1
+  COIL Outputs.Alarm1.%X1 := StatusWord0.%X2
+  COIL Outputs.Alarm1.%X2 := NOT StatusWord0.%X3
+  COIL Outputs.Alarm1.%X3 := StatusWord0.%X4
+  COIL Outputs.Alarm1.%X4 := StatusWord0.%X5
+  COIL Outputs.Alarm1.%X5 := StatusWord2.%X0
+  COIL Outputs.Alarm1.%X6 := StatusWord2.%X1
+  COIL Outputs.Alarm1.%X7 := StatusWord2.%X2
+  COIL Outputs.Alarm1.%X8 := StatusWord2.%X3
+  COIL Outputs.Alarm1.%X9 := StatusWord2.%X4
+  COIL Outputs.Alarm1.%X10 := StatusWord2.%X5
+  COIL Outputs.Alarm1.%X11 := StatusWord2.%X6
+  COIL Outputs.Alarm1.%X12 := StatusWord2.%X7
+  COIL Outputs.Alarm1.%X13 := StatusWord5.%X2
+  COIL Outputs.Alarm1.%X14 := StatusWord5.%X3
+  COIL Outputs.Alarm1.%X15 := StatusWord5.%X8
+  COIL Outputs.Alarm2.%X0 := StatusWord5.%X9
+  COIL Outputs.Alarm2.%X1 := StatusWord5.%X10
+  COIL Outputs.Alarm2.%X2 := NOT StatusWord5.%X12
+  COIL Outputs.Alarm2.%X3 := StatusWord5.%X12
+  COIL Outputs.Alarm2.%X4 := StatusWord5.%X13
+
+NETWORK 20 ""
+  MOVE(EN := NOT PlantControl.Test[5], IN := ControlWord0) => OutputWord0
+  MOVE(EN := NOT PlantControl.Test[5], IN := ControlWord1) => OutputWord1
+  SWAP(EN := PlantControl.Test[5], IN := ControlWord0) => OutputWord0
+  SWAP(EN := PlantControl.Test[5], IN := ControlWord1) => OutputWord1
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access inputWord0 = 21 LocalVariable
+  access StatusWord0 = 22 LocalVariable
+  access inputWord1 = 23 LocalVariable
+  access StatusWord1 = 24 LocalVariable
+  access inputWord2 = 25 LocalVariable
+  access StatusWord2 = 26 LocalVariable
+  access inputWord3 = 27 LocalVariable
+  access StatusWord3 = 28 LocalVariable
+  access inputWord4 = 29 LocalVariable
+  access StatusWord4 = 30 LocalVariable
+  access inputWord5 = 31 LocalVariable
+  access StatusWord5 = 32 LocalVariable
+  access inputWord6 = 33 LocalVariable
+  access StatusWord6 = 34 LocalVariable
+  access inputWord7 = 35 LocalVariable
+  access StatusWord7 = 36 LocalVariable
+  move 0
+    moveuid = 37
+    rail = 45
+    in tag = 21 46
+    dest = 22
+    destwire = 47
+  move 1
+    moveuid = 38
+    rail = 45
+    in tag = 23 48
+    dest = 24
+    destwire = 49
+  move 2
+    moveuid = 39
+    rail = 45
+    in tag = 25 50
+    dest = 26
+    destwire = 51
+  move 3
+    moveuid = 40
+    rail = 45
+    in tag = 27 52
+    dest = 28
+    destwire = 53
+  move 4
+    moveuid = 41
+    rail = 45
+    in tag = 29 54
+    dest = 30
+    destwire = 55
+  move 5
+    moveuid = 42
+    rail = 45
+    in tag = 31 56
+    dest = 32
+    destwire = 57
+  move 6
+    moveuid = 43
+    rail = 45
+    in tag = 33 58
+    dest = 34
+    destwire = 59
+  move 7
+    moveuid = 44
+    rail = 45
+    in tag = 35 60
+    dest = 36
+    destwire = 61
+NETWORK 2
+  compileunit = 8
+  access HardWireSignals.ComError = 23 LocalVariable
+  access StatusWord0.%X2 = 22 LocalVariable
+  access LostLifeBit = 21 LocalVariable
+  access HardWireSignals.ComError = 25 LocalVariable
+  access LostLifeBit = 24 LocalVariable
+  access Outputs.OSComFault = 26 LocalVariable
+  access PlantControl.Test[7] = 27 GlobalVariable
+  access StatusWord0.%X2 = 28 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 34
+      branch 0
+        rail = 38
+        step 0 contact
+          uid = 29
+          operand = 21
+          operandwire = 39
+          negated = true
+          out = 40
+        step 1 contact
+          uid = 30
+          operand = 22
+          operandwire = 41
+          negated = false
+          out = 42
+        step 2 contact
+          uid = 31
+          operand = 23
+          operandwire = 43
+          negated = false
+          out = 44
+      branch 1
+        rail = 38
+        step 0 contact
+          uid = 32
+          operand = 24
+          operandwire = 45
+          negated = false
+          out = 46
+        step 1 contact
+          uid = 33
+          operand = 25
+          operandwire = 47
+          negated = false
+          out = 48
+      out = 49
+    coil = 35
+    coil operand = 26
+    coil operandwire = 50
+  assignment 1
+    rail = 38
+    step 0 contact
+      uid = 36
+      operand = 27
+      operandwire = 51
+      negated = false
+      out = 52
+    coil = 37
+    coil operand = 28
+    coil operandwire = 53
+NETWORK 3
+  compileunit = D
+  access Inputs.FaultReset = 21 LocalVariable
+  access ControlWord0.%X7 = 22 LocalVariable
+  assignment 0
+    rail = 25
+    step 0 contact
+      uid = 23
+      operand = 21
+      operandwire = 26
+      negated = false
+      out = 27
+    coil = 24
+    coil operand = 22
+    coil operandwire = 28
+NETWORK 4
+  compileunit = 12
+  access HardWireSignals.Running = 23 LocalVariable
+  access StatusWord0.%X3 = 22 LocalVariable
+  access LostLifeBit = 21 LocalVariable
+  access HardWireSignals.Running = 25 LocalVariable
+  access LostLifeBit = 24 LocalVariable
+  access Outputs.OSRunning = 26 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 32
+      branch 0
+        rail = 34
+        step 0 contact
+          uid = 27
+          operand = 21
+          operandwire = 35
+          negated = true
+          out = 36
+        step 1 contact
+          uid = 28
+          operand = 22
+          operandwire = 37
+          negated = false
+          out = 38
+        step 2 contact
+          uid = 29
+          operand = 23
+          operandwire = 39
+          negated = false
+          out = 40
+      branch 1
+        rail = 34
+        step 0 contact
+          uid = 30
+          operand = 24
+          operandwire = 41
+          negated = false
+          out = 42
+        step 1 contact
+          uid = 31
+          operand = 25
+          operandwire = 43
+          negated = false
+          out = 44
+      out = 45
+    coil = 33
+    coil operand = 26
+    coil operandwire = 46
+NETWORK 5
+  compileunit = 17
+  access StatusWord0.%X10 = 21 LocalVariable
+  access LifeBitTimer.Q = 23 LocalVariable
+  access Inputs.FaultReset = 25 LocalVariable
+  access LostLifeBit = 24 LocalVariable
+  access LostLifeBit = 26 LocalVariable
+  constant T#5S = 22 none
+  timer 0
+    tonpartuid = 28
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 29
+    instancescope = LocalVariable
+    instancepath = LifeBitTimer
+    rail = 36
+    step 0 contact
+      uid = 27
+      operand = 21
+      operandwire = 37
+      negated = true
+      out = 38
+    preset literal = 22 39
+    et = 40 35
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 33
+      branch 0
+        rail = 36
+        step 0 contact
+          uid = 30
+          operand = 23
+          operandwire = 41
+          negated = false
+          out = 42
+      branch 1
+        rail = 36
+        step 0 contact
+          uid = 31
+          operand = 24
+          operandwire = 43
+          negated = false
+          out = 44
+        step 1 contact
+          uid = 32
+          operand = 25
+          operandwire = 45
+          negated = true
+          out = 46
+      out = 47
+    coil = 34
+    coil operand = 26
+    coil operandwire = 48
+NETWORK 6
+  compileunit = 1C
+  access Outputs.FaultActive = 30 LocalVariable
+  access Outputs.FTR = 29 LocalVariable
+  access Inputs.InhibitMotor = 28 LocalVariable
+  access Inputs.AutoStartSignal = 24 LocalVariable
+  access Inputs.InHand = 21 LocalVariable
+  access Inputs.HandIntervention = 23 LocalVariable
+  access Inputs.InHand = 22 LocalVariable
+  access Inputs.HandStartSignal = 27 LocalVariable
+  access Inputs.HandIntervention = 26 LocalVariable
+  access Inputs.InHand = 25 LocalVariable
+  access Outputs.TryRun = 31 LocalVariable
+  access Inputs.Shutdown = 38 LocalVariable
+  access Outputs.Stop = 37 LocalVariable
+  access Inputs.RecentStart = 34 LocalVariable
+  access PreStartMemory = 33 LocalVariable
+  access Outputs.TryRun = 32 LocalVariable
+  access HardWireSignals.Run = 35 LocalVariable
+  access ControlWord0.%X0 = 36 LocalVariable
+  access ControlWord0.%X0 = 39 LocalVariable
+  access HardWireSignals.Run = 40 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 49
+      branch 0
+        rail = none
+        step 0 or
+          uid = 44
+          branch 0
+            rail = 64
+            step 0 contact
+              uid = 41
+              operand = 21
+              operandwire = 65
+              negated = true
+              out = 66
+          branch 1
+            rail = 64
+            step 0 contact
+              uid = 42
+              operand = 22
+              operandwire = 67
+              negated = false
+              out = 68
+            step 1 contact
+              uid = 43
+              operand = 23
+              operandwire = 69
+              negated = true
+              out = 70
+          out = 71
+        step 1 contact
+          uid = 45
+          operand = 24
+          operandwire = 72
+          negated = false
+          out = 73
+      branch 1
+        rail = 64
+        step 0 contact
+          uid = 46
+          operand = 25
+          operandwire = 74
+          negated = false
+          out = 75
+        step 1 contact
+          uid = 47
+          operand = 26
+          operandwire = 76
+          negated = false
+          out = 77
+        step 2 contact
+          uid = 48
+          operand = 27
+          operandwire = 78
+          negated = false
+          out = 79
+      out = 80
+    step 1 contact
+      uid = 50
+      operand = 28
+      operandwire = 81
+      negated = true
+      out = 82
+    step 2 contact
+      uid = 51
+      operand = 29
+      operandwire = 83
+      negated = true
+      out = 84
+    step 3 contact
+      uid = 52
+      operand = 30
+      operandwire = 85
+      negated = true
+      out = 86
+    coil = 53
+    coil operand = 31
+    coil operandwire = 87
+  assignment 1
+    rail = none
+    step 0 or
+      uid = 59
+      branch 0
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 55
+          operand = 33
+          operandwire = 90
+          negated = false
+          out = 91
+        step 2 contact
+          uid = 56
+          operand = 34
+          operandwire = 92
+          negated = false
+          out = 93
+      branch 1
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 57
+          operand = 35
+          operandwire = 94
+          negated = false
+          out = 95
+      branch 2
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 58
+          operand = 36
+          operandwire = 96
+          negated = false
+          out = 97
+      out = 98
+    step 1 contact
+      uid = 60
+      operand = 37
+      operandwire = 99
+      negated = true
+      out = 100
+    step 2 contact
+      uid = 61
+      operand = 38
+      operandwire = 101
+      negated = true
+      out = 102
+    coil = 62
+    coil operand = 39
+    coil operandwire = 103
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 59
+      branch 0
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 55
+          operand = 33
+          operandwire = 90
+          negated = false
+          out = 91
+        step 2 contact
+          uid = 56
+          operand = 34
+          operandwire = 92
+          negated = false
+          out = 93
+      branch 1
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 57
+          operand = 35
+          operandwire = 94
+          negated = false
+          out = 95
+      branch 2
+        rail = 64
+        step 0 contact
+          uid = 54
+          operand = 32
+          operandwire = 88
+          negated = false
+          out = 89
+        step 1 contact
+          uid = 58
+          operand = 36
+          operandwire = 96
+          negated = false
+          out = 97
+      out = 98
+    step 1 contact
+      uid = 60
+      operand = 37
+      operandwire = 99
+      negated = true
+      out = 100
+    step 2 contact
+      uid = 61
+      operand = 38
+      operandwire = 101
+      negated = true
+      out = 102
+    coil = 63
+    coil operand = 40
+    coil operandwire = 104
+NETWORK 7
+  compileunit = 21
+  access Inputs.InHand = 21 LocalVariable
+  access Inputs.HandIntervention = 22 LocalVariable
+  access Outputs.FaultActive = 25 LocalVariable
+  access Inputs.HandIntervention = 24 LocalVariable
+  access Inputs.InHand = 23 LocalVariable
+  access Inputs.HandStartSignal = 26 LocalVariable
+  assignment 0
+    rail = 33
+    step 0 contact
+      uid = 27
+      operand = 21
+      operandwire = 34
+      negated = true
+      out = 35
+    coil = 28
+    coil operand = 22
+    coil operandwire = 36
+  assignment 1
+    rail = 33
+    step 0 contact
+      uid = 29
+      operand = 23
+      operandwire = 37
+      negated = false
+      out = 38
+    step 1 contact
+      uid = 30
+      operand = 24
+      operandwire = 39
+      negated = true
+      out = 40
+    step 2 contact
+      uid = 31
+      operand = 25
+      operandwire = 41
+      negated = false
+      out = 42
+    coil = 32
+    coil operand = 26
+    coil operandwire = 43
+NETWORK 8
+  compileunit = 26
+  access HardWireSignals.Run = 32 LocalVariable
+  access ControlWord0.%X0 = 31 LocalVariable
+  access Inputs.InHand = 30 LocalVariable
+  access Inputs.HandStartSignal = 28 LocalVariable
+  access PreStartMemory = 26 LocalVariable
+  access Inputs.RecentStart = 27 LocalVariable
+  access Outputs.TryRun = 29 LocalVariable
+  access Outputs.FaultActive = 24 LocalVariable
+  access HardWireSignals.Run = 23 LocalVariable
+  access ControlWord0.%X0 = 22 LocalVariable
+  access Inputs.RecentStart = 21 LocalVariable
+  access Inputs.RecentStart = 25 LocalVariable
+  access Inputs.HandStartSignal = 34 LocalVariable
+  constant T#100MS = 33 none
+  timer 0
+    tonpartuid = 49
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 50
+    instancescope = LocalVariable
+    instancepath = GeneralDelayTimer
+    rail = none
+    step 0 or
+      uid = 45
+      branch 0
+        rail = none
+        step 0 or
+          uid = 42
+          branch 0
+            rail = 53
+            step 0 contact
+              uid = 40
+              operand = 26
+              operandwire = 63
+              negated = true
+              out = 64
+          branch 1
+            rail = 53
+            step 0 contact
+              uid = 41
+              operand = 27
+              operandwire = 65
+              negated = true
+              out = 66
+          out = 67
+        step 1 contact
+          uid = 43
+          operand = 28
+          operandwire = 68
+          negated = false
+          out = 69
+      branch 1
+        rail = 53
+        step 0 contact
+          uid = 44
+          operand = 29
+          operandwire = 70
+          negated = false
+          out = 71
+      out = 72
+    step 1 contact
+      uid = 46
+      operand = 30
+      operandwire = 73
+      negated = false
+      out = 74
+    step 2 contact
+      uid = 47
+      operand = 31
+      operandwire = 75
+      negated = true
+      out = 76
+    step 3 contact
+      uid = 48
+      operand = 32
+      operandwire = 77
+      negated = true
+      out = 78
+    preset literal = 33 79
+    et = 81 52
+  assignment 0
+    rail = 53
+    step 0 contact
+      uid = 35
+      operand = 21
+      operandwire = 54
+      negated = false
+      out = 55
+    step 1 contact
+      uid = 36
+      operand = 22
+      operandwire = 56
+      negated = true
+      out = 57
+    step 2 contact
+      uid = 37
+      operand = 23
+      operandwire = 58
+      negated = true
+      out = 59
+    step 3 contact
+      uid = 38
+      operand = 24
+      operandwire = 60
+      negated = true
+      out = 61
+    coil = 39
+    coil operand = 25
+    coil operandwire = 62
+  assignment 1
+    rail = none
+    step 0 timeroutput
+      tonpartuid = 49
+      port = Q
+      out = 80
+    coil = 51
+    coil operand = 34
+    coil operandwire = 82
+NETWORK 9
+  compileunit = 2B
+  access Inputs.InHand = 33 LocalVariable
+  access Inputs.PreStartDone = 32 LocalVariable
+  access PreStartMemory = 31 LocalVariable
+  access RisingEdgeFlags[4] = 22 LocalVariable
+  access Inputs.InHand = 21 LocalVariable
+  access HandPosEdge = 23 LocalVariable
+  access RisingEdgeFlags[4] = 24 LocalVariable
+  access Inputs.InHand = 27 LocalVariable
+  access Inputs.InHand = 25 LocalVariable
+  access NegitiveSignalEdge[1] = 26 LocalVariable
+  access HandNegEdge = 28 LocalVariable
+  access HandNegEdge = 29 LocalVariable
+  access NegitiveSignalEdge[1] = 30 LocalVariable
+  constant T#30S = 34 none
+  timer 0
+    tonpartuid = 49
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 50
+    instancescope = LocalVariable
+    instancepath = InHandReqPreStart
+    rail = 52
+    step 0 contact
+      uid = 46
+      operand = 31
+      operandwire = 70
+      negated = false
+      out = 71
+    step 1 contact
+      uid = 47
+      operand = 32
+      operandwire = 72
+      negated = true
+      out = 73
+    step 2 contact
+      uid = 48
+      operand = 33
+      operandwire = 74
+      negated = false
+      out = 75
+    preset literal = 34 76
+    et = 77 51
+  assignment 0
+    rail = 52
+    step 0 contact
+      uid = 35
+      operand = 21
+      operandwire = 53
+      negated = false
+      out = 54
+    step 1 contact
+      uid = 36
+      operand = 22
+      operandwire = 55
+      negated = true
+      out = 56
+    coil = 37
+    coil operand = 23
+    coil operandwire = 57
+  assignment 1
+    rail = 52
+    step 0 contact
+      uid = 35
+      operand = 21
+      operandwire = 53
+      negated = false
+      out = 54
+    coil = 38
+    coil operand = 24
+    coil operandwire = 58
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 41
+      branch 0
+        rail = 52
+        step 0 contact
+          uid = 39
+          operand = 25
+          operandwire = 59
+          negated = false
+          out = 60
+      branch 1
+        rail = 52
+        step 0 contact
+          uid = 40
+          operand = 26
+          operandwire = 61
+          negated = false
+          out = 62
+      out = 63
+    step 1 contact
+      uid = 42
+      operand = 27
+      operandwire = 64
+      negated = true
+      out = 65
+    coil = 43
+    coil operand = 28
+    coil operandwire = 66
+  assignment 3
+    rail = none
+    step 0 or
+      uid = 41
+      branch 0
+        rail = 52
+        step 0 contact
+          uid = 39
+          operand = 25
+          operandwire = 59
+          negated = false
+          out = 60
+      branch 1
+        rail = 52
+        step 0 contact
+          uid = 40
+          operand = 26
+          operandwire = 61
+          negated = false
+          out = 62
+      out = 63
+    step 1 contact
+      uid = 44
+      operand = 29
+      operandwire = 67
+      negated = true
+      out = 68
+    coil = 45
+    coil operand = 30
+    coil operandwire = 69
+NETWORK 10
+  compileunit = 30
+  access Inputs.PreStartDone = 21 LocalVariable
+  access HandNegEdge = 28 LocalVariable
+  access Outputs.FaultActive = 27 LocalVariable
+  access HandPosEdge = 26 LocalVariable
+  access InHandReqPreStart.Q = 25 LocalVariable
+  access HardWireSignals.Run = 24 LocalVariable
+  access ControlWord0.%X0 = 23 LocalVariable
+  access PreStartMemory = 22 LocalVariable
+  access PreStartMemory = 29 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 38
+      branch 0
+        rail = 40
+        step 0 contact
+          uid = 30
+          operand = 21
+          operandwire = 41
+          negated = false
+          out = 42
+      branch 1
+        rail = 40
+        step 0 contact
+          uid = 31
+          operand = 22
+          operandwire = 43
+          negated = false
+          out = 44
+        step 1 contact
+          uid = 32
+          operand = 23
+          operandwire = 45
+          negated = true
+          out = 46
+        step 2 contact
+          uid = 33
+          operand = 24
+          operandwire = 47
+          negated = true
+          out = 48
+        step 3 contact
+          uid = 34
+          operand = 25
+          operandwire = 49
+          negated = true
+          out = 50
+        step 4 contact
+          uid = 35
+          operand = 26
+          operandwire = 51
+          negated = true
+          out = 52
+        step 5 contact
+          uid = 36
+          operand = 27
+          operandwire = 53
+          negated = true
+          out = 54
+        step 6 contact
+          uid = 37
+          operand = 28
+          operandwire = 55
+          negated = true
+          out = 56
+      out = 57
+    coil = 39
+    coil operand = 29
+    coil operandwire = 58
+NETWORK 11
+  compileunit = 35
+  access Inputs.ShutdownTime = 21 LocalVariable
+  access Time = 23 LocalVariable
+  access Inputs.EnableUPSTime = 26 LocalVariable
+  access Time = 28 LocalVariable
+  access Inputs.FTTime = 31 LocalVariable
+  access Time = 33 LocalVariable
+  access Inputs.Belt1OffDelay = 36 LocalVariable
+  access Time = 38 LocalVariable
+  access Time = 24 LocalVariable
+  access ShutdownTimeMS = 25 LocalVariable
+  access Time = 29 LocalVariable
+  access EnableUPSTimeMS = 30 LocalVariable
+  access Time = 34 LocalVariable
+  access FTTimeMS = 35 LocalVariable
+  access Time = 39 LocalVariable
+  access Belt1OffDelayMS = 40 LocalVariable
+  constant 1000.0 = 22 Real
+  constant 1000.0 = 27 Real
+  constant 1000.0 = 32 Real
+  constant 1000.0 = 37 Real
+  mul 0
+    muluid = 41
+    kind = mul
+    en = condition
+      rail = 49
+    input 0 tag = 21 50
+    input 1 literal = 22 51
+    dest = 23
+    destwire = 53
+  mul 1
+    muluid = 43
+    kind = mul
+    en = condition
+      rail = 49
+    input 0 tag = 26 56
+    input 1 literal = 27 57
+    dest = 28
+    destwire = 59
+  mul 2
+    muluid = 45
+    kind = mul
+    en = condition
+      rail = 49
+    input 0 tag = 31 62
+    input 1 literal = 32 63
+    dest = 33
+    destwire = 65
+  mul 3
+    muluid = 47
+    kind = mul
+    en = condition
+      rail = 49
+    input 0 tag = 36 68
+    input 1 literal = 37 69
+    dest = 38
+    destwire = 71
+  convert 0
+    convertuid = 42
+    en = eno 41 52
+    in tag = 24 54
+    srctype = Real
+    desttype = DInt
+    dest = 25
+    destwire = 55
+  convert 1
+    convertuid = 44
+    en = eno 43 58
+    in tag = 29 60
+    srctype = Real
+    desttype = DInt
+    dest = 30
+    destwire = 61
+  convert 2
+    convertuid = 46
+    en = eno 45 64
+    in tag = 34 66
+    srctype = Real
+    desttype = DInt
+    dest = 35
+    destwire = 67
+  convert 3
+    convertuid = 48
+    en = eno 47 70
+    in tag = 39 72
+    srctype = Real
+    desttype = DInt
+    dest = 40
+    destwire = 73
+NETWORK 12
+  compileunit = 3A
+  access Outputs.Stop = 25 LocalVariable
+  access ShutdownTimeMS = 26 LocalVariable
+  access RisingEdgeFlags[1] = 22 LocalVariable
+  access Inputs.Shutdown = 21 LocalVariable
+  access Outputs.Stop = 23 LocalVariable
+  access RisingEdgeFlags[1] = 24 LocalVariable
+  access Outputs.OSRunning = 28 LocalVariable
+  access ShutdownTimer.Q = 27 LocalVariable
+  access Outputs.ShutdownComplete = 29 LocalVariable
+  access Inputs.Shutdown = 31 LocalVariable
+  access Outputs.ShutdownComplete = 30 LocalVariable
+  access Outputs.Stop = 32 LocalVariable
+  timer 0
+    tonpartuid = 38
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 39
+    instancescope = LocalVariable
+    instancepath = ShutdownTimer
+    rail = 47
+    step 0 contact
+      uid = 37
+      operand = 25
+      operandwire = 54
+      negated = false
+      out = 55
+    preset tag = 26 56
+    et = 57 46
+  assignment 0
+    rail = 47
+    step 0 contact
+      uid = 33
+      operand = 21
+      operandwire = 48
+      negated = false
+      out = 49
+    step 1 contact
+      uid = 34
+      operand = 22
+      operandwire = 50
+      negated = true
+      out = 51
+    coil = 35
+    coil operand = 23
+    coil operandwire = 52
+  assignment 1
+    rail = 47
+    step 0 contact
+      uid = 33
+      operand = 21
+      operandwire = 48
+      negated = false
+      out = 49
+    coil = 36
+    coil operand = 24
+    coil operandwire = 53
+  assignment 2
+    rail = 47
+    step 0 contact
+      uid = 40
+      operand = 27
+      operandwire = 58
+      negated = false
+      out = 59
+    step 1 contact
+      uid = 41
+      operand = 28
+      operandwire = 60
+      negated = true
+      out = 61
+    coil = 42
+    coil operand = 29
+    coil operandwire = 62
+  assignment 3
+    rail = 47
+    step 0 contact
+      uid = 43
+      operand = 30
+      operandwire = 63
+      negated = false
+      out = 64
+    step 1 contact
+      uid = 44
+      operand = 31
+      operandwire = 65
+      negated = true
+      out = 66
+    coil = 45
+    coil operand = 32
+    coil operandwire = 67
+NETWORK 13
+  compileunit = 3F
+  access Outputs.OSRunning = 23 LocalVariable
+  access ControlWord0.%X1 = 22 LocalVariable
+  access ControlWord0.%X0 = 21 LocalVariable
+  access FTTimeMS = 24 LocalVariable
+  access FaultTripTimer.Q = 25 LocalVariable
+  access Inputs.FaultReset = 27 LocalVariable
+  access Outputs.FTR = 26 LocalVariable
+  access Outputs.FTR = 28 LocalVariable
+  timer 0
+    tonpartuid = 32
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 33
+    instancescope = LocalVariable
+    instancepath = FaultTripTimer
+    rail = 40
+    step 0 contact
+      uid = 29
+      operand = 21
+      operandwire = 41
+      negated = false
+      out = 42
+    step 1 contact
+      uid = 30
+      operand = 22
+      operandwire = 43
+      negated = false
+      out = 44
+    step 2 contact
+      uid = 31
+      operand = 23
+      operandwire = 45
+      negated = true
+      out = 46
+    preset tag = 24 47
+    et = 48 39
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 37
+      branch 0
+        rail = 40
+        step 0 contact
+          uid = 34
+          operand = 25
+          operandwire = 49
+          negated = false
+          out = 50
+      branch 1
+        rail = 40
+        step 0 contact
+          uid = 35
+          operand = 26
+          operandwire = 51
+          negated = false
+          out = 52
+        step 1 contact
+          uid = 36
+          operand = 27
+          operandwire = 53
+          negated = true
+          out = 54
+      out = 55
+    coil = 38
+    coil operand = 28
+    coil operandwire = 56
+NETWORK 14
+  compileunit = 44
+  access Outputs.OSRunning = 22 LocalVariable
+  access ControlWord0.%X0 = 21 LocalVariable
+  access FTTimeMS = 23 LocalVariable
+  access FTSTimer.Q = 24 LocalVariable
+  access Inputs.FaultReset = 26 LocalVariable
+  access Outputs.FTS = 25 LocalVariable
+  access Outputs.FTS = 27 LocalVariable
+  timer 0
+    tonpartuid = 30
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 31
+    instancescope = LocalVariable
+    instancepath = FTSTimer
+    rail = 38
+    step 0 contact
+      uid = 28
+      operand = 21
+      operandwire = 39
+      negated = true
+      out = 40
+    step 1 contact
+      uid = 29
+      operand = 22
+      operandwire = 41
+      negated = false
+      out = 42
+    preset tag = 23 43
+    et = 44 37
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 35
+      branch 0
+        rail = 38
+        step 0 contact
+          uid = 32
+          operand = 24
+          operandwire = 45
+          negated = false
+          out = 46
+      branch 1
+        rail = 38
+        step 0 contact
+          uid = 33
+          operand = 25
+          operandwire = 47
+          negated = false
+          out = 48
+        step 1 contact
+          uid = 34
+          operand = 26
+          operandwire = 49
+          negated = true
+          out = 50
+      out = 51
+    coil = 36
+    coil operand = 27
+    coil operandwire = 52
+NETWORK 15
+  compileunit = 49
+  access Outputs.FTR = 21 LocalVariable
+  access Outputs.FTS = 22 LocalVariable
+  access LostLifeBit = 23 LocalVariable
+  access StatusWord0.%X2 = 24 LocalVariable
+  access StatusWord0.%X8 = 25 LocalVariable
+  access StatusWord0.%X9 = 26 LocalVariable
+  access StatusWord1.%X0 = 27 LocalVariable
+  access StatusWord1.%X1 = 28 LocalVariable
+  access StatusWord1.%X3 = 29 LocalVariable
+  access StatusWord5.%X2 = 30 LocalVariable
+  access StatusWord5.%X3 = 31 LocalVariable
+  access StatusWord5.%X8 = 32 LocalVariable
+  access StatusWord5.%X9 = 33 LocalVariable
+  access StatusWord5.%X10 = 34 LocalVariable
+  access Inputs.FaultReset = 36 LocalVariable
+  access Outputs.FaultActive = 35 LocalVariable
+  access Outputs.FaultActive = 37 LocalVariable
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 54
+      branch 0
+        rail = 56
+        step 0 contact
+          uid = 38
+          operand = 21
+          operandwire = 57
+          negated = false
+          out = 58
+      branch 1
+        rail = 56
+        step 0 contact
+          uid = 39
+          operand = 22
+          operandwire = 59
+          negated = false
+          out = 60
+      branch 2
+        rail = 56
+        step 0 contact
+          uid = 40
+          operand = 23
+          operandwire = 61
+          negated = false
+          out = 62
+      branch 3
+        rail = 56
+        step 0 contact
+          uid = 41
+          operand = 24
+          operandwire = 63
+          negated = false
+          out = 64
+      branch 4
+        rail = 56
+        step 0 contact
+          uid = 42
+          operand = 25
+          operandwire = 65
+          negated = false
+          out = 66
+      branch 5
+        rail = 56
+        step 0 contact
+          uid = 43
+          operand = 26
+          operandwire = 67
+          negated = false
+          out = 68
+      branch 6
+        rail = 56
+        step 0 contact
+          uid = 44
+          operand = 27
+          operandwire = 69
+          negated = false
+          out = 70
+      branch 7
+        rail = 56
+        step 0 contact
+          uid = 45
+          operand = 28
+          operandwire = 71
+          negated = false
+          out = 72
+      branch 8
+        rail = 56
+        step 0 contact
+          uid = 46
+          operand = 29
+          operandwire = 73
+          negated = false
+          out = 74
+      branch 9
+        rail = 56
+        step 0 contact
+          uid = 47
+          operand = 30
+          operandwire = 75
+          negated = false
+          out = 76
+      branch 10
+        rail = 56
+        step 0 contact
+          uid = 48
+          operand = 31
+          operandwire = 77
+          negated = false
+          out = 78
+      branch 11
+        rail = 56
+        step 0 contact
+          uid = 49
+          operand = 32
+          operandwire = 79
+          negated = false
+          out = 80
+      branch 12
+        rail = 56
+        step 0 contact
+          uid = 50
+          operand = 33
+          operandwire = 81
+          negated = false
+          out = 82
+      branch 13
+        rail = 56
+        step 0 contact
+          uid = 51
+          operand = 34
+          operandwire = 83
+          negated = false
+          out = 84
+      branch 14
+        rail = 56
+        step 0 contact
+          uid = 52
+          operand = 35
+          operandwire = 85
+          negated = false
+          out = 86
+        step 1 contact
+          uid = 53
+          operand = 36
+          operandwire = 87
+          negated = true
+          out = 88
+      out = 89
+    coil = 55
+    coil operand = 37
+    coil operandwire = 90
+NETWORK 16
+  compileunit = 4E
+  access Outputs.OSRunning = 23 LocalVariable
+  access StatusWord0.%X0 = 22 LocalVariable
+  access Inputs.InHand = 21 LocalVariable
+  access EnableUPSTimeMS = 24 LocalVariable
+  access Outputs.OSRunning = 26 LocalVariable
+  access EnableUpstreamTimer.Q = 25 LocalVariable
+  access Outputs.UPSEnable = 27 LocalVariable
+  timer 0
+    tonpartuid = 31
+    kind = ton
+    version = 1.0
+    timetype = Time
+    instanceuid = 32
+    instancescope = LocalVariable
+    instancepath = EnableUpstreamTimer
+    rail = 37
+    step 0 contact
+      uid = 28
+      operand = 21
+      operandwire = 38
+      negated = true
+      out = 39
+    step 1 contact
+      uid = 29
+      operand = 22
+      operandwire = 40
+      negated = false
+      out = 41
+    step 2 contact
+      uid = 30
+      operand = 23
+      operandwire = 42
+      negated = false
+      out = 43
+    preset tag = 24 44
+    et = 45 36
+  assignment 0
+    rail = 37
+    step 0 contact
+      uid = 33
+      operand = 25
+      operandwire = 46
+      negated = false
+      out = 47
+    step 1 contact
+      uid = 34
+      operand = 26
+      operandwire = 48
+      negated = false
+      out = 49
+    coil = 35
+    coil operand = 27
+    coil operandwire = 50
+NETWORK 17
+  compileunit = 53
+  access Outputs.OSRunning = 22 LocalVariable
+  access StatusWord0.%X0 = 21 LocalVariable
+  access HrTotaliserTimerReset = 23 LocalVariable
+  access HrTotaliserTimer.Q = 25 LocalVariable
+  access RisingEdgeFlags[2] = 36 LocalVariable
+  access HrTotaliserTimerReset = 37 LocalVariable
+  access Outputs.HrsRun = 32 LocalVariable
+  access RisingEdgeFlags[2] = 26 LocalVariable
+  access Outputs.HrsRun = 35 LocalVariable
+  access Outputs.HrsRun = 27 LocalVariable
+  access Outputs.HrsRun = 30 LocalVariable
+  access Outputs.HrsRun = 31 LocalVariable
+  constant T#1H = 24 none
+  constant 4294967295 = 33 UDInt
+  constant 0 = 34 UDInt
+  constant 4294967295 = 28 UDInt
+  constant 1 = 29 UDInt
+  timer 0
+    tonpartuid = 40
+    kind = tonr
+    version = 1.0
+    timetype = Time
+    instanceuid = 41
+    instancescope = LocalVariable
+    instancepath = HrTotaliserTimer
+    rail = 51
+    step 0 contact
+      uid = 38
+      operand = 21
+      operandwire = 52
+      negated = false
+      out = 53
+    step 1 contact
+      uid = 39
+      operand = 22
+      operandwire = 54
+      negated = false
+      out = 55
+    preset literal = 24 57
+    et = 58 50
+    reset tag = 23 56
+  assignment 0
+    rail = 51
+    step 0 contact
+      uid = 42
+      operand = 25
+      operandwire = 59
+      negated = false
+      out = 60
+    coil = 48
+    coil operand = 36
+    coil operandwire = 74
+  assignment 1
+    rail = 51
+    step 0 contact
+      uid = 42
+      operand = 25
+      operandwire = 59
+      negated = false
+      out = 60
+    coil = 49
+    coil operand = 37
+    coil operandwire = 75
+  move 0
+    moveuid = 47
+    rail = 51
+    step 0 contact
+      uid = 42
+      operand = 25
+      operandwire = 59
+      negated = false
+      out = 60
+    step 1 contact
+      uid = 43
+      operand = 26
+      operandwire = 61
+      negated = true
+      out = 62
+    step 2 compare
+      partname = Eq
+      uid = 46
+      srctype = UDInt
+      left tag = 32 69
+      right literal = 33 70
+      out = 71
+    in literal = 34 72
+    dest = 35
+    destwire = 73
+  mul 0
+    muluid = 45
+    kind = add
+    en = condition
+      rail = 51
+      step 0 contact
+        uid = 42
+        operand = 25
+        operandwire = 59
+        negated = false
+        out = 60
+      step 1 contact
+        uid = 43
+        operand = 26
+        operandwire = 61
+        negated = true
+        out = 62
+      step 2 compare
+        partname = Lt
+        uid = 44
+        srctype = UDInt
+        left tag = 27 63
+        right literal = 28 64
+        out = 65
+    input 0 literal = 29 66
+    input 1 tag = 30 67
+    dest = 31
+    destwire = 68
+NETWORK 18
+  compileunit = 58
+  access Outputs.FaultActive = 21 LocalVariable
+  access Outputs.Telemetry = 23 LocalVariable
+  access Outputs.OSRunning = 24 LocalVariable
+  access Outputs.Telemetry = 26 LocalVariable
+  access HardWireSignals.Running = 29 LocalVariable
+  access StatusWord0.%X3 = 28 LocalVariable
+  access LostLifeBit = 27 LocalVariable
+  access HardWireSignals.Running = 31 LocalVariable
+  access LostLifeBit = 30 LocalVariable
+  access Outputs.Telemetry = 33 LocalVariable
+  access Outputs.UPSEnable = 34 LocalVariable
+  access Inputs.InHand = 35 LocalVariable
+  access Outputs.Telemetry = 37 LocalVariable
+  access Outputs.FaultActive = 38 LocalVariable
+  access Outputs.Telemetry = 40 LocalVariable
+  constant 0 = 22 Int
+  constant 1 = 25 Int
+  constant 2 = 32 Int
+  constant 3 = 36 Int
+  constant -1 = 39 Int
+  move 0
+    moveuid = 42
+    rail = 58
+    step 0 contact
+      uid = 41
+      operand = 21
+      operandwire = 59
+      negated = true
+      out = 60
+    in literal = 22 61
+    dest = 23
+    destwire = 62
+  move 1
+    moveuid = 44
+    rail = 58
+    step 0 contact
+      uid = 41
+      operand = 21
+      operandwire = 59
+      negated = true
+      out = 60
+    step 1 contact
+      uid = 43
+      operand = 24
+      operandwire = 63
+      negated = false
+      out = 64
+    in literal = 25 65
+    dest = 26
+    destwire = 66
+  move 2
+    moveuid = 51
+    rail = none
+    step 0 or
+      uid = 50
+      branch 0
+        rail = 58
+        step 0 contact
+          uid = 41
+          operand = 21
+          operandwire = 59
+          negated = true
+          out = 60
+        step 1 contact
+          uid = 43
+          operand = 24
+          operandwire = 63
+          negated = false
+          out = 64
+        step 2 contact
+          uid = 45
+          operand = 27
+          operandwire = 67
+          negated = true
+          out = 68
+        step 3 contact
+          uid = 46
+          operand = 28
+          operandwire = 69
+          negated = false
+          out = 70
+        step 4 contact
+          uid = 47
+          operand = 29
+          operandwire = 71
+          negated = false
+          out = 72
+      branch 1
+        rail = 58
+        step 0 contact
+          uid = 41
+          operand = 21
+          operandwire = 59
+          negated = true
+          out = 60
+        step 1 contact
+          uid = 43
+          operand = 24
+          operandwire = 63
+          negated = false
+          out = 64
+        step 2 contact
+          uid = 48
+          operand = 30
+          operandwire = 73
+          negated = false
+          out = 74
+        step 3 contact
+          uid = 49
+          operand = 31
+          operandwire = 75
+          negated = false
+          out = 76
+      out = 77
+    in literal = 32 78
+    dest = 33
+    destwire = 79
+  move 3
+    moveuid = 55
+    rail = none
+    step 0 or
+      uid = 54
+      branch 0
+        rail = none
+        step 0 or
+          uid = 50
+          branch 0
+            rail = 58
+            step 0 contact
+              uid = 41
+              operand = 21
+              operandwire = 59
+              negated = true
+              out = 60
+            step 1 contact
+              uid = 43
+              operand = 24
+              operandwire = 63
+              negated = false
+              out = 64
+            step 2 contact
+              uid = 45
+              operand = 27
+              operandwire = 67
+              negated = true
+              out = 68
+            step 3 contact
+              uid = 46
+              operand = 28
+              operandwire = 69
+              negated = false
+              out = 70
+            step 4 contact
+              uid = 47
+              operand = 29
+              operandwire = 71
+              negated = false
+              out = 72
+          branch 1
+            rail = 58
+            step 0 contact
+              uid = 41
+              operand = 21
+              operandwire = 59
+              negated = true
+              out = 60
+            step 1 contact
+              uid = 43
+              operand = 24
+              operandwire = 63
+              negated = false
+              out = 64
+            step 2 contact
+              uid = 48
+              operand = 30
+              operandwire = 73
+              negated = false
+              out = 74
+            step 3 contact
+              uid = 49
+              operand = 31
+              operandwire = 75
+              negated = false
+              out = 76
+          out = 77
+        step 1 contact
+          uid = 52
+          operand = 34
+          operandwire = 80
+          negated = false
+          out = 81
+      branch 1
+        rail = none
+        step 0 or
+          uid = 50
+          branch 0
+            rail = 58
+            step 0 contact
+              uid = 41
+              operand = 21
+              operandwire = 59
+              negated = true
+              out = 60
+            step 1 contact
+              uid = 43
+              operand = 24
+              operandwire = 63
+              negated = false
+              out = 64
+            step 2 contact
+              uid = 45
+              operand = 27
+              operandwire = 67
+              negated = true
+              out = 68
+            step 3 contact
+              uid = 46
+              operand = 28
+              operandwire = 69
+              negated = false
+              out = 70
+            step 4 contact
+              uid = 47
+              operand = 29
+              operandwire = 71
+              negated = false
+              out = 72
+          branch 1
+            rail = 58
+            step 0 contact
+              uid = 41
+              operand = 21
+              operandwire = 59
+              negated = true
+              out = 60
+            step 1 contact
+              uid = 43
+              operand = 24
+              operandwire = 63
+              negated = false
+              out = 64
+            step 2 contact
+              uid = 48
+              operand = 30
+              operandwire = 73
+              negated = false
+              out = 74
+            step 3 contact
+              uid = 49
+              operand = 31
+              operandwire = 75
+              negated = false
+              out = 76
+          out = 77
+        step 1 contact
+          uid = 53
+          operand = 35
+          operandwire = 82
+          negated = false
+          out = 83
+      out = 84
+    in literal = 36 85
+    dest = 37
+    destwire = 86
+  move 4
+    moveuid = 57
+    rail = 58
+    step 0 contact
+      uid = 56
+      operand = 38
+      operandwire = 87
+      negated = false
+      out = 88
+    in literal = 39 89
+    dest = 40
+    destwire = 90
+NETWORK 19
+  compileunit = 5D
+  access Outputs.FTR = 21 LocalVariable
+  access Outputs.Alarm0.%X0 = 22 LocalVariable
+  access Outputs.FTS = 23 LocalVariable
+  access Outputs.Alarm0.%X1 = 24 LocalVariable
+  access LostLifeBit = 25 LocalVariable
+  access Outputs.Alarm0.%X2 = 26 LocalVariable
+  access StatusWord0.%X0 = 27 LocalVariable
+  access Outputs.Alarm0.%X3 = 28 LocalVariable
+  access StatusWord0.%X1 = 29 LocalVariable
+  access Outputs.Alarm0.%X4 = 30 LocalVariable
+  access StatusWord0.%X2 = 31 LocalVariable
+  access Outputs.Alarm0.%X5 = 32 LocalVariable
+  access StatusWord0.%X6 = 33 LocalVariable
+  access Outputs.Alarm0.%X6 = 34 LocalVariable
+  access StatusWord0.%X7 = 35 LocalVariable
+  access Outputs.Alarm0.%X7 = 36 LocalVariable
+  access StatusWord0.%X8 = 37 LocalVariable
+  access Outputs.Alarm0.%X8 = 38 LocalVariable
+  access StatusWord0.%X9 = 39 LocalVariable
+  access Outputs.Alarm0.%X9 = 40 LocalVariable
+  access StatusWord0.%X11 = 41 LocalVariable
+  access Outputs.Alarm0.%X10 = 42 LocalVariable
+  access StatusWord0.%X12 = 43 LocalVariable
+  access Outputs.Alarm0.%X11 = 44 LocalVariable
+  access StatusWord0.%X13 = 45 LocalVariable
+  access Outputs.Alarm0.%X12 = 46 LocalVariable
+  access StatusWord5.%X14 = 47 LocalVariable
+  access Outputs.Alarm0.%X13 = 48 LocalVariable
+  access StatusWord5.%X15 = 49 LocalVariable
+  access Outputs.Alarm0.%X14 = 50 LocalVariable
+  access StatusWord0.%X0 = 51 LocalVariable
+  access Outputs.Alarm0.%X15 = 52 LocalVariable
+  access StatusWord0.%X1 = 53 LocalVariable
+  access Outputs.Alarm1.%X0 = 54 LocalVariable
+  access StatusWord0.%X2 = 55 LocalVariable
+  access Outputs.Alarm1.%X1 = 56 LocalVariable
+  access StatusWord0.%X3 = 57 LocalVariable
+  access Outputs.Alarm1.%X2 = 58 LocalVariable
+  access StatusWord0.%X4 = 59 LocalVariable
+  access Outputs.Alarm1.%X3 = 60 LocalVariable
+  access StatusWord0.%X5 = 61 LocalVariable
+  access Outputs.Alarm1.%X4 = 62 LocalVariable
+  access StatusWord2.%X0 = 63 LocalVariable
+  access Outputs.Alarm1.%X5 = 64 LocalVariable
+  access StatusWord2.%X1 = 65 LocalVariable
+  access Outputs.Alarm1.%X6 = 66 LocalVariable
+  access StatusWord2.%X2 = 67 LocalVariable
+  access Outputs.Alarm1.%X7 = 68 LocalVariable
+  access StatusWord2.%X3 = 69 LocalVariable
+  access Outputs.Alarm1.%X8 = 70 LocalVariable
+  access StatusWord2.%X4 = 71 LocalVariable
+  access Outputs.Alarm1.%X9 = 72 LocalVariable
+  access StatusWord2.%X5 = 73 LocalVariable
+  access Outputs.Alarm1.%X10 = 74 LocalVariable
+  access StatusWord2.%X6 = 75 LocalVariable
+  access Outputs.Alarm1.%X11 = 76 LocalVariable
+  access StatusWord2.%X7 = 77 LocalVariable
+  access Outputs.Alarm1.%X12 = 78 LocalVariable
+  access StatusWord5.%X2 = 79 LocalVariable
+  access Outputs.Alarm1.%X13 = 80 LocalVariable
+  access StatusWord5.%X3 = 81 LocalVariable
+  access Outputs.Alarm1.%X14 = 82 LocalVariable
+  access StatusWord5.%X8 = 83 LocalVariable
+  access Outputs.Alarm1.%X15 = 84 LocalVariable
+  access StatusWord5.%X9 = 85 LocalVariable
+  access Outputs.Alarm2.%X0 = 86 LocalVariable
+  access StatusWord5.%X10 = 87 LocalVariable
+  access Outputs.Alarm2.%X1 = 88 LocalVariable
+  access StatusWord5.%X12 = 89 LocalVariable
+  access Outputs.Alarm2.%X2 = 90 LocalVariable
+  access StatusWord5.%X12 = 91 LocalVariable
+  access Outputs.Alarm2.%X3 = 92 LocalVariable
+  access StatusWord5.%X13 = 93 LocalVariable
+  access Outputs.Alarm2.%X4 = 94 LocalVariable
+  assignment 0
+    rail = 169
+    step 0 contact
+      uid = 95
+      operand = 21
+      operandwire = 170
+      negated = false
+      out = 171
+    coil = 96
+    coil operand = 22
+    coil operandwire = 172
+  assignment 1
+    rail = 169
+    step 0 contact
+      uid = 97
+      operand = 23
+      operandwire = 173
+      negated = false
+      out = 174
+    coil = 98
+    coil operand = 24
+    coil operandwire = 175
+  assignment 2
+    rail = 169
+    step 0 contact
+      uid = 99
+      operand = 25
+      operandwire = 176
+      negated = false
+      out = 177
+    coil = 100
+    coil operand = 26
+    coil operandwire = 178
+  assignment 3
+    rail = 169
+    step 0 contact
+      uid = 101
+      operand = 27
+      operandwire = 179
+      negated = true
+      out = 180
+    coil = 102
+    coil operand = 28
+    coil operandwire = 181
+  assignment 4
+    rail = 169
+    step 0 contact
+      uid = 103
+      operand = 29
+      operandwire = 182
+      negated = false
+      out = 183
+    coil = 104
+    coil operand = 30
+    coil operandwire = 184
+  assignment 5
+    rail = 169
+    step 0 contact
+      uid = 105
+      operand = 31
+      operandwire = 185
+      negated = false
+      out = 186
+    coil = 106
+    coil operand = 32
+    coil operandwire = 187
+  assignment 6
+    rail = 169
+    step 0 contact
+      uid = 107
+      operand = 33
+      operandwire = 188
+      negated = false
+      out = 189
+    coil = 108
+    coil operand = 34
+    coil operandwire = 190
+  assignment 7
+    rail = 169
+    step 0 contact
+      uid = 109
+      operand = 35
+      operandwire = 191
+      negated = false
+      out = 192
+    coil = 110
+    coil operand = 36
+    coil operandwire = 193
+  assignment 8
+    rail = 169
+    step 0 contact
+      uid = 111
+      operand = 37
+      operandwire = 194
+      negated = false
+      out = 195
+    coil = 112
+    coil operand = 38
+    coil operandwire = 196
+  assignment 9
+    rail = 169
+    step 0 contact
+      uid = 113
+      operand = 39
+      operandwire = 197
+      negated = false
+      out = 198
+    coil = 114
+    coil operand = 40
+    coil operandwire = 199
+  assignment 10
+    rail = 169
+    step 0 contact
+      uid = 115
+      operand = 41
+      operandwire = 200
+      negated = false
+      out = 201
+    coil = 116
+    coil operand = 42
+    coil operandwire = 202
+  assignment 11
+    rail = 169
+    step 0 contact
+      uid = 117
+      operand = 43
+      operandwire = 203
+      negated = false
+      out = 204
+    coil = 118
+    coil operand = 44
+    coil operandwire = 205
+  assignment 12
+    rail = 169
+    step 0 contact
+      uid = 119
+      operand = 45
+      operandwire = 206
+      negated = false
+      out = 207
+    coil = 120
+    coil operand = 46
+    coil operandwire = 208
+  assignment 13
+    rail = 169
+    step 0 contact
+      uid = 121
+      operand = 47
+      operandwire = 209
+      negated = false
+      out = 210
+    coil = 122
+    coil operand = 48
+    coil operandwire = 211
+  assignment 14
+    rail = 169
+    step 0 contact
+      uid = 123
+      operand = 49
+      operandwire = 212
+      negated = false
+      out = 213
+    coil = 124
+    coil operand = 50
+    coil operandwire = 214
+  assignment 15
+    rail = 169
+    step 0 contact
+      uid = 125
+      operand = 51
+      operandwire = 215
+      negated = false
+      out = 216
+    coil = 126
+    coil operand = 52
+    coil operandwire = 217
+  assignment 16
+    rail = 169
+    step 0 contact
+      uid = 127
+      operand = 53
+      operandwire = 218
+      negated = false
+      out = 219
+    coil = 128
+    coil operand = 54
+    coil operandwire = 220
+  assignment 17
+    rail = 169
+    step 0 contact
+      uid = 129
+      operand = 55
+      operandwire = 221
+      negated = false
+      out = 222
+    coil = 130
+    coil operand = 56
+    coil operandwire = 223
+  assignment 18
+    rail = 169
+    step 0 contact
+      uid = 131
+      operand = 57
+      operandwire = 224
+      negated = true
+      out = 225
+    coil = 132
+    coil operand = 58
+    coil operandwire = 226
+  assignment 19
+    rail = 169
+    step 0 contact
+      uid = 133
+      operand = 59
+      operandwire = 227
+      negated = false
+      out = 228
+    coil = 134
+    coil operand = 60
+    coil operandwire = 229
+  assignment 20
+    rail = 169
+    step 0 contact
+      uid = 135
+      operand = 61
+      operandwire = 230
+      negated = false
+      out = 231
+    coil = 136
+    coil operand = 62
+    coil operandwire = 232
+  assignment 21
+    rail = 169
+    step 0 contact
+      uid = 137
+      operand = 63
+      operandwire = 233
+      negated = false
+      out = 234
+    coil = 138
+    coil operand = 64
+    coil operandwire = 235
+  assignment 22
+    rail = 169
+    step 0 contact
+      uid = 139
+      operand = 65
+      operandwire = 236
+      negated = false
+      out = 237
+    coil = 140
+    coil operand = 66
+    coil operandwire = 238
+  assignment 23
+    rail = 169
+    step 0 contact
+      uid = 141
+      operand = 67
+      operandwire = 239
+      negated = false
+      out = 240
+    coil = 142
+    coil operand = 68
+    coil operandwire = 241
+  assignment 24
+    rail = 169
+    step 0 contact
+      uid = 143
+      operand = 69
+      operandwire = 242
+      negated = false
+      out = 243
+    coil = 144
+    coil operand = 70
+    coil operandwire = 244
+  assignment 25
+    rail = 169
+    step 0 contact
+      uid = 145
+      operand = 71
+      operandwire = 245
+      negated = false
+      out = 246
+    coil = 146
+    coil operand = 72
+    coil operandwire = 247
+  assignment 26
+    rail = 169
+    step 0 contact
+      uid = 147
+      operand = 73
+      operandwire = 248
+      negated = false
+      out = 249
+    coil = 148
+    coil operand = 74
+    coil operandwire = 250
+  assignment 27
+    rail = 169
+    step 0 contact
+      uid = 149
+      operand = 75
+      operandwire = 251
+      negated = false
+      out = 252
+    coil = 150
+    coil operand = 76
+    coil operandwire = 253
+  assignment 28
+    rail = 169
+    step 0 contact
+      uid = 151
+      operand = 77
+      operandwire = 254
+      negated = false
+      out = 255
+    coil = 152
+    coil operand = 78
+    coil operandwire = 256
+  assignment 29
+    rail = 169
+    step 0 contact
+      uid = 153
+      operand = 79
+      operandwire = 257
+      negated = false
+      out = 258
+    coil = 154
+    coil operand = 80
+    coil operandwire = 259
+  assignment 30
+    rail = 169
+    step 0 contact
+      uid = 155
+      operand = 81
+      operandwire = 260
+      negated = false
+      out = 261
+    coil = 156
+    coil operand = 82
+    coil operandwire = 262
+  assignment 31
+    rail = 169
+    step 0 contact
+      uid = 157
+      operand = 83
+      operandwire = 263
+      negated = false
+      out = 264
+    coil = 158
+    coil operand = 84
+    coil operandwire = 265
+  assignment 32
+    rail = 169
+    step 0 contact
+      uid = 159
+      operand = 85
+      operandwire = 266
+      negated = false
+      out = 267
+    coil = 160
+    coil operand = 86
+    coil operandwire = 268
+  assignment 33
+    rail = 169
+    step 0 contact
+      uid = 161
+      operand = 87
+      operandwire = 269
+      negated = false
+      out = 270
+    coil = 162
+    coil operand = 88
+    coil operandwire = 271
+  assignment 34
+    rail = 169
+    step 0 contact
+      uid = 163
+      operand = 89
+      operandwire = 272
+      negated = true
+      out = 273
+    coil = 164
+    coil operand = 90
+    coil operandwire = 274
+  assignment 35
+    rail = 169
+    step 0 contact
+      uid = 165
+      operand = 91
+      operandwire = 275
+      negated = false
+      out = 276
+    coil = 166
+    coil operand = 92
+    coil operandwire = 277
+  assignment 36
+    rail = 169
+    step 0 contact
+      uid = 167
+      operand = 93
+      operandwire = 278
+      negated = false
+      out = 279
+    coil = 168
+    coil operand = 94
+    coil operandwire = 280
+NETWORK 20
+  compileunit = 62
+  access PlantControl.Test[5] = 24 GlobalVariable
+  access ControlWord0 = 25 LocalVariable
+  access OutputWord0 = 26 LocalVariable
+  access PlantControl.Test[5] = 30 GlobalVariable
+  access ControlWord1 = 31 LocalVariable
+  access OutputWord1 = 32 LocalVariable
+  access PlantControl.Test[5] = 21 GlobalVariable
+  access ControlWord0 = 22 LocalVariable
+  access OutputWord0 = 23 LocalVariable
+  access PlantControl.Test[5] = 27 GlobalVariable
+  access ControlWord1 = 28 LocalVariable
+  access OutputWord1 = 29 LocalVariable
+  move 0
+    moveuid = 36
+    rail = 41
+    step 0 contact
+      uid = 35
+      operand = 24
+      operandwire = 46
+      negated = true
+      out = 47
+    in tag = 25 48
+    dest = 26
+    destwire = 49
+  move 1
+    moveuid = 40
+    rail = 41
+    step 0 contact
+      uid = 39
+      operand = 30
+      operandwire = 54
+      negated = true
+      out = 55
+    in tag = 31 56
+    dest = 32
+    destwire = 57
+  swap 0
+    swapuid = 34
+    en = condition
+      rail = 41
+      step 0 contact
+        uid = 33
+        operand = 21
+        operandwire = 42
+        negated = false
+        out = 43
+    in tag = 22 44
+    srctype = Word
+    dest = 23
+    destwire = 45
+  swap 1
+    swapuid = 38
+    en = condition
+      rail = 41
+      step 0 contact
+        uid = 37
+        operand = 27
+        operandwire = 50
+        negated = false
+        out = 51
+    in tag = 28 52
+    srctype = Word
+    dest = 29
+    destwire = 53

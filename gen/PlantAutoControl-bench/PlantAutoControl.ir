@@ -1,0 +1,267 @@
+BLOCK FC PlantAutoControl
+ROOTID 0
+NUMBER 100
+LANGUAGE LAD
+TITLE "Plant Automatic Control"
+COMMENT "Per-equipment automatic-control layer for the shredding/material-recovery plant (REQ-001..022). Paradigm: combinational chained-permissive interlock/mapping (C-113 'no' - no phase memory in this block; the plant sequencer and equipment FBs hold the state). One network per machine, in material-train order, each mapping field feedback in, computing the auto start/shutdown permissives from PlantControl.Status and neighbour UPSEnable/ShutdownComplete, driving the physical output, and calling the equipment FB. Composed from the chained-permissive-enable pattern. Net 17 (feed conveyor) is freeform fwd/rev per C-116/C-117 (reversal pause enforced inside MotorFwdRevSystem). Author: lad-coder (gen-block-new). Rev 1, 2026-07-20."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  INOUT
+  TEMP
+  CONSTANT
+
+NETWORK 1 "Incline Feed Conveyor Automatic Control"
+  COMMENT "Incline feed VSD (MotorVSDInst2). Running-fwd confirmation taken from the rotation sensor (inferred VSD-running mapping - review). Holds during shutdown until the link conveyor and the third-party JOB9001 plant have both completed shutdown (REQ-003/014); starts once the air-separator VSD is enabled (REQ-004)."
+  COIL MotorVSDInst2.IO.RunningFwdFB := DiscreteInputs.IFCRotSen
+  COIL MotorVSDInst2.IO.SystemHealthy := TRUE
+  COIL MotorVSDInst2.IO.InhibitMotor := DiscreteInputs.IFCIsoFB
+  COIL MotorVSDInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst2.IO.AutoStartSignal := (PlantControl.Status >= 1 OR (NOT MotorStarterInst4.IO.ShutdownComplete OR NOT InterlockData.JOB9001ShutdownComplete) AND PlantControl.Status = -1) AND AirStarInst1.Outputs.EnableUPS
+  COIL MotorVSDInst2.IO.Shutdown := NOT (PlantControl.Status >= 1 OR (NOT MotorStarterInst4.IO.ShutdownComplete OR NOT InterlockData.JOB9001ShutdownComplete) AND PlantControl.Status = -1) AND NOT MotorVSDInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst2, EN := TRUE)
+
+NETWORK 2 "Link Conveyor Automatic Control"
+  COMMENT "Link conveyor (MotorStarterInst4), the designated first machine. Gated by the third-party JOB9001 interlock; holds through shutdown until JOB9001 signals its own shutdown complete (REQ-014). On first auto-start it requests the plant pre-start warning once (one-shot via PlantControl.PositiveEdgeArray[4]), cleared when the pre-start output energises (REQ-015)."
+  COIL MotorStarterInst4.IO.RunningFB := DiscreteInputs.HFLCRunning AND DiscreteInputs.HFLCRotSen OR DiscreteInputs.HFLCRunning AND HMIControlSignals.BypassHFLCRotSen
+  COIL MotorStarterInst4.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst4.IO.InhibitMotor := DiscreteInputs.HFLCIsoFB
+  COIL MotorStarterInst4.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst4.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT InterlockData.JOB9001ShutdownComplete) AND MotorVSDInst2.IO.UPSEnable AND InterlockData.JOB9001Interlock
+  COIL MotorStarterInst4.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT InterlockData.JOB9001ShutdownComplete) AND NOT MotorStarterInst4.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst4.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.HFLCStart := MotorStarterInst4.IO.Run
+  SCOIL PlantControl.AutoPreStart := MotorStarterInst4.IO.AutoStartSignal AND NOT PlantControl.PositiveEdgeArray[4]
+  RCOIL PlantControl.AutoPreStart := DiscreteOutputs.RunPreStart
+  COIL PlantControl.PositiveEdgeArray[4] := MotorStarterInst4.IO.AutoStartSignal
+  CALL MotorStarter(MotorStarterInst4, EN := TRUE)
+
+NETWORK 3 "Dust Filter Unit 1 Automatic Control"
+  COMMENT "Dust filter unit 1 (FilterUnitInst2). Remote-operational, running(=ready) and fault feedbacks brought in; fault reset echoed to the physical unit (REQ-019). Fan up-to-speed delay set from the plant fan-start time (REQ-020); see block header re C-308. Starts once the sorter conveyor VSD is enabled; holds during shutdown until fans-shutdown-ready (REQ-003/013)."
+  COIL FilterUnitInst2.RemoteOp := DiscreteInputs.FilterUnit1Op
+  COIL FilterUnitInst2.IO.RunningFB := DiscreteInputs.FilterUnit1Ready
+  COIL FilterUnitInst2.IO.FaultFB := DiscreteInputs.FilterUnit1Flt
+  COIL FilterUnitInst2.IO.SystemHealthy := TRUE
+  COIL FilterUnitInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst2.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady) AND MotorVSDInst3.IO.UPSEnable
+  COIL FilterUnitInst2.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady) AND NOT FilterUnitInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL FilterUnitInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.FilterUnit1Start := FilterUnitInst2.IO.Run
+  COIL DiscreteOutputs.FilterUnit1Reset := HMIControlSignals.SystemReset
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst2.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst2, EN := TRUE)
+
+NETWORK 4 "Dust Filter Unit 2 Automatic Control"
+  COMMENT "Dust filter unit 2 (FilterUnitInst3), identical shape to unit 1 (REQ-019/020). Starts once the sorter conveyor VSD is enabled; holds until fans-shutdown-ready."
+  COIL FilterUnitInst3.RemoteOp := DiscreteInputs.FilterUnit2Op
+  COIL FilterUnitInst3.IO.RunningFB := DiscreteInputs.FilterUnit2Ready
+  COIL FilterUnitInst3.IO.FaultFB := DiscreteInputs.FilterUnit2Flt
+  COIL FilterUnitInst3.IO.SystemHealthy := TRUE
+  COIL FilterUnitInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst3.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady) AND MotorVSDInst3.IO.UPSEnable
+  COIL FilterUnitInst3.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady) AND NOT FilterUnitInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL FilterUnitInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.FilterUnit2Start := FilterUnitInst3.IO.Run
+  COIL DiscreteOutputs.FilterUnit2Reset := HMIControlSignals.SystemReset
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst3.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst3, EN := TRUE)
+
+NETWORK 5 "Air-Separator VSD Automatic Control"
+  COMMENT "Air-separator VSD (AirStarInst1), a bus-coupled drive with no discrete start output. Running confirmed over comms (MachineRunning). Alternative start permissive: discharge-conveyor VSD plus both dust filters enabled, OR discharge-conveyor VSD plus the third-party link-out signal (REQ-021). Holds during shutdown until the incline feed conveyor has shut down (REQ-003)."
+  COIL AirStarInst1.ComsInputs.MachineRunning := DiscreteInputs.AirStarRunning
+  COIL AirStarInst1.Inputs.SystemHealthy := TRUE
+  COIL AirStarInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL AirStarInst1.Inputs.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst2.IO.ShutdownComplete) AND MotorVSDInst1.IO.UPSEnable AND FilterUnitInst2.IO.UPSEnable AND FilterUnitInst3.IO.UPSEnable OR (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst2.IO.ShutdownComplete) AND MotorVSDInst1.IO.UPSEnable AND InterlockData.LinkOut3rdParty
+  COIL AirStarInst1.Inputs.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst2.IO.ShutdownComplete) AND NOT AirStarInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL AirStarInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  CALL AirStarSystem(AirStarInst1, EN := TRUE)
+
+NETWORK 6 "Discharge Conveyor VSD Automatic Control"
+  COMMENT "Discharge conveyor VSD (MotorVSDInst1). Treats its rotation sensor as running-forward confirmation (REQ-012; bypass handling deferred - review). Starts once the overband magnet and ECS are enabled; holds during shutdown until the air-separator VSD has shut down (REQ-003/004)."
+  COIL MotorVSDInst1.IO.RunningFwdFB := DiscreteInputs.AirStarDCRotSen
+  COIL MotorVSDInst1.IO.SystemHealthy := TRUE
+  COIL MotorVSDInst1.IO.InhibitMotor := DiscreteInputs.AirStarDCIsoFB
+  COIL MotorVSDInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst1.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT AirStarInst1.Outputs.ShutdownComplete) AND MotorStarterInst8.IO.UPSEnable AND ECSControlInst1.Outputs.UPSEnable
+  COIL MotorVSDInst1.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT AirStarInst1.Outputs.ShutdownComplete) AND NOT MotorVSDInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst1, EN := TRUE)
+
+NETWORK 7 "Metal Collection Conveyor Automatic Control"
+  COMMENT "Metal collection conveyor (MotorStarterInst3). Gated by the magnet-circuit enable (REQ-013); starts on that plant flag rather than an upstream UPSEnable. Holds during shutdown until the overband magnet has shut down (REQ-003)."
+  COIL MotorStarterInst3.IO.RunningFB := DiscreteInputs.FMCCRunning AND DiscreteInputs.FMCCRotSen OR DiscreteInputs.FMCCRunning AND HMIControlSignals.BypassFMCCRotSen
+  COIL MotorStarterInst3.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst3.IO.InhibitMotor := DiscreteInputs.FMCCIsoFB
+  COIL MotorStarterInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst3.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst8.IO.ShutdownComplete) AND PlantControl.MagEnable
+  COIL MotorStarterInst3.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst8.IO.ShutdownComplete) AND NOT MotorStarterInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.FMCCStart := MotorStarterInst3.IO.Run
+  CALL MotorStarter(MotorStarterInst3, EN := TRUE)
+
+NETWORK 8 "Overband Magnet Automatic Control"
+  COMMENT "Overband magnet (MotorStarterInst8), confirmed on run feedback only (no rotation sensor). Starts once the metal collection conveyor is enabled; holds during shutdown until the discharge conveyor VSD has shut down (REQ-003/004)."
+  COIL MotorStarterInst8.IO.RunningFB := DiscreteInputs.OverbandMagRunning
+  COIL MotorStarterInst8.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst8.IO.InhibitMotor := DiscreteInputs.OverbandMagIsoFB
+  COIL MotorStarterInst8.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst8.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND MotorStarterInst3.IO.UPSEnable
+  COIL MotorStarterInst8.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND NOT MotorStarterInst8.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst8.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OverbandMagStart := MotorStarterInst8.IO.Run
+  CALL MotorStarter(MotorStarterInst8, EN := TRUE)
+
+NETWORK 9 "Equipment Control System Automatic Control"
+  COMMENT "Equipment control system (ECSControlInst1). Fault, mode (auto/hand/setting), ready, running, feeder/charge and rotor status brought in; auto-start and reset outputs driven (REQ-018). Starts once the sorter conveyor VSD is enabled; holds during shutdown until the discharge conveyor VSD has shut down (REQ-003)."
+  COIL ECSControlInst1.Inputs.RunningFB := DiscreteInputs.ECSRunning
+  COIL ECSControlInst1.Inputs.ReadyFB := DiscreteInputs.ECSReady
+  COIL ECSControlInst1.Inputs.MSHandMode := DiscreteInputs.ECSHandMode
+  COIL ECSControlInst1.Inputs.MSAutoMode := DiscreteInputs.ECSAutoMode
+  COIL ECSControlInst1.Inputs.MSSettingMode := DiscreteInputs.ECSSettingMode
+  COIL ECSControlInst1.Inputs.SumFlt := DiscreteInputs.ECSSumFlt
+  COIL ECSControlInst1.Inputs.FCRotorFault := DiscreteInputs.ECSFCRotorFlt
+  COIL ECSControlInst1.Inputs.FltRotorRevs := DiscreteInputs.ECSFltRotorRevs
+  COIL ECSControlInst1.Inputs.FCConveyorBeltFlt := DiscreteInputs.ECSFCConveyorFlt
+  COIL ECSControlInst1.Inputs.InterlockingFeeder := DiscreteInputs.ECSInterlockingFeeder
+  COIL ECSControlInst1.Inputs.MaterialChargeEnabled := DiscreteInputs.ECSMatChargeEnabled
+  COIL ECSControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL ECSControlInst1.Inputs.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND MotorVSDInst3.IO.UPSEnable
+  COIL ECSControlInst1.Inputs.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete) AND NOT ECSControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL ECSControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.ECSAutoStart := ECSControlInst1.Outputs.ECSRun
+  COIL DiscreteOutputs.ECSReset := ECSControlInst1.Outputs.ECSReset
+  CALL EquipmentControlSystem(ECSControlInst1, EN := TRUE)
+
+NETWORK 10 "Sorter Conveyor VSD Automatic Control"
+  COMMENT "Sorter feed conveyor VSD (MotorVSDInst3). Running-fwd from rotation sensor (inferred - review). Only permitted to start while the optical sorter is ready and not faulted, and the ejected and residual conveyors are enabled (REQ-017/004). Holds during shutdown until the ECS has shut down (REQ-003)."
+  COIL MotorVSDInst3.IO.RunningFwdFB := DiscreteInputs.OSCRotSen
+  COIL MotorVSDInst3.IO.SystemHealthy := TRUE
+  COIL MotorVSDInst3.IO.InhibitMotor := DiscreteInputs.OSCIsoFB
+  COIL MotorVSDInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst3.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT ECSControlInst1.Outputs.ShutdownComplete) AND DiscreteInputs.TomraReady AND MotorStarterInst6.IO.UPSEnable AND MotorStarterInst7.IO.UPSEnable AND NOT DiscreteInputs.TomraComFlt
+  COIL MotorVSDInst3.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT ECSControlInst1.Outputs.ShutdownComplete) AND NOT MotorVSDInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst3, EN := TRUE)
+
+NETWORK 11 "Optical Sorter Automatic Control"
+  COMMENT "Optical sorter (TomraControlInst1). Hardwired ready/running/comms-fault brought in and the run command driven to the sorter (REQ-017). Comms data words (a separate block owns them) deliberately not wired here. Starts once the ejected and residual conveyors are enabled; holds during shutdown until the sorter conveyor VSD has shut down (REQ-003)."
+  COIL TomraControlInst1.HardWireSignals.Ready := DiscreteInputs.TomraReady
+  COIL TomraControlInst1.HardWireSignals.Running := DiscreteInputs.TomraRunning
+  COIL TomraControlInst1.HardWireSignals.ComError := DiscreteInputs.TomraComFlt
+  COIL TomraControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL TomraControlInst1.Inputs.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst3.IO.ShutdownComplete) AND MotorStarterInst6.IO.UPSEnable AND MotorStarterInst7.IO.UPSEnable
+  COIL TomraControlInst1.Inputs.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorVSDInst3.IO.ShutdownComplete) AND NOT TomraControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL TomraControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.TomraRun := TomraControlInst1.HardWireSignals.Run
+  CALL TomraControlSystem(TomraControlInst1, EN := TRUE)
+
+NETWORK 12 "Drum Separator Automatic Control"
+  COMMENT "Drum separator (MotorStarterInst5), confirmed on run feedback only. Gated by the drum-separator enable (REQ-013); holds during shutdown until drum-shutdown-ready (REQ-003)."
+  COIL MotorStarterInst5.IO.RunningFB := DiscreteInputs.OSDrumSepRunning
+  COIL MotorStarterInst5.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst5.IO.InhibitMotor := DiscreteInputs.OSDrumSepIsoFB
+  COIL MotorStarterInst5.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst5.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.DrumShutdownReady) AND PlantControl.DrumsEnable
+  COIL MotorStarterInst5.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.DrumShutdownReady) AND NOT MotorStarterInst5.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst5.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSDrumSepStart := MotorStarterInst5.IO.Run
+  CALL MotorStarter(MotorStarterInst5, EN := TRUE)
+
+NETWORK 13 "Ejected Material Conveyor Automatic Control"
+  COMMENT "Ejected material conveyor (MotorStarterInst6). Gated by the general enable (REQ-013); holds during shutdown until the optical sorter has shut down (REQ-003)."
+  COIL MotorStarterInst6.IO.RunningFB := DiscreteInputs.OSECRunning AND DiscreteInputs.OSECRotSen OR DiscreteInputs.OSECRunning AND HMIControlSignals.BypassOSECRotSen
+  COIL MotorStarterInst6.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst6.IO.InhibitMotor := DiscreteInputs.OSECIsoFB
+  COIL MotorStarterInst6.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst6.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete) AND PlantControl.GeneralEnable
+  COIL MotorStarterInst6.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete) AND NOT MotorStarterInst6.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst6.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSECStart := MotorStarterInst6.IO.Run
+  CALL MotorStarter(MotorStarterInst6, EN := TRUE)
+
+NETWORK 14 "Residual Material Conveyor Automatic Control"
+  COMMENT "Residual material conveyor (MotorStarterInst7). Starts once disc spreaders 1 and 2 are enabled; holds during shutdown until the optical sorter has shut down (REQ-003/004)."
+  COIL MotorStarterInst7.IO.RunningFB := DiscreteInputs.OSRCRunning AND DiscreteInputs.OSRCRotSen OR DiscreteInputs.OSRCRunning AND HMIControlSignals.BypassOSRCRotSen
+  COIL MotorStarterInst7.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst7.IO.InhibitMotor := DiscreteInputs.OSRCIsoFB
+  COIL MotorStarterInst7.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst7.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete) AND MotorStarterInst1.IO.UPSEnable AND MotorStarterInst2.IO.UPSEnable
+  COIL MotorStarterInst7.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete) AND NOT MotorStarterInst7.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst7.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSRCStart := MotorStarterInst7.IO.Run
+  CALL MotorStarter(MotorStarterInst7, EN := TRUE)
+
+NETWORK 15 "Disc Spreader Unit 1 Automatic Control"
+  COMMENT "Disc spreader unit 1 (MotorStarterInst1), confirmed on run feedback only. Starts once the feed conveyor is enabled; holds during shutdown until the residual material conveyor has shut down (REQ-003/004)."
+  COIL MotorStarterInst1.IO.RunningFB := DiscreteInputs.DiskSpreader1Running
+  COIL MotorStarterInst1.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst1.IO.InhibitMotor := DiscreteInputs.DiskSpreader1IsoFB
+  COIL MotorStarterInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst1.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete) AND MotorFwdRevInst1.IO.UPSEnable
+  COIL MotorStarterInst1.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete) AND NOT MotorStarterInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.DiskSpreader1Start := MotorStarterInst1.IO.Run
+  CALL MotorStarter(MotorStarterInst1, EN := TRUE)
+
+NETWORK 16 "Disc Spreader Unit 2 Automatic Control"
+  COMMENT "Disc spreader unit 2 (MotorStarterInst2), identical shape to unit 1. Starts once the feed conveyor is enabled; holds until the residual material conveyor has shut down (REQ-003/004)."
+  COIL MotorStarterInst2.IO.RunningFB := DiscreteInputs.DiskSpreader2Running
+  COIL MotorStarterInst2.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst2.IO.InhibitMotor := DiscreteInputs.DiskSpreader2IsoFB
+  COIL MotorStarterInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst2.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete) AND MotorFwdRevInst1.IO.UPSEnable
+  COIL MotorStarterInst2.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete) AND NOT MotorStarterInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.DiskSpreader2Start := MotorStarterInst2.IO.Run
+  CALL MotorStarter(MotorStarterInst2, EN := TRUE)
+
+NETWORK 17 "Feed Conveyor Automatic Control"
+  COMMENT "Shredder feed conveyor (MotorFwdRevInst1), forward/reverse. Runs forward when the shredder is ready to receive (its upstream-enable), reverses on the general enable to back material off the shredder when it is not ready (REQ-016). Reverse selection is FREEFORM (no admitted pattern for fwd/rev); the stopped-before-reverse pause is enforced inside MotorFwdRevSystem (C-117). Holds during shutdown until disc spreaders 1 and 2 have shut down (REQ-003)."
+  COIL MotorFwdRevInst1.IO.RunningFBFwd := DiscreteInputs.SFCRunningFwd AND DiscreteInputs.SFCRotSen OR DiscreteInputs.SFCRunningFwd AND HMIControlSignals.BypassSFCRotSen
+  COIL MotorFwdRevInst1.IO.RunningFBRev := DiscreteInputs.SFCRunningRev
+  COIL MotorFwdRevInst1.IO.SystemHealthy := TRUE
+  COIL MotorFwdRevInst1.IO.InhibitMotor := DiscreteInputs.SFCIsoFB
+  COIL MotorFwdRevInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorFwdRevInst1.IO.Reverse := NOT ShredderControlInst1.Outputs.UPSEnable AND PlantControl.GeneralEnable
+  COIL MotorFwdRevInst1.IO.AutoStartSignal := (PlantControl.Status >= 1 OR (NOT MotorStarterInst1.IO.ShutdownComplete OR NOT MotorStarterInst2.IO.ShutdownComplete) AND PlantControl.Status = -1) AND ShredderControlInst1.Outputs.UPSEnable OR (PlantControl.Status >= 1 OR (NOT MotorStarterInst1.IO.ShutdownComplete OR NOT MotorStarterInst2.IO.ShutdownComplete) AND PlantControl.Status = -1) AND PlantControl.GeneralEnable
+  COIL MotorFwdRevInst1.IO.Shutdown := NOT (PlantControl.Status >= 1 OR (NOT MotorStarterInst1.IO.ShutdownComplete OR NOT MotorStarterInst2.IO.ShutdownComplete) AND PlantControl.Status = -1) AND NOT MotorFwdRevInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorFwdRevInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.SFCRunFwd := MotorFwdRevInst1.IO.RunFwd
+  COIL DiscreteOutputs.SFCRunRev := MotorFwdRevInst1.IO.RunRev
+  CALL MotorFwdRevSystem(MotorFwdRevInst1, EN := TRUE)
+
+NETWORK 18 "Shredder Automatic Control"
+  COMMENT "Shredder (ShredderControlInst1), commanded through its FB (no discrete start; internal sequence out of scope). Starts once the discharge conveyor is enabled; holds during shutdown until the feed conveyor has shut down (REQ-003/004)."
+  COIL ShredderControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL ShredderControlInst1.Inputs.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorFwdRevInst1.IO.ShutdownComplete) AND MotorStarterInst9.IO.UPSEnable
+  COIL ShredderControlInst1.Inputs.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT MotorFwdRevInst1.IO.ShutdownComplete) AND NOT ShredderControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL ShredderControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  CALL ShredderControlSystem(ShredderControlInst1, EN := TRUE)
+
+NETWORK 19 "Cyclone Filter Unit Automatic Control"
+  COMMENT "Cyclone filter unit (FilterUnitInst1). Remote-operational feedback and reset brought in; fault taken from the inverse of the system-OK signal (REQ-019). Running feedback NOT wired - its source tag DiscreteInputs.'CycloneDustAutoRunning/Stop' contains a '/' and is un-referenceable in IR (C-005 violation in the given DB); see report. Fan up-to-speed from the plant fan-start time (REQ-020). Runs with the plant; holds until fans-shutdown-ready (REQ-003)."
+  COIL FilterUnitInst1.RemoteOp := DiscreteInputs.CycloneDustRemOp
+  COIL FilterUnitInst1.IO.FaultFB := NOT DiscreteInputs.CycloneDustSysOk
+  COIL FilterUnitInst1.IO.SystemHealthy := TRUE
+  COIL FilterUnitInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst1.IO.AutoStartSignal := PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady
+  COIL FilterUnitInst1.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady) AND NOT FilterUnitInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL FilterUnitInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.CycloneDustFilterStart := FilterUnitInst1.IO.Run
+  COIL DiscreteOutputs.CycloneDustFilterReset := HMIControlSignals.SystemReset
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst1.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst1, EN := TRUE)
+
+NETWORK 20 "Discharge Conveyor Automatic Control"
+  COMMENT "Discharge conveyor (MotorStarterInst9). Gated by the general enable (REQ-013); holds during shutdown until the shredder has shut down (REQ-003)."
+  COIL MotorStarterInst9.IO.RunningFB := DiscreteInputs.SDCRuning AND DiscreteInputs.SDCRotSen OR DiscreteInputs.SDCRuning AND HMIControlSignals.BypassSDCRotSen
+  COIL MotorStarterInst9.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst9.IO.InhibitMotor := DiscreteInputs.SDCIsoFB
+  COIL MotorStarterInst9.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst9.IO.AutoStartSignal := (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT ShredderControlInst1.Outputs.ShutdownComplete) AND PlantControl.GeneralEnable
+  COIL MotorStarterInst9.IO.Shutdown := NOT (PlantControl.Status >= 1 OR PlantControl.Status = -1 AND NOT ShredderControlInst1.Outputs.ShutdownComplete) AND NOT MotorStarterInst9.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst9.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.SDCStart := MotorStarterInst9.IO.Run
+  CALL MotorStarter(MotorStarterInst9, EN := TRUE)

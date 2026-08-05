@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Converter.CandidateScan;
 using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
@@ -7,12 +8,15 @@ using Converter.Ir;
 using Converter.IrHash;
 using Converter.Preflight;
 using Converter.ReuseScan;
+using Converter.RelationReconcile;
 using Converter.Review;
 using Converter.Sanitize;
+using Converter.SignalSweep;
 using Converter.SimaticMl;
 using Converter.TagStatus;
 using Converter.TargetScan;
 using Converter.Trace;
+using Converter.UndrivenScan;
 
 namespace Converter;
 
@@ -55,6 +59,26 @@ internal static class Program
             return RunReuseScan(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "candidate-scan")
+        {
+            return RunCandidateScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "undriven-scan")
+        {
+            return RunUndrivenScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "relation-reconcile")
+        {
+            return RunRelationReconcile(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "signal-sweep")
+        {
+            return RunSignalSweep(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "ir-hash")
         {
             return RunIrHash(args[1..]);
@@ -90,14 +114,18 @@ internal static class Program
             Console.Error.WriteLine("       converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]   # --project enables cross-file rules (C-118 interface-UDT Step, FI-09)");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
-            Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]   # classify tag names exists/proposed against the export (FI-24); exit 1 if any proposed");
+            Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]   # classify names against the export (FI-24): EXISTS / PROPOSED (root absent) / MEMBER-NOT-FOUND (root resolves, member absent) / MEMBER-UNCHECKED (member namespace not enumerable); exit 1 if any proposed or member-not-found. --roots-only restores root-level-only classification");
             Console.Error.WriteLine("       converter diff <old.ir> <new.ir> [--only <network> ...] [--json]   # which networks changed, rest provably identical in IR (S7 invariance); with --only, exit 1 on any change outside the set");
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
-            Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0");
+            Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
+            Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
+            Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
+            Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
+            Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
             return 1;
         }
 
@@ -426,6 +454,7 @@ internal static class Program
         var names = new List<string>();
         string? projectDir = null;
         var json = false;
+        var rootsOnly = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -437,6 +466,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--roots-only":
+                    rootsOnly = true;
+                    break;
                 default:
                     names.Add(args[i]);
                     break;
@@ -445,7 +477,7 @@ internal static class Program
 
         if (names.Count == 0 || projectDir is null)
         {
-            Console.Error.WriteLine("Usage: converter tagstatus <name> [<name> ...] --project <ir-dir> [--json]");
+            Console.Error.WriteLine("Usage: converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]");
             return 1;
         }
 
@@ -455,10 +487,10 @@ internal static class Program
             return 1;
         }
 
-        var report = TagStatusRunner.Run(names, projectDir);
+        var report = TagStatusRunner.Run(names, projectDir, rootsOnly);
         Console.WriteLine(json ? TagStatusOutputFormatter.FormatJson(report) : TagStatusOutputFormatter.FormatText(report));
 
-        return report.HasProposed ? 1 : 0;
+        return report.HasBlocking ? 1 : 0;
     }
 
     private static int RunDiff(string[] args)
@@ -535,6 +567,312 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunSignalSweep(string[] args)
+    {
+        string? projectDir = null;
+        string? specs = null;
+        string? register = null;
+        string? unclaimed = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--specs":
+                    specs = RequireValue(args, ref i, "--specs");
+                    break;
+                case "--register":
+                    register = RequireValue(args, ref i, "--register");
+                    break;
+                case "--unclaimed":
+                    unclaimed = RequireValue(args, ref i, "--unclaimed");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || specs is null)
+        {
+            Console.Error.WriteLine("Usage: converter signal-sweep --project <ir-dir> --specs <equipment-specs-dir> [--register <requirements.md>] [--unclaimed <unclaimed-signals.md>] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir) || !Directory.Exists(specs))
+        {
+            Console.Error.WriteLine($"directory not found: {(Directory.Exists(projectDir) ? specs : projectDir)}");
+            return 1;
+        }
+
+        foreach (var path in new[] { register, unclaimed }.Where(p => p is not null && !File.Exists(p)))
+        {
+            Console.Error.WriteLine($"file not found: {path}");
+            return 1;
+        }
+
+        try
+        {
+            var report = SignalSweepRunner.Run(projectDir, specs, register, unclaimed);
+            Console.WriteLine(json
+                ? SignalSweepOutputFormatter.FormatJson(report)
+                : SignalSweepOutputFormatter.FormatText(report));
+
+            return report.HasFindings ? 1 : 0;
+        }
+        catch (SignalSweepFormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static int RunRelationReconcile(string[] args)
+    {
+        string? specs = null;
+        string? ledger = null;
+        string? register = null;
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--specs":
+                    specs = RequireValue(args, ref i, "--specs");
+                    break;
+                case "--ledger":
+                    ledger = RequireValue(args, ref i, "--ledger");
+                    break;
+                case "--register":
+                    register = RequireValue(args, ref i, "--register");
+                    break;
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (specs is null || ledger is null || register is null)
+        {
+            Console.Error.WriteLine("Usage: converter relation-reconcile --specs <equipment-specs-dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(specs))
+        {
+            Console.Error.WriteLine($"--specs directory not found: {specs}");
+            return 1;
+        }
+
+        foreach (var (label, path) in new[] { ("--ledger", ledger), ("--register", register) })
+        {
+            if (!File.Exists(path))
+            {
+                Console.Error.WriteLine($"{label} file not found: {path}");
+                return 1;
+            }
+        }
+
+        if (projectDir is not null && !Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        try
+        {
+            var report = RelationReconcileRunner.Run(specs, ledger, register, projectDir);
+            Console.WriteLine(json
+                ? RelationReconcileOutputFormatter.FormatJson(report)
+                : RelationReconcileOutputFormatter.FormatText(report));
+
+            return report.HasFindings ? 1 : 0;
+        }
+        catch (RelationReconcileFormatException ex)
+        {
+            // A leg that parsed nothing is a hard error, never a clean reconcile — a silent all-green
+            // after format drift would make this check worse than not having it.
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static int RunUndrivenScan(string[] args)
+    {
+        string? projectDir = null;
+        string? fb = null;
+        var instances = new List<string>();
+        var callers = new List<string>();
+        var json = false;
+        var hints = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--fb":
+                    fb = RequireValue(args, ref i, "--fb");
+                    break;
+                case "--instance":
+                    var instance = RequireValue(args, ref i, "--instance");
+                    if (instance is null)
+                    {
+                        return 1;
+                    }
+
+                    instances.Add(instance);
+                    break;
+                case "--caller":
+                    var caller = RequireValue(args, ref i, "--caller");
+                    if (caller is null)
+                    {
+                        return 1;
+                    }
+
+                    callers.Add(caller);
+                    break;
+                case "--hints":
+                    hints = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || fb is null)
+        {
+            Console.Error.WriteLine("Usage: converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        foreach (var caller in callers.Where(c => !File.Exists(c)))
+        {
+            Console.Error.WriteLine($"--caller file not found: {caller}");
+            return 1;
+        }
+
+        var report = UndrivenScanRunner.Run(projectDir, fb, instances, callers, hints);
+        Console.WriteLine(json
+            ? UndrivenScanOutputFormatter.FormatJson(report)
+            : UndrivenScanOutputFormatter.FormatText(report));
+
+        // Hard facts only: an interface input with no armed writer. The name-join hints never gate.
+        return report.HasFindings ? 1 : 0;
+    }
+
+    private static int RunCandidateScan(string[] args)
+    {
+        string? projectDir = null;
+        string? fb = null;
+        string? instance = null;
+        string? type = null;
+        var direction = "any";
+        var scopes = new List<string>();
+        var phrases = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--fb":
+                    fb = RequireValue(args, ref i, "--fb");
+                    break;
+                case "--instance":
+                    instance = RequireValue(args, ref i, "--instance");
+                    break;
+                case "--type":
+                    type = RequireValue(args, ref i, "--type");
+                    break;
+                case "--direction":
+                    direction = RequireValue(args, ref i, "--direction") ?? "any";
+                    break;
+                case "--scope":
+                    var scope = RequireValue(args, ref i, "--scope");
+                    if (scope is null)
+                    {
+                        return 1;
+                    }
+
+                    scopes.Add(scope);
+                    break;
+                case "--phrase":
+                    var phrase = RequireValue(args, ref i, "--phrase");
+                    if (phrase is null)
+                    {
+                        return 1;
+                    }
+
+                    phrases.Add(phrase);
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || fb is null)
+        {
+            Console.Error.WriteLine("Usage: converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>] [--scope <path-prefix> ...] [--type <TypeName>] [--direction status|command|any] [--phrase <word> ...] [--json]");
+            return 1;
+        }
+
+        if (direction is not ("status" or "command" or "any"))
+        {
+            Console.Error.WriteLine($"--direction must be status, command or any (got '{direction}')");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = CandidateScanRunner.Run(projectDir, fb, instance, scopes, type, direction, phrases);
+        Console.WriteLine(json
+            ? CandidateScanOutputFormatter.FormatJson(report)
+            : CandidateScanOutputFormatter.FormatText(report));
+
+        // Non-zero when the requirement could be satisfied by more than one signal — the mechanical
+        // trigger that makes an ambiguous binding non-discretionary.
+        return report.HasChoice ? 1 : 0;
     }
 
     private static int RunReuseScan(string[] args)

@@ -1,0 +1,19 @@
+DB ProcessTimings
+  ROOTID 0
+  NUMBER 3
+  MEMBERS
+    AntiCondensationTime : Real RETAIN = 5.0
+    PreStartRunTime : Real RETAIN = 5.0
+    NormalFanStartTime : Real RETAIN = 10.0
+    DrumsDelay : Real RETAIN = 0.0
+    MagnetsDelay : Real RETAIN = 5.0
+    GeneralDelay : Real RETAIN = 10.0
+    PreStartTimeout : Real RETAIN = 60.0
+    GlobalFTTimes : Real RETAIN = 0.0
+    GlobalUPEnableTime : Real RETAIN = 0.0
+    GlobalShutdownCompleteTime : Real RETAIN = 0.0
+    GlobalVSDStartUpTime : Real RETAIN = 0.0
+    GlobalVSDAutoSpeed : Real RETAIN = 0.0
+    GlobalVSDHandSpeed : Real RETAIN = 0.0
+    GlobalFwdRevDOLRevDelayTime : Real RETAIN = 0.0
+    GlobalFwdRevDOLFTRIgnoreTime : Real RETAIN = 0.0

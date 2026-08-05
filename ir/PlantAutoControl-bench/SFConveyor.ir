@@ -1,0 +1,104 @@
+DB MotorFwdRevInst1
+  ROOTID 0
+  NUMBER 20
+  INSTANCEOF MotorFwdRevSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    IO : "MotorFwdRevIOSet" RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      RunningFBFwd : Bool = FALSE
+      RunningFBRev : Bool = FALSE
+      FaultFB : Bool = FALSE
+      SystemHealthy : Bool = TRUE
+      PreStartDone : Bool = FALSE
+      InhibitMotor : Bool = FALSE
+      FaultReset : Bool = FALSE
+      FTTime : Real = 3.0
+      EnableUPSTime : Real = 2.0
+      FaultActive : Bool = FALSE
+      RunFwd : Bool = FALSE
+      RunRev : Bool = FALSE
+      UPSEnable : Bool = FALSE
+      FTR : Bool = FALSE
+      FTS : Bool = FALSE
+      HrsRun : UDInt = 9
+      Telemetry : Int = 0
+      Alarm : Word = 16#0000
+      Name : String = 'Feed Conveyor Unit'
+      HandIntervention : Bool = FALSE
+      RecentStart : Bool = FALSE
+      TryRunMotor : Bool = FALSE
+      Shutdown : Bool = FALSE
+      ShutdownComplete : Bool = TRUE
+      ShutdownTime : Real = 15.0
+      StopMotor : Bool = FALSE
+      ReverseDelay : Real = 1.0
+      ReverseIgnoreFT : Real = 3.0
+      Reverse : Bool = FALSE
+      HandReverse : Bool = FALSE
+    RisingEdgeFlags : Array[0..3] of Bool
+    NegitiveSignalEdge : Array[0..2] of Bool
+    Pasue : Bool
+    HrTotaliserTimerReset : Bool
+    EnableUPSTimeMS : DInt
+    ShutdownTimeMS : DInt
+    FTTimeMS : DInt
+    PauseTimeMS : DInt
+    ReverseIgnoreFTTimeMS : DInt
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    CycleDelayReset : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time = T#1H
+      ET : Time
+      IN : Bool = FALSE
+      Q : Bool
+    ReversalPauseTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ReversalIgnoreFTTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PreStartMemory : Bool SETPOINT = FALSE
+    HandPosEdge : Bool
+    HandNegEdge : Bool
+    CycleDelay : Bool

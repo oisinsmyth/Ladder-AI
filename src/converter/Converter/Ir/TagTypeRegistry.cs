@@ -57,6 +57,13 @@ public sealed class TagTypeRegistry
     // lives in a Controls/Settings DB rather than the interface UDT.
     public bool IsKnownDb(string name) => _dbs.ContainsKey(StripQuotes(name));
 
+    // The DB body behind a name (quotes tolerated), so a caller can tell "this DB has no such
+    // member" from "this DB's members aren't in the export at all" — an instance-DB stub created by
+    // `create-instance-db` and not yet re-exported carries no member tree, and treating that as
+    // "member absent" would manufacture a false gap. Sibling of TryGetUdt.
+    public bool TryGetDb(string name, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out DbSource db) =>
+        _dbs.TryGetValue(StripQuotes(name), out db);
+
     public static TagTypeRegistry FromSources(
         IEnumerable<DbSource> dbs, IEnumerable<PlcTypeSource> udts, IEnumerable<PlcTagSource> tags)
     {

@@ -47,6 +47,11 @@ public static class TraceRunner
                 hops.Add(TimingHop(timing, blocks));
             }
 
+            if (binding.Guard is { } guard)
+            {
+                hops.Add(GuardContainmentHop(guard, graph));
+            }
+
             traces.Add(new ReqTrace(binding.Req, hops));
         }
 
@@ -192,6 +197,99 @@ public static class TraceRunner
             ? $"{path}: written by {writers.Count} site(s) ({disarmedCount} disarmed)"
             : $"{path}: written by {writers.Count} site(s)";
         return new HopResult(hop, Verdict.Ok, okDetail, writers);
+    }
+
+    // Hop 6 (FI-36-min): every signal the spec lists as a condition on `coil` must appear in the guard of
+    // each write to it. Pure set-difference over signal identity — it cannot be defeated by how anyone
+    // *reads* an ambiguous requirement, which is the whole point: a dropped cascade-hold term shipped as a
+    // REGRESSION because the coder and the reviewer resolved the same ambiguous source the same way
+    // (`docs/evidence/PlantAutoControl-bench-autopsy.md`). Reported PER WRITING SITE, never unioned: a term
+    // present in one network and absent in another is the multi-instance shape a union would hide.
+    private static HopResult GuardContainmentHop(GuardConstraint constraint, ProjectUsageGraph graph)
+    {
+        var coil = constraint.Coil;
+
+        if (!graph.Usages.TryGetValue(coil, out var usage) || usage.Writers.Count == 0)
+        {
+            // No writer at all is the output-path fact, not a containment fact — do not report every
+            // required term as "missing" off the back of a path that simply isn't written.
+            return new HopResult(HopKind.GuardContainment, Verdict.Unimplemented,
+                $"{coil}: no writer — no output path (guard containment not assessable)", Array.Empty<string>());
+        }
+
+        var evidence = new List<string>();
+        var anyMissing = false;
+
+        foreach (var site in usage.Writers.OrderBy(w => w.Block, StringComparer.Ordinal).ThenBy(w => w.Network))
+        {
+            var present = new HashSet<string>(GuardTagPaths(site.Guard), StringComparer.Ordinal);
+            var missing = constraint.MustContain
+                .Where(term => !present.Contains(term))
+                .ToList();
+
+            var where = $"{site.Block} N{site.Network}";
+            var disarmed = DisarmAnalysis.IsProvablyFalse(site.Guard) ? " [disarmed]" : string.Empty;
+
+            if (missing.Count == 0)
+            {
+                evidence.Add($"{where}{disarmed}: all {constraint.MustContain.Count} required term(s) present");
+                continue;
+            }
+
+            anyMissing = true;
+            evidence.Add($"{where}{disarmed}: MISSING {string.Join(", ", missing)}");
+        }
+
+        return anyMissing
+            ? new HopResult(HopKind.GuardContainment, Verdict.MissingTerm,
+                $"{coil}: a spec-listed condition is absent from the guard of at least one writer", evidence)
+            : new HopResult(HopKind.GuardContainment, Verdict.Ok,
+                $"{coil}: every spec-listed condition present in all {usage.Writers.Count} writer guard(s)", evidence);
+    }
+
+    // Every tag path referenced anywhere in a guard expression. A null guard (a read, or an ENO-chained
+    // write with no local condition) contributes nothing — an unconditional write contains no terms.
+    private static IEnumerable<string> GuardTagPaths(Expr? guard)
+    {
+        if (guard is null)
+        {
+            yield break;
+        }
+
+        switch (guard)
+        {
+            case Expr.TagRef tag:
+                yield return tag.Path;
+                break;
+            case Expr.Not not:
+                foreach (var path in GuardTagPaths(not.Operand))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.And and:
+                foreach (var path in and.Operands.SelectMany(GuardTagPaths))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.Or or:
+                foreach (var path in or.Operands.SelectMany(GuardTagPaths))
+                {
+                    yield return path;
+                }
+
+                break;
+            case Expr.Compare compare:
+                foreach (var path in GuardTagPaths(compare.Left).Concat(GuardTagPaths(compare.Right)))
+                {
+                    yield return path;
+                }
+
+                break;
+        }
     }
 
     private static HopResult NumberHop(NumberConstraint number, IReadOnlyDictionary<string, string?> startValues)

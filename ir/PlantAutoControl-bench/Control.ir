@@ -1,0 +1,21 @@
+DB PlantControl
+  ROOTID 0
+  NUMBER 39
+  MEMBERS
+    Status : Int
+    PositiveEdgeArray : Array[0..7] of Bool
+    NegitiveEdgeArray : Array[0..7] of Bool
+    LastCompleteStartUp : DTL VERSION 1.0
+    AntiConRunRequired : Bool
+    GeneralEnable : Bool
+    DrumsEnable : Bool
+    MagEnable : Bool
+    DrumShutdownReady : Bool
+    FansShutdownReady : Bool
+    MagShutdownReady : Bool
+    PreStartComplete : Bool
+    ShredderEStopFB : Word
+    SFCStockWhenShredFlt : Bool
+    EstopResetStart : Bool
+    AutoPreStart : Bool
+    Test : Array[0..10] of Bool

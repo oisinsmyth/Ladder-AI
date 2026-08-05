@@ -1,0 +1,85 @@
+DB FilterUnitInst3
+  ROOTID 0
+  NUMBER 40
+  INSTANCEOF FilterUnitSystem
+  INPUT
+  OUTPUT
+  MEMBERS
+    IO : "MotorIOSet" RETAIN
+      InHand : Bool = FALSE
+      AutoStartSignal : Bool = FALSE
+      HandStartSignal : Bool = FALSE
+      RunningFB : Bool = FALSE
+      FaultFB : Bool = FALSE
+      SystemHealthy : Bool = TRUE
+      PreStartDone : Bool = FALSE
+      InhibitMotor : Bool = FALSE
+      FaultReset : Bool = FALSE
+      FTTime : Real = 3.0
+      EnableUPSTime : Real = 10.0
+      FaultActive : Bool = TRUE
+      Run : Bool = FALSE
+      UPSEnable : Bool = FALSE
+      FTR : Bool = FALSE
+      FTS : Bool = FALSE
+      HrsRun : UDInt = 1
+      Telemetry : Int = -1
+      Alarm : Word = 16#0008
+      Name : String = 'Dust Filter Unit 2'
+      HandIntervention : Bool = FALSE
+      RecentStart : Bool = FALSE
+      TryRunMotor : Bool = FALSE
+      Shutdown : Bool = FALSE
+      ShutdownComplete : Bool = TRUE
+      ShutdownTime : Real = 5.0
+      StopMotor : Bool = FALSE
+    RemoteOp : Bool SETPOINT
+    RisingEdgeFlags : Array[0..3] of Bool
+    NegitiveSignalEdge : Array[0..1] of Bool
+    HrTotaliserTimerReset : Bool
+    EnableUPSTimeMS : DInt
+    ShutdownTimeMS : DInt
+    FTTimeMS : DInt
+    FaultTripTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    FTSTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    EnableUpstreamTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    ShutdownTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    GeneralDelayTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    InHandReqPreStart : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    HrTotaliserTimer : TONR_TIME VERSION 1.0 RETAIN SETPOINT
+      PT : Time = T#1H
+      ET : Time
+      IN : Bool = FALSE
+      Q : Bool
+    RecentStartSignal : TOF_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    PreStartMemory : Bool SETPOINT
+    HandPosEdge : Bool
+    HandNegEdge : Bool

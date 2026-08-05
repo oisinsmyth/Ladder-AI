@@ -1,0 +1,4742 @@
+BLOCK FC PlantAutoControl
+ROOTID 0
+NUMBER 2
+LANGUAGE LAD
+TITLE "Automatic Equipment Control"
+COMMENT "Automatic equipment control."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "Incline Feed Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorVSDInst2.IO.SystemHealthy := TRUE
+  COIL MotorVSDInst2.IO.InhibitMotor := DiscreteInputs.IFCIsoFB
+  COIL MotorVSDInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst2.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND InterlockData.JOB9001Interlock{split 4} AND NOT MotorStarterInst4.IO.ShutdownComplete{split 5}){split 1} AND AirStarInst1.Outputs.EnableUPS
+  COIL MotorVSDInst2.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND InterlockData.JOB9001Interlock AND NOT MotorStarterInst4.IO.ShutdownComplete{recv 5}){recv 1}) AND NOT MotorVSDInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst2, EN := TRUE)
+
+NETWORK 2 "Link Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst4.IO.RunningFB := DiscreteInputs.HFLCRunning{split 1} AND DiscreteInputs.HFLCRotSen OR DiscreteInputs.HFLCRunning{recv 1} AND HMIControlSignals.BypassHFLCRotSen
+  COIL MotorStarterInst4.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst4.IO.InhibitMotor := DiscreteInputs.HFLCIsoFB
+  COIL MotorStarterInst4.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst4.IO.AutoStartSignal := (InterlockData.JOB9001Interlock{split 3} AND (PlantControl.Status >= 1){split 4} OR InterlockData.JOB9001Interlock{recv 3} AND (PlantControl.Status = -1){split 5} AND NOT InterlockData.JOB9001ShutdownComplete{split 6}){split 2} AND MotorVSDInst2.IO.UPSEnable
+  COIL MotorStarterInst4.IO.Shutdown := NOT ((InterlockData.JOB9001Interlock AND (PlantControl.Status >= 1){recv 4} OR InterlockData.JOB9001Interlock AND PlantControl.Status = -1 AND NOT InterlockData.JOB9001ShutdownComplete{recv 6}){recv 2}) AND NOT MotorStarterInst4.IO.HandIntervention AND PlantControl.Status = -1
+  SCOIL PlantControl.AutoPreStart := InterlockData.JOB9001Interlock{split 7} AND (PlantControl.Status >= 1){split 8} AND MotorStarterInst4.IO.AutoStartSignal{split 9} AND NOT PlantControl.PositiveEdgeArray[4]
+  COIL PlantControl.PositiveEdgeArray[4] := InterlockData.JOB9001Interlock AND PlantControl.Status >= 1 AND MotorStarterInst4.IO.AutoStartSignal{recv 9}
+  RCOIL PlantControl.AutoPreStart := DiscreteOutputs.RunPreStart
+  COIL MotorStarterInst4.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.HFLCStart := MotorStarterInst4.IO.Run
+  CALL MotorStarter(MotorStarterInst4, EN := TRUE)
+
+NETWORK 3 "Dust Filter Unit 1 Control"
+  COMMENT "Automatic control logic."
+  COIL FilterUnitInst2.RemoteOp := DiscreteInputs.FilterUnit1Ready
+  COIL FilterUnitInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst2.IO.SystemHealthy := TRUE
+  COIL DiscreteOutputs.FilterUnit1Reset := FilterUnitInst2.IO.FaultReset
+  COIL FilterUnitInst2.IO.RunningFB := DiscreteInputs.FilterUnit1Op
+  COIL FilterUnitInst2.IO.FaultFB := DiscreteInputs.FilterUnit1Flt
+  COIL FilterUnitInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL FilterUnitInst2.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT PlantControl.FansShutdownReady{split 4} OR (PlantControl.Status = -1){recv 3} AND NOT AirStarInst1.Outputs.ShutdownComplete{split 5}){split 1} AND MotorVSDInst3.IO.UPSEnable
+  COIL FilterUnitInst2.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady{recv 4} OR PlantControl.Status = -1 AND NOT AirStarInst1.Outputs.ShutdownComplete{recv 5}){recv 1}) AND NOT FilterUnitInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL DiscreteOutputs.FilterUnit1Start := FilterUnitInst2.IO.Run
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst2.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst2, EN := TRUE)
+
+NETWORK 4 "Dust Filter Unit 2 Control"
+  COMMENT "Automatic control logic."
+  COIL FilterUnitInst3.RemoteOp := DiscreteInputs.FilterUnit2Ready
+  COIL FilterUnitInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst3.IO.SystemHealthy := TRUE
+  COIL DiscreteOutputs.FilterUnit2Reset := FilterUnitInst3.IO.FaultReset
+  COIL FilterUnitInst3.IO.RunningFB := DiscreteInputs.FilterUnit2Op
+  COIL FilterUnitInst3.IO.FaultFB := DiscreteInputs.FilterUnit2Flt
+  COIL FilterUnitInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL FilterUnitInst3.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT PlantControl.FansShutdownReady{split 4} OR (PlantControl.Status = -1){recv 3} AND NOT AirStarInst1.Outputs.ShutdownComplete{split 5}){split 1} AND MotorVSDInst3.IO.UPSEnable
+  COIL FilterUnitInst3.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady{recv 4} OR PlantControl.Status = -1 AND NOT AirStarInst1.Outputs.ShutdownComplete{recv 5}){recv 1}) AND NOT FilterUnitInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL DiscreteOutputs.FilterUnit2Start := FilterUnitInst3.IO.Run
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst3.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst3, EN := TRUE)
+
+NETWORK 5 "VSD Motor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL AirStarInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL AirStarInst1.Inputs.SystemHealthy := TRUE
+  COIL AirStarInst1.Inputs.AutoStartSignal := ((PlantControl.Status >= 1){split 3} OR (PlantControl.Status = -1){split 4} AND NOT MotorVSDInst2.IO.ShutdownComplete{split 5}){split 1} AND MotorVSDInst1.IO.UPSEnable{split 2} AND FilterUnitInst2.IO.UPSEnable AND FilterUnitInst3.IO.UPSEnable OR ((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT MotorVSDInst2.IO.ShutdownComplete{recv 5}) AND MotorVSDInst1.IO.UPSEnable{recv 2} AND InterlockData.LinkOut3rdParty
+  COIL AirStarInst1.Inputs.Shutdown := NOT (((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT MotorVSDInst2.IO.ShutdownComplete{recv 5}){recv 1}) AND NOT AirStarInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL AirStarInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  CALL AirStarSystem(AirStarInst1, EN := TRUE)
+
+NETWORK 6 "Discharge Conveyor VSD Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorVSDInst1.IO.RotationSensor := NOT HMIControlSignals.BypassAirStarDCRotSen
+  COIL MotorVSDInst1.IO.SystemHealthy := TRUE
+  SCOIL MotorVSDInst1.IO.RunningFwdFB := NOT HMIControlSignals.BypassAirStarDCRotSen AND DiscreteInputs.AirStarDCRotSen
+  RCOIL MotorVSDInst1.IO.RunningFwdFB := NOT HMIControlSignals.BypassAirStarDCRotSen AND NOT DiscreteInputs.AirStarDCRotSen
+  COIL MotorVSDInst1.IO.InhibitMotor := DiscreteInputs.AirStarDCIsoFB
+  COIL MotorVSDInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst1.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT AirStarInst1.Outputs.ShutdownComplete{split 4}){split 1} AND MotorStarterInst8.IO.UPSEnable AND ECSControlInst1.Outputs.UPSEnable
+  COIL MotorVSDInst1.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT AirStarInst1.Outputs.ShutdownComplete{recv 4}){recv 1}) AND NOT MotorVSDInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst1, EN := TRUE)
+
+NETWORK 7 "Metal Collection Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst3.IO.RunningFB := DiscreteInputs.FMCCRunning{split 1} AND DiscreteInputs.FMCCRotSen OR DiscreteInputs.FMCCRunning{recv 1} AND HMIControlSignals.BypassFMCCRotSen
+  COIL MotorStarterInst3.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst3.IO.InhibitMotor := DiscreteInputs.FMCCIsoFB
+  COIL MotorStarterInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst3.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 3} OR (PlantControl.Status = -1){split 4} AND NOT MotorStarterInst8.IO.ShutdownComplete{split 5}){split 2} AND PlantControl.MagEnable
+  COIL MotorStarterInst3.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT MotorStarterInst8.IO.ShutdownComplete{recv 5}){recv 2}) AND NOT MotorStarterInst3.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.FMCCStart := MotorStarterInst3.IO.Run
+  CALL MotorStarter(MotorStarterInst3, EN := TRUE)
+
+NETWORK 8 "Overband Magnet Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst8.IO.RunningFB := DiscreteInputs.OverbandMagRunning
+  COIL MotorStarterInst8.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst8.IO.InhibitMotor := DiscreteInputs.OverbandMagIsoFB
+  COIL MotorStarterInst8.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst8.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorVSDInst1.IO.ShutdownComplete{split 4}){split 1} AND MotorStarterInst3.IO.UPSEnable
+  COIL MotorStarterInst8.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT MotorStarterInst8.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst8.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OverbandMagStart := MotorStarterInst8.IO.Run
+  CALL MotorStarter(MotorStarterInst8, EN := TRUE)
+
+NETWORK 9 "Equipment Control System Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL ECSControlInst1.Inputs.FCConveyorBeltFlt := DiscreteInputs.ECSFCConveyorFlt
+  COIL ECSControlInst1.Inputs.FCRotorFault := DiscreteInputs.ECSFCRotorFlt
+  COIL ECSControlInst1.Inputs.FltRotorRevs := DiscreteInputs.ECSFltRotorRevs
+  COIL ECSControlInst1.Inputs.InterlockingFeeder := DiscreteInputs.ECSInterlockingFeeder
+  COIL ECSControlInst1.Inputs.MaterialChargeEnabled := DiscreteInputs.ECSMatChargeEnabled
+  COIL ECSControlInst1.Inputs.MSAutoMode := DiscreteInputs.ECSAutoMode
+  COIL ECSControlInst1.Inputs.MSHandMode := DiscreteInputs.ECSHandMode
+  COIL ECSControlInst1.Inputs.MSSettingMode := DiscreteInputs.ECSSettingMode
+  COIL ECSControlInst1.Inputs.ReadyFB := DiscreteInputs.ECSReady
+  COIL ECSControlInst1.Inputs.RunningFB := DiscreteInputs.ECSRunning
+  COIL ECSControlInst1.Inputs.SumFlt := DiscreteInputs.ECSSumFlt
+  COIL ECSControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  COIL ECSControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL ECSControlInst1.Inputs.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorVSDInst1.IO.ShutdownComplete{split 4}){split 1} AND MotorVSDInst3.IO.UPSEnable
+  COIL ECSControlInst1.Inputs.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorVSDInst1.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT ECSControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL DiscreteOutputs.ECSAutoStart := ECSControlInst1.Outputs.ECSRun
+  COIL DiscreteOutputs.ECSReset := ECSControlInst1.Outputs.ECSReset
+  CALL EquipmentControlSystem(ECSControlInst1, EN := TRUE)
+
+NETWORK 10 "Sorter Conveyor VSD Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorVSDInst3.IO.SystemHealthy := TRUE
+  COIL MotorVSDInst3.IO.InhibitMotor := DiscreteInputs.OSCIsoFB
+  COIL MotorVSDInst3.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorVSDInst3.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT ECSControlInst1.Outputs.ShutdownComplete{split 4}){split 1} AND TomraControlInst1.HardWireSignals.Ready AND NOT TomraControlInst1.Outputs.FaultActive AND MotorStarterInst6.IO.UPSEnable AND MotorStarterInst7.IO.UPSEnable
+  COIL MotorVSDInst3.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT ECSControlInst1.Outputs.ShutdownComplete{recv 4}){recv 1}) AND NOT TomraControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  COIL MotorVSDInst3.IO.FaultReset := HMIControlSignals.SystemReset
+  CALL MotorVSDSystem(MotorVSDInst3, EN := TRUE)
+
+NETWORK 11 "Optical Sorter Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL TomraControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL TomraControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  COIL TomraControlInst1.HardWireSignals.Ready := DiscreteInputs.TomraReady
+  COIL TomraControlInst1.HardWireSignals.Running := DiscreteInputs.TomraRunning
+  COIL TomraControlInst1.HardWireSignals.ComError := DiscreteInputs.TomraComFlt
+  COIL TomraControlInst1.Inputs.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorVSDInst3.IO.ShutdownComplete{split 4}){split 1} AND MotorStarterInst6.IO.UPSEnable AND MotorStarterInst7.IO.UPSEnable
+  COIL TomraControlInst1.Inputs.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorVSDInst3.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT MotorStarterInst6.IO.HandIntervention AND PlantControl.Status = -1
+  COIL DiscreteOutputs.TomraRun := TomraControlInst1.HardWireSignals.Run
+  CALL TomraControlSystem(TomraControlInst1, EN := TRUE, inputWord0 := Tag_45, inputWord1 := Tag_46, inputWord2 := Tag_47, inputWord3 := Tag_48, inputWord4 := Tag_49, inputWord5 := Tag_50, inputWord6 := Tag_51, inputWord7 := Tag_52, OutputWord0 => Tag_53, OutputWord1 => Tag_54)
+
+NETWORK 12 "Drum Separator Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst5.IO.RunningFB := DiscreteInputs.OSDrumSepRunning
+  COIL MotorStarterInst5.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst5.IO.InhibitMotor := DiscreteInputs.OSDrumSepIsoFB
+  COIL MotorStarterInst5.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst5.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT PlantControl.DrumShutdownReady{split 4}){split 1} AND PlantControl.DrumsEnable
+  COIL MotorStarterInst5.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT PlantControl.DrumShutdownReady{recv 4}){recv 1}) AND NOT MotorStarterInst5.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst5.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSDrumSepStart := MotorStarterInst5.IO.Run
+  CALL MotorStarter(MotorStarterInst5, EN := TRUE)
+
+NETWORK 13 "Ejected Material Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst6.IO.RunningFB := DiscreteInputs.OSECRunning{split 1} AND DiscreteInputs.OSECRotSen OR DiscreteInputs.OSECRunning{recv 1} AND HMIControlSignals.BypassOSECRotSen
+  COIL MotorStarterInst6.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst6.IO.InhibitMotor := DiscreteInputs.OSECIsoFB
+  COIL MotorStarterInst6.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst6.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 3} OR (PlantControl.Status = -1){split 4} AND NOT TomraControlInst1.Outputs.ShutdownComplete{split 5}){split 2} AND PlantControl.GeneralEnable
+  COIL MotorStarterInst6.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete{recv 5}){recv 2}) AND NOT MotorStarterInst6.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst6.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSECStart := MotorStarterInst6.IO.Run
+  CALL MotorStarter(MotorStarterInst6, EN := TRUE)
+
+NETWORK 14 "Residual Material Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst7.IO.RunningFB := DiscreteInputs.OSRCRunning{split 1} AND DiscreteInputs.OSRCRotSen OR DiscreteInputs.OSRCRunning{recv 1} AND HMIControlSignals.BypassOSRCRotSen
+  COIL MotorStarterInst7.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst7.IO.InhibitMotor := DiscreteInputs.OSRCIsoFB
+  COIL MotorStarterInst7.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst7.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 3} OR (PlantControl.Status = -1){split 4} AND NOT TomraControlInst1.Outputs.ShutdownComplete{split 5}){split 2} AND MotorStarterInst1.IO.UPSEnable AND MotorStarterInst2.IO.UPSEnable
+  COIL MotorStarterInst7.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT TomraControlInst1.Outputs.ShutdownComplete{recv 5}){recv 2}) AND NOT MotorStarterInst7.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst7.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.OSRCStart := MotorStarterInst7.IO.Run
+  CALL MotorStarter(MotorStarterInst7, EN := TRUE)
+
+NETWORK 15 "Disc Spreader Unit 1 Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst1.IO.RunningFB := DiscreteInputs.DiskSpreader1Running
+  COIL MotorStarterInst1.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst1.IO.InhibitMotor := DiscreteInputs.DiskSpreader1IsoFB
+  COIL MotorStarterInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst1.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorStarterInst7.IO.ShutdownComplete{split 4}){split 1} AND MotorFwdRevInst1.IO.UPSEnable
+  COIL MotorStarterInst1.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT MotorStarterInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.DiskSpreader1Start := MotorStarterInst1.IO.Run
+  CALL MotorStarter(MotorStarterInst1, EN := TRUE)
+
+NETWORK 16 "Disc Spreader Unit 2 Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst2.IO.RunningFB := DiscreteInputs.DiskSpreader2Running
+  COIL MotorStarterInst2.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst2.IO.InhibitMotor := DiscreteInputs.DiskSpreader2IsoFB
+  COIL MotorStarterInst2.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst2.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorStarterInst7.IO.ShutdownComplete{split 4}){split 1} AND MotorFwdRevInst1.IO.UPSEnable
+  COIL MotorStarterInst2.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorStarterInst7.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT MotorStarterInst2.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst2.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.DiskSpreader2Start := MotorStarterInst2.IO.Run
+  CALL MotorStarter(MotorStarterInst2, EN := TRUE)
+
+NETWORK 17 "Feed Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorFwdRevInst1.IO.RunningFBFwd := DiscreteInputs.SFCRunningFwd{split 1} AND DiscreteInputs.SFCRotSen OR DiscreteInputs.SFCRunningFwd{recv 1} AND HMIControlSignals.BypassSFCRotSen
+  COIL MotorFwdRevInst1.IO.SystemHealthy := TRUE
+  COIL MotorFwdRevInst1.IO.RunningFBRev := DiscreteInputs.SFCRunningRev{split 2} AND DiscreteInputs.SFCRotSen OR DiscreteInputs.SFCRunningRev{recv 2} AND HMIControlSignals.BypassSFCRotSen
+  COIL MotorFwdRevInst1.IO.InhibitMotor := DiscreteInputs.SFCIsoFB
+  COIL MotorFwdRevInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  RCOIL MotorFwdRevInst1.IO.Reverse := ((PlantControl.Status >= 1){split 4} AND NOT MotorFwdRevInst1.IO.InHand{split 5} AND MotorFwdRevInst1.IO.RunningFBFwd{split 6} OR PlantControl.Status >= 1 AND NOT MotorFwdRevInst1.IO.InHand{recv 5} AND MotorFwdRevInst1.IO.RunningFBRev{split 7}){split 3} AND ShredderControlInst1.Outputs.UPSEnable
+  SCOIL MotorFwdRevInst1.IO.Reverse := (PlantControl.Status >= 1 AND NOT MotorFwdRevInst1.IO.InHand AND MotorFwdRevInst1.IO.RunningFBFwd{recv 6} OR PlantControl.Status >= 1 AND NOT MotorFwdRevInst1.IO.InHand AND MotorFwdRevInst1.IO.RunningFBRev{recv 7}){recv 3} AND NOT ShredderControlInst1.Outputs.UPSEnable
+  COIL MotorFwdRevInst1.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 9} OR (PlantControl.Status = -1){split 10} AND NOT MotorStarterInst1.IO.ShutdownComplete{split 11} OR (PlantControl.Status = -1){recv 10} AND NOT MotorStarterInst2.IO.ShutdownComplete{split 12}){split 8} AND NOT MotorFwdRevInst1.IO.Reverse AND ShredderControlInst1.Outputs.UPSEnable OR ((PlantControl.Status >= 1){recv 9} OR PlantControl.Status = -1 AND NOT MotorStarterInst1.IO.ShutdownComplete{recv 11} OR PlantControl.Status = -1 AND NOT MotorStarterInst2.IO.ShutdownComplete{recv 12}){recv 8} AND MotorFwdRevInst1.IO.Reverse AND PlantControl.GeneralEnable
+  COIL MotorFwdRevInst1.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 9} OR PlantControl.Status = -1 AND NOT MotorStarterInst1.IO.ShutdownComplete{recv 11} OR PlantControl.Status = -1 AND NOT MotorStarterInst2.IO.ShutdownComplete{recv 12}){recv 8}) AND NOT MotorFwdRevInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorFwdRevInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.SFCRunFwd := MotorFwdRevInst1.IO.RunFwd
+  COIL DiscreteOutputs.SFCRunRev := MotorFwdRevInst1.IO.RunRev
+  CALL MotorFwdRevSystem(MotorFwdRevInst1, EN := TRUE)
+
+NETWORK 18 "Shredder Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL ShredderControlInst1.Inputs.PreStartDone := PlantControl.PreStartComplete
+  COIL ShredderControlInst1.Inputs.FaultReset := HMIControlSignals.SystemReset
+  COIL ShredderControlInst1.Inputs.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT MotorFwdRevInst1.IO.ShutdownComplete{split 4}){split 1} AND MotorStarterInst9.IO.UPSEnable
+  COIL ShredderControlInst1.Inputs.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT MotorFwdRevInst1.IO.ShutdownComplete{recv 4}){recv 1}) AND NOT ShredderControlInst1.Inputs.HandIntervention AND PlantControl.Status = -1
+  CALL ShredderControlSystem(ShredderControlInst1, EN := TRUE)
+
+NETWORK 19 "Cyclone Filter Unit Control"
+  COMMENT "Automatic control logic."
+  COIL FilterUnitInst1.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL FilterUnitInst1.RemoteOp := DiscreteInputs.CycloneDustRemOp
+  COIL DiscreteOutputs.CycloneDustFilterReset := FilterUnitInst1.IO.FaultReset
+  COIL FilterUnitInst1.IO.RunningFB := DiscreteInputs.CycloneDustAutoRunning/Stop
+  COIL FilterUnitInst1.IO.FaultFB := NOT DiscreteInputs.CycloneDustSysOk
+  COIL FilterUnitInst1.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL FilterUnitInst1.IO.SystemHealthy := TRUE
+  COIL FilterUnitInst1.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 2} OR (PlantControl.Status = -1){split 3} AND NOT PlantControl.FansShutdownReady{split 4} OR (PlantControl.Status = -1){recv 3} AND NOT ShredderControlInst1.Outputs.ShutdownComplete{split 5}){split 1}
+  COIL FilterUnitInst1.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 2} OR PlantControl.Status = -1 AND NOT PlantControl.FansShutdownReady{recv 4} OR PlantControl.Status = -1 AND NOT ShredderControlInst1.Outputs.ShutdownComplete{recv 5}){recv 1}) AND NOT FilterUnitInst1.IO.HandIntervention AND PlantControl.Status = -1
+  COIL DiscreteOutputs.CycloneDustFilterStart := FilterUnitInst1.IO.Run
+  MOVE(EN := TRUE, IN := ProcessTimings.NormalFanStartTime) => FilterUnitInst1.IO.EnableUPSTime
+  CALL FilterUnitSystem(FilterUnitInst1, EN := TRUE)
+
+NETWORK 20 "Discharge Conveyor Automatic Control"
+  COMMENT "Automatic control logic."
+  COIL MotorStarterInst9.IO.RunningFB := DiscreteInputs.SDCRuning{split 1} AND DiscreteInputs.SDCRotSen OR DiscreteInputs.SDCRuning{recv 1} AND HMIControlSignals.BypassSDCRotSen
+  COIL MotorStarterInst9.IO.SystemHealthy := TRUE
+  COIL MotorStarterInst9.IO.InhibitMotor := DiscreteInputs.SDCIsoFB
+  COIL MotorStarterInst9.IO.PreStartDone := PlantControl.PreStartComplete
+  COIL MotorStarterInst9.IO.AutoStartSignal := ((PlantControl.Status >= 1){split 3} OR (PlantControl.Status = -1){split 4} AND NOT ShredderControlInst1.Outputs.ShutdownComplete{split 5}){split 2} AND PlantControl.GeneralEnable
+  COIL MotorStarterInst9.IO.Shutdown := NOT (((PlantControl.Status >= 1){recv 3} OR PlantControl.Status = -1 AND NOT ShredderControlInst1.Outputs.ShutdownComplete{recv 5}){recv 2}) AND NOT MotorStarterInst9.IO.HandIntervention AND PlantControl.Status = -1
+  COIL MotorStarterInst9.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.SDCStart := MotorStarterInst9.IO.Run
+  CALL MotorStarter(MotorStarterInst9, EN := TRUE)
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access MotorVSDInst2.IO.SystemHealthy = 21 GlobalVariable
+  access DiscreteInputs.IFCIsoFB = 22 GlobalVariable
+  access MotorVSDInst2.IO.InhibitMotor = 23 GlobalVariable
+  access PlantControl.PreStartComplete = 24 GlobalVariable
+  access MotorVSDInst2.IO.PreStartDone = 25 GlobalVariable
+  access AirStarInst1.Outputs.EnableUPS = 26 GlobalVariable
+  access PlantControl.Status = 27 GlobalVariable
+  access MotorStarterInst4.IO.ShutdownComplete = 28 GlobalVariable
+  access InterlockData.JOB9001Interlock = 29 GlobalVariable
+  access PlantControl.Status = 30 GlobalVariable
+  access MotorVSDInst2.IO.AutoStartSignal = 31 GlobalVariable
+  access PlantControl.Status = 32 GlobalVariable
+  access MotorVSDInst2.IO.HandIntervention = 33 GlobalVariable
+  access MotorVSDInst2.IO.Shutdown = 34 GlobalVariable
+  access HMIControlSignals.SystemReset = 35 GlobalVariable
+  access MotorVSDInst2.IO.FaultReset = 36 GlobalVariable
+  constant 1 = 37 Int
+  constant -1 = 38 Int
+  constant -1 = 39 Int
+  assignment 0
+    rail = 61
+    coil = 40
+    coil operand = 21
+    coil operandwire = 60
+  assignment 1
+    rail = 61
+    step 0 contact
+      uid = 41
+      operand = 22
+      operandwire = 62
+      negated = false
+      out = 63
+    coil = 42
+    coil operand = 23
+    coil operandwire = 64
+  assignment 2
+    rail = 61
+    step 0 contact
+      uid = 43
+      operand = 24
+      operandwire = 65
+      negated = false
+      out = 66
+    coil = 44
+    coil operand = 25
+    coil operandwire = 67
+  assignment 3
+    rail = none
+    step 0 or
+      uid = 49
+      branch 0
+        rail = 61
+        step 0 compare
+          partname = Ge
+          uid = 45
+          srctype = Int
+          left tag = 27 68
+          right literal = 37 69
+          out = 70
+      branch 1
+        rail = 61
+        step 0 compare
+          partname = Eq
+          uid = 46
+          srctype = Int
+          left tag = 30 71
+          right literal = 38 72
+          out = 73
+        step 1 contact
+          uid = 47
+          operand = 29
+          operandwire = 74
+          negated = false
+          out = 75
+        step 2 contact
+          uid = 48
+          operand = 28
+          operandwire = 76
+          negated = true
+          out = 77
+      out = 78
+    step 1 contact
+      uid = 50
+      operand = 26
+      operandwire = 79
+      negated = false
+      out = 80
+    coil = 51
+    coil operand = 31
+    coil operandwire = 81
+  assignment 4
+    rail = none
+    step 0 not
+      uid = 52
+      rail = none
+      step 0 or
+        uid = 49
+        branch 0
+          rail = 61
+          step 0 compare
+            partname = Ge
+            uid = 45
+            srctype = Int
+            left tag = 27 68
+            right literal = 37 69
+            out = 70
+        branch 1
+          rail = 61
+          step 0 compare
+            partname = Eq
+            uid = 46
+            srctype = Int
+            left tag = 30 71
+            right literal = 38 72
+            out = 73
+          step 1 contact
+            uid = 47
+            operand = 29
+            operandwire = 74
+            negated = false
+            out = 75
+          step 2 contact
+            uid = 48
+            operand = 28
+            operandwire = 76
+            negated = true
+            out = 77
+        out = 78
+      out = 82
+    step 1 contact
+      uid = 53
+      operand = 33
+      operandwire = 83
+      negated = true
+      out = 84
+    step 2 compare
+      partname = Eq
+      uid = 54
+      srctype = Int
+      left tag = 32 85
+      right literal = 39 86
+      out = 87
+    coil = 55
+    coil operand = 34
+    coil operandwire = 88
+  assignment 5
+    rail = 61
+    step 0 contact
+      uid = 56
+      operand = 35
+      operandwire = 89
+      negated = false
+      out = 90
+    coil = 57
+    coil operand = 36
+    coil operandwire = 91
+  call 0
+    calluid = 58
+    blockname = MotorVSDSystem
+    blocktype = FB
+    rail = 61
+    instanceuid = 59
+    instancescope = GlobalVariable
+    instancepath = MotorVSDInst2
+NETWORK 2
+  compileunit = 8
+  access DiscreteInputs.HFLCRotSen = 21 GlobalVariable
+  access DiscreteInputs.HFLCRunning = 22 GlobalVariable
+  access HMIControlSignals.BypassHFLCRotSen = 23 GlobalVariable
+  access MotorStarterInst4.IO.RunningFB = 24 GlobalVariable
+  access MotorStarterInst4.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.HFLCIsoFB = 26 GlobalVariable
+  access MotorStarterInst4.IO.InhibitMotor = 27 GlobalVariable
+  access PlantControl.PreStartComplete = 28 GlobalVariable
+  access MotorStarterInst4.IO.PreStartDone = 29 GlobalVariable
+  access MotorVSDInst2.IO.UPSEnable = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access InterlockData.JOB9001Interlock = 32 GlobalVariable
+  access InterlockData.JOB9001ShutdownComplete = 33 GlobalVariable
+  access PlantControl.Status = 34 GlobalVariable
+  access MotorStarterInst4.IO.AutoStartSignal = 35 GlobalVariable
+  access PlantControl.Status = 36 GlobalVariable
+  access MotorStarterInst4.IO.HandIntervention = 37 GlobalVariable
+  access MotorStarterInst4.IO.Shutdown = 38 GlobalVariable
+  access PlantControl.PositiveEdgeArray[4] = 39 GlobalVariable
+  access MotorStarterInst4.IO.AutoStartSignal = 40 GlobalVariable
+  access PlantControl.Status = 41 GlobalVariable
+  access InterlockData.JOB9001Interlock = 42 GlobalVariable
+  access PlantControl.AutoPreStart = 43 GlobalVariable
+  access PlantControl.PositiveEdgeArray[4] = 44 GlobalVariable
+  access DiscreteOutputs.RunPreStart = 45 GlobalVariable
+  access PlantControl.AutoPreStart = 46 GlobalVariable
+  access HMIControlSignals.SystemReset = 47 GlobalVariable
+  access MotorStarterInst4.IO.FaultReset = 48 GlobalVariable
+  access MotorStarterInst4.IO.Run = 49 GlobalVariable
+  access DiscreteOutputs.HFLCStart = 50 GlobalVariable
+  constant 1 = 51 Int
+  constant -1 = 52 Int
+  constant -1 = 53 Int
+  constant 1 = 54 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 58
+      branch 0
+        rail = 94
+        step 0 contact
+          uid = 55
+          operand = 22
+          operandwire = 90
+          negated = false
+          out = 91
+        step 1 contact
+          uid = 56
+          operand = 21
+          operandwire = 92
+          negated = false
+          out = 93
+      branch 1
+        rail = 94
+        step 0 contact
+          uid = 55
+          operand = 22
+          operandwire = 90
+          negated = false
+          out = 91
+        step 1 contact
+          uid = 57
+          operand = 23
+          operandwire = 95
+          negated = false
+          out = 96
+      out = 97
+    coil = 59
+    coil operand = 24
+    coil operandwire = 98
+  assignment 1
+    rail = 94
+    coil = 60
+    coil operand = 25
+    coil operandwire = 99
+  assignment 2
+    rail = 94
+    step 0 contact
+      uid = 61
+      operand = 26
+      operandwire = 100
+      negated = false
+      out = 101
+    coil = 62
+    coil operand = 27
+    coil operandwire = 102
+  assignment 3
+    rail = 94
+    step 0 contact
+      uid = 63
+      operand = 28
+      operandwire = 103
+      negated = false
+      out = 104
+    coil = 64
+    coil operand = 29
+    coil operandwire = 105
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 69
+      branch 0
+        rail = 94
+        step 0 contact
+          uid = 65
+          operand = 32
+          operandwire = 106
+          negated = false
+          out = 107
+        step 1 compare
+          partname = Ge
+          uid = 66
+          srctype = Int
+          left tag = 31 108
+          right literal = 51 109
+          out = 110
+      branch 1
+        rail = 94
+        step 0 contact
+          uid = 65
+          operand = 32
+          operandwire = 106
+          negated = false
+          out = 107
+        step 1 compare
+          partname = Eq
+          uid = 67
+          srctype = Int
+          left tag = 34 111
+          right literal = 52 112
+          out = 113
+        step 2 contact
+          uid = 68
+          operand = 33
+          operandwire = 114
+          negated = true
+          out = 115
+      out = 116
+    step 1 contact
+      uid = 70
+      operand = 30
+      operandwire = 117
+      negated = false
+      out = 118
+    coil = 71
+    coil operand = 35
+    coil operandwire = 119
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 72
+      rail = none
+      step 0 or
+        uid = 69
+        branch 0
+          rail = 94
+          step 0 contact
+            uid = 65
+            operand = 32
+            operandwire = 106
+            negated = false
+            out = 107
+          step 1 compare
+            partname = Ge
+            uid = 66
+            srctype = Int
+            left tag = 31 108
+            right literal = 51 109
+            out = 110
+        branch 1
+          rail = 94
+          step 0 contact
+            uid = 65
+            operand = 32
+            operandwire = 106
+            negated = false
+            out = 107
+          step 1 compare
+            partname = Eq
+            uid = 67
+            srctype = Int
+            left tag = 34 111
+            right literal = 52 112
+            out = 113
+          step 2 contact
+            uid = 68
+            operand = 33
+            operandwire = 114
+            negated = true
+            out = 115
+        out = 116
+      out = 120
+    step 1 contact
+      uid = 73
+      operand = 37
+      operandwire = 121
+      negated = true
+      out = 122
+    step 2 compare
+      partname = Eq
+      uid = 74
+      srctype = Int
+      left tag = 36 123
+      right literal = 53 124
+      out = 125
+    coil = 75
+    coil operand = 38
+    coil operandwire = 126
+  assignment 6
+    rail = 94
+    step 0 contact
+      uid = 76
+      operand = 42
+      operandwire = 127
+      negated = false
+      out = 128
+    step 1 compare
+      partname = Ge
+      uid = 77
+      srctype = Int
+      left tag = 41 129
+      right literal = 54 130
+      out = 131
+    step 2 contact
+      uid = 78
+      operand = 40
+      operandwire = 132
+      negated = false
+      out = 133
+    step 3 contact
+      uid = 79
+      operand = 39
+      operandwire = 134
+      negated = true
+      out = 135
+    coil = 80
+    coil operand = 43
+    coil operandwire = 136
+  assignment 7
+    rail = 94
+    step 0 contact
+      uid = 76
+      operand = 42
+      operandwire = 127
+      negated = false
+      out = 128
+    step 1 compare
+      partname = Ge
+      uid = 77
+      srctype = Int
+      left tag = 41 129
+      right literal = 54 130
+      out = 131
+    step 2 contact
+      uid = 78
+      operand = 40
+      operandwire = 132
+      negated = false
+      out = 133
+    coil = 81
+    coil operand = 44
+    coil operandwire = 137
+  assignment 8
+    rail = 94
+    step 0 contact
+      uid = 82
+      operand = 45
+      operandwire = 138
+      negated = false
+      out = 139
+    coil = 83
+    coil operand = 46
+    coil operandwire = 140
+  assignment 9
+    rail = 94
+    step 0 contact
+      uid = 84
+      operand = 47
+      operandwire = 141
+      negated = false
+      out = 142
+    coil = 85
+    coil operand = 48
+    coil operandwire = 143
+  assignment 10
+    rail = 94
+    step 0 contact
+      uid = 88
+      operand = 49
+      operandwire = 144
+      negated = false
+      out = 145
+    coil = 89
+    coil operand = 50
+    coil operandwire = 146
+  call 0
+    calluid = 86
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 94
+    instanceuid = 87
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst4
+NETWORK 3
+  compileunit = D
+  access DiscreteInputs.FilterUnit1Ready = 21 GlobalVariable
+  access FilterUnitInst2.RemoteOp = 22 GlobalVariable
+  access PlantControl.PreStartComplete = 23 GlobalVariable
+  access FilterUnitInst2.IO.PreStartDone = 24 GlobalVariable
+  access FilterUnitInst2.IO.SystemHealthy = 25 GlobalVariable
+  access FilterUnitInst2.IO.FaultReset = 26 GlobalVariable
+  access DiscreteOutputs.FilterUnit1Reset = 27 GlobalVariable
+  access DiscreteInputs.FilterUnit1Op = 28 GlobalVariable
+  access FilterUnitInst2.IO.RunningFB = 29 GlobalVariable
+  access DiscreteInputs.FilterUnit1Flt = 30 GlobalVariable
+  access FilterUnitInst2.IO.FaultFB = 31 GlobalVariable
+  access HMIControlSignals.SystemReset = 32 GlobalVariable
+  access FilterUnitInst2.IO.FaultReset = 33 GlobalVariable
+  access MotorVSDInst3.IO.UPSEnable = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access PlantControl.FansShutdownReady = 36 GlobalVariable
+  access PlantControl.Status = 37 GlobalVariable
+  access AirStarInst1.Outputs.ShutdownComplete = 38 GlobalVariable
+  access FilterUnitInst2.IO.AutoStartSignal = 39 GlobalVariable
+  access PlantControl.Status = 40 GlobalVariable
+  access FilterUnitInst2.IO.HandIntervention = 41 GlobalVariable
+  access FilterUnitInst2.IO.Shutdown = 42 GlobalVariable
+  access FilterUnitInst2.IO.Run = 43 GlobalVariable
+  access DiscreteOutputs.FilterUnit1Start = 44 GlobalVariable
+  access ProcessTimings.NormalFanStartTime = 45 GlobalVariable
+  access FilterUnitInst2.IO.EnableUPSTime = 46 GlobalVariable
+  constant 1 = 47 Int
+  constant -1 = 48 Int
+  constant -1 = 49 Int
+  assignment 0
+    rail = 82
+    step 0 contact
+      uid = 51
+      operand = 21
+      operandwire = 79
+      negated = false
+      out = 80
+    coil = 52
+    coil operand = 22
+    coil operandwire = 81
+  assignment 1
+    rail = 82
+    step 0 contact
+      uid = 53
+      operand = 23
+      operandwire = 83
+      negated = false
+      out = 84
+    coil = 54
+    coil operand = 24
+    coil operandwire = 85
+  assignment 2
+    rail = 82
+    coil = 55
+    coil operand = 25
+    coil operandwire = 86
+  assignment 3
+    rail = 82
+    step 0 contact
+      uid = 56
+      operand = 26
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 57
+    coil operand = 27
+    coil operandwire = 89
+  assignment 4
+    rail = 82
+    step 0 contact
+      uid = 58
+      operand = 28
+      operandwire = 90
+      negated = false
+      out = 91
+    coil = 59
+    coil operand = 29
+    coil operandwire = 92
+  assignment 5
+    rail = 82
+    step 0 contact
+      uid = 60
+      operand = 30
+      operandwire = 93
+      negated = false
+      out = 94
+    coil = 61
+    coil operand = 31
+    coil operandwire = 95
+  assignment 6
+    rail = 82
+    step 0 contact
+      uid = 62
+      operand = 32
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 63
+    coil operand = 33
+    coil operandwire = 98
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 68
+      branch 0
+        rail = 82
+        step 0 compare
+          partname = Ge
+          uid = 64
+          srctype = Int
+          left tag = 35 99
+          right literal = 47 100
+          out = 101
+      branch 1
+        rail = 82
+        step 0 compare
+          partname = Eq
+          uid = 65
+          srctype = Int
+          left tag = 37 102
+          right literal = 48 103
+          out = 104
+        step 1 contact
+          uid = 66
+          operand = 36
+          operandwire = 105
+          negated = true
+          out = 106
+      branch 2
+        rail = 82
+        step 0 compare
+          partname = Eq
+          uid = 65
+          srctype = Int
+          left tag = 37 102
+          right literal = 48 103
+          out = 104
+        step 1 contact
+          uid = 67
+          operand = 38
+          operandwire = 107
+          negated = true
+          out = 108
+      out = 109
+    step 1 contact
+      uid = 69
+      operand = 34
+      operandwire = 110
+      negated = false
+      out = 111
+    coil = 70
+    coil operand = 39
+    coil operandwire = 112
+  assignment 8
+    rail = none
+    step 0 not
+      uid = 71
+      rail = none
+      step 0 or
+        uid = 68
+        branch 0
+          rail = 82
+          step 0 compare
+            partname = Ge
+            uid = 64
+            srctype = Int
+            left tag = 35 99
+            right literal = 47 100
+            out = 101
+        branch 1
+          rail = 82
+          step 0 compare
+            partname = Eq
+            uid = 65
+            srctype = Int
+            left tag = 37 102
+            right literal = 48 103
+            out = 104
+          step 1 contact
+            uid = 66
+            operand = 36
+            operandwire = 105
+            negated = true
+            out = 106
+        branch 2
+          rail = 82
+          step 0 compare
+            partname = Eq
+            uid = 65
+            srctype = Int
+            left tag = 37 102
+            right literal = 48 103
+            out = 104
+          step 1 contact
+            uid = 67
+            operand = 38
+            operandwire = 107
+            negated = true
+            out = 108
+        out = 109
+      out = 113
+    step 1 contact
+      uid = 72
+      operand = 41
+      operandwire = 114
+      negated = true
+      out = 115
+    step 2 compare
+      partname = Eq
+      uid = 73
+      srctype = Int
+      left tag = 40 116
+      right literal = 49 117
+      out = 118
+    coil = 74
+    coil operand = 42
+    coil operandwire = 119
+  assignment 9
+    rail = 82
+    step 0 contact
+      uid = 77
+      operand = 43
+      operandwire = 120
+      negated = false
+      out = 121
+    coil = 78
+    coil operand = 44
+    coil operandwire = 122
+  move 0
+    moveuid = 50
+    rail = 82
+    in tag = 45 123
+    dest = 46
+    destwire = 124
+  call 0
+    calluid = 75
+    blockname = FilterUnitSystem
+    blocktype = FB
+    rail = 82
+    instanceuid = 76
+    instancescope = GlobalVariable
+    instancepath = FilterUnitInst2
+NETWORK 4
+  compileunit = 12
+  access DiscreteInputs.FilterUnit2Ready = 21 GlobalVariable
+  access FilterUnitInst3.RemoteOp = 22 GlobalVariable
+  access PlantControl.PreStartComplete = 23 GlobalVariable
+  access FilterUnitInst3.IO.PreStartDone = 24 GlobalVariable
+  access FilterUnitInst3.IO.SystemHealthy = 25 GlobalVariable
+  access FilterUnitInst3.IO.FaultReset = 26 GlobalVariable
+  access DiscreteOutputs.FilterUnit2Reset = 27 GlobalVariable
+  access DiscreteInputs.FilterUnit2Op = 28 GlobalVariable
+  access FilterUnitInst3.IO.RunningFB = 29 GlobalVariable
+  access DiscreteInputs.FilterUnit2Flt = 30 GlobalVariable
+  access FilterUnitInst3.IO.FaultFB = 31 GlobalVariable
+  access HMIControlSignals.SystemReset = 32 GlobalVariable
+  access FilterUnitInst3.IO.FaultReset = 33 GlobalVariable
+  access MotorVSDInst3.IO.UPSEnable = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access PlantControl.FansShutdownReady = 36 GlobalVariable
+  access PlantControl.Status = 37 GlobalVariable
+  access AirStarInst1.Outputs.ShutdownComplete = 38 GlobalVariable
+  access FilterUnitInst3.IO.AutoStartSignal = 39 GlobalVariable
+  access PlantControl.Status = 40 GlobalVariable
+  access FilterUnitInst3.IO.HandIntervention = 41 GlobalVariable
+  access FilterUnitInst3.IO.Shutdown = 42 GlobalVariable
+  access FilterUnitInst3.IO.Run = 43 GlobalVariable
+  access DiscreteOutputs.FilterUnit2Start = 44 GlobalVariable
+  access ProcessTimings.NormalFanStartTime = 45 GlobalVariable
+  access FilterUnitInst3.IO.EnableUPSTime = 46 GlobalVariable
+  constant 1 = 47 Int
+  constant -1 = 48 Int
+  constant -1 = 49 Int
+  assignment 0
+    rail = 82
+    step 0 contact
+      uid = 51
+      operand = 21
+      operandwire = 79
+      negated = false
+      out = 80
+    coil = 52
+    coil operand = 22
+    coil operandwire = 81
+  assignment 1
+    rail = 82
+    step 0 contact
+      uid = 53
+      operand = 23
+      operandwire = 83
+      negated = false
+      out = 84
+    coil = 54
+    coil operand = 24
+    coil operandwire = 85
+  assignment 2
+    rail = 82
+    coil = 55
+    coil operand = 25
+    coil operandwire = 86
+  assignment 3
+    rail = 82
+    step 0 contact
+      uid = 56
+      operand = 26
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 57
+    coil operand = 27
+    coil operandwire = 89
+  assignment 4
+    rail = 82
+    step 0 contact
+      uid = 58
+      operand = 28
+      operandwire = 90
+      negated = false
+      out = 91
+    coil = 59
+    coil operand = 29
+    coil operandwire = 92
+  assignment 5
+    rail = 82
+    step 0 contact
+      uid = 60
+      operand = 30
+      operandwire = 93
+      negated = false
+      out = 94
+    coil = 61
+    coil operand = 31
+    coil operandwire = 95
+  assignment 6
+    rail = 82
+    step 0 contact
+      uid = 62
+      operand = 32
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 63
+    coil operand = 33
+    coil operandwire = 98
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 68
+      branch 0
+        rail = 82
+        step 0 compare
+          partname = Ge
+          uid = 64
+          srctype = Int
+          left tag = 35 99
+          right literal = 47 100
+          out = 101
+      branch 1
+        rail = 82
+        step 0 compare
+          partname = Eq
+          uid = 65
+          srctype = Int
+          left tag = 37 102
+          right literal = 48 103
+          out = 104
+        step 1 contact
+          uid = 66
+          operand = 36
+          operandwire = 105
+          negated = true
+          out = 106
+      branch 2
+        rail = 82
+        step 0 compare
+          partname = Eq
+          uid = 65
+          srctype = Int
+          left tag = 37 102
+          right literal = 48 103
+          out = 104
+        step 1 contact
+          uid = 67
+          operand = 38
+          operandwire = 107
+          negated = true
+          out = 108
+      out = 109
+    step 1 contact
+      uid = 69
+      operand = 34
+      operandwire = 110
+      negated = false
+      out = 111
+    coil = 70
+    coil operand = 39
+    coil operandwire = 112
+  assignment 8
+    rail = none
+    step 0 not
+      uid = 71
+      rail = none
+      step 0 or
+        uid = 68
+        branch 0
+          rail = 82
+          step 0 compare
+            partname = Ge
+            uid = 64
+            srctype = Int
+            left tag = 35 99
+            right literal = 47 100
+            out = 101
+        branch 1
+          rail = 82
+          step 0 compare
+            partname = Eq
+            uid = 65
+            srctype = Int
+            left tag = 37 102
+            right literal = 48 103
+            out = 104
+          step 1 contact
+            uid = 66
+            operand = 36
+            operandwire = 105
+            negated = true
+            out = 106
+        branch 2
+          rail = 82
+          step 0 compare
+            partname = Eq
+            uid = 65
+            srctype = Int
+            left tag = 37 102
+            right literal = 48 103
+            out = 104
+          step 1 contact
+            uid = 67
+            operand = 38
+            operandwire = 107
+            negated = true
+            out = 108
+        out = 109
+      out = 113
+    step 1 contact
+      uid = 72
+      operand = 41
+      operandwire = 114
+      negated = true
+      out = 115
+    step 2 compare
+      partname = Eq
+      uid = 73
+      srctype = Int
+      left tag = 40 116
+      right literal = 49 117
+      out = 118
+    coil = 74
+    coil operand = 42
+    coil operandwire = 119
+  assignment 9
+    rail = 82
+    step 0 contact
+      uid = 77
+      operand = 43
+      operandwire = 120
+      negated = false
+      out = 121
+    coil = 78
+    coil operand = 44
+    coil operandwire = 122
+  move 0
+    moveuid = 50
+    rail = 82
+    in tag = 45 123
+    dest = 46
+    destwire = 124
+  call 0
+    calluid = 75
+    blockname = FilterUnitSystem
+    blocktype = FB
+    rail = 82
+    instanceuid = 76
+    instancescope = GlobalVariable
+    instancepath = FilterUnitInst3
+NETWORK 5
+  compileunit = 17
+  access PlantControl.PreStartComplete = 21 GlobalVariable
+  access AirStarInst1.Inputs.PreStartDone = 22 GlobalVariable
+  access AirStarInst1.Inputs.SystemHealthy = 23 GlobalVariable
+  access FilterUnitInst3.IO.UPSEnable = 24 GlobalVariable
+  access FilterUnitInst2.IO.UPSEnable = 25 GlobalVariable
+  access MotorVSDInst1.IO.UPSEnable = 26 GlobalVariable
+  access PlantControl.Status = 27 GlobalVariable
+  access MotorVSDInst2.IO.ShutdownComplete = 28 GlobalVariable
+  access PlantControl.Status = 29 GlobalVariable
+  access InterlockData.LinkOut3rdParty = 30 GlobalVariable
+  access AirStarInst1.Inputs.AutoStartSignal = 31 GlobalVariable
+  access PlantControl.Status = 32 GlobalVariable
+  access AirStarInst1.Inputs.HandIntervention = 33 GlobalVariable
+  access AirStarInst1.Inputs.Shutdown = 34 GlobalVariable
+  access HMIControlSignals.SystemReset = 35 GlobalVariable
+  access AirStarInst1.Inputs.FaultReset = 36 GlobalVariable
+  constant 1 = 37 Int
+  constant -1 = 38 Int
+  constant -1 = 39 Int
+  assignment 0
+    rail = 64
+    step 0 contact
+      uid = 40
+      operand = 21
+      operandwire = 61
+      negated = false
+      out = 62
+    coil = 41
+    coil operand = 22
+    coil operandwire = 63
+  assignment 1
+    rail = 64
+    coil = 42
+    coil operand = 23
+    coil operandwire = 65
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 51
+      branch 0
+        rail = none
+        step 0 or
+          uid = 46
+          branch 0
+            rail = 64
+            step 0 compare
+              partname = Ge
+              uid = 43
+              srctype = Int
+              left tag = 27 66
+              right literal = 37 67
+              out = 68
+          branch 1
+            rail = 64
+            step 0 compare
+              partname = Eq
+              uid = 44
+              srctype = Int
+              left tag = 29 69
+              right literal = 38 70
+              out = 71
+            step 1 contact
+              uid = 45
+              operand = 28
+              operandwire = 72
+              negated = true
+              out = 73
+          out = 74
+        step 1 contact
+          uid = 47
+          operand = 26
+          operandwire = 75
+          negated = false
+          out = 76
+        step 2 contact
+          uid = 48
+          operand = 25
+          operandwire = 77
+          negated = false
+          out = 78
+        step 3 contact
+          uid = 49
+          operand = 24
+          operandwire = 79
+          negated = false
+          out = 80
+      branch 1
+        rail = none
+        step 0 or
+          uid = 46
+          branch 0
+            rail = 64
+            step 0 compare
+              partname = Ge
+              uid = 43
+              srctype = Int
+              left tag = 27 66
+              right literal = 37 67
+              out = 68
+          branch 1
+            rail = 64
+            step 0 compare
+              partname = Eq
+              uid = 44
+              srctype = Int
+              left tag = 29 69
+              right literal = 38 70
+              out = 71
+            step 1 contact
+              uid = 45
+              operand = 28
+              operandwire = 72
+              negated = true
+              out = 73
+          out = 74
+        step 1 contact
+          uid = 47
+          operand = 26
+          operandwire = 75
+          negated = false
+          out = 76
+        step 2 contact
+          uid = 50
+          operand = 30
+          operandwire = 81
+          negated = false
+          out = 82
+      out = 83
+    coil = 52
+    coil operand = 31
+    coil operandwire = 84
+  assignment 3
+    rail = none
+    step 0 not
+      uid = 53
+      rail = none
+      step 0 or
+        uid = 46
+        branch 0
+          rail = 64
+          step 0 compare
+            partname = Ge
+            uid = 43
+            srctype = Int
+            left tag = 27 66
+            right literal = 37 67
+            out = 68
+        branch 1
+          rail = 64
+          step 0 compare
+            partname = Eq
+            uid = 44
+            srctype = Int
+            left tag = 29 69
+            right literal = 38 70
+            out = 71
+          step 1 contact
+            uid = 45
+            operand = 28
+            operandwire = 72
+            negated = true
+            out = 73
+        out = 74
+      out = 85
+    step 1 contact
+      uid = 54
+      operand = 33
+      operandwire = 86
+      negated = true
+      out = 87
+    step 2 compare
+      partname = Eq
+      uid = 55
+      srctype = Int
+      left tag = 32 88
+      right literal = 39 89
+      out = 90
+    coil = 56
+    coil operand = 34
+    coil operandwire = 91
+  assignment 4
+    rail = 64
+    step 0 contact
+      uid = 57
+      operand = 35
+      operandwire = 92
+      negated = false
+      out = 93
+    coil = 58
+    coil operand = 36
+    coil operandwire = 94
+  call 0
+    calluid = 59
+    blockname = AirStarSystem
+    blocktype = FB
+    rail = 64
+    instanceuid = 60
+    instancescope = GlobalVariable
+    instancepath = AirStarInst1
+NETWORK 6
+  compileunit = 1C
+  access HMIControlSignals.BypassAirStarDCRotSen = 21 GlobalVariable
+  access MotorVSDInst1.IO.RotationSensor = 22 GlobalVariable
+  access MotorVSDInst1.IO.SystemHealthy = 23 GlobalVariable
+  access DiscreteInputs.AirStarDCRotSen = 24 GlobalVariable
+  access HMIControlSignals.BypassAirStarDCRotSen = 25 GlobalVariable
+  access MotorVSDInst1.IO.RunningFwdFB = 26 GlobalVariable
+  access DiscreteInputs.AirStarDCRotSen = 27 GlobalVariable
+  access HMIControlSignals.BypassAirStarDCRotSen = 28 GlobalVariable
+  access MotorVSDInst1.IO.RunningFwdFB = 29 GlobalVariable
+  access DiscreteInputs.AirStarDCIsoFB = 30 GlobalVariable
+  access MotorVSDInst1.IO.InhibitMotor = 31 GlobalVariable
+  access PlantControl.PreStartComplete = 32 GlobalVariable
+  access MotorVSDInst1.IO.PreStartDone = 33 GlobalVariable
+  access ECSControlInst1.Outputs.UPSEnable = 34 GlobalVariable
+  access MotorStarterInst8.IO.UPSEnable = 35 GlobalVariable
+  access PlantControl.Status = 36 GlobalVariable
+  access AirStarInst1.Outputs.ShutdownComplete = 37 GlobalVariable
+  access PlantControl.Status = 38 GlobalVariable
+  access MotorVSDInst1.IO.AutoStartSignal = 39 GlobalVariable
+  access PlantControl.Status = 40 GlobalVariable
+  access MotorVSDInst1.IO.HandIntervention = 41 GlobalVariable
+  access MotorVSDInst1.IO.Shutdown = 42 GlobalVariable
+  access HMIControlSignals.SystemReset = 43 GlobalVariable
+  access MotorVSDInst1.IO.FaultReset = 44 GlobalVariable
+  constant 1 = 45 Int
+  constant -1 = 46 Int
+  constant -1 = 47 Int
+  assignment 0
+    rail = 79
+    step 0 contact
+      uid = 48
+      operand = 21
+      operandwire = 76
+      negated = true
+      out = 77
+    coil = 49
+    coil operand = 22
+    coil operandwire = 78
+  assignment 1
+    rail = 79
+    coil = 50
+    coil operand = 23
+    coil operandwire = 80
+  assignment 2
+    rail = 79
+    step 0 contact
+      uid = 51
+      operand = 25
+      operandwire = 81
+      negated = true
+      out = 82
+    step 1 contact
+      uid = 52
+      operand = 24
+      operandwire = 83
+      negated = false
+      out = 84
+    coil = 53
+    coil operand = 26
+    coil operandwire = 85
+  assignment 3
+    rail = 79
+    step 0 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = true
+      out = 87
+    step 1 contact
+      uid = 55
+      operand = 27
+      operandwire = 88
+      negated = true
+      out = 89
+    coil = 56
+    coil operand = 29
+    coil operandwire = 90
+  assignment 4
+    rail = 79
+    step 0 contact
+      uid = 57
+      operand = 30
+      operandwire = 91
+      negated = false
+      out = 92
+    coil = 58
+    coil operand = 31
+    coil operandwire = 93
+  assignment 5
+    rail = 79
+    step 0 contact
+      uid = 59
+      operand = 32
+      operandwire = 94
+      negated = false
+      out = 95
+    coil = 60
+    coil operand = 33
+    coil operandwire = 96
+  assignment 6
+    rail = none
+    step 0 or
+      uid = 64
+      branch 0
+        rail = 79
+        step 0 compare
+          partname = Ge
+          uid = 61
+          srctype = Int
+          left tag = 36 97
+          right literal = 45 98
+          out = 99
+      branch 1
+        rail = 79
+        step 0 compare
+          partname = Eq
+          uid = 62
+          srctype = Int
+          left tag = 38 100
+          right literal = 46 101
+          out = 102
+        step 1 contact
+          uid = 63
+          operand = 37
+          operandwire = 103
+          negated = true
+          out = 104
+      out = 105
+    step 1 contact
+      uid = 65
+      operand = 35
+      operandwire = 106
+      negated = false
+      out = 107
+    step 2 contact
+      uid = 66
+      operand = 34
+      operandwire = 108
+      negated = false
+      out = 109
+    coil = 67
+    coil operand = 39
+    coil operandwire = 110
+  assignment 7
+    rail = none
+    step 0 not
+      uid = 68
+      rail = none
+      step 0 or
+        uid = 64
+        branch 0
+          rail = 79
+          step 0 compare
+            partname = Ge
+            uid = 61
+            srctype = Int
+            left tag = 36 97
+            right literal = 45 98
+            out = 99
+        branch 1
+          rail = 79
+          step 0 compare
+            partname = Eq
+            uid = 62
+            srctype = Int
+            left tag = 38 100
+            right literal = 46 101
+            out = 102
+          step 1 contact
+            uid = 63
+            operand = 37
+            operandwire = 103
+            negated = true
+            out = 104
+        out = 105
+      out = 111
+    step 1 contact
+      uid = 69
+      operand = 41
+      operandwire = 112
+      negated = true
+      out = 113
+    step 2 compare
+      partname = Eq
+      uid = 70
+      srctype = Int
+      left tag = 40 114
+      right literal = 47 115
+      out = 116
+    coil = 71
+    coil operand = 42
+    coil operandwire = 117
+  assignment 8
+    rail = 79
+    step 0 contact
+      uid = 72
+      operand = 43
+      operandwire = 118
+      negated = false
+      out = 119
+    coil = 73
+    coil operand = 44
+    coil operandwire = 120
+  call 0
+    calluid = 74
+    blockname = MotorVSDSystem
+    blocktype = FB
+    rail = 79
+    instanceuid = 75
+    instancescope = GlobalVariable
+    instancepath = MotorVSDInst1
+NETWORK 7
+  compileunit = 21
+  access DiscreteInputs.FMCCRotSen = 21 GlobalVariable
+  access DiscreteInputs.FMCCRunning = 22 GlobalVariable
+  access HMIControlSignals.BypassFMCCRotSen = 23 GlobalVariable
+  access MotorStarterInst3.IO.RunningFB = 24 GlobalVariable
+  access MotorStarterInst3.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.FMCCIsoFB = 26 GlobalVariable
+  access MotorStarterInst3.IO.InhibitMotor = 27 GlobalVariable
+  access PlantControl.PreStartComplete = 28 GlobalVariable
+  access MotorStarterInst3.IO.PreStartDone = 29 GlobalVariable
+  access PlantControl.MagEnable = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access MotorStarterInst8.IO.ShutdownComplete = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst3.IO.AutoStartSignal = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access MotorStarterInst3.IO.HandIntervention = 36 GlobalVariable
+  access MotorStarterInst3.IO.Shutdown = 37 GlobalVariable
+  access HMIControlSignals.SystemReset = 38 GlobalVariable
+  access MotorStarterInst3.IO.FaultReset = 39 GlobalVariable
+  access MotorStarterInst3.IO.Run = 40 GlobalVariable
+  access DiscreteOutputs.FMCCStart = 41 GlobalVariable
+  constant 1 = 42 Int
+  constant -1 = 43 Int
+  constant -1 = 44 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 48
+      branch 0
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 46
+          operand = 21
+          operandwire = 73
+          negated = false
+          out = 74
+      branch 1
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 47
+          operand = 23
+          operandwire = 76
+          negated = false
+          out = 77
+      out = 78
+    coil = 49
+    coil operand = 24
+    coil operandwire = 79
+  assignment 1
+    rail = 75
+    coil = 50
+    coil operand = 25
+    coil operandwire = 80
+  assignment 2
+    rail = 75
+    step 0 contact
+      uid = 51
+      operand = 26
+      operandwire = 81
+      negated = false
+      out = 82
+    coil = 52
+    coil operand = 27
+    coil operandwire = 83
+  assignment 3
+    rail = 75
+    step 0 contact
+      uid = 53
+      operand = 28
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 54
+    coil operand = 29
+    coil operandwire = 86
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 58
+      branch 0
+        rail = 75
+        step 0 compare
+          partname = Ge
+          uid = 55
+          srctype = Int
+          left tag = 31 87
+          right literal = 42 88
+          out = 89
+      branch 1
+        rail = 75
+        step 0 compare
+          partname = Eq
+          uid = 56
+          srctype = Int
+          left tag = 33 90
+          right literal = 43 91
+          out = 92
+        step 1 contact
+          uid = 57
+          operand = 32
+          operandwire = 93
+          negated = true
+          out = 94
+      out = 95
+    step 1 contact
+      uid = 59
+      operand = 30
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 60
+    coil operand = 34
+    coil operandwire = 98
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 61
+      rail = none
+      step 0 or
+        uid = 58
+        branch 0
+          rail = 75
+          step 0 compare
+            partname = Ge
+            uid = 55
+            srctype = Int
+            left tag = 31 87
+            right literal = 42 88
+            out = 89
+        branch 1
+          rail = 75
+          step 0 compare
+            partname = Eq
+            uid = 56
+            srctype = Int
+            left tag = 33 90
+            right literal = 43 91
+            out = 92
+          step 1 contact
+            uid = 57
+            operand = 32
+            operandwire = 93
+            negated = true
+            out = 94
+        out = 95
+      out = 99
+    step 1 contact
+      uid = 62
+      operand = 36
+      operandwire = 100
+      negated = true
+      out = 101
+    step 2 compare
+      partname = Eq
+      uid = 63
+      srctype = Int
+      left tag = 35 102
+      right literal = 44 103
+      out = 104
+    coil = 64
+    coil operand = 37
+    coil operandwire = 105
+  assignment 6
+    rail = 75
+    step 0 contact
+      uid = 65
+      operand = 38
+      operandwire = 106
+      negated = false
+      out = 107
+    coil = 66
+    coil operand = 39
+    coil operandwire = 108
+  assignment 7
+    rail = 75
+    step 0 contact
+      uid = 69
+      operand = 40
+      operandwire = 109
+      negated = false
+      out = 110
+    coil = 70
+    coil operand = 41
+    coil operandwire = 111
+  call 0
+    calluid = 67
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 75
+    instanceuid = 68
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst3
+NETWORK 8
+  compileunit = 26
+  access DiscreteInputs.OverbandMagRunning = 21 GlobalVariable
+  access MotorStarterInst8.IO.RunningFB = 22 GlobalVariable
+  access MotorStarterInst8.IO.SystemHealthy = 23 GlobalVariable
+  access DiscreteInputs.OverbandMagIsoFB = 24 GlobalVariable
+  access MotorStarterInst8.IO.InhibitMotor = 25 GlobalVariable
+  access PlantControl.PreStartComplete = 26 GlobalVariable
+  access MotorStarterInst8.IO.PreStartDone = 27 GlobalVariable
+  access MotorStarterInst3.IO.UPSEnable = 28 GlobalVariable
+  access PlantControl.Status = 29 GlobalVariable
+  access MotorVSDInst1.IO.ShutdownComplete = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access MotorStarterInst8.IO.AutoStartSignal = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst8.IO.HandIntervention = 34 GlobalVariable
+  access MotorStarterInst8.IO.Shutdown = 35 GlobalVariable
+  access HMIControlSignals.SystemReset = 36 GlobalVariable
+  access MotorStarterInst8.IO.FaultReset = 37 GlobalVariable
+  access MotorStarterInst8.IO.Run = 38 GlobalVariable
+  access DiscreteOutputs.OverbandMagStart = 39 GlobalVariable
+  constant 1 = 40 Int
+  constant -1 = 41 Int
+  constant -1 = 42 Int
+  assignment 0
+    rail = 69
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 22
+    coil operandwire = 68
+  assignment 1
+    rail = 69
+    coil = 45
+    coil operand = 23
+    coil operandwire = 70
+  assignment 2
+    rail = 69
+    step 0 contact
+      uid = 46
+      operand = 24
+      operandwire = 71
+      negated = false
+      out = 72
+    coil = 47
+    coil operand = 25
+    coil operandwire = 73
+  assignment 3
+    rail = 69
+    step 0 contact
+      uid = 48
+      operand = 26
+      operandwire = 74
+      negated = false
+      out = 75
+    coil = 49
+    coil operand = 27
+    coil operandwire = 76
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 53
+      branch 0
+        rail = 69
+        step 0 compare
+          partname = Ge
+          uid = 50
+          srctype = Int
+          left tag = 29 77
+          right literal = 40 78
+          out = 79
+      branch 1
+        rail = 69
+        step 0 compare
+          partname = Eq
+          uid = 51
+          srctype = Int
+          left tag = 31 80
+          right literal = 41 81
+          out = 82
+        step 1 contact
+          uid = 52
+          operand = 30
+          operandwire = 83
+          negated = true
+          out = 84
+      out = 85
+    step 1 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = false
+      out = 87
+    coil = 55
+    coil operand = 32
+    coil operandwire = 88
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 56
+      rail = none
+      step 0 or
+        uid = 53
+        branch 0
+          rail = 69
+          step 0 compare
+            partname = Ge
+            uid = 50
+            srctype = Int
+            left tag = 29 77
+            right literal = 40 78
+            out = 79
+        branch 1
+          rail = 69
+          step 0 compare
+            partname = Eq
+            uid = 51
+            srctype = Int
+            left tag = 31 80
+            right literal = 41 81
+            out = 82
+          step 1 contact
+            uid = 52
+            operand = 30
+            operandwire = 83
+            negated = true
+            out = 84
+        out = 85
+      out = 89
+    step 1 contact
+      uid = 57
+      operand = 34
+      operandwire = 90
+      negated = true
+      out = 91
+    step 2 compare
+      partname = Eq
+      uid = 58
+      srctype = Int
+      left tag = 33 92
+      right literal = 42 93
+      out = 94
+    coil = 59
+    coil operand = 35
+    coil operandwire = 95
+  assignment 6
+    rail = 69
+    step 0 contact
+      uid = 60
+      operand = 36
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 61
+    coil operand = 37
+    coil operandwire = 98
+  assignment 7
+    rail = 69
+    step 0 contact
+      uid = 64
+      operand = 38
+      operandwire = 99
+      negated = false
+      out = 100
+    coil = 65
+    coil operand = 39
+    coil operandwire = 101
+  call 0
+    calluid = 62
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 69
+    instanceuid = 63
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst8
+NETWORK 9
+  compileunit = 2B
+  access DiscreteInputs.ECSFCConveyorFlt = 21 GlobalVariable
+  access ECSControlInst1.Inputs.FCConveyorBeltFlt = 22 GlobalVariable
+  access DiscreteInputs.ECSFCRotorFlt = 23 GlobalVariable
+  access ECSControlInst1.Inputs.FCRotorFault = 24 GlobalVariable
+  access DiscreteInputs.ECSFltRotorRevs = 25 GlobalVariable
+  access ECSControlInst1.Inputs.FltRotorRevs = 26 GlobalVariable
+  access DiscreteInputs.ECSInterlockingFeeder = 27 GlobalVariable
+  access ECSControlInst1.Inputs.InterlockingFeeder = 28 GlobalVariable
+  access DiscreteInputs.ECSMatChargeEnabled = 29 GlobalVariable
+  access ECSControlInst1.Inputs.MaterialChargeEnabled = 30 GlobalVariable
+  access DiscreteInputs.ECSAutoMode = 31 GlobalVariable
+  access ECSControlInst1.Inputs.MSAutoMode = 32 GlobalVariable
+  access DiscreteInputs.ECSHandMode = 33 GlobalVariable
+  access ECSControlInst1.Inputs.MSHandMode = 34 GlobalVariable
+  access DiscreteInputs.ECSSettingMode = 35 GlobalVariable
+  access ECSControlInst1.Inputs.MSSettingMode = 36 GlobalVariable
+  access DiscreteInputs.ECSReady = 37 GlobalVariable
+  access ECSControlInst1.Inputs.ReadyFB = 38 GlobalVariable
+  access DiscreteInputs.ECSRunning = 39 GlobalVariable
+  access ECSControlInst1.Inputs.RunningFB = 40 GlobalVariable
+  access DiscreteInputs.ECSSumFlt = 41 GlobalVariable
+  access ECSControlInst1.Inputs.SumFlt = 42 GlobalVariable
+  access HMIControlSignals.SystemReset = 43 GlobalVariable
+  access ECSControlInst1.Inputs.FaultReset = 44 GlobalVariable
+  access PlantControl.PreStartComplete = 45 GlobalVariable
+  access ECSControlInst1.Inputs.PreStartDone = 46 GlobalVariable
+  access MotorVSDInst3.IO.UPSEnable = 47 GlobalVariable
+  access PlantControl.Status = 48 GlobalVariable
+  access MotorVSDInst1.IO.ShutdownComplete = 49 GlobalVariable
+  access PlantControl.Status = 50 GlobalVariable
+  access ECSControlInst1.Inputs.AutoStartSignal = 51 GlobalVariable
+  access PlantControl.Status = 52 GlobalVariable
+  access ECSControlInst1.Inputs.HandIntervention = 53 GlobalVariable
+  access ECSControlInst1.Inputs.Shutdown = 54 GlobalVariable
+  access ECSControlInst1.Outputs.ECSRun = 55 GlobalVariable
+  access DiscreteOutputs.ECSAutoStart = 56 GlobalVariable
+  access ECSControlInst1.Outputs.ECSReset = 57 GlobalVariable
+  access DiscreteOutputs.ECSReset = 58 GlobalVariable
+  constant 1 = 59 Int
+  constant -1 = 60 Int
+  constant -1 = 61 Int
+  assignment 0
+    rail = 107
+    step 0 contact
+      uid = 62
+      operand = 21
+      operandwire = 104
+      negated = false
+      out = 105
+    coil = 63
+    coil operand = 22
+    coil operandwire = 106
+  assignment 1
+    rail = 107
+    step 0 contact
+      uid = 64
+      operand = 23
+      operandwire = 108
+      negated = false
+      out = 109
+    coil = 65
+    coil operand = 24
+    coil operandwire = 110
+  assignment 2
+    rail = 107
+    step 0 contact
+      uid = 66
+      operand = 25
+      operandwire = 111
+      negated = false
+      out = 112
+    coil = 67
+    coil operand = 26
+    coil operandwire = 113
+  assignment 3
+    rail = 107
+    step 0 contact
+      uid = 68
+      operand = 27
+      operandwire = 114
+      negated = false
+      out = 115
+    coil = 69
+    coil operand = 28
+    coil operandwire = 116
+  assignment 4
+    rail = 107
+    step 0 contact
+      uid = 70
+      operand = 29
+      operandwire = 117
+      negated = false
+      out = 118
+    coil = 71
+    coil operand = 30
+    coil operandwire = 119
+  assignment 5
+    rail = 107
+    step 0 contact
+      uid = 72
+      operand = 31
+      operandwire = 120
+      negated = false
+      out = 121
+    coil = 73
+    coil operand = 32
+    coil operandwire = 122
+  assignment 6
+    rail = 107
+    step 0 contact
+      uid = 74
+      operand = 33
+      operandwire = 123
+      negated = false
+      out = 124
+    coil = 75
+    coil operand = 34
+    coil operandwire = 125
+  assignment 7
+    rail = 107
+    step 0 contact
+      uid = 76
+      operand = 35
+      operandwire = 126
+      negated = false
+      out = 127
+    coil = 77
+    coil operand = 36
+    coil operandwire = 128
+  assignment 8
+    rail = 107
+    step 0 contact
+      uid = 78
+      operand = 37
+      operandwire = 129
+      negated = false
+      out = 130
+    coil = 79
+    coil operand = 38
+    coil operandwire = 131
+  assignment 9
+    rail = 107
+    step 0 contact
+      uid = 80
+      operand = 39
+      operandwire = 132
+      negated = false
+      out = 133
+    coil = 81
+    coil operand = 40
+    coil operandwire = 134
+  assignment 10
+    rail = 107
+    step 0 contact
+      uid = 82
+      operand = 41
+      operandwire = 135
+      negated = false
+      out = 136
+    coil = 83
+    coil operand = 42
+    coil operandwire = 137
+  assignment 11
+    rail = 107
+    step 0 contact
+      uid = 84
+      operand = 43
+      operandwire = 138
+      negated = false
+      out = 139
+    coil = 85
+    coil operand = 44
+    coil operandwire = 140
+  assignment 12
+    rail = 107
+    step 0 contact
+      uid = 86
+      operand = 45
+      operandwire = 141
+      negated = false
+      out = 142
+    coil = 87
+    coil operand = 46
+    coil operandwire = 143
+  assignment 13
+    rail = none
+    step 0 or
+      uid = 91
+      branch 0
+        rail = 107
+        step 0 compare
+          partname = Ge
+          uid = 88
+          srctype = Int
+          left tag = 48 144
+          right literal = 59 145
+          out = 146
+      branch 1
+        rail = 107
+        step 0 compare
+          partname = Eq
+          uid = 89
+          srctype = Int
+          left tag = 50 147
+          right literal = 60 148
+          out = 149
+        step 1 contact
+          uid = 90
+          operand = 49
+          operandwire = 150
+          negated = true
+          out = 151
+      out = 152
+    step 1 contact
+      uid = 92
+      operand = 47
+      operandwire = 153
+      negated = false
+      out = 154
+    coil = 93
+    coil operand = 51
+    coil operandwire = 155
+  assignment 14
+    rail = none
+    step 0 not
+      uid = 94
+      rail = none
+      step 0 or
+        uid = 91
+        branch 0
+          rail = 107
+          step 0 compare
+            partname = Ge
+            uid = 88
+            srctype = Int
+            left tag = 48 144
+            right literal = 59 145
+            out = 146
+        branch 1
+          rail = 107
+          step 0 compare
+            partname = Eq
+            uid = 89
+            srctype = Int
+            left tag = 50 147
+            right literal = 60 148
+            out = 149
+          step 1 contact
+            uid = 90
+            operand = 49
+            operandwire = 150
+            negated = true
+            out = 151
+        out = 152
+      out = 156
+    step 1 contact
+      uid = 95
+      operand = 53
+      operandwire = 157
+      negated = true
+      out = 158
+    step 2 compare
+      partname = Eq
+      uid = 96
+      srctype = Int
+      left tag = 52 159
+      right literal = 61 160
+      out = 161
+    coil = 97
+    coil operand = 54
+    coil operandwire = 162
+  assignment 15
+    rail = 107
+    step 0 contact
+      uid = 100
+      operand = 55
+      operandwire = 163
+      negated = false
+      out = 164
+    coil = 101
+    coil operand = 56
+    coil operandwire = 165
+  assignment 16
+    rail = 107
+    step 0 contact
+      uid = 102
+      operand = 57
+      operandwire = 166
+      negated = false
+      out = 167
+    coil = 103
+    coil operand = 58
+    coil operandwire = 168
+  call 0
+    calluid = 98
+    blockname = EquipmentControlSystem
+    blocktype = FB
+    rail = 107
+    instanceuid = 99
+    instancescope = GlobalVariable
+    instancepath = ECSControlInst1
+NETWORK 10
+  compileunit = 30
+  access MotorVSDInst3.IO.SystemHealthy = 21 GlobalVariable
+  access DiscreteInputs.OSCIsoFB = 22 GlobalVariable
+  access MotorVSDInst3.IO.InhibitMotor = 23 GlobalVariable
+  access PlantControl.PreStartComplete = 24 GlobalVariable
+  access MotorVSDInst3.IO.PreStartDone = 25 GlobalVariable
+  access MotorStarterInst7.IO.UPSEnable = 26 GlobalVariable
+  access MotorStarterInst6.IO.UPSEnable = 27 GlobalVariable
+  access TomraControlInst1.Outputs.FaultActive = 28 GlobalVariable
+  access TomraControlInst1.HardWireSignals.Ready = 29 GlobalVariable
+  access PlantControl.Status = 30 GlobalVariable
+  access ECSControlInst1.Outputs.ShutdownComplete = 31 GlobalVariable
+  access PlantControl.Status = 32 GlobalVariable
+  access MotorVSDInst3.IO.AutoStartSignal = 33 GlobalVariable
+  access PlantControl.Status = 34 GlobalVariable
+  access TomraControlInst1.Inputs.HandIntervention = 35 GlobalVariable
+  access MotorVSDInst3.IO.Shutdown = 36 GlobalVariable
+  access HMIControlSignals.SystemReset = 37 GlobalVariable
+  access MotorVSDInst3.IO.FaultReset = 38 GlobalVariable
+  constant 1 = 39 Int
+  constant -1 = 40 Int
+  constant -1 = 41 Int
+  assignment 0
+    rail = 65
+    coil = 42
+    coil operand = 21
+    coil operandwire = 64
+  assignment 1
+    rail = 65
+    step 0 contact
+      uid = 43
+      operand = 22
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 23
+    coil operandwire = 68
+  assignment 2
+    rail = 65
+    step 0 contact
+      uid = 45
+      operand = 24
+      operandwire = 69
+      negated = false
+      out = 70
+    coil = 46
+    coil operand = 25
+    coil operandwire = 71
+  assignment 3
+    rail = none
+    step 0 or
+      uid = 50
+      branch 0
+        rail = 65
+        step 0 compare
+          partname = Ge
+          uid = 47
+          srctype = Int
+          left tag = 30 72
+          right literal = 39 73
+          out = 74
+      branch 1
+        rail = 65
+        step 0 compare
+          partname = Eq
+          uid = 48
+          srctype = Int
+          left tag = 32 75
+          right literal = 40 76
+          out = 77
+        step 1 contact
+          uid = 49
+          operand = 31
+          operandwire = 78
+          negated = true
+          out = 79
+      out = 80
+    step 1 contact
+      uid = 51
+      operand = 29
+      operandwire = 81
+      negated = false
+      out = 82
+    step 2 contact
+      uid = 52
+      operand = 28
+      operandwire = 83
+      negated = true
+      out = 84
+    step 3 contact
+      uid = 53
+      operand = 27
+      operandwire = 85
+      negated = false
+      out = 86
+    step 4 contact
+      uid = 54
+      operand = 26
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 55
+    coil operand = 33
+    coil operandwire = 89
+  assignment 4
+    rail = none
+    step 0 not
+      uid = 56
+      rail = none
+      step 0 or
+        uid = 50
+        branch 0
+          rail = 65
+          step 0 compare
+            partname = Ge
+            uid = 47
+            srctype = Int
+            left tag = 30 72
+            right literal = 39 73
+            out = 74
+        branch 1
+          rail = 65
+          step 0 compare
+            partname = Eq
+            uid = 48
+            srctype = Int
+            left tag = 32 75
+            right literal = 40 76
+            out = 77
+          step 1 contact
+            uid = 49
+            operand = 31
+            operandwire = 78
+            negated = true
+            out = 79
+        out = 80
+      out = 90
+    step 1 contact
+      uid = 57
+      operand = 35
+      operandwire = 91
+      negated = true
+      out = 92
+    step 2 compare
+      partname = Eq
+      uid = 58
+      srctype = Int
+      left tag = 34 93
+      right literal = 41 94
+      out = 95
+    coil = 59
+    coil operand = 36
+    coil operandwire = 96
+  assignment 5
+    rail = 65
+    step 0 contact
+      uid = 60
+      operand = 37
+      operandwire = 97
+      negated = false
+      out = 98
+    coil = 61
+    coil operand = 38
+    coil operandwire = 99
+  call 0
+    calluid = 62
+    blockname = MotorVSDSystem
+    blocktype = FB
+    rail = 65
+    instanceuid = 63
+    instancescope = GlobalVariable
+    instancepath = MotorVSDInst3
+NETWORK 11
+  compileunit = 35
+  access PlantControl.PreStartComplete = 21 GlobalVariable
+  access TomraControlInst1.Inputs.PreStartDone = 22 GlobalVariable
+  access HMIControlSignals.SystemReset = 23 GlobalVariable
+  access TomraControlInst1.Inputs.FaultReset = 24 GlobalVariable
+  access DiscreteInputs.TomraReady = 25 GlobalVariable
+  access TomraControlInst1.HardWireSignals.Ready = 26 GlobalVariable
+  access DiscreteInputs.TomraRunning = 27 GlobalVariable
+  access TomraControlInst1.HardWireSignals.Running = 28 GlobalVariable
+  access DiscreteInputs.TomraComFlt = 29 GlobalVariable
+  access TomraControlInst1.HardWireSignals.ComError = 30 GlobalVariable
+  access MotorStarterInst7.IO.UPSEnable = 31 GlobalVariable
+  access MotorStarterInst6.IO.UPSEnable = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorVSDInst3.IO.ShutdownComplete = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access TomraControlInst1.Inputs.AutoStartSignal = 36 GlobalVariable
+  access PlantControl.Status = 37 GlobalVariable
+  access MotorStarterInst6.IO.HandIntervention = 38 GlobalVariable
+  access TomraControlInst1.Inputs.Shutdown = 39 GlobalVariable
+  access TomraControlInst1.HardWireSignals.Run = 40 GlobalVariable
+  access DiscreteOutputs.TomraRun = 41 GlobalVariable
+  access Tag_45 = 42 GlobalVariable
+  access Tag_46 = 43 GlobalVariable
+  access Tag_47 = 44 GlobalVariable
+  access Tag_48 = 45 GlobalVariable
+  access Tag_49 = 46 GlobalVariable
+  access Tag_50 = 47 GlobalVariable
+  access Tag_51 = 48 GlobalVariable
+  access Tag_52 = 49 GlobalVariable
+  access Tag_53 = 50 GlobalVariable
+  access Tag_54 = 51 GlobalVariable
+  constant 1 = 52 Int
+  constant -1 = 53 Int
+  constant -1 = 54 Int
+  assignment 0
+    rail = 83
+    step 0 contact
+      uid = 55
+      operand = 21
+      operandwire = 80
+      negated = false
+      out = 81
+    coil = 56
+    coil operand = 22
+    coil operandwire = 82
+  assignment 1
+    rail = 83
+    step 0 contact
+      uid = 57
+      operand = 23
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 58
+    coil operand = 24
+    coil operandwire = 86
+  assignment 2
+    rail = 83
+    step 0 contact
+      uid = 59
+      operand = 25
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 60
+    coil operand = 26
+    coil operandwire = 89
+  assignment 3
+    rail = 83
+    step 0 contact
+      uid = 61
+      operand = 27
+      operandwire = 90
+      negated = false
+      out = 91
+    coil = 62
+    coil operand = 28
+    coil operandwire = 92
+  assignment 4
+    rail = 83
+    step 0 contact
+      uid = 63
+      operand = 29
+      operandwire = 93
+      negated = false
+      out = 94
+    coil = 64
+    coil operand = 30
+    coil operandwire = 95
+  assignment 5
+    rail = none
+    step 0 or
+      uid = 68
+      branch 0
+        rail = 83
+        step 0 compare
+          partname = Ge
+          uid = 65
+          srctype = Int
+          left tag = 33 96
+          right literal = 52 97
+          out = 98
+      branch 1
+        rail = 83
+        step 0 compare
+          partname = Eq
+          uid = 66
+          srctype = Int
+          left tag = 35 99
+          right literal = 53 100
+          out = 101
+        step 1 contact
+          uid = 67
+          operand = 34
+          operandwire = 102
+          negated = true
+          out = 103
+      out = 104
+    step 1 contact
+      uid = 69
+      operand = 32
+      operandwire = 105
+      negated = false
+      out = 106
+    step 2 contact
+      uid = 70
+      operand = 31
+      operandwire = 107
+      negated = false
+      out = 108
+    coil = 71
+    coil operand = 36
+    coil operandwire = 109
+  assignment 6
+    rail = none
+    step 0 not
+      uid = 72
+      rail = none
+      step 0 or
+        uid = 68
+        branch 0
+          rail = 83
+          step 0 compare
+            partname = Ge
+            uid = 65
+            srctype = Int
+            left tag = 33 96
+            right literal = 52 97
+            out = 98
+        branch 1
+          rail = 83
+          step 0 compare
+            partname = Eq
+            uid = 66
+            srctype = Int
+            left tag = 35 99
+            right literal = 53 100
+            out = 101
+          step 1 contact
+            uid = 67
+            operand = 34
+            operandwire = 102
+            negated = true
+            out = 103
+        out = 104
+      out = 110
+    step 1 contact
+      uid = 73
+      operand = 38
+      operandwire = 111
+      negated = true
+      out = 112
+    step 2 compare
+      partname = Eq
+      uid = 74
+      srctype = Int
+      left tag = 37 113
+      right literal = 54 114
+      out = 115
+    coil = 75
+    coil operand = 39
+    coil operandwire = 116
+  assignment 7
+    rail = 83
+    step 0 contact
+      uid = 78
+      operand = 40
+      operandwire = 117
+      negated = false
+      out = 118
+    coil = 79
+    coil operand = 41
+    coil operandwire = 119
+  call 0
+    calluid = 76
+    blockname = TomraControlSystem
+    blocktype = FB
+    rail = 83
+    instanceuid = 77
+    instancescope = GlobalVariable
+    instancepath = TomraControlInst1
+    argument 0 input inputWord0 Word
+      value tag = 42 120
+    argument 1 input inputWord1 Word
+      value tag = 43 121
+    argument 2 input inputWord2 Word
+      value tag = 44 122
+    argument 3 input inputWord3 Word
+      value tag = 45 123
+    argument 4 input inputWord4 Word
+      value tag = 46 124
+    argument 5 input inputWord5 Word
+      value tag = 47 125
+    argument 6 input inputWord6 Word
+      value tag = 48 126
+    argument 7 input inputWord7 Word
+      value tag = 49 127
+    argument 8 output OutputWord0 Word
+      dest = 50
+      destwire = 128
+    argument 9 output OutputWord1 Word
+      dest = 51
+      destwire = 129
+NETWORK 12
+  compileunit = 3A
+  access DiscreteInputs.OSDrumSepRunning = 21 GlobalVariable
+  access MotorStarterInst5.IO.RunningFB = 22 GlobalVariable
+  access MotorStarterInst5.IO.SystemHealthy = 23 GlobalVariable
+  access DiscreteInputs.OSDrumSepIsoFB = 24 GlobalVariable
+  access MotorStarterInst5.IO.InhibitMotor = 25 GlobalVariable
+  access PlantControl.PreStartComplete = 26 GlobalVariable
+  access MotorStarterInst5.IO.PreStartDone = 27 GlobalVariable
+  access PlantControl.DrumsEnable = 28 GlobalVariable
+  access PlantControl.Status = 29 GlobalVariable
+  access PlantControl.DrumShutdownReady = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access MotorStarterInst5.IO.AutoStartSignal = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst5.IO.HandIntervention = 34 GlobalVariable
+  access MotorStarterInst5.IO.Shutdown = 35 GlobalVariable
+  access HMIControlSignals.SystemReset = 36 GlobalVariable
+  access MotorStarterInst5.IO.FaultReset = 37 GlobalVariable
+  access MotorStarterInst5.IO.Run = 38 GlobalVariable
+  access DiscreteOutputs.OSDrumSepStart = 39 GlobalVariable
+  constant 1 = 40 Int
+  constant -1 = 41 Int
+  constant -1 = 42 Int
+  assignment 0
+    rail = 69
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 22
+    coil operandwire = 68
+  assignment 1
+    rail = 69
+    coil = 45
+    coil operand = 23
+    coil operandwire = 70
+  assignment 2
+    rail = 69
+    step 0 contact
+      uid = 46
+      operand = 24
+      operandwire = 71
+      negated = false
+      out = 72
+    coil = 47
+    coil operand = 25
+    coil operandwire = 73
+  assignment 3
+    rail = 69
+    step 0 contact
+      uid = 48
+      operand = 26
+      operandwire = 74
+      negated = false
+      out = 75
+    coil = 49
+    coil operand = 27
+    coil operandwire = 76
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 53
+      branch 0
+        rail = 69
+        step 0 compare
+          partname = Ge
+          uid = 50
+          srctype = Int
+          left tag = 29 77
+          right literal = 40 78
+          out = 79
+      branch 1
+        rail = 69
+        step 0 compare
+          partname = Eq
+          uid = 51
+          srctype = Int
+          left tag = 31 80
+          right literal = 41 81
+          out = 82
+        step 1 contact
+          uid = 52
+          operand = 30
+          operandwire = 83
+          negated = true
+          out = 84
+      out = 85
+    step 1 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = false
+      out = 87
+    coil = 55
+    coil operand = 32
+    coil operandwire = 88
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 56
+      rail = none
+      step 0 or
+        uid = 53
+        branch 0
+          rail = 69
+          step 0 compare
+            partname = Ge
+            uid = 50
+            srctype = Int
+            left tag = 29 77
+            right literal = 40 78
+            out = 79
+        branch 1
+          rail = 69
+          step 0 compare
+            partname = Eq
+            uid = 51
+            srctype = Int
+            left tag = 31 80
+            right literal = 41 81
+            out = 82
+          step 1 contact
+            uid = 52
+            operand = 30
+            operandwire = 83
+            negated = true
+            out = 84
+        out = 85
+      out = 89
+    step 1 contact
+      uid = 57
+      operand = 34
+      operandwire = 90
+      negated = true
+      out = 91
+    step 2 compare
+      partname = Eq
+      uid = 58
+      srctype = Int
+      left tag = 33 92
+      right literal = 42 93
+      out = 94
+    coil = 59
+    coil operand = 35
+    coil operandwire = 95
+  assignment 6
+    rail = 69
+    step 0 contact
+      uid = 60
+      operand = 36
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 61
+    coil operand = 37
+    coil operandwire = 98
+  assignment 7
+    rail = 69
+    step 0 contact
+      uid = 64
+      operand = 38
+      operandwire = 99
+      negated = false
+      out = 100
+    coil = 65
+    coil operand = 39
+    coil operandwire = 101
+  call 0
+    calluid = 62
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 69
+    instanceuid = 63
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst5
+NETWORK 13
+  compileunit = 3F
+  access DiscreteInputs.OSECRotSen = 21 GlobalVariable
+  access DiscreteInputs.OSECRunning = 22 GlobalVariable
+  access HMIControlSignals.BypassOSECRotSen = 23 GlobalVariable
+  access MotorStarterInst6.IO.RunningFB = 24 GlobalVariable
+  access MotorStarterInst6.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.OSECIsoFB = 26 GlobalVariable
+  access MotorStarterInst6.IO.InhibitMotor = 27 GlobalVariable
+  access PlantControl.PreStartComplete = 28 GlobalVariable
+  access MotorStarterInst6.IO.PreStartDone = 29 GlobalVariable
+  access PlantControl.GeneralEnable = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access TomraControlInst1.Outputs.ShutdownComplete = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst6.IO.AutoStartSignal = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access MotorStarterInst6.IO.HandIntervention = 36 GlobalVariable
+  access MotorStarterInst6.IO.Shutdown = 37 GlobalVariable
+  access HMIControlSignals.SystemReset = 38 GlobalVariable
+  access MotorStarterInst6.IO.FaultReset = 39 GlobalVariable
+  access MotorStarterInst6.IO.Run = 40 GlobalVariable
+  access DiscreteOutputs.OSECStart = 41 GlobalVariable
+  constant 1 = 42 Int
+  constant -1 = 43 Int
+  constant -1 = 44 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 48
+      branch 0
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 46
+          operand = 21
+          operandwire = 73
+          negated = false
+          out = 74
+      branch 1
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 47
+          operand = 23
+          operandwire = 76
+          negated = false
+          out = 77
+      out = 78
+    coil = 49
+    coil operand = 24
+    coil operandwire = 79
+  assignment 1
+    rail = 75
+    coil = 50
+    coil operand = 25
+    coil operandwire = 80
+  assignment 2
+    rail = 75
+    step 0 contact
+      uid = 51
+      operand = 26
+      operandwire = 81
+      negated = false
+      out = 82
+    coil = 52
+    coil operand = 27
+    coil operandwire = 83
+  assignment 3
+    rail = 75
+    step 0 contact
+      uid = 53
+      operand = 28
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 54
+    coil operand = 29
+    coil operandwire = 86
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 58
+      branch 0
+        rail = 75
+        step 0 compare
+          partname = Ge
+          uid = 55
+          srctype = Int
+          left tag = 31 87
+          right literal = 42 88
+          out = 89
+      branch 1
+        rail = 75
+        step 0 compare
+          partname = Eq
+          uid = 56
+          srctype = Int
+          left tag = 33 90
+          right literal = 43 91
+          out = 92
+        step 1 contact
+          uid = 57
+          operand = 32
+          operandwire = 93
+          negated = true
+          out = 94
+      out = 95
+    step 1 contact
+      uid = 59
+      operand = 30
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 60
+    coil operand = 34
+    coil operandwire = 98
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 61
+      rail = none
+      step 0 or
+        uid = 58
+        branch 0
+          rail = 75
+          step 0 compare
+            partname = Ge
+            uid = 55
+            srctype = Int
+            left tag = 31 87
+            right literal = 42 88
+            out = 89
+        branch 1
+          rail = 75
+          step 0 compare
+            partname = Eq
+            uid = 56
+            srctype = Int
+            left tag = 33 90
+            right literal = 43 91
+            out = 92
+          step 1 contact
+            uid = 57
+            operand = 32
+            operandwire = 93
+            negated = true
+            out = 94
+        out = 95
+      out = 99
+    step 1 contact
+      uid = 62
+      operand = 36
+      operandwire = 100
+      negated = true
+      out = 101
+    step 2 compare
+      partname = Eq
+      uid = 63
+      srctype = Int
+      left tag = 35 102
+      right literal = 44 103
+      out = 104
+    coil = 64
+    coil operand = 37
+    coil operandwire = 105
+  assignment 6
+    rail = 75
+    step 0 contact
+      uid = 65
+      operand = 38
+      operandwire = 106
+      negated = false
+      out = 107
+    coil = 66
+    coil operand = 39
+    coil operandwire = 108
+  assignment 7
+    rail = 75
+    step 0 contact
+      uid = 69
+      operand = 40
+      operandwire = 109
+      negated = false
+      out = 110
+    coil = 70
+    coil operand = 41
+    coil operandwire = 111
+  call 0
+    calluid = 67
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 75
+    instanceuid = 68
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst6
+NETWORK 14
+  compileunit = 44
+  access DiscreteInputs.OSRCRotSen = 21 GlobalVariable
+  access DiscreteInputs.OSRCRunning = 22 GlobalVariable
+  access HMIControlSignals.BypassOSRCRotSen = 23 GlobalVariable
+  access MotorStarterInst7.IO.RunningFB = 24 GlobalVariable
+  access MotorStarterInst7.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.OSRCIsoFB = 26 GlobalVariable
+  access MotorStarterInst7.IO.InhibitMotor = 27 GlobalVariable
+  access PlantControl.PreStartComplete = 28 GlobalVariable
+  access MotorStarterInst7.IO.PreStartDone = 29 GlobalVariable
+  access MotorStarterInst2.IO.UPSEnable = 30 GlobalVariable
+  access MotorStarterInst1.IO.UPSEnable = 31 GlobalVariable
+  access PlantControl.Status = 32 GlobalVariable
+  access TomraControlInst1.Outputs.ShutdownComplete = 33 GlobalVariable
+  access PlantControl.Status = 34 GlobalVariable
+  access MotorStarterInst7.IO.AutoStartSignal = 35 GlobalVariable
+  access PlantControl.Status = 36 GlobalVariable
+  access MotorStarterInst7.IO.HandIntervention = 37 GlobalVariable
+  access MotorStarterInst7.IO.Shutdown = 38 GlobalVariable
+  access HMIControlSignals.SystemReset = 39 GlobalVariable
+  access MotorStarterInst7.IO.FaultReset = 40 GlobalVariable
+  access MotorStarterInst7.IO.Run = 41 GlobalVariable
+  access DiscreteOutputs.OSRCStart = 42 GlobalVariable
+  constant 1 = 43 Int
+  constant -1 = 44 Int
+  constant -1 = 45 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 49
+      branch 0
+        rail = 77
+        step 0 contact
+          uid = 46
+          operand = 22
+          operandwire = 73
+          negated = false
+          out = 74
+        step 1 contact
+          uid = 47
+          operand = 21
+          operandwire = 75
+          negated = false
+          out = 76
+      branch 1
+        rail = 77
+        step 0 contact
+          uid = 46
+          operand = 22
+          operandwire = 73
+          negated = false
+          out = 74
+        step 1 contact
+          uid = 48
+          operand = 23
+          operandwire = 78
+          negated = false
+          out = 79
+      out = 80
+    coil = 50
+    coil operand = 24
+    coil operandwire = 81
+  assignment 1
+    rail = 77
+    coil = 51
+    coil operand = 25
+    coil operandwire = 82
+  assignment 2
+    rail = 77
+    step 0 contact
+      uid = 52
+      operand = 26
+      operandwire = 83
+      negated = false
+      out = 84
+    coil = 53
+    coil operand = 27
+    coil operandwire = 85
+  assignment 3
+    rail = 77
+    step 0 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = false
+      out = 87
+    coil = 55
+    coil operand = 29
+    coil operandwire = 88
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 59
+      branch 0
+        rail = 77
+        step 0 compare
+          partname = Ge
+          uid = 56
+          srctype = Int
+          left tag = 32 89
+          right literal = 43 90
+          out = 91
+      branch 1
+        rail = 77
+        step 0 compare
+          partname = Eq
+          uid = 57
+          srctype = Int
+          left tag = 34 92
+          right literal = 44 93
+          out = 94
+        step 1 contact
+          uid = 58
+          operand = 33
+          operandwire = 95
+          negated = true
+          out = 96
+      out = 97
+    step 1 contact
+      uid = 60
+      operand = 31
+      operandwire = 98
+      negated = false
+      out = 99
+    step 2 contact
+      uid = 61
+      operand = 30
+      operandwire = 100
+      negated = false
+      out = 101
+    coil = 62
+    coil operand = 35
+    coil operandwire = 102
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 63
+      rail = none
+      step 0 or
+        uid = 59
+        branch 0
+          rail = 77
+          step 0 compare
+            partname = Ge
+            uid = 56
+            srctype = Int
+            left tag = 32 89
+            right literal = 43 90
+            out = 91
+        branch 1
+          rail = 77
+          step 0 compare
+            partname = Eq
+            uid = 57
+            srctype = Int
+            left tag = 34 92
+            right literal = 44 93
+            out = 94
+          step 1 contact
+            uid = 58
+            operand = 33
+            operandwire = 95
+            negated = true
+            out = 96
+        out = 97
+      out = 103
+    step 1 contact
+      uid = 64
+      operand = 37
+      operandwire = 104
+      negated = true
+      out = 105
+    step 2 compare
+      partname = Eq
+      uid = 65
+      srctype = Int
+      left tag = 36 106
+      right literal = 45 107
+      out = 108
+    coil = 66
+    coil operand = 38
+    coil operandwire = 109
+  assignment 6
+    rail = 77
+    step 0 contact
+      uid = 67
+      operand = 39
+      operandwire = 110
+      negated = false
+      out = 111
+    coil = 68
+    coil operand = 40
+    coil operandwire = 112
+  assignment 7
+    rail = 77
+    step 0 contact
+      uid = 71
+      operand = 41
+      operandwire = 113
+      negated = false
+      out = 114
+    coil = 72
+    coil operand = 42
+    coil operandwire = 115
+  call 0
+    calluid = 69
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 77
+    instanceuid = 70
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst7
+NETWORK 15
+  compileunit = 49
+  access DiscreteInputs.DiskSpreader1Running = 21 GlobalVariable
+  access MotorStarterInst1.IO.RunningFB = 22 GlobalVariable
+  access MotorStarterInst1.IO.SystemHealthy = 23 GlobalVariable
+  access DiscreteInputs.DiskSpreader1IsoFB = 24 GlobalVariable
+  access MotorStarterInst1.IO.InhibitMotor = 25 GlobalVariable
+  access PlantControl.PreStartComplete = 26 GlobalVariable
+  access MotorStarterInst1.IO.PreStartDone = 27 GlobalVariable
+  access MotorFwdRevInst1.IO.UPSEnable = 28 GlobalVariable
+  access PlantControl.Status = 29 GlobalVariable
+  access MotorStarterInst7.IO.ShutdownComplete = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access MotorStarterInst1.IO.AutoStartSignal = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst1.IO.HandIntervention = 34 GlobalVariable
+  access MotorStarterInst1.IO.Shutdown = 35 GlobalVariable
+  access HMIControlSignals.SystemReset = 36 GlobalVariable
+  access MotorStarterInst1.IO.FaultReset = 37 GlobalVariable
+  access MotorStarterInst1.IO.Run = 38 GlobalVariable
+  access DiscreteOutputs.DiskSpreader1Start = 39 GlobalVariable
+  constant 1 = 40 Int
+  constant -1 = 41 Int
+  constant -1 = 42 Int
+  assignment 0
+    rail = 69
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 22
+    coil operandwire = 68
+  assignment 1
+    rail = 69
+    coil = 45
+    coil operand = 23
+    coil operandwire = 70
+  assignment 2
+    rail = 69
+    step 0 contact
+      uid = 46
+      operand = 24
+      operandwire = 71
+      negated = false
+      out = 72
+    coil = 47
+    coil operand = 25
+    coil operandwire = 73
+  assignment 3
+    rail = 69
+    step 0 contact
+      uid = 48
+      operand = 26
+      operandwire = 74
+      negated = false
+      out = 75
+    coil = 49
+    coil operand = 27
+    coil operandwire = 76
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 53
+      branch 0
+        rail = 69
+        step 0 compare
+          partname = Ge
+          uid = 50
+          srctype = Int
+          left tag = 29 77
+          right literal = 40 78
+          out = 79
+      branch 1
+        rail = 69
+        step 0 compare
+          partname = Eq
+          uid = 51
+          srctype = Int
+          left tag = 31 80
+          right literal = 41 81
+          out = 82
+        step 1 contact
+          uid = 52
+          operand = 30
+          operandwire = 83
+          negated = true
+          out = 84
+      out = 85
+    step 1 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = false
+      out = 87
+    coil = 55
+    coil operand = 32
+    coil operandwire = 88
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 56
+      rail = none
+      step 0 or
+        uid = 53
+        branch 0
+          rail = 69
+          step 0 compare
+            partname = Ge
+            uid = 50
+            srctype = Int
+            left tag = 29 77
+            right literal = 40 78
+            out = 79
+        branch 1
+          rail = 69
+          step 0 compare
+            partname = Eq
+            uid = 51
+            srctype = Int
+            left tag = 31 80
+            right literal = 41 81
+            out = 82
+          step 1 contact
+            uid = 52
+            operand = 30
+            operandwire = 83
+            negated = true
+            out = 84
+        out = 85
+      out = 89
+    step 1 contact
+      uid = 57
+      operand = 34
+      operandwire = 90
+      negated = true
+      out = 91
+    step 2 compare
+      partname = Eq
+      uid = 58
+      srctype = Int
+      left tag = 33 92
+      right literal = 42 93
+      out = 94
+    coil = 59
+    coil operand = 35
+    coil operandwire = 95
+  assignment 6
+    rail = 69
+    step 0 contact
+      uid = 60
+      operand = 36
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 61
+    coil operand = 37
+    coil operandwire = 98
+  assignment 7
+    rail = 69
+    step 0 contact
+      uid = 64
+      operand = 38
+      operandwire = 99
+      negated = false
+      out = 100
+    coil = 65
+    coil operand = 39
+    coil operandwire = 101
+  call 0
+    calluid = 62
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 69
+    instanceuid = 63
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst1
+NETWORK 16
+  compileunit = 4E
+  access DiscreteInputs.DiskSpreader2Running = 21 GlobalVariable
+  access MotorStarterInst2.IO.RunningFB = 22 GlobalVariable
+  access MotorStarterInst2.IO.SystemHealthy = 23 GlobalVariable
+  access DiscreteInputs.DiskSpreader2IsoFB = 24 GlobalVariable
+  access MotorStarterInst2.IO.InhibitMotor = 25 GlobalVariable
+  access PlantControl.PreStartComplete = 26 GlobalVariable
+  access MotorStarterInst2.IO.PreStartDone = 27 GlobalVariable
+  access MotorFwdRevInst1.IO.UPSEnable = 28 GlobalVariable
+  access PlantControl.Status = 29 GlobalVariable
+  access MotorStarterInst7.IO.ShutdownComplete = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access MotorStarterInst2.IO.AutoStartSignal = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst2.IO.HandIntervention = 34 GlobalVariable
+  access MotorStarterInst2.IO.Shutdown = 35 GlobalVariable
+  access HMIControlSignals.SystemReset = 36 GlobalVariable
+  access MotorStarterInst2.IO.FaultReset = 37 GlobalVariable
+  access MotorStarterInst2.IO.Run = 38 GlobalVariable
+  access DiscreteOutputs.DiskSpreader2Start = 39 GlobalVariable
+  constant 1 = 40 Int
+  constant -1 = 41 Int
+  constant -1 = 42 Int
+  assignment 0
+    rail = 69
+    step 0 contact
+      uid = 43
+      operand = 21
+      operandwire = 66
+      negated = false
+      out = 67
+    coil = 44
+    coil operand = 22
+    coil operandwire = 68
+  assignment 1
+    rail = 69
+    coil = 45
+    coil operand = 23
+    coil operandwire = 70
+  assignment 2
+    rail = 69
+    step 0 contact
+      uid = 46
+      operand = 24
+      operandwire = 71
+      negated = false
+      out = 72
+    coil = 47
+    coil operand = 25
+    coil operandwire = 73
+  assignment 3
+    rail = 69
+    step 0 contact
+      uid = 48
+      operand = 26
+      operandwire = 74
+      negated = false
+      out = 75
+    coil = 49
+    coil operand = 27
+    coil operandwire = 76
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 53
+      branch 0
+        rail = 69
+        step 0 compare
+          partname = Ge
+          uid = 50
+          srctype = Int
+          left tag = 29 77
+          right literal = 40 78
+          out = 79
+      branch 1
+        rail = 69
+        step 0 compare
+          partname = Eq
+          uid = 51
+          srctype = Int
+          left tag = 31 80
+          right literal = 41 81
+          out = 82
+        step 1 contact
+          uid = 52
+          operand = 30
+          operandwire = 83
+          negated = true
+          out = 84
+      out = 85
+    step 1 contact
+      uid = 54
+      operand = 28
+      operandwire = 86
+      negated = false
+      out = 87
+    coil = 55
+    coil operand = 32
+    coil operandwire = 88
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 56
+      rail = none
+      step 0 or
+        uid = 53
+        branch 0
+          rail = 69
+          step 0 compare
+            partname = Ge
+            uid = 50
+            srctype = Int
+            left tag = 29 77
+            right literal = 40 78
+            out = 79
+        branch 1
+          rail = 69
+          step 0 compare
+            partname = Eq
+            uid = 51
+            srctype = Int
+            left tag = 31 80
+            right literal = 41 81
+            out = 82
+          step 1 contact
+            uid = 52
+            operand = 30
+            operandwire = 83
+            negated = true
+            out = 84
+        out = 85
+      out = 89
+    step 1 contact
+      uid = 57
+      operand = 34
+      operandwire = 90
+      negated = true
+      out = 91
+    step 2 compare
+      partname = Eq
+      uid = 58
+      srctype = Int
+      left tag = 33 92
+      right literal = 42 93
+      out = 94
+    coil = 59
+    coil operand = 35
+    coil operandwire = 95
+  assignment 6
+    rail = 69
+    step 0 contact
+      uid = 60
+      operand = 36
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 61
+    coil operand = 37
+    coil operandwire = 98
+  assignment 7
+    rail = 69
+    step 0 contact
+      uid = 64
+      operand = 38
+      operandwire = 99
+      negated = false
+      out = 100
+    coil = 65
+    coil operand = 39
+    coil operandwire = 101
+  call 0
+    calluid = 62
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 69
+    instanceuid = 63
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst2
+NETWORK 17
+  compileunit = 53
+  access DiscreteInputs.SFCRotSen = 21 GlobalVariable
+  access DiscreteInputs.SFCRunningFwd = 22 GlobalVariable
+  access HMIControlSignals.BypassSFCRotSen = 23 GlobalVariable
+  access MotorFwdRevInst1.IO.RunningFBFwd = 24 GlobalVariable
+  access MotorFwdRevInst1.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.SFCRotSen = 26 GlobalVariable
+  access DiscreteInputs.SFCRunningRev = 27 GlobalVariable
+  access HMIControlSignals.BypassSFCRotSen = 28 GlobalVariable
+  access MotorFwdRevInst1.IO.RunningFBRev = 29 GlobalVariable
+  access DiscreteInputs.SFCIsoFB = 30 GlobalVariable
+  access MotorFwdRevInst1.IO.InhibitMotor = 31 GlobalVariable
+  access PlantControl.PreStartComplete = 32 GlobalVariable
+  access MotorFwdRevInst1.IO.PreStartDone = 33 GlobalVariable
+  access ShredderControlInst1.Outputs.UPSEnable = 34 GlobalVariable
+  access MotorFwdRevInst1.IO.RunningFBFwd = 35 GlobalVariable
+  access MotorFwdRevInst1.IO.InHand = 36 GlobalVariable
+  access PlantControl.Status = 37 GlobalVariable
+  access MotorFwdRevInst1.IO.RunningFBRev = 38 GlobalVariable
+  access MotorFwdRevInst1.IO.Reverse = 39 GlobalVariable
+  access ShredderControlInst1.Outputs.UPSEnable = 40 GlobalVariable
+  access MotorFwdRevInst1.IO.Reverse = 41 GlobalVariable
+  access ShredderControlInst1.Outputs.UPSEnable = 42 GlobalVariable
+  access MotorFwdRevInst1.IO.Reverse = 43 GlobalVariable
+  access PlantControl.Status = 44 GlobalVariable
+  access MotorStarterInst1.IO.ShutdownComplete = 45 GlobalVariable
+  access PlantControl.Status = 46 GlobalVariable
+  access MotorStarterInst2.IO.ShutdownComplete = 47 GlobalVariable
+  access PlantControl.GeneralEnable = 48 GlobalVariable
+  access MotorFwdRevInst1.IO.Reverse = 49 GlobalVariable
+  access MotorFwdRevInst1.IO.AutoStartSignal = 50 GlobalVariable
+  access PlantControl.Status = 51 GlobalVariable
+  access MotorFwdRevInst1.IO.HandIntervention = 52 GlobalVariable
+  access MotorFwdRevInst1.IO.Shutdown = 53 GlobalVariable
+  access HMIControlSignals.SystemReset = 54 GlobalVariable
+  access MotorFwdRevInst1.IO.FaultReset = 55 GlobalVariable
+  access MotorFwdRevInst1.IO.RunFwd = 56 GlobalVariable
+  access DiscreteOutputs.SFCRunFwd = 57 GlobalVariable
+  access MotorFwdRevInst1.IO.RunRev = 58 GlobalVariable
+  access DiscreteOutputs.SFCRunRev = 59 GlobalVariable
+  constant 1 = 60 Int
+  constant 1 = 61 Int
+  constant -1 = 62 Int
+  constant -1 = 63 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 67
+      branch 0
+        rail = 115
+        step 0 contact
+          uid = 64
+          operand = 22
+          operandwire = 111
+          negated = false
+          out = 112
+        step 1 contact
+          uid = 65
+          operand = 21
+          operandwire = 113
+          negated = false
+          out = 114
+      branch 1
+        rail = 115
+        step 0 contact
+          uid = 64
+          operand = 22
+          operandwire = 111
+          negated = false
+          out = 112
+        step 1 contact
+          uid = 66
+          operand = 23
+          operandwire = 116
+          negated = false
+          out = 117
+      out = 118
+    coil = 68
+    coil operand = 24
+    coil operandwire = 119
+  assignment 1
+    rail = 115
+    coil = 69
+    coil operand = 25
+    coil operandwire = 120
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 73
+      branch 0
+        rail = 115
+        step 0 contact
+          uid = 70
+          operand = 27
+          operandwire = 121
+          negated = false
+          out = 122
+        step 1 contact
+          uid = 71
+          operand = 26
+          operandwire = 123
+          negated = false
+          out = 124
+      branch 1
+        rail = 115
+        step 0 contact
+          uid = 70
+          operand = 27
+          operandwire = 121
+          negated = false
+          out = 122
+        step 1 contact
+          uid = 72
+          operand = 28
+          operandwire = 125
+          negated = false
+          out = 126
+      out = 127
+    coil = 74
+    coil operand = 29
+    coil operandwire = 128
+  assignment 3
+    rail = 115
+    step 0 contact
+      uid = 75
+      operand = 30
+      operandwire = 129
+      negated = false
+      out = 130
+    coil = 76
+    coil operand = 31
+    coil operandwire = 131
+  assignment 4
+    rail = 115
+    step 0 contact
+      uid = 77
+      operand = 32
+      operandwire = 132
+      negated = false
+      out = 133
+    coil = 78
+    coil operand = 33
+    coil operandwire = 134
+  assignment 5
+    rail = none
+    step 0 or
+      uid = 83
+      branch 0
+        rail = 115
+        step 0 compare
+          partname = Ge
+          uid = 79
+          srctype = Int
+          left tag = 37 135
+          right literal = 60 136
+          out = 137
+        step 1 contact
+          uid = 80
+          operand = 36
+          operandwire = 138
+          negated = true
+          out = 139
+        step 2 contact
+          uid = 81
+          operand = 35
+          operandwire = 140
+          negated = false
+          out = 141
+      branch 1
+        rail = 115
+        step 0 compare
+          partname = Ge
+          uid = 79
+          srctype = Int
+          left tag = 37 135
+          right literal = 60 136
+          out = 137
+        step 1 contact
+          uid = 80
+          operand = 36
+          operandwire = 138
+          negated = true
+          out = 139
+        step 2 contact
+          uid = 82
+          operand = 38
+          operandwire = 142
+          negated = false
+          out = 143
+      out = 144
+    step 1 contact
+      uid = 84
+      operand = 34
+      operandwire = 145
+      negated = false
+      out = 146
+    coil = 85
+    coil operand = 39
+    coil operandwire = 147
+  assignment 6
+    rail = none
+    step 0 or
+      uid = 83
+      branch 0
+        rail = 115
+        step 0 compare
+          partname = Ge
+          uid = 79
+          srctype = Int
+          left tag = 37 135
+          right literal = 60 136
+          out = 137
+        step 1 contact
+          uid = 80
+          operand = 36
+          operandwire = 138
+          negated = true
+          out = 139
+        step 2 contact
+          uid = 81
+          operand = 35
+          operandwire = 140
+          negated = false
+          out = 141
+      branch 1
+        rail = 115
+        step 0 compare
+          partname = Ge
+          uid = 79
+          srctype = Int
+          left tag = 37 135
+          right literal = 60 136
+          out = 137
+        step 1 contact
+          uid = 80
+          operand = 36
+          operandwire = 138
+          negated = true
+          out = 139
+        step 2 contact
+          uid = 82
+          operand = 38
+          operandwire = 142
+          negated = false
+          out = 143
+      out = 144
+    step 1 contact
+      uid = 86
+      operand = 40
+      operandwire = 148
+      negated = true
+      out = 149
+    coil = 87
+    coil operand = 41
+    coil operandwire = 150
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 97
+      branch 0
+        rail = none
+        step 0 or
+          uid = 92
+          branch 0
+            rail = 115
+            step 0 compare
+              partname = Ge
+              uid = 88
+              srctype = Int
+              left tag = 44 151
+              right literal = 61 152
+              out = 153
+          branch 1
+            rail = 115
+            step 0 compare
+              partname = Eq
+              uid = 89
+              srctype = Int
+              left tag = 46 154
+              right literal = 62 155
+              out = 156
+            step 1 contact
+              uid = 90
+              operand = 45
+              operandwire = 157
+              negated = true
+              out = 158
+          branch 2
+            rail = 115
+            step 0 compare
+              partname = Eq
+              uid = 89
+              srctype = Int
+              left tag = 46 154
+              right literal = 62 155
+              out = 156
+            step 1 contact
+              uid = 91
+              operand = 47
+              operandwire = 159
+              negated = true
+              out = 160
+          out = 161
+        step 1 contact
+          uid = 93
+          operand = 43
+          operandwire = 162
+          negated = true
+          out = 163
+        step 2 contact
+          uid = 94
+          operand = 42
+          operandwire = 164
+          negated = false
+          out = 165
+      branch 1
+        rail = none
+        step 0 or
+          uid = 92
+          branch 0
+            rail = 115
+            step 0 compare
+              partname = Ge
+              uid = 88
+              srctype = Int
+              left tag = 44 151
+              right literal = 61 152
+              out = 153
+          branch 1
+            rail = 115
+            step 0 compare
+              partname = Eq
+              uid = 89
+              srctype = Int
+              left tag = 46 154
+              right literal = 62 155
+              out = 156
+            step 1 contact
+              uid = 90
+              operand = 45
+              operandwire = 157
+              negated = true
+              out = 158
+          branch 2
+            rail = 115
+            step 0 compare
+              partname = Eq
+              uid = 89
+              srctype = Int
+              left tag = 46 154
+              right literal = 62 155
+              out = 156
+            step 1 contact
+              uid = 91
+              operand = 47
+              operandwire = 159
+              negated = true
+              out = 160
+          out = 161
+        step 1 contact
+          uid = 95
+          operand = 49
+          operandwire = 166
+          negated = false
+          out = 167
+        step 2 contact
+          uid = 96
+          operand = 48
+          operandwire = 168
+          negated = false
+          out = 169
+      out = 170
+    coil = 98
+    coil operand = 50
+    coil operandwire = 171
+  assignment 8
+    rail = none
+    step 0 not
+      uid = 99
+      rail = none
+      step 0 or
+        uid = 92
+        branch 0
+          rail = 115
+          step 0 compare
+            partname = Ge
+            uid = 88
+            srctype = Int
+            left tag = 44 151
+            right literal = 61 152
+            out = 153
+        branch 1
+          rail = 115
+          step 0 compare
+            partname = Eq
+            uid = 89
+            srctype = Int
+            left tag = 46 154
+            right literal = 62 155
+            out = 156
+          step 1 contact
+            uid = 90
+            operand = 45
+            operandwire = 157
+            negated = true
+            out = 158
+        branch 2
+          rail = 115
+          step 0 compare
+            partname = Eq
+            uid = 89
+            srctype = Int
+            left tag = 46 154
+            right literal = 62 155
+            out = 156
+          step 1 contact
+            uid = 91
+            operand = 47
+            operandwire = 159
+            negated = true
+            out = 160
+        out = 161
+      out = 172
+    step 1 contact
+      uid = 100
+      operand = 52
+      operandwire = 173
+      negated = true
+      out = 174
+    step 2 compare
+      partname = Eq
+      uid = 101
+      srctype = Int
+      left tag = 51 175
+      right literal = 63 176
+      out = 177
+    coil = 102
+    coil operand = 53
+    coil operandwire = 178
+  assignment 9
+    rail = 115
+    step 0 contact
+      uid = 103
+      operand = 54
+      operandwire = 179
+      negated = false
+      out = 180
+    coil = 104
+    coil operand = 55
+    coil operandwire = 181
+  assignment 10
+    rail = 115
+    step 0 contact
+      uid = 107
+      operand = 56
+      operandwire = 182
+      negated = false
+      out = 183
+    coil = 108
+    coil operand = 57
+    coil operandwire = 184
+  assignment 11
+    rail = 115
+    step 0 contact
+      uid = 109
+      operand = 58
+      operandwire = 185
+      negated = false
+      out = 186
+    coil = 110
+    coil operand = 59
+    coil operandwire = 187
+  call 0
+    calluid = 105
+    blockname = MotorFwdRevSystem
+    blocktype = FB
+    rail = 115
+    instanceuid = 106
+    instancescope = GlobalVariable
+    instancepath = MotorFwdRevInst1
+NETWORK 18
+  compileunit = 58
+  access PlantControl.PreStartComplete = 21 GlobalVariable
+  access ShredderControlInst1.Inputs.PreStartDone = 22 GlobalVariable
+  access HMIControlSignals.SystemReset = 23 GlobalVariable
+  access ShredderControlInst1.Inputs.FaultReset = 24 GlobalVariable
+  access MotorStarterInst9.IO.UPSEnable = 25 GlobalVariable
+  access PlantControl.Status = 26 GlobalVariable
+  access MotorFwdRevInst1.IO.ShutdownComplete = 27 GlobalVariable
+  access PlantControl.Status = 28 GlobalVariable
+  access ShredderControlInst1.Inputs.AutoStartSignal = 29 GlobalVariable
+  access PlantControl.Status = 30 GlobalVariable
+  access ShredderControlInst1.Inputs.HandIntervention = 31 GlobalVariable
+  access ShredderControlInst1.Inputs.Shutdown = 32 GlobalVariable
+  constant 1 = 33 Int
+  constant -1 = 34 Int
+  constant -1 = 35 Int
+  assignment 0
+    rail = 55
+    step 0 contact
+      uid = 36
+      operand = 21
+      operandwire = 52
+      negated = false
+      out = 53
+    coil = 37
+    coil operand = 22
+    coil operandwire = 54
+  assignment 1
+    rail = 55
+    step 0 contact
+      uid = 38
+      operand = 23
+      operandwire = 56
+      negated = false
+      out = 57
+    coil = 39
+    coil operand = 24
+    coil operandwire = 58
+  assignment 2
+    rail = none
+    step 0 or
+      uid = 43
+      branch 0
+        rail = 55
+        step 0 compare
+          partname = Ge
+          uid = 40
+          srctype = Int
+          left tag = 26 59
+          right literal = 33 60
+          out = 61
+      branch 1
+        rail = 55
+        step 0 compare
+          partname = Eq
+          uid = 41
+          srctype = Int
+          left tag = 28 62
+          right literal = 34 63
+          out = 64
+        step 1 contact
+          uid = 42
+          operand = 27
+          operandwire = 65
+          negated = true
+          out = 66
+      out = 67
+    step 1 contact
+      uid = 44
+      operand = 25
+      operandwire = 68
+      negated = false
+      out = 69
+    coil = 45
+    coil operand = 29
+    coil operandwire = 70
+  assignment 3
+    rail = none
+    step 0 not
+      uid = 46
+      rail = none
+      step 0 or
+        uid = 43
+        branch 0
+          rail = 55
+          step 0 compare
+            partname = Ge
+            uid = 40
+            srctype = Int
+            left tag = 26 59
+            right literal = 33 60
+            out = 61
+        branch 1
+          rail = 55
+          step 0 compare
+            partname = Eq
+            uid = 41
+            srctype = Int
+            left tag = 28 62
+            right literal = 34 63
+            out = 64
+          step 1 contact
+            uid = 42
+            operand = 27
+            operandwire = 65
+            negated = true
+            out = 66
+        out = 67
+      out = 71
+    step 1 contact
+      uid = 47
+      operand = 31
+      operandwire = 72
+      negated = true
+      out = 73
+    step 2 compare
+      partname = Eq
+      uid = 48
+      srctype = Int
+      left tag = 30 74
+      right literal = 35 75
+      out = 76
+    coil = 49
+    coil operand = 32
+    coil operandwire = 77
+  call 0
+    calluid = 50
+    blockname = ShredderControlSystem
+    blocktype = FB
+    rail = 55
+    instanceuid = 51
+    instancescope = GlobalVariable
+    instancepath = ShredderControlInst1
+NETWORK 19
+  compileunit = 5D
+  access HMIControlSignals.SystemReset = 21 GlobalVariable
+  access FilterUnitInst1.IO.FaultReset = 22 GlobalVariable
+  access DiscreteInputs.CycloneDustRemOp = 23 GlobalVariable
+  access FilterUnitInst1.RemoteOp = 24 GlobalVariable
+  access FilterUnitInst1.IO.FaultReset = 25 GlobalVariable
+  access DiscreteOutputs.CycloneDustFilterReset = 26 GlobalVariable
+  access DiscreteInputs.CycloneDustAutoRunning/Stop = 27 GlobalVariable
+  access FilterUnitInst1.IO.RunningFB = 28 GlobalVariable
+  access DiscreteInputs.CycloneDustSysOk = 29 GlobalVariable
+  access FilterUnitInst1.IO.FaultFB = 30 GlobalVariable
+  access PlantControl.PreStartComplete = 31 GlobalVariable
+  access FilterUnitInst1.IO.PreStartDone = 32 GlobalVariable
+  access FilterUnitInst1.IO.SystemHealthy = 33 GlobalVariable
+  access PlantControl.Status = 34 GlobalVariable
+  access PlantControl.FansShutdownReady = 35 GlobalVariable
+  access PlantControl.Status = 36 GlobalVariable
+  access ShredderControlInst1.Outputs.ShutdownComplete = 37 GlobalVariable
+  access FilterUnitInst1.IO.AutoStartSignal = 38 GlobalVariable
+  access PlantControl.Status = 39 GlobalVariable
+  access FilterUnitInst1.IO.HandIntervention = 40 GlobalVariable
+  access FilterUnitInst1.IO.Shutdown = 41 GlobalVariable
+  access FilterUnitInst1.IO.Run = 42 GlobalVariable
+  access DiscreteOutputs.CycloneDustFilterStart = 43 GlobalVariable
+  access ProcessTimings.NormalFanStartTime = 44 GlobalVariable
+  access FilterUnitInst1.IO.EnableUPSTime = 45 GlobalVariable
+  constant 1 = 46 Int
+  constant -1 = 47 Int
+  constant -1 = 48 Int
+  assignment 0
+    rail = 80
+    step 0 contact
+      uid = 50
+      operand = 21
+      operandwire = 77
+      negated = false
+      out = 78
+    coil = 51
+    coil operand = 22
+    coil operandwire = 79
+  assignment 1
+    rail = 80
+    step 0 contact
+      uid = 52
+      operand = 23
+      operandwire = 81
+      negated = false
+      out = 82
+    coil = 53
+    coil operand = 24
+    coil operandwire = 83
+  assignment 2
+    rail = 80
+    step 0 contact
+      uid = 54
+      operand = 25
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 55
+    coil operand = 26
+    coil operandwire = 86
+  assignment 3
+    rail = 80
+    step 0 contact
+      uid = 56
+      operand = 27
+      operandwire = 87
+      negated = false
+      out = 88
+    coil = 57
+    coil operand = 28
+    coil operandwire = 89
+  assignment 4
+    rail = 80
+    step 0 contact
+      uid = 58
+      operand = 29
+      operandwire = 90
+      negated = true
+      out = 91
+    coil = 59
+    coil operand = 30
+    coil operandwire = 92
+  assignment 5
+    rail = 80
+    step 0 contact
+      uid = 60
+      operand = 31
+      operandwire = 93
+      negated = false
+      out = 94
+    coil = 61
+    coil operand = 32
+    coil operandwire = 95
+  assignment 6
+    rail = 80
+    coil = 62
+    coil operand = 33
+    coil operandwire = 96
+  assignment 7
+    rail = none
+    step 0 or
+      uid = 67
+      branch 0
+        rail = 80
+        step 0 compare
+          partname = Ge
+          uid = 63
+          srctype = Int
+          left tag = 34 97
+          right literal = 46 98
+          out = 99
+      branch 1
+        rail = 80
+        step 0 compare
+          partname = Eq
+          uid = 64
+          srctype = Int
+          left tag = 36 100
+          right literal = 47 101
+          out = 102
+        step 1 contact
+          uid = 65
+          operand = 35
+          operandwire = 103
+          negated = true
+          out = 104
+      branch 2
+        rail = 80
+        step 0 compare
+          partname = Eq
+          uid = 64
+          srctype = Int
+          left tag = 36 100
+          right literal = 47 101
+          out = 102
+        step 1 contact
+          uid = 66
+          operand = 37
+          operandwire = 105
+          negated = true
+          out = 106
+      out = 107
+    coil = 68
+    coil operand = 38
+    coil operandwire = 108
+  assignment 8
+    rail = none
+    step 0 not
+      uid = 69
+      rail = none
+      step 0 or
+        uid = 67
+        branch 0
+          rail = 80
+          step 0 compare
+            partname = Ge
+            uid = 63
+            srctype = Int
+            left tag = 34 97
+            right literal = 46 98
+            out = 99
+        branch 1
+          rail = 80
+          step 0 compare
+            partname = Eq
+            uid = 64
+            srctype = Int
+            left tag = 36 100
+            right literal = 47 101
+            out = 102
+          step 1 contact
+            uid = 65
+            operand = 35
+            operandwire = 103
+            negated = true
+            out = 104
+        branch 2
+          rail = 80
+          step 0 compare
+            partname = Eq
+            uid = 64
+            srctype = Int
+            left tag = 36 100
+            right literal = 47 101
+            out = 102
+          step 1 contact
+            uid = 66
+            operand = 37
+            operandwire = 105
+            negated = true
+            out = 106
+        out = 107
+      out = 109
+    step 1 contact
+      uid = 70
+      operand = 40
+      operandwire = 110
+      negated = true
+      out = 111
+    step 2 compare
+      partname = Eq
+      uid = 71
+      srctype = Int
+      left tag = 39 112
+      right literal = 48 113
+      out = 114
+    coil = 72
+    coil operand = 41
+    coil operandwire = 115
+  assignment 9
+    rail = 80
+    step 0 contact
+      uid = 75
+      operand = 42
+      operandwire = 116
+      negated = false
+      out = 117
+    coil = 76
+    coil operand = 43
+    coil operandwire = 118
+  move 0
+    moveuid = 49
+    rail = 80
+    in tag = 44 119
+    dest = 45
+    destwire = 120
+  call 0
+    calluid = 73
+    blockname = FilterUnitSystem
+    blocktype = FB
+    rail = 80
+    instanceuid = 74
+    instancescope = GlobalVariable
+    instancepath = FilterUnitInst1
+NETWORK 20
+  compileunit = 62
+  access DiscreteInputs.SDCRotSen = 21 GlobalVariable
+  access DiscreteInputs.SDCRuning = 22 GlobalVariable
+  access HMIControlSignals.BypassSDCRotSen = 23 GlobalVariable
+  access MotorStarterInst9.IO.RunningFB = 24 GlobalVariable
+  access MotorStarterInst9.IO.SystemHealthy = 25 GlobalVariable
+  access DiscreteInputs.SDCIsoFB = 26 GlobalVariable
+  access MotorStarterInst9.IO.InhibitMotor = 27 GlobalVariable
+  access PlantControl.PreStartComplete = 28 GlobalVariable
+  access MotorStarterInst9.IO.PreStartDone = 29 GlobalVariable
+  access PlantControl.GeneralEnable = 30 GlobalVariable
+  access PlantControl.Status = 31 GlobalVariable
+  access ShredderControlInst1.Outputs.ShutdownComplete = 32 GlobalVariable
+  access PlantControl.Status = 33 GlobalVariable
+  access MotorStarterInst9.IO.AutoStartSignal = 34 GlobalVariable
+  access PlantControl.Status = 35 GlobalVariable
+  access MotorStarterInst9.IO.HandIntervention = 36 GlobalVariable
+  access MotorStarterInst9.IO.Shutdown = 37 GlobalVariable
+  access HMIControlSignals.SystemReset = 38 GlobalVariable
+  access MotorStarterInst9.IO.FaultReset = 39 GlobalVariable
+  access MotorStarterInst9.IO.Run = 40 GlobalVariable
+  access DiscreteOutputs.SDCStart = 41 GlobalVariable
+  constant 1 = 42 Int
+  constant -1 = 43 Int
+  constant -1 = 44 Int
+  assignment 0
+    rail = none
+    step 0 or
+      uid = 48
+      branch 0
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 46
+          operand = 21
+          operandwire = 73
+          negated = false
+          out = 74
+      branch 1
+        rail = 75
+        step 0 contact
+          uid = 45
+          operand = 22
+          operandwire = 71
+          negated = false
+          out = 72
+        step 1 contact
+          uid = 47
+          operand = 23
+          operandwire = 76
+          negated = false
+          out = 77
+      out = 78
+    coil = 49
+    coil operand = 24
+    coil operandwire = 79
+  assignment 1
+    rail = 75
+    coil = 50
+    coil operand = 25
+    coil operandwire = 80
+  assignment 2
+    rail = 75
+    step 0 contact
+      uid = 51
+      operand = 26
+      operandwire = 81
+      negated = false
+      out = 82
+    coil = 52
+    coil operand = 27
+    coil operandwire = 83
+  assignment 3
+    rail = 75
+    step 0 contact
+      uid = 53
+      operand = 28
+      operandwire = 84
+      negated = false
+      out = 85
+    coil = 54
+    coil operand = 29
+    coil operandwire = 86
+  assignment 4
+    rail = none
+    step 0 or
+      uid = 58
+      branch 0
+        rail = 75
+        step 0 compare
+          partname = Ge
+          uid = 55
+          srctype = Int
+          left tag = 31 87
+          right literal = 42 88
+          out = 89
+      branch 1
+        rail = 75
+        step 0 compare
+          partname = Eq
+          uid = 56
+          srctype = Int
+          left tag = 33 90
+          right literal = 43 91
+          out = 92
+        step 1 contact
+          uid = 57
+          operand = 32
+          operandwire = 93
+          negated = true
+          out = 94
+      out = 95
+    step 1 contact
+      uid = 59
+      operand = 30
+      operandwire = 96
+      negated = false
+      out = 97
+    coil = 60
+    coil operand = 34
+    coil operandwire = 98
+  assignment 5
+    rail = none
+    step 0 not
+      uid = 61
+      rail = none
+      step 0 or
+        uid = 58
+        branch 0
+          rail = 75
+          step 0 compare
+            partname = Ge
+            uid = 55
+            srctype = Int
+            left tag = 31 87
+            right literal = 42 88
+            out = 89
+        branch 1
+          rail = 75
+          step 0 compare
+            partname = Eq
+            uid = 56
+            srctype = Int
+            left tag = 33 90
+            right literal = 43 91
+            out = 92
+          step 1 contact
+            uid = 57
+            operand = 32
+            operandwire = 93
+            negated = true
+            out = 94
+        out = 95
+      out = 99
+    step 1 contact
+      uid = 62
+      operand = 36
+      operandwire = 100
+      negated = true
+      out = 101
+    step 2 compare
+      partname = Eq
+      uid = 63
+      srctype = Int
+      left tag = 35 102
+      right literal = 44 103
+      out = 104
+    coil = 64
+    coil operand = 37
+    coil operandwire = 105
+  assignment 6
+    rail = 75
+    step 0 contact
+      uid = 65
+      operand = 38
+      operandwire = 106
+      negated = false
+      out = 107
+    coil = 66
+    coil operand = 39
+    coil operandwire = 108
+  assignment 7
+    rail = 75
+    step 0 contact
+      uid = 69
+      operand = 40
+      operandwire = 109
+      negated = false
+      out = 110
+    coil = 70
+    coil operand = 41
+    coil operandwire = 111
+  call 0
+    calluid = 67
+    blockname = MotorStarter
+    blocktype = FB
+    rail = 75
+    instanceuid = 68
+    instancescope = GlobalVariable
+    instancepath = MotorStarterInst9

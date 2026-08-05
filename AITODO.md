@@ -20,6 +20,33 @@ documented/committed, delete it from this file rather than letting it accumulate
 4. Cross-check: does the code in the diff match what this doc claims is done? If not, trust the
    code/diff and fix this doc.
 
+## In flight — S6-Killer-Plan aftermath (2026-08-05, branch `worktree-s6-killer-plan`, NOT merged)
+
+**Done and committed on that branch** (~25 commits; `git log --oneline master..worktree-s6-killer-plan`):
+the S6-Killer-Plan answer-key validation end-to-end (score: MATCH 14 / IMPROVEMENT 1 / DEFECT 3 /
+REGRESSION 1 / SPEC-GAP 3), its autopsy, the four-rung spec pipeline skills, the FI-36/FI-39 mechanical
+floor (5 converter checks, 707 tests), the `tagstatus` member-blindness fix, and three real runs of the
+pipeline. See `docs/notes/S6-Killer-Plan.md`'s status block for the map.
+
+**Left deliberately OPEN (owner's call, 2026-08-05) — not blockers, just not now:**
+
+1. **The `references/<class>/` library** — the binding constraint. All three references self-disclaim as
+   non-standards (derived from as-built FB interfaces), so rung A's *completeness by construction* —
+   the property that makes a spec complete rather than merely careful — is **nominal, not delivered**.
+   Rung A raises this as a blocking Q on every run. Highest-value remaining pipeline work; needs its own
+   scoped proposal.
+2. **Two tool refinements** (detail in `docs/16-future-ideas.md` FI-39): `relation-reconcile`'s citation
+   check **rewards a vaguer citation** than a precise one; `signal-sweep` can never reach zero here
+   because a real member name contains `/`.
+3. **The dispatch path** — the four rung skills weren't exposed to the Skill tool in the runs that used
+   them; each agent read the `SKILL.md` directly instead. Worth confirming registration before relying
+   on `/gen-pid-analysis` by name.
+4. **A second plant.** Everything above is fitted to one. A different plant is what shows which rules
+   are general and which are overfitted — the real completeness test.
+
+**Unchanged by any of this:** S6 exit still needs its ten fresh plain-language requests. None of this
+work counts toward that tally — it is a validation fixture and the tooling that came out of it.
+
 ## Project stage
 
 **S3 — Comment generation, DONE — gate reviewed and signed off by the project owner, 2026-07-14.**

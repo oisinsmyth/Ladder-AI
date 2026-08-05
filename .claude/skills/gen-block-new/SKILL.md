@@ -71,6 +71,12 @@ reality into code. Report the gap and stop; don't improvise the DB.
   line not signed → stop and say gate 1 must be signed first (docs/15 gate 1 is never skipped). A
   tier-(c) item is not yours — route it to `gen-block-modify-purpose`. Never code from a remembered
   or conversation-supplied design.
+- **`gen/<project>/code-structure.md` §D3 — REQUIRED where the project was specified through the
+  A–D rungs.** The per-instance render is the term-level contract: every term carries the relation id
+  it satisfies, and you implement **all** of them. Fitting the render to the nearest pattern shape and
+  shedding the residue is the documented generation failure
+  (`docs/evidence/PlantAutoControl-bench-autopsy.md` cause 2) — a term you cannot place in the pattern is a
+  stop-and-report, never a drop.
 - **`patterns/` + `docs/07-pattern-library-spec.md`** — your composition vocabulary. Read the
   relevant pattern's `pattern.md` in full, including its **admission status** and its `examples/`.
   The three kinds behave differently (below).
@@ -108,9 +114,14 @@ reality into code. Report the gap and stop; don't improvise the DB.
      sequencer, C-501/C-504 for an alarm FC, …).
    - A tier-(c) item is not yours — stop and route to `gen-block-modify-purpose`.
 3. **Tag-status gate (anti-laundering, hard rule 3).** Run
-   `converter tagstatus <every tag you will write> --project ir/<project>/`. Any `proposed` name →
-   stop and report the gap; the engineer creates it, you never code against it. Re-verify the
-   manifest's own `exists` marks here — trust the grep, not the artifact's memory.
+   `converter tagstatus <every tag you will write> --project ir/<project>/`. It classifies to
+   **member** level: `PROPOSED` (root absent) **and** `MEMBER-NOT-FOUND` (root exists, member
+   invented) both **stop the run** — report the gap; the engineer creates it, you never code against
+   it. A `MEMBER-UNCHECKED` result means the export cannot enumerate that namespace (an unexported
+   UDT, an instance-DB stub): the tool did not verify it, so **you** must, by reading the type.
+   Re-verify the manifest's own `exists` marks here — trust the tool, not the artifact's memory.
+   *(Until 2026-08-05 this check was root-level only and would pass an invented member; do not rely
+   on a remembered "it said EXISTS".)*
 4. **Write the IR, grouped by function (C-126) at write time — see below.**
 5. **Inner loop to a clean compile** (CLAUDE.md workflow step 4; the loop `lad-coder` owns):
    `converter preflight <files> --project ir/<project>/` — **zero-findings bar** (a consciously
