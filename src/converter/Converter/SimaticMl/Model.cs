@@ -133,6 +133,14 @@ public sealed record AccessNode(
 // All optional fields live on the one PartNode type rather than subtypes since every other Part
 // kind (Coil, and Contact/O without these) is unaffected and the parser/writer already dispatch
 // on `Name` for anything Part-shape-specific.
+//
+// Field-count watch, resolved 2026-08-05 (audit F-51): 14 fields, UNCHANGED since 2026-07-20 across
+// 55 commits that added four subcommands, a shared primitive and a `tagstatus` semantics change. The
+// earlier "the kitchen-sink trend has continued" premise for a discriminated-union split is therefore
+// false — the shape is stable, and a split would touch ~6,000 lines of the most load-bearing code in
+// the repo with no CI to catch a regression. REVISIT TRIGGER: this record passing 16 fields. Until
+// then, adding an optional field here is the expected way to carry a newly-confirmed Part attribute,
+// not evidence of drift.
 public sealed record PartNode(
     int UId,
     string Name,

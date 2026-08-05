@@ -29,12 +29,29 @@ public static class RelationArtifactParsers
     // A D3 render term tag: `[C2]` or `[P1,P2]`.
     private static readonly Regex RenderTermTag = new(@"\[([CP]\d+(?:\s*,\s*[CP]\d+)*)\]", RegexOptions.Compiled);
 
+    // The D3 render's per-network instance line: `NETWORK "…" instance: `FilterUnitInst2``. Hoisted
+    // here 2026-08-05 (audit F-41) — it used to be compiled inline inside ParseRender's per-line loop,
+    // the one pattern in this file that paid the Regex construction cost once per line of every
+    // artifact read rather than once per process.
+    private static readonly Regex RenderInstance = new(@"instance:\s*`?([A-Za-z_][A-Za-z0-9_]*)`?", RegexOptions.Compiled);
+
     private static readonly Regex BacktickToken = new(@"`([^`]+)`", RegexOptions.Compiled);
 
     private static readonly Regex Identifier = new(@"^[%A-Za-z_][A-Za-z0-9_.%\[\]]*$", RegexOptions.Compiled);
 
-    // `## **STOPPED — all six instances. No render produced.**` and kin.
-    private static readonly Regex StoppedMarker = new(@"STOPPED", RegexOptions.Compiled);
+    // A stopped D3 announces itself in a HEADING. Both real forms are in the committed corpus:
+    //   `## **STOPPED — all six instances. No render produced.**`   (rerun2, rerun3)
+    //   `> ## RUN STATUS — D3 (render) STOPPED. D0, D1, D2 COMPLETE.` (rerun, blockquoted, and the
+    //    word is mid-sentence rather than straight after the `##`)
+    // Tightened 2026-08-05 (audit F-41): this was a bare `STOPPED` substring match over the whole
+    // file, so the uppercase word anywhere in prose or in a table cell ("the conveyor must be
+    // STOPPED before…") flipped the runner's "verify this is intended" warning into a reassuring
+    // "legitimately stopped". Scoping to heading lines is as tight as the real corpus allows —
+    // anchoring to `^##\s+\*\*STOPPED` specifically, as first proposed, would have mis-reported
+    // gen/PlantAutoControl-bench-rerun/code-structure.md, whose stop is declared in a blockquoted
+    // `## RUN STATUS` heading. Neither branch gates the exit code; this only changes what the note says.
+    private static readonly Regex StoppedMarker =
+        new(@"^[ \t>]*#{1,6}[^\n]*\bSTOPPED\b", RegexOptions.Compiled | RegexOptions.Multiline);
 
     // One spec file per instance; the instance is the FILENAME, which is the only place it is stated
     // unambiguously (the heading carries a prose title too).
@@ -171,7 +188,7 @@ public static class RelationArtifactParsers
 
         foreach (var line in text.Split('\n'))
         {
-            var heading = Regex.Match(line, @"instance:\s*`?([A-Za-z_][A-Za-z0-9_]*)`?");
+            var heading = RenderInstance.Match(line);
             if (heading.Success)
             {
                 instance = heading.Groups[1].Value;

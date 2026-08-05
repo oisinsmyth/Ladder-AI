@@ -232,3 +232,47 @@ public sealed class DeviceNotFoundException : Exception
     {
     }
 }
+
+/// <summary>
+/// Thrown when a <c>--group &lt;device&gt;/&lt;path&gt;</c> argument names a group that isn't there —
+/// the part of the path *after* the device name, which <see cref="DeviceNotFoundException"/> already
+/// covers. Added 2026-08-05 (audit F-09): these sites threw a bare <c>InvalidOperationException</c>,
+/// so the commonest user mistake this tool has reported as exit 5 (an internal fault) rather than 7.
+///
+/// The messages point at <c>openness-cli list</c> deliberately. A <c>--group</c> path must match that
+/// command's own Path column verbatim — a device item's real name can itself contain spaces and an
+/// embedded article number as one literal string — and a shortened guess is precisely how this error
+/// gets produced, so naming the cure in the message is most of the value.
+/// </summary>
+public sealed class GroupNotFoundException : Exception
+{
+    private GroupNotFoundException(string message)
+        : base(message)
+    {
+    }
+
+    public static GroupNotFoundException EmptyPath() =>
+        new("Empty --group path. Pass --group <device>/<path>, copied verbatim from `openness-cli list`'s Path column.");
+
+    public static GroupNotFoundException NoDeviceItem(string groupPath) =>
+        new($"No device item found under '{groupPath}'. Copy the Path column from `openness-cli list` verbatim — " +
+            "a device item's real name can contain spaces and an article number as one literal string, and a " +
+            "shortened guess fails here.");
+
+    public static GroupNotFoundException GroupMissing(string kind, string groupName, string parentPath) =>
+        new($"{kind} group '{groupName}' not found under '{parentPath}'. Check it against `openness-cli list`'s Path column.");
+}
+
+/// <summary>
+/// Thrown when a <c>--group</c> path resolves to a device item that carries no PLC software — an HMI
+/// station, a rack, or a module rather than the PLC itself. Same user-error class as
+/// <see cref="GroupNotFoundException"/>, kept separate because the correction is different: not a typo
+/// in the path, but the wrong device item named along it.
+/// </summary>
+public sealed class NotAPlcSoftwareContainerException : Exception
+{
+    public NotAPlcSoftwareContainerException(string path)
+        : base($"'{path}' is not a PLC software container.")
+    {
+    }
+}

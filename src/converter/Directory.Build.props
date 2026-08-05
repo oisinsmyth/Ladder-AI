@@ -5,6 +5,16 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!--
+      Enabled 2026-08-05 (audit F-37) only after measuring: this solution built at 0 warnings in both
+      Debug and Release, so this pins a state that already held rather than declaring an aspiration.
+      With no CI, "we target zero warnings" was previously unenforced and unmeasured — a compiler
+      warning could sit in the tree indefinitely with nothing to notice it. If a legitimate warning
+      ever needs to be allowed, suppress that ONE diagnostic with a justified <NoWarn> and keep this
+      on; turning it off wholesale gives the tree back to entropy.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
 </Project>

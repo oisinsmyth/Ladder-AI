@@ -13,8 +13,9 @@
     </Reference>
   </ItemGroup>
 
+  <!-- Version comes from the repo-root Directory.Packages.props (F-38, central package management). -->
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="System.Text.Json" />
   </ItemGroup>
 
 </Project>

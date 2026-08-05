@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Added 2026-08-05 (audit F-38). The golden harness previously pinned its TargetFramework,
+    ImplicitUsings and Nullable inline in GoldenHarness.Tests.csproj — the only one of the three
+    solutions with no Directory.Build.props, so it was the one most likely to drift away from the
+    others unnoticed. It shares the converter's net8.0 settings because it references
+    Converter.csproj directly; a mismatch here would surface as a confusing project-reference error
+    rather than an obvious version statement.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- See src/converter/Directory.Build.props — measured at 0 warnings before enabling. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

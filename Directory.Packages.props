@@ -1,0 +1,33 @@
+<Project>
+
+  <!--
+    Central package management (2026-08-05, audit F-38). Before this, the same four test-harness
+    pins were duplicated verbatim in all three test .csproj files, so a version bump had to be made
+    in three places and a *partial* bump — one suite on a different xunit than the other two — would
+    have built and run silently. There is no CI to notice the drift, which is exactly why the
+    versions belong in one file.
+
+    NuGet uses the NEAREST Directory.Packages.props walking up from each project, and no project
+    under this repo has its own, so this file is the single source of truth for every one of them.
+    With ManagePackageVersionsCentrally on, a <PackageReference> in a .csproj carries no Version at
+    all — an unlisted package is a build error rather than a silent floating reference.
+
+    The net48 / net8.0 split is deliberate and stays where it is (see src/openness-cli's own
+    Directory.Build.props): these packages are framework-agnostic, so one pin serves both.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="6.0.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageVersion Include="xunit" Version="2.5.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

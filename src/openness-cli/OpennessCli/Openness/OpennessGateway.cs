@@ -1142,18 +1142,24 @@ public sealed class OpennessGateway : IOpennessGateway
     }
 
     /// <summary>
-    /// Resolves a "list"-style Path (e.g. "S7-1200 G2 station_2/JOB9002_PLC/Control") to the
-    /// PlcBlockGroup it names: greedily descends matching DeviceItem names first, then treats
-    /// the remaining segments as nested PlcBlockGroup names once a PLC software container is
-    /// found. There's no fixed boundary between the device-item part and the group-name part
-    /// in the path string, so this is the only reliable way to resolve it generically.
+    /// The shared front half of <see cref="FindGroup"/>, <see cref="FindTypeGroup"/> and
+    /// <see cref="FindTagTableGroup"/> — three ~50-line functions that were verbatim copies of each
+    /// other apart from their last five lines (deduplicated 2026-08-05).
+    ///
+    /// Resolves a "list"-style Path (e.g. "S7-1200 G2 station_2/JOB9002_PLC/Control") as far as the
+    /// PlcSoftware it names, and reports how many leading segments that consumed. There's no fixed
+    /// boundary between the device-item part of the path and the group-name part, so the walk is
+    /// greedy: descend matching DeviceItem names for as long as they match, then hand the remaining
+    /// segments back to the caller, which knows which composition tree they name. Only that tail
+    /// differs — PlcBlockGroup, PlcTypeGroup and PlcTagTableGroup share no base type carrying a
+    /// `Groups` collection, so folding the tail in too would cost more parameterisation than it saves.
     /// </summary>
-    private static PlcBlockGroup FindGroup(Project project, string groupPath)
+    private static (PlcSoftware Software, string[] Segments, int Index) ResolvePlcSoftware(Project project, string groupPath)
     {
         var segments = groupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 0)
         {
-            throw new InvalidOperationException("Empty --group path.");
+            throw GroupNotFoundException.EmptyPath();
         }
 
         var device = project.Devices.Cast<Device>().FirstOrDefault(d => d.Name == segments[0])
@@ -1178,124 +1184,58 @@ public sealed class OpennessGateway : IOpennessGateway
 
         if (currentItem is null)
         {
-            throw new InvalidOperationException($"No device item found under '{groupPath}'.");
+            throw GroupNotFoundException.NoDeviceItem(groupPath);
         }
 
         var softwareContainer = currentItem.GetService<SoftwareContainer>();
         if (softwareContainer?.Software is not PlcSoftware plcSoftware)
         {
-            throw new InvalidOperationException($"'{string.Join("/", segments, 0, i)}' is not a PLC software container.");
+            throw new NotAPlcSoftwareContainerException(string.Join("/", segments, 0, i));
         }
+
+        return (plcSoftware, segments, i);
+    }
+
+    private static PlcBlockGroup FindGroup(Project project, string groupPath)
+    {
+        var (plcSoftware, segments, i) = ResolvePlcSoftware(project, groupPath);
 
         PlcBlockGroup group = plcSoftware.BlockGroup;
         for (; i < segments.Length; i++)
         {
             group = group.Groups.Cast<PlcBlockUserGroup>().FirstOrDefault(g => g.Name == segments[i])
-                ?? throw new InvalidOperationException($"Block group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
+                ?? throw GroupNotFoundException.GroupMissing("Block", segments[i], string.Join("/", segments, 0, i));
         }
 
         return group;
     }
 
-    // Mirrors FindGroup exactly, resolving into PlcSoftware.TypeGroup/PlcTypeGroup instead of
-    // .BlockGroup/PlcBlockGroup — a separate composition tree, not a view onto the same one
-    // (confirmed real, 2026-07-14: PlcTypeGroup has no relation to PlcBlockGroup beyond both
-    // hanging off the same PlcSoftware).
+    // PlcSoftware.TypeGroup/PlcTypeGroup is a separate composition tree, not a view onto
+    // .BlockGroup/PlcBlockGroup (confirmed real, 2026-07-14: PlcTypeGroup has no relation to
+    // PlcBlockGroup beyond both hanging off the same PlcSoftware).
     private static PlcTypeGroup FindTypeGroup(Project project, string groupPath)
     {
-        var segments = groupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0)
-        {
-            throw new InvalidOperationException("Empty --group path.");
-        }
-
-        var device = project.Devices.Cast<Device>().FirstOrDefault(d => d.Name == segments[0])
-            ?? throw new DeviceNotFoundException(segments[0]);
-
-        var i = 1;
-        DeviceItem? currentItem = null;
-        IEnumerable<DeviceItem> currentLevel = device.DeviceItems.Cast<DeviceItem>();
-
-        while (i < segments.Length)
-        {
-            var next = currentLevel.FirstOrDefault(it => it.Name == segments[i]);
-            if (next is null)
-            {
-                break;
-            }
-
-            currentItem = next;
-            currentLevel = next.DeviceItems.Cast<DeviceItem>();
-            i++;
-        }
-
-        if (currentItem is null)
-        {
-            throw new InvalidOperationException($"No device item found under '{groupPath}'.");
-        }
-
-        var softwareContainer = currentItem.GetService<SoftwareContainer>();
-        if (softwareContainer?.Software is not PlcSoftware plcSoftware)
-        {
-            throw new InvalidOperationException($"'{string.Join("/", segments, 0, i)}' is not a PLC software container.");
-        }
+        var (plcSoftware, segments, i) = ResolvePlcSoftware(project, groupPath);
 
         PlcTypeGroup group = plcSoftware.TypeGroup;
         for (; i < segments.Length; i++)
         {
             group = group.Groups.Cast<PlcTypeUserGroup>().FirstOrDefault(g => g.Name == segments[i])
-                ?? throw new InvalidOperationException($"Type group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
+                ?? throw GroupNotFoundException.GroupMissing("Type", segments[i], string.Join("/", segments, 0, i));
         }
 
         return group;
     }
 
-    // Mirrors FindTypeGroup exactly, resolving into PlcSoftware.TagTableGroup/PlcTagTableGroup
-    // instead of .TypeGroup/PlcTypeGroup.
     private static PlcTagTableGroup FindTagTableGroup(Project project, string groupPath)
     {
-        var segments = groupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0)
-        {
-            throw new InvalidOperationException("Empty --group path.");
-        }
-
-        var device = project.Devices.Cast<Device>().FirstOrDefault(d => d.Name == segments[0])
-            ?? throw new DeviceNotFoundException(segments[0]);
-
-        var i = 1;
-        DeviceItem? currentItem = null;
-        IEnumerable<DeviceItem> currentLevel = device.DeviceItems.Cast<DeviceItem>();
-
-        while (i < segments.Length)
-        {
-            var next = currentLevel.FirstOrDefault(it => it.Name == segments[i]);
-            if (next is null)
-            {
-                break;
-            }
-
-            currentItem = next;
-            currentLevel = next.DeviceItems.Cast<DeviceItem>();
-            i++;
-        }
-
-        if (currentItem is null)
-        {
-            throw new InvalidOperationException($"No device item found under '{groupPath}'.");
-        }
-
-        var softwareContainer = currentItem.GetService<SoftwareContainer>();
-        if (softwareContainer?.Software is not PlcSoftware plcSoftware)
-        {
-            throw new InvalidOperationException($"'{string.Join("/", segments, 0, i)}' is not a PLC software container.");
-        }
+        var (plcSoftware, segments, i) = ResolvePlcSoftware(project, groupPath);
 
         PlcTagTableGroup group = plcSoftware.TagTableGroup;
         for (; i < segments.Length; i++)
         {
             group = group.Groups.Cast<PlcTagTableUserGroup>().FirstOrDefault(g => g.Name == segments[i])
-                ?? throw new InvalidOperationException($"Tag table group '{segments[i]}' not found under '{string.Join("/", segments, 0, i)}'.");
+                ?? throw GroupNotFoundException.GroupMissing("Tag table", segments[i], string.Join("/", segments, 0, i));
         }
 
         return group;

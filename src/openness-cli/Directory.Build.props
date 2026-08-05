@@ -13,6 +13,13 @@
     -->
     <TiaOpennessDir Condition="'$(TiaOpennessDir)' == ''">$(TIA_OPENNESS_PATH)</TiaOpennessDir>
     <TiaOpennessDir Condition="'$(TiaOpennessDir)' == ''">C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V20</TiaOpennessDir>
+
+    <!--
+      Enabled 2026-08-05 (audit F-37) only after measuring: this solution built at 0 warnings in both
+      Debug and Release. See src/converter/Directory.Build.props for the reasoning — same rule, and
+      the same "suppress one diagnostic, don't disable the gate" escape hatch.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
 </Project>
