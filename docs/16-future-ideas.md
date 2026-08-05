@@ -677,3 +677,42 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Costs / risks:** Emit **facts, never verdicts** (the standing discipline for `review`/`cross-check`/`trace` output) — "3 candidates for this binding", not "wrong signal chosen". The candidate set needs a defensible scope rule (in-scope = this instance's IO rows + its FB's status members) or it degenerates to noise. Converter stays a pure in-process file transformer (no external-process shell-out — the owner-held invariant).
 **Dependencies:** FI-22 `cross-check` (`ProjectUsageGraph`, writer facts), FI-25 `trace` (forward REQ→IR binding), `ProjectIndex`/`DigestBuilder`, and the A–D rung artifacts' formats (the id conventions to parse). Supersedes nothing; it is **the mechanical floor FI-36 needs** — FI-36 defines the completeness trace, this computes the inputs that make it unfakeable.
 **Verdict / revisit trigger:** Open — the highest-value remaining build for the spec pipeline, and the only proposal that survives an agent deciding not to look. Sequence it with FI-36. **Design study done 2026-08-05: `docs/notes/fi-39-candidate-scan-design.md`** — all five checks buildable now, ~1800–2200 LOC + 30–40 tests total, recommended order **FI-36-min → `candidate-scan` (+ a new `SignalInventory` primitive, since `ProjectUsageGraph` discards member types) → `undriven-scan` → `relation-reconcile` (checks 2+3 folded) → `signal-sweep`**; items 1–3 read `.ir` only (no skill edit can rot them) and are ~45% of the effort for ~85% of the demonstrated value. **Correction to this entry:** "all five checks have a known-correct expected answer" on the fixture is **overstated** — checks 2 and 3 produce *empty* results there (rerun2 already reconciles 174/174/174; zero `verified-cross-block` rows exist) and check 5 has no oracle; the fixture is a strong regression test for **3 of 5**. Two design constraints the study surfaced: every absence claim must state its **denominator** (`ir/PlantAutoControl-bench/` is a *partial* 34-file export — "no writer" there is a scope fact, not a defect), and a markdown leg parsing **zero rows must hard-error**, never pass clean, or format drift turns these checks into silent all-greens.
+
+### FI-40 — a mechanical status check: retire the hand-restated-status drift class
+- **Status:** Raised (2026-08-05, out of the audit fix wave — the audit's own headline process recommendation)
+- **Problem.** Three consecutive audits have found the same defect class, and it is now the project's
+  measured dominant failure mode: a fact's *status* is re-stated by hand in several independent
+  documents, one goes stale, and only an audit notices. The 2026-08-05 audit re-derived **14 of the
+  prior round's 19 items as still valid**, and 11 of its own 53 findings trace to a single merge that
+  updated `CLAUDE.md` and `docs/16`'s entry bodies but not `docs/15`, `stage-gates.md`,
+  `docs/evidence/stage-S6.md`, `docs/16`'s status sections, `AITODO.md` or `CHANGELOG.md`.
+- **Why the usual fix does not work.** "Reconcile the whole file" is already a standing Method rule and
+  has now failed twice. Worse, the *correction* is not reliable either: the 2026-07-20 audit set out to
+  fix a stale rule count and wrote **24**, because it counted `C-nnn` *mentions* in `Rules.cs` rather
+  than dispatches in `ReviewRunner.AllRuleIds` — the real figure is **18**. Two audits, three documents,
+  and the confident correction was also wrong. A reading discipline cannot fix a measurement that is
+  easy to take incorrectly; only executable code reading the authoritative source can.
+- **Proposal.** A small test asserting the *derivable* facts these documents claim, so a claim fails in
+  a local `dotnet test` the moment it drifts. Candidate assertions, each cheap and unambiguous:
+  1. **Rule count** — every doc stating a mechanized-rule count states `AllRuleIds.Length`. One
+     assertion would have prevented three wrong numbers across two audits.
+  2. **FI status coherence** — every `docs/16` entry marked `Implemented` that names a `converter <cmd>`
+     has that subcommand dispatched in `Program.cs`, and does *not* appear in `AITODO.md`'s open list.
+     This is F-11 and F-12, mechanically.
+  3. **Skill inventory** — every skill named in `docs/15`'s tables exists in `.claude/skills/`, and
+     every skill directory appears in `docs/15`. This is F-04 — and the 2026-07-20 clean bill on exactly
+     this check, which had inverted within two weeks.
+  4. **Artifact-name contract** — every artifact filename a SKILL says it *consumes* is one some SKILL
+     *produces*. This is F-03: the `process-topology.md` nothing emitted, which degraded silently on
+     every run for two weeks because "consumed if present" never errors.
+- **Costs / risks.** Must assert **derivable** facts only — never prose. A check that fires falsely is
+  worse than none, because the cure for a noisy test is to delete it. Keep it to identifiers and
+  filenames; do not attempt to check meaning. The parsing is markdown-shaped and so itself drift-prone,
+  therefore each check must **hard-error on parsing zero rows** rather than passing clean — the same
+  rule FI-39's checks already follow, learned the same way.
+- **Dependencies.** None. It reads `docs/*.md`, `.claude/skills/` and two C# symbols. Deliberately
+  smaller than FI-39: no new subcommand, no new primitive — one test file in an existing suite.
+- **Verdict / revisit trigger.** Open, and cheap. The audit's judgement was that this is the single
+  highest-leverage item it found, precisely because it does not depend on anyone choosing to look — the
+  same property that made the FI-36/FI-39 mechanical floor worth building for the spec pipeline. If a
+  fourth audit finds this class again, that is the trigger to stop recommending it and build it.
