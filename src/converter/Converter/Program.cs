@@ -8,6 +8,7 @@ using Converter.Ir;
 using Converter.IrHash;
 using Converter.Preflight;
 using Converter.ReuseScan;
+using Converter.RelationReconcile;
 using Converter.Review;
 using Converter.Sanitize;
 using Converter.SimaticMl;
@@ -65,6 +66,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "undriven-scan")
         {
             return RunUndrivenScan(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "relation-reconcile")
+        {
+            return RunRelationReconcile(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -551,6 +557,84 @@ internal static class Program
         // no --only it's an informational report (exit 0) — a filter/inspection aid, never a gate on
         // its own.
         return report.HasInvarianceViolation ? 1 : 0;
+    }
+
+    private static int RunRelationReconcile(string[] args)
+    {
+        string? specs = null;
+        string? ledger = null;
+        string? register = null;
+        string? projectDir = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--specs":
+                    specs = RequireValue(args, ref i, "--specs");
+                    break;
+                case "--ledger":
+                    ledger = RequireValue(args, ref i, "--ledger");
+                    break;
+                case "--register":
+                    register = RequireValue(args, ref i, "--register");
+                    break;
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (specs is null || ledger is null || register is null)
+        {
+            Console.Error.WriteLine("Usage: converter relation-reconcile --specs <equipment-specs-dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(specs))
+        {
+            Console.Error.WriteLine($"--specs directory not found: {specs}");
+            return 1;
+        }
+
+        foreach (var (label, path) in new[] { ("--ledger", ledger), ("--register", register) })
+        {
+            if (!File.Exists(path))
+            {
+                Console.Error.WriteLine($"{label} file not found: {path}");
+                return 1;
+            }
+        }
+
+        if (projectDir is not null && !Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        try
+        {
+            var report = RelationReconcileRunner.Run(specs, ledger, register, projectDir);
+            Console.WriteLine(json
+                ? RelationReconcileOutputFormatter.FormatJson(report)
+                : RelationReconcileOutputFormatter.FormatText(report));
+
+            return report.HasFindings ? 1 : 0;
+        }
+        catch (RelationReconcileFormatException ex)
+        {
+            // A leg that parsed nothing is a hard error, never a clean reconcile — a silent all-green
+            // after format drift would make this check worse than not having it.
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
     }
 
     private static int RunUndrivenScan(string[] args)

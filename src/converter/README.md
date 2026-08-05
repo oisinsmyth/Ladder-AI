@@ -1833,6 +1833,43 @@ reader/writer index, reused by FI-25). Four fact tables:
 **Exit 0 always** — a facts provider, not a gate. On `ir/test-project001` it surfaces real signals
 (e.g. `DB_Input.Pusher_Local_Remote` written-but-never-consumed; the unused overcurrent setpoints).
 
+## `relation-reconcile` — relation-set reconciliation + probative citations (2026-08-05, FI-35 checks 2+3)
+
+```
+converter relation-reconcile --specs <equipment-specs-dir> --ledger <code-structure.md>
+                             --register <requirements.md> [--project <ir-dir>] [--json]
+```
+
+Reconciles the `(instance, relation-id)` sets across the four relation-bearing artifacts — the specs'
+`- **C1**` bullets, the D2 ledger rows, the derived register's `Rel` column, and the D3 render's `[C1]`
+term tags — and reports every pairwise difference.
+
+**The key is `(instance, relation-id)`, never the bare id:** two instances' `C1` are different
+relations, so a bare union across specs is vacuous and would let one instance's relation satisfy
+another's.
+
+What it buys is honest: on a clean artifact set it is a **regression guard, not a catch** — but it
+converts three **hand-asserted counts inside the artifact** (`| Rows in this ledger | 174 |`) into
+computed ones, which is the "computed rather than asserted" principle this tooling exists for.
+
+- **An `ABSENT` leg is not a reconciling leg.** A stopped D3 reports `ABSENT`; reporting "0 differences"
+  for an artifact that does not exist is the silent-green failure the check exists to avoid. An absent
+  leg alone does **not** gate.
+- **A leg that parses zero rows is a HARD ERROR**, never a clean pass — format drift is the whole risk
+  here (five documented divergences between a SKILL written this month and an artifact produced this
+  week), so the parsers are strict and say so loudly when the shape is missing.
+- **Citations (check 3):** for each `verified-cross-block` row, every backticked identifier-shaped token
+  in the evidence cell is classified — *resolves with N writers* / *writers all disarmed* / *declared
+  with no writer in this export* / *does not resolve*. A row where **no** token resolves to a written
+  member is the finding. The cell is free prose (file names, network labels, expression fragments), so
+  the tool never guesses which token is "the tag" — it reports per token. It also never judges whether
+  the guard *entails* the claim; that stays a human duty. Needs `--project`.
+- **Denominator, always:** "no writer" means *no writer among the N blocks in this export* — partial
+  exports are normal here, so that is a scope fact, not a defect.
+
+**Exit 1** on any non-empty set-difference or citation finding. On the fixture: 174/174/174 with
+`render ABSENT`, exit 0; delete one ledger row and it names `FilterUnitInst2.C5`, exit 1.
+
 ## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-35 check 4)
 
 ```
