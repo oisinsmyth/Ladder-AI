@@ -222,6 +222,12 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   for diagnosis. Both, not either.
   *The same shape covers info/status events*, which condense and latch identically even though
   nothing interlocks on them — so that an event too brief for an HMI poll is still there to be read.
+  **C-501 DEPENDS ON THIS RULE — do not relax it without reading that one.** C-501 permits a whole
+  alarm word to be written in a single network, and the only reason that stays readable is that every
+  bit is driven by a *named* cause this rule guarantees exists (`COIL IO.Alarm.%X0 := IO.FTR`, where
+  `FTR` is the documentation). Allow anonymous or inline-expression fault detection back in and
+  C-501's slice access becomes undecodable without a bit map, which is the state it was in before
+  2026-08-06.
 
 ## Commenting
 
@@ -235,7 +241,7 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 
 ## Data
 
-- C-301 *(error)* — No absolute addressing (%M, %DBx.DBWy) in logic; symbolic access only. **Documented exception:** slice access (`.%Xn`, `.%Bn`, …) is permitted in encode/decode contexts — alarm words (per C-501's conditions), comms mapping, and data-handling blocks (C-105) — never in equipment control logic.
+- C-301 *(error)* — No absolute addressing (%M, %DBx.DBWy) in logic; symbolic access only. **Documented exception:** slice access (`.%Xn`, `.%Bn`, …) is permitted in encode/decode contexts — alarm words (per C-501's **three** conditions: one network per word, every bit driven by a single named cause, and a bit map in the network comment — restated 2026-08-06, when those conditions changed), comms mapping, and data-handling blocks (C-105) — never in equipment control logic.
 - C-302 *(warn)* — UDTs for repeated equipment structures; no parallel loose-tag families (three conveyors as `FCC_Run`/`BC1_Run`/`BC2_Run` flat-tag copies silently diverge — one `UDT_Conveyor`, three instances). Data-side counterpart of C-106.
 - C-303 *(error)* — Optimized block access on unless a comms interface requires otherwise.
 - C-304 *(error)* — **Control logic never reads physical inputs or writes physical outputs directly** — applies to all IO addressing, local and remote/Profinet alike. All physical IO passes through buffer DBs, **one buffer pair per IO source**: local PLC IO via `DB_Inputs`/`DB_Outputs` (mapped by `FC_InputMap`/`FC_OutputMap`), remote nodes via their own (`DB_Rem0Inputs`/`FC_Rem0InputMap`, …); analog IO in its own dedicated DBs. Mapping happens only in the `Map` FCs (called per C-109's mapping exception / C-110's ordering).
@@ -280,10 +286,38 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   *Consequence worth stating:* an alarm does **not** move to `DB_Alarms` merely because its ID sits in
   a category prefix. An ID is a label, an instance is a home, and the second decides.
   *Why:* WinCC Unified discrete alarms trigger cleanly off Word tags (Ints misbehave), and Words group related alarms meaningfully for HMI and comms mapping.
-  Alarm bits are written via slice access (`DB_Alarms.EStopAlarm0.%X3`) — a **documented exception to C-301**, on two conditions: exactly one alarm bit per network, and the network title states the alarm text (matching the HMI alarm text), so the rung is read by its title, never by decoding `%Xn`.
+  **ONE NETWORK PER ALARM WORD** *(owner ruling, 2026-08-06 — this rule previously said "exactly one
+  alarm bit per network", which the proven site block does not do and never did:
+  `patterns/motor-dol` NETWORK 14 writes three bits of one word).* A network's subject is the one
+  variable it changes, and for an alarm network that variable is the **word**. Alarm bits are written
+  via slice access (`DB_Alarms.EStopAlarm0.%X3`) — a **documented exception to C-301** — on three
+  conditions:
+  1. **One network per alarm word.** All the bits of a word are written in that one network, and no
+     other network writes them.
+  2. **Every bit is driven by a SINGLE NAMED CAUSE, never an inline expression** — `COIL
+     IO.Alarm.%X0 := IO.FTR`. This is what makes the slice readable: you read `FTR` and know what the
+     bit is, so `%X0` never has to be decoded to understand the rung. **C-130 is what guarantees such
+     a named cause exists**, which is why this relaxation is safe now and would not have been before
+     it. An alarm bit that genuinely must be driven by an expression keeps its own titled network.
+  3. **The network comment carries a bit map, one line per bit, with the C-505 alarm text**:
+     `%X0 = FTR = "<Equipment> — fail to run — check starter"`. The old rule put that text in the
+     network title, which is where it went when a network held one bit; a word-sized network has
+     nowhere else for it to go.
+  *On the duplication this creates, deliberately (owner ruling, 2026-08-06):* the alarm wording now
+  exists in two places — this comment and the HMI. That is normally the failure this document warns
+  about most (C-409, C-508: one fact, one place, or the copies disagree). **Alarms are the exception,
+  and only alarms.** The two copies do not serve the same purpose: the HMI's text is what the
+  operator reads, the comment's is what an engineer reads *at the bit*, and without it the only link
+  between a PLC bit and the operator-facing words lives in a project document rather than in the
+  code. A document is what goes stale. Keep the comment even where it feels redundant, and do not
+  generalise this exception to anything that is not an alarm text.
 - C-502 *(warn)* — `FC_AlarmsMain` (called from OB1 per C-109) calls one monitoring FC per monitored function/category. Categories vary per project, but `FC_GeneralAlarms` (catch-all) and `FC_EStopAlarms` always exist. **No project-scale-down exception** — a small/demo project still instantiates the skeleton, even with few or no alarms in it yet. *(Confirmed by owner, 2026-07-17 — owner-questions C-6: "this is always required even if not used.")*
 - C-503 *(warn)* — Repeatable equipment (motors, VSDs, …) monitors its own alarms **inside its FB, per instance**. Alarm and faceplate data reaches the HMI through the equipment's UDT interface — the UDT carries everything the HMI needs; category words in `DB_Alarms` are not duplicated per instance.
-- C-504 *(error)* — **One alarm rung monitors one fault, and one root cause raises one alarm.** Where a fault is a known *consequence* of another alarm (e.g. E-Stop drops a drive's Ready), the consequence alarm is suppressed by **a term that is true only while the cause is absent**, extended by a short TON (per C-406) so slow-recovering equipment doesn't flash consequence alarms while the cause resets. Suppression lasts only for the causal condition's duration (+ delay) — a genuine second fault that persists beyond it still alarms.
+- C-504 *(error)* — **One alarm rung monitors one fault, and one root cause raises one alarm.**
+  *"Rung" here means one coil line, NOT one network* — pinned 2026-08-06, because the term was
+  undefined and the two readings now disagree: C-501 puts every bit of an alarm word in **one
+  network**, so read as "network" this rule would forbid what that one requires. One coil, one
+  fault; a network may hold as many such coils as the word has bits. Where a fault is a known *consequence* of another alarm (e.g. E-Stop drops a drive's Ready), the consequence alarm is suppressed by **a term that is true only while the cause is absent**, extended by a short TON (per C-406) so slow-recovering equipment doesn't flash consequence alarms while the cause resets. Suppression lasts only for the causal condition's duration (+ delay) — a genuine second fault that persists beyond it still alarms.
   **Clarified (owner ruling, 2026-08-05):** the rule is *negate the cause*, not *use a `-|/|-`*. A normally-closed contact is simply how you negate a BOOL, and stating the rule in those terms was reading the rendering as the requirement. **The suppressing cause does not have to be an alarm bit and does not have to be a BOOL.** Where the cause is a sequence state, a mode, or any non-boolean, the suppression term is whatever is true when that cause is false — a `<>` comparison on a step number, an equality test on a mode word, a comparison on a value. Same rule, different rendering, chosen by the data type.
   - *Consequence worth stating:* a suppression whose cause has no alarm bit is **not** an exception to this rule and does not need one inventing. "Suppressed while the press is closing" is `StepId <> Closing`, not a new alarm to hang a contact on.
   - *What this does not cover:* **retroactively clearing an already-latched consequence** when its cause arrives late. That is an un-latch, not a filter — no negation term can un-set a latched bit (C-508), so it needs an explicit reset driven by a rising edge on the cause. Legitimate, but it is a different mechanism and should be recognised as one rather than mistaken for suppression.
