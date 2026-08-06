@@ -200,6 +200,28 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   *Applies to* sibling instances of the same or different classes under one caller. *Does not apply
   to* a genuine sequential chain where instance N's output is deliberately consumed by instance N+1
   within the same scan — that is a designed data flow, and it should say so in the network title.
+- C-130 *(error)* — **Every equipment block condenses all of its fault causes into ONE latched fault
+  bit, and the control logic reads only that bit.** *(Owner ruling, 2026-08-06. Reference shape:
+  `patterns/motor-dol/MotorStarter.ir` networks 8–10.)*
+  ```
+  COIL IO.FTR         := <detection> OR IO.FTR OR IO.FTS OR IO.FaultFB
+                                     AND NOT IO.FaultReset     <- each cause seals itself in
+  COIL IO.FaultActive := IO.FTR OR IO.FTS OR IO.FaultFB
+                         OR IO.FaultActive AND NOT IO.FaultReset  <- condensed, one bit
+  ```
+  Start permissives, hand-intervention logic, shutdown and prestart all reference `FaultActive` and
+  never the individual causes.
+  *Why it is a rule and not a preference.* "Is this equipment faulted?" is asked in a dozen rungs.
+  Answered by an OR-chain of causes, every one of those rungs has to be edited when a cause is added
+  — and the day one of them is missed is the day equipment starts with a live fault. Answered by one
+  bit, adding a cause touches exactly one network. It also makes the question reviewable: a reader
+  checking that a start is properly interlocked reads one term, not a chain they must first prove
+  complete.
+  *The individual causes still exist and still latch* — they are what the alarm word publishes
+  (C-508), and what tells an operator WHICH fault. The condensed bit is for control; the causes are
+  for diagnosis. Both, not either.
+  *The same shape covers info/status events*, which condense and latch identically even though
+  nothing interlocks on them — so that an event too brief for an HMI poll is still there to be read.
 
 ## Commenting
 
@@ -265,6 +287,15 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   **Clarified (owner ruling, 2026-08-05):** the rule is *negate the cause*, not *use a `-|/|-`*. A normally-closed contact is simply how you negate a BOOL, and stating the rule in those terms was reading the rendering as the requirement. **The suppressing cause does not have to be an alarm bit and does not have to be a BOOL.** Where the cause is a sequence state, a mode, or any non-boolean, the suppression term is whatever is true when that cause is false — a `<>` comparison on a step number, an equality test on a mode word, a comparison on a value. Same rule, different rendering, chosen by the data type.
   - *Consequence worth stating:* a suppression whose cause has no alarm bit is **not** an exception to this rule and does not need one inventing. "Suppressed while the press is closing" is `StepId <> Closing`, not a new alarm to hang a contact on.
   - *What this does not cover:* **retroactively clearing an already-latched consequence** when its cause arrives late. That is an un-latch, not a filter — no negation term can un-set a latched bit (C-508), so it needs an explicit reset driven by a rising edge on the cause. Legitimate, but it is a different mechanism and should be recognised as one rather than mistaken for suppression.
+  - **WHERE THE FILTER SITS, AND WHY IT IS NOT NEGOTIABLE** *(owner ruling, 2026-08-06)*:
+    **between the latched cause and the alarm bit — in the alarm-publishing network, never in the
+    fault logic.** The chain is `causes → condensed latched fault bit (C-130) → [suppression] →
+    alarm bit (C-508)`. Control reads the condensed bit, which sits **upstream of every filter**, so
+    suppression changes what the operator is SHOWN and can never change what the plant DOES.
+    Put a suppression term into the fault logic instead and the two fuse: an alarm tidied off a
+    screen now also un-interlocks a start, and the reason will not be visible in either the alarm
+    list or the interlock rung. That is not a tidier alarm list, it is a plant that starts on a
+    suppressed fault. The separation is the whole reason suppression is safe to do at all.
   *Why:* site incident — E-Stop presses flooded the alarm list with "Not Ready" echoes, burying the actual cause. Same principle as C-409: one fact, one place.
 - C-505 *(warn)* — Alarm text format: **`<Equipment> — <fault> — <action hint>`**. Equipment identifier per C-004, English per C-006.
 - C-506 *(warn)* — Fixed three-class severity taxonomy, assigned by the **operator-action test** (not perceived badness): **Fault** (equipment stopped/stopping; intervention before restart), **Warning** (running degraded/approaching limit; action soon), **Info/Event** (record only). Per-alarm class assignment happens in the project alarm list at kickoff (alongside the C-004 equipment list); the classes and their HMI presentation (colours, filtering) never vary between projects — fixed container, variable contents, same move as C-305.
@@ -283,14 +314,25 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
     first saw an alarm (view-time) distinct from when it appeared and when it was fixed — that is
     a logging/traceability feature, not the same thing as requiring acknowledgment to clear, and
     doesn't change an alarm's ack-required status under this rule.
-- C-508 *(error)* — **Every alarm bit latches in the PLC until an explicit reset, whatever its
-  severity class.** *(Owner ruling, 2026-08-05, from a live job.)* C-123 already makes this
-  universal for **fault** bits — latched, cleared only by a named `FaultReset`, no exceptions.
-  This rule states the same default for the other two C-506 classes, because nothing previously
-  did: a **Warning** or an **Info/Event** that appears and clears between two HMI polls is
-  otherwise invisible, and "this was true at some point" is the entire reason the bit exists.
-  Reading a Warning's bit lifetime out of a rule about faults was an inference nobody should have
-  to make.
+- C-508 *(error)* — **The bit that CAUSES an alarm latches until an explicit reset, whatever its
+  severity class. The alarm bit itself does not — it is a direct, unlatched read of the already-
+  latched cause.** *(Owner ruling 2026-08-05; **corrected 2026-08-06** — see below.)*
+  C-123 already makes latching universal for **fault** bits. This rule extends the same default to
+  the other two C-506 classes, because nothing previously did: a **Warning** or an **Info/Event**
+  that appears and clears between two HMI polls is otherwise invisible, and "this was true at some
+  point" is the entire reason the bit exists.
+  **CORRECTED 2026-08-06 — this rule first read "every alarm BIT latches", and that is wrong.**
+  The seal-in belongs on the cause, at its own detection network, exactly as `patterns/motor-dol`
+  does it:
+  ```
+  COIL IO.FTR    := FaultTripTimer.Q OR IO.FTR AND NOT IO.FaultReset   <- the latch lives here
+  COIL IO.Alarm.%X0 := IO.FTR                                          <- direct read, NOT latched
+  ```
+  Latching the alarm bit as well would put **two seal-ins on one fact**, in two places, free to
+  disagree — and the alarm one would be the copy that lies, because nothing downstream can correct
+  it. The alarm inherits latched behaviour by reading a latched bit; it does not implement it.
+  *How to tell you have it right:* there is exactly one `OR <self> AND NOT <reset>` per fact, and it
+  is in the network that detects the fact — never in the network that publishes it.
   **Orthogonal to C-507, and this is the pairing that keeps being conflated.** Latching is
   *PLC-side bit lifetime*; acknowledgment is an *HMI gesture*. An alarm latches **and** requires no
   acknowledgment — both at once, and that is the normal case, not an exception to either rule. The
