@@ -100,6 +100,44 @@ runs** (`gen/PlantAutoControl-bench-rerun{,2,3}/`), never yet on a second. And e
 `references/<class>/` self-declares as derived-from-as-built rather than from an engineering standard,
 so rung A's *completeness by construction* is **nominal, not delivered** — the binding open item.
 
+### Building a missing reference: the co-authoring loop (owner ruling, 2026-08-06)
+
+**This is now the standard route for a class with no `references/<class>/` entry.** It exists because
+the alternative silently defeats the pipeline: when rung C constructs a class requirement set from
+the current job's own documents, the coder and the reviewer end up reading the same source, which is
+the **correlated check** the four rungs were built to break (`docs/evidence/PlantAutoControl-bench-autopsy.md`).
+Proceeding anyway is not neutral — it removes the guarantee while leaving the artifacts looking
+complete.
+
+**The loop.** Whenever an object, a pattern, or — most importantly — an **FB** is identified for which
+no class reference exists:
+
+1. **Flag it to the engineer BEFORE generating anything.** Not after a draft, not with a draft
+   attached. The point is to reach agreement on what the class *is* before any ladder exists to
+   anchor on, because a draft is an anchor whether or not anyone intends it to be.
+2. **Work the spec together, in both directions — including specs already approved.** An approved
+   spec is not closed to this: the class question ("what must ANY valve do?") is a different question
+   from the instance question the approval answered ("what must THIS valve do?"), and the second
+   having been signed off does not settle the first.
+3. **Generate the ladder and import it** once the spec is agreed.
+4. **The engineer edits it directly in TIA Portal** and says what changed.
+5. **Repeat 2–4 until both sides are satisfied.** The loop closes on agreement, not on a checklist.
+6. **The settled result becomes `references/<class>/reference.md`** — and, unlike every entry that
+   preceded it, one that does NOT self-disclaim as derived-from-as-built, because it was authored
+   deliberately as a class definition and edited by the engineer in the tool.
+
+**Why the TIA-side edit is the load-bearing step, and not a formality.** It is what makes the check
+genuinely independent. The engineer editing real ladder in the real editor is reasoning from the
+plant and from site practice — sources the AI does not have and cannot infer from the job documents.
+That is precisely the independent second reading `references/` was supposed to supply and currently
+does not. A reference written by the AI and merely *approved* by the engineer would be the correlated
+check again, one step removed.
+
+**Cost, stated honestly.** This is slower than generating from the job's own documents, and it front-
+loads engineer time onto the first instance of each class. The return is that it is paid once per
+class and amortised across every future project, and that it converts the library's standing
+disclaimer into something real for that class. It is the only route currently proposed that does.
+
 Skills 8–9 (the modify pair) share a **modification-choreography reference** — the common
 procedure for scoping a touch to named network(s), proving the untouched-network invariance
 check, and presenting the before/after diff (CLAUDE.md "Workflow for modifying existing logic").

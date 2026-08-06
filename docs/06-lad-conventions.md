@@ -183,6 +183,23 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   E-Stop circuits exist to prevent; the same guarantee must hold on the PLC-logic side of the
   boundary. This makes explicit the outcome C-124's mechanism (force `Step` to idle at OB100)
   exists to guarantee, and generalizes REQ-062's per-project wording into a site-wide rule.
+- C-129 *(error)* — **Where one block calls several sibling instances whose interlocks reference each
+  other, evaluate those interlock terms ONCE at the top of the block, then call the instances below
+  it.** *(Owner ruling, 2026-08-06.)* Every sibling then reads the same vintage of data, and the
+  block's behaviour does not depend on the order of its own CALLs.
+  *The failure it prevents is not the one-scan lag — it is MIXED VINTAGE.* Call four sibling
+  instances in sequence and let each read the others' commanded states, and instance 2 sees
+  instance 1's output from **this** scan and instances 3–4's from the **last** one. Some interlocks
+  are then a scan old and some are current, decided entirely by call order. That is unreviewable: no
+  reading of the block tells you which terms are stale without also tracing the call sequence.
+  *What the rule buys.* A uniform one-scan lag, which is a statement you can verify — *"every
+  interlock in this block is evaluated on the state as of the start of this scan"* — and correctness
+  that survives someone reordering the CALLs later, which the ordered form does not. The lag itself
+  is almost never the hazard; on equipment whose actuators take hundreds of milliseconds to move, a
+  scan is invisible. The hidden order-dependence is the hazard.
+  *Applies to* sibling instances of the same or different classes under one caller. *Does not apply
+  to* a genuine sequential chain where instance N's output is deliberately consumed by instance N+1
+  within the same scan — that is a designed data flow, and it should say so in the network title.
 
 ## Commenting
 
@@ -229,7 +246,17 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 
 ## Alarms
 
-- C-501 *(warn)* — All category alarms live in **`DB_Alarms`**, packed into Words per category, named `<Category>Alarm0`, `<Category>Alarm1`, … extending by Word as counts exceed 16.
+- C-501 *(warn)* — Alarms that have **no instance to live in** go in **`DB_Alarms`**, packed into Words per category, named `<Category>Alarm0`, `<Category>Alarm1`, … extending by Word as counts exceed 16.
+  **Amended (owner ruling, 2026-08-06) — `DB_Alarms` IS THE RESIDUAL, NOT THE DEFAULT.** This rule
+  previously read "all category alarms live in `DB_Alarms`", which put it in direct tension with
+  C-503: a per-vessel alarm had two plausible homes, and the choice fell to whoever wrote it. The
+  test is now positional, not categorical — **does this alarm belong to an instance?** If it does, it
+  lives in that instance's alarm word and reaches the HMI through the instance (C-503), and the HMI
+  binds to the instance DB directly. `DB_Alarms` carries only what genuinely has nowhere else: plant-
+  level and system-wide conditions — safety circuit, comms loss, retentive-data faults, shared-
+  resource contention, simulation-active summaries.
+  *Consequence worth stating:* an alarm does **not** move to `DB_Alarms` merely because its ID sits in
+  a category prefix. An ID is a label, an instance is a home, and the second decides.
   *Why:* WinCC Unified discrete alarms trigger cleanly off Word tags (Ints misbehave), and Words group related alarms meaningfully for HMI and comms mapping.
   Alarm bits are written via slice access (`DB_Alarms.EStopAlarm0.%X3`) — a **documented exception to C-301**, on two conditions: exactly one alarm bit per network, and the network title states the alarm text (matching the HMI alarm text), so the rung is read by its title, never by decoding `%Xn`.
 - C-502 *(warn)* — `FC_AlarmsMain` (called from OB1 per C-109) calls one monitoring FC per monitored function/category. Categories vary per project, but `FC_GeneralAlarms` (catch-all) and `FC_EStopAlarms` always exist. **No project-scale-down exception** — a small/demo project still instantiates the skeleton, even with few or no alarms in it yet. *(Confirmed by owner, 2026-07-17 — owner-questions C-6: "this is always required even if not used.")*
