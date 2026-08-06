@@ -229,6 +229,45 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   C-501's slice access becomes undecodable without a bit map, which is the state it was in before
   2026-08-06.
 
+- C-131 *(error)* — **A feedback proves NON-arrival at a commanded state. It never proves arrival.
+  Write every feedback-derived fault to detect the wrong state positively; never write one that
+  depends on proving the right state was reached.** *(Owner ruling, 2026-08-06. Already embodied,
+  undocumented, in `patterns/motor-dol/MotorStarter.ir` networks 8–9.)*
+  ```
+  COIL IO.FTR := <commanded ON  AND feedback ABSENT  for PT> OR IO.FTR AND NOT IO.FaultReset
+  COIL IO.FTS := <commanded OFF AND feedback PRESENT for PT> OR IO.FTS AND NOT IO.FaultReset
+  ```
+  Both terms fire on **evidence of the wrong state**. Neither fires on absence of evidence of the
+  right one, and that is the whole rule.
+  *Why it is a rule.* `FTS` above proves the device did not stop — the feedback is still made. It says
+  nothing about whether it *did* stop: the contactor could have welded with its auxiliary open, the
+  actuator could have stalled between limits, the sensor could have failed low. **A quiet feedback is
+  absence of evidence, not evidence of absence.** Every device on a plant has more ways to look
+  correct than to be correct, so a rung written to confirm a safe state confirms the sensor, not the
+  plant — and it fails silent, which is the failure mode that reaches site.
+  *The consequence for requirements, which is where this rule earns its keep.* A specification that
+  says "prove the device reached its safe position" **is not implementable as written** and must be
+  re-specified as "detect that it did not", or raised. Do not quietly implement the detectable
+  neighbour of an unimplementable requirement and let the wording stand — the two differ exactly when
+  it matters. This is the single most common way a feedback requirement is silently downgraded.
+  *It extends to INFERRED feedback, and this is the wider net.* A feedback need not be a limit switch:
+  a process variable can stand in for one — a flow, a pressure, a rate of change, a weight. Everything
+  above applies unchanged, plus one addition. **An inferred feedback has a THIRD state that a real
+  contact does not: cannot-tell.** The process variable may be untrustworthy, or moving for a
+  legitimate reason, or driven by something other than the device in question. That third state must
+  gate whether the fault is armed at all; it must never be read as a position. Reading cannot-tell as
+  "not arrived" alarms the plant every time the process legitimately moves; reading it as "arrived"
+  is the silent failure this rule exists to prevent.
+  *Arming an inferred feedback.* Prefer arming from a **command the program itself issued** — the
+  device was told to change state, so a window opens in which its effect must appear — over arming
+  from an inference about the process variable. A command is certain knowledge; an inference about
+  whether a signal is trustworthy is another thing that can be wrong. Bound every such window
+  (a device whose effect never settles must not hold a window open forever), and where two devices
+  could each explain the same movement, attribute by an independent fact — which motive equipment is
+  running, or a magnitude only one of them can produce — or raise the ambiguity as its own condition
+  rather than blaming both. **Two devices each independently announcing a definite failure from one
+  ambiguous fact is worse than one honest report that something is wrong.**
+
 ## Commenting
 
 - C-201 *(error)* — Every network has a title; every block has a header comment (purpose, author, revision).
