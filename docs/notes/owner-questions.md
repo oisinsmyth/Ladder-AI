@@ -1,5 +1,15 @@
 # Open questions for the owner
 
+**Scope: PROJECT-WIDE questions only** (owner ruling, 2026-08-06). Tooling, conventions, the
+roadmap, the data-boundary regime itself — anything about how the tool should work. **Questions
+about a live engineering job do not belong here and must never be written here**, because this file is
+committed to git and a live run's questions are written in that job's own vocabulary (tags,
+equipment, alarm IDs, process detail). Each live run keeps its own open-questions doc *inside its
+job folder*, which is gitignored — see `docs/13-data-boundary.md`'s "Live runs" section. A question
+that is genuinely both gets split: the general half here in generic terms, the job-specific half in
+the job folder. Policy questions *about* the live-run regime are project-wide and do belong here —
+the test is whether answering it requires naming anything from a site's plant.
+
 **Purpose.** This doc exists to consolidate a *large batch* of accumulated questions into one
 priority-ordered list when there are too many for ad hoc handling — it is not a permanently
 populated running log. When opened for a new batch, it holds everything currently waiting on the
