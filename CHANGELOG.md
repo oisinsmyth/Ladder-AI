@@ -33,6 +33,25 @@ and its enforcement disagreeing, silently, in the direction that punishes correc
   one of them asserted that several bits of one word was a violation, which is now the *required*
   shape. Seven replace them, one per condition plus the negated-cause and clean-word cases.
 
+**C-501 condition 2 permitted no suppressor term, which contradicted C-504 — corrected same day**
+
+The fix above enforced condition 2 as written — "a single named cause, never an inline expression" —
+and that clause was itself out of date. **C-504 places alarm filtering in the alarm-write network and
+nowhere else**, which is the whole reason suppression cannot reach control: the condensed fault bit
+control reads is written upstream of it. A suppressed alarm bit is therefore *necessarily*
+`cause AND NOT suppressor`. The two rules together forbade the only correct implementation, and the
+newly-corrected checker flagged compliant code on its first run against a real block.
+
+- **The convention now permits one named cause ANDed with negated named suppressors, and nothing
+  else** (owner ruling). The prohibition's target was always anonymous logic that hides what a bit
+  means, not the uniform mandated decoration — the cause is still the first thing you read.
+- **The check is shape-specific, not "does it contain an AND"**: exactly one bare named cause, every
+  remaining operand a negated bare tag. `A AND B` still fails — two un-negated tags give the bit two
+  plausible subjects — and an OR of causes still fails, since that is what C-130's condensed bit
+  exists for.
+- **Tests: 770 → 772**, adding the permitted-suppressor case and the two-un-negated-causes boundary
+  that the ruling deliberately did not move.
+
 ## 2026-08-05
 
 **The mechanical floor could exit 0 having examined nothing — FI-44, FI-45 fixed; FI-46 raised**

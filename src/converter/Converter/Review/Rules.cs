@@ -396,16 +396,31 @@ public static class Rules
         return lastDot >= 0 ? tag[(lastDot + 1)..] : tag;
     }
 
-    // C-501 condition 2 — `COIL IO.Alarm.%X0 := IO.FTR`. A bare tag is a single named cause, and so
-    // is a negated bare tag: you still read one name and know what the bit is, which is the whole
-    // point ("%X0 never has to be decoded to understand the rung"). Anything containing an AND, OR
-    // or comparison is the inline expression the rule exists to keep out.
+    // C-501 condition 2 — `COIL IO.Alarm.%X0 := IO.FTR`, or `:= IO.FTR AND NOT IO.SuppFTR`.
+    //
+    // The suppressor term is PERMITTED (owner ruling, 2026-08-06). This check first rejected any
+    // AND, which contradicted C-504's filter-placement rule: suppression is applied in the
+    // alarm-write network and nowhere else, so a suppressed alarm bit is *necessarily*
+    // `cause AND NOT suppressor`. Between them the two rules forbade the only correct
+    // implementation, and this check flagged compliant code while passing the superseded form.
+    //
+    // What stays forbidden is anonymous logic that hides what a bit means — an OR of causes, a
+    // comparison, an unnamed intermediate. The test below is therefore shape-specific rather than
+    // "does it contain an AND": exactly one bare (or negated-bare) named cause, and every remaining
+    // operand a NEGATED bare tag. `A AND B` still fails, because two un-negated tags give the bit
+    // two plausible subjects and the reader cannot tell which one the bit is named for.
     private static bool IsSingleNamedCause(Expr condition) => condition switch
     {
         Expr.TagRef => true,
         Expr.Not not => not.Operand is Expr.TagRef,
+        Expr.And and => and.Operands.Count(IsBareNamedCause) == 1
+                        && and.Operands.All(op => IsBareNamedCause(op) || IsNegatedNamedTag(op)),
         _ => false,
     };
+
+    private static bool IsBareNamedCause(Expr operand) => operand is Expr.TagRef;
+
+    private static bool IsNegatedNamedTag(Expr operand) => operand is Expr.Not { Operand: Expr.TagRef };
 
     // C-406 (error) — TON is the only timer instruction used; TOF/TONR are violations. Checked in
     // two genuinely different places: the *declaration* form (a DbMember whose own Datatype is

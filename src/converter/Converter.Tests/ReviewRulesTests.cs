@@ -339,14 +339,57 @@ public class ReviewRulesTests
     }
 
     [Fact]
+    public void CheckC301_CauseAndedWithNegatedSuppressor_Clean()
+    {
+        // Owner ruling 2026-08-06: the suppressor term is permitted. C-504 puts filtering in the
+        // alarm-write network and nowhere else, so a suppressed bit is NECESSARILY this shape —
+        // rejecting it made the two rules jointly forbid the only correct implementation.
+        var network = new IrNetwork(1, "Alarm", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.And(new Expr[]
+            {
+                new Expr.TagRef("IO.FTO"),
+                new Expr.Not(new Expr.TagRef("IO.SuppFTO")),
+            })),
+        }, Comment: "%X0 = FTO = \"Valve — failed to open\"");
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    [Fact]
+    public void CheckC301_TwoUnnegatedCausesAnded_StillFlagged()
+    {
+        // The boundary the ruling did NOT move: two un-negated tags give the bit two plausible
+        // subjects, so a reader cannot tell which one it is named for. That is the anonymous logic
+        // condition 2 exists to catch, and permitting suppressors must not let it back in.
+        var network = new IrNetwork(1, "Alarm", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.And(new Expr[]
+            {
+                new Expr.TagRef("A"),
+                new Expr.TagRef("B"),
+            })),
+        }, Comment: "%X0 = A AND B");
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(2, findings.Count);
+        Assert.Contains(findings, f => f.Description.Contains("inline expression"));
+    }
+
+    [Fact]
     public void CheckC301_BitDrivenByInlineExpression_FlagsBothRules()
     {
         // Condition 2 — the relaxation to word-sized networks is only safe because every bit reads
-        // as a named cause; an inline expression is what makes %X0 need decoding again.
+        // as a named cause; an inline expression is what makes %X0 need decoding again. An OR of
+        // causes is the canonical case: the bit is true for more than one reason and the network
+        // says nothing about which, so C-130's condensed bit is what this should have read instead.
         var network = new IrNetwork(1, "Alarm", new[]
         {
-            new CoilAssignment("IO.Alarm.%X0", new Expr.And(new Expr[] { new Expr.TagRef("A"), new Expr.TagRef("B") })),
-        }, Comment: "%X0 = A AND B");
+            new CoilAssignment("IO.Alarm.%X0", new Expr.Or(new Expr[] { new Expr.TagRef("A"), new Expr.TagRef("B") })),
+        }, Comment: "%X0 = A OR B");
         var block = MakeBlock("FB", "FB_Test", new[] { network });
 
         var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();

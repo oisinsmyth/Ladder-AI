@@ -364,11 +364,25 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   conditions:
   1. **One network per alarm word.** All the bits of a word are written in that one network, and no
      other network writes them.
-  2. **Every bit is driven by a SINGLE NAMED CAUSE, never an inline expression** — `COIL
-     IO.Alarm.%X0 := IO.FTR`. This is what makes the slice readable: you read `FTR` and know what the
-     bit is, so `%X0` never has to be decoded to understand the rung. **C-130 is what guarantees such
-     a named cause exists**, which is why this relaxation is safe now and would not have been before
-     it. An alarm bit that genuinely must be driven by an expression keeps its own titled network.
+  2. **Every bit is driven by a SINGLE NAMED CAUSE, optionally ANDed with negated named
+     suppressors, and by nothing else** — `COIL IO.Alarm.%X0 := IO.FTR`, or
+     `COIL IO.Alarm.%X0 := IO.FTR AND NOT IO.SuppFTR`. This is what makes the slice readable: you
+     read `FTR` and know what the bit is, so `%X0` never has to be decoded to understand the rung.
+     **C-130 is what guarantees such a named cause exists**, which is why this relaxation is safe now
+     and would not have been before it. An alarm bit that genuinely must be driven by anything else
+     keeps its own titled network.
+     **Corrected (owner ruling, 2026-08-06) — the suppressor term is permitted, and this clause was
+     briefly out of date against the rest of the rule base.** As first written it said "never an
+     inline expression" flatly, which **contradicts C-504's own filter-placement rule**: suppression
+     is applied in the alarm-write network and *nowhere else*, precisely so that it can change what
+     the operator is shown and can never change what the plant does (control reads the condensed
+     fault bit, which is upstream). A suppressed alarm bit is therefore *necessarily*
+     `cause AND NOT suppressor` — so the two rules together forbade the only correct implementation,
+     and the mechanised check flagged compliant code while passing the superseded form. The target of
+     the prohibition was always **anonymous logic that hides what a bit means** (`A AND B OR C`), not
+     the uniform, mandated suppression decoration, which hides nothing: the cause is still the first
+     thing you read. Anything beyond one named cause and negated named suppressors — an OR of causes,
+     a comparison, an unnamed intermediate — is still the violation this condition exists to catch.
   3. **The network comment carries a bit map, one line per bit, with the C-505 alarm text**:
      `%X0 = FTR = "<Equipment> — fail to run — check starter"`. The old rule put that text in the
      network title, which is where it went when a network held one bit; a word-sized network has
