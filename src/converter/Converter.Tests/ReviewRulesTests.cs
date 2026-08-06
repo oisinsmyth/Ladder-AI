@@ -236,19 +236,43 @@ public class ReviewRulesTests
         Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
     }
 
+    // C-501 was amended by owner ruling on 2026-08-06: the unit is the alarm WORD, not the bit.
+    // The three tests that used to live here encoded the superseded form — and one of them asserted
+    // that several bits of one word was a violation, which is now the REQUIRED shape and is what
+    // patterns/motor-dol NETWORK 14 has always done. They are replaced, not adjusted.
+
     [Fact]
-    public void CheckC301_SingleSliceBitTitled_SatisfiesAlarmException_Clean()
+    public void CheckC301_WholeAlarmWordInOneCommentedNetwork_Clean()
     {
-        var network = new IrNetwork(1, "High temperature alarm", new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
+        // The proven site shape: patterns/motor-dol NETWORK 14 writes three bits of one word.
+        var network = new IrNetwork(1, "Alarm", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.TagRef("IO.FTR")),
+            new CoilAssignment("IO.Alarm.%X1", new Expr.TagRef("IO.FTS")),
+            new CoilAssignment("IO.Alarm.%X2", new Expr.TagRef("IO.FaultFB")),
+        }, Comment: "%X0 = FTR = \"Pump 1 — fail to run — check starter\"\n%X1 = FTS = \"Pump 1 — fail to stop\"\n%X2 = FaultFB = \"Pump 1 — starter fault\"");
         var block = MakeBlock("FB", "FB_Test", new[] { network });
 
         Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
     }
 
     [Fact]
-    public void CheckC301_SingleSliceBitUntitled_FlagsBothC301AndC501()
+    public void CheckC301_NegatedNamedCause_IsStillASingleNamedCause_Clean()
     {
-        var network = new IrNetwork(1, string.Empty, new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
+        var network = new IrNetwork(1, "Alarm", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.Not(new Expr.TagRef("IO.Healthy"))),
+        }, Comment: "%X0 = NOT Healthy = \"Pump 1 — unhealthy\"");
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        Assert.Empty(Rules.CheckC301AbsoluteAddressing(block));
+    }
+
+    [Fact]
+    public void CheckC301_NoBitMapComment_FlagsBothRules()
+    {
+        // Condition 3. Titled but uncommented — the shape the SUPERSEDED rule accepted.
+        var network = new IrNetwork(1, "High temperature alarm", new[] { new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")) });
         var block = MakeBlock("FB", "FB_Test", new[] { network });
 
         var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
@@ -259,18 +283,76 @@ public class ReviewRulesTests
     }
 
     [Fact]
-    public void CheckC301_MultipleSliceBitsEvenTitled_FlagsBothRules()
+    public void CheckC301_BitMapOmitsOneBit_FlagsBothRules()
     {
-        var network = new IrNetwork(1, "Alarm word bits", new[]
+        // Condition 3, the case that matters: a comment exists, so a reader assumes it is documented.
+        var network = new IrNetwork(1, "Alarm", new[]
         {
-            new CoilAssignment("AlarmWord.%X3", new Expr.TagRef("Cond1")),
-            new CoilAssignment("AlarmWord.%X4", new Expr.TagRef("Cond2")),
-        });
+            new CoilAssignment("IO.Alarm.%X0", new Expr.TagRef("IO.FTR")),
+            new CoilAssignment("IO.Alarm.%X1", new Expr.TagRef("IO.FTS")),
+        }, Comment: "%X0 = FTR = \"Pump 1 — fail to run\"");
         var block = MakeBlock("FB", "FB_Test", new[] { network });
 
         var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
 
         Assert.Equal(2, findings.Count);
+        Assert.Contains(findings, f => f.Description.Contains("%X1"));
+    }
+
+    [Fact]
+    public void CheckC301_BitsOfTwoDifferentWordsInOneNetwork_FlagsBothRules()
+    {
+        // Condition 1a — a network's subject is the one word it changes.
+        var network = new IrNetwork(1, "Alarms", new[]
+        {
+            new CoilAssignment("IO.Alarm0.%X0", new Expr.TagRef("IO.FTR")),
+            new CoilAssignment("IO.Alarm1.%X0", new Expr.TagRef("IO.FTS")),
+        }, Comment: "%X0 = FTR / FTS");
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(2, findings.Count);
+        Assert.Contains(findings, f => f.Description.Contains("different words"));
+    }
+
+    [Fact]
+    public void CheckC301_OneWordSplitAcrossTwoNetworks_FlagsEachNetwork()
+    {
+        // Condition 1b — all of a word's bits belong in ONE network. Each offending network is
+        // reported, so the reader sees both halves of the split rather than one arbitrary end.
+        var first = new IrNetwork(1, "Alarm part 1", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.TagRef("IO.FTR")),
+        }, Comment: "%X0 = FTR");
+        var second = new IrNetwork(2, "Alarm part 2", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X1", new Expr.TagRef("IO.FTS")),
+        }, Comment: "%X1 = FTS");
+        var block = MakeBlock("FB", "FB_Test", new[] { first, second });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(4, findings.Count);
+        Assert.Contains(findings, f => f.NetworkNumber ==1 && f.Description.Contains("also written by network(s) 2"));
+        Assert.Contains(findings, f => f.NetworkNumber ==2 && f.Description.Contains("also written by network(s) 1"));
+    }
+
+    [Fact]
+    public void CheckC301_BitDrivenByInlineExpression_FlagsBothRules()
+    {
+        // Condition 2 — the relaxation to word-sized networks is only safe because every bit reads
+        // as a named cause; an inline expression is what makes %X0 need decoding again.
+        var network = new IrNetwork(1, "Alarm", new[]
+        {
+            new CoilAssignment("IO.Alarm.%X0", new Expr.And(new Expr[] { new Expr.TagRef("A"), new Expr.TagRef("B") })),
+        }, Comment: "%X0 = A AND B");
+        var block = MakeBlock("FB", "FB_Test", new[] { network });
+
+        var findings = Rules.CheckC301AbsoluteAddressing(block).ToList();
+
+        Assert.Equal(2, findings.Count);
+        Assert.Contains(findings, f => f.Description.Contains("inline expression"));
     }
 
     [Fact]

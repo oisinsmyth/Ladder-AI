@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-06
+
+**The C-501 checker enforced the superseded rule — a compliant block failed review, a
+non-compliant one passed**
+
+C-501 was amended by owner ruling on 2026-08-06 to **one network per alarm WORD** (it previously
+said one alarm *bit* per network, which the proven site block never did — `patterns/motor-dol`
+NETWORK 14 writes three bits of one word and always has). The doc was amended; the mechanised check
+was not. `Rules.cs` still required `sliceWrites.Count == 1` plus a network Title, so **code written
+to the current convention was flagged and code written to the retired one passed** — the rule base
+and its enforcement disagreeing, silently, in the direction that punishes correctness.
+
+- **The check now enforces the amended rule's own three conditions, in its order.** (1) One network
+  per alarm word — both halves: all bits written in a network target one word, *and* no other
+  network writes that word's bits. (2) Every bit driven by a **single named cause**, never an inline
+  expression — a bare tag, or a negated bare tag, since either way you read one name and know what
+  the bit is. (3) The **bit map lives in the network COMMENT**, not the Title: the alarm text went in
+  the title while a network held exactly one bit, and a word-sized network has nowhere else to put
+  it. Condition 3 checks that every written bit is mentioned, deliberately weaker than parsing the
+  `%X0 = FTR = "…"` form — the point is that no bit is undocumented, and a format assertion would be
+  brittle without being stronger.
+- **Findings now say which condition failed**, and a split word names the other networks holding its
+  bits, so the reader sees both halves rather than one arbitrary end.
+- **It found two real things on first run, which is the argument for having fixed it.** A block whose
+  alarm word had been consolidated correctly still drove two of its four bits from inline
+  expressions — invisible to the old check, which could only ever see one bit at a time. And
+  `patterns/motor-dol` itself now flags: its NETWORK 14 satisfies the new condition 1 (that is why
+  the rule was amended) but has **no bit-map comment**, so `%X0`/`%X1`/`%X2` are undecodable from the
+  network alone. Condition 3 is new and the pattern predates it; the pattern needs the comment.
+- **Tests: 766 → 770.** Three tests encoding the superseded form were replaced rather than adjusted —
+  one of them asserted that several bits of one word was a violation, which is now the *required*
+  shape. Seven replace them, one per condition plus the negated-cause and clean-word cases.
+
 ## 2026-08-05
 
 **The mechanical floor could exit 0 having examined nothing — FI-44, FI-45 fixed; FI-46 raised**

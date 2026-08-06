@@ -255,37 +255,105 @@ public static class Rules
             yield break;
         }
 
+        // C-501 as amended (owner ruling, 2026-08-06): THE UNIT IS THE ALARM WORD, NOT THE BIT.
+        // This check previously required `sliceWrites.Count == 1` plus a Title, which flagged the
+        // proven site shape as a violation — `patterns/motor-dol` NETWORK 14 writes three bits of
+        // one word and always did. The doc was amended and this was not, so a block written to the
+        // current rule failed review while a block written to the superseded one passed. The three
+        // conditions below are the amended rule's own, in its order.
+        var networksByWord = new Dictionary<string, List<int>>(StringComparer.Ordinal);
         foreach (var network in block.Networks)
         {
-            var sliceWrites = SliceAccessWritesInNetwork(network).ToList();
-            if (sliceWrites.Count == 0)
+            foreach (var word in SliceAccessWritesInNetwork(network).Select(SliceWordPath).Distinct(StringComparer.Ordinal))
+            {
+                if (!networksByWord.TryGetValue(word, out var owners))
+                {
+                    owners = new List<int>();
+                    networksByWord[word] = owners;
+                }
+
+                owners.Add(network.Number);
+            }
+        }
+
+        foreach (var network in block.Networks)
+        {
+            var sliceAssignments = network.Assignments.Where(a => IsSliceAccessTag(a.CoilTag)).ToList();
+            if (sliceAssignments.Count == 0)
             {
                 continue;
             }
 
-            var satisfiesAlarmWordException = sliceWrites.Count == 1 && !string.IsNullOrEmpty(network.Title);
-            if (satisfiesAlarmWordException)
+            var sliceWrites = sliceAssignments.Select(a => a.CoilTag).ToList();
+            var words = sliceWrites.Select(SliceWordPath).Distinct(StringComparer.Ordinal).ToList();
+            var reasons = new List<string>();
+
+            // Condition 1, both halves: one network per alarm word, and all of that word's bits in it.
+            if (words.Count > 1)
+            {
+                reasons.Add($"it writes bits of {words.Count} different words ({string.Join(", ", words)}) — a network's subject is the one word it changes");
+            }
+
+            foreach (var word in words)
+            {
+                var others = networksByWord[word].Where(n => n != network.Number).ToList();
+                if (others.Count > 0)
+                {
+                    reasons.Add($"'{word}' is also written by network(s) {string.Join(", ", others)} — all of a word's bits belong in one network");
+                }
+            }
+
+            // Condition 2: every bit driven by a single named cause, never an inline expression.
+            var expressionDriven = sliceAssignments.Where(a => !IsSingleNamedCause(a.Condition)).Select(a => a.CoilTag).ToList();
+            if (expressionDriven.Count > 0)
+            {
+                reasons.Add($"{string.Join(", ", expressionDriven)} driven by an inline expression rather than a single named cause (C-130 guarantees a named one exists)");
+            }
+
+            // Condition 3: the bit map lives in the network COMMENT. The alarm text used to go in the
+            // Title, which worked while a network held exactly one bit; a word-sized network has
+            // nowhere else to put it. Checking that every written bit is mentioned is deliberately
+            // weaker than parsing the `%X0 = FTR = "..."` form — the point is that no bit is
+            // undocumented, and a format assertion here would be brittle without being stronger.
+            if (string.IsNullOrWhiteSpace(network.Comment))
+            {
+                reasons.Add("it has no network comment carrying the bit map (one line per bit, with that bit's C-505 alarm text)");
+            }
+            else
+            {
+                var undocumented = sliceWrites
+                    .Select(SliceBitToken)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(bit => network.Comment!.IndexOf(bit, StringComparison.OrdinalIgnoreCase) < 0)
+                    .ToList();
+                if (undocumented.Count > 0)
+                {
+                    reasons.Add($"the network comment's bit map does not mention {string.Join(", ", undocumented)}");
+                }
+            }
+
+            if (reasons.Count == 0)
             {
                 continue;
             }
+
+            var detail = string.Join("; ", reasons);
 
             yield return new Finding(
                 "C-301",
                 FindingSeverity.Error,
                 block.Name,
                 network.Number,
-                $"Network {network.Number} writes {sliceWrites.Count} slice-access bit(s) ({string.Join(", ", sliceWrites)}) without satisfying the C-501 alarm-word exception (exactly one bit, network titled).",
-                sliceWrites.Count > 1
-                    ? "Split into one network per alarm bit, each titled with its own alarm text, or move this logic into a self-identified data-handling/comms block (C-105)."
-                    : "Add a network title stating the alarm text, or move this logic into a self-identified data-handling/comms block (C-105).");
+                $"Network {network.Number} writes slice-access bit(s) ({string.Join(", ", sliceWrites)}) without satisfying the C-501 alarm-word exception: {detail}.",
+                "Write all of one alarm word's bits in a single commented network, each bit driven by a single named cause, or move this logic into a self-identified data-handling/comms block (C-105).");
 
             yield return new Finding(
                 "C-501",
                 FindingSeverity.Warn,
                 block.Name,
                 network.Number,
-                $"Network {network.Number}'s slice-access alarm bit(s) don't satisfy C-501's own conditions (exactly one bit per network, network title states the alarm text).",
-                "Either restructure to satisfy C-501 as written, or — if this packed/summarized form is intentionally fine — propose it as a documented exception in docs/06-lad-conventions.md rather than leaving the rule and the practice disagreeing.");
+                $"Network {network.Number}'s slice-access alarm bit(s) don't satisfy C-501's own conditions: {detail}.",
+                "Either restructure to satisfy C-501 as written (one network per alarm word, a single named cause per bit, the bit map in the network comment), or — if this form is intentionally fine — propose it as a documented exception in docs/06-lad-conventions.md rather than leaving the rule and the practice disagreeing.");
         }
     }
 
@@ -311,6 +379,33 @@ public static class Rules
         var lastDot = tag.LastIndexOf('.');
         return lastDot >= 0 && lastDot + 1 < tag.Length && tag[lastDot + 1] == '%';
     }
+
+    // "DB_Alarms.EStopAlarm0.%X3" -> "DB_Alarms.EStopAlarm0". C-501's unit of grouping since the
+    // 2026-08-06 amendment: the word is what a network's subject is, so the word is what the rule
+    // counts. Only ever called on a tag IsSliceAccessTag already accepted.
+    private static string SliceWordPath(string tag)
+    {
+        var lastDot = tag.LastIndexOf('.');
+        return lastDot >= 0 ? tag[..lastDot] : tag;
+    }
+
+    // "DB_Alarms.EStopAlarm0.%X3" -> "%X3", for checking the comment's bit map mentions it.
+    private static string SliceBitToken(string tag)
+    {
+        var lastDot = tag.LastIndexOf('.');
+        return lastDot >= 0 ? tag[(lastDot + 1)..] : tag;
+    }
+
+    // C-501 condition 2 — `COIL IO.Alarm.%X0 := IO.FTR`. A bare tag is a single named cause, and so
+    // is a negated bare tag: you still read one name and know what the bit is, which is the whole
+    // point ("%X0 never has to be decoded to understand the rung"). Anything containing an AND, OR
+    // or comparison is the inline expression the rule exists to keep out.
+    private static bool IsSingleNamedCause(Expr condition) => condition switch
+    {
+        Expr.TagRef => true,
+        Expr.Not not => not.Operand is Expr.TagRef,
+        _ => false,
+    };
 
     // C-406 (error) — TON is the only timer instruction used; TOF/TONR are violations. Checked in
     // two genuinely different places: the *declaration* form (a DbMember whose own Datatype is
