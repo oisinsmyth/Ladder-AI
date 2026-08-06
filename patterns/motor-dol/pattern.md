@@ -35,6 +35,21 @@ in `PlantAutoControl`, not assumed from the interface declaration alone. Interna
 arrays, every timer instance, `PreStartMemory`, `HandPosEdge`/`HandNegEdge`) is never touched from
 outside and needs no caller wiring.
 
+**The interface type ships with the pattern: `MotorIOSet.ir` / `.xml` (added 2026-08-06).** Under
+**C-132** the whole caller-visible interface is that one `STATIC` member, so without the type the
+pattern could not be instantiated at all — the pattern shipped from admission (2026-07-15) until now
+with its own interface type absent, a gap `patterns/valve-two-state/` exposed by shipping one.
+The type's member list is recovered from `MotorStarter.ir`'s own `STATIC` section (where
+`IO` carries its members as inline nested declarations), name for name, type for type, in order; it
+is not a fresh export of the real `TypeDOL`. Its member comments are written from this block's
+fourteen networks and from nothing else — each says who writes the member and who reads it, and
+where the ladder shows nothing the comment says so (`Name` has no reader and no writer anywhere in
+this block). **No member carries `RETAIN`**, deliberately: a `TYPE` member has no `Remanence`
+attribute in the real XML shape, so the token would be silently dropped crossing to XML (FI-47).
+Retention is declared where it can be — on the FB static, `IO : "MotorIOSet" RETAIN SETPOINT`, which
+`MotorStarter.ir` already does. The table below stays as the readable summary; the type file is the
+authoritative member list.
+
 **Caller writes (real-world inputs):**
 
 | Member | Type | Meaning |
@@ -76,7 +91,7 @@ outside and needs no caller wiring.
 11. **Upstream enable** — `UPSEnable` delays by `EnableUPSTimeMS` after `Run AND RunningFB` — the actual enable-chain link consumed by the next equipment.
 12. **Hours totaliser** — **known deviation, not silently cleaned up**: uses `TONR` directly, which `06-lad-conventions.md` C-406 bans (TON-only; the convention doc's own action item calls for "a site-standard, cross-platform retentive-timer FB" to replace exactly this). Documented as real, existing, compiling content — not proposed as the template to copy into new equipment.
 13. **HMI telemetry** — a cascade of gated `MOVE`s setting `Telemetry` to the status codes above.
-14. **Alarm bits** — packs `FTR`/`FTS`/`FaultFB` into `Alarm.%X0`/`%X1`/`%X2`. **Also a known deviation**: 3 bits in one network doesn't satisfy C-501's "exactly one bit per network" exception to C-301 — same shape already flagged during S4's own convention-review pilot on `NodeStatusAlarms`/`PerimeterSafetyAlarms`. Real, compiling, existing content; not the template to copy.
+14. **Alarm bits** — packs `FTR`/`FTS`/`FaultFB` into `Alarm.%X0`/`%X1`/`%X2`. **Status changed 2026-08-06, and the change went the pattern's way**: C-501 previously required "exactly one alarm bit per network", which this network was recorded here as deviating from; the rule was amended that day to require the opposite — **one network per alarm word** — citing this very network as the proven site shape it had been contradicting. Conditions 1 (one network per word) and 2 (each bit a single named cause) are met as written. **Condition 3 is not: the network carries no bit-map comment** — one line per bit with that bit's C-505 alarm text — which is why `converter review` still reports network 14 under C-301/C-501. That condition postdates the block and the block is proven site code, so **the gap is recorded here for the owner to rule on, not silently fixed**: adding the comment is a comment-only change of the S3-proven lowest-risk class, but it is an edit to proven site content and that call is the owner's.
 
 ## Examples
 
@@ -128,3 +143,19 @@ documentation than the real source block (`MotorDOL` is itself untitled at N4 an
 N6 — `sanitization/MotorDOL.map.json` reflects the source), so a future re-sanitization from a
 fresh export would need these two fields re-applied. Change re-affirmed under the admission's
 sign-off discipline: Oisín, 2026-07-16.
+
+**2026-08-06 — `MotorIOSet.ir` / `.xml` added; `MotorStarter.ir` untouched (added file, not a
+refactor).** Building `patterns/valve-two-state/` exposed the gap: under C-132 (added the same day)
+the block's entire caller-visible interface is the one `STATIC` member `IO : "MotorIOSet"`, and the
+type it names was not in this folder — so the pattern could not be instantiated as shipped. The type
+is recovered from `MotorStarter.ir`'s own inline nested declaration (27 members, name/type/order
+verified identical), given member comments written from this block's own networks, and shaped after
+`patterns/valve-two-state/UDT_Valve.ir`. **No `RETAIN` on any member** (FI-47) — verified 0
+`Remanence=` attributes in the generated XML. Verified: `converter preflight` clean (0 findings);
+`converter to-xml` then `to-ir` round-trips byte-identical; `dotnet test` green. **Not verified: TIA
+import + block compile of the type** — the Portal slot was in use by another project at the time and
+this run did not queue for it, so the compile gate on this file is outstanding and the type's
+standing rests on `MotorStarter`'s own admission evidence (the identical struct compiles clean with
+nine instances in `SampleProject`). Item 14's C-501 status also changed on this date, in the
+pattern's favour — see "Behaviour, by network" 14 for the one condition still unmet and the ruling it
+awaits.
