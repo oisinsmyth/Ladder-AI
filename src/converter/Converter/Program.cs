@@ -1516,9 +1516,27 @@ internal static class Program
             networkComments.Add(block.Networks[i].Comment);
         }
 
+        // A static named as a CALL's instance is a MULTI-INSTANCE and takes the minimal member shape
+        // (TIA: "The attribute 'Remanence' cannot be set"). Derived here because this is the last place
+        // the IR networks and the interface are both in hand. Subscript stripped, same normalisation as
+        // SidecarSynthesizer.ScopeFor. Timers are unaffected — they are TimerBindings, not Calls.
+        var multiInstanceStatics = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var call in block.Networks.SelectMany(n => n.Calls))
+        {
+            if (call.InstancePath is not { } instPath)
+            {
+                continue;
+            }
+
+            var head = instPath.Split('.')[0];
+            var subscript = head.IndexOf('[');
+            multiInstanceStatics.Add(subscript >= 0 ? head[..subscript] : head);
+        }
+
         var blockSource = new BlockSource(
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers, block.Title,
-            block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType);
+            block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType,
+            multiInstanceStatics.ToList());
         return BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkTitles, networkComments);
     }
 }

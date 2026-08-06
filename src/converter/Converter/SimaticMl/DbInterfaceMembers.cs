@@ -473,9 +473,21 @@ internal static class DbInterfaceMembers
     /// <paramref name="includeSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, whose
     /// AttributeList never carries a SetPoint BooleanAttribute at all — confirmed real, 2026-07-12, S1 item 20.
     /// </summary>
-    public static XElement WriteMember(DbMember member, bool includeSetPoint = true)
+    /// <param name="bareShape">
+    /// Forces the minimal member shape (no <c>Remanence</c>, no <c>AttributeList</c>) for a member whose
+    /// datatype is another FB — a MULTI-INSTANCE static. TIA rejects the full shape on one outright:
+    /// <c>"The attribute 'Remanence' cannot be set."</c> Retentivity of a multi-instance is a property of
+    /// the CALLED block's own members, not of the calling member, so there is nothing for TIA to set here.
+    /// Caller-supplied rather than read off the member because the datatype alone cannot distinguish an
+    /// FB-typed static from a UDT-typed one — both are quoted names, and a UDT-typed static (the C-132
+    /// interface member) genuinely does carry Remanence. <see cref="BlockSourceWriter"/> derives it from
+    /// the block's own CALL statements, which is a fact the file already contains rather than a token an
+    /// author has to remember. Timers are unaffected: they arrive as TimerBindings, not CallStatements,
+    /// and their full shape (VERSION/SETPOINT) is confirmed real.
+    /// </param>
+    public static XElement WriteMember(DbMember member, bool includeSetPoint = true, bool bareShape = false)
     {
-        if (member.IsBareParameter)
+        if (member.IsBareParameter || bareShape)
         {
             var bareElement = new XElement(
                 Ns + "Member",

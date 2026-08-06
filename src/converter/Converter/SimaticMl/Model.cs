@@ -296,11 +296,22 @@ public sealed record BlockSource(
     IReadOnlyList<DbMember>? OutputMembers = null,
     IReadOnlyList<DbMember>? InOutMembers = null,
     IReadOnlyList<DbMember>? ConstantMembers = null,
-    string? SecondaryType = null)
+    string? SecondaryType = null,
+    IReadOnlyList<string>? MultiInstanceStatics = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 
     public IReadOnlyList<DbMember> InOutMembers { get; init; } = InOutMembers ?? Array.Empty<DbMember>();
+
+    /// <summary>
+    /// Names of Static members that are MULTI-INSTANCES — an FB called with one of this block's own
+    /// statics as its instance. They take the minimal member shape; see
+    /// <see cref="DbInterfaceMembers.WriteMember"/>'s <c>bareShape</c> for why TIA requires it.
+    /// Carried on the model rather than derived in the writer because by the time a BlockSource
+    /// exists its networks are already FlgNet XML, and this is a fact about the IR that produced it.
+    /// Empty on the parse path, which never writes an interface.
+    /// </summary>
+    public IReadOnlyList<string> MultiInstanceStatics { get; init; } = MultiInstanceStatics ?? Array.Empty<string>();
 }
 
 public sealed class SimaticMlFormatException : Exception

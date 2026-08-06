@@ -161,10 +161,17 @@ public static class BlockSourceWriter
 
         if (staticMembers is not null)
         {
+            // MULTI-INSTANCE statics take the minimal member shape — see WriteMember's `bareShape`.
+            // Derived from the block's own CALL statements rather than from an IR token, because the
+            // datatype cannot tell an FB-typed static from a UDT-typed one (both are quoted names, and
+            // the UDT-typed C-132 interface member genuinely does carry Remanence). A member that is
+            // called as an instance in this block IS an FB instance; nothing else can be.
+            var multiInstanceNames = new HashSet<string>(block.MultiInstanceStatics, StringComparer.Ordinal);
+
             var staticSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Static"));
             foreach (var member in staticMembers)
             {
-                staticSection.Add(DbInterfaceMembers.WriteMember(member));
+                staticSection.Add(DbInterfaceMembers.WriteMember(member, bareShape: multiInstanceNames.Contains(member.Name)));
             }
 
             sectionsChildren.Add(staticSection);

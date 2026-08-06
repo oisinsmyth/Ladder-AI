@@ -2,6 +2,35 @@
 
 ## 2026-08-06
 
+**The converter could not express a multi-instance FB call — in two independent ways**
+
+Found by a coding agent that read a settled architecture, hit the tool boundary, and **stopped
+before writing any IR** rather than working around it. The construct — an FB called with one of the
+calling block's own statics as its instance, `#ValveWater` rather than a global instance DB —
+appears **nowhere in the committed export corpus**. It had simply never been written, so nothing
+had ever exercised the path.
+
+- **`Remanence` was emitted on every static member.** TIA refuses it on an FB-typed one:
+  `"The attribute 'Remanence' cannot be set."` A multi-instance's retentivity is a property of the
+  **called** block's members, not of the calling member, so there is nothing for TIA to set. Such a
+  member now takes the minimal shape (no `Remanence`, no `AttributeList`).
+- **A call's instance scope was hardcoded to `GlobalVariable`**, with a comment stating
+  multi-instance was out of scope. TIA resolved the name as a global DB and reported
+  `"Missing instance DB"` on a block that had imported cleanly. **The timer path had always done
+  this correctly** via its own `ScopeFor`, so the two were asymmetric for no reason beyond nobody
+  having needed it.
+- **The FB-vs-UDT distinction is derived, not declared.** The datatype cannot decide it — an
+  FB-typed static and a UDT-typed one are both quoted names, and the UDT-typed one (the C-132
+  interface member) genuinely *does* carry `Remanence`; that is where `RETAIN` on a whole interface
+  is expressed. So the set is derived from the block's **own `CALL` statements**: a static named as
+  a call's instance is an FB instance, and nothing else can be. That is a fact the file already
+  contains rather than a token an author has to remember — the failure mode the `BAREPARAM` token
+  already has.
+- Timers are unaffected: they arrive as `TimerBinding`s, not `CallStatement`s, and their full
+  shape (`VERSION`/`SETPOINT`) is confirmed real.
+- **Tests: 772 → 776**, covering both defects and both regression guards — an ordinary
+  single-instance call must still scope global, and an ordinary static must still carry `Remanence`.
+
 **The C-501 checker enforced the superseded rule — a compliant block failed review, a
 non-compliant one passed**
 

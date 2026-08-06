@@ -1166,7 +1166,14 @@ public static class SidecarSynthesizer
         if (call.InstancePath is { } instancePath)
         {
             instanceUId = nextUid++;
-            instanceScope = GlobalVariableScope;
+
+            // MULTI-INSTANCE: a call whose instance is a STATIC of this block is a LocalVariable, not a
+            // global instance DB. This was hardcoded to GlobalVariableScope with a comment saying
+            // multi-instance was out of scope, so TIA resolved `#ValveWater` as a global DB name and
+            // reported "Missing instance DB" on a block that had imported cleanly. BuildTimerSidecar has
+            // always done this correctly (its own ScopeFor call below), so the two paths were asymmetric
+            // for no reason other than that no multi-instance FB call had ever been written.
+            instanceScope = ScopeFor(instancePath, localNames);
             instanceComponentPath = instancePath.Split('.');
         }
 
