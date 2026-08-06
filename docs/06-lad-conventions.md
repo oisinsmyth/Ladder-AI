@@ -268,6 +268,37 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   rather than blaming both. **Two devices each independently announcing a definite failure from one
   ambiguous fact is worse than one honest report that something is wrong.**
 
+- C-132 *(error)* — **An FB's entire caller-visible interface is ONE `STATIC` member of its own
+  interface UDT. An equipment FB declares no `INPUT`, `OUTPUT` or `IN_OUT` parameters at all.**
+  *(Owner ruling, 2026-08-06. Reference shape: `patterns/motor-dol/MotorStarter.ir` — its `INPUT` and
+  `OUTPUT` sections are empty and the whole interface is `IO : "MotorIOSet" RETAIN SETPOINT`.)*
+  This is the **mechanism** that three existing rules already assume without any of them saying it:
+  C-115 puts the handshake vocabulary "through its UDT", C-113 requires step memory in "the block's
+  own caller-visible interface UDT", and C-127 says "everything an FB needs comes in through its own
+  UDT interface". Each presupposes a single interface struct; none states that it is a `STATIC` and
+  that parameters are therefore not used. That gap is why a block was once built with 33 `INPUT`
+  parameters without breaking any written rule.
+  *Why it is a rule and not a style preference.* Four things follow from it that parameters cannot
+  give you. **(1) Retention becomes declarable at all** — a UDT *member* carries no `Remanence`
+  attribute in the real XML shape, so `RETAIN` on a type member is silently dropped (FI-47); the FB
+  static is the only place retention can be stated, and a parameter interface has no such place.
+  **(2) One HMI binding point** — the instance DB *is* the interface, so the panel and the caller
+  address the same members, and C-503's "reaches the HMI through its own UDT" is satisfied by
+  construction rather than by a parallel publication struct. **(3) Adding a member touches no call
+  site** — the interface can grow as a block matures without re-editing every caller, which is what
+  makes "partial by design, completed at architecture sign-off" a workable practice instead of a
+  promise to re-open every instance later. **(4) One reviewable surface** — "what does this block
+  need?" is answered by reading one type, not by reconciling a parameter list against a struct.
+  *The cost, stated honestly, because it is real.* The call site shows nothing. `CALL #Valve1` does
+  not reveal what was wired, where `CALL #Valve1(AutoOpenCmd := …)` would. **Mitigation, which is part
+  of the rule:** the caller's writes to an instance's struct sit immediately adjacent to that
+  instance's `CALL`, never scattered — so the wiring is still readable in one place, just a different
+  place. A reviewer who cannot see the writes beside the call should treat that as a finding.
+  *Scope.* Equipment and sequencer FBs. **FCs are exempt and must use parameters** — an FC has no
+  static memory, which is C-113's own test for what must be an FB. This is a convention, not a
+  tooling limit: the converter handles FC/FB parameter interfaces fine, and the choice is about
+  consistency across a project's blocks, not capability.
+
 ## Commenting
 
 - C-201 *(error)* — Every network has a title; every block has a header comment (purpose, author, revision).
