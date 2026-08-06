@@ -1,0 +1,347 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V20" />
+  <SW.Types.PlcStruct ID="0">
+    <AttributeList>
+      <Interface>
+        <Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+          <Section Name="None">
+            <Member Name="InHand" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The operator has taken this valve in hand, so HandOpenSignal is the command source instead of AutoOpenSignal. THE TWO SOURCES REPLACE EACH OTHER RATHER THAN COMBINING, so there is never a state in which both partly drive the valve and no order of events that leaves the operator and the sequence disagreeing about who has it. This is also the bit the block publishes as its override indication, so the fact has exactly one home.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="AutoOpenSignal" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The open command from the automatic source - the sequence, the controller, whatever owns this valve in normal running. The default path, followed whenever the valve is not in hand.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="HandOpenSignal" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The open command from the operator side. MAINTAINED, NOT A MOMENTARY PRESS - the block carries none of the latching the motor pattern needs for pushbuttons, so an operator interface that sends momentary presses needs that latching added and it is not here. Stated as a wiring contract rather than left to be discovered.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="PositionFB" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE VALVE IS PROVEN OPEN. It may be a real limit contact, or an inference the caller draws from any process variable it likes - the block treats both identically and knows nothing about which it is. WHERE TWO SOURCES EXIST FOR ONE VALVE the caller ORs them and drives the result here, biased toward reporting OPEN: a valve passing while the program believes it sealed is the failure that actually hurts, and a valve wrongly reported open is a nuisance.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="PositionValid" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">C-131'S CANNOT-TELL STATE, AS ONE BIT. The position statement above is currently a meaningful statement about this valve - the contact is fitted and healthy, or the inference behind it is trustworthy right now. IT GATES WHETHER EITHER FAULT MAY ARM AT ALL AND IS NEVER READ AS A POSITION. Reading cannot-tell as not-arrived alarms on every legitimate operation; reading it as arrived is the silent failure C-131 exists to prevent. On a valve with no position source of any kind this is permanently FALSE and both detections are neutralised by wiring rather than by being absent, which is what lets one uniform block serve proven and blind valves alike.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FBSenseInvert" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The position source proves CLOSED rather than OPEN. The sense question is answered in exactly one place - here - rather than being asserted in the name of every signal that carries it, so the opposite wiring costs a setting and not a code change, and there is one place to look when the answer turns out to have been wrong.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FaultFB" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">An external fault about this valve that the block cannot detect itself - an actuator thermal, a solenoid driver fault, a diagnostic bit from a valve island. Written by whoever detects it; the block latches it into its own cause bit and never writes this member, so it keeps exactly one writer.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="SystemHealthy" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The permissive that must be present for this valve to be driven at all. Carried straight across from the motor pattern's own start rung; nothing about what makes it healthy belongs in this block.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="InhibitValve" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">An external inhibit from any source - a process interlock, a level trip, a shared-resource refusal, or an interlock that reads a SIBLING valve. Interlocks that need to see other equipment are computed by whoever owns that equipment and arrive here through this one bit, because a block cannot see its siblings and logic that pretends otherwise belongs to the caller.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FaultReset" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">Clears the latched cause bits. Written by the caller from the one plant-wide reset, so the member is per instance while the source is a single bit, exactly as the motor pattern has it. A cause whose condition is still true re-sets on the same scan through its own detection term, which delivers clear every latched fault WHOSE CAUSE HAS GONE with the ordinary seal-in and no comparison logic.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FTTime" Datatype="Real">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">SECONDS. The fail-to time, SHARED BY BOTH DIRECTIONS exactly as the motor pattern shares one preset across fail-to-run and fail-to-stop. It must cover actuator travel in the SLOWER direction plus any interposing relay operate time, and where the position is inferred rather than sensed it must also cover the time that inference needs to become conclusive. MUST NOT BE ZERO - at zero both faults raise during every legitimate transit, and an alarm that cries during normal operation gets switched off in its first week. Held in seconds for operator legibility and converted once inside the block to a millisecond preset.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="EnableUPSTime" Datatype="Real">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">SECONDS. How long the valve must be PROVEN open before it enables whatever is upstream or downstream of it. Sized to cover any settling the enabled device needs beyond the valve's own travel.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FailCloseCritical" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">This instance's failure to close carries the more severe consequence class rather than the lesser one. ONE CONDITION, TWO CLASSES, DECIDED BY THE INSTANCE: the same physical fault - a valve still passing while shut - is a nuisance on one duty and a hazard on another, so the class is TOLD to the block rather than inferred by it. Where this is FALSE the critical bit on this instance is permanently clear, which is a true statement about that instance and not a gap.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="SuppFTO" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The dominant suppressor for the fail-to-open ALARM BIT, computed by the caller. It reaches the alarm bit only - never FaultActive, never either class bit - so a suppressed fault still holds the plant and only the panel goes quiet. That separation is the entire reason suppression is safe to do at all.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="SuppFTC" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">As SuppFTO, for the fail-to-close alarm bit. Where a more severe attribution of the SAME evidence takes precedence over this one, this is where that precedence is applied - and applying it here rather than in the detection is what keeps this valve's own consequence standing behind the suppressed alarm.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="OpenValve" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE COMMANDED STATE OF THIS VALVE, and the only member the output mapping should read. There is no close command: this member dropping IS the close, and the valve fails shut with no energy on it. BOTH FAULT DETECTIONS ARE ARMED AGAINST THIS rather than against either command source, so an operator acting in hand disarms the detection that assumes the opposite state automatically, with no override-suppression logic anywhere in the block.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="UPSEnable" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">The C-115 handshake out: this valve is PROVEN open and whatever it feeds may run. It requires positive proof rather than assuming it, so a valve with no position source never enables - the conservative answer, and the right one for a permissive whose failure mode is a downstream device starting into a shut valve.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FTO" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">FAIL TO OPEN. LATCHED CAUSE, alarm bit 0 - commanded open, the position source is trustworthy, and it says the valve is NOT open, continuously for longer than FTTime. Seals itself in at its own detection network and clears only on FaultReset (C-508). C-131 in its plainest form: it fires on positive evidence of the WRONG state, never on the absence of evidence of the right one. WORTH KNOWING WHERE THE SUPPLY CAN BE ISOLATED: on a valve whose position is INFERRED from what the process does, this fault is watching the hydraulics as much as the actuator, because a closed manual isolator, a blocked line, an air-locked pump or a lost prime all give a genuinely open valve and no flow. If the two need telling apart, that is a second fault about the supply and it belongs to whoever owns the supply, not here.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FTC" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">FAIL TO CLOSE. LATCHED CAUSE, alarm bit 1 - commanded shut, the position source is trustworthy, and it says the valve is STILL OPEN, continuously for longer than FTTime. It proves the valve did NOT close; it never proves that it did, because a quiet feedback is absence of evidence and not evidence of absence - the actuator could have stalled between limits, the seat could be holding on debris, the sensor could have failed low.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="ExtFault" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">LATCHED CAUSE, alarm bit 2 - the external fault above, held until reset. IT EXISTS RATHER THAN LATCHING FaultFB IN PLACE, which is what the motor pattern does with a reset coil: giving the external input its own cause bit leaves FaultFB with exactly one writer instead of two, and puts this fact's seal-in at a detection network like every other cause in the block.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="OverrideActive" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">STANDING CONDITION, NOT A FAULT, alarm bit 3 - this valve is in hand. No seal-in, no clearing on FaultReset, and it feeds neither FaultActive nor either class bit, because taking a valve in hand is a deliberate act and a deliberate act must not freeze anything. Published per valve so the indication does not need its message text to say which valve it is about.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="FaultActive" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE ONE BIT THE CONTROL LOGIC AND THE OWNING CALLER READ - never the individual causes and never the alarm word. A pure OR of the three latched causes with NO SEAL-IN OF ITS OWN: every term is already sealed at its own detection network, and a second seal here is the duplicate C-508 forbids. ITS POSITION UPSTREAM OF THE ALARM-WRITE NETWORK IS WHAT MAKES SUPPRESSION SAFE - the panel can be emptied and this bit cannot - and it is also what the command rung reads for its fail-safe, so the valve closing itself on its own fault is not defeatable by suppression either. On every instance it is provably identical to CriticalActive OR ErrorActive, because FTC lands in exactly one of the two per instance and the other two causes are the lesser class everywhere; the identity is recorded rather than exploited, because writing it a third way would give one fact three homes.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="CriticalActive" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE CRITICAL-CLASS CONSEQUENCE BIT - drop outputs and freeze timers. MEMBERSHIP IS A PROPERTY OF THE INSTANCE AND NOT OF THE MEMBER, uniquely on this type, which is exactly why FailCloseCritical exists. EXHAUSTIVELY: FTC where FailCloseCritical is set, and nothing else, ever. Pure OR, no seal-in, upstream of every suppression term - so a suppressed critical fault still drops outputs, which is the property this bit exists to deliver and the reason the consequence is derived from the CAUSE and never by masking the alarm word. AN APPLICATION WITH ONLY ONE CONSEQUENCE CLASS leaves FailCloseCritical clear on every instance and reads FaultActive alone; the two class bits then cost two Bools and nothing else.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="ErrorActive" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE ERROR-CLASS CONSEQUENCE BIT - freeze the affected phase and inhibit the next step. The exact complement of CriticalActive: FTO always, FTC only where it is NOT the critical class, and ExtFault always. WHAT FEEDS NEITHER BIT: OverrideActive, which is a deliberate act. Between them the two bits partition every latched cause with none left over. Pure OR, no seal-in, upstream of every suppression term.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="CycleCount" Datatype="UDInt">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">How many times this valve has been PROVEN to open, counted on an explicitly constructed edge because counter instructions are not used (C-401) and the built-in edge instruction is not used (C-404). A maintenance figure - actuators and seats wear per operation, not per hour - and it is debounced by a small FIXED time so a chattering position source cannot inflate it. Rolls over rather than saturating, which is the motor pattern's own choice for its hours-run totaliser and is kept for consistency rather than argued afresh.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="Telemetry" Datatype="Int">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">One status code for the operator display: -1 faulted, 0 closed, 1 commanded open and travelling, 2 proven open. TWO COVERS PROVEN OPEN WHETHER REACHED BY HAND OR BY AUTO - there is no separate in-hand code, because the in-hand fact is published on its own bit and a status code that also carried it would give one fact two homes. Written as a chain of overriding moves, last enabled wins, so adding a state is one line rather than a re-cut of a comparison tree.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="Alarm" Datatype="Word">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">ONE WORD, WRITTEN IN ONE NETWORK (C-501). Bit 0 fail to open, 1 fail to close, 2 external fault, 3 in hand, bits 4-15 the application's. Each bit is a DIRECT UNLATCHED read of an already-latched cause, ANDed with that bit's suppressor and nothing else - the alarm INHERITS latched behaviour by reading a latched bit and does not implement it, and the suppressor and-terms are the only place a suppression reaches (C-504, C-508). THE BLOCK WRITES BITS 0 TO 3 AND NOTHING ELSE. An application needing further conditions on this word allocates them itself; one that has retired a condition leaves its bit vacant rather than reusing it. NOTE FOR ANYONE EXPECTING A SEPARATE POSITION-MISMATCH BIT, because its absence is a design consequence rather than an omission: with ONE position input there is one fail-to-open and one fail-to-close detection, and a mismatch between command and feedback IS one of those two - a source reading not-open under an open command is a failure to open, and one still made under a close command is a failure to close. A third bit would be a third name for evidence already published on bits 0 and 1. If an application genuinely needs to distinguish a REAL contact disagreeing from an INFERENCE disagreeing, that is a second position channel and a second detection, and it is not in this block.</MultiLanguageText>
+              </Comment>
+            </Member>
+            <Member Name="SuppCause" Datatype="Int">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">Address of the dominant live suppressor acting on this valve, 0 = none. A CLEAR ALARM BIT AND A SUPPRESSED ONE LOOK IDENTICAL, and on a valve whose position is inferred that is the common case rather than the exotic one: a clear bit may mean this valve is fine, or may mean nobody can currently tell. Written by whoever computes the suppressions and never by the block, so the encoding can change without touching any logic. THE ENCODING IS THE APPLICATION'S - this block moves nothing into this member and interprets nothing out of it.</MultiLanguageText>
+              </Comment>
+            </Member>
+          </Section>
+        </Sections>
+      </Interface>
+      <IsFailsafeCompliant>false</IsFailsafeCompliant>
+      <Name>UDT_Valve</Name>
+      <Namespace />
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="100000" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="100001" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text>THE COMPLETE CALLER-VISIBLE INTERFACE OF FB_Valve - commands, settings, published state, fault causes and the alarm word, all of it, in one type. C-132: an FB's entire interface is ONE STATIC member of its own interface UDT, and an equipment FB declares no INPUT, OUTPUT or IN_OUT parameters at all. The instance DB therefore IS the interface - the caller writes into it, the panel binds to it (C-503), and retention becomes declarable at the FB static that instantiates it, which is the only place retention CAN be stated, because a TYPE member carries no Remanence attribute in the real XML shape and a RETAIN token here would be silently dropped (FI-47). THE SHAPE IS patterns/motor-dol's MotorIOSet, MEMBER FOR MEMBER WHERE IT TRANSFERS. A DOL motor and a two-state valve are the same problem in different clothes - an automatic source, a hand source, a fail-safe that beats both, a feedback that can only prove non-arrival, a shared fail-to time, a latched fault surface, an upstream enable, an operation count, a status code and an alarm word - so the names are carried across rather than re-invented. WHAT DID NOT TRANSFER: the prestart apparatus (PreStartDone, PreStartMemory and the hand-selector edges that exist to serve it) and the controlled-shutdown apparatus (Shutdown, StopMotor, ShutdownComplete, ShutdownTime) have no valve meaning and are dropped entire; HandIntervention and RecentStart are dropped because the hand command here is MAINTAINED rather than a momentary button press; and the hours-run totaliser becomes an operation count, because actuators and seats wear per operation and not per hour. Name is dropped deliberately - a String inside a retained struct instantiated once per valve on a plant is a kilobyte-scale retentive cost for a label the panel already holds. THE POSITION FEEDBACK IS A COMPUTED BOOL AND THE BLOCK DOES NOT KNOW WHAT PRODUCED IT. A real limit contact, or an inference the caller draws from any process variable it likes, arrive on the same member; the block treats them identically and needs no knowledge of thresholds, windows, magnitudes or attribution. THAT IS WHAT KEEPS IT A LIBRARY BLOCK - everything application-specific lives in whatever computes PositionFB and PositionValid, and no plant's particular inference scheme is built into the valve. C-131 governs both fault detections without exception, and PositionValid is that rule's cannot-tell state carried as one bit: it GATES whether a fault may arm and is never read as a position in either direction. THE ALARM WORD'S BITS 4 TO 15 ARE THE APPLICATION'S. This block writes bits 0 to 3 and nothing else; an application that needs further conditions on the same word allocates them itself and writes them from wherever it detects them, and an application that has retired a condition leaves its bit vacant rather than reusing it.</Text>
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="100002" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="100003" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Types.PlcStruct>
+</Document>

@@ -1,0 +1,13 @@
+NETWORK 12 "Inlet Valve - wiring and call"
+  COMMENT "THE C-132 ADJACENCY OBLIGATION, WORKED. Because the block declares no parameters, the CALL line shows nothing about what was wired - so every write to this instance's struct sits IMMEDIATELY ABOVE ITS OWN CALL, in one place, and a reviewer who finds them scattered should treat that as a finding. Read this network as the call site's argument list, written out. THE POSITION PAIR IS THE PART TO GET RIGHT: PositionFB is whatever proves this valve open, and PositionValid says that proof is meaningful RIGHT NOW. Here the valve has a real open-limit contact, so validity is simply the contact's own health; on a valve with no contact the caller would drive PositionFB from its own inference and PositionValid from whether that inference is currently trustworthy, and on a valve with no position source of any kind it would drive PositionValid permanently FALSE, which disarms both detections and is the honest answer for a valve nobody can judge. THE OUTPUT IS READ BACK OUT, not driven in: OpenValve is what the output mapping takes."
+  COIL iDB_Valve_Inlet.IO.SystemHealthy := PlantControl.SafetyHealthy
+  COIL iDB_Valve_Inlet.IO.InhibitValve := PlantControl.InletBlocked OR NOT UpstreamValve.IO.OpenValve
+  COIL iDB_Valve_Inlet.IO.AutoOpenSignal := PlantControl.Status >= 1 AND SequenceControl.InletDemand
+  COIL iDB_Valve_Inlet.IO.InHand := HMIControlSignals.InletValveInHand
+  COIL iDB_Valve_Inlet.IO.HandOpenSignal := HMIControlSignals.InletValveHandOpen
+  COIL iDB_Valve_Inlet.IO.PositionFB := DiscreteInputs.InletValveOpenLimit
+  COIL iDB_Valve_Inlet.IO.PositionValid := NOT DiscreteInputs.InletValveLimitFault
+  COIL iDB_Valve_Inlet.IO.FaultFB := DiscreteInputs.InletValveActuatorFault
+  COIL iDB_Valve_Inlet.IO.FaultReset := HMIControlSignals.SystemReset
+  COIL DiscreteOutputs.InletValveOpen := iDB_Valve_Inlet.IO.OpenValve
+  CALL FB_Valve(iDB_Valve_Inlet, EN := TRUE)

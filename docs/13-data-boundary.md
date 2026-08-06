@@ -352,3 +352,28 @@ the older Amber process; live runs do not follow it.
 
 - **2026-08-04 — job `JOB9004`.** First live run; owner is reviewing each step. Job identity, scope
   and all content live in `Live Runs/JOB9004/` only. Governed entirely by this section.
+
+### Promotions out of a live run
+
+The one route by which anything leaves a job folder. Every promotion is recorded here, in job-code
+terms only, so that "did anything ever leave, and on whose word" is answerable without opening a job
+folder. **A promotion is never the agent's call and never mine** — this section exists because the
+rule it records is the easiest one in this document to talk yourself past, the content being
+generic-looking and the benefit obvious.
+
+- **2026-08-06 — `patterns/valve-two-state/`, from job `JOB9004`.** A generic two-state valve FB and
+  its interface UDT. **Route: explicit per-item owner permission**, not sanitization-with-mapping —
+  the owner named the two items and instructed their promotion. Copy, not move: the job keeps its
+  own versions, which retain the job-specific design history the library copies must not.
+  *Audited before commit, by the dispatching agent rather than the writing one*: zero site,
+  process, equipment, tag or alarm-ID content in any promoted file. The FB was already free of job
+  content and was promoted unchanged; the UDT's comments carried job provenance (a deleted
+  allocation paragraph, a bit-history narrative, a document reference, a job-specific count and one
+  job word for a hazard) and were rewritten to keep the engineering and drop the record. Two
+  residual audit hits were checked and cleared: a date, which cites a convention change in this
+  repo, and one generic noun inside a sentence listing what the block does *not* name.
+  **A security check fired on this promotion** and was assessed rather than waved through: it
+  reported that no owner permission was recorded *in the sub-agent's own transcript*, which was
+  true — the permission was given in the main conversation and relayed. The finding was correct
+  about what it could see and its underlying rule is the right one; this register entry is the
+  durable record whose absence it was really objecting to.

@@ -1,0 +1,271 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V20" />
+  <SW.Blocks.InstanceDB ID="0">
+    <AttributeList>
+      <InstanceOfName>FB_Valve</InstanceOfName>
+      <InstanceOfType>FB</InstanceOfType>
+      <Interface>
+        <Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+          <Section Name="Input" />
+          <Section Name="Output" />
+          <Section Name="Static">
+            <Member Name="IO" Datatype="&quot;UDT_Valve&quot;" Remanence="Retain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="None">
+                  <Member Name="InHand" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="AutoOpenSignal" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="HandOpenSignal" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="PositionFB" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="PositionValid" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FBSenseInvert" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FaultFB" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="SystemHealthy" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="InhibitValve" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FaultReset" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FTTime" Datatype="Real">
+                    <StartValue>10.0</StartValue>
+                  </Member>
+                  <Member Name="EnableUPSTime" Datatype="Real">
+                    <StartValue>2.0</StartValue>
+                  </Member>
+                  <Member Name="FailCloseCritical" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="SuppFTO" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="SuppFTC" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="OpenValve" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="UPSEnable" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FTO" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FTC" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="ExtFault" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="OverrideActive" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="FaultActive" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="CriticalActive" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="ErrorActive" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="CycleCount" Datatype="UDInt">
+                    <StartValue>0</StartValue>
+                  </Member>
+                  <Member Name="Telemetry" Datatype="Int">
+                    <StartValue>0</StartValue>
+                  </Member>
+                  <Member Name="Alarm" Datatype="Word">
+                    <StartValue>16#0</StartValue>
+                  </Member>
+                  <Member Name="SuppCause" Datatype="Int">
+                    <StartValue>0</StartValue>
+                  </Member>
+                </Section>
+              </Sections>
+            </Member>
+            <Member Name="FBOpen" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <StartValue>FALSE</StartValue>
+            </Member>
+            <Member Name="CycleEdge" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <StartValue>FALSE</StartValue>
+            </Member>
+            <Member Name="CyclePrev" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <StartValue>FALSE</StartValue>
+            </Member>
+            <Member Name="FTTimeMS" Datatype="DInt" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <StartValue>0</StartValue>
+            </Member>
+            <Member Name="EnableUPSTimeMS" Datatype="DInt" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <StartValue>0</StartValue>
+            </Member>
+            <Member Name="FailToOpenTimer" Datatype="TON_TIME" Version="1.0" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="None">
+                  <Member Name="PT" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="ET" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="IN" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="Q" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                </Section>
+              </Sections>
+            </Member>
+            <Member Name="FailToCloseTimer" Datatype="TON_TIME" Version="1.0" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="None">
+                  <Member Name="PT" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="ET" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="IN" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="Q" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                </Section>
+              </Sections>
+            </Member>
+            <Member Name="EnableUpstreamTimer" Datatype="TON_TIME" Version="1.0" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="None">
+                  <Member Name="PT" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="ET" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="IN" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="Q" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                </Section>
+              </Sections>
+            </Member>
+            <Member Name="CycleDebounceTimer" Datatype="TON_TIME" Version="1.0" Remanence="NonRetain" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="None">
+                  <Member Name="PT" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="ET" Datatype="Time">
+                    <StartValue>T#0MS</StartValue>
+                  </Member>
+                  <Member Name="IN" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                  <Member Name="Q" Datatype="Bool">
+                    <StartValue>FALSE</StartValue>
+                  </Member>
+                </Section>
+              </Sections>
+            </Member>
+          </Section>
+        </Sections>
+      </Interface>
+      <Name>iDB_Valve_Inlet</Name>
+      <Namespace />
+      <Number>900</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="100000" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="100001" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text>EXAMPLE instance DB for FB_Valve - one valve, wired in examples/calling-network.ir. START VALUES ARE DOWNLOAD-TIME ONLY and every command member is overwritten by the caller each scan, so the values that actually matter here are the two SETTINGS: FTTime, which must cover this actuator's travel in its slower direction, and EnableUPSTime. Both ship non-zero on purpose - a zero fail-to time raises both faults during every legitimate transit. The whole struct is RETAIN, which is what C-132 makes possible and what keeps a latched fault alive across a power cycle; note that this retains the entire interface, not only the latched causes.</Text>
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.InstanceDB>
+</Document>
