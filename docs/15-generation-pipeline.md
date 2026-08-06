@@ -273,7 +273,7 @@ corpus: a reviewer skill that doesn't independently find the known problems isn'
 | 7 | `gen-spec-analysis`, `gen-io-tags`, `gen-reconcile`, `gen-alarm-design` (as the next real project needs them) | Not built (`gen-spec-analysis` performed once as a `manual:` run — its output contract is now defined) |
 | 8 | The **four-rung structured spec pipeline**: `gen-pid-analysis` (rung A), `gen-functional-analysis` (B), `gen-equipment-spec` (C), `gen-code-structure` (D) — pulled forward out of this step by the S6-Killer-Plan autopsy, which found a correlated-check root cause the existing chain could not fix | **All four BUILT 2026-08-05** (`448251c`, amended `b66c1f8`/`c48057b`/`decd2d5`/`361c0e0`). Adversarially validated twice (`docs/evidence/four-rung-design-validation{,-round2}.md`) and exercised on three runs (`gen/PlantAutoControl-bench-rerun{,2,3}/`). **Caveats, both live:** one plant only, never a second; and `references/<class>/` self-disclaims as non-standards, so rung A's completeness-by-construction is nominal, not delivered |
 | 8b | `audit-artifact`, `gen-integration` formalization | Not built |
-| 8c | **`gen-data-structures`** — a data-structure stage that does not exist in the numbered skill list at all (§ "Stages and skills" has no entry for it). Authors the UDT and DB landscape from the design artifacts: types, blocks, members, data types, **retentivity**, start values; proves it by import + block-level compile + export-back. It is the stage that turns a retentive-data list and an HMI interface definition into objects a project actually contains. | **Not built, and now RUN MANUALLY TWICE** (2026-08-05, one live greenfield job: an author pass, then a rename + restructure pass). Per the standing convention that a second manual run of a stage is the trigger to build its skill rather than do it a third time by hand, this is **due**. Both runs were performed to contract by `lad-coder` under hard rule 8, so the contract is already observed rather than hypothetical — what it consumes, what it proves, and the five TIA behaviours it has to design around (`docs/notes/openness-quirks.md`) |
+| 8c | **`gen-data-structures`** — a data-structure stage that does not exist in the numbered skill list at all (§ "Stages and skills" has no entry for it). Authors the UDT and DB landscape from the design artifacts: types, blocks, members, data types, **retentivity**, start values; proves it by import + block-level compile + export-back. It is the stage that turns a retentive-data list and an HMI interface definition into objects a project actually contains. | **Not built, and now RUN MANUALLY FIVE TIMES AND COUNTING** (2026-08-05/06, one live greenfield job: an author pass, a rename + restructure pass, then three successive corrections as owner rulings landed). Per the standing convention that a *second* manual run is the trigger to build the skill rather than do it a third time by hand, this is **overdue, not due** — and the run count is itself evidence about the stage: structures get revised every time a ruling lands upstream, so 8c is re-entered far more often than a stage that runs once. Its gate hazard below is therefore paid repeatedly. Both runs were performed to contract by `lad-coder` under hard rule 8, so the contract is already observed rather than hypothetical — what it consumes, what it proves, and the five TIA behaviours it has to design around (`docs/notes/openness-quirks.md`) |
 | 9 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |
 
 **Why 8c is listed out of numeric order:** it was never in the pipeline's own stage table. The
@@ -282,6 +282,40 @@ landscape already exists — true on every project this pipeline had seen, becau
 was read out of a project that already had its DBs. The first greenfield job made the gap visible
 immediately: nothing can be coded until the types and blocks exist, and no skill owned creating
 them.
+
+### 8c's gate is not the compile gate — and this is the stage's defining hazard
+
+**Measured, not predicted (2026-08-06).** On a structure-only pass, a member was silently deleted
+from five of six interface types by an editing error. Every static and compile check available
+returned clean on the broken input:
+
+| Check | Result on input missing a member from 5 of 6 types |
+|---|---|
+| `converter preflight` (whole project) | 0 findings, exit 0 |
+| `openness-cli compile` (whole device) | `Success`, errors 0, warnings 0 |
+| `openness-cli compile` (each block) | `Success`, errors 0, warnings 0 |
+| `openness-cli sanity-check` | `HEALTHY`, 0 inconsistent |
+| **member-by-member re-export diff vs the as-built baseline** | **caught it** — showed `+2/-1` where the change was `+2/-0` |
+
+**Why every gate missed it.** Hard rule 4's compile gate works by making the *consumers* of a
+definition object to it. In a structure-only phase there are no consumers yet — no FB has been
+written against the type — so a missing member is a definition nobody references, which is exactly
+what a compiler is entitled to accept. **The gate is close to vacuous here**, and passing it means
+much less than it means at any other stage.
+
+**The rule this stage carries as a result:** at 8c the real gate is the **sent-vs-returned re-export
+diff against the previous as-built export**, and it must be *mechanical and member-by-member*, not a
+visual read. Assert the shape of the intended change (`purely additive`, `+N/-0`, baseline order
+preserved) rather than merely eyeballing that the new members arrived — the defect here was invisible
+in the added members and visible only in the removed count. A quote-balance check over every member
+line belongs in the same pass; a dangling comment fragment also survives compile.
+
+**Corollary — the hazard runs the other way too.** Because nothing references these objects yet, a
+*wrong* definition is equally silent. This is the same structural reason [FI-47](16-future-ideas.md)
+bites at this stage and no other: a `RETAIN` written on a type member parses, compiles, exports and
+drift-checks clean, and is discovered by a power cycle on a live plant. 8c is the stage where
+"it compiled" is the weakest evidence in the pipeline, and it is also the stage that decides
+retentivity — those two facts meeting is what makes the re-export diff non-optional here.
 
 ## Relationship to existing docs
 
