@@ -972,3 +972,28 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   tighten to true D3 network headers, which needs a corpus-measured pattern first.
 - **Verdict.** Open. (1) is the cheapest and has a live false positive today. (2) is the one with
   unknown extent, which is its own argument for looking.
+
+### FI-47 — ` RETAIN` on a UDT member parses clean and is silently dropped crossing to XML
+- **Status:** Raised (2026-08-06). Found while verifying a data-structure stage, not by a test.
+- **The defect.** A UDT's member lines share `DbMemberLineFormat`'s grammar with a DB's, so
+  `<member> : Bool RETAIN` inside a `TYPE` **parses successfully**. But a real UDT member's XML
+  carries no `Remanence` attribute at all, so `WriteTypeMember` has nowhere to put it and the token
+  vanishes. `TypeIr.cs`'s own header documents this ("the shared line grammar would still *accept* a
+  hand-authored ` RETAIN`, which the XML writer then has nowhere to put") and `ir/SPEC.md` calls it a
+  documented edge — so it is **known and deliberate, recorded as prose rather than enforced in code**.
+- **Why prose is not enough here.** Retention is the one DB property whose loss is invisible until a
+  power cycle: the block compiles, imports, exports and round-trips clean, and the omission surfaces
+  as data that did not survive an outage — on site, months later. This is the FI-44 family exactly
+  (a check that passes because it examined the wrong thing), with a worse failure mode: FI-44's
+  silent cleans were caught by re-running a fixed check, and this one is caught by an outage.
+- **Also: `to-ir` round-trips a lie.** Import a UDT whose author wrote `RETAIN`, export it, and the
+  IR comes back without it — so `drift-check` and the golden harness both report agreement between
+  two files that say different things, because the difference was destroyed on the way in.
+- **Fix.** Hard-error on ` RETAIN` (and ` VERSION`) in a `TYPE` member line at parse time, naming the
+  member and stating where retention *is* declared — the FB static or DB member that instantiates the
+  type. A hard error is right rather than a review finding: there is no valid program in which the
+  token means anything, so there is nothing to weigh. Cheap, and the correct behaviour is already
+  written down — this is enforcement of an existing documented rule, not a new one.
+- **Verdict.** Open, and worth doing before the next data-structure stage. The current mitigation is
+  that an author has to know the rule and apply it by hand every time, which is the mitigation FI-44
+  was raised to stop relying on.
