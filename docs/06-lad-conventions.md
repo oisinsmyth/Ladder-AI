@@ -299,6 +299,33 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   tooling limit: the converter handles FC/FB parameter interfaces fine, and the choice is about
   consistency across a project's blocks, not capability.
 
+- C-133 *(error)* — **A momentary event latches for a fixed minimum time, not until reset. One
+  project-wide preset, `Event_Min_Hold`, default 60 s.** *(Owner ruling, 2026-08-06.)*
+  ```
+  TON(EventHoldTimer, IN := <the event>, PT := Event_Min_HoldMS)   <- not the pattern; see below
+  COIL IO.EventActive := <the event> OR IO.EventActive AND NOT <hold expired>
+  ```
+  *The problem it solves.* An INFO or status event that is true for one scan — a batch cancelled, a
+  step advanced, a request refused — **is invisible between two HMI polls.** It happens, the bit
+  goes true and false, the panel polls a second later and sees nothing. Nothing records it, and no
+  operator can be shown what they cannot be polled for.
+  *Why a timed hold and not a latch.* A **fault** latches until `FaultReset` because it records a
+  condition somebody must act on and clear (C-508). An **event** records that something *happened* —
+  there is nothing to clear, and a latched event would need an operator to acknowledge a fact that is
+  already over, or it would stand forever. The timed hold makes the event survive any poll interval
+  and then clear itself, needing no reset and no acknowledgement. **Do not give a momentary event a
+  `FaultReset` term** — that is the tell that it has been mistaken for a fault.
+  *One preset, project-wide.* `Event_Min_Hold` is a single setting, not per event. The number is a
+  property of *how often the panel polls*, not of any individual event, so a per-event preset would
+  be an invitation to tune away a symptom of a comms problem one alarm at a time. **60 s default** —
+  comfortably longer than any polling or nesting interval, short enough that an event that stopped a
+  minute ago is not still lit.
+  *Interaction with C-508 and C-501.* The held bit is still a **cause**, so it seals in at its own
+  detection network and the alarm word reads it directly and unlatched, exactly as a fault does. The
+  only difference is what clears it. And the event is still classed WARNING or INFO: **the hold must
+  not make it feed `FaultActive`, `CriticalActive` or `ErrorActive`** — holding a bit longer so a
+  panel can see it must never change what the plant does.
+
 ## Commenting
 
 - C-201 *(error)* — Every network has a title; every block has a header comment (purpose, author, revision).
