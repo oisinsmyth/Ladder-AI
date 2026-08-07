@@ -405,6 +405,15 @@ public sealed class ProjectUsageGraph
     // root) rather than a root-qualified path — that suffix is exactly the FB-internal alias form.
     private void CollectInstanceLeafPaths(string instanceDb, string suffixPrefix, DbMember member)
     {
+        // FI-50. Same exclusion as the multi-instance path: an IEC timer/counter inside an instance
+        // DB is instruction state, written by the instruction and not by any caller. Applied on both
+        // paths deliberately — the two forms describe the same placement, and a member that is noise
+        // through one route is noise through the other.
+        if (IecInstanceTypes.Contains(Unquote(member.Datatype)))
+        {
+            return;
+        }
+
         var suffix = suffixPrefix.Length == 0 ? member.Name : suffixPrefix + "." + member.Name;
         if (member.NestedMembers is { Count: > 0 } nested)
         {
