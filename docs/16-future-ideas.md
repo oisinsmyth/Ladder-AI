@@ -1075,3 +1075,40 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Verdict.** Open. It is the mechanical floor's own argument applied to a rule currently held by
   discipline — and this project's record is that discipline-held invariants fail quietly, which is
   why FI-44 exists at all.
+
+### FI-50 — `undriven-scan` could not see a multi-instance, which is the house interface style
+- **Status:** **BUILT AND FIXED 2026-08-07**, same day it was found. Kept as a record because the
+  *shape* of the miss matters more than the fix.
+- **The shape.** `undriven-scan` resolved instances by looking for DB sources carrying an
+  `InstanceOf`. A **multi-instance** — an FB placed as a `STATIC` member of another FB,
+  `ValveWater : "FB_Valve"` — has no DB of its own and was therefore not an instance at all. Every
+  FB on the driving corpus reported `no instances`; the scan examined **zero members of zero
+  instances** and said so quietly.
+- **Why it is not a corner case.** C-132 makes the single-`STATIC`-UDT interface the house style, so
+  a project can be built entirely out of multi-instances. The check that exists to catch an undriven
+  interface member was structurally blind to **every block in the project**, and the blindness scaled
+  with adherence to our own convention. A reviewer doing the sweep by hand found real undriven
+  members the tool had reported nothing about.
+- **This is FI-44 again, through a door FI-44 did not check.** FI-44 made "examined nothing" exit 2
+  instead of 0, which is exactly what saved this: the command was *loud* about finding no instances,
+  and that is what got it looked at. The lesson is not that FI-44 was incomplete — it is that
+  **"empty is not clean" needs re-asking every time a new shape enters the corpus**, because the set
+  of ways to examine nothing grows with the codebase.
+- **What the fix had to get right**, both non-obvious:
+  1. **Addressing.** A multi-instance is written bare inside its owner (`ValveWater.IO.Cmd`) with no
+     instance root, unlike an iDB. So lookups use the local form **restricted to the owning block** —
+     without that restriction two FBs sharing a static name pool each other's writers and each masks
+     the other's gap, which would have turned a blind check into a wrong one.
+  2. **Nesting.** Resolution iterates to a fixpoint, because multi-instances nest. A single pass
+     roots a nested placement at its declaration site and loses the per-instance resolution the
+     command exists for.
+- **A judgement recorded rather than buried:** where the owning FB has **no instance DB yet**, the
+  placement is reported under a declaration-site path (`FB_SiloVessel/ValveWater`). That is a class,
+  not a placement, and the `/` says so. Reporting it is right — a block written before its caller is
+  otherwise unexaminable, and unexaminable is the state this entry exists to abolish.
+- **One false positive removed with it.** IEC timer/counter statics are excluded: a `TON_TIME`'s `Q`
+  is written by the timer instruction, not a caller, so the question is meaningless for them. Left
+  in, they were the loudest noise in the new output — and noise in a check is how a check gets
+  ignored.
+- **Verdict.** Closed. Four regression tests: per-placement resolution, declaration-site form, the
+  timer exclusion, and a placement not being counted as a leaf of its own owner.

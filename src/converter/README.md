@@ -2025,6 +2025,39 @@ a spec that required the capability — which is what makes it useful for the dr
 (`RotationSensor` ↔ `…RotSen`). **Off by default and never part of the exit condition** — it is a
 labelled heuristic, and on a real corpus it fires often enough to bury the findings it sits beside.
 
+### Multi-instances count as instances (2026-08-07, FI-50)
+
+An **instance** here is an instance DB *or* a **multi-instance** — an FB placed as a `STATIC` member of
+another FB (`ValveWater : "FB_Valve"`) rather than given a DB of its own. Both carry per-instance state
+and both can be left undriven.
+
+Originally only instance DBs were counted, because instances were read off DB sources carrying an
+`InstanceOf`. That is not a corner case under **C-132**, which makes the single-`STATIC`-UDT interface
+the house style: a whole corpus can consist of nothing but multi-instances, and this scan would examine
+**zero** members of **zero** instances while exiting cleanly. Found on a live job where every FB in the
+project reported `no instances` — FI-44's "empty is not clean" failure re-entering through a shape
+FI-44 did not consider.
+
+Two details the implementation has to get right, both of which are the reason this is not a one-liner:
+
+- **A multi-instance is addressed by its bare static name from inside its owner** (`ValveWater.IO.Cmd`),
+  with no instance root in the text at all — unlike an iDB, which callers address by name. So the usage
+  lookup is made on the local form and then **restricted to the owning block**, or two FBs that happen
+  to share a static name pool each other's writers and each masks the other's gap.
+- **Resolution iterates to a fixpoint**, because multi-instances nest: if `FB_SiloSequence` owns an
+  `FB_SiloCycle` and is itself reached through an instance DB, the cycle's real path is
+  `iDB_SeqW.Cycle`. A single pass would root it at the declaration site and lose exactly the
+  per-instance resolution this command exists for.
+
+Where the owning FB has no instance DB **yet**, the placement is reported under a **declaration-site**
+path — `FB_SiloVessel/ValveWater`, with a `/` that can never be mistaken for a member path. That keeps a
+block written before its caller judgeable instead of unexaminable; the alternative is reporting nothing,
+which is the failure this fix exists to remove.
+
+**IEC timer and counter statics are excluded.** A `TON_TIME`'s `Q` and `ET` are written by the timer
+instruction, not by any caller, so "who drives this" is not a meaningful question for them. Left in,
+they were the loudest false positive in the output — every dwell in a sequencer carries one.
+
 ## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-39 check 1)
 
 ```

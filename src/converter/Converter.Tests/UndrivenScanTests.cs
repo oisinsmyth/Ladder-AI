@@ -208,4 +208,91 @@ public class UndrivenScanTests : IDisposable
         Assert.False(report.ExaminedNothing);
         Assert.NotEmpty(report.Members);
     }
+
+    // FI-50 (2026-08-07). A MULTI-INSTANCE — an FB placed as a STATIC member of another FB rather
+    // than given its own instance DB — was invisible here, because instances were read only off DB
+    // sources carrying an InstanceOf.
+    //
+    // Why that is not a corner case: C-132 makes the single-STATIC-UDT interface the house style, so
+    // a corpus can consist of nothing but multi-instances. Found on a live job where EVERY FB
+    // reported "no instances" and the scan exited without examining one member of one block.
+    private void WriteOwnerWithTwoPlacements() =>
+        WriteBlock("FB_Owner.ir", "FB_Owner",
+            statics: new[]
+            {
+                // Two placements of the same FB. One is wired, one is not — the pooling trap again,
+                // and the reason a per-instance answer is the point.
+                new DbMember("Left", "\"FB_M\"", Retain: false, StartValue: null),
+                new DbMember("Right", "\"FB_M\"", Retain: false, StartValue: null),
+                // An IEC timer static is instruction state, not interface: nobody "drives" its Q.
+                new DbMember("Dwell", "TON_TIME", Retain: false, StartValue: null),
+            },
+            networks: new[]
+            {
+                new IrNetwork(4, "Drives the left placement only", new[]
+                {
+                    new CoilAssignment("Left.IO.Cmd", new Expr.TagRef("Src")),
+                }),
+            });
+
+    [Fact]
+    public void MultiInstanceStatic_IsAnInstance_AndResolvesPerPlacement()
+    {
+        WriteOwnerWithTwoPlacements();
+
+        var report = UndrivenScanRunner.Run(_dir, "FB_M", Array.Empty<string>(), Array.Empty<string>());
+
+        var left = Assert.Single(report.Members,
+            m => m.Instance == "FB_Owner/Left" && m.Member == "IO.Cmd");
+        var right = Assert.Single(report.Members,
+            m => m.Instance == "FB_Owner/Right" && m.Member == "IO.Cmd");
+
+        Assert.Equal(DriveState.Driven, left.State);
+        Assert.Contains("FB_Owner N4", left.Writers);
+        Assert.Equal(DriveState.Undriven, right.State);
+    }
+
+    // The owning FB has no instance DB of its own here, so the placement is identified by its
+    // DECLARATION SITE. That form says plainly it is a class and not a placement — and reporting it
+    // is still far better than reporting nothing, which is the FI-44 failure wearing a new hat.
+    [Fact]
+    public void MultiInstanceOwner_WithNoInstanceDb_StillExaminesTheInterface()
+    {
+        WriteOwnerWithTwoPlacements();
+
+        var report = UndrivenScanRunner.Run(_dir, "FB_M", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.Equal(ScanScope.Scanned, report.Scope);
+        Assert.False(report.ExaminedNothing);
+        Assert.All(
+            report.Members.Where(m => m.Instance.StartsWith("FB_Owner/", StringComparison.Ordinal)),
+            m => Assert.Contains('/', m.Instance));
+    }
+
+    // An IEC timer's Q and ET are written by the timer instruction, not by any caller, so counting
+    // them as members nobody drives is a false positive — and a loud one, since every dwell in a
+    // sequencer carries one.
+    [Fact]
+    public void IecTimerStatics_AreNotReportedAsUndrivenMembers()
+    {
+        WriteOwnerWithTwoPlacements();
+
+        var report = UndrivenScanRunner.Run(_dir, "FB_Owner", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.DoesNotContain(report.Members, m => m.Member.StartsWith("Dwell.", StringComparison.Ordinal));
+    }
+
+    // A placement is not a leaf of its owner: FB_Owner's own scan must not report `Left.IO.Cmd` as
+    // one of FB_Owner's members. It belongs to FB_M's scan, where it is judged against FB_M's
+    // interface.
+    [Fact]
+    public void NestedPlacement_IsNotAlsoALeafOfItsOwner()
+    {
+        WriteOwnerWithTwoPlacements();
+
+        var report = UndrivenScanRunner.Run(_dir, "FB_Owner", Array.Empty<string>(), Array.Empty<string>());
+
+        Assert.DoesNotContain(report.Members, m => m.Member.StartsWith("Left.", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Members, m => m.Member.StartsWith("Right.", StringComparison.Ordinal));
+    }
 }

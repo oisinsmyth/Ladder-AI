@@ -33,17 +33,24 @@ public static class UndrivenScanRunner
                 ScanScope.UnknownBlock);
         }
 
-        if (!graph.InstanceToFb.Values.Any(v => string.Equals(v, fbName, StringComparison.Ordinal)))
+        // FI-50. An instance is an instance DB OR a multi-instance static inside another FB. Only
+        // counting the first meant that under C-132 — where the house style is one STATIC UDT and
+        // FBs are placed as multi-instances — this scan examined nothing and said so quietly on a
+        // whole corpus. Both forms carry per-instance state and both can be left undriven.
+        var allInstances = graph.InstanceToFb
+            .Concat(graph.MultiInstanceToFb)
+            .Where(kv => string.Equals(kv.Value, fbName, StringComparison.Ordinal))
+            .Select(kv => kv.Key)
+            .ToList();
+
+        if (allInstances.Count == 0)
         {
             return new UndrivenScanReport(projectDir, inventory.FilesScanned, fbName, callerFiles,
                 Array.Empty<MemberDrive>(), inventory.Warnings.Concat(graph.Warnings).ToList(),
                 ScanScope.NoInstances);
         }
 
-        // Every instance DB of this FB, unless the caller narrowed it.
-        var instances = graph.InstanceToFb
-            .Where(kv => string.Equals(kv.Value, fbName, StringComparison.Ordinal))
-            .Select(kv => kv.Key)
+        var instances = allInstances
             .Where(i => instanceFilter.Count == 0 || instanceFilter.Contains(i, StringComparer.Ordinal))
             .OrderBy(i => i, StringComparer.Ordinal)
             .ToList();
@@ -56,8 +63,9 @@ public static class UndrivenScanRunner
         // exists to catch. Members the FB WRITES are out of scope — a status nobody consumes is the
         // project-wide reference graph's question, not this one.
         var scopedMembers = graph.InstanceMemberPaths
-            .Where(p => instances.Contains(p.InstanceDb, StringComparer.Ordinal))
-            .Select(p => p.Suffix)
+            .Concat(graph.MultiInstanceMemberPaths)
+            .Where(p => instances.Contains(p.Item1, StringComparer.Ordinal))
+            .Select(p => p.Item2)
             .Distinct(StringComparer.Ordinal)
             .Where(suffix => !IsWrittenByFb(graph, fbName, suffix))
             .Where(suffix => IsReadByFb(graph, fbName, suffix) || IsUntouchedByFb(graph, fbName, suffix))
@@ -105,10 +113,25 @@ public static class UndrivenScanRunner
         string member,
         bool includeHints)
     {
-        var path = $"{instance}.{member}";
-        var writers = graph.Usages.TryGetValue(path, out var usage)
-            ? usage.Writers
-            : new List<ProjectUsageGraph.UsageSite>();
+        // FI-50. An instance DB is addressed by its own name from outside (`iDB_X.IO.Step`), but a
+        // MULTI-INSTANCE is addressed from inside its owner by its bare static name
+        // (`ValveWater.IO.Step`) — there is no instance root in the text at all. So the lookup uses
+        // the local form, then restricts to the owning block: two FBs that both happen to declare a
+        // `ValveWater` would otherwise pool each other's writers and each mask the other's gap.
+        var isMulti = graph.MultiInstanceOrigin.TryGetValue(instance, out var origin);
+        var path = isMulti ? $"{origin.LocalRoot}.{member}" : $"{instance}.{member}";
+
+        List<ProjectUsageGraph.UsageSite> writers;
+        if (graph.Usages.TryGetValue(path, out var usage))
+        {
+            writers = isMulti
+                ? usage.Writers.Where(w => string.Equals(w.Block, origin.OwnerFb, StringComparison.Ordinal)).ToList()
+                : usage.Writers.ToList();
+        }
+        else
+        {
+            writers = new List<ProjectUsageGraph.UsageSite>();
+        }
 
         var writerNames = writers
             .Select(w => $"{w.Block} N{w.Network}")
