@@ -1091,6 +1091,10 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   Scope held deliberately: no Portal, no `openness-cli`, no `.ir` touched. **Adoption is not part of
   it** — nothing yet requires an agent to claim before writing, and wiring claims into the coding
   skills is what turns the registry from available into binding.
+  **Build and test record: `docs/evidence/fi-50-claims-build.md`** — what changed, the unit /
+  cross-process / real-corpus / regression evidence, the **standing testing requirements** for future
+  changes (§4), and the explicit not-tested list (§5: non-local filesystems, multi-machine, clock
+  skew, crash-mid-acquire, adoption).
 - **Prior status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
   is **four** ideas with four different verdicts, and that the headline framing ("multi-agent access",
   "streamline", "bulk") names benefits the substrate cannot deliver *as stated*. Owner clarified the same
