@@ -15,27 +15,38 @@ namespace Converter.SimaticMl;
 // </Access></Component>`. Seen only on the last component, same as SliceAccessModifier, and
 // never confirmed together with one on the same Component — but nothing here assumes they're
 // mutually exclusive.
+//
+// GENERALIZED 2026-08-07 (FI-51): the array index is now carried IN THE COMPONENT NAME as a
+// "Name[n]" suffix, at ANY position in the path, instead of in a separate field pinned to the
+// last component. The old shape modelled the index as a property of the ACCESS; it is a property
+// of a COMPONENT, and pinning it to the last one made a mid-path subscript inexpressible —
+// `DB_Weigh.Silo[0].RawValue`, an array of structs, which is an ordinary shape rather than an
+// exotic one. Worse, the two halves disagreed: the parser REFUSED a non-final indexed component
+// (correct, loud) while the writer silently emitted `<Component Name="Silo[0]" />` — a component
+// literally named "Silo[0]", which is not the member and does not exist. A read that refuses and
+// a write that corrupts is the worst possible pairing.
+//
+// This is the SECOND defect in this class. The first collapsed `Node_Error[1]`/`[2]`/`[3]` into
+// one indistinguishable path and was caught by the owner in TIA, not by a test. Per the standing
+// rule that a second instance of a bug class earns the general fix rather than another special
+// case, the positional special-casing is retired outright rather than extended: every component
+// is now treated identically, and `DottedPath` is a plain join with no positional logic left in
+// it to get wrong.
 public sealed record AccessNode(
     int UId,
     string Scope,
     IReadOnlyList<string> ComponentPath,
-    string? SliceAccessModifier = null,
-    int? ArrayIndex = null)
+    string? SliceAccessModifier = null)
 {
-    // "[n]" and ".%X15" notation composed together — array index before slice, matching the one
-    // real case observed of a not-yet-seen combination; the site's own ".%X15" convention is
-    // preserved exactly, "[n]" is the natural/obvious choice for array subscript, not otherwise
-    // used by the IR.
+    // "[n]" rides in its own component; ".%X15" is still an access-level suffix, because a slice
+    // genuinely is one — it addresses a bit within whatever the whole path resolved to. The site's
+    // own ".%X15" convention is preserved exactly; "[n]" is the natural notation for a subscript
+    // and is not otherwise used by the IR.
     public string DottedPath
     {
         get
         {
             var path = string.Join('.', ComponentPath);
-            if (ArrayIndex is not null)
-            {
-                path += $"[{ArrayIndex}]";
-            }
-
             if (SliceAccessModifier is not null)
             {
                 path += $".%{SliceAccessModifier.ToUpperInvariant()}";
@@ -43,6 +54,16 @@ public sealed record AccessNode(
 
             return path;
         }
+    }
+
+    // Splits a "Name[n]" component into its parts. An index never contains a dot, so this is
+    // unambiguous against the path join above.
+    public static (string Name, int? Index) SplitComponent(string component)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(component, @"^(?<name>.+)\[(?<index>\d+)\]$");
+        return m.Success
+            ? (m.Groups["name"].Value, int.Parse(m.Groups["index"].Value))
+            : (component, null);
     }
 
     // Siemens's own fixed set of 8 "Clock memory byte" system tags — confirmed real, 2026-07-14
@@ -69,13 +90,12 @@ public sealed record AccessNode(
         var slice = sliceMatch.Success ? sliceMatch.Groups["slice"].Value.ToLowerInvariant() : null;
         var rest = sliceMatch.Success ? sliceMatch.Groups["rest"].Value : dottedPath;
 
-        var arrayMatch = System.Text.RegularExpressions.Regex.Match(rest, @"^(?<path>.+)\[(?<index>\d+)\]$");
-        var arrayIndex = arrayMatch.Success ? int.Parse(arrayMatch.Groups["index"].Value) : (int?)null;
-        var path = arrayMatch.Success ? arrayMatch.Groups["path"].Value : rest;
+        // Subscripts stay attached to their own component through the split — an index contains
+        // no dot, so splitting on '.' cannot cut one in half, and no separate extraction step is
+        // needed at any position.
+        var componentPath = KnownDottedSingleComponentNames.Contains(rest) ? new[] { rest } : rest.Split('.');
 
-        var componentPath = KnownDottedSingleComponentNames.Contains(path) ? new[] { path } : path.Split('.');
-
-        return new AccessNode(uid, scope, componentPath, slice, arrayIndex);
+        return new AccessNode(uid, scope, componentPath, slice);
     }
 }
 

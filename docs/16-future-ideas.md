@@ -1112,3 +1112,41 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   ignored.
 - **Verdict.** Closed. Four regression tests: per-placement resolution, declaration-site form, the
   timer exclusion, and a placement not being counted as a leaf of its own owner.
+
+### FI-51 — an array subscript could only be expressed on the LAST component of a path
+- **Status:** **BUILT AND FIXED 2026-08-07.** Found while asking why four vessels on a live job
+  had no weight.
+- **The shape.** `AccessNode` carried a single `int? ArrayIndex`, documented as "seen only on the
+  last component". So `DB_Weigh.Silo[0].RawValue` — an **array of structs**, indexed in the
+  MIDDLE of the path — had nowhere to live.
+- **The two halves disagreed, in the worst possible direction.** The parser **refused** a non-final
+  indexed component with a clear `UnsupportedConstructException`. The writer **silently emitted**
+  `<Component Name="Silo[0]" />` — a component literally *named* `Silo[0]`, which names no member
+  and which TIA rejects on import. A read path that refuses and a write path that corrupts is
+  strictly worse than either alone: the loud half never fires on content the quiet half produced.
+- **What it cost.** On the driving job the weighing interface is
+  `Silo : Array[0..3] of UDT_WeighSilo`, so the input map could not be written. **No vessel had a
+  weight**, and every weight-derived judgement on the plant — stability, trust, the overfill
+  defence, and the inference of valve position that thirteen blind valves depend on — ran on zero.
+  The block comment recorded it as a tooling limitation and moved on, which is the right thing to
+  do in the moment and exactly how a tooling gap becomes permanent.
+- **This was the SECOND defect of this class**, and that decided the fix. The first collapsed
+  `Node_Error[1]`/`[2]`/`[3]` into one indistinguishable path — caught by the owner reviewing the
+  result in TIA, not by a test. The standing rule is that a second instance earns the **general**
+  fix rather than another special case, so the positional modelling was retired outright instead
+  of extended to "last component, or the one before it".
+- **The fix.** The index is a property of a **component**, not of an access — so it now rides in
+  the component itself as `Name[n]`, at any position. `ArrayIndex` is gone; `DottedPath` is a plain
+  join with no positional logic left in it to get wrong; parser and writer treat every component
+  identically. The bit-slice modifier stays access-level, because a slice genuinely *is* one — it
+  addresses a bit within whatever the whole path resolved to.
+- **Verified:** 785 converter tests, 39 golden round-trip tests, and `drift-check` against the
+  committed export corpus unchanged at its known baseline (`ExportDriftDetectorTests` asserts the
+  drifted set equals its baseline, and still passes). Four regression tests: mid-path subscript,
+  the trailing case that already worked, subscript-plus-slice composed, and several subscripts in
+  one path.
+- **The lesson worth keeping.** "Only ever seen on the last component" was an honest observation
+  about a corpus, and it hardened into a modelling decision. Refusing the unobserved shape on the
+  read side was right. What was wrong was letting the write side produce that same shape without
+  refusing — **a converter's two directions must agree about what is inexpressible**, or the
+  refusal is not a guard, it is only an inconvenience on one side.

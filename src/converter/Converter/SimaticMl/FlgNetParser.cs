@@ -793,14 +793,22 @@ public static class FlgNetParser
                 "SliceAccessModifier found on a non-final <Component> — only the last component was observed to carry one.");
         }
 
-        var arrayIndex = ParseArrayIndex(components[^1]);
-        if (components.Take(components.Count - 1).Any(c => c.Attribute("AccessModifier")?.Value == "Array"))
-        {
-            throw new UnsupportedConstructException(
-                "Array-indexed Component found on a non-final <Component> — only the last component was observed to carry one.");
-        }
+        // FI-51. A subscript on ANY component is now read, and rides back into that component's
+        // own name as "Name[n]". The previous refusal of a non-final indexed component was
+        // correct at the time — it was an unobserved shape, and refusing beats guessing — but the
+        // shape turned out to be ordinary (an array of structs, `DB_Weigh.Silo[0].RawValue`), and
+        // the writer was meanwhile emitting a corrupt version of the same thing rather than
+        // refusing alongside.
+        var indexedPath = components
+            .Select(c =>
+            {
+                var name = RequireAttribute(c, "Name");
+                var index = ParseArrayIndex(c);
+                return index is null ? name : $"{name}[{index}]";
+            })
+            .ToList();
 
-        return new AccessNode(RequireIntAttribute(access, "UId"), scope, path, sliceModifier, arrayIndex);
+        return new AccessNode(RequireIntAttribute(access, "UId"), scope, indexedPath, sliceModifier);
     }
 
     // A LocalConstant Access — confirmed real, 2026-07-12 (S1 item 21), 4 independent instances

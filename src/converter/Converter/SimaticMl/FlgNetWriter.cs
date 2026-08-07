@@ -38,28 +38,33 @@ public static class FlgNetWriter
                 continue;
             }
 
+            // FI-51. Every component is treated identically: a "Name[n]" suffix becomes the real
+            // SimaticML subscript shape wherever it sits in the path. Previously only the last
+            // component could carry one, and a mid-path subscript was written out as a component
+            // literally NAMED "Silo[0]" — a member that does not exist, accepted by the writer and
+            // rejected by TIA. The slice modifier stays last-component-only, because a slice really
+            // is an access-level suffix rather than a per-component one.
             var componentElements = access.ComponentPath
                 .Select((component, index) =>
                 {
-                    var element = new XElement(ns + "Component", new XAttribute("Name", component));
-                    if (index == access.ComponentPath.Count - 1)
-                    {
-                        if (access.ArrayIndex is not null)
-                        {
-                            element.Add(new XAttribute("AccessModifier", "Array"));
-                            element.Add(new XElement(
-                                ns + "Access",
-                                new XAttribute("Scope", "LiteralConstant"),
-                                new XElement(
-                                    ns + "Constant",
-                                    new XElement(ns + "ConstantType", "DInt"),
-                                    new XElement(ns + "ConstantValue", access.ArrayIndex.Value))));
-                        }
+                    var (name, arrayIndex) = AccessNode.SplitComponent(component);
+                    var element = new XElement(ns + "Component", new XAttribute("Name", name));
 
-                        if (access.SliceAccessModifier is not null)
-                        {
-                            element.Add(new XAttribute("SliceAccessModifier", access.SliceAccessModifier));
-                        }
+                    if (arrayIndex is not null)
+                    {
+                        element.Add(new XAttribute("AccessModifier", "Array"));
+                        element.Add(new XElement(
+                            ns + "Access",
+                            new XAttribute("Scope", "LiteralConstant"),
+                            new XElement(
+                                ns + "Constant",
+                                new XElement(ns + "ConstantType", "DInt"),
+                                new XElement(ns + "ConstantValue", arrayIndex.Value))));
+                    }
+
+                    if (index == access.ComponentPath.Count - 1 && access.SliceAccessModifier is not null)
+                    {
+                        element.Add(new XAttribute("SliceAccessModifier", access.SliceAccessModifier));
                     }
 
                     return element;
