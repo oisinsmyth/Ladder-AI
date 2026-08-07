@@ -212,6 +212,25 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
       use of its HMI content as generation input, committing any real HMI name or comment text, or
       HMI work on any other project. `10-non-goals.md`'s exclusion of HMI *engineering* is untouched
       — this is reconnaissance, and it does not open a capability.
+    - **Superseded in one respect, 2026-08-07 (same session): a WRITE test was authorized.** Project
+      owner's own explicit instruction — "now try creating a test screen in the scratch copy" —
+      immediately after the read-only survey established that Unified screens can only be authored
+      through the object model. This lifts the "no write to JOB9002's HMI" clause above **for a
+      throwaway test artifact only**, and nothing else in that clause moves.
+      - **Scope:** create one test screen, with an invented name and a small number of static items,
+        in **JOB9002's own scratch copy** (never a real project file), to prove the
+        `Screens.Create` → `ScreenItems.Create<T>` → `Validate()` → `Save()` path works end to end.
+        Writing into that scratch copy is not itself new ground — the 2026-07-14 S3 extension above
+        already authorized importing generated content back into it.
+      - **Deliberately still excluded:** any modification of an *existing* screen, tag, alarm or
+        script; any binding to real HMI/PLC tags; and any write to the real (non-scratch) project.
+        The test screen references nothing that already exists.
+      - **Standing intent:** the artifact is disposable and removable on request. Its name is
+        invented, so no real HMI name is created or committed either.
+      - **`10-non-goals.md` is NOT amended by this.** HMI engineering remains a non-goal there,
+        "revisit only via ADR". This is a capability *probe* answering the survey's own cheapest
+        open question (does `Validate()` do anything?), not the opening of an HMI capability — that
+        would need the ADR the non-goals doc asks for.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's

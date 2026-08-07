@@ -170,6 +170,85 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void Parse_HmiCreateScreen_RequiresName()
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi-create-screen", "MyProject", "--yes" });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_HmiCreateScreen_DefaultsToUnconfirmed()
+    {
+        // The gate must default closed: the one HMI command that writes should never write because
+        // a flag was forgotten.
+        var result = ArgumentParser.Parse(new[] { "hmi-create-screen", "MyProject", "--name", "TestScreen" });
+        var success = Assert.IsType<ParseResult.HmiCreateScreenSuccess>(result);
+        Assert.False(success.Options.Confirm);
+        Assert.Equal("TestScreen", success.Options.ScreenName);
+        Assert.Equal(ArgumentParser.DefaultHmiScreenWidth, success.Options.Width);
+        Assert.Equal(ArgumentParser.DefaultHmiScreenHeight, success.Options.Height);
+        Assert.Empty(success.Options.ItemTypes);
+    }
+
+    [Fact]
+    public void Parse_HmiCreateScreen_CollectsRepeatedItemFlags()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-create-screen", "MyProject", "--name", "TestScreen",
+            "--item", "HmiRectangle", "--item", "HmiText", "--width", "800", "--height", "480", "--yes",
+        });
+
+        var success = Assert.IsType<ParseResult.HmiCreateScreenSuccess>(result);
+        Assert.True(success.Options.Confirm);
+        Assert.Equal(new[] { "HmiRectangle", "HmiText" }, success.Options.ItemTypes);
+        Assert.Equal(800, success.Options.Width);
+        Assert.Equal(480, success.Options.Height);
+    }
+
+    [Fact]
+    public void FormatHmiCreateScreenResult_CleanValidate_SaysItRanRatherThanStayingSilent()
+    {
+        // "no messages" and "never ran" must not look the same — this is the first time the project
+        // has ever invoked Validate().
+        var result = new HmiCreateScreenResult(
+            "station/Panel_1", "TestScreen", 1280, 615,
+            new[] { "HmiRectangle HmiRectangle_1" },
+            Array.Empty<HmiValidationMessage>(),
+            true);
+
+        var text = OutputFormatter.FormatHmiCreateScreenResult(result);
+
+        Assert.Contains("ran, returned no errors and no warnings", text, StringComparison.Ordinal);
+        Assert.Contains("project saved: yes", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiCreateScreenResult_ValidateThrew_IsNotPresentedAsAPass()
+    {
+        var result = new HmiCreateScreenResult(
+            "station/Panel_1", "TestScreen", 1280, 615,
+            Array.Empty<string>(),
+            new[] { new HmiValidationMessage(string.Empty, "ValidateThrew", "NotSupportedException: nope") },
+            true);
+
+        var text = OutputFormatter.FormatHmiCreateScreenResult(result);
+
+        Assert.Contains("THREW", text, StringComparison.Ordinal);
+        Assert.Contains("not a pass", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiCreateScreenResult_UnsavedIsLoud()
+    {
+        var result = new HmiCreateScreenResult(
+            "station/Panel_1", "TestScreen", 1280, 615,
+            Array.Empty<string>(), Array.Empty<HmiValidationMessage>(), false);
+
+        Assert.Contains("project saved: NO", OutputFormatter.FormatHmiCreateScreenResult(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FormatHmiReport_NoDevices_SaysSo()
     {
         Assert.Equal("(no HMI devices found)", OutputFormatter.FormatHmiReport(Array.Empty<HmiDeviceInfo>(), null));

@@ -224,6 +224,38 @@ happened to set, never what the next one is required to set.
 Schema is a Unified-only concept — classic exposes no screen items, so there is no item schema to
 report, and `--schema` says so rather than printing an empty document.
 
+## `hmi-create-screen` — the only HMI command that writes
+
+Everything else under `hmi` is read-only by construction. This one is deliberately a **separate
+subcommand** rather than a flag on the walker, so that "walk the HMI" can never become "modify the
+HMI" by a mistyped argument.
+
+```
+openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes
+```
+
+- **Gated on `--yes`**, like `delete` — the two mutating commands in this tool behave the same way.
+  Without it, the command prints what it *would* create and exits `10 = NotConfirmed`. That refusal
+  is answered from the arguments alone: **it never contacts Portal**, so a dry run is instant and
+  cannot fail on a connect.
+- **Creates, never overwrites.** An existing screen of that name is a hard error, not a merge.
+- **Refuses an ambiguous device.** More than one Unified HMI is an error rather than a first-match
+  guess — writing to the wrong panel is not undone by re-reading.
+- **Unified only.** Classic exposes no screen-item model, so there is nothing to create into.
+- `--item` takes CLR type names from `hmi --schema`'s own creatable list, repeatable. Item creation
+  needs only a name (see `--schema`: nothing is `Mandatory`, only `Name` is `Relevant`), so items are
+  created bare and positioned/styled afterwards through attributes.
+- **Runs `Validate()` and reports it explicitly**, including "ran, returned no errors and no
+  warnings" — because silence and "never ran" would otherwise look identical. Validation errors exit
+  `8 = CompileFailed`: a failed gate, not a successful create with commentary. This is the HMI
+  analogue of hard rule 4.
+- **Saves.** `Project.Save()` is called, and the result says whether it was — an unsaved create lives
+  only in the Portal process holding it and vanishes with that process.
+
+**Scope note:** HMI engineering is still a non-goal (`docs/10-non-goals.md`, "revisit only via ADR").
+This exists as a capability *probe* — the cheapest way to answer the survey's own open question of
+whether `Validate()` does anything — not as an HMI authoring capability.
+
 ### Attaching under Portal pileup
 
 `Connect` prefers a running Portal that already has the requested project open, reading

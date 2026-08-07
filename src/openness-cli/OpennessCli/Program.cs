@@ -43,6 +43,14 @@ internal static class Program
                 return RunPortalStatus(gateway, portalStatus.Options);
             }
 
+            // The unconfirmed dry run answers from the arguments alone, so it must not pay for a
+            // Portal connect first — and it certainly must not FAIL on one. Checked here, before
+            // Connect, for the same reason portal-status is: refusing to act needs no session.
+            if (parseResult is ParseResult.HmiCreateScreenSuccess { Options.Confirm: false } unconfirmed)
+            {
+                return RefuseUnconfirmedHmiCreateScreen(unconfirmed.Options);
+            }
+
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds), ArgumentParser.ProjectIdentifier(parseResult));
 
             switch (parseResult)
@@ -63,6 +71,8 @@ internal static class Program
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
                 case ParseResult.HmiSuccess hmi:
                     return RunHmi(gateway, hmi.Options, timeoutOpenSeconds);
+                case ParseResult.HmiCreateScreenSuccess hmiCreate:
+                    return RunHmiCreateScreen(gateway, hmiCreate.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -132,6 +142,32 @@ internal static class Program
             : OutputFormatter.FormatHmiReport(devices, options.Screen));
 
         return ExitCodes.Success;
+    }
+
+    private static int RefuseUnconfirmedHmiCreateScreen(HmiCreateScreenOptions options)
+    {
+        Console.Error.WriteLine(
+            $"Would create screen '{options.ScreenName}' ({options.Width}x{options.Height})" +
+            (options.ItemTypes.Count > 0 ? $" with items: {string.Join(", ", options.ItemTypes)}" : " with no items") +
+            $" in project '{options.ProjectIdentifier}'. Nothing was created, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    // The only writing HMI path. Gated on --yes like `delete`; the unconfirmed case never reaches
+    // here (handled before Connect), so by this point the write is authorised.
+    private static int RunHmiCreateScreen(IOpennessGateway gateway, HmiCreateScreenOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var result = gateway.CreateHmiScreen(options.ScreenName, options.Width, options.Height, options.ItemTypes);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatHmiCreateScreenJson(result)
+            : OutputFormatter.FormatHmiCreateScreenResult(result));
+
+        // Validation errors are a failed gate, not a successful create with commentary — this is the
+        // HMI analogue of hard rule 4's "never present non-compiling logic as finished".
+        return result.Validation.Any(m => m.Severity is "Error" or "ValidateThrew")
+            ? ExitCodes.CompileFailed
+            : ExitCodes.Success;
     }
 
     private static int RunExport(IOpennessGateway gateway, ExportCommandOptions options, int timeoutOpenSeconds)

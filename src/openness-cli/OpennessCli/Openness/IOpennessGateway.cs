@@ -77,6 +77,16 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems);
 
     /// <summary>
+    /// Creates one screen (and optionally a few static items on it), runs <c>Validate()</c>, and
+    /// saves. **The only writing method in the HMI half of this interface** — kept separate from the
+    /// walker on purpose so that reading can never become writing by accident.
+    ///
+    /// Refuses on an existing screen name: this creates, never overwrites. Refuses on an ambiguous
+    /// device rather than guessing, because writing to the wrong panel is not undone by re-reading.
+    /// </summary>
+    HmiCreateScreenResult CreateHmiScreen(string screenName, long width, long height, IReadOnlyList<string> itemTypes);
+
+    /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
     /// <see cref="SafetyContentRefusedException"/>) before calling Export() at all if the block
     /// classifies as safety. <paramref name="deviceFilter"/> disambiguates when the same block
@@ -312,6 +322,38 @@ public sealed class GroupNotFoundException : Exception
 /// <see cref="GroupNotFoundException"/>, kept separate because the correction is different: not a typo
 /// in the path, but the wrong device item named along it.
 /// </summary>
+public sealed class HmiScreenAlreadyExistsException : Exception
+{
+    public HmiScreenAlreadyExistsException(string name)
+        : base($"A screen named '{name}' already exists. This command creates screens and never overwrites one — choose a different name, or delete the existing screen in TIA Portal first.")
+    {
+    }
+}
+
+public sealed class HmiUnknownScreenItemTypeException : Exception
+{
+    public HmiUnknownScreenItemTypeException(string typeName)
+        : base($"'{typeName}' is not a concrete screen-item type in the installed Openness assembly. Run `openness-cli hmi <project> --schema` to list the types this device can actually create.")
+    {
+    }
+}
+
+public sealed class NoUnifiedHmiDeviceException : Exception
+{
+    public NoUnifiedHmiDeviceException()
+        : base("No WinCC Unified HMI device found in this project. Screen creation is Unified-only — classic HMI exposes no screen-item model at all, so there is nothing to create into.")
+    {
+    }
+}
+
+public sealed class AmbiguousHmiDeviceException : Exception
+{
+    public AmbiguousHmiDeviceException(IReadOnlyList<string> paths)
+        : base($"More than one WinCC Unified HMI device found ({string.Join(", ", paths)}). Refusing to guess which one to write to.")
+    {
+    }
+}
+
 public sealed class NotAPlcSoftwareContainerException : Exception
 {
     public NotAPlcSoftwareContainerException(string path)

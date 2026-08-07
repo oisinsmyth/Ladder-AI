@@ -510,15 +510,17 @@ against a schema the API hands you. Consequences, all of them already visible in
 
 ## 9. Unverified — do not treat as proven
 
-- **Only the READ path has been run live** (§7). Everything in §4 about *construction* —
-  `Screens.Create`, `ScreenItems.Create<T>`, `Dynamizations.Create<T>`, `Validate()` — remains
-  reflection-only. Nothing was created, no property was set, nothing was imported, `Validate()` was
-  never called. Reading proves the object model is reachable and shaped as documented; it proves
-  nothing about writing to it.
-- **`Validate()` is the load-bearing untested claim.** §5.B rests on it being a real pre-commit gate,
-  and §6 uses it to revise "there is no compile gate on the HMI side". It has never been invoked.
-  If it turns out to be shallow, the strongest argument for Unified weakens considerably — test it
-  before relying on it.
+- **Only the READ path has been run live** (§7). The write path (`hmi-create-screen`: `Screens.Create`
+  → `ScreenItems.Create<T>` → `Validate()` → `Save()`) is **built, unit-tested and documented, but
+  has never executed against a real device** — every attempt was blocked by the transient
+  `Attach()` wedge in `openness-quirks.md`, not by anything in the code. So construction remains
+  reflection-only in exactly the way this section originally said, and the code being written does
+  not change that.
+- **`Validate()` is still the load-bearing untested claim.** §5.B rests on it being a real
+  pre-commit gate, and §6 uses it to revise "there is no compile gate on the HMI side". **It has
+  still never been invoked.** If it turns out to be shallow, the strongest argument for Unified
+  weakens considerably. The command that would answer this in one run now exists — running it is
+  the single highest-value outstanding item (§10).
 - **The compile path is inferred, not observed.** `ICompilable` exists (`Compile() : CompilerResult`)
   and `HmiTarget` implements `IEngineeringServiceProvider`, so `HmiTarget.GetService<ICompilable>()`
   *compiles*. Whether it returns non-null is untested. Note that **`HmiSoftware` (Unified) does not
@@ -548,8 +550,12 @@ In rough order of cost, and none of it authorised by this note:
    §5.A — the architecture that reuses this project's existing SimaticML machinery — is the one that
    does *not* apply, and §5.B's serialiser is on the critical path rather than being an alternative
    to it.
-2. **Call `Validate()` once**, on one real screen, read-only. It is the cheapest possible test and it
-   is what §5.B's whole advantage rests on. Nothing else on this list matters as much.
+2. **Call `Validate()` once.** Still the highest-value item, and now one command away — the tool
+   exists and is tested; only a working Portal attach is missing:
+   `openness-cli hmi-create-screen <project> --name <throwaway> --item HmiRectangle --yes`.
+   It creates a screen, validates, saves and reports. What it answers: whether `Validate()` returns
+   anything real (the claim §5.B rests on), whether `Create<T>` accepts a bare name as the schema
+   implies, and whether `Save()` persists a Unified screen. Three unknowns, one run.
 3. **Enumerate the alarms**, not just count them. 311 of them with a readable `Tag`/`PlcTag` join is
    FI-35's use case sitting in reach, and it needs no screen work at all.
 4. Read `EventHandlers` — the walker's one genuinely misleading gap (§7).

@@ -104,3 +104,29 @@ public sealed record HmiSchemaReport(
     string DevicePath,
     IReadOnlyList<string> CreatableScreenItemTypes,
     IReadOnlyList<HmiTypeSchema> ItemSchemas);
+
+/// <summary>
+/// One message from <c>UIBase.Validate()</c>. Reported per property, and warnings are kept
+/// separately from errors because the API distinguishes them — this is the closest thing the HMI
+/// side has to the PLC compile gate, and flattening the two would throw away exactly the
+/// information that makes it a gate rather than a hint.
+/// </summary>
+public sealed record HmiValidationMessage(
+    string PropertyName,
+    string Severity,
+    string Message);
+
+/// <summary>
+/// Result of the screen-creation probe: what was created, and what <c>Validate()</c> said about it.
+/// <see cref="Saved"/> records whether the project was actually written — a created-but-unsaved
+/// screen lives only in the Portal process's memory and vanishes with it (the trap
+/// <c>SaveProject</c>'s own comment records for the PLC side).
+/// </summary>
+public sealed record HmiCreateScreenResult(
+    string DevicePath,
+    string ScreenName,
+    long Width,
+    long Height,
+    IReadOnlyList<string> CreatedItems,
+    IReadOnlyList<HmiValidationMessage> Validation,
+    bool Saved);

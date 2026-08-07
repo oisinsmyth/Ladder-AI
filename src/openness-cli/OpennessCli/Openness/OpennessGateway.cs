@@ -441,6 +441,148 @@ public sealed class OpennessGateway : IOpennessGateway
         return results;
     }
 
+    /// <summary>
+    /// The ONLY method in the HMI half of this gateway that writes. Everything else is read-only by
+    /// construction; this one is deliberately separate, separately named, and gated on an explicit
+    /// confirmation at the CLI layer, so "walk the HMI" can never turn into "modify the HMI" by
+    /// accident.
+    ///
+    /// Creates a screen, optionally a few static items on it, runs <c>Validate()</c>, and saves.
+    /// Refuses if a screen of that name already exists — this creates, it never overwrites, and it
+    /// never touches an existing screen.
+    /// </summary>
+    public HmiCreateScreenResult CreateHmiScreen(string screenName, long width, long height, IReadOnlyList<string> itemTypes)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CreateHmiScreen)}.");
+        }
+
+        var (software, devicePath) = FindSingleUnifiedSoftware();
+
+        // Create, never overwrite. The read walker already proved name lookup works; this is the
+        // guard that keeps a "test screen" from silently replacing a real one on a name collision.
+        if (software.Screens.Find(screenName) is not null)
+        {
+            throw new HmiScreenAlreadyExistsException(screenName);
+        }
+
+        HmiScreen screen = software.Screens.Create(screenName);
+        screen.Width = (uint)width;
+        screen.Height = (uint)height;
+
+        var created = new List<string>();
+        var index = 1;
+        foreach (var itemType in itemTypes)
+        {
+            var itemName = $"{itemType}_{index++}";
+            CreateScreenItem(screen, itemType, itemName);
+            created.Add($"{itemType} {itemName}");
+        }
+
+        var validation = ReadValidation(screen);
+
+        SaveProject();
+
+        return new HmiCreateScreenResult(devicePath, screenName, width, height, created, validation, true);
+    }
+
+    // Create<T> is generic over the item type, but the caller names types as strings, so the type
+    // argument has to be bound at runtime. Resolved against the assembly that actually defines the
+    // Unified UI types rather than a hand-maintained switch — the device reports 56 creatable types
+    // and enumerating them here by hand would rot.
+    private static void CreateScreenItem(HmiScreen screen, string itemTypeName, string itemName)
+    {
+        var composition = screen.ScreenItems;
+        var type = typeof(HmiScreenItemBase).Assembly
+            .GetTypes()
+            .FirstOrDefault(t => t.Name.Equals(itemTypeName, StringComparison.OrdinalIgnoreCase)
+                && typeof(HmiScreenItemBase).IsAssignableFrom(t)
+                && !t.IsAbstract);
+
+        if (type is null)
+        {
+            throw new HmiUnknownScreenItemTypeException(itemTypeName);
+        }
+
+        var create = composition.GetType()
+            .GetMethods()
+            .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == 1);
+
+        if (create is null)
+        {
+            throw new InvalidOperationException("HmiScreenItemBaseComposition.Create<T>(string) was not found on the installed Openness assembly.");
+        }
+
+        create.MakeGenericMethod(type).Invoke(composition, new object[] { itemName });
+    }
+
+    private static IReadOnlyList<HmiValidationMessage> ReadValidation(HmiScreen screen)
+    {
+        var messages = new List<HmiValidationMessage>();
+        try
+        {
+            // Fully qualified: Siemens's own HmiValidationResult and this project's
+            // HmiValidationMessage are one letter apart in intent and would read ambiguously here.
+            foreach (Siemens.Engineering.HmiUnified.Common.HmiValidationResult result in screen.Validate())
+            {
+                var property = TryRead(() => result.PropertyName) ?? string.Empty;
+                foreach (var error in result.Errors ?? Enumerable.Empty<string>())
+                {
+                    messages.Add(new HmiValidationMessage(property, "Error", error));
+                }
+
+                foreach (var warning in result.Warnings ?? Enumerable.Empty<string>())
+                {
+                    messages.Add(new HmiValidationMessage(property, "Warning", warning));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Validate() has never been called by this project before. If it throws, that is itself
+            // the finding — surface it as a message rather than losing it or failing the create.
+            messages.Add(new HmiValidationMessage(string.Empty, "ValidateThrew", ex.GetType().Name + ": " + ex.Message));
+        }
+
+        return messages;
+    }
+
+    private (HmiSoftware Software, string Path) FindSingleUnifiedSoftware()
+    {
+        var found = new List<(HmiSoftware Software, string Path)>();
+        foreach (Device device in _project!.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectUnifiedSoftware(item, device.Name, found);
+            }
+        }
+
+        return found.Count switch
+        {
+            0 => throw new NoUnifiedHmiDeviceException(),
+            1 => found[0],
+            // Writing to the wrong panel is not recoverable by re-reading, so an ambiguous target is
+            // a hard error rather than a first-match guess.
+            _ => throw new AmbiguousHmiDeviceException(found.Select(f => f.Path).ToList()),
+        };
+    }
+
+    private static void CollectUnifiedSoftware(DeviceItem item, string parentPath, List<(HmiSoftware, string)> found)
+    {
+        var path = $"{parentPath}/{item.Name}";
+        if (item.GetService<SoftwareContainer>()?.Software is HmiSoftware unified)
+        {
+            found.Add((unified, path));
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            CollectUnifiedSoftware(child, path, found);
+        }
+    }
+
     public IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems)
     {
         if (_project is null)

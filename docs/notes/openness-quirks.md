@@ -643,44 +643,47 @@ network that was just redesigned reads as a *design* failure rather than a wrong
 before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
 one probe cycle here and would have cost a misdiagnosed redesign otherwise.
 
-## A worktree-built binary is refused by Openness SILENTLY — no dialog at all (2026-08-07)
+## `Attach()` intermittently hangs with NO dialog — transient, and it is not about which binary (2026-08-07)
 
-The single most useful fact here: **it does not prompt.** The existing memory/notes say a
-freshly-built binary "hangs at TIA's first-connect approval dialog". Half of that is right — it hangs
-— but on this occasion there was **no dialog anywhere**, so waiting for someone to click one is
-waiting for something that will never appear.
+**The one solid, reusable fact: it does not prompt.** Prior notes and memory said a freshly-built
+binary "hangs at TIA's first-connect approval dialog". The hang is real; **the dialog is not.**
+Enumerated every top-level window — visible *and* hidden — across all five Portal processes via
+`EnumWindows`: only the two real project windows and the usual hidden plumbing
+(`ThreadSynchronizer`, `SCP Communication`, IME, GDI+). Nothing to accept, anywhere. So the tool's
+own `ConnectTimeout` message ("accept the dialog if it's there") sends the reader hunting for
+something that does not exist, and waiting for a human to click is waiting forever. Note also that
+`Get-Process`'s `MainWindowTitle` alone is **not** sufficient evidence — a modal child window need
+not appear there — which is why the full enumeration is the check worth doing.
 
-**What happened.** Five `openness-cli hmi` runs against the same project over ~40 minutes. Runs 2 and
-3 succeeded. Runs 1, 4 and 5 hung for their entire `--timeout-connect` (3, 15 and 10 minutes) and
-exited 3. The project, the command and the machine were unchanged throughout. The only thing that
-changed between a working run and a failing one was **a rebuild of the binary**.
+**What is NOT established: any binary-level cause. This section originally claimed one and was
+wrong.** The full record over ~2.5 hours against one unchanged project:
 
-**How it was pinned down, and this is the cheap diagnostic worth reusing.** Run the *main checkout's*
-long-approved binary against the same project:
+| Binary | Result |
+|---|---|
+| worktree build A | hung (3 min) |
+| worktree build A | **succeeded twice** |
+| worktree build A | hung (15 min), hung (10 min) |
+| main checkout binary | **succeeded** (<90 s) ← the observation this section first over-read |
+| worktree build B, staged at the approved path | **succeeded twice** |
+| worktree build C, staged at the same path | hung (3 min), hung (10 min) |
+| main checkout binary, restored | **hung (90 s)** |
 
-```
-"<main checkout>\src\openness-cli\OpennessCli\bin\Debug\net48\openness-cli.exe" list "<project>.ap20" --timeout-connect 90 --timeout-open 45
-```
+**Both binaries have succeeded and both have failed.** The main-vs-worktree comparison that looked
+decisive was confounded by *when* it was run — it happened to fall in a good window. The honest
+reading is a **transient, time-varying failure of `Attach()`**, which is exactly what this file
+already recorded on 2026-07-14 ("A second concurrent Portal instance sometimes won't connect at
+all — transient, resolved on retry"). That earlier entry was right and this one should not have
+tried to replace it.
 
-It connected and listed blocks in well under 90 s while the worktree binary was hanging for ten
-minutes on the identical project. That single comparison separates "Portal/project is unhealthy"
-from "this executable is not approved", and it took one command.
+**The lesson worth keeping is methodological.** One successful A/B run is not a root cause when the
+failure is intermittent. The comparison needs repeating in both directions before it means anything,
+and here it inverted on the second pass. `portal-status` keeps working throughout, because it never
+calls `Attach()` — so "portal-status works" says nothing about whether an attach will.
 
-**Proof there was no dialog.** Enumerated every top-level window (visible *and* hidden) across all
-five Portal processes via `EnumWindows`. Only the two real project windows and the usual hidden
-plumbing (`ThreadSynchronizer`, `SCP Communication`, IME, GDI+). Nothing to accept. `Get-Process`'s
-`MainWindowTitle` alone is not sufficient evidence here — a modal child dialog would not necessarily
-show up there — which is why the full enumeration is the check worth doing.
-
-**So the error message is a guess, and it was the wrong guess.** "This is usually the first-connect
-approval dialog waiting inside TIA Portal — check Portal, accept the dialog if it's there" is right
-often enough to keep, but a reader who believes it will go looking for a dialog that does not exist.
-Treat `ConnectTimeout` as "this executable may not be approved", and use the main-binary comparison
-above before assuming anything about Portal's health.
-
-**Practical rule, unchanged from the earlier memory but now with a reason:** run Portal work from the
-main checkout's already-approved binary. A worktree build is a different executable at a different
-path and Openness access control does not carry the approval across.
+**Practical guidance, unchanged and still sound:** prefer the main checkout's binary for Portal work
+(it is the one with the longest approval history), raise `--timeout-connect` well above the 180 s
+default on a loaded machine, retry rather than concluding, and clear Portal pileup periodically —
+`openness-cli portal-status` classifies what is safe to close and never closes anything itself.
 
 ### Unrelated but found at the same time: `Connect` attached to `GetProcesses()[0]` blindly
 

@@ -97,6 +97,21 @@ public sealed record HmiOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// The only HMI command that writes. Confirm mirrors `delete`'s own gate: the mutating commands in
+// this tool state what they will do and require --yes before doing it. ItemTypes are CLR type names
+// from `hmi --schema`'s own creatable list.
+public sealed record HmiCreateScreenOptions(
+    string ProjectIdentifier,
+    string ScreenName,
+    long Width,
+    long Height,
+    IReadOnlyList<string> ItemTypes,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -121,6 +136,8 @@ public abstract record ParseResult
 
     public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
 
+    public sealed record HmiCreateScreenSuccess(HmiCreateScreenOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -132,6 +149,10 @@ public static class ArgumentParser
     // Generous enough that a real screen is never silently clipped in practice, low enough that a
     // pathological one cannot stall a run. Truncation is always visible in the output.
     public const int DefaultHmiMaxItems = 500;
+
+    // A Unified Comfort Panel content area, i.e. a plausible screen rather than a 0x0 one. Overridable.
+    public const int DefaultHmiScreenWidth = 1280;
+    public const int DefaultHmiScreenHeight = 615;
 
     private const string Usage =
         "Usage:\n" +
@@ -150,7 +171,9 @@ public static class ArgumentParser
         "  list --tagtables enumerates tag tables instead of blocks.\n" +
         "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.\n" +
         "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
-        "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.";
+        "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
+        "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    THE ONLY HMI COMMAND THAT WRITES. Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
@@ -172,6 +195,7 @@ public static class ArgumentParser
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -191,6 +215,7 @@ public static class ArgumentParser
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -212,8 +237,9 @@ public static class ArgumentParser
             "sanity-check" => ParseSanityCheck(args),
             "portal-status" => ParsePortalStatus(args),
             "hmi" => ParseHmi(args),
+            "hmi-create-screen" => ParseHmiCreateScreen(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-create-screen.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -852,6 +878,105 @@ public static class ArgumentParser
         }
 
         return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseHmiCreateScreen(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? name = null;
+        var width = DefaultHmiScreenWidth;
+        var height = DefaultHmiScreenHeight;
+        var itemTypes = new List<string>();
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    break;
+                case "--width":
+                    if (!TryTakeIntValue(args, ref i, "--width", out var w, out var widthErr))
+                    {
+                        return new ParseResult.Failure(widthErr);
+                    }
+
+                    width = w;
+                    break;
+                case "--height":
+                    if (!TryTakeIntValue(args, ref i, "--height", out var h, out var heightErr))
+                    {
+                        return new ParseResult.Failure(heightErr);
+                    }
+
+                    height = h;
+                    break;
+                case "--item":
+                    if (!TryTakeValue(args, ref i, "--item", out var item, out var itemErr))
+                    {
+                        return new ParseResult.Failure(itemErr);
+                    }
+
+                    itemTypes.Add(item!);
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (name is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <screen name>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiCreateScreenSuccess(new HmiCreateScreenOptions(
+            projectIdentifier, name, width, height, itemTypes, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

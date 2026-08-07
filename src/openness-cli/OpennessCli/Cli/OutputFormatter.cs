@@ -226,6 +226,73 @@ public static class OutputFormatter
         _ => 2,
     };
 
+    /// <summary>
+    /// Reports what was created and, more importantly, what <c>Validate()</c> said. A clean validate
+    /// is stated explicitly rather than shown as silence — "no messages" and "never ran" look
+    /// identical otherwise, and this is the first time this project has invoked it at all.
+    /// </summary>
+    public static string FormatHmiCreateScreenResult(HmiCreateScreenResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("CREATED screen '").Append(result.ScreenName).Append("' on ").AppendLine(result.DevicePath);
+        sb.Append("  size: ").Append(result.Width.ToString(CultureInfo.InvariantCulture))
+          .Append('x').Append(result.Height.ToString(CultureInfo.InvariantCulture)).AppendLine();
+        sb.Append("  items created: ").Append(result.CreatedItems.Count.ToString(CultureInfo.InvariantCulture)).AppendLine();
+        foreach (var item in result.CreatedItems)
+        {
+            sb.Append("    ").AppendLine(item);
+        }
+
+        var errors = result.Validation.Count(m => m.Severity == "Error");
+        var warnings = result.Validation.Count(m => m.Severity == "Warning");
+        var threw = result.Validation.Count(m => m.Severity == "ValidateThrew");
+
+        sb.Append("  Validate(): ");
+        if (threw > 0)
+        {
+            sb.AppendLine("THREW — see below (this is a finding, not a pass)");
+        }
+        else if (result.Validation.Count == 0)
+        {
+            sb.AppendLine("ran, returned no errors and no warnings");
+        }
+        else
+        {
+            sb.Append(errors.ToString(CultureInfo.InvariantCulture)).Append(" error(s), ")
+              .Append(warnings.ToString(CultureInfo.InvariantCulture)).AppendLine(" warning(s)");
+        }
+
+        foreach (var message in result.Validation)
+        {
+            sb.Append("    [").Append(message.Severity).Append("] ");
+            if (!string.IsNullOrEmpty(message.PropertyName))
+            {
+                sb.Append(message.PropertyName).Append(": ");
+            }
+
+            sb.AppendLine(message.Message);
+        }
+
+        // Saved is reported explicitly because an unsaved create survives only as long as the Portal
+        // process holding it — the trap SaveProject's own comment records.
+        sb.Append("  project saved: ").Append(result.Saved ? "yes" : "NO");
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatHmiCreateScreenJson(HmiCreateScreenResult result) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                devicePath = result.DevicePath,
+                screenName = result.ScreenName,
+                width = result.Width,
+                height = result.Height,
+                createdItems = result.CreatedItems,
+                validation = result.Validation.Select(m => new { property = m.PropertyName, severity = m.Severity, message = m.Message }),
+                saved = result.Saved,
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+
     public static string FormatHmiSchemaJson(IReadOnlyList<HmiSchemaReport> reports)
     {
         var payload = reports.Select(r => new
