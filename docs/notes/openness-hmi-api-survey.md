@@ -328,34 +328,47 @@ of §5.B's serialiser.
 
 | | |
 |---|---|
-| Engineering screens | **3** (see caveat) |
+| Engineering screens | **48** |
 | Screen groups | 5 |
+| Screen items, all screens | **1404** (largest single screen: 185; none empty) |
 | HMI tags | 233 |
 | **Discrete alarms** | **311** |
 | Analog alarms / script modules | 0 / 0 |
 | Alarm classes | 20 |
 
-> **Caveat on the screen count — unverified.** The measured run enumerated `HmiSoftware.Screens`
-> only, and the device also reports **5 screen groups**. Whether `HmiSoftware.Screens` is root-only
-> (so grouped screens were missed) or already a flat view of all of them (so 3 is the whole truth) is
-> **not established**. The walker now also recurses `ScreenGroups` and deduplicates by name, so it is
-> correct under either reading — but that path has not been run live, so treat 3 as a lower bound
-> until it has. The alarm/tag counts are unaffected: they come straight off `HmiSoftware`.
+> **Correction, and it inverts an earlier conclusion in this note.** The first measured run reported
+> **3** screens and this section originally drew "screens are few, alarms are many" from it. That was
+> wrong. `HmiSoftware.Screens` is **root-only** — the other 45 screens live inside the 5 screen
+> groups, and the first walker never descended into them. A 16× undercount, produced silently: the
+> output looked complete and internally consistent, and nothing about it invited suspicion except the
+> `screenGroups=5` line sitting next to `screens=3`.
+>
+> The lesson is the one the PLC side already learned in `WalkBlockGroup`: **a composition hanging off
+> the software root is not the whole tree.** Any Openness walker should assume a `.Groups` recursion
+> exists until it has checked, and treat a group count next to a suspiciously small item count as the
+> tell.
 
-**Screens are few, alarms are many** — subject to that caveat. Even at its lower bound the ratio is
-stark: three hundred alarms against a single-digit screen count. Worth knowing before anyone scopes
-"AI HMI design", because on this evidence the screen-drawing half may well be the small half, and the
-alarm half is where the volume is.
+So the real shape is the opposite of the first reading: **48 screens and 1404 screen items** against
+311 alarms. This is a substantial HMI, not a three-screen one, and the screen-drawing half is not the
+small half. The alarm surface is still large and still the most tractable target (§10), but it does
+not dwarf the screens the way one run wrongly suggested.
 
 **311 discrete alarms, enumerable through the API.** That is §6's answer stopping being a claim about
 type shapes and becoming a measurement on a real plant.
 
-**A trap worth recording.** The project folder on disk holds ~48 `screens/screen_*.rdf` files, and I
-first read that as the screen count. It is not: that directory is the *compiled runtime image*
-(everything `DownloadTask.xml` lists as a download item — system screens, faceplate instances,
-dialogs), not the engineering screens. **Do not infer HMI content from the project folder.** The
-engineering answer is 3 and only Openness gives it. The `.rdf` files are also an undocumented binary
-format — reverse-reading them would be the HMI equivalent of hand-patching SimaticML (hard rule 7).
+**A trap that turned out to be the reverse of what I recorded.** The project folder holds ~48
+`screens/screen_*.rdf` files. I first read that as the screen count, then — after the walker returned
+3 — wrote a confident note saying *do not infer HMI content from the project folder, those are only
+compiled runtime artifacts*. **The disk was right and the walker was wrong.** 48 `.rdf` files, 48
+engineering screens.
+
+The honest lesson is narrower than either version: the runtime image is a *plausible* cross-check on
+the engineering content, not an authority on it (it also contains faceplate instances and system
+artifacts, so the correspondence is not guaranteed to be exact). What it is genuinely good for is
+**smelling out an under-reporting reader** — a large disagreement between the file count and the API
+count means one of them is wrong, and that is worth resolving rather than explaining away. I
+explained it away. The `.rdf` files themselves remain an undocumented binary format that should not
+be parsed (hard rule 7's reasoning applies).
 
 **Item types observed** — rectangle, text, line, IO field, graphic view, button, screen window, alarm
 control. Layout is absolutely positioned (`@x,y w×h`), no layout engine.
@@ -448,6 +461,39 @@ decisive: it is the API declaring its own contract rather than us inferring a wh
 type observed, every attribute with access mode, create-relevance, type and a sample value, sorted
 **Mandatory → Relevant → the rest** — authoring order.
 
+### Measured schema (JOB9002, 2026-08-07) — what the metamodel actually says
+
+`openness-cli hmi --schema` run against the real device. Four results, all load-bearing for a builder:
+
+**1. 56 creatable screen-item types.** `GetCreationInfos("ScreenItems")` returns 56 — the widgets,
+shapes and controls of §4, plus the abstract-looking bases (`HmiShapeBase`, `HmiControlWindowBase`,
+`HmiCentricShapeBase`…). The API declares this itself; no whitelist has to be inferred from samples.
+
+**2. Creation is almost unconstrained — and this is the headline for a builder.** Across every type
+inspected, **nothing is `Mandatory` and the only `Relevant` attribute is `Name`.** Everything else —
+geometry, colours, `ProcessValue`, alignment — is `None`, i.e. set *after* construction like any
+other property. So the builder shape is simply:
+
+```
+ScreenItems.Create<HmiIOField>("<name>")   ->  set attributes  ->  Dynamizations.Create<TagDynamization>("<property>")
+```
+
+There is no constructor-argument puzzle to solve, which is the single biggest unknown a missing
+export format would otherwise have left open.
+
+**3. Bound properties read empty, and that is the tell.** On a real dynamized `HmiIOField`,
+`ProcessValue` is a `String` with **no value at all** — because the binding lives in the item's
+`Dynamizations` composition, not in the property. A reader that only walked attributes would
+conclude the field displays nothing. Value and binding are separate surfaces and both must be read.
+
+**4. Sub-parts are `Read`-only handles, not assignables.** `Font`, `Padding`, `InputBehavior`,
+`ToolTipText` report `[Read/None]` and return part objects (`HmiFontPart`, `HmiPaddingPart`, …). You
+configure them by reaching *into* the returned object, never by assigning a new one. Each item also
+owns four compositions — `Dynamizations`, `EventHandlers`, `PropertyEventHandlers`, `Thresholds`.
+
+A representative type is 24–37 attributes (`HmiScreen` itself is 14), so the whole authoring surface
+for a screen is a few hundred well-typed properties — large, but enumerable and self-documenting.
+
 ### What this means for screen creation
 
 Reframe the goal. A screen-creation capability here is **not** a converter emitting a document;
@@ -482,11 +528,15 @@ against a schema the API hands you. Consequences, all of them already visible in
 - **`Create<T>` constraints are unknown.** The generic `ScreenItems.Create<T>(name)` presumably
   rejects some `T`, and `Create<T>(name, containedTypeValue)` exists for container types. Which
   types are legal where is not derivable from reflection.
-- **One project is not a population.** §7 measured a single device. "Screens are few, alarms are
-  many", the frame/content-window composition, and the tag-naming mismatch are all facts *about that
-  project*. The tag/PlcTag mismatch generalises the least comfortably — it arises because one panel
-  faces two PLCs, which is a common but not universal arrangement. Treat §7 as one grounded data
-  point, in the same spirit the four-rung spec pipeline is held to "one plant, three runs".
+- **One project is not a population.** §7 measured a single device. The counts, the
+  frame/content-window composition, and the tag-naming mismatch are all facts *about that project*.
+  The tag/PlcTag mismatch generalises the least comfortably — it arises because one panel faces two
+  PLCs, which is a common but not universal arrangement. Treat §7 as one grounded data point, in the
+  same spirit the four-rung spec pipeline is held to "one plant, three runs".
+- **The screen-item schema is drawn only from types this project happens to use.** `--schema`
+  describes 13 item types because those are the ones on these 48 screens; the device reports **56**
+  creatable types. The other 43 have not been inspected, and nothing here should be read as a
+  complete catalogue of what a Unified screen can contain.
 - **V21 exists** and was not examined. Given classic's four-release freeze, the useful question for
   V21 is only ever about Unified.
 

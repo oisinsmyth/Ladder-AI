@@ -143,12 +143,14 @@ public static class ArgumentParser
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
-        "  openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
         "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
         "  list --tagtables enumerates tag tables instead of blocks.\n" +
-        "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.";
+        "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.\n" +
+        "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
+        "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
