@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Xml.Linq;
 using Converter.Ir;
 using Converter.SimaticMl;
 using Xunit;
@@ -82,5 +83,42 @@ public class MultiInstanceCallTests
         var element = DbInterfaceMembers.WriteMember(member);
 
         Assert.Equal("Retain", element.Attribute("Remanence")!.Value);
+    }
+
+    [Fact]
+    public void ParseMember_MultiInstanceFromTia_ReadsBackAsBareShape()
+    {
+        // The READ half, missed when the write half was fixed. TIA re-exports a multi-instance with
+        // NO Remanence but WITH an AttributeList and a <Sections> child holding the callee's whole
+        // interface expanded inline. The bare-shape branch required BOTH absent, so this fell through
+        // to the Remanence switch and hard-errored — taking to-ir, drift-check and the round-trip
+        // harness out for every block containing a multi-instance.
+        var xml = XElement.Parse(
+            """
+            <Member xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5"
+                    Name="ProbeValve" Datatype="&quot;FB_Valve&quot;" Accessibility="Public">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+              </AttributeList>
+              <Sections>
+                <Section Name="Input">
+                  <Member Name="InHand" Datatype="Bool" Remanence="NonRetain" Accessibility="Public" />
+                </Section>
+              </Sections>
+            </Member>
+            """);
+
+        var member = DbInterfaceMembers.ParseMember(xml, "Block 'FB_Caller'");
+
+        Assert.Equal("ProbeValve", member.Name);
+        Assert.Equal("\"FB_Valve\"", member.Datatype);
+        Assert.True(member.IsBareParameter);
+        Assert.False(member.Retain);
+
+        // The callee's expanded interface is DISCARDED, not adopted. It is the called block's own
+        // declaration; duplicating it into the caller would make the two free to disagree.
+        Assert.Null(member.NestedMembers);
     }
 }
