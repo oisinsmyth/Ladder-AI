@@ -174,6 +174,28 @@ shell should branch on these rather than on stderr text.
 | 8 | `CompileFailed` | `compile` ran to completion but returned `State != Success`. The diagnostics are on stdout (`--json` for structured form); the exit code alone doesn't distinguish errors from warnings-only states |
 | 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block, or at least one device failing to compile. Both lists are printed |
 | 10 | `NotConfirmed` | `delete` resolved the block and printed what it *would* delete, but `--yes` was absent. **Nothing was deleted.** The only subcommand with a confirmation gate, because it's the only irreversible one |
+| 11 | `CompileIncomplete` | A **whole-device** `compile` returned `Success` with no errors, but blocks remain flagged `IsConsistent=false` — so it did not compile them and proved less than it appears to. The unverified blocks are listed on stderr. Distinct from `CompileFailed`: nothing reported an error, the gate simply did not examine everything (FI-52) |
+
+### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
+
+A block freshly re-imported through Openness's `Import()` is flagged `IsConsistent=false`, and
+**device-level `Compile()` reports `Success` without ever clearing that flag.** Measured live on a
+real project: `STATE: Success, ERRORS: 0, WARNINGS: 0` while **19 of 34 blocks were uncompiled**,
+one of which failed with **8 errors** the moment it was compiled individually.
+
+The quirk itself was known and written down on 2026-07-10 — in `IOpennessGateway.CompileBlock`'s
+doc comment and `docs/notes/openness-quirks.md`. What made it bite anyway is that the top-level
+instruction still named a bare `compile` as the gate, so the warning lived somewhere the person
+about to walk into it had no reason to read. **A trap recorded in the wrong place is not recorded.**
+
+`compile` now fails closed: after a clean whole-device run it enumerates blocks and, if any remain
+inconsistent, prints them and exits `11` instead of `0`. Safety blocks never trip it —
+`EnumerateBlocks` reports them consistent by construction rather than reading their flag (hard
+rule 2), so this cannot become a back door into safety content.
+
+**The exit code is a backstop, not the plan.** Prefer `sanity-check`, which checks consistency
+*and* compiles every device, and whose `INCONSISTENT: 0` line is the thing to quote as evidence.
+Per-block `--block`/`--type` compiles in dependency order are the other valid form.
 
 **Known gap (2026-08-05, audit F-09): a mis-typed `--group` exits 5, not 7.** The group-resolution
 failures in `OpennessGateway` (`FindGroup`/`FindTypeGroup`/`FindTagTableGroup`) throw plain

@@ -169,7 +169,47 @@ internal static class Program
             _ => throw new InvalidOperationException("--block and --type are mutually exclusive."),
         };
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
-        return result.State == Model.CompileState.Success ? ExitCodes.Success : ExitCodes.CompileFailed;
+
+        if (result.State != Model.CompileState.Success)
+        {
+            return ExitCodes.CompileFailed;
+        }
+
+        // FI-52 (2026-08-07). A WHOLE-DEVICE compile is not a whole-PROGRAM gate, and used to say
+        // it was. Confirmed live: a device compile returned "STATE: Success, ERRORS: 0" while 19 of
+        // 34 freshly-imported blocks were still flagged IsConsistent=false — and one of those, when
+        // compiled individually, failed with 8 errors. The quirk itself was known since 2026-07-10
+        // (see IOpennessGateway.CompileBlock's own doc comment: a block re-imported via Import()
+        // gets flagged inconsistent, and device-level Compile() reports Success without clearing
+        // it) — but it was recorded in a doc comment, while the top-level instruction still named
+        // a bare `compile` as the gate. A known trap written down where the person about to walk
+        // into it does not read.
+        //
+        // Hard rule 4 rests on this exit code, so it fails closed: a pass now REQUIRES that
+        // nothing was left unverified. Safety blocks never trip it — EnumerateBlocks reports them
+        // consistent by construction rather than reading their flag (hard rule 2).
+        if (options.Block is null && options.Type is null)
+        {
+            var unverified = gateway.EnumerateBlocks().Where(b => !b.IsConsistent).ToList();
+            if (unverified.Count > 0)
+            {
+                Console.Error.WriteLine();
+                Console.Error.WriteLine(
+                    $"COMPILE INCOMPLETE: the device compiled without errors, but {unverified.Count} block(s) " +
+                    "were not compiled and remain inconsistent. Device-level compile does not clear the " +
+                    "inconsistent flag a freshly-imported block carries, so this is NOT a whole-program gate.");
+                Console.Error.WriteLine("Compile these individually (--block / --type), in dependency order:");
+                foreach (var block in unverified.OrderBy(b => b.Name, StringComparer.Ordinal))
+                {
+                    Console.Error.WriteLine($"  {block.Name}  ({block.Path})");
+                }
+
+                Console.Error.WriteLine("Or run `openness-cli sanity-check`, which checks consistency and compiles.");
+                return ExitCodes.CompileIncomplete;
+            }
+        }
+
+        return ExitCodes.Success;
     }
 
     private static int RunDelete(IOpennessGateway gateway, DeleteCommandOptions options, int timeoutOpenSeconds)
@@ -247,6 +287,14 @@ public static class ExitCodes
     public const int CompileFailed = 8;
     public const int SanityCheckFailed = 9;
     public const int NotConfirmed = 10;
+
+    /// <summary>
+    /// FI-52. The device compiled cleanly but did not cover every block: blocks remain flagged
+    /// inconsistent, so the run proved less than it appears to. Distinct from
+    /// <see cref="CompileFailed"/> — nothing reported an error; the gate simply did not examine
+    /// everything, which is the failure mode that matters most because it looks like a pass.
+    /// </summary>
+    public const int CompileIncomplete = 11;
 
     /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).

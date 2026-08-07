@@ -1150,3 +1150,42 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   read side was right. What was wrong was letting the write side produce that same shape without
   refusing — **a converter's two directions must agree about what is inexpressible**, or the
   refusal is not a guard, it is only an inconvenience on one side.
+
+### FI-52 — the compile gate could return a false pass, and the warning was in the wrong place
+- **Status:** **BUILT AND FIXED 2026-08-07.** Found by an agent that distrusted its own green result.
+- **The shape.** `openness-cli compile <project>` (whole device) returned `STATE: Success,
+  ERRORS: 0, WARNINGS: 0`. In fact **19 of 34 blocks had not been compiled at all**, and one of
+  them — compiled individually — failed with **8 errors**. A block freshly re-imported through
+  Openness's `Import()` carries `IsConsistent=false`, and device-level `Compile()` reports success
+  without ever clearing it.
+- **Why this one matters more than the others.** Hard rule 4 — *"never present non-compiling logic
+  as finished"* — is the project's last line of defence before an engineer sees the work, and its
+  instrument could report a clean pass over unexamined blocks. Every "compile gate passed" claim
+  made with a bare device compile was weaker than it read.
+- **THE REAL DEFECT IS NOT THE QUIRK. IT IS WHERE THE QUIRK WAS WRITTEN DOWN.** The behaviour was
+  known and documented on **2026-07-10** — in `IOpennessGateway.CompileBlock`'s own doc comment and
+  in `docs/notes/openness-quirks.md` — nearly a month before it bit. It bit anyway because
+  `CLAUDE.md`'s hard rule 4 and its Commands table both still named a bare `compile` as the gate,
+  with no cross-reference. The knowledge was captured; the instruction that contradicted it was
+  not updated. **A trap recorded somewhere the person about to walk into it does not read is not
+  recorded.**
+- **What caught it.** Not a test and not the rule — an agent that got a suspiciously terse
+  seven-line success with no per-block output, and block-compiled something it had *not* touched to
+  see whether the result meant anything. That instinct is the actual control here, and it is not
+  mechanical, which is why the fix below had to be.
+- **The fix.** `compile` now fails closed: after a clean whole-device run it enumerates blocks and,
+  if any remain inconsistent, lists them and exits **11 `CompileIncomplete`** rather than 0 —
+  deliberately distinct from `8 CompileFailed`, because nothing reported an error; the gate simply
+  did not examine everything, and those two call for different actions. Safety blocks cannot trip
+  it: `EnumerateBlocks` reports them consistent by construction rather than reading their flag
+  (hard rule 2), so this is not a back door into safety content. `CLAUDE.md` hard rule 4, the
+  Commands table and the openness-cli README all now name `sanity-check` or per-block compiles as
+  the gate.
+- **Same family as FI-44 and FI-50, one layer up.** Those were checks that examined nothing and
+  exited 0. This is the *compile gate itself* doing it — and unlike them it had no "examined
+  nothing" signal at all to notice, because the device compile genuinely did run and genuinely did
+  succeed at the thing it was actually doing. **"Empty is not clean" has to be asked of the gates,
+  not only of the checks.**
+- **Verdict.** Closed on the mechanism. Worth a standing habit: when a documented quirk contradicts
+  a top-level instruction, the instruction is the thing to fix — the doc comment has already
+  proved it cannot carry the warning alone.
