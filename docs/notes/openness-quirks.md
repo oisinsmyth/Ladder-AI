@@ -643,34 +643,60 @@ network that was just redesigned reads as a *design* failure rather than a wrong
 before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
 one probe cycle here and would have cost a misdiagnosed redesign otherwise.
 
-## Attach hangs under Portal pileup — measured, and now mitigated in `Connect` (2026-08-07)
+## A worktree-built binary is refused by Openness SILENTLY — no dialog at all (2026-08-07)
 
-The "second concurrent instance sometimes won't connect" symptom (see the two 2026-07-14 sections
-above) reproduced cleanly and this time the cause was legible.
+The single most useful fact here: **it does not prompt.** The existing memory/notes say a
+freshly-built binary "hangs at TIA's first-connect approval dialog". Half of that is right — it hangs
+— but on this occasion there was **no dialog anywhere**, so waiting for someone to click one is
+waiting for something that will never appear.
 
-**What happened.** Three `openness-cli hmi` runs against the same project, minutes apart. The first
-two succeeded. The third hung for the **full 15-minute** `--timeout-connect` and exited 3, with five
-Portal processes running (~6.6 GB total) — two holding real projects, three effectively idle. Nothing
-had changed about the project, the command, or the binary between run two and run three.
+**What happened.** Five `openness-cli hmi` runs against the same project over ~40 minutes. Runs 2 and
+3 succeeded. Runs 1, 4 and 5 hung for their entire `--timeout-connect` (3, 15 and 10 minutes) and
+exited 3. The project, the command and the machine were unchanged throughout. The only thing that
+changed between a working run and a failing one was **a rebuild of the binary**.
 
-**Why the default made it worse.** `Connect()` took `TiaPortal.GetProcesses()[0]` **unconditionally**.
-That is fine with one Portal and actively harmful with five: it attaches to whichever process the API
-happens to list first, which may be a wedged or busy one, *even when a healthy instance with the
-target project already open is sitting in the same list*. The failure mode is a silent 15-minute
-stall, and the error message blames the first-connect approval dialog — which was **not** present
-here (checked: no dialog window on any Portal process). That message is right often enough to be
-worth keeping, but it is a guess, and under pileup it is the wrong guess.
+**How it was pinned down, and this is the cheap diagnostic worth reusing.** Run the *main checkout's*
+long-approved binary against the same project:
 
-**The fix, and why it was free.** `TiaPortalProcess.ProjectPath` is readable **without** calling
-`Attach()` — recorded in `openness-api-surface-v20.md` back on 2026-07-14 as "a real simplification
-opportunity … noted here, not acted on yet". `Connect` now takes an optional project hint and
-prefers the process already holding that project, falling back to `[0]` when there is no hint or no
-match. It narrows *which* process is attached, never *whether* one is, and costs one property read
-per process.
+```
+"<main checkout>\src\openness-cli\OpennessCli\bin\Debug\net48\openness-cli.exe" list "<project>.ap20" --timeout-connect 90 --timeout-open 45
+```
 
-**What this does not fix.** Pileup is still the underlying problem and still worth clearing —
-`openness-cli portal-status` classifies which instances are safe to close, and it never closes
-anything itself. The hint makes a wedged neighbour survivable, not harmless. Note also that a cold
-Portal V20 launch on a loaded machine can legitimately exceed the **180 s default** connect timeout;
-that is slowness, not a wedge, and it is worth raising `--timeout-connect` before concluding anything
-is wrong.
+It connected and listed blocks in well under 90 s while the worktree binary was hanging for ten
+minutes on the identical project. That single comparison separates "Portal/project is unhealthy"
+from "this executable is not approved", and it took one command.
+
+**Proof there was no dialog.** Enumerated every top-level window (visible *and* hidden) across all
+five Portal processes via `EnumWindows`. Only the two real project windows and the usual hidden
+plumbing (`ThreadSynchronizer`, `SCP Communication`, IME, GDI+). Nothing to accept. `Get-Process`'s
+`MainWindowTitle` alone is not sufficient evidence here — a modal child dialog would not necessarily
+show up there — which is why the full enumeration is the check worth doing.
+
+**So the error message is a guess, and it was the wrong guess.** "This is usually the first-connect
+approval dialog waiting inside TIA Portal — check Portal, accept the dialog if it's there" is right
+often enough to keep, but a reader who believes it will go looking for a dialog that does not exist.
+Treat `ConnectTimeout` as "this executable may not be approved", and use the main-binary comparison
+above before assuming anything about Portal's health.
+
+**Practical rule, unchanged from the earlier memory but now with a reason:** run Portal work from the
+main checkout's already-approved binary. A worktree build is a different executable at a different
+path and Openness access control does not carry the approval across.
+
+### Unrelated but found at the same time: `Connect` attached to `GetProcesses()[0]` blindly
+
+`Connect()` took `TiaPortal.GetProcesses()[0]` unconditionally, which is fine with one Portal and
+poor with five — it can attach to a wedged or busy instance even when a healthy one holding the
+target project is in the same list. `TiaPortalProcess.ProjectPath` is readable **without** calling
+`Attach()` (recorded in `openness-api-surface-v20.md` on 2026-07-14 as "a real simplification
+opportunity … noted here, not acted on yet"), so `Connect` now takes an optional project hint and
+prefers the process already holding it, falling back to `[0]` otherwise.
+
+**This was NOT the cause of the hang above and did not fix it** — the hang was the unapproved binary,
+and the fix was written while that was still the leading hypothesis. It is kept because it is
+correct on its own terms and costs one property read per process, but it must not be recorded as the
+remedy for this symptom. Pileup is still worth clearing separately: `openness-cli portal-status`
+classifies which instances are safe to close, and never closes anything itself.
+
+**One genuinely separate cause, also seen:** a cold Portal V20 launch on a loaded machine can exceed
+the **180 s default** connect timeout legitimately. That is slowness, not refusal — raise
+`--timeout-connect` before concluding anything is wrong.
