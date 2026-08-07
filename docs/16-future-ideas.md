@@ -997,3 +997,32 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Verdict.** Open, and worth doing before the next data-structure stage. The current mitigation is
   that an author has to know the rule and apply it by hand every time, which is the mitigation FI-44
   was raised to stop relying on.
+
+### FI-48 — `to-xml` can reorder coils within a network, and coil order is semantic
+- **Status:** Raised (2026-08-07). Found by a coding agent doing a re-export diff, then hit for real
+  by a second agent on the same block.
+- **The defect.** A network's `COIL` and `RCOIL` came back from `to-xml` → TIA → `to-ir` in the
+  opposite order to the IR that produced them, and to the order the real site export has. The IR
+  treats `COIL`/`SCOIL`/`RCOIL` as **one contiguous kind-run** (`ir/SPEC.md`, statement-kind
+  ordering), so their relative order inside that run is content, not formatting.
+- **Why it matters and is not cosmetic.** Coil order decides same-scan freshness — a coil written
+  before another reads its *new* value, after it reads last scan's. This project has now been bitten
+  by that four separate times in one week (a never-incrementing hours counter; the valve's cycle
+  edge; an ET sample that must precede its timer; and a cast-out condensation that reports a scan
+  late). So a transform that silently permutes coils can change behaviour, and the case where it
+  happens to be inert is luck rather than safety.
+- **Where it is NOT.** `FlgNetWriter` emits parts in **UId order** (`FlgNetWriter.cs:329`), which is
+  required — TIA rejects a `<Parts>` whose `<Access>` elements are not UId-ascending, which is what
+  `FlgNetWriterPartOrderTests` already guards. So the writer is doing the right thing and the
+  reorder comes from **UId assignment in the sidecar synthesizer**, or from how the reducer
+  reconstructs assignments on the way back. Not yet isolated.
+- **Second symptom, probably the same root.** The affected block's TIA re-export is **not
+  re-derivable** — `to-ir --no-sidecar` hard-errors (ADR-0005) and `drift-check` reports `DRIFTED`
+  even against the export the IR came from. Other blocks derive clean, so it is content-specific.
+  **Practical consequence: `drift-check` cannot police that block**, so one of the project's
+  mechanical gates is silently absent on it.
+- **Fix.** Isolate first — the two symptoms may be one root or two. When fixing, note the standing
+  rule that on a *second* instance of a document-order bug class the answer is **one general
+  ordering guarantee, not another special case**; this is at least the second.
+- **Verdict.** Open. Worth doing before the next block goes into `patterns/`: a library block that
+  cannot be round-trip verified ships without one of its gates.
