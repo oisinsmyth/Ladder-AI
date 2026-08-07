@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Converter.CandidateScan;
+using Converter.Claims;
 using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
@@ -104,6 +105,16 @@ internal static class Program
             return RunTrace(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "claim")
+        {
+            return RunClaim(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "claims")
+        {
+            return RunClaims(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
@@ -126,6 +137,8 @@ internal static class Program
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
             Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
+            Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-48); exit 1 refused, 2 unusable");
+            Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-48); exit 1 on conflict");
             return 1;
         }
 
@@ -212,6 +225,248 @@ internal static class Program
 
     private static bool IsTagTableXml(XDocument document) =>
         document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Tags.PlcTagTable") ?? false;
+
+    // FI-48 component 1. Exit codes: 0 acquired / clean, 1 refused or conflict, 2 unusable input.
+    // The 1-vs-2 split matters to a calling agent: 1 is a real answer ("someone else has it, pick
+    // another"), 2 means nothing was decided and retrying the same way will not help.
+    private const int ExitUnusable = 2;
+
+    // --claims is required, falling back only to LADDER_CLAIMS_DIR, and hard-errors if neither is set.
+    // It deliberately does NOT default to anything worktree-relative: agents run in separate git
+    // worktrees, so a per-worktree claims directory is always empty, always grants every claim, and
+    // silently converts the whole registry into a no-op. FI-44's "empty is not clean" in its purest
+    // form — the failure would look exactly like success.
+    private static string? ResolveClaimsDir(string? flag)
+    {
+        if (!string.IsNullOrWhiteSpace(flag))
+        {
+            return flag;
+        }
+
+        var fromEnv = Environment.GetEnvironmentVariable("LADDER_CLAIMS_DIR");
+        return string.IsNullOrWhiteSpace(fromEnv) ? null : fromEnv;
+    }
+
+    private static int RunClaim(string[] args)
+    {
+        string? projectDir = null, claimsDir = null, agent = null, kindToken = null;
+        string? value = null, type = null, within = null, purpose = null;
+        var allocate = false;
+        var floor = 1;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project": projectDir = Next(args, ref i); break;
+                case "--claims": claimsDir = Next(args, ref i); break;
+                case "--agent": agent = Next(args, ref i); break;
+                case "--kind": kindToken = Next(args, ref i); break;
+                case "--value": value = Next(args, ref i); break;
+                case "--type": type = Next(args, ref i); break;
+                case "--in": within = Next(args, ref i); break;
+                case "--purpose": purpose = Next(args, ref i); break;
+                case "--floor":
+                    if (!int.TryParse(Next(args, ref i), out floor))
+                    {
+                        Console.Error.WriteLine("--floor requires an integer");
+                        return ExitUnusable;
+                    }
+
+                    break;
+                case "--allocate": allocate = true; break;
+                case "--json": json = true; break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return ExitUnusable;
+            }
+        }
+
+        if (projectDir is null || agent is null || kindToken is null)
+        {
+            Console.Error.WriteLine("Usage: converter claim --project <ir-dir> --claims <dir> --agent <id> --kind <" + ClaimKinds.AllTokens + "> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]");
+            return ExitUnusable;
+        }
+
+        var resolved = ResolveClaimsDir(claimsDir);
+        if (resolved is null)
+        {
+            Console.Error.WriteLine("--claims <dir> is required (or set LADDER_CLAIMS_DIR). It must be a directory SHARED by every agent working this project — a per-worktree path would grant every claim and coordinate nothing.");
+            return ExitUnusable;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"directory not found: {projectDir}");
+            return ExitUnusable;
+        }
+
+        if (!ClaimKinds.TryParse(kindToken, out var kind))
+        {
+            Console.Error.WriteLine($"unknown --kind '{kindToken}' — expected one of: {ClaimKinds.AllTokens}");
+            return ExitUnusable;
+        }
+
+        if (allocate == (value is not null))
+        {
+            Console.Error.WriteLine("pass exactly one of --value <v> or --allocate");
+            return ExitUnusable;
+        }
+
+        try
+        {
+            var corpus = ClaimCorpus.Build(projectDir);
+            var store = new ClaimStore(resolved, projectDir);
+
+            var outcome = allocate
+                ? ClaimsRunner.Allocate(corpus, store, projectDir, kind, type, floor, within, agent, purpose)
+                : ClaimsRunner.Acquire(corpus, store, projectDir, kind, value!, agent, purpose);
+
+            var text = json
+                ? ClaimsOutputFormatter.FormatOutcomeJson(outcome)
+                : ClaimsOutputFormatter.FormatOutcomeText(outcome);
+
+            if (outcome.Ok)
+            {
+                Console.WriteLine(text);
+                return 0;
+            }
+
+            Console.Error.WriteLine(text);
+            return outcome.Result is ClaimResult.Invalid or ClaimResult.NothingExamined ? ExitUnusable : 1;
+        }
+        catch (ClaimFormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return ExitUnusable;
+        }
+    }
+
+    private static int RunClaims(string[] args)
+    {
+        string? projectDir = null, claimsDir = null, agent = null, kindToken = null, value = null;
+        var check = false;
+        var release = false;
+        var all = false;
+        var force = false;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project": projectDir = Next(args, ref i); break;
+                case "--claims": claimsDir = Next(args, ref i); break;
+                case "--agent": agent = Next(args, ref i); break;
+                case "--kind": kindToken = Next(args, ref i); break;
+                case "--value": value = Next(args, ref i); break;
+                case "--check": check = true; break;
+                case "--release": release = true; break;
+                case "--all": all = true; break;
+                case "--force": force = true; break;
+                case "--json": json = true; break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return ExitUnusable;
+            }
+        }
+
+        if (projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter claims --project <ir-dir> --claims <dir> [--check] [--agent <id>] [--json]");
+            Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> --release --agent <id> (--kind <k> --value <v> | --all) [--force]");
+            return ExitUnusable;
+        }
+
+        var resolved = ResolveClaimsDir(claimsDir);
+        if (resolved is null)
+        {
+            Console.Error.WriteLine("--claims <dir> is required (or set LADDER_CLAIMS_DIR).");
+            return ExitUnusable;
+        }
+
+        var store = new ClaimStore(resolved, projectDir);
+
+        if (release)
+        {
+            return RunClaimsRelease(store, agent, kindToken, value, all, force);
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"directory not found: {projectDir}");
+            return ExitUnusable;
+        }
+
+        var corpus = ClaimCorpus.Build(projectDir);
+        var report = ClaimsRunner.Check(corpus, store, projectDir, DateTime.UtcNow);
+
+        if (agent is not null)
+        {
+            report = report with { Claims = report.Claims.Where(c => c.Agent == agent).ToList() };
+        }
+
+        Console.WriteLine(json
+            ? ClaimsOutputFormatter.FormatReportJson(report)
+            : ClaimsOutputFormatter.FormatReportText(report));
+
+        // Listing is informational; only --check gates. Separating them means an agent can look at the
+        // board without a non-zero exit, and a pipeline step can gate without also having to parse it.
+        return check && report.HasFindings ? 1 : 0;
+    }
+
+    private static int RunClaimsRelease(ClaimStore store, string? agent, string? kindToken, string? value, bool all, bool force)
+    {
+        if (agent is null)
+        {
+            Console.Error.WriteLine("--release requires --agent <id>");
+            return ExitUnusable;
+        }
+
+        if (all)
+        {
+            var released = 0;
+            foreach (var claim in store.All().Where(c => c.Agent == agent))
+            {
+                if (store.Release(claim.Kind, claim.Value, agent, force, out var why))
+                {
+                    Console.WriteLine(why);
+                    released++;
+                }
+                else
+                {
+                    Console.Error.WriteLine(why);
+                }
+            }
+
+            Console.WriteLine($"released {released} claim(s) for agent '{agent}'");
+            return 0;
+        }
+
+        if (kindToken is null || value is null)
+        {
+            Console.Error.WriteLine("--release needs either --all or both --kind and --value");
+            return ExitUnusable;
+        }
+
+        if (!ClaimKinds.TryParse(kindToken, out var kind))
+        {
+            Console.Error.WriteLine($"unknown --kind '{kindToken}' — expected one of: {ClaimKinds.AllTokens}");
+            return ExitUnusable;
+        }
+
+        if (store.Release(kind, value, agent, force, out var reason))
+        {
+            Console.WriteLine(reason);
+            return 0;
+        }
+
+        Console.Error.WriteLine(reason);
+        return 1;
+    }
+
+    private static string? Next(string[] args, ref int i) => i + 1 < args.Length ? args[++i] : null;
 
     private static int RunSanitize(string[] args)
     {

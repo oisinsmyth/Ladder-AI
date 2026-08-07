@@ -999,7 +999,21 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   was raised to stop relying on.
 
 ### FI-48 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
-- **Status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
+- **Status:** **Implemented (partial) 2026-08-07 — component 1 (claims) shipped; components 2–5
+  (workspaces, lease, integration, ledger) open.** `converter claim` / `converter claims`
+  (`src/converter/Converter/Claims/`, `src/converter/README.md`): six kinds across the two semantics,
+  corpus-validated against `ProjectIndex` (extended additively with `(Kind, Number)` and network slots),
+  `SignalInventory` and `ProjectUsageGraph`; `--claims` required with no default; 46 tests, 822 total.
+  **Two things changed in the build vs the design below.** (1) `--suggest` was **dropped for
+  `--allocate`**, which takes the lowest free value atomically — a non-binding suggestion is the exact
+  race the tool exists to remove. (2) Acquisition writes to a temp file and `File.Move`s it into the
+  slot rather than opening the slot with `CreateNew`: the parallel-acquisition test caught the winner
+  holding its new file open while writing, so a loser could not read who had beaten it. That defect was
+  found by the test, not by review — the argument for having written it.
+  Scope held deliberately: no Portal, no `openness-cli`, no `.ir` touched. **Adoption is not part of
+  it** — nothing yet requires an agent to claim before writing, and wiring claims into the coding
+  skills is what turns the registry from available into binding.
+- **Prior status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
   is **four** ideas with four different verdicts, and that the headline framing ("multi-agent access",
   "streamline", "bulk") names benefits the substrate cannot deliver *as stated*. Owner clarified the same
   day that the target is specifically **multiple agents on the same project / TIA file**; §FI-48a is the

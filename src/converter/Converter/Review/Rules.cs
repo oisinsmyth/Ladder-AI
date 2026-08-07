@@ -374,7 +374,10 @@ public static class Rules
         }
     }
 
-    private static bool IsSliceAccessTag(string tag)
+    // internal, not private: FI-48's claim validator reserves alarm BITS, so it needs the same
+    // word/bit decomposition C-501 uses. Copying three lines would let the two drift, and a claim
+    // registry that splits a slice path differently from the rule that audits it is worse than none.
+    internal static bool IsSliceAccessTag(string tag)
     {
         var lastDot = tag.LastIndexOf('.');
         return lastDot >= 0 && lastDot + 1 < tag.Length && tag[lastDot + 1] == '%';
@@ -383,14 +386,14 @@ public static class Rules
     // "DB_Alarms.EStopAlarm0.%X3" -> "DB_Alarms.EStopAlarm0". C-501's unit of grouping since the
     // 2026-08-06 amendment: the word is what a network's subject is, so the word is what the rule
     // counts. Only ever called on a tag IsSliceAccessTag already accepted.
-    private static string SliceWordPath(string tag)
+    internal static string SliceWordPath(string tag)
     {
         var lastDot = tag.LastIndexOf('.');
         return lastDot >= 0 ? tag[..lastDot] : tag;
     }
 
     // "DB_Alarms.EStopAlarm0.%X3" -> "%X3", for checking the comment's bit map mentions it.
-    private static string SliceBitToken(string tag)
+    internal static string SliceBitToken(string tag)
     {
         var lastDot = tag.LastIndexOf('.');
         return lastDot >= 0 ? tag[(lastDot + 1)..] : tag;

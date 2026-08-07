@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-08-07
+
+**`converter claim` / `claims` — reservations, so two agents on one project stop colliding**
+
+FI-48 component 1. The collisions that break same-project multi-agent work are decided **while
+writing IR** and never reach TIA: two agents each scan the corpus for the next free FB number and
+both pick 51; both verify alarm bit `%X9` is free and both take it; both append "network 8" to the
+same shared FC. Each agent's own `converter diff --only` invariance check passes — the conflict
+exists only between them, and a Portal-side queue is structurally unable to see any of it. A log
+cannot prevent it either: a log records what already happened, and prevention needs a reservation
+taken **before** the work.
+
+- **Six kinds, two semantics.** *Allocation* (`block-number`, `alarm-bit`, `db-member`,
+  `block-network`, `tag`) reserves something not yet used and is refused if the corpus already uses
+  it. *Exclusive* (`block-edit`) reserves write access to something that exists.
+- **`--claims <dir>` is required and has no default.** Agents run in separate git worktrees, so a
+  per-worktree claims directory is always empty, grants every claim, and turns the registry into a
+  no-op that looks exactly like success — FI-44's "empty is not clean" in its purest form.
+- **`--allocate`, not `--suggest`.** A read-only suggestion is the exact race the tool removes: two
+  agents are both told "FB51 is free", both act, and one finds out after doing the work. Allocation
+  takes the lowest free value atomically and prints what it took.
+- **Acquisition is a temp-file write plus `File.Move`.** Opening the slot with `CreateNew` looked
+  equivalent and was not — the winner holds its new file open while writing, so a loser hit a
+  sharing violation and could not report who beat it. **Found by the parallel-acquisition test, not
+  by review**, which is the argument for having written that test at all.
+- **`--check` gates on conflicts only.** A fulfilled allocation claim (the block got written, so the
+  resource now exists) is the normal end state and is reported without gating; a check that failed on
+  success would be ignored on failure. What gates: an exclusive claim on a vanished block, a
+  malformed value, and the **cross-kind conflict the filesystem cannot see** — A holds
+  `block-edit FC_ControlMain` while B holds `block-network FC_ControlMain:8`, two different values,
+  both acquisitions legitimately succeeding.
+- `ProjectIndex` gained `(Kind, Number)` and per-block network slots **additively** — one corpus
+  dispatch, per `SignalInventory`'s own stated invariant, rather than a second scanner that can
+  disagree. `Rules`' three C-501 slice helpers went `private` → `internal` for the same reason.
+- 46 tests (822 total). No Portal, no `openness-cli`, no `.ir` touched. **Adoption is not included**:
+  nothing yet *requires* a claim before writing, and wiring that into the coding skills is what turns
+  the registry from available into binding.
+
 ## 2026-08-06
 
 **The converter could not express a multi-instance FB call — in two independent ways**

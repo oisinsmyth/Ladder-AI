@@ -14,7 +14,30 @@ public sealed class ProjectIndex
     private readonly HashSet<string> _blockNames = new(StringComparer.Ordinal);
     private readonly List<string> _warnings = new();
 
+    // FI-48 component 1. Numbers and network slots are author-allocated in the IR (`NUMBER 50` is a
+    // line an agent writes), so they are the two things two agents pick independently and collide on.
+    // Recorded here rather than by a second scanner because this class already parses every block and
+    // DB to get their names — a separate walk would be a second corpus dispatch, and SignalInventory's
+    // own header states the invariant that the corpus is read one way "so the three can never disagree
+    // about what a corpus contains".
+    private readonly Dictionary<(string Kind, int Number), string> _numberOwners = new();
+    private readonly Dictionary<string, IReadOnlyList<int>> _blockNetworks = new(StringComparer.Ordinal);
+
     public IReadOnlyList<string> Warnings => _warnings;
+
+    // Keyed on (kind, number) because the number spaces are per-kind: FB50 and DB50 coexist, FB50 and
+    // a second FB50 do not.
+    public string? NumberOwner(string kind, int number) =>
+        _numberOwners.TryGetValue((kind, number), out var name) ? name : null;
+
+    public IReadOnlyList<int> NetworksOf(string blockName) =>
+        _blockNetworks.TryGetValue(blockName, out var networks) ? networks : Array.Empty<int>();
+
+    // FI-44 — "empty is not clean". A caller that validates against this index needs to distinguish
+    // "checked the corpus, the resource is free" from "the corpus was empty, so everything looks free".
+    // The second is not an answer, and treating it as one is how a check passes by examining nothing.
+    public bool IndexedAnything =>
+        _blockNames.Count + _dbNames.Count + _typeNames.Count + _tagNames.Count > 0;
 
     public static ProjectIndex Build(string projectDir, IReadOnlyList<string> batchPaths)
     {
@@ -50,7 +73,9 @@ public sealed class ProjectIndex
 
             if (text.StartsWith("DB ", StringComparison.Ordinal))
             {
-                _dbNames.Add(DbIrParser.ParseDb(text).Name);
+                var db = DbIrParser.ParseDb(text);
+                _dbNames.Add(db.Name);
+                _numberOwners[("DB", db.Number)] = db.Name;
                 return;
             }
 
@@ -74,6 +99,8 @@ public sealed class ProjectIndex
                 ? IrParser.ParseBlock(text).Block
                 : IrParser.ParseBlockWithoutSidecar(text);
             _blockNames.Add(block.Name);
+            _numberOwners[(block.Kind, block.Number)] = block.Name;
+            _blockNetworks[block.Name] = block.Networks.Select(n => n.Number).ToList();
         }
         catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
         {
