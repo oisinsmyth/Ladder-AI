@@ -71,7 +71,7 @@ dotnet test                         # PC-side tests (openness-cli, converter, te
 
 1. Confirm the request names a target block/network and the relevant equipment tags exist in `ir/<project>/` (pipeline-wide: every tag in an artifact is `exists` — verified by grep against the current export — or `proposed`; never code against `proposed`).
 2. Select patterns from `patterns/` covering the request; map real tags to slots; type-check.
-3. If >20% of the request needs freeform (non-pattern) rungs, say so and get explicit go-ahead before writing them.
+3. If >20% of the request needs freeform (non-pattern) rungs, say so and get explicit go-ahead before writing them. **What the threshold is FOR (owner clarification, 2026-08-07):** it is a rough prompt to check you have not missed an already-solved problem *because a pattern's name did not match what you were looking for* — not a cap on freeform. Some projects genuinely need more, and that is fine; early-stage work on a thin library needs a lot. So the go-ahead is normally granted — what is not optional is doing the check before asking.
 4. Write IR → `converter preflight` against the current `ir/<project>/` export (must pass with zero findings; a consciously-accepted finding needs the engineer's explicit OK recorded — it is a filter before the compile gate, never a substitute) → convert → import to scratch → compile → iterate until clean. On any compile failure, check `docs/notes/compile-error-playbook.md` first — entries are grounded hypotheses to verify, not answers to trust.
 5. Present: IR diff + one-paragraph intent statement + compile evidence + reviewer findings. Stop; the engineer takes it from there (`docs/11-review-workflow.md`).
 
