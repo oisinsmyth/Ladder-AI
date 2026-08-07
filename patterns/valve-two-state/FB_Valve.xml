@@ -23,6 +23,7 @@
                   <Member Name="HandOpenSignal" Datatype="Bool" />
                   <Member Name="PositionFB" Datatype="Bool" />
                   <Member Name="PositionValid" Datatype="Bool" />
+                  <Member Name="PositionConclusive" Datatype="Bool" />
                   <Member Name="FBSenseInvert" Datatype="Bool" />
                   <Member Name="FaultFB" Datatype="Bool" />
                   <Member Name="SystemHealthy" Datatype="Bool" />
@@ -186,7 +187,7 @@
           <MultilingualTextItem ID="100001" CompositionName="Items">
             <AttributeList>
               <Culture>en-US</Culture>
-              <Text>CONTROLS ONE TWO-STATE VALVE. It selects the open command from the automatic source or, when the valve is in hand, from the operator; drops that command on any latched fault, on an external inhibit, or on loss of the system permissive; detects and latches a failure to open and a failure to close; condenses those and an external fault into one fault bit and two consequence-class bits; enables an upstream component once the valve is proven open; counts operations; publishes a status code; and writes a four-bit alarm word. THERE IS NO CLOSE COMMAND - the output dropping IS the close, and the valve fails shut with no energy on it. THE WHOLE CALLER-VISIBLE INTERFACE IS THE SINGLE STATIC IO of type UDT_Valve; the block declares no INPUT, OUTPUT or IN_OUT parameters, so the instance DB IS the interface - the caller writes into it and the panel binds to it. The call site therefore shows nothing of what was wired, and whoever calls this block must keep its writes to an instance's struct IMMEDIATELY ADJACENT to that instance's CALL rather than scattered. THE POSITION FEEDBACK IS A COMPUTED BOOL AND THE BLOCK DOES NOT KNOW WHAT PRODUCED IT: a real limit contact and an inference the caller draws from any process variable arrive on the same member, so thresholds, windows, magnitudes and attribution all live in whatever computes it and none of them is built in here. BOTH DETECTIONS FIRE ON POSITIVE EVIDENCE OF THE WRONG STATE - commanded open and the position says not open, commanded shut and the position says still open - and neither fires on the absence of evidence of the right one, so a quiet feedback is never read as a sealed valve. PositionValid carries the cannot-tell case: it gates whether a fault may arm and is never read as a position in either direction, so a valve nobody can judge raises neither fault. WHAT THIS BLOCK LEAVES TO ITS CALLER, each deliberately absent rather than missing: any interlock that reads a SIBLING device, which arrives through InhibitValve because a block cannot see its siblings; re-driving the valve to a required state after a power failure or a safety stop, which is a sequencing decision and not a valve decision; how it learns that its process is simulated; and the meaning of the suppressor cause it publishes. IO is retained in full - the whole struct, not only the latched causes - so a latched critical fault survives a power cycle; the alarm word and status code are rewritten every scan, so retaining them is a stale value for one scan and never a second seal-in.</Text>
+              <Text>CONTROLS ONE TWO-STATE VALVE. It selects the open command from the automatic source or, when the valve is in hand, from the operator; drops that command on any latched fault, on an external inhibit, or on loss of the system permissive; detects and latches a failure to open and a failure to close; condenses those and an external fault into one fault bit and two consequence-class bits; enables an upstream component once the valve is proven open; counts operations; publishes a status code; and writes a four-bit alarm word. THERE IS NO CLOSE COMMAND - the output dropping IS the close, and the valve fails shut with no energy on it. THE WHOLE CALLER-VISIBLE INTERFACE IS THE SINGLE STATIC IO of type UDT_Valve; the block declares no INPUT, OUTPUT or IN_OUT parameters, so the instance DB IS the interface - the caller writes into it and the panel binds to it. The call site therefore shows nothing of what was wired, and whoever calls this block must keep its writes to an instance's struct IMMEDIATELY ADJACENT to that instance's CALL rather than scattered. THE POSITION FEEDBACK IS A COMPUTED BOOL AND THE BLOCK DOES NOT KNOW WHAT PRODUCED IT: a real limit contact and an inference the caller draws from any process variable arrive on the same member, so thresholds, windows, magnitudes and attribution all live in whatever computes it and none of them is built in here. BOTH DETECTIONS FIRE ON POSITIVE EVIDENCE OF THE WRONG STATE - commanded open and the position says not open, commanded shut and the position says still open - and neither fires on the absence of evidence of the right one, so a quiet feedback is never read as a sealed valve. PositionValid carries the cannot-tell case: it gates whether a fault may arm and is never read as a position in either direction, so a valve nobody can judge raises neither fault. PositionConclusive carries a second and different gate - the verdict has had long enough to be decisive - and BOTH must be true before either detection arms. WHERE THE POSITION IS INFERRED, THE DETECTION WINDOW IS COMPUTED BY THE CALLING BLOCK AND ARRIVES ON PositionConclusive, so how long a fault took to appear cannot be answered from inside this block: the fail-to time here is a short confirmation on a settled verdict, and the period over which evidence was gathered belongs to whoever computed it. WHAT THIS BLOCK LEAVES TO ITS CALLER, each deliberately absent rather than missing: any interlock that reads a SIBLING device, which arrives through InhibitValve because a block cannot see its siblings; re-driving the valve to a required state after a power failure or a safety stop, which is a sequencing decision and not a valve decision; how it learns that its process is simulated; and the meaning of the suppressor cause it publishes. IO is retained in full - the whole struct, not only the latched causes - so a latched critical fault survives a power cycle; the alarm word and status code are rewritten every scan, so retaining them is a stale value for one scan and never a second seal-in.</Text>
             </AttributeList>
           </MultilingualTextItem>
         </ObjectList>
@@ -668,33 +669,39 @@
                 </Access>
                 <Access Scope="LocalVariable" UId="11">
                   <Symbol>
-                    <Component Name="FBOpen" />
+                    <Component Name="IO" />
+                    <Component Name="PositionConclusive" />
                   </Symbol>
                 </Access>
                 <Access Scope="LocalVariable" UId="15">
                   <Symbol>
+                    <Component Name="FBOpen" />
+                  </Symbol>
+                </Access>
+                <Access Scope="LocalVariable" UId="19">
+                  <Symbol>
                     <Component Name="FTTimeMS" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="21">
+                <Access Scope="LocalVariable" UId="25">
                   <Symbol>
                     <Component Name="FailToOpenTimer" />
                     <Component Name="Q" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="25">
+                <Access Scope="LocalVariable" UId="29">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FTO" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="29">
+                <Access Scope="LocalVariable" UId="33">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FaultReset" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="35">
+                <Access Scope="LocalVariable" UId="39">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FTO" />
@@ -702,46 +709,39 @@
                 </Access>
                 <Part Name="Contact" UId="2" />
                 <Part Name="Contact" UId="6" />
-                <Part Name="Contact" UId="10">
+                <Part Name="Contact" UId="10" />
+                <Part Name="Contact" UId="14">
                   <Negated Name="operand" />
                 </Part>
-                <Part Name="TON" Version="1.0" UId="14">
-                  <Instance Scope="LocalVariable" UId="17">
+                <Part Name="TON" Version="1.0" UId="18">
+                  <Instance Scope="LocalVariable" UId="21">
                     <Component Name="FailToOpenTimer" />
                   </Instance>
                   <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
                 </Part>
-                <Part Name="Contact" UId="20" />
-                <Part Name="O" UId="32">
+                <Part Name="Contact" UId="24" />
+                <Part Name="O" UId="36">
                   <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
                 </Part>
-                <Part Name="Coil" UId="34" />
-                <Part Name="Contact" UId="24" />
-                <Part Name="Contact" UId="28">
+                <Part Name="Coil" UId="38" />
+                <Part Name="Contact" UId="28" />
+                <Part Name="Contact" UId="32">
                   <Negated Name="operand" />
                 </Part>
               </Parts>
               <Wires>
-                <Wire UId="22">
-                  <NameCon UId="20" Name="operand" />
-                  <IdentCon UId="21" />
-                </Wire>
-                <Wire UId="23">
-                  <NameCon UId="20" Name="out" />
-                  <NameCon UId="32" Name="in1" />
-                </Wire>
-                <Wire UId="1">
-                  <Powerrail />
-                  <NameCon UId="2" Name="in" />
-                  <NameCon UId="20" Name="in" />
-                  <NameCon UId="24" Name="in" />
-                </Wire>
                 <Wire UId="26">
                   <NameCon UId="24" Name="operand" />
                   <IdentCon UId="25" />
                 </Wire>
                 <Wire UId="27">
                   <NameCon UId="24" Name="out" />
+                  <NameCon UId="36" Name="in1" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                  <NameCon UId="24" Name="in" />
                   <NameCon UId="28" Name="in" />
                 </Wire>
                 <Wire UId="30">
@@ -750,15 +750,23 @@
                 </Wire>
                 <Wire UId="31">
                   <NameCon UId="28" Name="out" />
-                  <NameCon UId="32" Name="in2" />
+                  <NameCon UId="32" Name="in" />
                 </Wire>
-                <Wire UId="33">
+                <Wire UId="34">
+                  <NameCon UId="32" Name="operand" />
+                  <IdentCon UId="33" />
+                </Wire>
+                <Wire UId="35">
                   <NameCon UId="32" Name="out" />
-                  <NameCon UId="34" Name="in" />
+                  <NameCon UId="36" Name="in2" />
                 </Wire>
-                <Wire UId="36">
-                  <NameCon UId="34" Name="operand" />
-                  <IdentCon UId="35" />
+                <Wire UId="37">
+                  <NameCon UId="36" Name="out" />
+                  <NameCon UId="38" Name="in" />
+                </Wire>
+                <Wire UId="40">
+                  <NameCon UId="38" Name="operand" />
+                  <IdentCon UId="39" />
                 </Wire>
                 <Wire UId="4">
                   <NameCon UId="2" Name="operand" />
@@ -782,15 +790,23 @@
                 </Wire>
                 <Wire UId="13">
                   <NameCon UId="10" Name="out" />
-                  <NameCon UId="14" Name="IN" />
+                  <NameCon UId="14" Name="in" />
                 </Wire>
                 <Wire UId="16">
-                  <NameCon UId="14" Name="PT" />
+                  <NameCon UId="14" Name="operand" />
                   <IdentCon UId="15" />
                 </Wire>
-                <Wire UId="18">
-                  <NameCon UId="14" Name="ET" />
-                  <OpenCon UId="19" />
+                <Wire UId="17">
+                  <NameCon UId="14" Name="out" />
+                  <NameCon UId="18" Name="IN" />
+                </Wire>
+                <Wire UId="20">
+                  <NameCon UId="18" Name="PT" />
+                  <IdentCon UId="19" />
+                </Wire>
+                <Wire UId="22">
+                  <NameCon UId="18" Name="ET" />
+                  <OpenCon UId="23" />
                 </Wire>
               </Wires>
             </FlgNet>
@@ -839,33 +855,39 @@
                 </Access>
                 <Access Scope="LocalVariable" UId="11">
                   <Symbol>
-                    <Component Name="FBOpen" />
+                    <Component Name="IO" />
+                    <Component Name="PositionConclusive" />
                   </Symbol>
                 </Access>
                 <Access Scope="LocalVariable" UId="15">
                   <Symbol>
+                    <Component Name="FBOpen" />
+                  </Symbol>
+                </Access>
+                <Access Scope="LocalVariable" UId="19">
+                  <Symbol>
                     <Component Name="FTTimeMS" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="21">
+                <Access Scope="LocalVariable" UId="25">
                   <Symbol>
                     <Component Name="FailToCloseTimer" />
                     <Component Name="Q" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="25">
+                <Access Scope="LocalVariable" UId="29">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FTC" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="29">
+                <Access Scope="LocalVariable" UId="33">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FaultReset" />
                   </Symbol>
                 </Access>
-                <Access Scope="LocalVariable" UId="35">
+                <Access Scope="LocalVariable" UId="39">
                   <Symbol>
                     <Component Name="IO" />
                     <Component Name="FTC" />
@@ -876,43 +898,36 @@
                 </Part>
                 <Part Name="Contact" UId="6" />
                 <Part Name="Contact" UId="10" />
-                <Part Name="TON" Version="1.0" UId="14">
-                  <Instance Scope="LocalVariable" UId="17">
+                <Part Name="Contact" UId="14" />
+                <Part Name="TON" Version="1.0" UId="18">
+                  <Instance Scope="LocalVariable" UId="21">
                     <Component Name="FailToCloseTimer" />
                   </Instance>
                   <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
                 </Part>
-                <Part Name="Contact" UId="20" />
-                <Part Name="O" UId="32">
+                <Part Name="Contact" UId="24" />
+                <Part Name="O" UId="36">
                   <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
                 </Part>
-                <Part Name="Coil" UId="34" />
-                <Part Name="Contact" UId="24" />
-                <Part Name="Contact" UId="28">
+                <Part Name="Coil" UId="38" />
+                <Part Name="Contact" UId="28" />
+                <Part Name="Contact" UId="32">
                   <Negated Name="operand" />
                 </Part>
               </Parts>
               <Wires>
-                <Wire UId="22">
-                  <NameCon UId="20" Name="operand" />
-                  <IdentCon UId="21" />
-                </Wire>
-                <Wire UId="23">
-                  <NameCon UId="20" Name="out" />
-                  <NameCon UId="32" Name="in1" />
-                </Wire>
-                <Wire UId="1">
-                  <Powerrail />
-                  <NameCon UId="2" Name="in" />
-                  <NameCon UId="20" Name="in" />
-                  <NameCon UId="24" Name="in" />
-                </Wire>
                 <Wire UId="26">
                   <NameCon UId="24" Name="operand" />
                   <IdentCon UId="25" />
                 </Wire>
                 <Wire UId="27">
                   <NameCon UId="24" Name="out" />
+                  <NameCon UId="36" Name="in1" />
+                </Wire>
+                <Wire UId="1">
+                  <Powerrail />
+                  <NameCon UId="2" Name="in" />
+                  <NameCon UId="24" Name="in" />
                   <NameCon UId="28" Name="in" />
                 </Wire>
                 <Wire UId="30">
@@ -921,15 +936,23 @@
                 </Wire>
                 <Wire UId="31">
                   <NameCon UId="28" Name="out" />
-                  <NameCon UId="32" Name="in2" />
+                  <NameCon UId="32" Name="in" />
                 </Wire>
-                <Wire UId="33">
+                <Wire UId="34">
+                  <NameCon UId="32" Name="operand" />
+                  <IdentCon UId="33" />
+                </Wire>
+                <Wire UId="35">
                   <NameCon UId="32" Name="out" />
-                  <NameCon UId="34" Name="in" />
+                  <NameCon UId="36" Name="in2" />
                 </Wire>
-                <Wire UId="36">
-                  <NameCon UId="34" Name="operand" />
-                  <IdentCon UId="35" />
+                <Wire UId="37">
+                  <NameCon UId="36" Name="out" />
+                  <NameCon UId="38" Name="in" />
+                </Wire>
+                <Wire UId="40">
+                  <NameCon UId="38" Name="operand" />
+                  <IdentCon UId="39" />
                 </Wire>
                 <Wire UId="4">
                   <NameCon UId="2" Name="operand" />
@@ -953,15 +976,23 @@
                 </Wire>
                 <Wire UId="13">
                   <NameCon UId="10" Name="out" />
-                  <NameCon UId="14" Name="IN" />
+                  <NameCon UId="14" Name="in" />
                 </Wire>
                 <Wire UId="16">
-                  <NameCon UId="14" Name="PT" />
+                  <NameCon UId="14" Name="operand" />
                   <IdentCon UId="15" />
                 </Wire>
-                <Wire UId="18">
-                  <NameCon UId="14" Name="ET" />
-                  <OpenCon UId="19" />
+                <Wire UId="17">
+                  <NameCon UId="14" Name="out" />
+                  <NameCon UId="18" Name="IN" />
+                </Wire>
+                <Wire UId="20">
+                  <NameCon UId="18" Name="PT" />
+                  <IdentCon UId="19" />
+                </Wire>
+                <Wire UId="22">
+                  <NameCon UId="18" Name="ET" />
+                  <OpenCon UId="23" />
                 </Wire>
               </Wires>
             </FlgNet>

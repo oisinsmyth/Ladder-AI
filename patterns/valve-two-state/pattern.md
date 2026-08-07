@@ -118,12 +118,13 @@ does not have.
 | `InHand` | `Bool` | Operator has the valve in hand. Selects the hand source *instead of* auto — the two replace each other, never combine. |
 | `PositionFB` | `Bool` | **The valve is proven open.** Real contact or caller's inference; the block cannot tell. |
 | `PositionValid` | `Bool` | **C-131's cannot-tell state.** The statement above is meaningful right now. Gates whether either fault may arm. |
+| `PositionConclusive` | `Bool` | **The verdict has had long enough to be decisive.** Where the position is inferred, this is where the CALLER'S detection window arrives. `TRUE` on a real contact. Gates arming alongside `PositionValid`. |
 | `FBSenseInvert` | `Bool` | The position source proves CLOSED rather than OPEN. |
 | `FaultFB` | `Bool` | External fault this block cannot detect itself (actuator thermal, driver fault, valve-island diagnostic). |
 | `SystemHealthy` | `Bool` | Permissive that must be present to drive the valve at all. |
 | `InhibitValve` | `Bool` | External inhibit — process interlock, trip, shared-resource refusal, **or any interlock that reads a sibling valve**. |
 | `FaultReset` | `Bool` | From the one plant-wide reset. Clears the latched causes. |
-| `FTTime` | `Real` | **Seconds.** Fail-to time, shared by both directions. Must not be zero. |
+| `FTTime` | `Real` | **Seconds.** Fail-to time, shared by both directions. A **confirmation on a settled verdict**, not the evidence-gathering period — that is `PositionConclusive`'s. Real contact: the travel allowance. Inferred: **sub-second**. Must not be zero. |
 | `EnableUPSTime` | `Real` | **Seconds.** How long proven-open before `UPSEnable`. |
 | `FailCloseCritical` | `Bool` | This instance's fail-to-close is the CRITICAL class rather than the ERROR class. |
 | `SuppFTO` / `SuppFTC` | `Bool` | Alarm-bit suppressors. Reach the alarm bit only. |
@@ -149,8 +150,8 @@ does not have.
 **positive evidence of the wrong state** and neither fires on the absence of evidence of the right
 one:
 
-- `FTO` — commanded open, position source trusted, and it says **not open**, for longer than `FTTime`.
-- `FTC` — commanded shut, position source trusted, and it says **still open**, for longer than `FTTime`.
+- `FTO` — commanded open, position source trusted **and conclusive**, and it says **not open**, for longer than `FTTime`.
+- `FTC` — commanded shut, position source trusted **and conclusive**, and it says **still open**, for longer than `FTTime`.
 
 `FTC` proves the valve did *not* close. **It never proves that it did.** A quiet feedback is
 absence of evidence, not evidence of absence: the actuator could have stalled between limits, the
@@ -167,6 +168,25 @@ on every legitimate operation; reading it as arrived is the silent failure C-131
 On a valve with no position source of any kind, drive `PositionValid` permanently `FALSE`. Both
 detections are then neutralised by wiring rather than by absence, and that is the honest answer for
 a valve nobody can judge — not a gap to be filled.
+
+**`PositionConclusive` is a second and different gate, and the two are not interchangeable.** It
+says the verdict has had long enough to be *decisive*; `PositionValid` says it is *trustworthy*.
+Both must be true before either detection arms. They behave differently and that difference is the
+reason they are separate members: *not trustworthy* stands for as long as its cause lasts, while
+*not yet conclusive* lasts exactly one detection window and then ends by itself. A fitter looking at
+a valve that is not alarming needs to know which of the two is holding it — one says wait, the other
+says investigate.
+
+**Where the detection window lives, and why it is not in this block.** On a directly proven valve
+`PositionConclusive` is simply `TRUE`: a contact is decisive the instant it is read. On an inferred
+one, the caller holds it `FALSE` while it accumulates evidence and raises it when its own window
+closes — so **the period over which evidence was gathered is the caller's, and `FTTime` is only a
+short confirmation on top of a verdict that has already been decided.** The consequence for anyone
+reading this block: *how long did that fault take to appear* is **not answerable from inside it**.
+
+That split is what lets one uniform block serve instances whose detections have different windows in
+the open and shut directions. `FTTime` is one setting per instance and cannot carry two periods; the
+caller's window can differ per direction because the caller computes it per direction.
 
 Both detections are **armed from a command the program itself issued**, which is what C-131 asks
 for: the valve was *told* to change state, so a window opens in which its effect must appear.
@@ -208,7 +228,8 @@ Each was ruled, not overlooked.
 | **Cycle count, not hours run** | Actuators and seats wear per operation, not per hour. Same rollover-safe shape, plus a small fixed debounce so a chattering position source cannot inflate the count. |
 | **`NegativeSignalEdge` spelling** | The motor pattern's own member is misspelled. The apparatus it belongs to was dropped here, so the name does not appear — but if it is ever reintroduced, spell it correctly. Do not "fix" the motor pattern in place. |
 | **No `Name` member** | The motor's `Name` is a `String` inside a retained struct instantiated once per valve. On a plant's worth of valves that is a kilobyte-scale retentive cost for a label the panel already holds. |
-| **One fail-to preset, not two** | `FTTime` covers both directions. Owner's ruling: two presets are not worth the divergence they invite — they start equal and drift, and the second one is the one nobody re-checks. |
+| **One fail-to preset, not two** | `FTTime` covers both directions. Owner's ruling: two presets are not worth the divergence they invite — they start equal and drift, and the second one is the one nobody re-checks. **This is only affordable because `FTTime` is not the detection window** — an inferred instance whose two directions need different periods expresses that through `PositionConclusive`, which the caller computes per direction. |
+| **`PositionConclusive` separate from `PositionValid`** | Owner's ruling, 2026-08-07. The alternative was to re-mean `PositionValid` as "conclusive now". Rejected because re-meaning a published member is invisible in review — a reviewer reads the same name and assumes the same thing — where a new member is seen and asked about. |
 
 *The three rows above were moved out of the IR's own comments on 2026-08-07 under C-204. The
 comments now state the resulting behaviour; the argument for it lives here.*
