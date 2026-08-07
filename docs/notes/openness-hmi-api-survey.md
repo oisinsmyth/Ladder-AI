@@ -510,17 +510,14 @@ against a schema the API hands you. Consequences, all of them already visible in
 
 ## 9. Unverified — do not treat as proven
 
-- **Only the READ path has been run live** (§7). The write path (`hmi-create-screen`: `Screens.Create`
-  → `ScreenItems.Create<T>` → `Validate()` → `Save()`) is **built, unit-tested and documented, but
-  has never executed against a real device** — every attempt was blocked by the transient
-  `Attach()` wedge in `openness-quirks.md`, not by anything in the code. So construction remains
-  reflection-only in exactly the way this section originally said, and the code being written does
-  not change that.
-- **`Validate()` is still the load-bearing untested claim.** §5.B rests on it being a real
-  pre-commit gate, and §6 uses it to revise "there is no compile gate on the HMI side". **It has
-  still never been invoked.** If it turns out to be shallow, the strongest argument for Unified
-  weakens considerably. The command that would answer this in one run now exists — running it is
-  the single highest-value outstanding item (§10).
+- **`Validate()`'s DEPTH is still unproven** — see §10. It has now been invoked and it works, but it
+  was asked about a screen with nothing wrong with it, and it said nothing. That is consistent with a
+  thorough checker and equally consistent with a shallow one.
+- **Nothing has been *modified*.** The write path is proven for *creation* only. Editing an existing
+  screen, re-binding a dynamization, or deleting a screen have never been exercised, and creation
+  being easy says little about them — creation touches nothing anyone else depends on.
+- **No dynamization has been created**, only read. `Dynamizations.Create<TagDynamization>` remains
+  reflection-only, and it is the step that would actually bind a screen to the PLC.
 - **The compile path is inferred, not observed.** `ICompilable` exists (`Compile() : CompilerResult`)
   and `HmiTarget` implements `IEngineeringServiceProvider`, so `HmiTarget.GetService<ICompilable>()`
   *compiles*. Whether it returns non-null is untested. Note that **`HmiSoftware` (Unified) does not
@@ -542,7 +539,53 @@ against a schema the API hands you. Consequences, all of them already visible in
 - **V21 exists** and was not examined. Given classic's four-release freeze, the useful question for
   V21 is only ever about Unified.
 
-## 10. If this is ever picked up
+## 10. The write path, proven end to end (2026-08-07)
+
+`openness-cli hmi-create-screen` run against JOB9002's scratch copy under the write extension recorded
+in `13-data-boundary.md`. **It worked**, and a fresh process read the result back:
+
+```
+CREATED screen 'ZZ_AI_TestScreen' on <device>
+  size: 1280x615
+  items created: 3   (HmiRectangle, HmiText, HmiButton)
+  Validate(): ran, returned no errors and no warnings
+  project saved: yes
+```
+
+Read-back in a separate invocation: **49 screens where there were 48**, the new one carrying its
+three items — `HmiRectangle` at 96×48, `HmiText` and `HmiButton` at 160×40, all at `@0,0`.
+
+**What this establishes, and it is the whole §4/§5.B construction story:**
+
+1. **`Screens.Create(name)` works**, and the created screen accepts `Width`/`Height` immediately.
+2. **`ScreenItems.Create<T>(name)` really does take only a name.** The schema said nothing is
+   `Mandatory` and only `Name` is `Relevant` (§8); creation confirms it. Items arrive with sensible
+   per-type defaults (a rectangle 96×48, a text and a button 160×40) rather than 0×0 — so the
+   builder does not have to know a type's geometry to produce a valid object.
+3. **`Save()` persists a Unified screen**, verified by re-reading in a new process rather than by
+   trusting the return value.
+4. **`Validate()` is real, callable, and does not throw** — the first time this project has ever
+   invoked it.
+
+**What it does NOT establish, and the distinction matters.** `Validate()` returned *no errors and no
+warnings* — on a screen that had **nothing wrong with it**. Three default-positioned items on a
+correctly-sized screen is the easiest possible case. A clean result there is consistent with a
+thorough validator and equally consistent with one that checks almost nothing. **§5.B's "better
+verification story" therefore remains a hypothesis, not a measured fact.** The way to settle it is to
+create something deliberately invalid — an item bound to a non-existent tag, a screen sized past the
+panel — and see whether `Validate()` objects. Until that is run, do not cite `Validate()` as a gate.
+
+Two smaller observations worth keeping:
+
+- **Creation is cheap and non-destructive**, which is exactly why it is a poor guide to the rest of
+  the write surface. Modifying an existing screen and deleting one are the operations with real
+  consequences, and neither has been touched.
+- **The `--yes` gate refusing without contacting Portal** turned out to matter in practice, not just
+  in principle: during the wedge (`openness-quirks.md`) every Portal-touching command failed, while
+  the dry run kept answering in 0.4 s. A confirmation step that needs a working session is a
+  confirmation step that stops working exactly when things are going wrong.
+
+## 11. If this is ever picked up
 
 In rough order of cost, and none of it authorised by this note:
 
@@ -550,12 +593,11 @@ In rough order of cost, and none of it authorised by this note:
    §5.A — the architecture that reuses this project's existing SimaticML machinery — is the one that
    does *not* apply, and §5.B's serialiser is on the critical path rather than being an alternative
    to it.
-2. **Call `Validate()` once.** Still the highest-value item, and now one command away — the tool
-   exists and is tested; only a working Portal attach is missing:
-   `openness-cli hmi-create-screen <project> --name <throwaway> --item HmiRectangle --yes`.
-   It creates a screen, validates, saves and reports. What it answers: whether `Validate()` returns
-   anything real (the claim §5.B rests on), whether `Create<T>` accepts a bare name as the schema
-   implies, and whether `Save()` persists a Unified screen. Three unknowns, one run.
+2. ~~Call `Validate()` once.~~ **Done (§11) — and it answered less than hoped.** Create/Save are
+   proven; `Validate()` runs but was only ever shown a valid screen. **The replacement task: make
+   something deliberately invalid and see whether it objects** — an item bound to a non-existent
+   tag, or a screen sized past the panel. That is now the highest-value single run, because §5.B's
+   entire "better verification" argument rests on the answer.
 3. **Enumerate the alarms**, not just count them. 311 of them with a readable `Tag`/`PlcTag` join is
    FI-35's use case sitting in reach, and it needs no screen work at all.
 4. Read `EventHandlers` — the walker's one genuinely misleading gap (§7).

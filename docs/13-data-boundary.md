@@ -227,6 +227,11 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
         The test screen references nothing that already exists.
       - **Standing intent:** the artifact is disposable and removable on request. Its name is
         invented, so no real HMI name is created or committed either.
+      - **Executed 2026-08-07.** One screen created in the scratch copy with three default items,
+        `Validate()` clean, saved, and confirmed by read-back (49 screens where there were 48).
+        Details in `notes/openness-hmi-api-survey.md` §10. **The artifact is still present** in the
+        scratch copy — it is the only thing this session wrote to any project, and it can be deleted
+        in TIA Portal or left as a reference; nothing depends on it either way.
       - **`10-non-goals.md` is NOT amended by this.** HMI engineering remains a non-goal there,
         "revisit only via ADR". This is a capability *probe* answering the survey's own cheapest
         open question (does `Validate()` do anything?), not the opening of an HMI capability — that
