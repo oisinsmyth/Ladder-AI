@@ -137,8 +137,8 @@ internal static class Program
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
             Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
-            Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-48); exit 1 refused, 2 unusable");
-            Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-48); exit 1 on conflict");
+            Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-50); exit 1 refused, 2 unusable");
+            Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-50); exit 1 on conflict");
             return 1;
         }
 
@@ -226,7 +226,7 @@ internal static class Program
     private static bool IsTagTableXml(XDocument document) =>
         document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Tags.PlcTagTable") ?? false;
 
-    // FI-48 component 1. Exit codes: 0 acquired / clean, 1 refused or conflict, 2 unusable input.
+    // FI-50 component 1. Exit codes: 0 acquired / clean, 1 refused or conflict, 2 unusable input.
     // The 1-vs-2 split matters to a calling agent: 1 is a real answer ("someone else has it, pick
     // another"), 2 means nothing was decided and retrying the same way will not help.
     private const int ExitUnusable = 2;

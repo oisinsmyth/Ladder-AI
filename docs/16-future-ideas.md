@@ -998,7 +998,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   that an author has to know the rule and apply it by hand every time, which is the mitigation FI-44
   was raised to stop relying on.
 
-### FI-48 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
+### FI-50 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
 - **Status:** **Implemented (partial) 2026-08-07 — component 1 (claims) shipped; components 2–5
   (workspaces, lease, integration, ledger) open.** `converter claim` / `converter claims`
   (`src/converter/Converter/Claims/`, `src/converter/README.md`): six kinds across the two semantics,
@@ -1016,8 +1016,8 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Prior status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
   is **four** ideas with four different verdicts, and that the headline framing ("multi-agent access",
   "streamline", "bulk") names benefits the substrate cannot deliver *as stated*. Owner clarified the same
-  day that the target is specifically **multiple agents on the same project / TIA file**; §FI-48a is the
-  decomposition that makes that reachable and §FI-48b the resulting build. Nothing here is accepted.
+  day that the target is specifically **multiple agents on the same project / TIA file**; §FI-50a is the
+  decomposition that makes that reachable and §FI-50b the resulting build. Nothing here is accepted.
 - **Raised:** 2026-08-07 · **Source:** conversation — "a multi-agent access idea for TIA … streamline AI
   access … bulk imports and exports … maybe Openness won't support it, but maybe an Openness manager that
   can queue the agent access and keeps a log of exported and imported blocks."
@@ -1145,7 +1145,7 @@ human-gated dialog) into a fast, legible refusal, and it is the missing piece th
 tracks safe to attempt at all. Bulk **export** is cheap and independently useful. Per-agent scratch
 copies are the only route to real parallelism, and rest on an already-proven capability.
 
-#### FI-48a — the same-project decomposition (owner clarification, 2026-08-07)
+#### FI-50a — the same-project decomposition (owner clarification, 2026-08-07)
 
 The owner's target is explicit: **multiple agents working on the same project / the same TIA file.**
 Objections 1–2 above stand as written about the `.ap20`, but they answer the wrong question if read as
@@ -1187,7 +1187,7 @@ inverts the seed's emphasis: the manager's core is a **claims registry over shar
 the Portal lease is a small supporting part. It is also the same philosophy as FI-39/FI-44 — a mechanical
 floor that survives an agent choosing not to look — applied to coordination instead of review.
 
-#### FI-48b — the proposed build (five components, no daemon)
+#### FI-50b — the proposed build (five components, no daemon)
 
 Everything below is files plus short-lived processes. Nothing long-lived, so FI-12(b)'s stale-process
 risk is not incurred.
@@ -1260,7 +1260,7 @@ measurement gate and FI-43's missing undo.
   way is a rule interpretation the owner must sign off before anything is built on it.
 - Someone must run integration; if that is the orchestrator, the orchestrator is the serialization point.
 
-#### FI-48c — three corrections that the design turns on, and one live alternative
+#### FI-50c — three corrections that the design turns on, and one live alternative
 
 Recorded because each is a reading a future reader will arrive at independently, and two of them are the
 seed's own natural shape. From the owner's readback, 2026-08-07.
@@ -1269,7 +1269,7 @@ seed's own natural shape. From the owner's readback, 2026-08-07.
 already happened; preventing a collision needs a reservation taken *before* the work. "Agent B, FB51 is
 taken, use 52" has to be answerable at the moment B is about to choose, not reconstructable afterwards.
 Same information, opposite direction in time, and only one direction is useful for the stated problem: a
-log tells you who broke it, a claim stops it breaking. This is why FI-48b leads with the claims registry
+log tells you who broke it, a claim stops it breaking. This is why FI-50b leads with the claims registry
 and demotes the ledger to attribution — it is not a preference about tooling, it is the difference
 between prevention and forensics.
 
@@ -1283,7 +1283,7 @@ entry — it is what moves the manager's centre of gravity off the Portal side e
 
 **Correction 3 — round trips need not queue, and the alternative is a real choice, not an error.** The
 seed's natural shape is *one shared TIA project behind a queue*: every agent's round trip is a request
-the layer services in turn. It is simpler than FI-48b, needs one Portal instance rather than N, and
+the layer services in turn. It is simpler than FI-50b, needs one Portal instance rather than N, and
 throughput is tolerable because a warm attach is ~1s and a block compile ~2s. **What it trades away is
 failure isolation.** One agent leaving the shared project inconsistent (`IsConsistent` cascades;
 FI-42's stranded superseded types — both recorded here, not hypothetical) breaks the compile gate for
@@ -1303,8 +1303,8 @@ project: one agent's compile force-persists another agent's half-finished work.
 **Dependencies:** FI-28 (built, read-only half), FI-07 (parked write half — this idea is its natural
 reopening trigger), FI-12 (shares its measurement gate), FI-43 (no undo for bulk import), FI-26
 (supersedes the ledger's content question), `docs/13-data-boundary.md` (ledger retention).
-**Verdict / revisit trigger:** Under debate — owner's call on the FI-48b build order, on the hard-rule-4
-reading above, and on FI-48c's copies-vs-shared-queue question (decided by expected concurrent-agent
+**Verdict / revisit trigger:** Under debate — owner's call on the FI-50b build order, on the hard-rule-4
+reading above, and on FI-50c's copies-vs-shared-queue question (decided by expected concurrent-agent
 count, which nobody has measured). Note that component 1 is the same either way — claims are required
 under both models, because Correction 2 holds regardless of how round trips are served. Components 1–3
 are buildable now and are justified by recorded evidence

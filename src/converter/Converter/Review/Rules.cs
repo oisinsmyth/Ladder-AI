@@ -374,7 +374,7 @@ public static class Rules
         }
     }
 
-    // internal, not private: FI-48's claim validator reserves alarm BITS, so it needs the same
+    // internal, not private: FI-50's claim validator reserves alarm BITS, so it needs the same
     // word/bit decomposition C-501 uses. Copying three lines would let the two drift, and a claim
     // registry that splits a slice path differently from the rule that audits it is worse than none.
     internal static bool IsSliceAccessTag(string tag)

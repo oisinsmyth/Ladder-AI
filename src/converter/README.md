@@ -2129,7 +2129,7 @@ consumer recomputes the hash and discards the cache on mismatch (hash-on-read, t
 Deliberately **not** `digest --fingerprint` (that abstracts tag names → a rename wouldn't invalidate). Exit
 1 on a missing/unparseable/non-block file.
 
-## `claim` / `claims` — reserve a shared resource before writing IR (2026-08-07, FI-48 component 1)
+## `claim` / `claims` — reserve a shared resource before writing IR (2026-08-07, FI-50 component 1)
 
 ```
 converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k>
@@ -2143,7 +2143,7 @@ Lets several agents work one project without stepping on each other. The collisi
 decided **while writing IR** and never reach TIA: two agents each scan the corpus for the next free FB
 number and both pick 51; both verify alarm bit `%X9` is free and both take it; both append "network 8"
 to the same shared FC. Each agent's own `converter diff --only` invariance check passes — the conflict
-exists only between them. See `docs/16-future-ideas.md` FI-48.
+exists only between them. See `docs/16-future-ideas.md` FI-50.
 
 **Six kinds, two semantics.** *Allocation* (`block-number`, `alarm-bit`, `db-member`, `block-network`,
 `tag`) reserves something not yet used, and is refused if the corpus already uses it. *Exclusive*

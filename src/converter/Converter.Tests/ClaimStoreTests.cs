@@ -4,7 +4,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-48 component 1 — the storage layer: filename encoding, record round-trip, and release policy.
+/// FI-50 component 1 — the storage layer: filename encoding, record round-trip, and release policy.
 /// The encoding tests matter more than they look: sanitisation alone maps distinct values onto one
 /// filename, and two different claims collapsing into one file is a coordination tool losing a claim.
 /// </summary>

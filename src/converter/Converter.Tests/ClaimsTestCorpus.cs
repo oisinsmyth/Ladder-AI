@@ -4,7 +4,7 @@ using Converter.SimaticMl;
 namespace Converter.Tests;
 
 /// <summary>
-/// A minimal but realistic corpus for the FI-48 claim tests: a shared FC with networks 1-7 (the
+/// A minimal but realistic corpus for the FI-50 claim tests: a shared FC with networks 1-7 (the
 /// append-slot case), an FB holding number 50 (the block-number case), an alarm DB whose word has
 /// bit 0 already driven (the %X9 case from the project's own telemetry), and a settings DB with an
 /// existing member. Built from the IR model and serialized, never hand-written, so a grammar change

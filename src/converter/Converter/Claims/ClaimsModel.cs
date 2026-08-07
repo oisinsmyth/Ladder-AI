@@ -1,13 +1,13 @@
 namespace Converter.Claims;
 
-// FI-48 component 1 — the reservation registry that lets several agents work one project.
+// FI-50 component 1 — the reservation registry that lets several agents work one project.
 //
 // The collisions this exists to prevent are decided WHILE WRITING IR and never cross the TIA
 // boundary: two agents each scan the corpus for the next free FB number and both pick 51; both
 // verify alarm bit %X9 is free and both take it; both append "network 8" to the same shared FC.
 // Each agent's own `converter diff --only` invariance check passes — the conflict exists only
 // between them. A log cannot prevent any of it, because a log records what already happened;
-// prevention needs a reservation taken BEFORE the work (docs/16-future-ideas.md, FI-48c).
+// prevention needs a reservation taken BEFORE the work (docs/16-future-ideas.md, FI-50c).
 public enum ClaimKind
 {
     BlockNumber,    // "FB51"                          — allocation

@@ -14,7 +14,7 @@ public sealed class ProjectIndex
     private readonly HashSet<string> _blockNames = new(StringComparer.Ordinal);
     private readonly List<string> _warnings = new();
 
-    // FI-48 component 1. Numbers and network slots are author-allocated in the IR (`NUMBER 50` is a
+    // FI-50 component 1. Numbers and network slots are author-allocated in the IR (`NUMBER 50` is a
     // line an agent writes), so they are the two things two agents pick independently and collide on.
     // Recorded here rather than by a second scanner because this class already parses every block and
     // DB to get their names — a separate walk would be a second corpus dispatch, and SignalInventory's

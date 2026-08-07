@@ -4,7 +4,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-48 component 1 — allocation, and what `claims --check` gates on. The gating boundary is the
+/// FI-50 component 1 — allocation, and what `claims --check` gates on. The gating boundary is the
 /// substance here: a fulfilled allocation claim (the agent wrote the block, so the resource now
 /// exists) is the NORMAL end state, and a check that failed on it would cry wolf on every success.
 /// </summary>
