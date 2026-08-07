@@ -1001,8 +1001,9 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 ### FI-48 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
 - **Status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
   is **four** ideas with four different verdicts, and that the headline framing ("multi-agent access",
-  "streamline", "bulk") names benefits the substrate cannot deliver. Nothing here is accepted; the split
-  and the ranking are the proposal.
+  "streamline", "bulk") names benefits the substrate cannot deliver *as stated*. Owner clarified the same
+  day that the target is specifically **multiple agents on the same project / TIA file**; §FI-48a is the
+  decomposition that makes that reachable and §FI-48b the resulting build. Nothing here is accepted.
 - **Raised:** 2026-08-07 · **Source:** conversation — "a multi-agent access idea for TIA … streamline AI
   access … bulk imports and exports … maybe Openness won't support it, but maybe an Openness manager that
   can queue the agent access and keeps a log of exported and imported blocks."
@@ -1120,22 +1121,126 @@ human-gated dialog) into a fast, legible refusal, and it is the missing piece th
 tracks safe to attempt at all. Bulk **export** is cheap and independently useful. Per-agent scratch
 copies are the only route to real parallelism, and rest on an already-proven capability.
 
-**Proposed split and ranking (the actual proposal):**
-1. **Session broker / advisory lease** in `openness-cli` — per-project lock file (holder, PID, lease,
-   TTL), acquired per *transaction*; refuses to start when `portal-status` reports a dirty environment;
-   fails fast and legibly. No daemon, no queue, no persistent log. Build first.
-2. **Bulk export** (`--blocks a,b,c` / `--all`) — read-only, no attribution or ordering hazard.
-3. **Per-agent scratch project copies** — provisioning is easy; the deliverable is the *merge-back
-   discipline*, which is a review question, not a tool.
-4. **Bulk/ordered import** — behind FI-12's measurement gate and FI-43's missing undo.
-5. **Queue proper, and any daemon** — behind 1–4 and behind evidence that agents actually contend.
-6. **Ledger** — deferred in favour of `drift-check`; if built, attribution-only, per-project,
-   gitignored.
+## FI-48a — the same-project decomposition (owner clarification, 2026-08-07)
+
+The owner's target is explicit: **multiple agents working on the same project / the same TIA file.**
+Objections 1–2 above stand as written about the `.ap20`, but they answer the wrong question if read as
+"so it cannot be done". The resolution is a decomposition, and it is the load-bearing idea of this entry.
+
+**The `.ap20` is not the source of truth — `ir/<project>/` is.** Hard rule 7 already says so (edit only
+IR); the TIA project is a *compile target and export source*, not the master copy. So "the same project"
+splits into three resources with three different concurrency properties:
+
+| Resource | Concurrency | Today |
+|---|---|---|
+| `ir/<project>/`, `gen/<project>/`, `patterns/` — the actual project content | **Multi-writer capable**; agents already work in file-disjoint git worktrees | uncoordinated |
+| The `.ap20` an agent compiles against | **Single-writer, but replicable** — 5.6 MB (`GenProject1`, measured) | one shared scratch project |
+| The **canonical** project the engineer reviews into | **Single-writer, not replicable** | same shared project |
+
+So agents *can* work the same project concurrently: each takes a private disposable clone of the
+`.ap20`, works the shared IR under coordination, and converges through one serialized integration. That
+is git's own model — distributed copies, serialized merge — and it is the only shape the substrate
+permits. What cannot exist is two concurrent writers on one `.ap20`; nothing in this build pretends
+otherwise.
+
+**The hazards that actually break same-project multi-agent work are repo-side, and no Portal queue can
+see any of them.** Grounded in this repo:
+
+1. **Block numbers.** `NUMBER 50` is a line in the IR — numbers are author-allocated. Two agents each
+   scan `ir/` for the next free FB, both pick 51. Import matches by *name*, so this does not
+   necessarily fail loudly; it can land as two blocks claiming one number.
+2. **Alarm bits.** The committed telemetry records `ShredderAlarm0.%X9 <- HopperBlockedAlarm, X9 verified
+   free`. Two agents verifying "X9 free" concurrently both take it. Nothing detects it until someone
+   reads the alarm list — a wrong-alarm-text defect that reaches site.
+3. **Append slots in shared blocks.** The same run appended `FC_ControlMain` NW8+NW9. Two agents both
+   append "NW8". Each passes its own `converter diff --only` invariance check; the conflict exists only
+   between them.
+4. **Shared DB members** (`DB_Settings`/`DB_Controls`) and **proposed tags/addresses** — same class.
+5. **`Project.Save()`** — only if agents ever share one open project, which this build removes.
+
+**Five of those six are logical conflicts in repo state, invisible to any lock on the Portal side.** That
+inverts the seed's emphasis: the manager's core is a **claims registry over shared logical resources**;
+the Portal lease is a small supporting part. It is also the same philosophy as FI-39/FI-44 — a mechanical
+floor that survives an agent choosing not to look — applied to coordination instead of review.
+
+## FI-48b — the proposed build (five components, no daemon)
+
+Everything below is files plus short-lived processes. Nothing long-lived, so FI-12(b)'s stale-process
+risk is not incurred.
+
+**1. Claims registry — `converter claim` / `converter claims`.** The component that actually delivers
+same-project multi-agent work; build first, and it is testable entirely offline.
+- Storage: **one file per claim** under `gen/<project>/claims/`, not one table — a directory of disjoint
+  files is conflict-free under concurrent writers by construction, where a shared table is a merge
+  conflict per claim.
+- Claimable kinds: `block-number` (FB/FC/DB), `alarm-bit` (`<word>.%Xn`), `db-member`, `block-network`
+  (an append slot in a shared block), `tag`, and `block-edit` (exclusive write on an existing block).
+- `claim --suggest --kind block-number --type FB` must allocate against **`ir/` *and* outstanding
+  claims** — allocating against the corpus alone is exactly the race in hazard 1.
+- `claims --check` verifies every claim still holds and no *unclaimed* conflict exists. Per FI-44:
+  zero claims examined must **not** exit 0 vacuously.
+- Placement is an open call: it is pure repo-file transformation, so `converter` fits the
+  no-external-process invariant — but coordination state is arguably neither converter nor CLI. Decide
+  before building, not during.
+
+**2. Per-agent workspaces — `openness-cli workspace create|list|sync|destroy`.** A filesystem clone of
+the project directory per agent (5.6 MB — disk cost is a rounding error), registered and gitignored.
+Every agent's import/compile targets its own clone. Openness exposes no `SaveAs` in the recorded API
+surface, so this is a directory copy of a closed project, not an API call.
+
+**3. Canonical lease — `openness-cli lease`.** With clones in place the lease covers only the canonical
+project, so contention approaches zero. Holder + PID + TTL, acquired per *transaction*, `--wait`,
+TTL-reclaim for dead holders, and a `portal-status` precondition. It must **detect** a human holding the
+project rather than pretend to schedule them (objection 11).
+
+**4. Integration — the serialized merge.** The step that makes clones safe, composed almost entirely of
+tools that already exist: acquire lease → `claims --check` → `converter diff` per changed block (proves
+each agent touched only what it claimed) → **`cross-check` + `preflight` on the union** → ordered import
+(UDT-first) → compile canonical once → export → `drift-check` → release. Step four is the one that earns
+the whole design: two blocks that each compiled clean in isolation can still conflict (C-308 multi-writer,
+dead wiring, IO boundary), and only a union check sees it.
+
+**5. Status and ledger.** `manager status` (leases, workspaces, outstanding claims, stale agents) plus an
+attribution-only ledger — agent, time, exit code — **per-project and gitignored** (objection 8).
+`drift-check` remains the authority on content; the ledger never becomes an input a stage trusts.
+
+**Ranked build order:** 1 (claims) → 2 (workspaces) → 3 (lease) → 4 (integration) → 5 (status/ledger).
+Bulk export stays worth doing independently; bulk *import* and any queue-proper stay behind FI-12's
+measurement gate and FI-43's missing undo.
+
+**Benefits, stated precisely.**
+- **Real parallel compile on one project** — not a faster queue: N agents compile simultaneously because
+  they are not sharing a writer. Ceiling ~3 concurrent, set by RAM (objection 10), not by the design.
+- **Failure isolation, probably the largest practical win and not a speed argument at all.** Today one
+  agent leaving the shared scratch project inconsistent (`IsConsistent` cascades; FI-42's 14 stranded
+  superseded types) breaks every other agent's compile gate. A poisoned 5.6 MB clone is deleted, not
+  debugged.
+- **The `Save()` cross-contamination hazard is removed** for agents outright — no shared session.
+- **Silent logical collisions become loud, and become loud *before* the work** — a refused claim costs
+  seconds; the same collision found at merge costs a rebuilt block, and found on site costs a callout.
+- **A union compile gate that matches what hard rule 4 actually wants** before the engineer sees it.
+- **Legible failure** — the recorded 3-minute hang becomes `needs human: approval dialog, PID <n>`.
+- **Attribution** — when a review finds a defect in a multi-agent build, the ledger says which agent
+  produced which block under which claims. Currently unreconstructable.
+- **It makes the existing parallel-track workflow mechanically safe.** File-disjointness is enforced
+  today by the coordinator's judgment; claims make it a check.
+
+**Costs this build genuinely carries.**
+- Integration becomes a new serialized bottleneck, and the hard work migrates into it. If integration
+  costs 30 minutes, three agents saving 20 minutes each have bought nothing.
+- Claims cover only the kinds someone enumerated; an unclaimed resource class is an undetected collision.
+- **Clone staleness, and a hard-rule-4 question that needs the owner's ruling, not an assumption:** an
+  agent's clone diverges from canonical while it works, so its per-agent compile is evidence against an
+  older project. The coherent reading is that the per-agent compile is a *filter* (like `preflight`) and
+  the **integration compile is the gate** — but hard rule 4 is written per-change, and re-reading it this
+  way is a rule interpretation the owner must sign off before anything is built on it.
+- Someone must run integration; if that is the orchestrator, the orchestrator is the serialization point.
 
 **Dependencies:** FI-28 (built, read-only half), FI-07 (parked write half — this idea is its natural
 reopening trigger), FI-12 (shares its measurement gate), FI-43 (no undo for bulk import), FI-26
 (supersedes the ledger's content question), `docs/13-data-boundary.md` (ledger retention).
-**Verdict / revisit trigger:** Under debate — owner's call on the split. Item 1 is buildable now and is
-the only part justified by recorded evidence rather than by an assumed bottleneck. Items 4–5 stay shut
-until either FI-16 gains per-call timing or a real run records two agents actually contending for one
-project.
+**Verdict / revisit trigger:** Under debate — owner's call on the FI-48b build order and on the
+hard-rule-4 reading above. Components 1–3 are buildable now and are justified by recorded evidence
+(author-allocated `NUMBER`, the `%X9` alarm-bit claim, the stale-process compile block) rather than by an
+assumed bottleneck. Bulk *import*, a queue proper and any daemon stay shut until either FI-16 gains
+per-call timing or a real run records agents actually contending for the canonical project.
