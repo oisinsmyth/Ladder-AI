@@ -92,6 +92,7 @@ public sealed record HmiOptions(
     string? Screen,
     int MaxItems,
     bool Json,
+    bool Schema,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -169,6 +170,25 @@ public static class ArgumentParser
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
+    };
+
+    /// <summary>
+    /// The project this parse targets, or null for `portal-status`, which targets none. Used to tell
+    /// <c>Connect</c> which running Portal to prefer — see <c>ChooseProcessToAttach</c>. Same
+    /// every-variant guard as <see cref="CommonOptions"/> covers this.
+    /// </summary>
+    public static string? ProjectIdentifier(ParseResult result) => result switch
+    {
+        ParseResult.ListSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.ExportSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.ImportSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.CompileSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.PortalStatusSuccess => null,
+        ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -757,6 +777,7 @@ public static class ArgumentParser
         string? screen = null;
         var maxItems = DefaultHmiMaxItems;
         var json = false;
+        var schema = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -767,6 +788,9 @@ public static class ArgumentParser
             {
                 case "--json":
                     json = true;
+                    break;
+                case "--schema":
+                    schema = true;
                     break;
                 case "--screen":
                     if (!TryTakeValue(args, ref i, "--screen", out screen, out var screenErr))
@@ -818,7 +842,14 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, tiaInstall, timeoutConnect, timeoutOpen));
+        // --schema derives from whatever screens are walked, so on its own it means "all of them".
+        // Requiring --screen * alongside it would be a trap with no upside.
+        if (schema && screen is null)
+        {
+            screen = "*";
+        }
+
+        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

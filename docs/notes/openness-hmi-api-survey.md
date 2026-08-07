@@ -404,7 +404,65 @@ exactly the join an alarm tool needs, and on Unified it can be extracted rather 
 - Alarms/tags are counted, not enumerated. Counting proved the surface exists; listing them is the
   obvious next step and was out of scope for a survey.
 
-## 8. Unverified — do not treat as proven
+## 8. "Decode the XML" — there isn't one, and what replaces it
+
+Asked directly (2026-08-07, owner) to decode the HMI screen XML, with screen creation and design as
+the eventual goal. **For WinCC Unified there is no screen XML to decode.** That is not a gap in the
+search; it is the shape of the product. Checked four independent ways, all agreeing:
+
+1. **The API.** Sweeping every `Import`/`Export` method across the Unified namespaces returns only
+   tags, script modules and text lists. `IChromDataExchangeExport` is implemented by exactly one
+   type, `HmiScriptModule`. There is no `HmiScreen.Export` and no `HmiScreenComposition.Import`.
+2. **The project folder.** Every `.xml` file in a real project is a GSD device description, a
+   conversion log, or `DownloadTask.xml` — none is a screen.
+3. **The compiled runtime image.** Screens there are `.rdf`, an undocumented Siemens binary
+   serialisation. The two large `.zip`s next to them are **not** screens either: they are web-control
+   bundles (Angular/JS assets for custom controls). Reading `.rdf` would be reverse-engineering an
+   internal format — the HMI equivalent of hand-patching SimaticML, which hard rule 7 exists to
+   forbid, and it would bind us to a format Siemens can change without notice.
+4. **Independently.** Third-party tooling documents the same limitation in its own release notes:
+   WinCC Unified is not supported for export by the Openness API.
+
+**Classic is the opposite** and worth restating here, because it is where the intuition comes from:
+classic screens *do* move as SimaticML, and Siemens' own doc-comment on `Screen.Export` says exactly
+that. So "the HMI screen XML" is a real thing — on hardware this project's own reference job does not
+use.
+
+### What replaces it is better than XML
+
+Openness is **self-describing**, and the metamodel answers questions a sample document cannot:
+
+| API | Question it answers |
+|---|---|
+| `GetAttributeInfos()` | every attribute of an object: `Name`, `AccessMode`, `SupportedTypes`, and **`CreateRelevance`** |
+| `GetCompositionInfos()` | the child collections an object owns (`ScreenItems`, `Dynamizations`, `EventHandlers`) |
+| `GetCreationInfos(composition)` | **which types that composition will actually accept**, with their constructor parameters |
+
+`CreateRelevance` is the one that matters most for authoring: it is an enum of
+`None | Relevant | Mandatory`, so the API states outright **which attributes must be supplied at
+creation time**. No exported example can tell you that — an XML file shows you what one screen
+happened to set, never what the next screen is required to set. `GetCreationInfos` is similarly
+decisive: it is the API declaring its own contract rather than us inferring a whitelist from samples.
+
+`openness-cli hmi --schema` extracts exactly this: the creatable screen-item types, and for each item
+type observed, every attribute with access mode, create-relevance, type and a sample value, sorted
+**Mandatory → Relevant → the rest** — authoring order.
+
+### What this means for screen creation
+
+Reframe the goal. A screen-creation capability here is **not** a converter emitting a document;
+there is no document. It is a builder driving the object model — `Screens.Create` →
+`ScreenItems.Create<T>` → set attributes → `Dynamizations.Create<TagDynamization>("PropertyName")` —
+against a schema the API hands you. Consequences, all of them already visible in §5.B:
+
+- **The IR/converter pattern does not transfer.** There is no SimaticML-shaped middle format to own.
+- **The review discipline does not transfer either, yet.** No export means no diff, no `ir-hash`, no
+  golden round-trip. A canonical serialiser has to be written before any of this project's existing
+  review machinery can apply to a screen — which is why it is the long pole, not the generation.
+- **The verification story is better, if `Validate()` holds up.** Per-object, per-property errors and
+  warnings, checkable before anything is committed — still untested (§9).
+
+## 9. Unverified — do not treat as proven
 
 - **Only the READ path has been run live** (§7). Everything in §4 about *construction* —
   `Screens.Create`, `ScreenItems.Create<T>`, `Dynamizations.Create<T>`, `Validate()` — remains
@@ -432,7 +490,7 @@ exactly the join an alarm tool needs, and on Unified it can be extracted rather 
 - **V21 exists** and was not examined. Given classic's four-release freeze, the useful question for
   V21 is only ever about Unified.
 
-## 9. If this is ever picked up
+## 10. If this is ever picked up
 
 In rough order of cost, and none of it authorised by this note:
 

@@ -55,7 +55,7 @@ public sealed class OpennessGateway : IOpennessGateway
     // opened into it. Null whenever this invocation attached to something that already existed.
     private int? _pendingLaunchPid;
 
-    public void Connect(TimeSpan timeout)
+    public void Connect(TimeSpan timeout, string? preferProjectIdentifier = null)
     {
         RunWithTimeout(
             () =>
@@ -63,7 +63,7 @@ public sealed class OpennessGateway : IOpennessGateway
                 var processes = TiaPortal.GetProcesses();
                 if (processes.Count > 0)
                 {
-                    _tiaPortal = processes[0].Attach();
+                    _tiaPortal = ChooseProcessToAttach(processes, preferProjectIdentifier).Attach();
                     _connectLaunchedFreshInstance = false;
                 }
                 else
@@ -84,6 +84,67 @@ public sealed class OpennessGateway : IOpennessGateway
             },
             timeout,
             () => new ConnectTimeoutException(timeout));
+    }
+
+    /// <summary>
+    /// Picks which running Portal to attach to, preferring one that already has the requested
+    /// project open.
+    ///
+    /// Connect() used to take <c>processes[0]</c> unconditionally. That is fine with one Portal and
+    /// actively harmful with several: attaching to a wedged or busy instance hangs until the connect
+    /// timeout even when a perfectly healthy instance with the target project already open is
+    /// sitting next to it in the list. Observed live 2026-08-07 — two runs against the same project
+    /// succeeded, then a third hung for the full 15-minute timeout with five Portal processes
+    /// running, which is the "second instance sometimes won't connect under process pileup" symptom
+    /// CLAUDE.md records.
+    ///
+    /// <c>TiaPortalProcess.ProjectPath</c> is readable WITHOUT attaching
+    /// (docs/notes/openness-api-surface-v20.md, which flagged exactly this as an unused
+    /// simplification), so the choice costs nothing and touches nothing. Falls back to the old
+    /// behaviour when there is no hint or no match — this narrows which process is attached, and
+    /// never changes whether one is.
+    /// </summary>
+    private static TiaPortalProcess ChooseProcessToAttach(IList<TiaPortalProcess> processes, string? preferProjectIdentifier)
+    {
+        if (preferProjectIdentifier is not { Length: > 0 } wanted || string.IsNullOrWhiteSpace(wanted))
+        {
+            return processes[0];
+        }
+
+        foreach (TiaPortalProcess process in processes)
+        {
+            string? projectPath;
+            try
+            {
+                projectPath = process.ProjectPath?.FullName;
+            }
+            catch (Exception)
+            {
+                // A process that will not describe itself is exactly one not to attach to blindly.
+                continue;
+            }
+
+            if (projectPath is not null && ProjectIdentifierMatches(projectPath, wanted))
+            {
+                return process;
+            }
+        }
+
+        return processes[0];
+    }
+
+    // Mirrors FindAlreadyOpenProject's own matching: the identifier is either a full .apNN path or a
+    // bare project name, so compare both the whole path and its file-name stem.
+    private static bool ProjectIdentifierMatches(string projectPath, string identifier)
+    {
+        if (string.Equals(projectPath, identifier, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(projectPath);
+        return string.Equals(stem, identifier, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(stem, Path.GetFileNameWithoutExtension(identifier), StringComparison.OrdinalIgnoreCase);
     }
 
     // Read-only Portal-process enumeration for `portal-status`. Independent of Connect()/_tiaPortal
@@ -378,6 +439,192 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         return results;
+    }
+
+    public IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EnumerateHmiSchema)}.");
+        }
+
+        var results = new List<HmiSchemaReport>();
+
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                WalkDeviceItemForHmiSchema(item, device.Name, screenFilter, maxItems, results);
+            }
+        }
+
+        return results;
+    }
+
+    private static void WalkDeviceItemForHmiSchema(
+        DeviceItem item,
+        string parentPath,
+        string screenFilter,
+        int maxItems,
+        List<HmiSchemaReport> results)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        if (item.GetService<SoftwareContainer>()?.Software is HmiSoftware unified)
+        {
+            results.Add(ReadUnifiedSchema(unified, path, screenFilter, maxItems));
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            WalkDeviceItemForHmiSchema(child, path, screenFilter, maxItems, results);
+        }
+    }
+
+    // Schema is a property of the TYPE, so each distinct CLR type is described once no matter how
+    // many instances carry it. Classic is absent here on purpose: it exposes no screen items, so
+    // there is no item schema to report (docs/notes/openness-hmi-api-survey.md §3).
+    private static HmiSchemaReport ReadUnifiedSchema(HmiSoftware software, string path, string screenFilter, int maxItems)
+    {
+        var creatable = new List<string>();
+        var schemas = new Dictionary<string, HmiTypeSchema>(StringComparer.Ordinal);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var screens = new List<HmiScreen>();
+        foreach (HmiScreen screen in software.Screens)
+        {
+            if (seen.Add(TryRead(() => screen.Name) ?? string.Empty))
+            {
+                screens.Add(screen);
+            }
+        }
+
+        foreach (HmiScreenGroup group in software.ScreenGroups)
+        {
+            CollectGroupScreens(group, seen, screens);
+        }
+
+        foreach (var screen in screens)
+        {
+            var screenName = TryRead(() => screen.Name) ?? string.Empty;
+            if (!WantsDetail(screenName, screenFilter))
+            {
+                continue;
+            }
+
+            // The creation metamodel: what types this composition will accept. This is the piece no
+            // sample document could give you — it is the API stating its own contract.
+            if (creatable.Count == 0)
+            {
+                creatable.AddRange(ReadCreatableTypes(screen, "ScreenItems"));
+            }
+
+            if (!schemas.ContainsKey(nameof(HmiScreen)))
+            {
+                schemas[nameof(HmiScreen)] = ReadTypeSchema(screen, nameof(HmiScreen));
+            }
+
+            var read = 0;
+            foreach (HmiScreenItemBase item in screen.ScreenItems)
+            {
+                if (read++ >= maxItems)
+                {
+                    break;
+                }
+
+                var typeName = item.GetType().Name;
+                if (!schemas.ContainsKey(typeName))
+                {
+                    schemas[typeName] = ReadTypeSchema(item, typeName);
+                }
+            }
+        }
+
+        return new HmiSchemaReport(path, creatable, schemas.Values.OrderBy(s => s.TypeName, StringComparer.Ordinal).ToList());
+    }
+
+    private static void CollectGroupScreens(HmiScreenGroup group, HashSet<string> seen, List<HmiScreen> results)
+    {
+        foreach (HmiScreen screen in group.Screens)
+        {
+            if (seen.Add(TryRead(() => screen.Name) ?? string.Empty))
+            {
+                results.Add(screen);
+            }
+        }
+
+        foreach (HmiScreenGroup child in group.Groups)
+        {
+            CollectGroupScreens(child, seen, results);
+        }
+    }
+
+    private static IReadOnlyList<string> ReadCreatableTypes(IEngineeringObject owner, string compositionName)
+    {
+        try
+        {
+            return owner.GetCreationInfos(compositionName)
+                .Select(info => info.Type?.Name ?? "(unknown)")
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static HmiTypeSchema ReadTypeSchema(IEngineeringObject subject, string typeName)
+    {
+        var compositions = new List<string>();
+        try
+        {
+            compositions.AddRange(subject.GetCompositionInfos().Select(c => c.Name).OrderBy(n => n, StringComparer.Ordinal));
+        }
+        catch (Exception)
+        {
+            // A type that will not describe its child compositions still has attributes worth having.
+        }
+
+        var attributes = new List<HmiAttributeSchema>();
+        try
+        {
+            foreach (var info in subject.GetAttributeInfos().OrderBy(i => i.Name, StringComparer.Ordinal))
+            {
+                attributes.Add(new HmiAttributeSchema(
+                    info.Name,
+                    TryRead(() => info.AccessMode.ToString()) ?? "?",
+                    TryRead(() => info.CreateRelevance.ToString()) ?? "?",
+                    TryRead(() => info.SupportedTypes?.FirstOrDefault()?.Name),
+                    // A sample value makes an attribute name legible in a way a type name alone does
+                    // not — "HorizontalAlignment : HmiHorizontalAlignment" says far less than "= Left".
+                    DescribeValue(subject, info.Name)));
+            }
+        }
+        catch (Exception)
+        {
+            // Same reasoning as everywhere else in this walker: partial beats nothing.
+        }
+
+        return new HmiTypeSchema(typeName, compositions, attributes);
+    }
+
+    private static string? DescribeValue(IEngineeringObject subject, string attributeName)
+    {
+        try
+        {
+            var value = subject.GetAttribute(attributeName);
+            return value switch
+            {
+                null => null,
+                AttributeValueUnsupported => "(unsupported)",
+                var v => v.ToString(),
+            };
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     // Same recursive DeviceItem descent as WalkDeviceItem/WalkDeviceItemForTagTables, but matching

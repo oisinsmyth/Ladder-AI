@@ -6,7 +6,11 @@ namespace OpennessCli.Openness;
 
 public interface IOpennessGateway : IDisposable
 {
-    void Connect(TimeSpan timeout);
+    /// <param name="preferProjectIdentifier">Optional hint: attach to a running Portal that already
+    /// has this project open, rather than whichever process happens to be first. Readable without
+    /// attaching, so it costs nothing; falls back to the first process when absent or unmatched.
+    /// Narrows WHICH process is attached, never whether one is.</param>
+    void Connect(TimeSpan timeout, string? preferProjectIdentifier = null);
 
     /// <summary>
     /// Read-only Portal-process diagnostic for `portal-status`: enumerates every running
@@ -55,6 +59,22 @@ public interface IOpennessGateway : IDisposable
     /// survey run. Truncation is visible: <see cref="Model.HmiScreenInfo.ItemCount"/> is the true
     /// count, which the caller compares against the number of items actually returned.</param>
     IReadOnlyList<HmiDeviceInfo> EnumerateHmi(string? screenFilter, int maxItems);
+
+    /// <summary>
+    /// The metamodel behind <see cref="EnumerateHmi"/>: for each screen-item type observed, every
+    /// attribute the API declares, with its access mode and create-relevance, plus the list of types
+    /// the ScreenItems composition will accept.
+    ///
+    /// This exists because WinCC Unified has **no screen export** — there is no XML or JSON document
+    /// of a screen to read anywhere, in the API, the project folder, or the compiled runtime image.
+    /// What replaces it is that Openness describes itself: <c>GetAttributeInfos()</c> and
+    /// <c>GetCreationInfos()</c> are the authoritative schema, and unlike a sample document they
+    /// state which attributes are Mandatory at creation rather than leaving it to be inferred.
+    ///
+    /// Read-only, like the rest of this walker — reporting that an attribute is writable is not
+    /// writing to it.
+    /// </summary>
+    IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems);
 
     /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws

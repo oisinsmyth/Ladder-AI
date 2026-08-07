@@ -642,3 +642,35 @@ network that was just redesigned reads as a *design* failure rather than a wrong
 **The practical lesson is the probe, not the instruction.** A construct never written on a project
 before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
 one probe cycle here and would have cost a misdiagnosed redesign otherwise.
+
+## Attach hangs under Portal pileup — measured, and now mitigated in `Connect` (2026-08-07)
+
+The "second concurrent instance sometimes won't connect" symptom (see the two 2026-07-14 sections
+above) reproduced cleanly and this time the cause was legible.
+
+**What happened.** Three `openness-cli hmi` runs against the same project, minutes apart. The first
+two succeeded. The third hung for the **full 15-minute** `--timeout-connect` and exited 3, with five
+Portal processes running (~6.6 GB total) — two holding real projects, three effectively idle. Nothing
+had changed about the project, the command, or the binary between run two and run three.
+
+**Why the default made it worse.** `Connect()` took `TiaPortal.GetProcesses()[0]` **unconditionally**.
+That is fine with one Portal and actively harmful with five: it attaches to whichever process the API
+happens to list first, which may be a wedged or busy one, *even when a healthy instance with the
+target project already open is sitting in the same list*. The failure mode is a silent 15-minute
+stall, and the error message blames the first-connect approval dialog — which was **not** present
+here (checked: no dialog window on any Portal process). That message is right often enough to be
+worth keeping, but it is a guess, and under pileup it is the wrong guess.
+
+**The fix, and why it was free.** `TiaPortalProcess.ProjectPath` is readable **without** calling
+`Attach()` — recorded in `openness-api-surface-v20.md` back on 2026-07-14 as "a real simplification
+opportunity … noted here, not acted on yet". `Connect` now takes an optional project hint and
+prefers the process already holding that project, falling back to `[0]` when there is no hint or no
+match. It narrows *which* process is attached, never *whether* one is, and costs one property read
+per process.
+
+**What this does not fix.** Pileup is still the underlying problem and still worth clearing —
+`openness-cli portal-status` classifies which instances are safe to close, and it never closes
+anything itself. The hint makes a wedged neighbour survivable, not harmless. Note also that a cold
+Portal V20 launch on a loaded machine can legitimately exceed the **180 s default** connect timeout;
+that is slowness, not a wedge, and it is worth raising `--timeout-connect` before concluding anything
+is wrong.

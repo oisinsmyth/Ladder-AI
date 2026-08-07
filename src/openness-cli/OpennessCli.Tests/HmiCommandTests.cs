@@ -104,6 +104,72 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void Parse_HmiSchemaWithoutScreen_ImpliesAllScreens()
+    {
+        // --schema derives from the screens walked, so alone it must mean all of them; requiring
+        // "--screen *" alongside would be a trap with no upside.
+        var result = ArgumentParser.Parse(new[] { "hmi", "MyProject", "--schema" });
+        var success = Assert.IsType<ParseResult.HmiSuccess>(result);
+        Assert.True(success.Options.Schema);
+        Assert.Equal("*", success.Options.Screen);
+    }
+
+    [Fact]
+    public void Parse_HmiSchemaWithExplicitScreen_KeepsThatScreen()
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi", "MyProject", "--schema", "--screen", "Overview" });
+        var success = Assert.IsType<ParseResult.HmiSuccess>(result);
+        Assert.True(success.Options.Schema);
+        Assert.Equal("Overview", success.Options.Screen);
+    }
+
+    [Fact]
+    public void ProjectIdentifier_IsReadableForEverySuccessVariantThatHasOne()
+    {
+        // Feeds Connect's process-preference. portal-status legitimately has no project.
+        Assert.Equal("MyProject", ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "hmi", "MyProject" })));
+        Assert.Equal("MyProject", ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "list", "MyProject" })));
+        Assert.Null(ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "portal-status" })));
+    }
+
+    [Fact]
+    public void FormatHmiSchemaReport_NoDevices_SaysSchemaIsUnifiedOnly()
+    {
+        var text = OutputFormatter.FormatHmiSchemaReport(Array.Empty<HmiSchemaReport>());
+        Assert.Contains("Unified-only", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiSchemaReport_OrdersMandatoryAttributesFirst()
+    {
+        // The authoring order: what you must set, then what is worth setting, then the rest.
+        var report = new HmiSchemaReport(
+            "station/Panel_1",
+            new[] { "HmiButton", "HmiIOField" },
+            new[]
+            {
+                new HmiTypeSchema(
+                    "HmiIOField",
+                    new[] { "Dynamizations" },
+                    new[]
+                    {
+                        new HmiAttributeSchema("Zzz", "ReadWrite", "None", "Boolean", "False"),
+                        new HmiAttributeSchema("Aaa", "ReadWrite", "Relevant", "String", "x"),
+                        new HmiAttributeSchema("Mmm", "ReadWrite", "Mandatory", "String", "y"),
+                    }),
+            });
+
+        var text = OutputFormatter.FormatHmiSchemaReport(new[] { report });
+
+        var mandatory = text.IndexOf("Mmm", StringComparison.Ordinal);
+        var relevant = text.IndexOf("Aaa", StringComparison.Ordinal);
+        var none = text.IndexOf("Zzz", StringComparison.Ordinal);
+        Assert.True(mandatory < relevant && relevant < none, "attributes must sort Mandatory -> Relevant -> None");
+        Assert.Contains("CREATABLE SCREEN-ITEM TYPES (2)", text, StringComparison.Ordinal);
+        Assert.Contains("[ReadWrite/Mandatory]", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FormatHmiReport_NoDevices_SaysSo()
     {
         Assert.Equal("(no HMI devices found)", OutputFormatter.FormatHmiReport(Array.Empty<HmiDeviceInfo>(), null));

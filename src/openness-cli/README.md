@@ -197,6 +197,43 @@ the API, and one property that throws on one item type must not lose the other 4
 Exits `0` when a project has no HMI device at all: "this project has none" is a legitimate answer to
 the question the command asks, not a failure.
 
+### `--schema` — the substitute for a screen XML
+
+**WinCC Unified has no screen export**, so there is no XML or JSON document of a screen to read
+anywhere: not in the API, not in the project folder, not in the compiled runtime image (which stores
+screens as undocumented binary `.rdf`). Verified four ways in
+`docs/notes/openness-hmi-api-survey.md` §8.
+
+What Openness offers instead is self-description, and for authoring it is strictly better than a
+sample document:
+
+```
+openness-cli hmi <project> --schema            # every screen
+openness-cli hmi <project> --schema --screen X # one screen's item types
+```
+
+It reports the types `ScreenItems` will accept (`GetCreationInfos`), and for each item type observed,
+every attribute (`GetAttributeInfos`) with its **access mode**, **create-relevance**, type and a
+sample value — sorted **Mandatory → Relevant → the rest**, which is the order someone writing a
+screen needs them in.
+
+`CreateRelevance` (`None | Relevant | Mandatory`) is the reason this beats an exported example: it
+states which attributes *must* be supplied at creation. An XML sample only ever shows what one screen
+happened to set, never what the next one is required to set.
+
+Schema is a Unified-only concept — classic exposes no screen items, so there is no item schema to
+report, and `--schema` says so rather than printing an empty document.
+
+### Attaching under Portal pileup
+
+`Connect` prefers a running Portal that already has the requested project open, reading
+`TiaPortalProcess.ProjectPath` **without attaching** (free, and touches nothing). It previously took
+`GetProcesses()[0]` unconditionally, which is fine with one Portal and harmful with several:
+observed live 2026-08-07, two runs against the same project succeeded and a third hung for a full
+15-minute connect timeout with five Portal processes running — the "second instance sometimes won't
+connect under process pileup" symptom CLAUDE.md records. The hint narrows *which* process is
+attached, never *whether* one is, and falls back to the old behaviour when absent or unmatched.
+
 ## Exit codes
 
 Every code this CLI can return (`OpennessCli/Program.cs`, `ExitCodes`). Anything driving it from a

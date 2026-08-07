@@ -69,3 +69,38 @@ public sealed record HmiDynamizationInfo(
     string Kind,
     string? Tag,
     string? PlcTag);
+
+/// <summary>
+/// One writable/readable property of a screen-item type, as the API itself describes it.
+///
+/// This is the answer to "where is the schema" for WinCC Unified. There is no screen XML to read —
+/// Unified has no screen export at all (docs/notes/openness-hmi-api-survey.md §4) — but Openness is
+/// self-describing: <c>IEngineeringObject.GetAttributeInfos()</c> reports every attribute with its
+/// access mode and, crucially, its <see cref="CreateRelevance"/>. That is strictly better than a
+/// sample XML file, because it distinguishes what you MAY set from what you MUST set at creation
+/// time, which no example document can tell you.
+/// </summary>
+public sealed record HmiAttributeSchema(
+    string Name,
+    string AccessMode,
+    string CreateRelevance,
+    string? SupportedType,
+    string? SampleValue);
+
+/// <summary>
+/// The schema of one screen-item CLR type (e.g. <c>HmiIOField</c>), reported once per type rather
+/// than once per instance — twenty buttons on a screen have one schema between them.
+/// </summary>
+public sealed record HmiTypeSchema(
+    string TypeName,
+    IReadOnlyList<string> Compositions,
+    IReadOnlyList<HmiAttributeSchema> Attributes);
+
+/// <summary>
+/// What `--schema` produces: the item types this device could create, and the full attribute schema
+/// of each type actually observed on the walked screens.
+/// </summary>
+public sealed record HmiSchemaReport(
+    string DevicePath,
+    IReadOnlyList<string> CreatableScreenItemTypes,
+    IReadOnlyList<HmiTypeSchema> ItemSchemas);

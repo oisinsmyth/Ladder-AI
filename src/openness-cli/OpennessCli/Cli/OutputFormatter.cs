@@ -157,6 +157,99 @@ public static class OutputFormatter
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
+    /// <summary>
+    /// The schema report — what stands in for a screen XML on Unified, where no screen export
+    /// exists. Attributes are ordered by create-relevance first (Mandatory, then Relevant, then the
+    /// rest) because that is the order someone authoring a screen needs them in: what must be set,
+    /// then what is worth setting, then everything else.
+    /// </summary>
+    public static string FormatHmiSchemaReport(IReadOnlyList<HmiSchemaReport> reports)
+    {
+        if (reports.Count == 0)
+        {
+            return "(no Unified HMI devices found — schema is a Unified-only concept; classic exposes no screen items)";
+        }
+
+        var sb = new StringBuilder();
+        foreach (var report in reports)
+        {
+            sb.Append("HMI DEVICE  ").AppendLine(report.DevicePath);
+
+            sb.Append("  CREATABLE SCREEN-ITEM TYPES (").Append(report.CreatableScreenItemTypes.Count).AppendLine("):");
+            if (report.CreatableScreenItemTypes.Count == 0)
+            {
+                sb.AppendLine("    (none reported — GetCreationInfos returned nothing for ScreenItems)");
+            }
+
+            foreach (var type in report.CreatableScreenItemTypes)
+            {
+                sb.Append("    ").AppendLine(type);
+            }
+
+            foreach (var schema in report.ItemSchemas)
+            {
+                sb.Append("  TYPE  ").Append(schema.TypeName)
+                  .Append("  attributes=").Append(schema.Attributes.Count.ToString(CultureInfo.InvariantCulture))
+                  .AppendLine();
+
+                if (schema.Compositions.Count > 0)
+                {
+                    sb.Append("    compositions: ").AppendLine(string.Join(", ", schema.Compositions));
+                }
+
+                foreach (var attribute in schema.Attributes.OrderBy(RelevanceRank).ThenBy(a => a.Name, StringComparer.Ordinal))
+                {
+                    sb.Append("    ").Append(attribute.Name)
+                      .Append("  [").Append(attribute.AccessMode).Append('/').Append(attribute.CreateRelevance).Append(']');
+                    if (!string.IsNullOrEmpty(attribute.SupportedType))
+                    {
+                        sb.Append("  : ").Append(attribute.SupportedType);
+                    }
+
+                    if (!string.IsNullOrEmpty(attribute.SampleValue))
+                    {
+                        sb.Append("  = ").Append(attribute.SampleValue);
+                    }
+
+                    sb.AppendLine();
+                }
+            }
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    private static int RelevanceRank(HmiAttributeSchema attribute) => attribute.CreateRelevance switch
+    {
+        "Mandatory" => 0,
+        "Relevant" => 1,
+        _ => 2,
+    };
+
+    public static string FormatHmiSchemaJson(IReadOnlyList<HmiSchemaReport> reports)
+    {
+        var payload = reports.Select(r => new
+        {
+            devicePath = r.DevicePath,
+            creatableScreenItemTypes = r.CreatableScreenItemTypes,
+            itemSchemas = r.ItemSchemas.Select(s => new
+            {
+                typeName = s.TypeName,
+                compositions = s.Compositions,
+                attributes = s.Attributes.Select(a => new
+                {
+                    name = a.Name,
+                    accessMode = a.AccessMode,
+                    createRelevance = a.CreateRelevance,
+                    supportedType = a.SupportedType,
+                    sampleValue = a.SampleValue,
+                }),
+            }),
+        });
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatHmiJson(IReadOnlyList<HmiDeviceInfo> devices)
     {
         var payload = devices.Select(d => new

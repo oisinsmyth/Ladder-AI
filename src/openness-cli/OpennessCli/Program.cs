@@ -43,7 +43,7 @@ internal static class Program
                 return RunPortalStatus(gateway, portalStatus.Options);
             }
 
-            gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds));
+            gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds), ArgumentParser.ProjectIdentifier(parseResult));
 
             switch (parseResult)
             {
@@ -115,6 +115,17 @@ internal static class Program
     private static int RunHmi(IOpennessGateway gateway, HmiOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        if (options.Schema)
+        {
+            var reports = gateway.EnumerateHmiSchema(options.Screen ?? "*", options.MaxItems);
+            Console.WriteLine(options.Json
+                ? OutputFormatter.FormatHmiSchemaJson(reports)
+                : OutputFormatter.FormatHmiSchemaReport(reports));
+
+            return ExitCodes.Success;
+        }
+
         var devices = gateway.EnumerateHmi(options.Screen, options.MaxItems);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiJson(devices)
