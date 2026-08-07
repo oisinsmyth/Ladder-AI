@@ -1052,3 +1052,26 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   ordering guarantee, not another special case**; this is at least the second.
 - **Verdict.** Open. Worth doing before the next block goes into `patterns/`: a library block that
   cannot be round-trip verified ships without one of its gates.
+
+### FI-49 — a member name shared across two types is an unenforced contract
+- **Status:** Raised (2026-08-07), by the agent that created the situation and then noticed it.
+- **The shape.** Two interface types can be required to carry a member with the same name AND the
+  same layout — because one HMI faceplate, one severity routine and one review serve both. On the
+  driving job that is a vessel-system alarm word shared by two vessel classes, protected by a rule
+  that says its bits must never be renumbered.
+- **What is enforced today: nothing.** The requirement lives in a comment on each type. Change one
+  and not the other and **it breaks silently** — everything compiles, reviews clean and round-trips,
+  because each type is internally consistent. That is the same failure mode as the collision the
+  rename was fixing: a name that survives while the meaning underneath it moves.
+- **Worth noting the rename was still a strict improvement.** Before it, the identity was invisible
+  *and* unenforced; after it, visible and unenforced. This entry is about closing the second half.
+- **Fix.** A cross-file check: **where two types declare a member of the same name, their shapes must
+  agree** — same datatype, and for a word-typed member the same bit allocation as far as the
+  comments declare it. `converter review --project` already does cross-file work (C-118, C-122,
+  C-125), so the seam exists. Two honest questions before building it: whether same-name-different-
+  shape is ever *legitimate* across unrelated types (if so the check needs an opt-out, and an opt-out
+  nobody sets is worse than no check), and whether bit allocation is reliably parseable from comments
+  or needs declaring.
+- **Verdict.** Open. It is the mechanical floor's own argument applied to a rule currently held by
+  discipline — and this project's record is that discipline-held invariants fail quietly, which is
+  why FI-44 exists at all.
