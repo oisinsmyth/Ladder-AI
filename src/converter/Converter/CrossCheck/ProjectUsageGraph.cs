@@ -247,6 +247,54 @@ public sealed class ProjectUsageGraph
 
     private static string Unquote(string? s) => (s ?? string.Empty).Trim().Trim('"');
 
+    // FI-53. Pool every usage that lands ON a declared member or ANYWHERE INSIDE it, ignoring array
+    // subscripts.
+    //
+    // Why this is needed at all: an `Array[0..3] of "UDT_X"` member is inventoried as ONE leaf
+    // (`DB_ParamRet.Silo`) because the walk does not expand a UDT behind an array. Every real
+    // reference, though, is written through an element and a member — `DB_ParamRet.Silo[0].ZeroOffset`
+    // — so an exact-string lookup finds nothing and the member reads as dead. Measured on a live
+    // project: `DB_ParamRet.Silo` and `DB_WeighInterface.Silo` both reported "unused (no writer, no
+    // reader)" against 24 and 16 real readers respectively, while their plain-scalar siblings in the
+    // same DB listed theirs correctly.
+    //
+    // The FI-51 half of this (expressing the subscript) was fixed first; this is the reference-graph
+    // half, and it is the more dangerous of the two, because its failure mode is a check quietly
+    // saying a live member is dead. Deleting on that advice would have removed the plant's entire
+    // weighing path.
+    //
+    // "Any element counts" is the right granularity here: the declared thing is one member of one
+    // type, and the question this graph answers is whether anything uses it. Whether some particular
+    // ELEMENT is unused is a different question with a different answer shape, and is not pretended
+    // to be answered.
+    public (IReadOnlyList<UsageSite> Writers, IReadOnlyList<UsageSite> Readers) UsagesCovering(string declaredPath)
+    {
+        var writers = new List<UsageSite>();
+        var readers = new List<UsageSite>();
+
+        foreach (var kv in _usages)
+        {
+            var stripped = StripSubscripts(kv.Key);
+            if (!string.Equals(stripped, declaredPath, StringComparison.Ordinal)
+                && !stripped.StartsWith(declaredPath + ".", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            writers.AddRange(kv.Value.Writers);
+            readers.AddRange(kv.Value.Readers);
+        }
+
+        return (writers, readers);
+    }
+
+    // Removes "[n]" from every component. An index never contains a dot, so this cannot disturb the
+    // component boundaries the path is built from.
+    public static string StripSubscripts(string path) =>
+        path.IndexOf('[') < 0
+            ? path
+            : System.Text.RegularExpressions.Regex.Replace(path, @"\[\d+\]", string.Empty);
+
     private static readonly HashSet<string> IecInstanceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "TON_TIME", "TOF_TIME", "TONR_TIME", "TP_TIME",

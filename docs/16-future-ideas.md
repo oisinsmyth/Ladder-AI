@@ -1189,3 +1189,37 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Verdict.** Closed on the mechanism. Worth a standing habit: when a documented quirk contradicts
   a top-level instruction, the instruction is the thing to fix — the doc comment has already
   proved it cannot carry the warning alone.
+
+### FI-53 — the reference graph did not credit a read taken THROUGH an array element
+- **Status:** **BUILT AND FIXED 2026-08-07**, hours after FI-51, and found by the agent that FI-51
+  had just unblocked.
+- **The shape.** An `Array[0..3] of "UDT_X"` member is inventoried as ONE leaf (`DB_ParamRet.Silo`),
+  because the signal walk does not expand a UDT sitting behind an array. Every real reference,
+  though, goes through an element AND a member — `DB_ParamRet.Silo[0].ZeroOffset`. `cross-check`
+  looked the declared path up by exact string, found nothing, and reported the member
+  **`unused (no writer, no reader)`**.
+- **Measured, not theorised.** On the live corpus `DB_ParamRet.Silo` reported dead against **24**
+  real readers and `DB_WeighInterface.Silo` against **16**, while plain scalar siblings *in the same
+  DB* listed their readers correctly — which is what makes it so easy to believe.
+- **This is the more dangerous half of the array problem.** FI-51's failure was a corrupt write that
+  TIA would reject. This one is a check quietly telling you a live member is dead, and the natural
+  response to "unused" is deletion. Acting on it would have removed the plant's entire weighing
+  path — the one FI-51 had just made expressible.
+- **Fix.** `ProjectUsageGraph.UsagesCovering(declaredPath)` pools every usage landing on a declared
+  member or anywhere inside it, with array subscripts stripped for the comparison. Prefix matching
+  respects component boundaries, so a member `Slot` cannot absorb its sibling `SlotCount` — that
+  is a regression test, not a hope. Reader/writer lists are now deduplicated, because pooling makes
+  repeats ordinary (three members of one element read in one network are three usages and one
+  reader).
+- **Granularity, stated rather than fudged:** "any element counts". The declared thing is one member
+  of one type and the question is whether anything uses it. Whether one particular ELEMENT is unused
+  is a different question with a different answer shape, and is not pretended to be answered.
+- **The pattern across FI-50, FI-51, FI-52 and this one, all found the same day.** Four checks, four
+  different mechanisms, one failure: **each reported a clean result over something it had not
+  examined.** A multi-instance that was not an instance; a subscript that could not be written; a
+  device compile that skipped 19 blocks; an array member whose readers did not match its name. None
+  was caught by a test — three were caught by an agent distrusting a clean result, and one by an
+  engineer's question about why a plant had no weight. **That is the control that is actually
+  working, and it is not mechanical.** The mechanical floor's job is to make the clean results
+  trustworthy enough that distrust is rare; the honest reading of today is that it is not there yet.
+- **Verdict.** Closed. 787 converter tests, 39 golden tests.

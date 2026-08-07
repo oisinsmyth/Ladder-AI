@@ -195,4 +195,72 @@ public class CrossCheckTests : IDisposable
         using var doc = JsonDocument.Parse(json); // asserts valid JSON
         Assert.True(doc.RootElement.TryGetProperty("deadMembers", out _));
     }
+
+    // FI-53 (2026-08-07). An `Array[0..n] of "UDT"` member is inventoried as ONE leaf, because the
+    // walk does not expand a UDT sitting behind an array. Every real reference goes through an
+    // element AND a member (`DB_Arr.Slot[0].Value`), so the exact-string lookup this used to do
+    // matched nothing and the member reported "unused (no writer, no reader)".
+    //
+    // Measured on a live project before the fix: the weighing-interface array and the per-silo
+    // parameter array both read as dead against 16 and 24 real readers. Acting on that advice would
+    // have deleted the plant's entire weighing path — which makes this the more dangerous half of
+    // the array-subscript problem. FI-51 fixed expressing a subscript; this is the reference graph
+    // failing to credit one.
+    [Fact]
+    public void ArrayOfUdtMember_CreditsReadsThroughItsElements()
+    {
+        WriteDb("DB_Arr.ir", new DbSource("0", "DB_Arr", 30, InstanceOfName: null, Comment: null, Members: new[]
+        {
+            new DbMember("Slot", "Array[0..3] of \"UDT_Slot\"", Retain: false, StartValue: null),
+            new DbMember("Plain", "Bool", Retain: false, StartValue: null),
+        }));
+
+        WriteBlock("FC_Arr.ir", new IrBlock("0", "FC", "FC_Arr", 40, "LAD", null, new[]
+        {
+            new IrNetwork(1, "Reads through two different elements", new[]
+            {
+                new CoilAssignment("DB_Arr.Plain", new Expr.TagRef("DB_Arr.Slot[0].Value")),
+                new CoilAssignment("DB_Ctrl.Shared", new Expr.TagRef("DB_Arr.Slot[2].Value")),
+            }),
+        }));
+
+        var byPath = CrossCheckRunner.Run(_dir).DeadMembers.ToDictionary(m => m.Path, StringComparer.Ordinal);
+
+        // Read through elements, never written -> reported as consumed-but-never-written, NOT as
+        // "no reader". The readers must actually be listed, and deduplicated to one per network.
+        Assert.True(byPath.ContainsKey("DB_Arr.Slot"));
+        Assert.Equal(new[] { "FC_Arr" }, byPath["DB_Arr.Slot"].Readers.Select(r => r.Block).ToArray());
+        Assert.Empty(byPath["DB_Arr.Slot"].Writers);
+
+        // The guard that matters: pooling must not make everything look alive. A sibling that
+        // genuinely nothing touches is still reported dead.
+        Assert.True(byPath.ContainsKey("DB_Arr.Plain"));
+        Assert.Empty(byPath["DB_Arr.Plain"].Readers);
+    }
+
+    // Prefix matching must respect component boundaries: a member named `Slot` must not absorb
+    // usages of a differently-named sibling that merely starts with the same letters.
+    [Fact]
+    public void PooledMatching_DoesNotAbsorbASimilarlyNamedSibling()
+    {
+        WriteDb("DB_Pre.ir", new DbSource("0", "DB_Pre", 31, InstanceOfName: null, Comment: null, Members: new[]
+        {
+            new DbMember("Slot", "Array[0..1] of \"UDT_Slot\"", Retain: false, StartValue: null),
+            new DbMember("SlotCount", "Int", Retain: false, StartValue: null),
+        }));
+
+        WriteBlock("FC_Pre.ir", new IrBlock("0", "FC", "FC_Pre", 41, "LAD", null, new[]
+        {
+            new IrNetwork(1, "Touches only the count", new[]
+            {
+                new CoilAssignment("DB_Ctrl.Shared", new Expr.TagRef("DB_Pre.SlotCount")),
+            }),
+        }));
+
+        var byPath = CrossCheckRunner.Run(_dir).DeadMembers.ToDictionary(m => m.Path, StringComparer.Ordinal);
+
+        // `SlotCount` is read; `Slot` is not, and must not inherit `SlotCount`'s reader.
+        Assert.True(byPath.ContainsKey("DB_Pre.Slot"));
+        Assert.Empty(byPath["DB_Pre.Slot"].Readers);
+    }
 }

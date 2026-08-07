@@ -24,15 +24,19 @@ public static class CrossCheckRunner
         var deadMembers = new List<DeadMemberFact>();
         foreach (var path in graph.GlobalDbMemberPaths.Distinct(StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal))
         {
-            graph.Usages.TryGetValue(path, out var usage);
-            var writers = usage?.Writers ?? new List<ProjectUsageGraph.UsageSite>();
-            var readers = usage?.Readers ?? new List<ProjectUsageGraph.UsageSite>();
+            // FI-53: pooled across array elements and members reached through them, not an exact
+            // string match. An `Array[0..3] of "UDT_X"` member is one declared leaf but is only ever
+            // referenced through an element (`…Silo[0].ZeroOffset`), so the exact lookup this used to
+            // do reported live members dead.
+            var (writers, readers) = graph.UsagesCovering(path);
             if (writers.Count == 0 || readers.Count == 0)
             {
+                // Distinct because pooling across array elements makes repeats ordinary: three
+                // members of one element read in one network are three usages and one reader.
                 deadMembers.Add(new DeadMemberFact(
                     path,
-                    writers.Select(ToWriter).ToList(),
-                    readers.Select(r => new ReaderRef(r.Block, r.Network)).ToList()));
+                    writers.Select(ToWriter).Distinct().ToList(),
+                    readers.Select(r => new ReaderRef(r.Block, r.Network)).Distinct().ToList()));
             }
         }
 
