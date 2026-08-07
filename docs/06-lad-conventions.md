@@ -140,6 +140,24 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   excluded — a fault needing human acknowledgement still needs it after a power cycle. *(This
   implies a carve-out C-403's own text doesn't currently spell out for `MotorDOL`'s own admitted
   content — worth folding back into C-403 itself later, not done here.)*
+  **AMENDED 2026-08-07 — `Step` is not always transient, and this rule assumed it was.** On a
+  restartable sequence — a conveyor line, a shredder, anything that can be run again from the top at
+  no cost — `Step` genuinely is transient run-state and force-writing it to idle is right. **On a
+  sequence holding irreplaceable process state it is not.** A batch plant's step number *is the
+  batch*: force it to idle and a forty-hour steep, its weight latches and its whole moisture history
+  become unreconstructable, which is the loss the retentive-data design exists to prevent. Zeroing
+  it does not make the plant safer; it destroys product and tells the operator nothing.
+  **So: `Step` force-writes to idle where the sequence is restartable, and MAY be retained where the
+  sequence holds state that cannot be reconstructed.** Where it is retained, three things are
+  required and none of them is optional:
+  1. **The block acts on nothing until an explicit operator resume** (C-128's guarantee, below).
+     A retained `Step` is a record of where the batch was, not a licence to continue.
+  2. **Everything else in this rule's list still force-writes to idle** — `Hold`, edge-memory,
+     in-progress event counters. They are transient on every plant shape.
+  3. **C-403 is untouched and is what actually delivers the safety.** Outputs are driven to a safe
+     state at startup whether or not `Step` survived, so nothing can move on power-up regardless.
+     That is why retaining `Step` costs no safety: the step number drives nothing until a person
+     says so.
 - C-125 *(warn)* — HMI exposure is satisfied by C-118's own placement plus two things that
   aren't automatic: the step legend (C-120), and any C-122 timeout's own fault bit living in the
   same interface UDT, not a private Static.
@@ -183,6 +201,33 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   E-Stop circuits exist to prevent; the same guarantee must hold on the PLC-logic side of the
   boundary. This makes explicit the outcome C-124's mechanism (force `Step` to idle at OB100)
   exists to guarantee, and generalizes REQ-062's per-project wording into a site-wide rule.
+  **AMENDED 2026-08-07 — the guarantee and the mechanism were welded together, and only the
+  guarantee is universal.** As written this rule says two things at once:
+  - **THE GUARANTEE — unchanged, and it is the whole point.** After a stop or power event, nothing
+    moves without a **fresh, explicit operator command**. Never automatic, never on the release of
+    an E-stop, never as a side effect of power returning. That is what the shredder incident was
+    about and it is not negotiable on any plant.
+  - **"FROM THE TOP" IS ONE MECHANISM FOR IT, not the guarantee itself.** Re-running the whole
+    sequence from step one is the correct and cheap way to deliver it **where the sequence is
+    restartable**. Where the sequence holds irreplaceable process state it is not: restarting a
+    forty-hour steep from the top after a two-second dip destroys the batch, and does so without
+    making anything safer.
+  **So a MID-SEQUENCE RESUME is permitted where the sequence holds state that cannot be
+  reconstructed — subject to all three of:**
+  1. **The fresh explicit operator command still happens**, per vessel or per unit, before anything
+     moves. The resume is *offered*; it is never taken automatically.
+  2. **The full EQUIPMENT start-up still runs** for whatever is about to move — siren, permissives,
+     staged starts. The sequence resumes at its step; a motor does not resume mid-start. **This is
+     the distinction the original wording collapsed**, and keeping the two apart is what makes the
+     relaxation safe rather than convenient.
+  3. **The resume point and its outputs are re-derived from the retained state, never assumed** —
+     the block drives its outputs to what the resumed phase requires, from a clean startup state,
+     rather than continuing from whatever was last commanded.
+  *Why the relaxation costs no safety:* C-403 still drives every output to a safe state at startup,
+  C-124's other transient state still zeroes, and (1) still requires a person. What survives is the
+  sequence's *position* — a number that drives nothing until commanded. **A rule that forces a plant
+  to choose between following it and keeping its product is a rule that will be quietly ignored**,
+  which is worse than one that says exactly when the cheap mechanism does not apply.
 - C-129 *(error)* — **Where one block calls several sibling instances whose interlocks reference each
   other, evaluate those interlock terms ONCE at the top of the block, then call the instances below
   it.** *(Owner ruling, 2026-08-06.)* Every sibling then reads the same vintage of data, and the
