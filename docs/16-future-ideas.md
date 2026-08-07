@@ -997,3 +997,145 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Verdict.** Open, and worth doing before the next data-structure stage. The current mitigation is
   that an author has to know the rule and apply it by hand every time, which is the mitigation FI-44
   was raised to stop relying on.
+
+### FI-48 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
+- **Status:** Under debate (2026-08-07) — raised by the owner as one idea; the analysis below argues it
+  is **four** ideas with four different verdicts, and that the headline framing ("multi-agent access",
+  "streamline", "bulk") names benefits the substrate cannot deliver. Nothing here is accepted; the split
+  and the ranking are the proposal.
+- **Raised:** 2026-08-07 · **Source:** conversation — "a multi-agent access idea for TIA … streamline AI
+  access … bulk imports and exports … maybe Openness won't support it, but maybe an Openness manager that
+  can queue the agent access and keeps a log of exported and imported blocks."
+
+**The seed, restated.** A process (daemon, broker, or serialising CLI layer) sits between N agents and
+TIA Portal: it queues their access so they cannot collide, offers bulk import/export instead of
+one-object-per-invocation, and maintains a ledger of what was imported and exported.
+
+**Objection 1 — a queue does not buy multi-agent access to one project; it buys multi-agent waiting.**
+The single-writer constraint is **TIA's, not ours**: T3.1 in `docs/notes/concurrent-portal-test-plan.md`
+confirmed live that a second open of the same project is refused by Portal itself. Throughput against one
+project is therefore exactly 1 no matter what is built in front of it. A queue over a single-writer
+resource is a mutex with a log — real value (ordering, no interleaved failures, observability), but not
+the value the word "multi-agent access" implies. Any entry that keeps the original framing will
+oversell itself to its own future reader.
+
+**Objection 2 — the concurrency that *is* available already exists, and the cheap design is copies, not
+a queue.** Concurrent sessions on *different* projects are proven safe and reliable: T2.1–T2.3 (human on
+one project, CLI on another, unsaved edits intact) and T4.3 (5/5 fresh concurrent launches, no hangs).
+So the design that actually yields parallel agents is **one scratch project copy per agent** — a TIA
+project is a copyable directory, and agents already work in file-disjoint worktrees
+(`feedback_value_leverage_parallel_tracks`). The queue is the design you need only if you have decided
+not to copy the project. The hard part of the copy design is not tooling, it is **merge-back**: which
+agent's diff enters the real project, in what order, reviewed by whom — an engineering-review question
+(hard rule 5), not a scheduler.
+
+**Objection 3 — this optimises a cost the project's own telemetry says is not the cost.** Committed
+`gen/*/telemetry.log` rows run **10–75 minutes per stage**, dominated by AI reasoning and by *blocking
+questions*. A cold project open is 20–30s; a warm attach to an already-open instance is ~1s (T0.2 —
+`openness-cli` never closes what it did not open, so the expensive open is already amortised across
+invocations by process reuse). Bulk-exporting 40 blocks therefore does not save 40 project opens; it
+saves ~39 attaches. **FI-12 is already parked on exactly this gate** — "(b) should not be built on an
+assumed bottleneck", pending FI-16 measurement — and FI-16's format is stage-grained, so it will never
+produce the per-call latency FI-12 is waiting for. Two consequences: this idea inherits FI-12's gate
+rather than escaping it, and *someone should fix the measurement* (a `--timing` line on `openness-cli`)
+before anyone argues from assumed Portal cost again.
+
+**Objection 4 — the recorded pain is reliability and hygiene, not throughput.** The one stage in the
+telemetry that Portal actually *blocked* failed like this: "COMPILE GATE BLOCKED: Portal connect timed
+out 3min, 2 stale Portal processes present (first-connect approval dialog needs human)". Not contention
+— **cruft plus a human-gated dialog**. T4.3's conclusion says the same thing: connection reliability
+degrades with process pileup, not with concurrency. So the highest-value component of the seed is the
+one it barely mentions — a broker that **refuses to start in a dirty environment**, owns the
+launch/reuse decision, and reports `held by <agent> for <n>s` or `needs human: approval dialog` instead
+of hanging for three minutes. FI-28 (`portal-status`) is its read-only half, built; FI-07 (janitor) is
+its parked write half. This idea is largely **FI-07 + FI-28 + a lease**, and should be read as their
+continuation rather than as a new thing.
+
+**Objection 5 — a daemon is the single most dangerous component available here.** The project's
+documented failure mode is stale Portal processes; a long-lived daemon is a stale-process factory with a
+heartbeat (FI-12(b) records this). Worse, it multiplies a live-found hazard: **any mutating command
+calls `Project.Save()`, which persists everything dirty in that project** — the T4.1 target had to be
+changed mid-audit because a compile would have force-saved a human's unsaved edit. Today's
+per-invocation, short-lived isolation is a *safety property*, not merely an inefficiency: agent B cannot
+persist agent A's half-finished work because agent B's process does not share A's session. A shared
+long-lived session removes that. Any daemon design must state what happens to a dirty project when the
+holder dies.
+
+**Objection 6 — bulk mutation weakens the compile gate and has no clean undo.** Hard rule 4 wants compile
+evidence *for the thing that changed*; a 12-block import plus one device compile yields a diagnostic pile
+that then has to be attributed, which is the attribution problem the per-block loop exists to avoid.
+Import is also **order-dependent** (UDT-first, or `Data type "<name>" is unknown` — live-verified
+2026-07-14), so a bulk import is a topologically-ordered operation, not a `for` loop. And rollback is
+missing: FI-43 records there is no `delete --type` and no in-place update, so a bad bulk type import is
+not cleanly undoable. **Export is the safe half** — read-only, no ordering, no attribution problem — and
+should be separated from import rather than shipped as one "bulk" feature.
+
+**Objection 7 — the ledger is the weakest element, and a better answer already exists.** This project has
+repeatedly recorded that derived and hand-maintained records rot (ADR-0005; the `TimerSample` stale
+sidecar; FI-15's staleness warning; FI-40's "hand-restated status drift class"). A log of what was
+imported and exported is a *claim about history* that nothing verifies. `converter drift-check` (FI-26)
+already answers the question the ledger is a proxy for — whether `ir/` and `simatic-ml/` actually agree —
+by Normalizer comparison rather than by testimony. **Prefer derived truth to recorded history.** The
+residue a ledger could legitimately own is what drift-check cannot derive: which agent did what, when,
+with what exit code — an attribution trail, not a source of truth about content. It must never become an
+input a stage trusts instead of looking.
+
+**Objection 8 — a repo-level ledger is a live-run retention leak.** `docs/13-data-boundary.md`'s live-run
+rule is **retention, not access**: nothing from a job folder is ever committed, and block/equipment names
+are exactly what a ledger records. A manager-owned log directory in the repo will be committed by
+someone. Non-negotiable if a ledger is ever built: per-project, gitignored by default, and a live-run
+job's ledger lives inside that job folder — never a global one.
+
+**Objection 9 — non-goal adjacency.** `10-non-goals.md` lists "Multi-user / team deployment — single
+engineering PC first" as a *not-now, ADR-only* item. N agents on one PC is not multi-user, but a manager
+daemon with a queue, leases, and a persistent log is the first sixty percent of one. The entry must say
+single-PC, single-human, N-agents explicitly, or the not-now drifts by construction rather than by
+decision.
+
+**Objection 10 — the ceiling is RAM, and it is about 3×.** One logical Portal instance is ~2 processes
+and roughly 1.5 GB (measured in the audit: +497 MB on a project open; 1.2 → 1.58 GB on another). Three or
+four concurrent instances is the practical ceiling on an engineering PC. The maximum benefit of *any*
+multi-agent Portal design is therefore ~3×, and only for agents on different projects — worth sizing the
+ambition to before choosing an architecture.
+
+**Objection 11 — the human cannot be queued, and is the likeliest lock-holder.** An engineer can open the
+project in Portal by hand at any moment (and does). A queue that does not include them is *advisory*,
+and an advisory lock over a resource another actor can take is a lie that eventually gets believed. The
+manager must therefore **detect** reality (portal-status, exact-project match) rather than schedule it.
+
+**Unanswered design questions** — these decide whether this is small or huge, and none has an obvious
+default: is the lock per-project or per-Portal-process? What is the unit of queueing — a command, or a
+*transaction* (import→compile→export must not lose the lock between steps, which implies a session
+concept, which is FI-12(b) again)? What happens when a lease-holder's agent dies (lease + TTL, or a
+project locked forever)? Does the queue survive reboot? Is a queued agent's wait bounded, and what does
+it do on timeout?
+
+**Also worth checking before building anything:** whether two `lad-coder` agents have *ever* actually
+needed Portal at the same time, or whether today's dispatch pattern already serialises them by
+construction. If it is hypothetical, this is FI-12's mistake at a larger scale.
+
+**Merits (what survives the above).** A per-project **advisory lease with an environment precondition**
+is genuinely valuable and small: it converts the recorded failure (3-minute hang, dirty process list,
+human-gated dialog) into a fast, legible refusal, and it is the missing piece that makes parallel agent
+tracks safe to attempt at all. Bulk **export** is cheap and independently useful. Per-agent scratch
+copies are the only route to real parallelism, and rest on an already-proven capability.
+
+**Proposed split and ranking (the actual proposal):**
+1. **Session broker / advisory lease** in `openness-cli` — per-project lock file (holder, PID, lease,
+   TTL), acquired per *transaction*; refuses to start when `portal-status` reports a dirty environment;
+   fails fast and legibly. No daemon, no queue, no persistent log. Build first.
+2. **Bulk export** (`--blocks a,b,c` / `--all`) — read-only, no attribution or ordering hazard.
+3. **Per-agent scratch project copies** — provisioning is easy; the deliverable is the *merge-back
+   discipline*, which is a review question, not a tool.
+4. **Bulk/ordered import** — behind FI-12's measurement gate and FI-43's missing undo.
+5. **Queue proper, and any daemon** — behind 1–4 and behind evidence that agents actually contend.
+6. **Ledger** — deferred in favour of `drift-check`; if built, attribution-only, per-project,
+   gitignored.
+
+**Dependencies:** FI-28 (built, read-only half), FI-07 (parked write half — this idea is its natural
+reopening trigger), FI-12 (shares its measurement gate), FI-43 (no undo for bulk import), FI-26
+(supersedes the ledger's content question), `docs/13-data-boundary.md` (ledger retention).
+**Verdict / revisit trigger:** Under debate — owner's call on the split. Item 1 is buildable now and is
+the only part justified by recorded evidence rather than by an assumed bottleneck. Items 4–5 stay shut
+until either FI-16 gains per-call timing or a real run records two agents actually contending for one
+project.
