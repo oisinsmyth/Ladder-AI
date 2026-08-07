@@ -298,6 +298,16 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   static memory, which is C-113's own test for what must be an FB. This is a convention, not a
   tooling limit: the converter handles FC/FB parameter interfaces fine, and the choice is about
   consistency across a project's blocks, not capability.
+  **A trap this rule creates, found the hard way (2026-08-07).** The interface struct is retained
+  *wholesale*, so **every member inside it is retentive and every member outside it is not** — and
+  moving a member out of the struct to a private static therefore **silently makes it
+  non-retentive**. That happened while refactoring a block so it stopped writing an HMI-owned bit:
+  a hand-selected motor's "in hand" state moved from the retained struct to a private latch, so
+  after a power cycle the latch came back false while the retained mode selector came back true, and
+  the block would have handed a motor the operator had taken in hand back to the automatic source.
+  Nothing flagged it — it compiles, reviews and round-trips clean, and only a power cycle shows it.
+  **When moving a member out of the interface struct, state what its retention becomes.** If it must
+  survive a power cycle it stays in the struct.
 
 - C-133 *(error)* — **A momentary event latches for a fixed minimum time, not until reset. One
   project-wide preset, `Event_Min_Hold`, default 60 s.** *(Owner ruling, 2026-08-06.)*

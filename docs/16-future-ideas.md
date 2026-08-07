@@ -1013,9 +1013,35 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   happens to be inert is luck rather than safety.
 - **Where it is NOT.** `FlgNetWriter` emits parts in **UId order** (`FlgNetWriter.cs:329`), which is
   required — TIA rejects a `<Parts>` whose `<Access>` elements are not UId-ascending, which is what
-  `FlgNetWriterPartOrderTests` already guards. So the writer is doing the right thing and the
-  reorder comes from **UId assignment in the sidecar synthesizer**, or from how the reducer
-  reconstructs assignments on the way back. Not yet isolated.
+  `FlgNetWriterPartOrderTests` already guards. The writer is doing the right thing.
+- **ISOLATED 2026-08-07, and the first guess in this entry was WRONG.** It originally said the
+  suspect was a mixed `COIL`/`RCOIL` run. **It is not** — a block network carrying a mixed
+  `SCOIL`/`COIL`/`COIL`/`RCOIL` run round-trips clean and always did. Seven converter-only probes
+  pinned the actual trigger. **All three conditions are required:**
+  1. the coil is a **Set or Reset** coil (a plain `COIL` in the same position is stable);
+  2. its expression is **exactly a timer's `Q`, bare, with no other term** (`RCOIL C := T1.Q AND A`
+     is stable; so is a bare non-timer tag);
+  3. it is **not already first** in the coil run.
+  The effect is **promotion to the front of the coil run**, not a swap of a pair.
+  Minimal reproduction, one network:
+  ```
+  TON(T1, IN := A, PT := T#100MS)
+  COIL  B := A AND NOT C
+  RCOIL C := T1.Q          <- comes back FIRST
+  ```
+- **The mechanism, and it explains all three conditions at once.** This is **Gap G2**
+  (`SidecarSynthesizer.BuildAssignment`): a coil fed *directly* by a same-network timer's `Q` wires
+  **straight from the TON's Q port — no rail, no Access** — because that is how TIA itself exports
+  it. And per that method's own logic, a **plain `Assign` coil takes the direct wire only for a
+  GLOBAL-instance timer, while a Set/Reset coil takes it for a same-network LOCAL-instance timer
+  too** — which is exactly why condition 1 selects S/R coils. So the qualifying coil is **the only
+  one in the network that is not on the rail**, and it comes back first because reconstruction finds
+  off-rail coils by a different path than the rail walk. Condition 3 is just "it was not already
+  where that path puts it".
+- **Fix.** Order reconstructed assignments by their part UId — document order as the XML actually
+  carries it — rather than by how they are fed. That is the **one general ordering guarantee** the
+  standing rule asks for on a second instance of this bug class, not another special case. The
+  writer needs no change.
 - **Second symptom, probably the same root.** The affected block's TIA re-export is **not
   re-derivable** — `to-ir --no-sidecar` hard-errors (ADR-0005) and `drift-check` reports `DRIFTED`
   even against the export the IR came from. Other blocks derive clean, so it is content-specific.
