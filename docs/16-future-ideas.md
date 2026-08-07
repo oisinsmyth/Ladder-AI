@@ -1012,6 +1012,16 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 TIA Portal: it queues their access so they cannot collide, offers bulk import/export instead of
 one-object-per-invocation, and maintains a ledger of what was imported and exported.
 
+**The model in one paragraph** (agreed with the owner 2026-08-07 after a readback; read this before the
+objections, which are the reasoning that produced it). *TIA is single-access. Agents work on IR in their
+own workspaces. Before an agent commits to a shared resource — block number, alarm bit, network slot, DB
+member — it takes a **claim** in the repo, so a second agent is refused rather than colliding. For round
+trips it uses its own copy of the project, in parallel with everyone else. A serialized layer guards only
+the **canonical** project, at integration, where the work merges and one authoritative compile runs. The
+log is for attribution after the fact — useful, but it is not what keeps agents apart.* One line:
+**claims keep agents off each other; the queue only protects the canonical project; the log just tells
+you who did what.**
+
 **Objection 1 — a queue does not buy multi-agent access to one project; it buys multi-agent waiting.**
 The single-writer constraint is **TIA's, not ours**: T3.1 in `docs/notes/concurrent-portal-test-plan.md`
 confirmed live that a second open of the same project is refused by Portal itself. Throughput against one
@@ -1121,7 +1131,7 @@ human-gated dialog) into a fast, legible refusal, and it is the missing piece th
 tracks safe to attempt at all. Bulk **export** is cheap and independently useful. Per-agent scratch
 copies are the only route to real parallelism, and rest on an already-proven capability.
 
-## FI-48a — the same-project decomposition (owner clarification, 2026-08-07)
+#### FI-48a — the same-project decomposition (owner clarification, 2026-08-07)
 
 The owner's target is explicit: **multiple agents working on the same project / the same TIA file.**
 Objections 1–2 above stand as written about the `.ap20`, but they answer the wrong question if read as
@@ -1163,7 +1173,7 @@ inverts the seed's emphasis: the manager's core is a **claims registry over shar
 the Portal lease is a small supporting part. It is also the same philosophy as FI-39/FI-44 — a mechanical
 floor that survives an agent choosing not to look — applied to coordination instead of review.
 
-## FI-48b — the proposed build (five components, no daemon)
+#### FI-48b — the proposed build (five components, no daemon)
 
 Everything below is files plus short-lived processes. Nothing long-lived, so FI-12(b)'s stale-process
 risk is not incurred.
@@ -1236,11 +1246,54 @@ measurement gate and FI-43's missing undo.
   way is a rule interpretation the owner must sign off before anything is built on it.
 - Someone must run integration; if that is the orchestrator, the orchestrator is the serialization point.
 
+#### FI-48c — three corrections that the design turns on, and one live alternative
+
+Recorded because each is a reading a future reader will arrive at independently, and two of them are the
+seed's own natural shape. From the owner's readback, 2026-08-07.
+
+**Correction 1 — a log cannot stop agents stepping on each other; only a claim can.** A log records what
+already happened; preventing a collision needs a reservation taken *before* the work. "Agent B, FB51 is
+taken, use 52" has to be answerable at the moment B is about to choose, not reconstructable afterwards.
+Same information, opposite direction in time, and only one direction is useful for the stated problem: a
+log tells you who broke it, a claim stops it breaking. This is why FI-48b leads with the claims registry
+and demotes the ledger to attribution — it is not a preference about tooling, it is the difference
+between prevention and forensics.
+
+**Correction 2 — the collisions happen upstream of the layer, so a layer in front of TIA is structurally
+in the wrong place to prevent them.** All four real clash sources — same block number (`NUMBER` is a line
+in the IR), same alarm bit, same append slot in a shared block, same DB member — are decided *while
+writing IR*, potentially hours before any round trip, and **none of them ever passes through the TIA
+boundary**. A queue at the Portal door never observes them, however well built. Coordination has to live
+where the work happens: in the repo, over IR. This is the single most load-bearing correction in the
+entry — it is what moves the manager's centre of gravity off the Portal side entirely.
+
+**Correction 3 — round trips need not queue, and the alternative is a real choice, not an error.** The
+seed's natural shape is *one shared TIA project behind a queue*: every agent's round trip is a request
+the layer services in turn. It is simpler than FI-48b, needs one Portal instance rather than N, and
+throughput is tolerable because a warm attach is ~1s and a block compile ~2s. **What it trades away is
+failure isolation.** One agent leaving the shared project inconsistent (`IsConsistent` cascades;
+FI-42's stranded superseded types — both recorded here, not hypothetical) breaks the compile gate for
+*every* agent, and someone has to debug it. With per-agent copies that agent deletes 5.6 MB and
+re-clones. Against that, each concurrent copy costs a Portal instance (~1.5 GB), so **copies win clearly
+below ~3 concurrent agents and are unavailable above it** — at which point the shared-queue model is the
+only design left. Both should stay on the table; the agent count decides, and that number is not known
+yet.
+
+**Two smaller ones.** (a) What returns from a round trip is **compile diagnostics plus the re-exported
+IR** — not diffs. `converter diff` is offline and the agent can run it itself; asking the layer for diffs
+puts work at the serialization point that does not need to be there. (b) **"Save" is not a request an
+agent makes** — every mutating command already saves implicitly (`Project.Save()`, objection 5). So it
+cannot be queued as a distinct operation, and its implicitness is itself an argument against a shared
+project: one agent's compile force-persists another agent's half-finished work.
+
 **Dependencies:** FI-28 (built, read-only half), FI-07 (parked write half — this idea is its natural
 reopening trigger), FI-12 (shares its measurement gate), FI-43 (no undo for bulk import), FI-26
 (supersedes the ledger's content question), `docs/13-data-boundary.md` (ledger retention).
-**Verdict / revisit trigger:** Under debate — owner's call on the FI-48b build order and on the
-hard-rule-4 reading above. Components 1–3 are buildable now and are justified by recorded evidence
+**Verdict / revisit trigger:** Under debate — owner's call on the FI-48b build order, on the hard-rule-4
+reading above, and on FI-48c's copies-vs-shared-queue question (decided by expected concurrent-agent
+count, which nobody has measured). Note that component 1 is the same either way — claims are required
+under both models, because Correction 2 holds regardless of how round trips are served. Components 1–3
+are buildable now and are justified by recorded evidence
 (author-allocated `NUMBER`, the `%X9` alarm-bit claim, the stale-process compile block) rather than by an
 assumed bottleneck. Bulk *import*, a queue proper and any daemon stay shut until either FI-16 gains
 per-call timing or a real run records agents actually contending for the canonical project.
