@@ -52,6 +52,22 @@ Where the motor's shape did not transfer, the network that would have carried it
 **Source:** written fresh against a specification, not extracted from working logic. Verified in a
 scratch TIA project on 2026-08-06.
 
+### Written as a library block, and deliberately over-specified
+
+*(Recorded here on 2026-08-07, moved out of the block's own header comment under C-204 — a comment
+is documentation, not the place a design choice is defended.)*
+
+The block is **deliberately over-specified against any single application**: it carries capability a
+given plant will never exercise. The reason is asymmetric cost — **stripping a proven capability out
+is cheap, and discovering a missing one at commissioning is not.** An instance that needs none of
+the consequence-class split, none of the suppression and no operation count pays two Bools, an Int
+and a UDInt for them, and nothing else.
+
+Nothing in the block names a plant, a process or a site alarm register. **Everything site-specific
+belongs to how an instance is WIRED, never to the block** — which is the same statement as "the
+position feedback is a computed Bool", generalised: thresholds, windows, magnitudes, attribution
+and alarm-bit allocation all live outside.
+
 ## When to use
 
 - Any valve driven by a single digital output where energised means open and de-energised means
@@ -191,6 +207,17 @@ Each was ruled, not overlooked.
 | **No seal-in on `FaultActive`** | The motor seals it. **C-508 was corrected on 2026-08-06** to put the seal on the cause and never on the condensation; the motor pattern predates the correction. |
 | **Cycle count, not hours run** | Actuators and seats wear per operation, not per hour. Same rollover-safe shape, plus a small fixed debounce so a chattering position source cannot inflate the count. |
 | **`NegativeSignalEdge` spelling** | The motor pattern's own member is misspelled. The apparatus it belongs to was dropped here, so the name does not appear — but if it is ever reintroduced, spell it correctly. Do not "fix" the motor pattern in place. |
+| **No `Name` member** | The motor's `Name` is a `String` inside a retained struct instantiated once per valve. On a plant's worth of valves that is a kilobyte-scale retentive cost for a label the panel already holds. |
+| **One fail-to preset, not two** | `FTTime` covers both directions. Owner's ruling: two presets are not worth the divergence they invite — they start equal and drift, and the second one is the one nobody re-checks. |
+
+*The three rows above were moved out of the IR's own comments on 2026-08-07 under C-204. The
+comments now state the resulting behaviour; the argument for it lives here.*
+
+**One further identity, recorded rather than exploited.** On every instance
+`FaultActive` is identical to `CriticalActive OR ErrorActive` — `FTC` lands in exactly one of the
+two per instance, and the other two causes are the lesser class everywhere. A reviewer can check it
+by reading three networks. It is **not** used to eliminate a network: writing the fact a third way
+would give it three homes, and the three would eventually disagree.
 
 ## Retention — the consequence that will surprise someone
 
