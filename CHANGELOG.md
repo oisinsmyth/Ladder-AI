@@ -2,6 +2,27 @@
 
 ## 2026-08-07
 
+**Multi-instance: the write half was fixed and the read half was missed**
+
+The 2026-08-06 fix made the converter able to WRITE a multi-instance FB call. A probe then proved
+that path end-to-end through Portal — import and compile both clean, which is what the previous
+fix could not claim. The same probe found the other half was still broken.
+
+- **`to-ir` hard-errored on every block containing a multi-instance** — `"unrecognized Remanence ''"`.
+  TIA re-exports the member with **no `Remanence`** (retention belongs to the *called* block's
+  members, so there is nothing to state) but **with** an `AttributeList` and a `<Sections>` child
+  carrying the callee's entire interface expanded inline. The bare-shape branch required both
+  absent, so it fell through to the `Remanence` switch.
+- **The consequence was a silently absent gate, not a nuisance.** It took out the re-export→IR diff
+  leg of the per-block gate contract, plus `drift-check` and the round-trip harness, for any block
+  with a multi-instance — which is every equipment-owning block on the current job.
+- **The `<Sections>` child is the discriminator**: an anonymous struct nests `<Member>` directly and
+  never has one. The expanded interface is **discarded on purpose** — it is the called block's own
+  declaration, already exported with it, and reading it back into the caller would duplicate the
+  declaration and let the two disagree. Name and datatype are the whole of what the caller declares,
+  which is what the bare shape writes back out, so it round-trips as a fixed point.
+- **Tests: 776 → 777.**
+
 **`converter claim` / `claims` — reservations, so two agents on one project stop colliding**
 
 FI-50 component 1. The collisions that break same-project multi-agent work are decided **while

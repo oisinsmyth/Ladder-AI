@@ -615,3 +615,30 @@ programmatically — the retentive-memory dialog after first download is the onl
 for a human to read it rather than assuming a check can assert it.
 
 *(Recorded from a live job; the behaviours are platform facts and carry nothing project-specific.)*
+
+## `CONV` rejects `TIME`. `T_CONV` is the instruction that takes it.
+
+**Found 2026-08-07, by a throwaway probe rather than by a failed block.**
+
+Converting a timer's `ET` to an integer is the natural way to accumulate elapsed time, and the
+converter emits `CONVERT` for it happily — with a correct-looking `SrcType="Time" DestType="DInt"` —
+and it round-trips byte-identical. **TIA refuses it on import:**
+
+```
+Error when calling method 'Create' of type 'Siemens.Engineering.SW.Blocks.CompileUnitComposition'.
+No import will be performed. The element with UId 19 causes the following error message:
+Data type Time is not permitted here.
+IMPORT_EXIT=5
+```
+
+`T_CONV` (`src_type="Time" dest_type="DInt"`) imports clean and compiles 0/0.
+
+**Why this is worth a note rather than a shrug.** Nothing on our side catches it: the converter
+accepts it, `to-xml` produces plausible XML, the round trip is clean, `preflight` passes and
+`converter review` passes. **The first thing that says no is the Portal import**, which is the
+expensive place to find out — and if it is discovered during a whole-block import, a failure on a
+network that was just redesigned reads as a *design* failure rather than a wrong instruction choice.
+
+**The practical lesson is the probe, not the instruction.** A construct never written on a project
+before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
+one probe cycle here and would have cost a misdiagnosed redesign otherwise.

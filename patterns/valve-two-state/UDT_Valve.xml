@@ -61,6 +61,17 @@
                 <MultiLanguageText Lang="en-US">THE POSITION STATEMENT ABOVE IS CURRENTLY MEANINGFUL for this valve - the contact is fitted and healthy, or the inference behind it is trustworthy right now. This is the cannot-tell case carried as one bit: IT GATES WHETHER EITHER FAULT MAY ARM AT ALL AND IS NEVER READ AS A POSITION. Reading cannot-tell as not-arrived alarms on every legitimate operation; reading it as arrived is the silent failure this bit exists to prevent. On a valve with no position source of any kind this is permanently FALSE and both detections are neutralised by wiring rather than by being absent, which is what lets one uniform block serve proven and blind valves alike.</MultiLanguageText>
               </Comment>
             </Member>
+            <Member Name="PositionConclusive" Datatype="Bool">
+              <AttributeList>
+                <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+              </AttributeList>
+              <Comment>
+                <MultiLanguageText Lang="en-US">THE POSITION STATEMENT HAS HAD LONG ENOUGH TO BE DECISIVE. Both detections require this AND PositionValid, so a fault arms only on a verdict that is both trustworthy and finished. IT IS A DIFFERENT FACT FROM PositionValid AND THE TWO ARE NOT INTERCHANGEABLE: not-trustworthy can stand for as long as its cause lasts - an instrument in calibration, a process variable being disturbed by something else - while not-yet-conclusive lasts exactly one detection window and then ends by itself. A fitter looking at a valve that is not alarming needs to know which of the two is holding it, because one says wait and the other says investigate. WHERE THE POSITION IS A REAL CONTACT THIS IS SIMPLY TRUE - a contact is decisive the instant it is read. WHERE IT IS INFERRED, THE DETECTION WINDOW IS COMPUTED BY THE CALLING BLOCK AND ARRIVES HERE: the caller holds this FALSE while it accumulates evidence and raises it when its window closes, so the verdict this block reads has already been decided rather than still forming. THE CONSEQUENCE FOR ANYONE READING THIS BLOCK: how long a fault took to appear is NOT ANSWERABLE FROM INSIDE IT. The fail-to time below is a short confirmation on a settled verdict, not the period over which evidence was gathered.</MultiLanguageText>
+              </Comment>
+            </Member>
             <Member Name="FBSenseInvert" Datatype="Bool">
               <AttributeList>
                 <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
@@ -124,7 +135,7 @@
                 <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
               </AttributeList>
               <Comment>
-                <MultiLanguageText Lang="en-US">SECONDS. The fail-to time, SHARED BY BOTH DIRECTIONS - one setting, not two free to drift apart. It must cover actuator travel in the SLOWER direction plus any interposing relay operate time, and where the position is inferred rather than sensed it must also cover the time that inference needs to become conclusive. MUST NOT BE ZERO - at zero both faults raise during every legitimate transit, and an alarm that cries during normal operation gets switched off in its first week. Held in seconds for operator legibility and converted once inside the block to a millisecond preset.</MultiLanguageText>
+                <MultiLanguageText Lang="en-US">SECONDS. The fail-to time, SHARED BY BOTH DIRECTIONS - one setting, not two free to drift apart. IT IS A CONFIRMATION ON AN ALREADY-DECIDED VERDICT AND NOT THE PERIOD OVER WHICH EVIDENCE IS GATHERED; PositionConclusive above is what carries that period. WHERE THE POSITION IS A REAL CONTACT it must cover actuator travel in the SLOWER direction plus any interposing relay operate time, because there the contact is decisive at once and this is the only allowance in the loop. WHERE THE POSITION IS INFERRED IT SHOULD BE SUB-SECOND: the fault fires at the caller's window PLUS this figure, so anything larger is added straight onto a detection time somebody else has already sized, and a second on a twenty-second window is a five percent error in the wrong direction. MUST NOT BE ZERO - at zero both faults raise during every legitimate transit on a directly proven valve, and an alarm that cries during normal operation gets switched off in its first week. Held in seconds for operator legibility and converted once inside the block to a millisecond preset.</MultiLanguageText>
               </Comment>
             </Member>
             <Member Name="EnableUPSTime" Datatype="Real">

@@ -66,6 +66,30 @@ internal static class DbInterfaceMembers
         // just missing `SetPoint`) — this FC's own interface carries neither. Checked before the
         // `Remanence` switch below would otherwise hard-error on its absence.
         var hasAttributeList = member.Elements().Any(e => e.Name.LocalName == "AttributeList");
+
+        // A MULTI-INSTANCE static, on the way BACK from TIA (2026-08-07). The write half of this was
+        // fixed first and the read half was missed, so `to-ir` hard-errored on every block containing
+        // one — "unrecognized Remanence ''" — which took the re-export leg of the gate contract, plus
+        // drift-check and the round-trip harness, out for any such block.
+        //
+        // TIA re-exports it as: NO `Remanence` (retention belongs to the CALLED block's members, so
+        // there is nothing to state here), but WITH an `AttributeList`, and with a `<Sections>` child
+        // carrying the callee's ENTIRE interface expanded inline. The `<Sections>` child is what makes
+        // it unambiguous — an anonymous struct nests `<Member>` directly and never has one.
+        //
+        // The expanded interface is DISCARDED on purpose. It is the callee's own declaration, owned by
+        // the called block and already exported with it; reading it back as nested members would
+        // duplicate that declaration into the caller and make the two free to disagree. Name and
+        // datatype are the whole of what the caller declares, which is exactly what the bare shape
+        // writes back out — so this round-trips as a fixed point.
+        var hasExpandedInterface = member.Elements().Any(e => e.Name.LocalName == "Sections");
+        if (member.Attribute("Remanence") is null && hasExpandedInterface)
+        {
+            return new DbMember(
+                name, datatype, Retain: false, StartValue: null, Version: version, SetPoint: false,
+                NestedMembers: null, IsBareParameter: true);
+        }
+
         if (member.Attribute("Remanence") is null && !hasAttributeList)
         {
             var bareStartValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
