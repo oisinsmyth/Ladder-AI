@@ -116,6 +116,18 @@ But it has consequences that must be stated plainly in any future capability:
    to check, and it is the direct analogue of hard rule 3 (never invent tags) applied to a surface
    where the tool cannot see the tag list. It must be surfaced as an assumption every time, not
    buried.
+
+   > **MEASURED FALSE on a real project, 2026-08-07** (`openness-hmi-api-survey.md` §7). On a
+   > Unified panel facing two PLC stations, `TagDynamization` reports `Tag` and `PlcTag`
+   > **separately and differently**: two distinctly-named HMI tags both resolve to a PLC tag of the
+   > *same* name, one per station. The HMI names carry a station qualifier because one panel faces
+   > two PLCs; the PLC names do not, because each is unambiguous inside its own PLC. Neither is
+   > derivable from the other. So the assumption does not merely need checking — where two stations
+   > collide it is **wrong**, and wrong silently: generated rows would import cleanly and point at
+   > the wrong station's fault bit. The mapping is readable rather than guessable on Unified
+   > (`PlcTag` is right there next to `Tag`), so a future alarm tool should **extract the join, never
+   > assume name equality** — and on classic, where no such API exists, this stops being an
+   > assumption to surface and becomes a question only the engineer can answer.
 3. **The workbook's `Class` column collapses two independent axes** the conventions keep separate:
    C-506's severity taxonomy (Fault / Warning / Info-Event, assigned by the operator-action test)
    and C-507's acknowledgement behaviour (self-clearing by default, per-alarm documented

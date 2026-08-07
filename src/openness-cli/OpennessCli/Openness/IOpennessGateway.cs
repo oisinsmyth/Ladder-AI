@@ -34,6 +34,29 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<TagTableInfo> EnumerateTagTables();
 
     /// <summary>
+    /// Read-only walk of every HMI device in the project. Exists because the rest of this gateway
+    /// is PLC-only by construction — every other walker filters
+    /// <c>SoftwareContainer.Software is PlcSoftware</c>, so an HMI device was previously invisible
+    /// to this tool rather than merely unsupported.
+    ///
+    /// The two HMI families are handled differently because the API forces it
+    /// (docs/notes/openness-hmi-api-survey.md): Unified exposes a full typed screen-item tree and
+    /// per-property dynamizations but has NO screen export, so reading the live model is the only
+    /// way to observe a screen's contents at all; classic exposes no screen contents whatsoever, so
+    /// its screens enumerate by name only.
+    ///
+    /// Strictly read-only: no Create, no SetAttribute, no import, no compile. Nothing here writes.
+    /// </summary>
+    /// <param name="screenFilter">When null, screens are summarised (name/size/item count) without
+    /// reading their items — reading every item on every screen is slow enough to matter. When set,
+    /// items and dynamizations are read for screens whose name matches (ordinal, case-insensitive),
+    /// or for all screens when it is "*".</param>
+    /// <param name="maxItems">Cap on items read per screen, so a pathological screen cannot stall a
+    /// survey run. Truncation is visible: <see cref="Model.HmiScreenInfo.ItemCount"/> is the true
+    /// count, which the caller compares against the number of items actually returned.</param>
+    IReadOnlyList<HmiDeviceInfo> EnumerateHmi(string? screenFilter, int maxItems);
+
+    /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
     /// <see cref="SafetyContentRefusedException"/>) before calling Export() at all if the block
     /// classifies as safety. <paramref name="deviceFilter"/> disambiguates when the same block

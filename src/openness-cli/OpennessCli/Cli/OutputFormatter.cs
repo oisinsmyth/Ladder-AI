@@ -51,6 +51,155 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    /// <summary>
+    /// Report shape is deliberately not a flat table: an HMI device is a small tree (device →
+    /// screen → item → dynamization) and flattening it loses the containment that makes the output
+    /// readable. The family line is the most important thing on the page — it is what tells the
+    /// reader whether screen contents were unavailable or merely not requested.
+    /// </summary>
+    public static string FormatHmiReport(IReadOnlyList<HmiDeviceInfo> devices, string? screenFilter)
+    {
+        if (devices.Count == 0)
+        {
+            return "(no HMI devices found)";
+        }
+
+        var sb = new StringBuilder();
+        foreach (var device in devices)
+        {
+            sb.Append("HMI DEVICE  ").Append(device.Path).Append("  [").Append(device.Family).AppendLine("]");
+
+            if (device.Family == HmiFamily.Unified)
+            {
+                sb.Append("  screens=").Append(device.ScreenCount)
+                  .Append("  screenGroups=").Append(device.ScreenGroupCount)
+                  .Append("  tags=").Append(device.TagCount)
+                  .Append("  discreteAlarms=").Append(device.DiscreteAlarmCount)
+                  .Append("  analogAlarms=").Append(device.AnalogAlarmCount)
+                  .Append("  alarmClasses=").Append(device.AlarmClassCount)
+                  .Append("  scripts=").Append(device.ScriptCount)
+                  .AppendLine();
+            }
+            else
+            {
+                sb.Append("  screens=").Append(device.ScreenCount).AppendLine();
+                sb.AppendLine("  (classic: Openness exposes no screen contents — Screen has no ScreenItems, so items cannot be listed)");
+            }
+
+            foreach (var screen in device.Screens)
+            {
+                sb.Append("  SCREEN  ").Append(screen.Name);
+                if (screen.ScreenNumber is { } number)
+                {
+                    sb.Append("  #").Append(number.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (screen.Width is { } w && screen.Height is { } h)
+                {
+                    sb.Append("  ").Append(w.ToString(CultureInfo.InvariantCulture)).Append('x').Append(h.ToString(CultureInfo.InvariantCulture));
+                }
+
+                if (device.Family == HmiFamily.Unified)
+                {
+                    sb.Append("  items=").Append(screen.ItemCount.ToString(CultureInfo.InvariantCulture));
+                }
+
+                sb.AppendLine();
+
+                if (screen.Items.Count < screen.ItemCount)
+                {
+                    // Never let a cap read as a complete listing (docs/04 design philosophy: no
+                    // silent truncation).
+                    sb.Append("    (showing ").Append(screen.Items.Count.ToString(CultureInfo.InvariantCulture))
+                      .Append(" of ").Append(screen.ItemCount.ToString(CultureInfo.InvariantCulture));
+                    sb.AppendLine(screen.Items.Count == 0 ? " items — pass --screen to read them)" : " items — raise --max-items for the rest)");
+                }
+
+                foreach (var item in screen.Items)
+                {
+                    sb.Append("    ").Append(item.ItemType).Append("  ").Append(item.Name);
+                    if (item.Left is { } left && item.Top is { } top)
+                    {
+                        sb.Append("  @").Append(left.ToString(CultureInfo.InvariantCulture)).Append(',').Append(top.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                    if (item.Width is { } iw && item.Height is { } ih)
+                    {
+                        sb.Append("  ").Append(iw.ToString(CultureInfo.InvariantCulture)).Append('x').Append(ih.ToString(CultureInfo.InvariantCulture));
+                    }
+
+                    sb.AppendLine();
+
+                    foreach (var dynamization in item.Dynamizations)
+                    {
+                        sb.Append("      ").Append(dynamization.PropertyName).Append(" <- ").Append(dynamization.Kind);
+                        if (!string.IsNullOrEmpty(dynamization.Tag))
+                        {
+                            sb.Append("  tag=").Append(dynamization.Tag);
+                        }
+
+                        if (!string.IsNullOrEmpty(dynamization.PlcTag))
+                        {
+                            sb.Append("  plcTag=").Append(dynamization.PlcTag);
+                        }
+
+                        sb.AppendLine();
+                    }
+                }
+            }
+        }
+
+        if (screenFilter is null && devices.Any(d => d.Family == HmiFamily.Unified))
+        {
+            sb.AppendLine("(summary only — pass --screen <name> or --screen * to read screen items and dynamizations)");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatHmiJson(IReadOnlyList<HmiDeviceInfo> devices)
+    {
+        var payload = devices.Select(d => new
+        {
+            path = d.Path,
+            software = d.SoftwareName,
+            family = d.Family.ToString(),
+            screenCount = d.ScreenCount,
+            screenGroupCount = d.ScreenGroupCount,
+            tagCount = d.TagCount,
+            discreteAlarmCount = d.DiscreteAlarmCount,
+            analogAlarmCount = d.AnalogAlarmCount,
+            alarmClassCount = d.AlarmClassCount,
+            scriptCount = d.ScriptCount,
+            screens = d.Screens.Select(s => new
+            {
+                name = s.Name,
+                screenNumber = s.ScreenNumber,
+                width = s.Width,
+                height = s.Height,
+                itemCount = s.ItemCount,
+                items = s.Items.Select(i => new
+                {
+                    name = i.Name,
+                    itemType = i.ItemType,
+                    left = i.Left,
+                    top = i.Top,
+                    width = i.Width,
+                    height = i.Height,
+                    dynamizations = i.Dynamizations.Select(dyn => new
+                    {
+                        propertyName = dyn.PropertyName,
+                        kind = dyn.Kind,
+                        tag = dyn.Tag,
+                        plcTag = dyn.PlcTag,
+                    }),
+                }),
+            }),
+        });
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     private static readonly string[] TagTableHeaders = { "NAME", "PATH" };
 
     public static string FormatTagTableTable(IReadOnlyList<TagTableInfo> tagTables)

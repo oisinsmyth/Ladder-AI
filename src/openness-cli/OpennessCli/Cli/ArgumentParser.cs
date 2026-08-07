@@ -85,6 +85,17 @@ public sealed record PortalStatusOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Screen defaults to null rather than "*": summarising every screen is cheap, reading every item on
+// every screen is not, so the expensive mode is opt-in. MaxItems bounds a single screen's read.
+public sealed record HmiOptions(
+    string ProjectIdentifier,
+    string? Screen,
+    int MaxItems,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -107,6 +118,8 @@ public abstract record ParseResult
 
     public sealed record PortalStatusSuccess(PortalStatusOptions Options) : ParseResult;
 
+    public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -114,6 +127,10 @@ public static class ArgumentParser
 {
     public const int DefaultTimeoutConnectSeconds = 180;
     public const int DefaultTimeoutOpenSeconds = 1800;
+
+    // Generous enough that a real screen is never silently clipped in practice, low enough that a
+    // pathological one cannot stall a run. Truncation is always visible in the output.
+    public const int DefaultHmiMaxItems = 500;
 
     private const string Usage =
         "Usage:\n" +
@@ -125,10 +142,35 @@ public static class ArgumentParser
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
+        "  openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
         "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
-        "  list --tagtables enumerates tag tables instead of blocks.";
+        "  list --tagtables enumerates tag tables instead of blocks.\n" +
+        "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.";
+
+    /// <summary>
+    /// Pulls the flags every subcommand shares off whichever options record the parse produced.
+    /// Lives here, next to the records it reads, rather than in <c>Program</c> — and is public so a
+    /// unit test can assert it handles EVERY success variant. That test exists because it was
+    /// needed: `hmi` shipped its own dispatch case, built clean, passed 152 tests, and still died
+    /// at runtime on this switch, which nothing had covered. Same reasoning that made
+    /// <c>ExitCodes</c> public on 2026-08-05 — a second dispatch on the same type is exactly where
+    /// a new subcommand gets forgotten.
+    /// </summary>
+    public static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) CommonOptions(ParseResult result) => result switch
+    {
+        ParseResult.ListSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.ExportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.ImportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
+    };
 
     public static ParseResult Parse(string[] args)
     {
@@ -147,8 +189,9 @@ public static class ArgumentParser
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
             "portal-status" => ParsePortalStatus(args),
+            "hmi" => ParseHmi(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -706,6 +749,76 @@ public static class ArgumentParser
         }
 
         return new ParseResult.CreateInstanceDbSuccess(new CreateInstanceDbCommandOptions(projectIdentifier, group, name, instanceOf, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseHmi(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? screen = null;
+        var maxItems = DefaultHmiMaxItems;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--json":
+                    json = true;
+                    break;
+                case "--screen":
+                    if (!TryTakeValue(args, ref i, "--screen", out screen, out var screenErr))
+                    {
+                        return new ParseResult.Failure(screenErr);
+                    }
+
+                    break;
+                case "--max-items":
+                    if (!TryTakeIntValue(args, ref i, "--max-items", out maxItems, out var maxErr))
+                    {
+                        return new ParseResult.Failure(maxErr);
+                    }
+
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

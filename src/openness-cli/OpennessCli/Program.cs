@@ -16,7 +16,7 @@ internal static class Program
             return ExitCodes.UsageError;
         }
 
-        var (tiaInstallOverride, timeoutConnectSeconds, timeoutOpenSeconds) = CommonOptions(parseResult);
+        var (tiaInstallOverride, timeoutConnectSeconds, timeoutOpenSeconds) = ArgumentParser.CommonOptions(parseResult);
 
         try
         {
@@ -61,6 +61,8 @@ internal static class Program
                     return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
+                case ParseResult.HmiSuccess hmi:
+                    return RunHmi(gateway, hmi.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -104,6 +106,19 @@ internal static class Program
             var blocks = gateway.EnumerateBlocks();
             Console.WriteLine(options.Json ? OutputFormatter.FormatJson(blocks) : OutputFormatter.FormatTable(blocks));
         }
+
+        return ExitCodes.Success;
+    }
+
+    // Read-only, and exits Success even when the project has no HMI device at all — "this project
+    // has none" is a legitimate answer to the question the command asks, not a failure.
+    private static int RunHmi(IOpennessGateway gateway, HmiOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var devices = gateway.EnumerateHmi(options.Screen, options.MaxItems);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatHmiJson(devices)
+            : OutputFormatter.FormatHmiReport(devices, options.Screen));
 
         return ExitCodes.Success;
     }
@@ -255,18 +270,6 @@ internal static class Program
         return ExitCodes.Success;
     }
 
-    private static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) CommonOptions(ParseResult result) => result switch
-    {
-        ParseResult.ListSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.ExportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.ImportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
-        _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
-    };
 }
 
 /// <summary>

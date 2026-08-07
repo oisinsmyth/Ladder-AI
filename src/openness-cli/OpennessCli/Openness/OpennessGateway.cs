@@ -6,6 +6,13 @@ using System.Threading.Tasks;
 using OpennessCli.Model;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
+using Siemens.Engineering.Hmi;
+using Siemens.Engineering.Hmi.Screen;
+using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.HmiUnified.UI.Base;
+using Siemens.Engineering.HmiUnified.UI.Dynamization;
+using Siemens.Engineering.HmiUnified.UI.ScreenGroup;
+using Siemens.Engineering.HmiUnified.UI.Screens;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 using Siemens.Engineering.SW;
@@ -350,6 +357,298 @@ public sealed class OpennessGateway : IOpennessGateway
         foreach (DeviceItem child in item.DeviceItems)
         {
             WalkDeviceItemForTagTables(child, path, results);
+        }
+    }
+
+    public IReadOnlyList<HmiDeviceInfo> EnumerateHmi(string? screenFilter, int maxItems)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EnumerateHmi)}.");
+        }
+
+        var results = new List<HmiDeviceInfo>();
+
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                WalkDeviceItemForHmi(item, device.Name, screenFilter, maxItems, results);
+            }
+        }
+
+        return results;
+    }
+
+    // Same recursive DeviceItem descent as WalkDeviceItem/WalkDeviceItemForTagTables, but matching
+    // the two HMI software types instead of PlcSoftware. A device is only ever one of the three, so
+    // the branches are exclusive and a PLC device simply falls through as before.
+    private static void WalkDeviceItemForHmi(
+        DeviceItem item,
+        string parentPath,
+        string? screenFilter,
+        int maxItems,
+        List<HmiDeviceInfo> results)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        var softwareContainer = item.GetService<SoftwareContainer>();
+        switch (softwareContainer?.Software)
+        {
+            case HmiSoftware unified:
+                results.Add(ReadUnifiedDevice(unified, path, screenFilter, maxItems));
+                break;
+            case HmiTarget classic:
+                results.Add(ReadClassicDevice(classic, path));
+                break;
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            WalkDeviceItemForHmi(child, path, screenFilter, maxItems, results);
+        }
+    }
+
+    private static HmiDeviceInfo ReadUnifiedDevice(HmiSoftware software, string path, string? screenFilter, int maxItems)
+    {
+        // Screens are reachable two ways: HmiSoftware.Screens, and recursively via HmiScreenGroups.
+        // What is NOT established is whether HmiSoftware.Screens is root-only (so the group walk adds
+        // screens) or already a flat view of all of them (so the group walk would double-count).
+        // Rather than bet on one reading, collect both and deduplicate by name — correct under
+        // either, and it cannot silently under-report the folder-organised case, which is the
+        // failure that would actually mislead. Screen names are unique per Unified device.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var screens = new List<HmiScreenInfo>();
+
+        foreach (HmiScreen screen in software.Screens)
+        {
+            AddUnifiedScreen(screen, screenFilter, maxItems, seen, screens);
+        }
+
+        foreach (HmiScreenGroup group in software.ScreenGroups)
+        {
+            WalkUnifiedScreenGroup(group, screenFilter, maxItems, seen, screens);
+        }
+
+        return new HmiDeviceInfo(
+            path,
+            software.Name,
+            HmiFamily.Unified,
+            screens.Count,
+            CountOrZero(() => software.ScreenGroups.Count),
+            CountOrZero(() => software.Tags.Count),
+            CountOrZero(() => software.DiscreteAlarms.Count),
+            CountOrZero(() => software.AnalogAlarms.Count),
+            CountOrZero(() => software.AlarmClasses.Count),
+            CountOrZero(() => software.Scripts.Count),
+            screens);
+    }
+
+    private static void WalkUnifiedScreenGroup(
+        HmiScreenGroup group,
+        string? screenFilter,
+        int maxItems,
+        HashSet<string> seen,
+        List<HmiScreenInfo> results)
+    {
+        foreach (HmiScreen screen in group.Screens)
+        {
+            AddUnifiedScreen(screen, screenFilter, maxItems, seen, results);
+        }
+
+        foreach (HmiScreenGroup child in group.Groups)
+        {
+            WalkUnifiedScreenGroup(child, screenFilter, maxItems, seen, results);
+        }
+    }
+
+    private static void AddUnifiedScreen(
+        HmiScreen screen,
+        string? screenFilter,
+        int maxItems,
+        HashSet<string> seen,
+        List<HmiScreenInfo> results)
+    {
+        var name = TryRead(() => screen.Name) ?? string.Empty;
+        if (!seen.Add(name))
+        {
+            return;
+        }
+
+        results.Add(ReadUnifiedScreen(screen, screenFilter, maxItems));
+    }
+
+    private static HmiScreenInfo ReadUnifiedScreen(HmiScreen screen, string? screenFilter, int maxItems)
+    {
+        var name = screen.Name;
+        var width = ReadLongAttribute(screen, "Width");
+        var height = ReadLongAttribute(screen, "Height");
+        int? number = ReadLongAttribute(screen, "ScreenNumber") is { } n ? (int)n : null;
+
+        // Count is cheap (composition metadata); reading each item's properties is not. Only pay
+        // that cost for screens the caller actually asked to see inside.
+        var itemCount = CountOrZero(() => screen.ScreenItems.Count);
+        if (!WantsDetail(name, screenFilter))
+        {
+            return new HmiScreenInfo(name, number, width, height, itemCount, Array.Empty<HmiScreenItemInfo>());
+        }
+
+        var items = new List<HmiScreenItemInfo>();
+        foreach (HmiScreenItemBase item in screen.ScreenItems)
+        {
+            if (items.Count >= maxItems)
+            {
+                break;
+            }
+
+            items.Add(ReadUnifiedScreenItem(item));
+        }
+
+        return new HmiScreenInfo(name, number, width, height, itemCount, items);
+    }
+
+    private static HmiScreenItemInfo ReadUnifiedScreenItem(HmiScreenItemBase item)
+    {
+        // The CLR type is the unambiguous answer to "what is this object" — the same reasoning
+        // ClassifyBlockType uses PLC-side. Geometry goes through generic attribute access instead of
+        // a cast per concrete type: there are ~50 of them (widgets, shapes, controls), they do not
+        // share one geometry base, and an item type added by a future TIA version still reports.
+        var dynamizations = new List<HmiDynamizationInfo>();
+        try
+        {
+            foreach (DynamizationBase dynamization in item.Dynamizations)
+            {
+                dynamizations.Add(ReadDynamization(dynamization));
+            }
+        }
+        catch (Exception)
+        {
+            // An item that refuses to enumerate its dynamizations still belongs in the listing —
+            // reporting it with none is honest and visibly different from reporting nothing at all.
+        }
+
+        // Name comes off the typed property first — it is declared on HmiScreenItemBase, so it is
+        // always there — and only falls back to generic attribute access. The reverse order would
+        // silently yield an empty name if this TIA version does not expose "Name" as an attribute.
+        return new HmiScreenItemInfo(
+            TryRead(() => item.Name) ?? ReadStringAttribute(item, "Name") ?? string.Empty,
+            item.GetType().Name,
+            ReadLongAttribute(item, "Left"),
+            ReadLongAttribute(item, "Top"),
+            ReadLongAttribute(item, "Width"),
+            ReadLongAttribute(item, "Height"),
+            dynamizations);
+    }
+
+    private static HmiDynamizationInfo ReadDynamization(DynamizationBase dynamization)
+    {
+        string? tag = null;
+        string? plcTag = null;
+        if (dynamization is TagDynamization tagDynamization)
+        {
+            tag = TryRead(() => tagDynamization.Tag);
+            plcTag = TryRead(() => tagDynamization.PlcTag);
+        }
+
+        var propertyName = TryRead(() => dynamization.PropertyName) ?? string.Empty;
+        var kind = TryRead(() => dynamization.DynamizationType.ToString()) ?? dynamization.GetType().Name;
+        return new HmiDynamizationInfo(propertyName, kind, tag, plcTag);
+    }
+
+    // Classic exposes no screen contents at all: Siemens.Engineering.Hmi.Screen.Screen has no
+    // ScreenItems property, and ScreenComposition has no Create — screens arrive only by SimaticML
+    // import or master-copy/library copy. So this reports names and nothing more, which is the API's
+    // ceiling rather than this walker's.
+    private static HmiDeviceInfo ReadClassicDevice(HmiTarget target, string path)
+    {
+        var screens = new List<HmiScreenInfo>();
+        WalkClassicScreenFolder(target.ScreenFolder, screens);
+
+        return new HmiDeviceInfo(
+            path,
+            target.Name,
+            HmiFamily.Classic,
+            screens.Count,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            screens);
+    }
+
+    private static void WalkClassicScreenFolder(ScreenFolder folder, List<HmiScreenInfo> results)
+    {
+        foreach (Screen screen in folder.Screens)
+        {
+            results.Add(new HmiScreenInfo(screen.Name, null, null, null, 0, Array.Empty<HmiScreenItemInfo>()));
+        }
+
+        foreach (ScreenUserFolder child in folder.Folders)
+        {
+            WalkClassicScreenFolder(child, results);
+        }
+    }
+
+    private static bool WantsDetail(string screenName, string? screenFilter) =>
+        screenFilter is not null
+        && (screenFilter == "*" || string.Equals(screenName, screenFilter, StringComparison.OrdinalIgnoreCase));
+
+    // Every read below is defensive on purpose. These are the first calls this project has ever made
+    // into the HMI half of the API and they are reflection-derived, not runtime-proven — one
+    // property that throws on one item type must not lose the other 47 screens.
+    private static int CountOrZero(Func<int> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
+    private static string? TryRead(Func<string?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadStringAttribute(IEngineeringObject item, string attribute)
+    {
+        try
+        {
+            return item.GetAttribute(attribute) as string;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static long? ReadLongAttribute(IEngineeringObject item, string attribute)
+    {
+        try
+        {
+            return item.GetAttribute(attribute) switch
+            {
+                null => null,
+                var value => Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture),
+            };
+        }
+        catch (Exception)
+        {
+            // Not every item type has every geometry attribute — a TouchArea and a Rectangle do not
+            // agree on what they expose. Absent is a fact, not an error.
+            return null;
         }
     }
 

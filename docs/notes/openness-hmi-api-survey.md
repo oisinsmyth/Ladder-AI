@@ -308,10 +308,113 @@ authoring needs a SimaticML dialect nobody has written). On **Unified**, screen-
 genuinely one API call away from boundary-defining, so the guard rail has to be a deliberate
 decision rather than a happy accident of what the API refuses to do.
 
-## 7. Unverified — do not treat as proven
+## 7. Grounded against a real Unified project (2026-08-07)
 
-- **Nothing was run against a live HMI device.** No screen created, no alarm created, no import,
-  no validation call. Type-shape only.
+The sections above are reflection. This one is measurement. Run against JOB9002's own HMI device under
+the read-only extension recorded in `13-data-boundary.md` — **all names below are invented**, per that
+entry's output rule; the structure is real.
+
+The device is a **Unified Comfort Panel**, which settles §5's "which architecture is even reachable"
+question for this shop the unhelpful way: the classic path in §5.A, the one that maps cleanly onto
+this project's existing machinery, **does not apply to this hardware at all.**
+
+Reading it required building the tool first: `openness-cli` was PLC-only by construction — every
+device walk filters `Software is PlcSoftware` — so the HMI device was *invisible* to it rather than
+unsupported. `openness-cli hmi` (read-only; see `src/openness-cli/README.md`) is that walker, and
+because Unified has no screen export it is necessarily a live-object-model reader, i.e. the first cut
+of §5.B's serialiser.
+
+**What the device actually contains:**
+
+| | |
+|---|---|
+| Engineering screens | **3** (see caveat) |
+| Screen groups | 5 |
+| HMI tags | 233 |
+| **Discrete alarms** | **311** |
+| Analog alarms / script modules | 0 / 0 |
+| Alarm classes | 20 |
+
+> **Caveat on the screen count — unverified.** The measured run enumerated `HmiSoftware.Screens`
+> only, and the device also reports **5 screen groups**. Whether `HmiSoftware.Screens` is root-only
+> (so grouped screens were missed) or already a flat view of all of them (so 3 is the whole truth) is
+> **not established**. The walker now also recurses `ScreenGroups` and deduplicates by name, so it is
+> correct under either reading — but that path has not been run live, so treat 3 as a lower bound
+> until it has. The alarm/tag counts are unaffected: they come straight off `HmiSoftware`.
+
+**Screens are few, alarms are many** — subject to that caveat. Even at its lower bound the ratio is
+stark: three hundred alarms against a single-digit screen count. Worth knowing before anyone scopes
+"AI HMI design", because on this evidence the screen-drawing half may well be the small half, and the
+alarm half is where the volume is.
+
+**311 discrete alarms, enumerable through the API.** That is §6's answer stopping being a claim about
+type shapes and becoming a measurement on a real plant.
+
+**A trap worth recording.** The project folder on disk holds ~48 `screens/screen_*.rdf` files, and I
+first read that as the screen count. It is not: that directory is the *compiled runtime image*
+(everything `DownloadTask.xml` lists as a download item — system screens, faceplate instances,
+dialogs), not the engineering screens. **Do not infer HMI content from the project folder.** The
+engineering answer is 3 and only Openness gives it. The `.rdf` files are also an undocumented binary
+format — reverse-reading them would be the HMI equivalent of hand-patching SimaticML (hard rule 7).
+
+**Item types observed** — rectangle, text, line, IO field, graphic view, button, screen window, alarm
+control. Layout is absolutely positioned (`@x,y w×h`), no layout engine.
+
+**Composition pattern**, which is a real design worth borrowing: one *frame* screen sized to the
+panel carries a header strip (rectangles/lines/texts) plus a `HmiScreenWindow`; content screens are
+sized to the window, not the panel, and are loaded into it — the window's `Screen` property is itself
+dynamized by an Expression. The entire alarm UI is a **single** `HmiAlarmControl` filling one screen.
+So 311 alarms cost exactly one screen object, and the screen/alarm asymmetry above is by design.
+
+**Dynamizations observed:** kind `Tag` and kind `Expression`, on properties `ProcessValue`, `Visible`,
+`Graphic` and `Screen`. So a Unified screen's PLC coupling really is per-property and really is
+readable — the mechanism §4 describes from reflection is the mechanism in use.
+
+### The finding that corrects the knowledge base
+
+`TagDynamization` exposes `Tag` and `PlcTag` **separately, and on this project they differ.** Two
+distinct HMI tags bound to a PLC tag of the *same* name on two different PLC stations:
+
+```
+HMI tag "UnitA_TripAlarm"   ->  PLC tag "TripAlarm0"
+HMI tag "UnitB_TripAlarm0"  ->  PLC tag "TripAlarm0"
+```
+
+The HMI tag names are disambiguated by station because one HMI faces two PLCs; the PLC tag names are
+not, because each is unambiguous *within its own PLC*. Neither name is derivable from the other.
+
+**This falsifies a stated assumption in `notes/hmi-alarm-generation.md` §5.2**, which recorded that
+the live alarm job took trigger tags from PLC member names "under a stated assumption that HMI tags
+match", and flagged that assumption as the engineer's to check. On a real project of this shape it is
+**wrong**, and wrong in the most dangerous way — silently, and only for the tags where two stations
+collide. An alarm generator that assumes name equality would produce rows that import cleanly and
+point at the wrong station's fault bit.
+
+The constructive half: the mapping is not guesswork, it is **readable**. `PlcTag` alongside `Tag` is
+exactly the join an alarm tool needs, and on Unified it can be extracted rather than assumed.
+
+### Walker gaps, stated rather than hidden
+
+- **Events are not read.** Buttons came back with no dynamizations because a button's behaviour lives
+  in `EventHandlers`, which is a different composition (`UI.Events`, 85 types) that this walker does
+  not touch. "No dynamizations" on a button therefore means *not looked at*, not *not bound* — the
+  one place this tool's output could currently mislead.
+- Faceplate *instances* are reported as ordinary items; faceplate *types* are library content and are
+  not walked.
+- Alarms/tags are counted, not enumerated. Counting proved the surface exists; listing them is the
+  obvious next step and was out of scope for a survey.
+
+## 8. Unverified — do not treat as proven
+
+- **Only the READ path has been run live** (§7). Everything in §4 about *construction* —
+  `Screens.Create`, `ScreenItems.Create<T>`, `Dynamizations.Create<T>`, `Validate()` — remains
+  reflection-only. Nothing was created, no property was set, nothing was imported, `Validate()` was
+  never called. Reading proves the object model is reachable and shaped as documented; it proves
+  nothing about writing to it.
+- **`Validate()` is the load-bearing untested claim.** §5.B rests on it being a real pre-commit gate,
+  and §6 uses it to revise "there is no compile gate on the HMI side". It has never been invoked.
+  If it turns out to be shallow, the strongest argument for Unified weakens considerably — test it
+  before relying on it.
 - **The compile path is inferred, not observed.** `ICompilable` exists (`Compile() : CompilerResult`)
   and `HmiTarget` implements `IEngineeringServiceProvider`, so `HmiTarget.GetService<ICompilable>()`
   *compiles*. Whether it returns non-null is untested. Note that **`HmiSoftware` (Unified) does not
@@ -321,20 +424,26 @@ decision rather than a happy accident of what the API refuses to do.
 - **`Create<T>` constraints are unknown.** The generic `ScreenItems.Create<T>(name)` presumably
   rejects some `T`, and `Create<T>(name, containedTypeValue)` exists for container types. Which
   types are legal where is not derivable from reflection.
-- **Licensing/hardware.** Unified requires Unified-capable hardware and its own engineering/runtime
-  licences. Whether the S7-1200 G2 target here would ever pair with a Unified panel is a
-  procurement question, not an API one — and it decides which of §5's architectures is even
-  reachable.
+- **One project is not a population.** §7 measured a single device. "Screens are few, alarms are
+  many", the frame/content-window composition, and the tag-naming mismatch are all facts *about that
+  project*. The tag/PlcTag mismatch generalises the least comfortably — it arises because one panel
+  faces two PLCs, which is a common but not universal arrangement. Treat §7 as one grounded data
+  point, in the same spirit the four-rung spec pipeline is held to "one plant, three runs".
 - **V21 exists** and was not examined. Given classic's four-release freeze, the useful question for
   V21 is only ever about Unified.
 
-## 8. If this is ever picked up
+## 9. If this is ever picked up
 
 In rough order of cost, and none of it authorised by this note:
 
-1. Confirm which panel family real jobs actually use. **This decides everything** and costs nothing.
-2. Verify the compile/validate path live against one throwaway HMI device — the cheapest way to
-   turn §7's inferences into facts.
-3. For classic: export one real screen to SimaticML and look at it. That single file answers
-   whether a screen IR dialect is a week or a quarter.
-4. For Unified: the serialiser in §5.B is the long pole, not the generation. Scope it first, not last.
+1. ~~Confirm which panel family real jobs actually use.~~ **Answered (§7): Unified.** Which means
+   §5.A — the architecture that reuses this project's existing SimaticML machinery — is the one that
+   does *not* apply, and §5.B's serialiser is on the critical path rather than being an alternative
+   to it.
+2. **Call `Validate()` once**, on one real screen, read-only. It is the cheapest possible test and it
+   is what §5.B's whole advantage rests on. Nothing else on this list matters as much.
+3. **Enumerate the alarms**, not just count them. 311 of them with a readable `Tag`/`PlcTag` join is
+   FI-35's use case sitting in reach, and it needs no screen work at all.
+4. Read `EventHandlers` — the walker's one genuinely misleading gap (§7).
+5. For Unified generation proper: the serialiser is the long pole, not the generation. Scope it
+   first, not last.

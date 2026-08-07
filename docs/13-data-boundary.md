@@ -185,6 +185,33 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
     register `gen/PlantAutoControl-bench/requirements.md`) is Green. Same genericization rule — no real
     JOB9002 name reaches any committed file, enforced by a map-key leakage grep before commit. Does
     **not** authorize production S7 modification of any real production block.
+  - **2026-08-07 — extended to the HMI device, read-only, for survey grounding.** Project owner's own
+    explicit instruction, this session ("open up JOB9002 use the hmi in that for examples"), following
+    `docs/notes/openness-hmi-api-survey.md`. Recorded because **every prior scope in this entry is
+    PLC-side** — blocks, DBs, UDTs, tag tables, patterns — and none of them reaches an HMI device, so
+    this is genuinely new ground rather than a re-reading of an existing extension. The entry's own
+    "per-project, not blanket — re-confirm before using this project for anything beyond what's
+    listed below" rule is what required it to be asked and recorded rather than assumed.
+    - **Scope, as approved:** read-only examination of the project's HMI device via
+      `openness-cli hmi` — enumerate screens, screen items, their geometry and their per-property
+      dynamizations, to ground the survey's claims in a real project instead of reflection alone.
+      **Read-only in the strict sense**: no screen or tag is created, no property is set, nothing is
+      imported, nothing is compiled, and the walker has no code path that writes.
+    - **Output rule — unchanged from the 2026-07-14/07-15 read-only extensions, which this mirrors:**
+      real screen, tag and equipment names may appear in conversation and in local scratch files
+      outside the repo; **nothing verbatim reaches a committed doc.** Where the survey needs an
+      example it gets an invented one carrying the same structure, on the same basis as the rest of
+      this entry. Structural findings (which item types exist, how a dynamization is shaped, what the
+      API does and does not expose) are not identifying and may be recorded directly.
+    - **Relevant finding, recorded here because it changes what the approval is worth:** JOB9002's panel
+      is a **Unified** device, not classic. Unified has no screen export, so there is no file
+      artifact to sanitize the way `converter sanitize` handles SimaticML — the only way to observe a
+      screen is to read the live object model. That makes the output rule above the *only* control on
+      this material, rather than a second one behind a sanitiser.
+    - **Not authorized by this entry:** any write to JOB9002's HMI (screens, tags, alarms, scripts),
+      use of its HMI content as generation input, committing any real HMI name or comment text, or
+      HMI work on any other project. `10-non-goals.md`'s exclusion of HMI *engineering* is untouched
+      — this is reconnaissance, and it does not open a capability.
 
 - **2026-07-10 — reference project (`ir/reference/`, `simatic-ml/reference/`) seeded from
   sanitized data, under a separate, private approval not detailed here.** The committed content's

@@ -13,6 +13,7 @@ openness-cli delete        <project> --block <name> [--device <name>] --yes    #
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
+openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     # READ-ONLY HMI walk: screens, screen items, per-property dynamizations — see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
 
@@ -155,6 +156,46 @@ and **always exits 0**, in both table and `--json` form.
 
 The classification and formatting are pure and unit-tested (`PortalStatusTests`); the
 `GetProcesses()` enumeration itself is integration-only (needs a live Portal).
+
+## `hmi` — the read-only HMI walk
+
+Every other subcommand is PLC-only *by construction*: each device walk filters
+`SoftwareContainer.Software is PlcSoftware`, so an HMI device was previously invisible to this tool
+rather than merely unsupported. `hmi` is the one command that matches the other two software types.
+
+**It is strictly read-only.** No `Create`, no `SetAttribute`, no import, no compile — there is no
+code path in the walker that writes. HMI *engineering* remains a non-goal (`docs/10-non-goals.md`);
+this exists to observe, and it does not open a capability.
+
+The output shape is decided by the API, not by preference — the two HMI families are disjoint object
+models with opposite strengths (`docs/notes/openness-hmi-api-survey.md`):
+
+| | Classic (`HmiTarget`) | Unified (`HmiSoftware`) |
+|---|---|---|
+| Screens | names only | name, number, size, item count |
+| Screen items | **impossible** — `Screen` has no `ScreenItems` property at all | full typed tree |
+| Dynamizations | n/a | per-property, with tag + PLC tag |
+
+So on a classic device the report says outright that Openness exposes no screen contents. That is
+the API's ceiling, not a gap in this walker, and the report states it rather than leaving an empty
+list to be misread as "this screen is empty".
+
+Two deliberate cost controls, because a Unified screen item is many slow property reads:
+
+- **Without `--screen`, screens are summarised** (name/size/item count) and no items are read.
+  `--screen <name>` reads that screen's items; `--screen *` reads every screen's.
+- **`--max-items <n>`** (default 500) caps items read per screen. Truncation is always visible —
+  the true `ItemCount` is reported alongside the number actually shown, so a cap can never read as a
+  complete listing.
+
+Geometry is read through generic attribute access rather than a cast per concrete item type: there
+are ~50 of them across widgets/shapes/controls, they do not share one geometry base, and an item
+type a future TIA version adds still reports its position instead of throwing. Every read in the
+walker is individually defensive — these are the first calls this project makes into the HMI half of
+the API, and one property that throws on one item type must not lose the other 47 screens.
+
+Exits `0` when a project has no HMI device at all: "this project has none" is a legitimate answer to
+the question the command asks, not a failure.
 
 ## Exit codes
 
