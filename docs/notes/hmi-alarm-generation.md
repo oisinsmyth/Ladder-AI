@@ -135,6 +135,17 @@ But it has consequences that must be stated plainly in any future capability:
 at because the spreadsheet route already worked and widening scope mid-job wasn't warranted. It
 should be answered before FI-35 is built, since it changes the shape of the deliverable.
 
+> **ANSWERED 2026-08-07 — `openness-hmi-api-survey.md` (reflection survey, type-shape only).** It
+> depends entirely on the panel family, and is absolute in both directions. **Classic**
+> (Comfort/Advanced/Professional): **no** — there is no alarm type anywhere in
+> `Siemens.Engineering.Hmi.*`, so the spreadsheet route taken here was the *only* route, not a
+> missed one. **Unified**: **yes** — `HmiSoftware.DiscreteAlarms`/`.AnalogAlarms`/`.AlarmClasses`
+> are creatable with typed trigger and bit-number properties. That also revises points 1–3 above
+> for Unified specifically: `Validate()` supplies the missing gate; `RaisedStateTagBitNumber` puts
+> HMI-side bit numbering *in* the API; and `HmiAlarmClass` keeps C-506 severity and C-507
+> acknowledgement on separate fields, so the collapsed `Class` column is a spreadsheet artifact,
+> not a domain one. Scope is unchanged — the survey is reconnaissance, not a capability.
+
 ## 6. Process learnings
 
 - **The data-boundary refusal worked exactly as designed, and should not be softened.** `lad-coder`
