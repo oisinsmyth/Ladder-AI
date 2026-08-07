@@ -81,7 +81,7 @@ Same as generation (including running inside `lad-coder`, not the dispatching ag
 
 ## Conventions
 
-LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like C-101 in review findings). Comments: why, not what. Every network you create gets a title.
+LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like C-101 in review findings — in the *findings*, never in the LAD's own comments, see C-204). Comments open by saying **what the logic does**, with the *why* only where it's needed to understand the function (C-202, corrected 2026-08-07 — it used to say "why, not what"), and carry **no development history, no argument against rejected alternatives, and no convention citations** (C-204). Every network you create gets a title.
 
 ## Current stage
 

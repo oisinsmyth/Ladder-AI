@@ -329,15 +329,58 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 ## Commenting
 
 - C-201 *(error)* — Every network has a title; every block has a header comment (purpose, author, revision).
-- C-202 *(warn)* — Comments say *why*, not what (the rungs already say what).
+- C-202 *(warn)* — **A comment opens by saying what the logic DOES, in a sentence or two. The *why*
+  follows only where it is needed to understand the function.** *(Owner ruling, 2026-08-07. This
+  **corrects** the rule as it stood — "comments say why, not what (the rungs already say what)" —
+  which was written from the author's chair. The reader is usually at a cabinet with a fault, and
+  telling them only why a rung exists while they are still working out what it does is the wrong way
+  round.)*
+  *What survives from the old rule, because it was right about this:* **do not narrate contacts.**
+  A comment that walks the rung element by element restates what is already on screen and drifts the
+  first time anyone edits it. "What it does" means what the network achieves **as a whole** — the
+  summary the rungs cannot give — not a transcription of them.
+  *The caveat is narrow and it is real.* Include the reason where a reader would otherwise get it
+  wrong: an ordering that looks arbitrary and is not, a term that exists to prevent something they
+  would tidy away, behaviour that is deliberately absent. The worked example is
+  `patterns/valve-two-state` network 12 — *"the two coils must stay in this order; swapping them
+  gives an edge that never fires."* Without that line a well-meaning edit silently breaks a counter.
+  That is why-in-service-of-what, and it stays.
+  *Read with C-204*, which says what a comment must never contain, and C-203, which says the detail
+  belongs here rather than in the title.
+
 - C-203 *(warn)* — **Titles are short; comments carry the detail.** A block or network title is a
-  short description — what this is, in a phrase. The detailed explanation (the *why*, the
-  justification, the scheme) lives in the corresponding comment, never crammed into the title.
+  short description — what this is, in a phrase. The detailed explanation lives in the corresponding
+  comment, never crammed into the title. *(Amended 2026-08-07: this used to say the comment carries
+  "the why, the justification, the scheme". **The justification no longer belongs there at all** —
+  see C-204 — and the detail is now led by what the logic does, per C-202. The rule that titles stay
+  short is unchanged; only what the comment is carrying has.)*
   *(Owner ruling, 2026-07-16 — retrospective C-606/C-607 notes, generalized. C-606/C-607 point
   their justification text here.)*
 
 ## Data
 
+- C-204 *(warn)* — **A comment is documentation, not a development record. It must not contain
+  development history, argument against rejected alternatives, or references to these conventions.**
+  *(Owner ruling, 2026-08-07.)*
+  Three exclusions, all of them things that are genuinely valuable somewhere else:
+  1. **No history.** No "changed at phase 1.5", no "this used to be X", no dated rulings, no account
+     of what a member carried before. A block comment that reads as a changelog is one nobody
+     finishes.
+  2. **No argument.** A comment is not where a choice is defended against the alternatives that lost.
+     That is design-review material and it belongs in the design documents, which exist for it.
+  3. **No convention citations.** **Say the rule, do not cite it** — "the valve closes when the block
+     faults" rather than "fail-safe per C-403". Whoever opens this block does not have this document
+     and should not need it. If a rule matters to the reader then its substance matters; its number
+     never does.
+  *Why this is its own rule and not part of C-202.* C-202 is a judgement about emphasis and ordering
+  that only a reader can make. **This one is mechanical** — a comment containing `C-nnn`, a date, or
+  "used to be" fails it without anyone exercising taste, which makes it a candidate for the review
+  runner in a way C-202 is not.
+  *Grounding, measured rather than asserted (2026-08-07).* `patterns/valve-two-state/FB_Valve.ir`
+  carried a **752-word single-paragraph** block comment with **22 convention citations across 10
+  distinct rules**, plus dated rulings and passages defending choices against rejected alternatives.
+  Its opening sentence was good and everything after it buried that sentence. Nothing in the rule
+  base forbade any of it, because the drift happened one reasonable addition at a time.
 - C-301 *(error)* — No absolute addressing (%M, %DBx.DBWy) in logic; symbolic access only. **Documented exception:** slice access (`.%Xn`, `.%Bn`, …) is permitted in encode/decode contexts — alarm words (per C-501's **three** conditions: one network per word, every bit driven by a single named cause, and a bit map in the network comment — restated 2026-08-06, when those conditions changed), comms mapping, and data-handling blocks (C-105) — never in equipment control logic.
 - C-302 *(warn)* — UDTs for repeated equipment structures; no parallel loose-tag families (three conveyors as `FCC_Run`/`BC1_Run`/`BC2_Run` flat-tag copies silently diverge — one `UDT_Conveyor`, three instances). Data-side counterpart of C-106.
 - C-303 *(error)* — Optimized block access on unless a comms interface requires otherwise.
