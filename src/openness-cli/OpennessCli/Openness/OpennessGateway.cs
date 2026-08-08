@@ -1740,9 +1740,45 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new DeviceNotFoundException(deviceFilter);
         }
 
-        var result = CompileDeviceItem(candidates[0].Item, candidates[0].Path);
+        var result = CompileHmiTarget(candidates[0].Item, candidates[0].Path);
         SaveProject();
         return result;
+    }
+
+    /// <summary>
+    /// Finds the compilable for an HMI device by walking OUTWARD from the software-bearing item.
+    ///
+    /// Measured 2026-08-08: <c>GetService&lt;ICompilable&gt;()</c> returns **null** on the device item
+    /// that actually carries the <c>HmiSoftware</c> — and `HmiSoftware` itself is not an
+    /// <c>IEngineeringServiceProvider</c> at all, so it cannot supply one either. The PLC assumption
+    /// baked into <c>CompileDeviceItem</c> (item first, its software second) simply does not hold
+    /// here. So this climbs the ancestor chain to the station and finally tries the
+    /// <c>Device</c> itself, reporting exactly what it tried when nothing is compilable.
+    /// </summary>
+    private static CompileResult CompileHmiTarget(DeviceItem softwareItem, string path)
+    {
+        var tried = new List<string>();
+
+        for (IEngineeringObject? current = softwareItem; current is not null; current = TryReadObject(() => current.Parent) as IEngineeringObject)
+        {
+            var label = current.GetType().Name + (current is DeviceItem di ? $" '{TryRead(() => di.Name)}'" : string.Empty);
+            tried.Add(label);
+
+            if (current is not IEngineeringServiceProvider provider)
+            {
+                continue;
+            }
+
+            var compilable = TryReadObject(() => provider.GetService<ICompilable>()) as ICompilable;
+            if (compilable is not null)
+            {
+                return RunCompile(compilable);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"No ICompilable service anywhere in the device tree for HMI '{path}'. Tried, outward from the software-bearing item: {string.Join(" -> ", tried)}. " +
+            "Note HmiSoftware is not an IEngineeringServiceProvider, so it can never supply one.");
     }
 
     private static void CollectHmiDeviceItems(DeviceItem item, string parentPath, List<(DeviceItem, string)> found)

@@ -709,6 +709,20 @@ throughout because it never attaches. CLAUDE.md already records that two Opennes
 different projects, contend badly enough to look like a wedge** even though the concurrency design
 itself is sound.
 
+**The shared build output path is a contested resource — do not stage into it.** This session
+repeatedly copied its worktree build over
+`src/openness-cli/OpennessCli/bin/Debug/net48/openness-cli.exe` (the main checkout's output) to reuse
+that path. That was a mistake once a second session existed: **the other session runs the same
+binary from the same path**, and was observed running `list` against a live engineering job while the
+staged build was in place. It later rebuilt the path itself, silently discarding the staged build.
+So two sessions were overwriting one executable, each unaware of the other.
+
+Nothing broke — the staged build is a strict superset of the original's commands, and a running
+process holds its image so a mid-run replacement cannot affect it — but that is luck again. **Use the
+worktree's own binary directly.** The staging was originally adopted on the theory that only the
+main-checkout path was Openness-approved; that theory is dead (the worktree binary demonstrably
+worked in quiet windows), so the staging has no remaining justification.
+
 **Operational rules that follow:**
 
 - **Never kill an `openness-cli` process without reading its command line first.** Done wrong here:
