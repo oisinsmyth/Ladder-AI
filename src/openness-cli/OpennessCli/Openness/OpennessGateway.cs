@@ -514,14 +514,20 @@ public sealed class OpennessGateway : IOpennessGateway
             applied.Add($"set {target}.{attribute} = {coerced}");
         }
 
+        // Syntax findings join the validation list rather than living only in the applied-change
+        // text, so the command can FAIL on them. Measured 2026-08-08: a deliberately unparseable
+        // handler was accepted and the command still exited 0, because it gated on Validate() alone
+        // — and Validate() says nothing about scripts. A check whose result cannot fail the command
+        // is decoration.
+        var syntaxFindings = new List<HmiValidationMessage>();
         foreach (var (target, eventType, script) in events)
         {
             var subject = ResolveTarget(screen, target);
-            var created = CreateEventHandler(subject, eventType, script);
+            var created = CreateEventHandler(subject, eventType, script, syntaxFindings);
             applied.Add(created);
         }
 
-        var validation = ReadValidation(screen);
+        var validation = ReadValidation(screen).Concat(syntaxFindings).ToList();
         SaveProject();
 
         return new HmiEditScreenResult(devicePath, screenName, applied, validation, true);
@@ -578,7 +584,7 @@ public sealed class OpennessGateway : IOpennessGateway
     // Each item type has its own EventHandlers composition whose Create() takes that type's own
     // event enum — Create(HmiButtonEventType) and so on. Bound at runtime for the same reason
     // CreateScreenItem is: there are ~40 of them and a hand-written switch would rot.
-    private static string CreateEventHandler(IEngineeringObject subject, string eventTypeName, string? script)
+    private static string CreateEventHandler(IEngineeringObject subject, string eventTypeName, string? script, List<HmiValidationMessage> syntaxFindings)
     {
         var composition = subject.GetType().GetProperty("EventHandlers")?.GetValue(subject)
             ?? throw new HmiEventsNotSupportedException(subject.GetType().Name);
@@ -623,6 +629,11 @@ public sealed class OpennessGateway : IOpennessGateway
         // is the point: a script body is otherwise accepted verbatim with nothing checking it, which
         // is the HMI equivalent of importing LAD without compiling.
         var syntax = RunSyntaxCheck(scriptObject);
+        if (syntax.StartsWith("SYNTAX ERRORS", StringComparison.Ordinal) || syntax.StartsWith("SyntaxCheck threw", StringComparison.Ordinal))
+        {
+            syntaxFindings.Add(new HmiValidationMessage($"{subject.GetType().Name}.{eventTypeName}", "Error", syntax));
+        }
+
         return $"event {verb} {subject.GetType().Name}.{eventTypeName} ({script.Length} chars, {syntax})";
     }
 

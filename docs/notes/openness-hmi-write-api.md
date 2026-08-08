@@ -209,38 +209,43 @@ throws), and it objected to nothing.
 **So `Validate()` is not a semantic gate.** It does not check geometry, bounds, or the coherence of a
 screen. Whatever it does check — probably per-property type/format legality, which the `SetAttribute`
 coercion has already enforced by the time it runs — it is not a substitute for a human looking at the
-screen, and it must not be cited as one.
+screen, and it must not be cited as one. It also stayed silent on a screen carrying a **deliberately
+unparseable script** (§4f), which puts its uselessness beyond doubt.
 
-### What this overturns
+### What this overturns — and what §4e/§4f then put back
 
-**`openness-hmi-api-survey.md` §5.B's central claim is withdrawn.** That section argued Unified's
-"better verification story" — per-object, per-property errors *and* warnings, checkable before
-committing — was the strongest argument for the Unified architecture, and §6 used it to revise the
-alarm note's "there is no compile gate on the HMI side". That revision was **wrong**, and the
-original claim in `hmi-alarm-generation.md` was right:
+**`openness-hmi-api-survey.md` §5.B's claim about `Validate()` is withdrawn.** That section argued
+Unified's "better verification story" rested on per-object validation checkable before committing.
+`Validate()` does not provide that.
 
-> **There is no compile gate on the HMI side.** Not on classic, and — now measured — not on Unified
-> either. `Validate()` exists and returns a well-shaped result; it simply has nothing to say.
+**But the conclusion originally drawn from this — "there is no compile gate on the HMI side" — is
+ALSO wrong**, as §4e and §4f then measured. A device compile *is* a gate: it rejects a broken script
+with a located diagnostic and emits per-object semantic warnings. The correct statement is narrower
+than either earlier version:
 
-Both halves of the automated-checking story are now known to be shallow:
+> **`Validate()` is not a gate. The device compile is** — for script content and per-object
+> configuration. It does **not** check geometry, and its coverage of dangling references is untested.
+
+The three checks, in order of usefulness:
 
 | Check | Depth | Evidence |
 |---|---|---|
-| `UIBase.Validate()` | passes structurally invalid screens | measured, above |
-| `IHmiScript.SyntaxCheck()` | parses only; no name resolution | §4b |
+| `UIBase.Validate()` | per-property; passes invalid screens *and* broken scripts | §4c, §4f |
+| `IHmiScript.SyntaxCheck()` | locates syntax faults (line/col); resolves no names | §4b, §4f |
+| **device compile** | **script errors + per-object semantics; blind to geometry** | §4e, §4f |
 
-### Why this matters more than it looks
+### Why this matters
 
-The PLC side of this project is built on hard rule 4: nothing is presented until the tooling has
-*proven* it valid, and FI-52 exists because a device compile that looked green was not proof enough.
-**The HMI side has no equivalent and cannot be given one from the API.** Any HMI generation capability
-therefore inherits a fundamentally weaker guarantee than the LAD pipeline, and that difference should
-be stated to the engineer every time, not buried.
+The PLC side is built on hard rule 4: nothing is presented until the tooling has *proven* it valid,
+and FI-52 exists because a green device compile was not proof enough. The HMI side now has a
+comparable gate in the device compile — **but with the same class of trap, and worse**: its
+`ErrorCount`/`WarningCount` are demonstrably wrong (§4e, §4f), so a naive gate reading those numbers
+would pass a project with 156 warnings and, in the wrong direction, misreport error volume. Gate on
+`State` and walk the message tree.
 
-It also changes the architecture comparison. The parent survey framed the choice as *classic = fits
-our machinery but weak gate* versus *Unified = doesn't fit but better gate*. The second half of that
-is now false. Unified's real advantages are its object model and its readable tag/PlcTag join — not
-verification.
+The architecture comparison also stands corrected: Unified's advantages are its object model, its
+readable `Tag`/`PlcTag` join, **and a real compile gate** — just not the per-object validation that
+was first claimed.
 
 ### Why `Validate()` is shallow — it is structural, not a bug
 
@@ -252,6 +257,93 @@ items overlap" — because none of those belong to a single property.
 So this is not a shortcoming that a later TIA version might fix, and not something to be worked
 around by calling it differently. **`Validate()` will never be the reference-checking gate**, and any
 design that assumed it might should stop.
+
+### 4e. **The HMI compile DOES check screen content — measured 2026-08-08** [LIVE]
+
+Baseline compile of the real HMI device, everything in a valid state:
+
+```
+STATE: Success
+ERRORS: 0  WARNINGS: 0
+
+[Information] HMI_1:
+[Success]     Hardware configuration:
+[Information] Software compilation started.
+[Information] Software compilation completed.
+[Warning] No release button is defined for the object '<item>' in screen '<screen>'.   (x154)
+[Warning] Zooming is centrally enabled/disabled in the device Runtime settings …
+[Warning] The user "Anonymous" is not supported by WinCC Unified Runtime devices …
+```
+
+**This is the gate `Validate()` is not.** "No release button is defined for the object X in screen Y"
+is a **per-object, per-screen semantic finding** — precisely the class of question a per-property
+validator is structurally unable to ask (§4c). The compiler walks screen contents and reasons about
+them. 156 diagnostics on a project whose screens were all authored by hand in TIA.
+
+So the picture is now three-layered, and only the last one is worth anything:
+
+| Check | Depth |
+|---|---|
+| `IHmiScript.SyntaxCheck()` | parses; resolves no names |
+| `UIBase.Validate()` | per-property; blind to everything cross-object |
+| **device compile** | **walks screen contents, produces semantic diagnostics** |
+
+### ⚠ `CompilerResult.WarningCount` IS WRONG — do not gate on it
+
+The header says `WARNINGS: 0`. The message tree contains **156 warnings**. The aggregate counts on
+`CompilerResult` do not reflect the messages beneath it.
+
+This is the FI-52 trap again, in a nastier form: PLC-side, a green device compile was *incomplete*;
+here the count is **flatly false**. Anything gating on `ErrorCount`/`WarningCount` sees a clean
+result and discards 156 real findings. **Walk `Messages` recursively and count them yourself** —
+`openness-cli` collects the tree correctly but currently *reports* the header counts, which is a
+defect to fix rather than a quirk to document.
+
+`STATE: Success` alongside 156 warnings is defensible (warnings are not errors); `WARNINGS: 0` is
+not.
+
+### 4f. The positive control — compile IS a gate, with a hole [LIVE]
+
+The control state: a deliberately unparseable event handler **and** `Screen.Width = 0`, on the same
+screen, in one edit. Then compile.
+
+```
+STATE: Error
+ERRORS: 1  WARNINGS: 0
+
+[Error] ZZ_AI_TestScreen:
+[Error]   HmiButton_3:
+[Error]     SyntaxError: Unexpected identifier 's' in line 12, in column 8
+```
+
+**Compile is a real gate.** It rejected the broken script with a precise diagnostic, located to line
+and column, nested screen → item → error. The positive control did its job: this result makes the
+baseline interpretable, because we now know a clean compile means "checked and found nothing" rather
+than "did not look".
+
+**But `Width = 0` produced no message whatsoever.** So the gate has a defined shape:
+
+| Fault | Caught by compile? |
+|---|---|
+| Script syntax error | **YES** — exact location |
+| Missing release button (per object) | **YES** — as a warning (baseline, 154 of them) |
+| Zero-width screen | **NO** — silent, in both runs |
+
+So compile checks **script content and per-object configuration**, and does **not** sanity-check
+geometry. Untested, and the next thing worth probing: dangling references — a dynamization naming a
+tag that does not exist. That is the failure mode §4d says nothing else catches, and compile is now
+the only remaining candidate.
+
+**`SyntaxCheck()` also caught it, and better than expected** — it returned
+`Unexpected identifier 's' in Line 12 at Col 8` at *write* time, before any compile. So the
+script-side check is more useful than §4b concluded: it does not resolve names, but it does locate
+syntax faults precisely. Use it as a fast pre-check; use compile as the gate.
+
+### ⚠ Second count defect: `ERRORS: 1` against 6 error messages
+
+The invalid run reported `ERRORS: 1` while the message tree held **6** `[Error]` entries, and
+`WARNINGS: 0` against 156 warnings. Both aggregate counts are unreliable in both directions. Gate on
+`State`, and walk `Messages` yourself for anything you intend to show or count.
 
 ### The compile question, and how to test it properly
 

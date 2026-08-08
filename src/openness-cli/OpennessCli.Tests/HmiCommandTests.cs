@@ -396,6 +396,44 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void FormatCompileTable_CountsFromMessagesAndFlagsCompilerDisagreement()
+    {
+        // Measured against a real HMI device: the compiler reported WARNINGS=0 alongside 156 warning
+        // messages, and ERRORS=1 alongside 6 error messages. Its aggregates are wrong in both
+        // directions, so they must not be the numbers shown or gated on.
+        var result = new CompileResult(
+            Model.CompileState.Error,
+            ErrorCount: 1,
+            WarningCount: 0,
+            Messages: new[]
+            {
+                new CompileMessage(Model.CompileState.Error, "SyntaxError: bad", "Screen/Button"),
+                new CompileMessage(Model.CompileState.Error, "another", "Screen"),
+                new CompileMessage(Model.CompileState.Warning, "no release button", "Screen/Rect"),
+            });
+
+        var text = OutputFormatter.FormatCompileTable(result);
+
+        // Counts come from the messages, not the compiler's aggregates.
+        Assert.Contains("ERRORS: 2  WARNINGS: 1", text, StringComparison.Ordinal);
+        // And the disagreement is surfaced rather than silently papered over.
+        Assert.Contains("are not reliable", text, StringComparison.Ordinal);
+        Assert.Contains("ErrorCount=1", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatCompileTable_AgreeingCountsProduceNoNote()
+    {
+        var result = new CompileResult(
+            Model.CompileState.Success,
+            ErrorCount: 0,
+            WarningCount: 1,
+            Messages: new[] { new CompileMessage(Model.CompileState.Warning, "w", "p") });
+
+        Assert.DoesNotContain("are not reliable", OutputFormatter.FormatCompileTable(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FormatHmiEditScreenResult_ListsAppliedChangesAndValidation()
     {
         var result = new HmiEditScreenResult(

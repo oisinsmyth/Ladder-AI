@@ -251,10 +251,15 @@ This is **easier to write and harder to review**, and the asymmetry matters:
   counterpart `SyntaxCheck()` is shallow too — syntax only, no name resolution (§4b there). And the
   shallowness is **structural**: `HmiValidationResult` carries a `PropertyName`, so `Validate()` is a
   per-property checker, incapable by construction of cross-object questions like "does this tag
-  exist". **There is no per-object gate on the HMI side, on either family** (whether a device
-  *compile* gates is measured separately and was still unanswered at time of writing). Unified's real
-  advantages are its object model and its readable `Tag`/`PlcTag` join; verification is not among
-  them.
+  exist".
+
+  **But the gate exists elsewhere — measured 2026-08-08.** A *device compile* rejects a broken event
+  script with a located diagnostic (`SyntaxError … line 12, column 8`, nested screen → item → error)
+  and emits per-object semantic warnings across the project. It does **not** check geometry — a
+  zero-width screen compiles clean. So the accurate statement is: **`Validate()` is not a gate; the
+  device compile is, for script content and per-object configuration**
+  (`openness-hmi-write-api.md` §4e–4f). Unified's advantages are its object model, its readable
+  `Tag`/`PlcTag` join, and that compile gate — just not per-object validation.
 - **No diff surface.** With no export, there is no text artifact to diff, hash, or store. This
   repo's entire review model — IR diffs, `ir-hash`, golden round-trips, "prove the untouched
   networks identical" — assumes a serialisable representation. On Unified you would have to
@@ -288,13 +293,18 @@ on the panel family, and the answer is absolute in both directions.**
 
 **`hmi-alarm-generation.md` §5's three consequences**, revisited:
 
-1. **"There is no compile gate on the HMI side."** — **The note was RIGHT and this entry's original
-   rebuttal was wrong (corrected 2026-08-07).** It originally claimed Unified's `Validate()` made
-   this false and called it the strongest argument for Unified. Measured: `Validate()` accepts a
-   zero-width screen and an item 99999 px off-screen without a single error or warning
-   (`openness-hmi-write-api.md` §4c), and `SyntaxCheck()` resolves no names (§4b). **There is no
-   compile gate on the HMI side, on either family** — so an HMI generation capability inherits a
-   weaker guarantee than the LAD pipeline's, and that must be said to the engineer every time.
+1. **"There is no compile gate on the HMI side."** — **Twice corrected; here is the settled version
+   (2026-08-08).** This entry first claimed `Validate()` made the statement false; that was wrong,
+   `Validate()` is measurably shallow (§4c). It was then corrected to "the alarm note was right,
+   there is no gate at all" — **also wrong**. A *device compile* is a genuine gate: it rejects a
+   broken script with a located diagnostic and emits per-object semantic warnings
+   (`openness-hmi-write-api.md` §4e–4f). What it does not do is check geometry.
+
+   The alarm note's point survives in its own context — that job produced a *spreadsheet*, and no
+   compile was involved anywhere in it. But for content written through Openness into the project,
+   there is a gate, and it should be used. Caveat that matters: the compiler's own
+   `ErrorCount`/`WarningCount` are wrong in both directions, so gate on `State` and walk the message
+   tree.
 2. **"HMI-side bit numbering within a Word trigger tag is not in the export — it is an HMI
    convention."** — True for classic. **False for Unified**: `HmiDiscreteAlarm.RaisedStateTagBitNumber`
    (and the two acknowledgement bit-number properties) are first-class API fields. The mapping the

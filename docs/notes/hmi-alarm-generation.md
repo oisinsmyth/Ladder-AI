@@ -158,13 +158,19 @@ should be answered before FI-35 is built, since it changes the shape of the deli
 > so the collapsed `Class` column is a spreadsheet artifact, not a domain one. Scope is unchanged —
 > the survey is reconnaissance, not a capability.
 >
-> **Point 1 is NOT revised — and a same-day revision of it has been withdrawn.** This block briefly
-> claimed `Validate()` "supplies the missing gate". Measured hours later against a real device, it
-> does not: `Validate()` accepts a zero-width screen and an item positioned 99999 px outside its
-> screen, reporting no errors and no warnings, and the script-side `SyntaxCheck()` resolves no names
-> (`openness-hmi-write-api.md` §4b–4c). **§5's point 1 stands as originally written, for both HMI
-> families.** Anything generated HMI-side is unverified by tooling in a way PLC-side output never
-> is, and that gap should be stated to the engineer every time rather than assumed closed.
+> **Point 1 — revised twice, settled 2026-08-08.** This block first claimed `Validate()` "supplies
+> the missing gate"; measured, it does not — it accepts a zero-width screen and even a screen
+> carrying an unparseable script, silently. That withdrawal was then over-corrected to "there is no
+> gate at all", which is **also** wrong: a **device compile** rejects a broken script with a located
+> diagnostic (`SyntaxError … line 12, column 8`) and emits per-object semantic warnings across a
+> project (`openness-hmi-write-api.md` §4e–4f). It does not check geometry.
+>
+> **What that means for this note specifically: point 1 stands, in its own context.** This job
+> produced a *spreadsheet*, and no compile was involved anywhere in that path — a workbook handed to
+> an engineer is genuinely unverified. But content written **through Openness into the project** can
+> be compiled, and should be. If alarm generation ever moves from spreadsheet to API (which §5 says
+> is possible on Unified), it gains a real gate — with the caveat that the compiler's own
+> `ErrorCount`/`WarningCount` are unreliable, so gate on `State` and walk the messages.
 
 ## 6. Process learnings
 

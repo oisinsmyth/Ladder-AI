@@ -455,11 +455,32 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    /// <summary>
+    /// Counts recomputed from the message tree, NOT taken from the compiler's own aggregates.
+    /// Measured 2026-08-08 against a real HMI device: <c>CompilerResult</c> reported
+    /// <c>WARNINGS: 0</c> alongside 156 warning messages, and on a failing run <c>ERRORS: 1</c>
+    /// alongside 6 error messages. The aggregates are wrong in both directions, so anything gating
+    /// or reporting on them is wrong too. <c>State</c> remains trustworthy and is what gates.
+    /// </summary>
+    private static (int Errors, int Warnings) CountFromMessages(CompileResult result) =>
+        (result.Messages.Count(m => m.State == Model.CompileState.Error),
+         result.Messages.Count(m => m.State == Model.CompileState.Warning));
+
     public static string FormatCompileTable(CompileResult result)
     {
         var sb = new StringBuilder();
+        var (errors, warnings) = CountFromMessages(result);
         sb.Append("STATE: ").Append(result.State).Append('\n');
-        sb.Append("ERRORS: ").Append(result.ErrorCount).Append("  WARNINGS: ").Append(result.WarningCount).Append('\n');
+        sb.Append("ERRORS: ").Append(errors).Append("  WARNINGS: ").Append(warnings).Append('\n');
+
+        // The compiler's own aggregates are shown only when they DISAGREE with the messages, so the
+        // discrepancy is visible rather than silently papered over.
+        if (result.ErrorCount != errors || result.WarningCount != warnings)
+        {
+            sb.Append("NOTE: compiler reported ErrorCount=").Append(result.ErrorCount)
+              .Append(", WarningCount=").Append(result.WarningCount)
+              .Append(" — these disagree with the messages above and are not reliable; counts shown are from the message tree.\n");
+        }
 
         if (result.Messages.Count > 0)
         {
