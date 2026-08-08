@@ -48,6 +48,27 @@ pipeline. Nothing of it is unmerged and no branch of it survives. Map:
 **Unchanged by any of this:** S6 exit still needs its ten fresh plain-language requests. None of this
 work counts toward that tally — it is a validation fixture and the tooling that came out of it.
 
+## Awaiting the project owner — ADR-0007 (HMI engineering scope)
+
+**The FI-54 probe programme is finished** (2026-08-07 → 09, all six phases; see `docs/notes/stage-gates.md`'s
+cross-stage evidence section for the map). **One decision is open and it is the owner's**: ADR-0007 is
+**Proposed** with the measurement it was drafted waiting for, and deliberately carries no
+recommendation. Until it is decided:
+
+- `docs/10-non-goals.md`'s "not now" line for HMI engineering **stands**. Do not build HMI capability.
+- The five HMI **write** commands (`hmi-create-screen`, `hmi-edit-screen`, `hmi-new`, `hmi-delete`,
+  `hmi-set`) are **probes without a disposition** — ADR-0007 option 3 would freeze or remove them.
+  `openness-cli hmi` (read-only) is unaffected and useful either way.
+- The headline the owner needs: additively capable, **destructively unsafe by default** (deletion
+  orphans silently — a post-delete compile is mandatory), and **alarm text cannot be written at
+  all**, which blocks FI-35's alarm-list generation, the concrete use case the whole thing was for.
+
+**Three narrow follow-up probes** would sharpen that last point and are the only Unified work left
+(each is one probe, not a programme): why `MultilingualTextItem.set_Text` refuses; whether
+`RaisedStateTagBitNumber` is merely contextual (disabled until a trigger tag exists); and whether the
+three refused dynamization kinds have another creation route. Classic HMI is externally gated — no
+classic device exists locally and adding one is its own non-goal.
+
 ## Project stage
 
 **S3 — Comment generation, DONE — gate reviewed and signed off by the project owner, 2026-07-14.**

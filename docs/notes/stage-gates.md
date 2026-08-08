@@ -44,6 +44,19 @@ correlated-check root cause), `…-review-conventions.md`, `…-review-functiona
 `…-review-simplicity.md`, `docs/evidence/PlantAutoControl-answerkey/` (the sealed key), and the two
 adversarial design rounds `docs/evidence/four-rung-design-validation.md` / `…-round2.md`.
 
+**HMI capability probe (FI-54), 2026-08-07 → 2026-08-09 — RUN AND CLOSED, and it is NOT a stage or a
+capability.** TIA Openness's HMI surface walked live against JOB9002's scratch copy, so that ADR-0007
+would rest on measurement. `docs/10-non-goals.md`'s "not now" line for HMI engineering **still
+stands** — nothing here may be used as HMI engineering capability, and `openness-cli hmi-create-screen`
+/ `hmi-edit-screen` / `hmi-new` / `hmi-delete` / `hmi-set` remain **probe commands pending
+ADR-0007's disposition**. Record: `docs/notes/hmi-capability-probe-plan.md` (programme state, all six
+phases), `docs/notes/openness-hmi-write-api.md` (findings), `docs/notes/openness-hmi-api-survey.md`
+(the read survey), `docs/evidence/hmi-capability-probes.md` (transcripts, redacted per `docs/13`),
+`docs/adr/adr-0007-hmi-engineering-scope.md` (**Proposed — awaiting the project owner's decision**).
+Headline results: the create/modify/bind/script/compile chain works end to end; **deletion orphans
+silently**; **alarm text cannot be written at all**; 3 of 6 dynamization kinds and 21 of 56 item
+types refuse without saying why; and the device compile is a genuine reference-integrity gate.
+
 **Appending history going forward:** add dated entries to the relevant
 `docs/evidence/stage-SN.md`, and update this file's status table in place. Keep large
 verbatim transcripts (blind-run reports, full tool output) in the evidence docs — never
