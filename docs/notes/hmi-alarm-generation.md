@@ -152,11 +152,19 @@ should be answered before FI-35 is built, since it changes the shape of the deli
 > (Comfort/Advanced/Professional): **no** — there is no alarm type anywhere in
 > `Siemens.Engineering.Hmi.*`, so the spreadsheet route taken here was the *only* route, not a
 > missed one. **Unified**: **yes** — `HmiSoftware.DiscreteAlarms`/`.AnalogAlarms`/`.AlarmClasses`
-> are creatable with typed trigger and bit-number properties. That also revises points 1–3 above
-> for Unified specifically: `Validate()` supplies the missing gate; `RaisedStateTagBitNumber` puts
-> HMI-side bit numbering *in* the API; and `HmiAlarmClass` keeps C-506 severity and C-507
-> acknowledgement on separate fields, so the collapsed `Class` column is a spreadsheet artifact,
-> not a domain one. Scope is unchanged — the survey is reconnaissance, not a capability.
+> are creatable with typed trigger and bit-number properties. That also revises points 2–3 above
+> for Unified specifically: `RaisedStateTagBitNumber` puts HMI-side bit numbering *in* the API; and
+> `HmiAlarmClass` separates C-506 severity (`Priority`) from C-507 acknowledgement (`StateMachine`),
+> so the collapsed `Class` column is a spreadsheet artifact, not a domain one. Scope is unchanged —
+> the survey is reconnaissance, not a capability.
+>
+> **Point 1 is NOT revised — and a same-day revision of it has been withdrawn.** This block briefly
+> claimed `Validate()` "supplies the missing gate". Measured hours later against a real device, it
+> does not: `Validate()` accepts a zero-width screen and an item positioned 99999 px outside its
+> screen, reporting no errors and no warnings, and the script-side `SyntaxCheck()` resolves no names
+> (`openness-hmi-write-api.md` §4b–4c). **§5's point 1 stands as originally written, for both HMI
+> families.** Anything generated HMI-side is unverified by tooling in a way PLC-side output never
+> is, and that gap should be stated to the engineer every time rather than assumed closed.
 
 ## 6. Process learnings
 

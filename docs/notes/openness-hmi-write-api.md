@@ -181,6 +181,61 @@ behaves differently depending on which side of the fence it runs on.
 `HmiTextListComposition` both have **no `Create`** — import-only, undocumented format — and **Unified
 has no graphic-list type at all**.
 
+## 4c. **`Validate()` is SHALLOW — measured, 2026-08-07** [LIVE]
+
+The load-bearing question of both notes, finally tested, and the answer is the unwelcome one.
+
+Two deliberately invalid states were written to a real screen and `Validate()` was called on each:
+
+| Probe | State created | `Validate()` result |
+|---|---|---|
+| 1 | Screen `Width = 0` — a zero-pixel-wide screen | **no errors, no warnings** |
+| 2 | Item at `Left = 99999, Top = 99999` — far outside the screen | **no errors, no warnings** |
+
+Both were accepted, saved, and read back. `Validate()` ran in each case (it is not a no-op that
+throws), and it objected to nothing.
+
+**So `Validate()` is not a semantic gate.** It does not check geometry, bounds, or the coherence of a
+screen. Whatever it does check — probably per-property type/format legality, which the `SetAttribute`
+coercion has already enforced by the time it runs — it is not a substitute for a human looking at the
+screen, and it must not be cited as one.
+
+### What this overturns
+
+**`openness-hmi-api-survey.md` §5.B's central claim is withdrawn.** That section argued Unified's
+"better verification story" — per-object, per-property errors *and* warnings, checkable before
+committing — was the strongest argument for the Unified architecture, and §6 used it to revise the
+alarm note's "there is no compile gate on the HMI side". That revision was **wrong**, and the
+original claim in `hmi-alarm-generation.md` was right:
+
+> **There is no compile gate on the HMI side.** Not on classic, and — now measured — not on Unified
+> either. `Validate()` exists and returns a well-shaped result; it simply has nothing to say.
+
+Both halves of the automated-checking story are now known to be shallow:
+
+| Check | Depth | Evidence |
+|---|---|---|
+| `UIBase.Validate()` | passes structurally invalid screens | measured, above |
+| `IHmiScript.SyntaxCheck()` | parses only; no name resolution | §4b |
+
+### Why this matters more than it looks
+
+The PLC side of this project is built on hard rule 4: nothing is presented until the tooling has
+*proven* it valid, and FI-52 exists because a device compile that looked green was not proof enough.
+**The HMI side has no equivalent and cannot be given one from the API.** Any HMI generation capability
+therefore inherits a fundamentally weaker guarantee than the LAD pipeline, and that difference should
+be stated to the engineer every time, not buried.
+
+It also changes the architecture comparison. The parent survey framed the choice as *classic = fits
+our machinery but weak gate* versus *Unified = doesn't fit but better gate*. The second half of that
+is now false. Unified's real advantages are its object model and its readable tag/PlcTag join — not
+verification.
+
+**What could still provide a gate**, none of it tested: compiling the HMI device through
+`ICompilable` (the parent survey notes `HmiSoftware` has no `GetService<T>()`, so this must go via the
+device item), or the runtime's own load-time errors. Until one of those is proven, treat "it saved
+without complaint" as meaning exactly that.
+
 ## 5. What "do anything to it" would still require
 
 Ordered by what actually blocks a general capability:

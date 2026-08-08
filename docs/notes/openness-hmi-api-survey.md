@@ -242,10 +242,14 @@ No XML, no IR, no round trip. The AI emits a structured build plan; a builder wa
 
 This is **easier to write and harder to review**, and the asymmetry matters:
 
-- **Better gate.** `UIBase.Validate() : IList<HmiValidationResult>` returns per-property `Errors`
-  *and* `Warnings`, on every screen and every screen item. `IHmiScript.SyntaxCheck()` checks script
-  dynamizations. This is a genuine pre-commit check with **no PLC-side analogue** — nothing in
-  `SW.Blocks` offers per-object validation short of a compile.
+- ~~**Better gate.**~~ **WITHDRAWN 2026-08-07 — measured false.** This section originally argued that
+  `UIBase.Validate()` was a genuine pre-commit check with no PLC-side analogue, and that this was the
+  strongest argument for Unified. It is not. `Validate()` accepts a **zero-width screen** and an item
+  positioned **99999 px outside** its screen, reporting no errors and no warnings in both cases
+  (`openness-hmi-write-api.md` §4c). Its script-side counterpart `SyntaxCheck()` is shallow too —
+  syntax only, no name resolution (§4b there). **There is no compile gate on the HMI side, on either
+  family.** Unified's real advantages are its object model and its readable `Tag`/`PlcTag` join;
+  verification is not among them.
 - **No diff surface.** With no export, there is no text artifact to diff, hash, or store. This
   repo's entire review model — IR diffs, `ir-hash`, golden round-trips, "prove the untouched
   networks identical" — assumes a serialisable representation. On Unified you would have to
@@ -279,10 +283,13 @@ on the panel family, and the answer is absolute in both directions.**
 
 **`hmi-alarm-generation.md` §5's three consequences**, revisited:
 
-1. **"There is no compile gate on the HMI side."** — True for classic. **False for Unified**, which
-   has `Validate()` per object *and* per property, returning warnings as well as errors. This is
-   the strongest single argument for Unified if a generation capability is ever scoped, because it
-   is the only version of this that satisfies hard rule 4's *spirit* rather than approximating it.
+1. **"There is no compile gate on the HMI side."** — **The note was RIGHT and this entry's original
+   rebuttal was wrong (corrected 2026-08-07).** It originally claimed Unified's `Validate()` made
+   this false and called it the strongest argument for Unified. Measured: `Validate()` accepts a
+   zero-width screen and an item 99999 px off-screen without a single error or warning
+   (`openness-hmi-write-api.md` §4c), and `SyntaxCheck()` resolves no names (§4b). **There is no
+   compile gate on the HMI side, on either family** — so an HMI generation capability inherits a
+   weaker guarantee than the LAD pipeline's, and that must be said to the engineer every time.
 2. **"HMI-side bit numbering within a Word trigger tag is not in the export — it is an HMI
    convention."** — True for classic. **False for Unified**: `HmiDiscreteAlarm.RaisedStateTagBitNumber`
    (and the two acknowledgement bit-number properties) are first-class API fields. The mapping the
