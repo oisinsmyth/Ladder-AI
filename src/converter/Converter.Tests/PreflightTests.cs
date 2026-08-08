@@ -240,4 +240,46 @@ public class PreflightTests : IDisposable
         Assert.Contains("PRE-FLIGHT ONLY", text);
         Assert.Contains("SUMMARY:", text);
     }
+
+    // FI-60 (2026-08-08). Preflight's convert pass synthesized with NO callee registry, so a block
+    // containing a WIRED CALL always reported "cannot synthesize the wired CALL ... or pass
+    // --project <ir-dir>" — EVEN ON A RUN WHERE --project WAS PASSED. The advice in the message was
+    // the one thing that could not help, because preflight already had the project and never used
+    // it.
+    //
+    // It is a false positive, not a missed defect (`to-xml --project` converted the same files
+    // cleanly and both import and compile passed), which makes it the worse kind: it fires for
+    // anyone who adds a parameterised FC call, on a check whose entire value is that a finding
+    // means something.
+    [Fact]
+    public void Run_BlockWithWiredCallToAProjectBlock_DoesNotReportAMissingCallee()
+    {
+        SeedProject();
+
+        // The callee lives in the PROJECT, not in the batch — which is exactly the case the
+        // --project flag exists to cover.
+        WriteProjectFile("FC_Callee.ir", SerializeSynthesizable(new IrBlock(
+            "0", "FC", "FC_Callee", 41, "LAD", "Callee.",
+            new[] { new IrNetwork(1, "N", new[] { new CoilAssignment("DB_Marks.Run", new Expr.TagRef("Start_PB")) }) },
+            InputMembers: new[] { new DbMember("Enable", "Bool", Retain: false, StartValue: null) })));
+
+        // No stored sidecar, so preflight takes the SYNTHESIS path — which is where the false
+        // positive lived.
+        var caller = WriteBatchFile(IrSerializer.SerializeBlockReadable(new IrBlock(
+            "0", "FC", "FC_Caller", 42, "LAD", "Caller.",
+            new[]
+            {
+                new IrNetwork(1, "Call", Array.Empty<CoilAssignment>(), Calls: new[]
+                {
+                    new CallStatement("FC_Callee", null, new Expr.Literal("TRUE"),
+                        new CallArgument[] { new CallArgument.InputArg("Enable", new Expr.TagRef("Start_PB")) }),
+                }),
+            })));
+
+        var report = PreflightRunner.Run(new[] { caller }, _projectDir);
+
+        Assert.DoesNotContain(
+            Assert.Single(report.Files).Findings,
+            f => f.Description.Contains("wired CALL", StringComparison.Ordinal));
+    }
 }
