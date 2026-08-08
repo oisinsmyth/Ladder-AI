@@ -211,12 +211,36 @@ public static class BlockSourceWriter
     // Input/Output/InOut all share the same member shape (Static's own full shape minus the
     // SetPoint BooleanAttribute — confirmed real, 2026-07-12, S1 item 20) and the same
     // present-but-possibly-empty regeneration pattern, so one helper covers all three.
+    // FI-59 (2026-08-08). A PARAMETER SECTION NEVER CARRIES `Remanence`, whatever the IR says.
+    //
+    // TIA rejects it outright, at IMPORT, with a message that names the parameter and not the
+    // cause:
+    //     "FC_EStopAlarms.FirstScan: The Openness import failed: The attribute 'Remanence' cannot
+    //      be set."
+    // Retention is meaningless on an Input/Output/InOut parameter — it has no storage of its own —
+    // so there is no case in which emitting it is right.
+    //
+    // Previously the bare shape was opt-in per member, via a `BAREPARAM` token the author had to
+    // remember to write. That made the failure mode a late, confusing import rejection for a
+    // missing token, on a block that converted and preflighted clean. An agent adding the first
+    // parameterised FC call on this project hit exactly that and had to be told the token existed.
+    //
+    // Deriving it from the SECTION rather than from a token is the general fix: the section already
+    // knows these are parameters, which is a fact the file contains rather than something an author
+    // must not forget. Same reasoning as deriving multi-instance shape from the block's own CALL
+    // statements instead of a marker.
+    private static readonly HashSet<string> ParameterSectionNames =
+        new(StringComparer.Ordinal) { "Input", "Output", "InOut" };
+
     private static XElement WriteMemberSection(string name, IReadOnlyList<DbMember>? members)
     {
         var section = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", name));
+        var isParameterSection = ParameterSectionNames.Contains(name);
+
         foreach (var member in members ?? Array.Empty<DbMember>())
         {
-            section.Add(DbInterfaceMembers.WriteMember(member, includeSetPoint: false));
+            section.Add(DbInterfaceMembers.WriteMember(
+                member, includeSetPoint: false, bareShape: isParameterSection));
         }
 
         return section;
