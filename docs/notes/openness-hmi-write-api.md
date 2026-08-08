@@ -648,6 +648,116 @@ that has failed in this survey**: a reference to something that does not exist. 
 Three different operations, one failure mode, one detector. **Reference integrity is the whole of HMI
 correctness checking, and the device compile is the only thing that performs it.**
 
+## 4l. P3–P6 — dynamizations, alarms, logs, structure (2026-08-09) [LIVE]
+
+Thirty probes in one chained run. Device left with zero artifacts and a clean compile.
+
+### P3 — only 3 of 6 dynamization kinds can be created
+
+| Kind | Result |
+|---|---|
+| `TagDynamization` | ✅ (§4h) |
+| `ScriptDynamization` | ✅ created, `DynamizationType=Script` |
+| `ExpressionDynamization` | ✅ created, `DynamizationType=Expression` |
+| `FlashingDynamization` | ❌ refused |
+| `ResourceListDynamization` | ❌ refused |
+| `TagParameterDynamization` | ❌ refused |
+
+All three refusals give the same opaque `Error when calling method 'Create'` — the identical
+non-message the item-type refusals give (§4k). **Half the dynamization vocabulary is unreachable
+through `Dynamizations.Create<T>`.** Whether Flashing/ResourceList/TagParameter need a different
+route, a precondition, or a different property is UNKNOWN; the API declines to say.
+
+This matters for alarm-state display specifically: **`Flashing` is how a real HMI shows an
+unacknowledged alarm**, and it is one of the three that cannot be created this way.
+
+Compile with the two new kinds present flagged only the script one:
+`[Error] HmiIOField_2: The configured tag is invalid.` — a `ScriptDynamization` on `ProcessValue`
+with no script yet is treated as an invalid tag configuration. Same pattern as everything else: a
+reference that resolves to nothing, caught by the compile.
+
+### P4 — alarms create, but the useful fields REFUSE
+
+Alarm class, discrete alarm and analog alarm all created. Then:
+
+| Attempt | Result |
+|---|---|
+| `AlarmClass = ZZ_AI_AlarmClass` on the alarm | ✅ set |
+| `Priority = 7` on the class | ✅ set (Byte) |
+| `StateMachine = RaiseClearRequiresAcknowledgement` | ✅ set (enum parsed) |
+| **`RaisedStateTagBitNumber = 3`** | ❌ **REFUSED** — `set_RaisedStateTagBitNumber` threw |
+| **`EventText` via `MultilingualText`** | ❌ **REFUSED** — `set_Text` on `MultilingualTextItem` threw |
+
+**The two axes I corrected the survey about (§6) — `Priority` and `StateMachine` — are settable.
+The two things an alarm actually needs are not.**
+
+The bit number almost certainly refuses for the same reason `HmiDataType` did on a fresh tag (§4h):
+**contextual writability** — the field is disabled until a trigger tag exists. That is consistent,
+but it means alarm creation has an ordering requirement the schema does not express.
+
+**The alarm-text refusal is the significant one.** `MultilingualTextItem.set_Text` threw even though
+a language item existed to write into. So the awkward path the survey predicted is not merely
+awkward — on this project it did not work at all. Until that is solved, **alarm generation through
+Openness cannot produce alarm text**, which is most of the value in FI-35's use case. Cause UNKNOWN;
+worth a targeted probe (is the item read-only until the alarm has a trigger? does it need the
+project's editing language rather than the first language?).
+
+Compile confirmed what was missing rather than what was set:
+`Trigger tag: No trigger tag is configured` on both alarms, and `The trigger value is invalid`.
+
+### P5 — logs and connections create; their settings are the work
+
+Data log, alarm log and connection all created cleanly. The compile then named exactly what bare
+objects lack:
+
+```
+ZZ_AI_AlarmLog: Database of the log must be on the same medium as the main database for alarm logging.
+ZZ_AI_AlarmLog: No alarm class is configured for the alarm log. Assign at least one alarm class.
+ZZ_AI_DataLog:  Database of the log must be on the same medium as the main database for tag logging.
+```
+
+Creation is trivial; **configuration is the entire task**, and the compile enumerates the required
+fields precisely — which makes it a usable specification for what a log generator must set.
+
+### P6 — structure works, and one of my own reports was wrong
+
+Screen group created; screen window created and successfully pointed at another screen
+(`HmiScreenWindow_1.Screen = ZZ_AI_GroupedScreen`); **compile clean with both present** — the only
+phase whose compile passed, because nothing here left a dangling reference.
+
+**Correction — `--in` did nothing.** P6.2 reported `created Screens 'ZZ_AI_GroupedScreen' in
+'ZZ_AI_Group'`. That was **my tool repeating my intent, not reporting what happened.**
+`HmiScreenComposition.Create` takes **only a name** (verified by reflection), so the two-argument
+path silently fell back to the one-argument one and the screen was created **at the root**. Only
+`HmiTagComposition` has a two-argument `Create(name, tagTableName)`.
+
+So: **creating a screen inside a group is not reachable through the device-level `Screens`
+composition at all.** It would require resolving the composition on the *group* (`group.Screens`),
+which the generic `--kind` resolver — which only walks `HmiSoftware` — cannot currently do. Combined
+with the earlier finding that screens **cannot be moved between groups**, grouping is currently
+unreachable programmatically by this tool.
+
+The tool now prints an explicit `WARNING: --in was IGNORED` in that case. A message that repeats the
+caller's intent instead of what happened is worse than no message, and this one would have been
+recorded as a successful grouping.
+
+### The sweep found two more of the same defect — in the reporting, not the API
+
+Re-reading the exit codes after the run: **P3.2 and P4.4 both exited 0** while printing refusals, and
+both counted the refusals as work done — `changes applied: 5` for two successes and three refusals,
+`3 change(s)` for one success and two refusals.
+
+Three instances of one defect class in a single day, all mine: **the tool reported what was asked for
+rather than what happened.** `--in` was the loudest, but the exit code is the worse one, because it
+is the only signal a script reads and it said success.
+
+Fixed: the count now reads `2 (3 REFUSED)`, and **any** refusal exits `7 = CommandError`. The
+previous rule — exit 0 if at least one change landed — was defensible for a probe that wants every
+verdict, but the verdicts print either way, so it bought nothing and cost the exit code its meaning.
+Guarded by `DescribeAppliedCount_ExcludesRefusalsAndSaysHowMany`.
+
+**Raw transcripts for all six phases: `docs/evidence/hmi-capability-probes.md`.**
+
 ## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
 
 "Mapped" and "walked" are different questions and give very different answers. The surface, measured:
@@ -666,12 +776,15 @@ correctness checking, and the device compile is the only thing that performs it.
 
 | Axis | Walked | Of | Share |
 |---|---|---|---|
-| Distinct API members invoked | ~85 | 4549 | **~2%** |
-| Creatable kinds actually created | **7** | 80 | 9% |
+| Distinct API members invoked | ~130 | 4549 | **~3%** |
+| Creatable kinds actually created | **15** | 80 | 19% |
 | Screen-item types instantiated | **35 created / 56 attempted** (§4k) | 56 | **63% created, 100% attempted** |
 | Event values attached | **2** (`Tapped`, `Loaded`) | 246 | <1% |
-| Dynamization kinds created | **1** (`TagDynamization`) | 6 | 17% |
-| **Deletions performed** | **0** | 184 | **0%** |
+| Dynamization kinds created | **3 created / 6 attempted** (§4l) | 6 | **50% created, 100% attempted** |
+| **Deletions performed** | **~20, across 9 kinds** (§4j, §4l) | 184 | ~5% of types |
+
+*Updated 2026-08-09 after P1–P6. The two "attempted" rows are the useful ones: item types and
+dynamization kinds are now **exhaustively** probed, so their refusal sets are facts, not gaps.*
 
 ### But count MECHANISMS, not instances
 
@@ -689,27 +802,44 @@ same `Create<T>` as `HmiButton`; attaching `KeyDown` uses the same enum-keyed `C
 
 ### The real gaps — zero live contact, ranked by consequence
 
-1. **Deletion — 0 of 184 types.** Nothing has ever been deleted. The whole destructive half of the
-   lifecycle is unexercised, and it is the half where mistakes are unrecoverable. Highest-value
-   remaining probe.
-2. **Alarms — never created.** 311 exist on this device and the alarm use case (FI-35) is the most
-   concrete one this project has. `MultilingualText.Items.Find(language)` for alarm text is entirely
-   unverified, and it is the awkward part.
-3. **Connections, data logs, alarm logs, logging tags** — never created. This is the data-plumbing
-   half; a generated HMI that logs anything needs it.
-4. **The other 5 dynamization kinds** — `Script`, `Flashing`, `Expression`, `ResourceList`,
-   `TagParameter`. `Flashing` and `Script` are how real HMIs express alarm state.
-5. **Screen groups (create), plant views, runtime settings, faceplate containers, text lists** —
-   read or reflected only.
+*Struck through as P1–P6 closed them; what survives is the residue, 2026-08-09.*
+
+1. ~~**Deletion — 0 of 184 types.**~~ **CLOSED (P1, §4j).** Deletion **orphans silently**; the
+   compile is the only detector. Nine kinds deleted across the programme, all confirmed absent on
+   read-back.
+2. ~~**Alarms — never created.**~~ **CLOSED, badly (P4, §4l).** Class, discrete and analog alarms all
+   create; `Priority` and `StateMachine` set. But **alarm text cannot be written at all** —
+   `MultilingualTextItem.set_Text` throws. FI-35's alarm case is therefore **blocked on an unexplained
+   refusal**, not on missing tooling. This is the programme's most consequential single finding.
+3. ~~**Connections, data logs, alarm logs**~~ — **CLOSED (P5, §4l).** All create trivially; the work
+   is entirely in configuration, and the compile enumerates the required fields precisely enough to
+   serve as a specification. (Logging *tags* still unwalked.)
+4. ~~**The other 5 dynamization kinds**~~ — **CLOSED, half-negative (P3, §4l).** `Script` and
+   `Expression` create; **`Flashing`, `ResourceList` and `TagParameter` refuse.** `Flashing` is how a
+   real HMI shows an unacknowledged alarm, so this compounds gap 2.
+5. **Plant views, runtime settings, faceplate containers, text lists** — still read/reflected only.
+   Screen *groups* now create (P6), but **a screen cannot be created into one** through the
+   device-level composition, and screens cannot be moved between groups — so grouping is
+   programmatically unreachable.
 6. **Classic HMI — 100% unwalked live.** 64 types, zero live contact, because no classic device
-   exists in the available project. Its entire SimaticML round trip is untested.
-7. **Multi-language anything.** Every string written has been invariant-culture; `MultilingualText`
-   has never been written to.
+   exists in the available project. Its entire SimaticML round trip is untested. *(Won't-do: adding
+   a device is hardware configuration, its own non-goal.)*
+7. **Multi-language anything.** Still unwalked — and P4 suggests it may not merely be awkward but
+   refused. Every string written has been invariant-culture.
+8. **Event breadth — 2 of 246 values.** Unchanged by P1–P6. The *mechanism* is proven; the catalogue
+   is not.
 
 ### What that means for "could you do anything to it?"
 
 **Additively, on Unified: close to yes** — the create/modify/bind/script/compile chain is proven end
 to end. **Destructively: unknown**, and that is a real hole. **On classic: no evidence at all.**
+
+**Revised after P1–P6 (2026-08-09):** destructively is now **yes, but unsafely** — deletion works and
+**orphans silently**, so it is automatable only with a mandatory post-delete compile. Additively the
+answer has to come down slightly: not from anything failing to build, but because **three specific
+things refuse and none of them say why** — alarm text, three dynamization kinds, and 21 of 56 item
+types. "Anything to it" is bounded by a refusal set that only trial-and-error reveals, and that set
+happens to contain the two capabilities alarm generation most needs.
 
 The three findings that most changed the design picture all came from *walking*, not reading:
 `Validate()` being useless, the compile catching dangling references, and writability being

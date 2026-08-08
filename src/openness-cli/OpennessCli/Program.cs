@@ -249,17 +249,18 @@ internal static class Program
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         var applied = gateway.SetHmiObjectAttributes(options.Kind, options.Name, options.Sets, options.Texts);
-        Console.WriteLine($"{options.Kind} '{options.Name}': {applied.Count} change(s)");
+        Console.WriteLine($"{options.Kind} '{options.Name}': {OutputFormatter.DescribeAppliedCount(applied)} change(s)");
         foreach (var line in applied)
         {
             Console.WriteLine("  " + line);
         }
 
-        // Individual refusals are reported, not fatal — the probe wants every verdict — but if
-        // NOTHING succeeded the command achieved nothing and should say so with its exit code.
-        return applied.Any(a => a.IndexOf("REFUSED", StringComparison.Ordinal) < 0)
-            ? ExitCodes.Success
-            : ExitCodes.CommandError;
+        // ANY refusal exits non-zero. This used to exit 0 whenever at least one change landed, on the
+        // reasoning that the probe wants every verdict rather than a bail-out — but the verdicts are
+        // printed either way, and the exit code is the only thing a script reads. Measured 2026-08-09
+        // (P4.4): the alarm's class was set, its bit number and its EventText were both refused, and
+        // the command exited 0. Partial success is not success.
+        return OutputFormatter.CountRefusals(applied) > 0 ? ExitCodes.CommandError : ExitCodes.Success;
     }
 
     private static int RunHmiInventory(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds)
@@ -288,9 +289,14 @@ internal static class Program
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));
 
-        return result.Validation.Any(m => m.Severity is "Error" or "ValidateThrew")
-            ? ExitCodes.CompileFailed
-            : ExitCodes.Success;
+        if (result.Validation.Any(m => m.Severity is "Error" or "ValidateThrew"))
+        {
+            return ExitCodes.CompileFailed;
+        }
+
+        // Same rule as hmi-set: a refused change is a failed change. Measured 2026-08-09 (P3.2) —
+        // three of five dynamization kinds were refused and the command still exited 0.
+        return OutputFormatter.CountRefusals(result.Applied) > 0 ? ExitCodes.CommandError : ExitCodes.Success;
     }
 
     // The only writing HMI path. Gated on --yes like `delete`; the unconfirmed case never reaches

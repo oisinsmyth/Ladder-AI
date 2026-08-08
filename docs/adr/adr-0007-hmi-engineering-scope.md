@@ -36,6 +36,40 @@ Three constraints frame everything below, and none of them is a preference:
   presented until the tooling has proven it valid". What the HMI side has instead is set out below,
   and it is weaker.
 
+## Update — the probe programme finished (2026-08-09)
+
+This ADR was drafted after phase 1. FI-54's remaining Unified phases have since run
+(`docs/notes/hmi-capability-probe-plan.md`, transcripts in
+`docs/evidence/hmi-capability-probes.md`). **The arguments below are left as they were written**; the
+four things the measurement changed are recorded here, and marked in place where they contradict a
+paragraph.
+
+1. **The alarm case — the strongest single argument in "The case for" — is materially weakened.**
+   Alarm classes and discrete/analog alarms all create, and `Priority`, `StateMachine` and
+   `AlarmClass` all set. But **the alarm text cannot be written at all**: `MultilingualTextItem
+   .set_Text` throws. `RaisedStateTagBitNumber` also refuses on a fresh alarm. So "alarms need no
+   screen work at all" still holds, and "the API supports them where the spreadsheet did not" now has
+   an exception covering the two fields that carry the content. Whether this is a fixable ordering
+   problem or a hard limit is **unknown** and is one targeted probe away.
+2. **"Only ~2% has been walked" is answered, and answered in the ADR's own favour as an argument.**
+   Live coverage moved to ~3% of members — but item types and dynamization kinds are now
+   **exhaustively attempted**, and the exhaustive results are negatives: **21 of 56 item types
+   refuse**, **3 of 6 dynamization kinds refuse** (including `Flashing`, which is how alarm state is
+   displayed), and every refusal gives the same message with no reason. The predicted base rate held.
+3. **Deletion — "0 of 184, the unrecoverable half" — is walked, and the answer is bad.** Deleting an
+   object that is still referenced neither cascades nor refuses: **it orphans silently**, and only
+   the compile notices. Automating deletion therefore requires a mandatory post-delete compile.
+4. **The compile gate got stronger evidence, not weaker.** Across six phases it caught **five
+   independent routes to a dangling reference** and named the missing field each time
+   (`Trigger tag: No trigger tag is configured`, `No alarm class is configured for the alarm log`,
+   …). Bare alarms and logs are useless, and the compile enumerates precisely what a generator would
+   have to set — which is a usable specification, not just a gate.
+
+**Option 4 ("defer pending FI-54's later phases") is now largely spent for Unified** — those phases
+have run. What remains deferrable is classic, which is externally gated on hardware, and three narrow
+follow-up probes. **No decision is taken here either; the point of the update is that the question can
+now be answered on measurement rather than on a projection.**
+
 ## Decision
 
 **None taken.** The question put to the owner is:
@@ -85,6 +119,11 @@ trigger tag is a first-class field on Unified, and the `Class` column's collapse
 acknowledgement behaviour is an artifact of the spreadsheet, not the domain — the API models three
 independent axes. The `Tag`/`PlcTag` join that falsified the live job's name-equality assumption is
 **readable** (survey §6, §7). Alarms need no screen work at all.
+
+> **Contradicted in part, 2026-08-09 (update §1).** The typed fields exist and the classes create,
+> but **`EventText` cannot be written** and `RaisedStateTagBitNumber` refuses on a fresh alarm. Read
+> this paragraph as "the API *models* them where the spreadsheet did not" — modelling is confirmed,
+> writing the text is not.
 
 **Alarms also have no bulk path**, which cuts the same way: no import/export exists for them, so every
 alarm is an individual API call. On 311 alarms that is precisely the difference between a spreadsheet
@@ -142,6 +181,13 @@ then measured false: alarm-class "states" (visuals, not acknowledgement semantic
 (half writable, not read-only), and `Validate()` itself. **Three consequential surprises out of 2%**
 is the honest base rate for the remaining 98%.
 
+> **Superseded 2026-08-09 (update §§2–3).** The tallies here are the phase-1 ones. Current: ~3% of
+> members, **15 of 80** creatable kinds, **35 created of all 56** item types attempted, **3 created
+> of all 6** dynamization kinds attempted, ~20 deletions across 9 kinds. The *argument* survives the
+> update — the base rate held, and the new surprises (deletion orphans; alarm text refuses; a third
+> of the item catalogue and half the dynamization kinds refuse without saying why) are again mostly
+> negative. Event breadth is unchanged at **2 of 246**.
+
 ## Options considered
 
 1. **Accept — HMI engineering in scope, screens included.** Buys the proven write path and the
@@ -197,8 +243,9 @@ requires an explicit disposition for them, not silence.
 
 ## Revisit triggers
 
-Revisit if any of: FI-54's phase 2 lands (deletion and alarm creation walked live, moving the ~2%
-figure materially); a real job arrives on **classic** hardware, which reopens the §5.A architecture
+~~Revisit if any of: FI-54's phase 2 lands~~ **(done 2026-08-09 — see the update above; this trigger
+has fired and the ADR is updated, still undecided)**. Revisit if any of: a real job arrives on
+**classic** hardware, which reopens the §5.A architecture
 this repo's machinery already fits; a second alarm-extraction job comes up (FI-35's own trigger) and
 the spreadsheet route bites again; Siemens ships a Unified screen export, which would collapse the
 serialiser cost and most of the review-machinery objection at once; or the owner scopes FI-18, which

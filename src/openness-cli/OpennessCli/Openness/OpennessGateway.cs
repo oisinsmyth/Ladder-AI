@@ -1130,13 +1130,25 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var wanted = parent is null ? 1 : 2;
         var create = creates.FirstOrDefault(m => m.GetParameters().Length == wanted) ?? creates[0];
-        var args = create.GetParameters().Length == 2 ? new object[] { name, parent ?? string.Empty } : new object[] { name };
+        var usedParent = create.GetParameters().Length == 2;
+        var args = usedParent ? new object[] { name, parent ?? string.Empty } : new object[] { name };
 
         var created = create.Invoke(composition, args)
             ?? throw new InvalidOperationException($"{kind}.Create returned null for '{name}'.");
 
         SaveProject();
-        return $"created {kind} '{name}'{(parent is not null ? $" in '{parent}'" : string.Empty)} on {devicePath} [{created.GetType().Name}]";
+
+        // Say so when --in was DISCARDED. Measured 2026-08-09: HmiScreenComposition.Create takes only
+        // a name, so `--in <group>` silently fell back to the one-argument overload and the object
+        // was created at the root — while the report still claimed it went into the group. A message
+        // that repeats the caller's intent rather than what happened is worse than no message.
+        var parentNote = parent is null
+            ? string.Empty
+            : usedParent
+                ? $" in '{parent}'"
+                : $" — WARNING: --in '{parent}' was IGNORED ({kind}.Create takes a name only; the object was created at the root)";
+
+        return $"created {kind} '{name}'{parentNote} on {devicePath} [{created.GetType().Name}]";
     }
 
     /// <summary>

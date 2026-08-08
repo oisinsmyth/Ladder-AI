@@ -703,4 +703,33 @@ public class HmiCommandTests
         Assert.Contains("\"itemType\": \"HmiIOField\"", json, StringComparison.Ordinal);
         Assert.Contains("\"plcTag\": \"DB_X.Speed\"", json, StringComparison.Ordinal);
     }
+
+    // Guards the 2026-08-09 fix: refusals share the applied list with successes, so both the headline
+    // count and the exit code have to subtract them. The live probes reported "changes applied: 5"
+    // for two successes and three refusals, and exited 0 — a caller reading either signal would have
+    // recorded work that never happened.
+    [Fact]
+    public void DescribeAppliedCount_ExcludesRefusalsAndSaysHowMany()
+    {
+        var applied = new[]
+        {
+            "dynamization ScriptDynamization created on HmiIOField.ProcessValue",
+            "dynamization ExpressionDynamization created on HmiText.Visible",
+            "dynamization FlashingDynamization on HmiRectangle_1.Visible -> REFUSED (…)",
+            "dynamization ResourceListDynamization on HmiButton_4.Visible -> REFUSED (…)",
+            "dynamization TagParameterDynamization on HmiCircle_5.Visible -> REFUSED (…)",
+        };
+
+        Assert.Equal("2 (3 REFUSED)", OutputFormatter.DescribeAppliedCount(applied));
+        Assert.Equal(3, OutputFormatter.CountRefusals(applied));
+    }
+
+    [Fact]
+    public void DescribeAppliedCount_IsABareNumberWhenNothingWasRefused()
+    {
+        var applied = new[] { "set AlarmClass", "set Priority" };
+
+        Assert.Equal("2", OutputFormatter.DescribeAppliedCount(applied));
+        Assert.Equal(0, OutputFormatter.CountRefusals(applied));
+    }
 }

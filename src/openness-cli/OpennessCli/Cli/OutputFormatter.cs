@@ -12,6 +12,26 @@ public static class OutputFormatter
 {
     private static readonly string[] Headers = { "TYPE", "NUMBER", "NAME", "LANGUAGE", "SAFETY", "CONSISTENT", "PATH" };
 
+    // A refusal is recorded in the same list as a success, so both the count and the exit code have
+    // to subtract them. Measured 2026-08-09 (P3/P4): three refused dynamizations and a refused alarm
+    // text were reported as "changes applied: 5" / "3 change(s)" with exit 0 — a scripted caller
+    // reading the count or the exit code would have recorded work that never happened.
+    // net48 has no string.Contains(string, StringComparison).
+    public static bool IsRefusal(string line) => line.IndexOf("REFUSED", StringComparison.Ordinal) >= 0;
+
+    public static int CountRefusals(IEnumerable<string> applied) => applied.Count(IsRefusal);
+
+    // "2 (3 REFUSED)" rather than "5" — the headline number must mean what it says.
+    public static string DescribeAppliedCount(IReadOnlyList<string> applied)
+    {
+        var refused = CountRefusals(applied);
+        var succeeded = applied.Count - refused;
+        var text = succeeded.ToString(CultureInfo.InvariantCulture);
+        return refused == 0
+            ? text
+            : $"{text} ({refused.ToString(CultureInfo.InvariantCulture)} REFUSED)";
+    }
+
     public static string FormatTable(IReadOnlyList<BlockInfo> blocks)
     {
         if (blocks.Count == 0)
@@ -279,7 +299,7 @@ public static class OutputFormatter
     {
         var sb = new StringBuilder();
         sb.Append("EDITED screen '").Append(result.ScreenName).Append("' on ").AppendLine(result.DevicePath);
-        sb.Append("  changes applied: ").Append(result.Applied.Count.ToString(CultureInfo.InvariantCulture)).AppendLine();
+        sb.Append("  changes applied: ").Append(DescribeAppliedCount(result.Applied)).AppendLine();
         foreach (var change in result.Applied)
         {
             sb.Append("    ").AppendLine(change);

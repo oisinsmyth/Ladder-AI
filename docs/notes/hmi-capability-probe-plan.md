@@ -1,8 +1,9 @@
 # Programme — HMI capability probes (live), phases and results
 
 Modelled on `concurrent-portal-test-plan.md`: numbered phases, per-probe IDs, and **open questions
-answered in place** as they resolve. Findings go to `openness-hmi-write-api.md`; raw transcripts to
-`docs/evidence/`; this file is the programme's own state.
+answered in place** as they resolve. Findings go to `openness-hmi-write-api.md`; **raw transcripts to
+`docs/evidence/hmi-capability-probes.md`** (all six phases, append-only); this file is the
+programme's own state.
 
 **What this is for:** `openness-hmi-write-api.md` §4i measured ~2% of 4549 declared HMI members
 walked live, 0 of 184 deletions. Three of this project's most consequential HMI findings
@@ -47,10 +48,34 @@ Rationale for one generic trio rather than ~80 wrappers, and the delete-path re-
 |---|---|---|---|
 | **P1** | Deletion lifecycle | 0 of 184 deletable types | **DONE 2026-08-08 — see §4j** |
 | **P2** | Item-type breadth | 3 of 56 item types | **DONE 2026-08-09 — 35 create, 21 refuse; see §4k** |
-| **P3** | Dynamization kinds | 1 of 6 | not started |
-| **P4** | Alarms (+ `MultilingualText`) | FI-35's own use case | not started |
-| **P5** | Data plumbing (connections, logs) | never created | not started |
-| **P6** | Structure (groups, windows, plant views) | read-only so far | not started |
+| **P3** | Dynamization kinds | 1 of 6 | **DONE — only 3 of 6 creatable; §4l** |
+| **P4** | Alarms (+ `MultilingualText`) | FI-35's own use case | **DONE — alarms create, TEXT REFUSED; §4l** |
+| **P5** | Data plumbing (connections, logs) | never created | **DONE — create trivially, config is the work; §4l** |
+| **P6** | Structure (groups, windows, plant views) | read-only so far | **DONE — works; `--in` found to be a no-op; §4l** |
+
+**All six phases complete, 2026-08-09.** Device returned to zero probe artifacts and a clean compile
+after every phase.
+
+### What the programme changed
+
+It was run so ADR-0007's decision would rest on measurement. It produced four findings that a
+reflection map could not have, and three of them are **negative**:
+
+1. **Deletion orphans silently.** Automatable only with a mandatory post-delete compile.
+2. **Alarm text cannot be written.** `MultilingualTextItem.set_Text` throws. This is FI-35's own use
+   case, and it is blocked on an unexplained refusal rather than on missing tooling.
+3. **Half the dynamization vocabulary refuses**, including `Flashing` — which is how alarm state is
+   shown. Compounds (2).
+4. **`GetCreationInfos` overstates creatability by 21 of 56.** The creatable set is discoverable only
+   by trial.
+
+The positive result is that everything else worked: create/modify/bind/script/compile is proven end
+to end, and **the compile is a genuine reference-integrity gate** — across P1–P6 it caught five
+independent routes to a dangling reference, and in each case named the missing field precisely enough
+to serve as a specification for a generator.
+
+The honest summary for the ADR: *additively capable, destructively unsafe-by-default, and bounded by
+a refusal set that only trial reveals — which happens to contain what alarm generation needs most.*
 
 ### P1 — deletion lifecycle
 
@@ -86,7 +111,10 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
 3. ~~**Can a tag table be deleted while it still contains tags?**~~ — **ANSWERED: yes** (P1.5
    deleted `ZZ_AI_TestTags` after its tag was already gone; a fuller test with a populated table is
    worth doing when one exists).
-4. **Do the five untested dynamization kinds resolve at all?** — open (P3).
+4. ~~**Do the five untested dynamization kinds resolve at all?**~~ — **ANSWERED 2026-08-09: only two
+   do.** `Script` and `Expression` create; `Flashing`, `ResourceList` and `TagParameter` refuse with
+   the same opaque error the item-type refusals give. **Half the dynamization vocabulary is
+   unreachable** — including `Flashing`, which is how a real HMI shows an unacknowledged alarm (§4l).
 6. ~~**Is `GetCreationInfos`' creatable list honest?**~~ — **ANSWERED 2026-08-09: no.** It reports 56
    creatable screen-item types; 35 create. The 21 refusals are the 17 `*Base` types (none marked
    `abstract`) plus `HmiLabel`, `HmiProcessControl` and the two custom containers, and every refusal
@@ -94,8 +122,18 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
 7. **Why do `HmiLabel` and `HmiProcessControl` refuse?** — UNKNOWN. The containers plausibly need
    the two-argument `Create<T>(name, containedTypeValue)`; these two have no such explanation.
    Worth one targeted probe with the second overload.
-5. **Can alarm text be written via `MultilingualText.Items.Find(language)`?** — open (P4). Known
-   awkward: `Items` has no `Create`, and runtime languages cannot be added.
+5. ~~**Can alarm text be written via `MultilingualText.Items.Find(language)`?**~~ — **ANSWERED
+   2026-08-09: NO, not on this project.** `MultilingualTextItem.set_Text` threw even with a language
+   item present. So alarm generation through Openness currently **cannot produce alarm text**, which
+   is most of FI-35's value. Cause UNKNOWN — worth one targeted probe (read-only until a trigger tag
+   exists? wrong language item? project editing language vs first language?).
+8. **Why does `RaisedStateTagBitNumber` refuse on a fresh alarm?** — likely the same contextual
+   writability as `HmiDataType` on a fresh tag (§4h): disabled until a trigger tag exists. If so,
+   alarm creation has an ordering requirement the schema does not express.
+9. **Can a screen be created inside a group?** — **not through the device-level composition.**
+   `HmiScreenComposition.Create` takes a name only, so `--in` was a silent no-op (now warned about).
+   It would need the composition resolved on the *group*. With screens also unable to move between
+   groups, screen grouping is currently unreachable programmatically.
 
 ## Programme log
 
@@ -124,3 +162,26 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
   polled for two consecutive quiet intervals and launched the sweep unattended when the machine
   freed up — the right shape for this programme, since Portal availability is the binding constraint
   and it is not predictable.
+- **2026-08-09** — **P3–P6 COMPLETE**, run as one chained 30-probe sweep, again launched unattended
+  by the quiet-poll waiter. Two negative results dominate: **only 3 of 6 dynamization kinds can be
+  created**, and **alarm text cannot be written at all** (`MultilingualTextItem.set_Text` throws) —
+  the second directly undercuts FI-35's alarm use case and is the most consequential single finding
+  of the programme. Alarms/logs/connections all *create* trivially and are useless bare; the compile
+  named exactly which fields were missing each time — the fourth and fifth independent routes to a
+  dangling reference caught only by the compile. P6 also caught **a defect in my own tooling**:
+  `--in` was silently discarded while the success message claimed the object had been grouped. Fixed
+  to warn; recorded in §4l as a correction, since a report that echoes intent instead of outcome is
+  worse than none. **Programme closed: all six phases done, device left with zero artifacts and
+  `STATE: Success`.**
+- **2026-08-09 — data-boundary near-miss, worth recording.** The raw transcripts **enumerate real
+  restricted content** (311 discrete alarm names, equipment and screen names) because
+  `hmi-inventory` and the read-backs list the whole device. Committing them verbatim to
+  `docs/evidence/` would have breached `docs/13`'s JOB9002 rule — *example content in a committed doc
+  must be genericized* — even though every object the probes **touched** was invented. **The
+  transcripts of a probe are not as safe as the probe.** They are now filtered by a fail-closed
+  whitelist, with elisions counted and labelled in the file. **The first version of that filter
+  leaked two real tag names**: PowerShell's `-match` is case-insensitive, so an all-caps `WARNING`
+  entry matched an alarm class named `Warning` and a bare `SET` matched real tags named `Settings*`.
+  Rebuilt with `-cmatch` and anchored patterns, then verified by searching the output for known real
+  equipment tokens. A whitelist matched case-insensitively, or on unanchored prefixes, is not
+  fail-closed — it only looks it.
