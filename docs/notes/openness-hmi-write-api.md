@@ -321,6 +321,28 @@ and column, nested screen → item → error. The positive control did its job: 
 baseline interpretable, because we now know a clean compile means "checked and found nothing" rather
 than "did not look".
 
+**Re-run isolated (single variable), 2026-08-08.** The run above changed two things at once — broken
+script *and* `Width = 0` — so it pointed at the script without isolating it. Repeated with `Width`
+left at 1000 and **only** the script broken:
+
+```
+STATE: Error
+ERRORS: 6  WARNINGS: 156        (counted from the message tree)
+NOTE: compiler reported ErrorCount=1, WarningCount=0 — these disagree … and are not reliable
+
+[Error] ZZ_AI_TestScreen:
+[Error]   HmiButton_3:
+[Error]     SyntaxError: Unexpected identifier 's' in line 12, in column 8
+```
+
+Identical diagnostic, no width message, single variable. **The broken script alone causes the
+compile error** — the gate finding now rests on an isolated experiment rather than an inference from
+a combined one.
+
+The same run confirmed both fixes live: the injection **exited 8** (a broken script now fails the
+edit command, where it previously exited 0 with the fault as commentary), and the recount plus its
+disagreement note fired exactly as intended against the real compiler.
+
 **But `Width = 0` produced no message whatsoever.** So the gate has a defined shape:
 
 | Fault | Caught by compile? |
