@@ -642,3 +642,27 @@ network that was just redesigned reads as a *design* failure rather than a wrong
 **The practical lesson is the probe, not the instruction.** A construct never written on a project
 before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
 one probe cycle here and would have cost a misdiagnosed redesign otherwise.
+
+## `converter to-ir <file>` overwrites `<file>.ir` in place, and emits a sidecar by default
+**Confirmed live 2026-08-08, by an agent that destroyed its own work with it and reported it.**
+
+Converting a TIA re-export to compare it against the working IR is an obvious move — and running
+`to-ir ir/FB_Drum.xml` writes `ir/FB_Drum.ir`, **overwriting the file you were about to compare it
+against.** The agent lost every edit in two blocks this way. Worse, the rewritten files carried
+`SIDECAR` sections, which this corpus does not use, so the damage was not a clean revert either.
+
+**Convert an export on a COPY, in a scratch directory, never against `ir/`.** If you must convert in
+place, `--no-sidecar` at least matches this corpus's shape — and it verifies the sidecar is
+derivable (ADR-0005) as a side effect, which is a useful check in its own right.
+
+The repair is worth recording too, because it is the standard to hold: the agent re-derived the
+files, re-applied every edit from a scripted patch asserting exactly one match per anchor (17 of
+17), and then separately proved it had not reverted a *concurrent* agent's work on one of the same
+files, by diffing against a timestamped baseline and showing 13 networks of that agent's later work
+still present. Reporting the accident is the minimum; proving the blast radius is the bar.
+
+## A per-block `compile` exits 8 at `ERRORS: 0` on a project with a standing warning
+This project carries an inherited `"Inputs or outputs are used that do not exist in the configured
+hardware"` warning on every block, which sets `STATE: Warning`, and `RunCompile` returns
+`CompileFailed` for any state that is not `Success`. **Read the `ERRORS:` count, not the exit code**,
+for per-block compiles here. The exit code remains meaningful for `sanity-check`, which is the gate.
