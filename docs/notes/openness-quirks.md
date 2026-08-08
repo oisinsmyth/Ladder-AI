@@ -685,6 +685,44 @@ calls `Attach()` — so "portal-status works" says nothing about whether an atta
 default on a loaded machine, retry rather than concluding, and clear Portal pileup periodically —
 `openness-cli portal-status` classifies what is safe to close and never closes anything itself.
 
+### ROOT CAUSE FOUND, 2026-08-08: a CONCURRENT SESSION on the same machine
+
+The intermittent attach hangs above were never about the binary. **Another Claude Code session was
+driving `openness-cli` against a different project on the same machine at the same time**, and the
+two contend for Portal.
+
+It was identified by reading the command line of a running client rather than assuming it was ours:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name = 'openness-cli.exe'" |
+  ForEach-Object { "$($_.ProcessId): $($_.CommandLine)" }
+```
+
+which showed a **Release**-build client (ours is Debug) compiling a block in an entirely different
+project. That single command distinguishes "my stuck client" from "someone else's running work", and
+it should be the first thing run whenever a Portal operation hangs.
+
+This fits every observation: attaches succeed in quiet windows and hang while the other session is
+mid-operation, both binaries succeed and fail at different times, and `portal-status` keeps working
+throughout because it never attaches. CLAUDE.md already records that two Openness sessions on the
+*same project* are unsupported; what this adds is that **two sessions on the same machine, on
+different projects, contend badly enough to look like a wedge** even though the concurrency design
+itself is sound.
+
+**Operational rules that follow:**
+
+- **Never kill an `openness-cli` process without reading its command line first.** Done wrong here:
+  a stuck client was killed on the assumption it was ours, without checking, while a concurrent
+  session was working a **live engineering job**. A killed Openness client does not corrupt the project
+  (Portal keeps its own state, and `openness-cli` never closes a project it did not open), so the
+  worst case is someone else's command failing and needing a retry — but that is luck, not design.
+  The check costs one command.
+- **Expect long operations to be genuinely long.** A Unified HMI compile regenerates the runtime;
+  Portal was observed burning ~45 minutes of CPU on one project while another session compiled a
+  block on another.
+- **Don't fight it.** Raising `--timeout-connect` does not help when the contention lasts longer than
+  any sane timeout. Check who else is running, and wait for them.
+
 ### Unrelated but found at the same time: `Connect` attached to `GetProcesses()[0]` blindly
 
 `Connect()` took `TiaPortal.GetProcesses()[0]` unconditionally, which is fine with one Portal and
