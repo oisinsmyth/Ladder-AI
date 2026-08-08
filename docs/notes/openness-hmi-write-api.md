@@ -498,6 +498,74 @@ tag existed on the next run. Openness has no rollback: **anything a command did 
 persist.** Commands must therefore be written to be re-runnable, and a failure must never be read as
 "nothing happened".
 
+## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
+
+"Mapped" and "walked" are different questions and give very different answers. The surface, measured:
+
+| Denominator | Count |
+|---|---|
+| Public HMI types | 551 |
+| Declared public members | 4549 |
+| Creatable composition kinds (`Create` exists) | **80** |
+| Deletable types (`Delete()` exists) | **184** |
+| Concrete screen-item types | **56** |
+| Event values across 40 event enums | **246** |
+| Dynamization kinds | **6** |
+
+### Walked live — the honest tally
+
+| Axis | Walked | Of | Share |
+|---|---|---|---|
+| Distinct API members invoked | ~85 | 4549 | **~2%** |
+| Creatable kinds actually created | **7** | 80 | 9% |
+| Screen-item types instantiated | **3** (Rectangle, Text, Button) | 56 | 5% |
+| Event values attached | **2** (`Tapped`, `Loaded`) | 246 | <1% |
+| Dynamization kinds created | **1** (`TagDynamization`) | 6 | 17% |
+| **Deletions performed** | **0** | 184 | **0%** |
+
+### But count MECHANISMS, not instances
+
+Instance coverage understates it, because the catalogue is repetitive. The distinct *mechanisms* of
+driving a Unified HMI are nearly all walked:
+
+read the device tree · enumerate screens (incl. groups) · read items, properties, dynamizations and
+events · dump the creation/attribute schema · create a screen · create items · set attributes with
+type coercion · attach and update event handlers · set and syntax-check script bodies · create tag
+tables and tags · **bind a property to a tag** · replace a binding · validate · **compile** · save ·
+read back from a fresh process.
+
+What is *not* walked is mostly **more of the same shape**: instantiating a `HmiGauge` exercises the
+same `Create<T>` as `HmiButton`; attaching `KeyDown` uses the same enum-keyed `Create` as `Tapped`.
+
+### The real gaps — zero live contact, ranked by consequence
+
+1. **Deletion — 0 of 184 types.** Nothing has ever been deleted. The whole destructive half of the
+   lifecycle is unexercised, and it is the half where mistakes are unrecoverable. Highest-value
+   remaining probe.
+2. **Alarms — never created.** 311 exist on this device and the alarm use case (FI-35) is the most
+   concrete one this project has. `MultilingualText.Items.Find(language)` for alarm text is entirely
+   unverified, and it is the awkward part.
+3. **Connections, data logs, alarm logs, logging tags** — never created. This is the data-plumbing
+   half; a generated HMI that logs anything needs it.
+4. **The other 5 dynamization kinds** — `Script`, `Flashing`, `Expression`, `ResourceList`,
+   `TagParameter`. `Flashing` and `Script` are how real HMIs express alarm state.
+5. **Screen groups (create), plant views, runtime settings, faceplate containers, text lists** —
+   read or reflected only.
+6. **Classic HMI — 100% unwalked live.** 64 types, zero live contact, because no classic device
+   exists in the available project. Its entire SimaticML round trip is untested.
+7. **Multi-language anything.** Every string written has been invariant-culture; `MultilingualText`
+   has never been written to.
+
+### What that means for "could you do anything to it?"
+
+**Additively, on Unified: close to yes** — the create/modify/bind/script/compile chain is proven end
+to end. **Destructively: unknown**, and that is a real hole. **On classic: no evidence at all.**
+
+The three findings that most changed the design picture all came from *walking*, not reading:
+`Validate()` being useless, the compile catching dangling references, and writability being
+contextual. That ratio — three consequential surprises from ~2% of the surface — is the argument for
+walking more of it before trusting any of the remaining 98%.
+
 ## 4g. Coverage — how much of the HMI surface is actually mapped (2026-08-08)
 
 Measured, not estimated: **551 public HMI types, 4549 declared public members** in the V20 assembly
