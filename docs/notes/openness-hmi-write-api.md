@@ -429,6 +429,51 @@ built rather than borrowed.
 `Find`, no `Delete` — a TIA-made singleton reached by index), and `DriverProperty` (the set is fixed
 by the chosen `CommunicationDriver`; only `.Value` is writable).
 
+## 4g. Coverage — how much of the HMI surface is actually mapped (2026-08-08)
+
+Measured, not estimated: **551 public HMI types, 4549 declared public members** in the V20 assembly
+(`Siemens.Engineering.Hmi.*` 64 types / 633 members; `Siemens.Engineering.HmiUnified.*` 487 / 3916).
+
+Four levels of "mapped", because they are worth very different amounts:
+
+| Level | Meaning | Types | Share |
+|---|---|---|---|
+| **L3 live-verified** | exercised against a real device | ~10 types, ~60 members | **~1% of members** |
+| **L2 member-detailed** | every property/method read and written down | ~213 | ~39% |
+| **L1 enumerated** | type names and bases only | ~337 | ~61% |
+| **L0 untouched** | never looked at | ~0 | — |
+
+**What is L2 or better:** all of classic (64 types), and Unified's `Common`, `UI.Base`, `UI.Screens`,
+`UI.ScreenGroup`, all four `UI.Dynamization*`, `HmiTags`, `HmiAlarm(+Common)`, `HmiConnections`,
+`HmiLogging(+Common)`, `LoggingTags`, `HmiAudit`, `HmiOpcUaAlarm`, `Scripts`, `TextGraphicList`,
+`Library`, and `Cpm` (partly).
+
+**What is only L1 — and it is the bulk:** `UI.Events` (85 types, **1095 members**), `UI.Parts` (74,
+689), `UI.Shapes` (20, 220), `UI.Widgets` (18, 186), `UI.Controls` (10, 106), `UI.Features` (15, 74),
+`UI.Enum` (97 enums), `RuntimeSettings` (18, 194). Those namespaces hold **~52% of all declared
+members**.
+
+**But raw member count overstates that gap**, and saying so matters more than the number:
+
+- `UI.Events`' 1095 members are ~85 near-identical `HmiXxxEventHandler(Composition)` pairs. The
+  *structure* is fully mapped — every handler exposes `Script : IHmiScript`, `Create`/`Find` are
+  keyed by a per-type event enum, and the enums are enumerated (§4b/§4f). Reading the other 80 types
+  would add almost nothing.
+- `UI.Enum`'s 97 types declare zero members by construction; the ones that matter for authoring are
+  enumerated already.
+- `UI.Parts`/`Shapes`/`Widgets`/`Controls` are the *item catalogue*. Their shapes are highly regular
+  and, more usefully, **`hmi --schema` dumps any of them from the live device on demand** — so they
+  are queryable rather than needing pre-documentation. 13 of them are already dumped in full.
+
+**The honest headline is the L3 row, not the L2 one.** Roughly **1% of the surface has been proven
+against a real device**: screen create/edit, item create, attribute set, event create/update, script
+attach, `SyntaxCheck`, `Validate`, device compile, and the read walk. Everything else — every tag,
+alarm, connection, log, dynamization and runtime setting — is **reflection-shaped only**, and this
+session has already produced three cases where a confident reading of a shape turned out wrong when
+tested (alarm-class "states", the plant model, `Validate()` itself).
+
+So: the *map* is good enough to plan with; the *territory* has barely been walked.
+
 ## 5. What "do anything to it" would still require
 
 Ordered by what actually blocks a general capability:
