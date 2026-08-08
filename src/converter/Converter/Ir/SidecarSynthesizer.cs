@@ -629,30 +629,63 @@ public static class SidecarSynthesizer
     // magnitude, a tag by its registry-resolved type. The widest present wins (Real outranks the integer
     // widths). A tag-vs-tag comparison whose tags resolve now types from them (closing the wide-tag gap); one
     // with no resolvable type still falls back to "Int" (unchanged).
+    // FI-55 (2026-08-08). A TAG'S DECLARED TYPE OUTRANKS A LITERAL'S INFERRED ONE, ALWAYS.
+    //
+    // The literal's "type" is a guess from its digits; the tag's is a fact from its declaration.
+    // Letting them compete on one ladder meant an unsigned tag LOST to its own literal and the
+    // comparison was emitted as the signed type, which TIA rejects outright:
+    //     "The data type UInt of the actual parameter does not match the data type Int of the
+    //      formal parameter"
+    // Found live on `IO.UnloadHoldSeq <> IO.UnloadHoldAck`-adjacent logic — the first unsigned
+    // tag this corpus had ever compared to a constant.
+    //
+    // The old rank table was the mechanism: it listed Int/DInt/UDInt/LInt/ULInt/Real and returned
+    // 0 for everything else, so UInt, USInt, Byte, Word and SInt all ranked BELOW Int and any
+    // literal beat them. Widening the table alone would have fixed these five and left the same
+    // trap for the next type nobody listed — so the precedence rule is the fix and the wider table
+    // is the belt.
     private static string InferCompareSrcType(Expr left, Expr right, TagTypeRegistry tagTypes)
     {
-        var present = new[] { OperandType(left, tagTypes), OperandType(right, tagTypes) }
+        var fromTags = new[] { TagOperandType(left, tagTypes), TagOperandType(right, tagTypes) }
             .Where(t => t is not null)
             .Select(t => t!)
             .ToList();
-        return present.Count == 0 ? "Int" : present.OrderByDescending(TypeRank).First();
+
+        if (fromTags.Count > 0)
+        {
+            return fromTags.OrderByDescending(TypeRank).First();
+        }
+
+        // Literal-vs-literal, or tags whose types don't resolve: fall back to magnitude inference
+        // exactly as before.
+        var fromLiterals = new[] { LiteralOperandType(left), LiteralOperandType(right) }
+            .Where(t => t is not null)
+            .Select(t => t!)
+            .ToList();
+
+        return fromLiterals.Count == 0 ? "Int" : fromLiterals.OrderByDescending(TypeRank).First();
     }
 
-    private static string? OperandType(Expr expr, TagTypeRegistry tagTypes) => expr switch
-    {
-        Expr.Literal literal => InferLiteralConstantType(literal.Value),
-        Expr.TagRef tag => tagTypes.Resolve(tag.Path),
-        _ => null,
-    };
+    private static string? TagOperandType(Expr expr, TagTypeRegistry tagTypes) =>
+        expr is Expr.TagRef tag ? tagTypes.Resolve(tag.Path) : null;
 
+    private static string? LiteralOperandType(Expr expr) =>
+        expr is Expr.Literal literal ? InferLiteralConstantType(literal.Value) : null;
+
+    // Ordered by width, then by the pre-existing relative order among the types that were already
+    // listed (Int < DInt < UDInt < LInt < ULInt < Real is preserved exactly, just shifted) so this
+    // widening cannot change any comparison that already worked. Unknown still ranks 0 — but with
+    // the tag-wins rule above, a type landing here no longer loses to a literal.
     private static int TypeRank(string type) => type switch
     {
-        "Int" => 1,
-        "DInt" => 2,
-        "UDInt" => 3,
-        "LInt" => 4,
-        "ULInt" => 5,
-        "Real" => 6,
+        "SInt" or "USInt" or "Byte" => 1,
+        "Int" or "UInt" or "Word" => 2,
+        "DInt" or "DWord" => 3,
+        "UDInt" => 4,
+        "LInt" or "LWord" => 5,
+        "ULInt" => 6,
+        "Real" => 7,
+        "LReal" => 8,
         _ => 0,
     };
 
