@@ -1,0 +1,183 @@
+# WinCC Unified — the write/capability map (2026-08-07)
+
+Companion to `openness-hmi-api-survey.md`, which establishes *what the HMI API is*. This one answers
+the follow-on question the owner actually asked: **how much of an HMI could be driven programmatically,
+and where are the walls?**
+
+**Method and status.** Four parallel reflection surveys of the installed V20 assembly, plus web
+research for the runtime script surface. **Reflection gives type shape, not runtime behaviour** — the
+same caveat the parent survey carries. Where something has been executed against a real device it is
+marked **[LIVE]**; everything else is shape-only. Agent findings that contradicted or extended the
+parent survey were **re-verified directly** before being written down here, and two of them corrected
+it (§6).
+
+---
+
+## 1. The capability map
+
+| Area | Create | Modify | Delete | Status |
+|---|---|---|---|---|
+| Screens | yes | yes | yes | **[LIVE]** create + modify |
+| Screen items | yes | yes | yes | **[LIVE]** create + modify |
+| Event handlers | yes | yes (idempotent) | yes | **[LIVE]** |
+| Event scripts | yes | yes | — | **[LIVE]**, `SyntaxCheck()` available |
+| **Dynamizations (tag binding)** | yes | replace-only | yes | shape-only |
+| HMI tags / tag tables / groups | yes | yes | yes | shape-only |
+| Alarms (discrete/analog) + classes | yes | yes | yes | shape-only |
+| Screen groups | yes | name only | yes | shape-only |
+| Plant views / view nodes | **yes** | — | yes | shape-only |
+| Runtime settings (start screen, resolution) | n/a | yes | n/a | shape-only |
+| **Script modules** | **NO** | import only | **NO** | wall |
+| **Faceplate types** | **NO** | — | — | wall |
+| **Nested screen items** | **NO** | — | — | wall |
+| **Moving a screen between groups** | **NO** | — | — | wall |
+| Plant *object* model (`Cpm` interfaces/members) | **NO** | — | — | wall |
+| Runtime languages | **NO** (toggle/font only) | partial | — | wall |
+| System tags / system text lists / audit trails | **NO** | — | **NO** | wall |
+
+**Read the walls, not the yeses.** Most of the surface is creatable; the interesting engineering
+question is what is not, because that is what an "AI designs the HMI" story would have to work around.
+
+## 2. The four walls that shape any design
+
+**Screen item trees are ONE LEVEL DEEP.** Sweeping every public type for a property of type
+`HmiScreenItemBaseComposition` returns **exactly one hit: `HmiScreen.ScreenItems`** (verified
+directly). Container types expose no child-item composition at all — `HmiContainerBase`,
+`HmiCustomWebControlContainer` and `HmiFaceplateContainer` reference an *external* type by name
+through `ContainedType : String`, which is what the second `Create<T>(name, containedTypeValue)`
+overload sets. So through Openness a screen is a **flat list of absolutely-positioned items**, not a
+tree. Any layout intelligence has to be expressed as coordinates, and grouping is a naming
+convention, not a structure.
+
+**Faceplates can be instantiated, never authored.** There is no Unified faceplate *type* class at all;
+the only faceplate types in the assembly are Classic (`Hmi.Faceplate.FaceplateLibraryType`) and add
+nothing over generic library plumbing. `HmiFaceplateInterfaceComposition` has `Find` and no `Create`.
+This is the sharpest limit on reuse: the natural "define a pump faceplate once, stamp it 40 times"
+approach cannot have its *first half* automated. Stamping is available; authoring is not.
+
+**Script modules cannot be created or deleted** (verified directly: no `Create` on the composition,
+no `Delete()` on `HmiScriptModule`, and `Name` is get-only). The composition offers only
+`Import`/`Export(DirectoryInfo[, String])`, and the file format they use is **undocumented** — no
+doc-comment in the shipped XML, no schema in the install. Shared script libraries are therefore
+import-only and their format is a reverse-engineering job nobody should start casually.
+
+**Screens cannot move between groups.** `Parent` is get-only and an assembly-wide sweep for
+`Move`/`Reparent` found nothing applicable. Reorganising a screen hierarchy means delete-and-recreate,
+which destroys the screen's contents. Get the grouping right at creation time.
+
+## 3. Dynamizations — the PLC↔HMI coupling
+
+The highest-value gap in the parent survey, and the shape is now clear.
+
+```csharp
+// Composition is keyed by PROPERTY NAME; PropertyName is get-only, so "re-bind" is delete+create.
+var existing = item.Dynamizations.Find("ProcessValue");
+existing?.Delete();                                             // DynamizationBase.Delete() exists
+
+var d = item.Dynamizations.Create<TagDynamization>("ProcessValue");
+d.Tag = "SomeHmiTag";      // plain string — NO compile-time or assign-time existence check
+d.ReadOnly = false;
+
+_ = d.PlcTag;              // GET-ONLY read-back. Empty => unresolved.
+_ = d.Address;             // GET-ONLY
+_ = d.DataType;            // GET-ONLY
+```
+
+`Dynamizations` is declared exactly once, on `UI.UIBase`, so every screen, item and part inherits it
+identically — one mechanism, universally.
+
+**This sharpens the tag-naming finding in the parent survey (§7).** `PlcTag` is **not settable on the
+dynamization** — it is a read-back derived from the HMI tag's own `PlcTag`. So the chain is:
+
+```
+dynamization.Tag  ->  HmiTag.PlcTag  ->  PLC tag
+   (you set this)     (set on the tag)    (the PLC's own name)
+```
+
+Which is exactly why the two names differed on the real project: they are set in two different places
+and nothing forces them to agree. It also means the join an alarm/report tool needs is **derivable**,
+because both halves are readable — but only by reading the *tag*, not the dynamization alone.
+
+`ValueConverter`, `Trigger` and `MappingTable` have **no public constructor** — you configure the
+object the getter returns, in place. `Trigger.Tags` reflects as `System.Object`; its real type is
+UNKNOWN offline and needs `GetAttributeInfos()` against a live object.
+
+**UNVERIFIED and important:** whether binding to a *nonexistent* tag fails at assignment, at
+`Validate()`, or never. `Tag` being a plain string means nothing checks it at compile time. Until
+tested, treat tag existence as a **precondition the caller must enforce** — which is the HMI analogue
+of hard rule 3, on a surface where the tool cannot currently see the tag list at write time.
+
+## 4. Tags and alarms
+
+Every composition `Create` takes only a name (tags also accept `(name, tagTableName)`).
+
+```csharp
+var table = hmi.TagTables.Find("Process") ?? hmi.TagTables.Create("Process");
+var tag   = hmi.Tags.Create("SomeTag", "Process");
+tag.Connection = "<connection name>";
+tag.AccessMode = HmiAccessMode.SymbolicAccess;
+tag.PlcTag     = "<PLC tag>";          // the PLC hop lives HERE, not on the dynamization
+tag.HmiDataType = "Bool";
+```
+
+`TagTableName` and `TagType` are **read-only** — a tag's table is fixed at creation. Tag tables nest
+arbitrarily through `HmiTagTableGroup`.
+
+**Alarm text is the awkward part.** The text property is a `MultilingualText`, which is get-only and
+has **no `Create` on its `Items`** — you must `Find(language)` an existing project language and set
+`.Text` on it. So alarm generation depends on the project's language set already containing what you
+need, and runtime languages themselves cannot be added (`LanguageAndFonts` has no `Create`).
+
+**Alarms have no import/export at all**, so unlike tags there is no bulk path — every alarm is an
+individual API call. On a device with 311 discrete alarms that is the difference between a spreadsheet
+and a loop, and it is an argument *for* driving them programmatically rather than by hand.
+
+## 5. What "do anything to it" would still require
+
+Ordered by what actually blocks a general capability:
+
+1. **Test whether `Validate()` has any depth.** Still the load-bearing unknown; it has only ever been
+   shown valid input. Everything called a "gate" here rests on it.
+2. **Prove the dynamization write path live**, including the nonexistent-tag question in §3.
+3. **Decide the faceplate story**, because the nesting + faceplate-authoring walls together mean
+   reuse cannot be expressed structurally — only by repeating flat items.
+4. **A layout model.** One level deep and absolute coordinates means any "design a screen" capability
+   owns its own layout reasoning; the API contributes nothing.
+5. **A serialiser** (parent survey §5.B) — still the long pole for review, unchanged.
+
+## 6. Corrections to the parent survey
+
+Two claims in `openness-hmi-api-survey.md` were wrong. Both came from reading type *names* rather than
+type *shapes*, and both were caught by re-verifying an agent's contradicting report.
+
+**Correction 1 — alarm class states are VISUALS, not acknowledgement semantics.** §6 of the parent
+survey said `HmiAlarmClass` keeps severity and acknowledgement apart via "`Priority` on one axis;
+`StateMachine`, `AcknowledgedState`, `ClearedState`, `AcknowledgedClearedState` on the other". Wrong:
+`RaisedState`/`AcknowledgedState`/`ClearedState`/`AcknowledgedClearedState` are **not enums** — each
+is an `AlarmStatusVisuals` subclass carrying `BackColor`, `TextColor` and `Flashing`. They describe
+how an alarm *looks* in each state.
+
+The conclusion survives and is in fact cleaner than stated — there are **three** independent axes, not
+two:
+
+| Axis | Field |
+|---|---|
+| Severity | `Priority : Byte` |
+| Acknowledgement behaviour | `StateMachine : HmiAlarmStateMachine` — `Raise`, `RaiseClear`, `RaiseRequiresAcknowledgement`, `RaiseClearOptionalAcknowledgement`, `RaiseClearRequiresAcknowledgement`, `RaiseClearRequiresAcknowledgementAndReset` |
+| Per-state appearance | the four `AlarmStatusVisuals` properties |
+
+So the parent survey's point against the spreadsheet's single `Class` column stands, and is stronger:
+one column has to carry what the API models as three separate things.
+
+**Correction 2 — the plant model is only half read-only.** The parent survey said the `Cpm` namespace
+is read-only, "expose `Find(name)` but no `Create`". Verified directly: `PlantViewComposition.Create(String)`
+and `PlantViewNodeComposition.Create(String[, String])` **do** exist, and both types have `Delete()`.
+What is genuinely `Find`-only is the *object* half — `PlantObjectInterfaceComposition`,
+`PlantObjectInterfaceMemberComposition`, `PlantObjectLoggingTagComposition`. So plant *views* can be
+built programmatically; plant *object interfaces* cannot. (Note the root is project-level
+`Project.PlantViews`, not `HmiSoftware`.)
+
+**Method note worth keeping.** Both errors were of the same kind: a property called `AcknowledgedState`
+and a namespace with `Find` methods both *looked* self-explanatory. Neither was checked against its
+actual type. When a name implies a semantic, reflect the type — the assembly is the authority, and a
+plausible name is not evidence.

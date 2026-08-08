@@ -596,17 +596,77 @@ public sealed class OpennessGateway : IOpennessGateway
 
         object parsed = Enum.Parse(enumType, match);
 
-        var handler = create.Invoke(composition, new object[] { parsed })
+        // Find-then-Create, so the command is IDEMPOTENT: re-running it to change a script must
+        // update the existing handler, not stack a second one on the same event. Openness offers
+        // Find(eventType) on the same composition, which is exactly the lookup needed.
+        var find = composition.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == enumType);
+
+        var existing = find?.Invoke(composition, new object[] { parsed });
+        var reused = existing is not null;
+
+        var handler = existing
+            ?? create.Invoke(composition, new object[] { parsed })
             ?? throw new InvalidOperationException($"Creating the '{eventTypeName}' handler returned null.");
 
-        if (script is not null)
+        var verb = reused ? "updated" : "created";
+        if (script is null)
         {
-            var scriptObject = handler.GetType().GetProperty("Script")?.GetValue(handler)
-                ?? throw new InvalidOperationException($"The '{eventTypeName}' handler exposes no Script to set.");
-            scriptObject.GetType().GetProperty("ScriptCode")?.SetValue(scriptObject, script);
+            return $"event {verb} {subject.GetType().Name}.{eventTypeName} (no script)";
         }
 
-        return $"event {subject.GetType().Name}.{eventTypeName}" + (script is null ? " (no script)" : " (script set)");
+        var scriptObject = handler.GetType().GetProperty("Script")?.GetValue(handler)
+            ?? throw new InvalidOperationException($"The '{eventTypeName}' handler exposes no Script to set.");
+        scriptObject.GetType().GetProperty("ScriptCode")?.SetValue(scriptObject, script);
+
+        // SyntaxCheck() is on IHmiScript and had never been called by this project. Calling it here
+        // is the point: a script body is otherwise accepted verbatim with nothing checking it, which
+        // is the HMI equivalent of importing LAD without compiling.
+        var syntax = RunSyntaxCheck(scriptObject);
+        return $"event {verb} {subject.GetType().Name}.{eventTypeName} ({script.Length} chars, {syntax})";
+    }
+
+    // Returns a short human-readable verdict rather than throwing: a syntax problem should be
+    // reported alongside everything else that happened, not abort the whole edit halfway through.
+    private static string RunSyntaxCheck(object scriptObject)
+    {
+        try
+        {
+            var method = scriptObject.GetType().GetMethod("SyntaxCheck", Type.EmptyTypes);
+            if (method is null)
+            {
+                return "SyntaxCheck unavailable";
+            }
+
+            if (method.Invoke(scriptObject, null) is not Siemens.Engineering.HmiUnified.Common.HmiValidationResult result)
+            {
+                return "SyntaxCheck returned nothing";
+            }
+
+            var errors = (result.Errors ?? Enumerable.Empty<string>()).ToList();
+            var warnings = (result.Warnings ?? Enumerable.Empty<string>()).ToList();
+            if (errors.Count == 0 && warnings.Count == 0)
+            {
+                return "syntax OK";
+            }
+
+            var parts = new List<string>();
+            if (errors.Count > 0)
+            {
+                parts.Add("SYNTAX ERRORS: " + string.Join("; ", errors));
+            }
+
+            if (warnings.Count > 0)
+            {
+                parts.Add("warnings: " + string.Join("; ", warnings));
+            }
+
+            return string.Join(" | ", parts);
+        }
+        catch (Exception ex)
+        {
+            return $"SyntaxCheck threw {ex.GetType().Name}";
+        }
     }
 
     private static HmiScreen? FindScreenAnywhere(HmiSoftware software, string screenName)

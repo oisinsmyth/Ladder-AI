@@ -188,8 +188,13 @@ DynamizationType = None | Tag | Script | ResourceList | Flashing | Expression | 
 `HmiAlarmClass` (`Priority`, `StateMachine`, `RaisedState`, `AcknowledgedState`, `ClearedState`,
 `AcknowledgedClearedState`, `Log`). All three compositions expose `Create(name)`.
 
-**The plant object model (`Cpm`, 24 types) is read-only.** `PlantObjectInterface` /
-`PlantObjectInterfaceMember` / `PlantView` compositions expose `Find(name)` but **no `Create`**.
+**The plant object model (`Cpm`, 24 types) is only HALF read-only** *(corrected 2026-08-07 — this
+originally said read-only outright)*. The **object** half genuinely is: `PlantObjectInterface`,
+`PlantObjectInterfaceMember` and `PlantObjectLoggingTag` compositions expose `Find(name)` and **no
+`Create`**. But **`PlantViewComposition.Create(String)` and `PlantViewNodeComposition.Create(String[,
+String])` do exist**, and both types have `Delete()` — so plant *views* are buildable
+programmatically even though plant *object interfaces* are not. (Their root is project-level
+`Project.PlantViews`, not `HmiSoftware`.) See `openness-hmi-write-api.md` §6.
 Note the shape though: `PlantObjectInterface` carries `PlcTag` and `PlcName` alongside its
 `Members` tree — that is structurally the same idea as this project's own PLC-side interface-UDT
 house style (C-132/C-118), which is a meaningful convergence if FI-18 ever gets scoped.
@@ -284,11 +289,19 @@ on the panel family, and the answer is absolute in both directions.**
    tool was told it must never assert is, on Unified, a value it can *read and write*.
 3. **"The workbook's `Class` column collapses two independent axes"** (C-506 severity vs C-507
    acknowledgement). — That collapse is an artifact **of the spreadsheet**, not of the domain.
-   `HmiAlarmClass` keeps them separate: `Priority` on one axis; `StateMachine`,
-   `AcknowledgedState`, `ClearedState`, `AcknowledgedClearedState` on the other. The E-Stop
-   acknowledgement error that bit live is **not expressible** as the same error against this API —
-   you cannot blanket-fill one field and silently decide the other. The owner ruling that note asks
-   for is still needed, but on Unified it is a mapping decision, not a lossy-compression decision.
+   `HmiAlarmClass` keeps them separate: **`Priority : Byte`** for severity and
+   **`StateMachine : HmiAlarmStateMachine`** for acknowledgement behaviour (six values, from `Raise`
+   through `RaiseClearRequiresAcknowledgementAndReset`). The E-Stop acknowledgement error that bit
+   live is **not expressible** as the same error against this API — you cannot blanket-fill one field
+   and silently decide the other. The owner ruling that note asks for is still needed, but on Unified
+   it is a mapping decision, not a lossy-compression decision.
+
+   > **Corrected 2026-08-07.** This paragraph originally also listed `AcknowledgedState`,
+   > `ClearedState` and `AcknowledgedClearedState` as acknowledgement-axis fields. They are not:
+   > each is an `AlarmStatusVisuals` subclass carrying `BackColor`/`TextColor`/`Flashing`, i.e. how
+   > the alarm *looks* in that state. So the API models **three** independent axes, not two, and the
+   > argument against a single `Class` column is stronger than stated. Detail in
+   > `openness-hmi-write-api.md` §6.
 
 **A bonus find, PLC-side, directly relevant to FI-35.** Sweeping every type whose name contains
 "Alarm" (the check that confirmed classic has none) turned up `Siemens.Engineering.SW.Alarm` — 12

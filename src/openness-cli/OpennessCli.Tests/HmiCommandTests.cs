@@ -296,6 +296,45 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void Parse_HmiEditScreen_EventScriptFromFile()
+    {
+        // A real handler body is multi-line JavaScript; passing that as one shell argument is
+        // miserable, so '@' loads it from a file.
+        var path = System.IO.Path.GetTempFileName();
+        try
+        {
+            System.IO.File.WriteAllText(path, "let a = 1;\nHMIRuntime.Trace(a);\n");
+            var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--event", $"Button_1:Tapped@{path}", "--yes" });
+            var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+            Assert.Equal("Button_1", success.Options.Events[0].Target);
+            Assert.Equal("Tapped", success.Options.Events[0].EventType);
+            Assert.Contains("HMIRuntime.Trace(a);", success.Options.Events[0].Script!, StringComparison.Ordinal);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_MissingScriptFileIsRejected()
+    {
+        // Silently creating an empty handler because the path was wrong would be the worst outcome.
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--event", @"Button_1:Tapped@C:\no\such\file.js", "--yes" });
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("script file not found", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_InlineScriptMayContainAtSign()
+    {
+        // '=' comes first, so the '@' is part of the script, not a file marker.
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--event", "B:Tapped=t('a@b');", "--yes" });
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        Assert.Equal("t('a@b');", success.Options.Events[0].Script);
+    }
+
+    [Fact]
     public void Parse_HmiEditScreen_SetValueMayContainEquals()
     {
         var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--set", "Screen.OutputFormat={D,@dd=MM}", "--yes" });

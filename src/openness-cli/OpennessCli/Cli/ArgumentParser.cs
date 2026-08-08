@@ -190,7 +190,8 @@ public static class ArgumentParser
         "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
         "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.\n" +
-        "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>]]... --yes [--json] [...]\n" +
+        "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>|@<file>]]... --yes [--json] [...]\n" +
+        "    --event is idempotent: an existing handler for that event is UPDATED, not duplicated. '@<file>' loads a multi-line script body; the script's SyntaxCheck() is run and reported.\n" +
         "    Modifies an EXISTING screen and/or attaches event handlers. Target is an item name, or 'Screen' for the screen itself. --yes required.\n" +
         "    Event names are touch-first: Tapped/ContextTapped/KeyDown/KeyUp (buttons add Down/Up), screens use Loaded/Unloaded. There is no 'Click'.";
 
@@ -1134,35 +1135,66 @@ public static class ArgumentParser
         return true;
     }
 
-    // "<Target>:<EventType>[=<script>]". The script is optional — an event handler with no script is
-    // a legitimate thing to create.
+    // "<Target>:<EventType>", "<Target>:<EventType>=<inline script>", or
+    // "<Target>:<EventType>@<path to script file>". The file form exists because a real handler body
+    // is multi-line JavaScript, and passing that as one shell argument is miserable and error-prone.
+    // The script is optional either way — an event handler with no script is legitimate.
     private static bool TryParseEvent(string raw, out (string Target, string EventType, string? Script) ev, out string error)
     {
         ev = default;
         var colon = raw.IndexOf(':');
         if (colon <= 0 || colon == raw.Length - 1)
         {
-            error = $"--event expects '<Target>:<EventType>[=<script>]', got '{raw}'.";
+            error = $"--event expects '<Target>:<EventType>', '<Target>:<EventType>=<script>' or '<Target>:<EventType>@<file>', got '{raw}'.";
             return false;
         }
 
         var target = raw.Substring(0, colon);
         var rest = raw.Substring(colon + 1);
+
+        // Whichever separator comes FIRST wins, so a '@' inside an inline script and an '=' inside a
+        // file path are both harmless.
         var eq = rest.IndexOf('=');
-        if (eq < 0)
+        var at = rest.IndexOf('@');
+        var useFile = at >= 0 && (eq < 0 || at < eq);
+        var sep = useFile ? at : eq;
+
+        if (sep < 0)
         {
             ev = (target, rest, null);
-        }
-        else if (eq == 0)
-        {
-            error = $"--event is missing an event type before '=', got '{raw}'.";
-            return false;
-        }
-        else
-        {
-            ev = (target, rest.Substring(0, eq), rest.Substring(eq + 1));
+            error = string.Empty;
+            return true;
         }
 
+        if (sep == 0)
+        {
+            error = $"--event is missing an event type before the separator, got '{raw}'.";
+            return false;
+        }
+
+        var eventType = rest.Substring(0, sep);
+        var payload = rest.Substring(sep + 1);
+
+        if (!useFile)
+        {
+            ev = (target, eventType, payload);
+            error = string.Empty;
+            return true;
+        }
+
+        if (payload.Length == 0)
+        {
+            error = $"--event '@' expects a script file path after it, got '{raw}'.";
+            return false;
+        }
+
+        if (!System.IO.File.Exists(payload))
+        {
+            error = $"--event script file not found: '{payload}'.";
+            return false;
+        }
+
+        ev = (target, eventType, System.IO.File.ReadAllText(payload));
         error = string.Empty;
         return true;
     }
