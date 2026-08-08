@@ -56,6 +56,23 @@ internal static class Program
                 return RefuseUnconfirmedHmiEditScreen(unconfirmedEdit.Options);
             }
 
+            if (parseResult is ParseResult.HmiNewSuccess { Options.Confirm: false } unconfirmedNew)
+            {
+                Console.Error.WriteLine(
+                    $"Would create {unconfirmedNew.Options.Kind} '{unconfirmedNew.Options.Name}'" +
+                    (unconfirmedNew.Options.Parent is { } p ? $" in '{p}'" : string.Empty) +
+                    $" in project '{unconfirmedNew.Options.ProjectIdentifier}'. Nothing was created, and Portal was not contacted. Re-run with --yes to proceed.");
+                return ExitCodes.NotConfirmed;
+            }
+
+            if (parseResult is ParseResult.HmiDeleteSuccess { Options.Confirm: false } unconfirmedDel)
+            {
+                Console.Error.WriteLine(
+                    $"Would DELETE {unconfirmedDel.Options.Kind} '{unconfirmedDel.Options.Name}' from project " +
+                    $"'{unconfirmedDel.Options.ProjectIdentifier}'. Nothing was deleted, and Portal was not contacted. Re-run with --yes to proceed.");
+                return ExitCodes.NotConfirmed;
+            }
+
             if (parseResult is ParseResult.HmiCreateTagSuccess { Options.Confirm: false } unconfirmedTag)
             {
                 Console.Error.WriteLine(
@@ -93,6 +110,12 @@ internal static class Program
                     return RunHmiCompile(gateway, hmiCompile.Options, timeoutOpenSeconds);
                 case ParseResult.HmiCreateTagSuccess hmiTag:
                     return RunHmiCreateTag(gateway, hmiTag.Options, timeoutOpenSeconds);
+                case ParseResult.HmiNewSuccess hmiNew:
+                    return RunHmiObject(gateway, hmiNew.Options, timeoutOpenSeconds, isDelete: false);
+                case ParseResult.HmiDeleteSuccess hmiDel:
+                    return RunHmiObject(gateway, hmiDel.Options, timeoutOpenSeconds, isDelete: true);
+                case ParseResult.HmiInventorySuccess hmiInv:
+                    return RunHmiInventory(gateway, hmiInv.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -194,6 +217,31 @@ internal static class Program
 
         Console.Error.WriteLine("Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
         return ExitCodes.NotConfirmed;
+    }
+
+    private static int RunHmiObject(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds, bool isDelete)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var message = isDelete
+            ? gateway.DeleteHmiObject(options.Kind, options.Name, options.AllowAnyName)
+            : gateway.CreateHmiObject(options.Kind, options.Name, options.Parent);
+        Console.WriteLine(message);
+
+        // The delete path re-reads to confirm absence; if the object survived, that is a failure of
+        // the operation even though nothing threw.
+        // net48 has no string.Contains(string, StringComparison).
+        return message.IndexOf("STILL PRESENT", StringComparison.Ordinal) >= 0 ? ExitCodes.CommandError : ExitCodes.Success;
+    }
+
+    private static int RunHmiInventory(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var objects = gateway.InventoryHmi(string.IsNullOrEmpty(options.Kind) ? null : options.Kind);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatHmiInventoryJson(objects)
+            : OutputFormatter.FormatHmiInventoryTable(objects));
+
+        return ExitCodes.Success;
     }
 
     private static int RunHmiCreateTag(IOpennessGateway gateway, HmiCreateTagOptions options, int timeoutOpenSeconds)
@@ -457,6 +505,24 @@ public static class ExitCodes
         // Not a naming mistake, but it was already classified this way and the message is actionable
         // (it names the path and points at the quirks note).
         ExportProducedNoFileException => CommandError,
+
+        // The HMI family, added 2026-08-08. Every one of these was falling through to
+        // UnexpectedError = 5 and printing a full inner-exception chain, even though each is a
+        // user-fixable naming or usage mistake whose message already says exactly how to fix it —
+        // the same defect audit F-09 fixed for the PLC family above. A wrong screen name should not
+        // read as an internal fault.
+        NoUnifiedHmiDeviceException => CommandError,
+        AmbiguousHmiDeviceException => CommandError,
+        HmiScreenNotFoundException => CommandError,
+        HmiScreenItemNotFoundException => CommandError,
+        HmiScreenAlreadyExistsException => CommandError,
+        HmiTagAlreadyExistsException => CommandError,
+        HmiUnknownScreenItemTypeException => CommandError,
+        HmiUnknownAttributeException => CommandError,
+        HmiAttributeNotWritableException => CommandError,
+        HmiUnknownEventTypeException => CommandError,
+        HmiEventsNotSupportedException => CommandError,
+        HmiDynamizationsNotSupportedException => CommandError,
 
         _ => UnexpectedError,
     };

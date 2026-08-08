@@ -151,6 +151,12 @@ public sealed record HmiCreateScreenResult(
     bool Saved);
 
 /// <summary>
+/// One object in an HMI composition, as reported by `hmi-inventory`. Deliberately minimal — this is
+/// a census, not a description; `hmi --screen` and `--schema` are for detail.
+/// </summary>
+public sealed record HmiObjectInfo(string Kind, string Name, string TypeName);
+
+/// <summary>
 /// Result of editing an existing screen. <see cref="Applied"/> records each change in the form it was
 /// actually made, which is not always the form it was asked for — an attribute declared as an enum
 /// or a number takes a converted value, and saying so makes a silent coercion visible.

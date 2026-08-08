@@ -127,6 +127,21 @@ public sealed record HmiEditScreenOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Metamodel-driven object commands. `Kind` names a composition on HmiSoftware (Screens, Tags,
+// DiscreteAlarms, ...); one options record serves create, delete and inventory because the shape is
+// the same and three near-identical records would only drift.
+public sealed record HmiObjectOptions(
+    string ProjectIdentifier,
+    string Kind,
+    string Name,
+    string? Parent,
+    bool AllowAnyName,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // The one HMI-tag write. Kept separate from screen editing because a tag is device-scoped, not
 // screen-scoped, and creating one is not part of editing a screen.
 public sealed record HmiCreateTagOptions(
@@ -173,6 +188,12 @@ public abstract record ParseResult
 
     public sealed record HmiCreateTagSuccess(HmiCreateTagOptions Options) : ParseResult;
 
+    public sealed record HmiNewSuccess(HmiObjectOptions Options) : ParseResult;
+
+    public sealed record HmiDeleteSuccess(HmiObjectOptions Options) : ParseResult;
+
+    public sealed record HmiInventorySuccess(HmiObjectOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -207,6 +228,13 @@ public static class ArgumentParser
         "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.\n" +
         "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
         "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
+        "  openness-cli hmi-create-tag <project> --name <name> --table <table> [--datatype <t>] --yes\n" +
+        "  openness-cli hmi-compile    <project> [--device <name>] [--json]\n" +
+        "  openness-cli hmi-inventory  <project> [--kind <Composition>] [--json]      # read-only census of HMI objects\n" +
+        "  openness-cli hmi-new        <project> --kind <Composition> --name <name> [--in <parent>] --yes\n" +
+        "  openness-cli hmi-delete     <project> --kind <Composition> --name <name> --yes [--allow-any-name]\n" +
+        "    --kind names a composition on HmiSoftware (Screens, Tags, TagTables, ScreenGroups, DiscreteAlarms, AlarmClasses, Connections, DataLogs, ...).\n" +
+        "    hmi-delete refuses any name not starting with 'ZZ_AI_' unless --allow-any-name is given: it only removes its own probe artifacts.\n" +
         "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.\n" +
         "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>|@<file>]]... --yes [--json] [...]\n" +
@@ -238,6 +266,9 @@ public static class ArgumentParser
         ParseResult.HmiEditScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateTagSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiNewSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiDeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiInventorySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -261,6 +292,9 @@ public static class ArgumentParser
         ParseResult.HmiEditScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCompileSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateTagSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiNewSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiDeleteSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiInventorySuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -285,6 +319,9 @@ public static class ArgumentParser
             "hmi-create-screen" => ParseHmiCreateScreen(args),
             "hmi-edit-screen" => ParseHmiEditScreen(args),
             "hmi-create-tag" => ParseHmiCreateTag(args),
+            "hmi-new" => ParseHmiObject(args, "hmi-new", requireName: true, requireConfirm: true),
+            "hmi-delete" => ParseHmiObject(args, "hmi-delete", requireName: true, requireConfirm: true),
+            "hmi-inventory" => ParseHmiObject(args, "hmi-inventory", requireName: false, requireConfirm: false),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -293,7 +330,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-create-screen, hmi-edit-screen.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1243,6 +1280,114 @@ public static class ArgumentParser
         ev = (target, eventType, System.IO.File.ReadAllText(payload));
         error = string.Empty;
         return true;
+    }
+
+    // One parser for hmi-new / hmi-delete / hmi-inventory: the flag shape is identical and three
+    // near-copies would drift. `verb` decides which ParseResult comes back and whether --name and
+    // --yes are required (inventory is read-only, so neither is).
+    private static ParseResult ParseHmiObject(string[] args, string verb, bool requireName, bool requireConfirm)
+    {
+        string? projectIdentifier = null;
+        string? kind = null;
+        string? name = null;
+        string? parent = null;
+        var allowAnyName = false;
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--allow-any-name":
+                    allowAnyName = true;
+                    break;
+                case "--kind":
+                    if (!TryTakeValue(args, ref i, "--kind", out kind, out var kindErr))
+                    {
+                        return new ParseResult.Failure(kindErr);
+                    }
+
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    break;
+                case "--in":
+                    if (!TryTakeValue(args, ref i, "--in", out parent, out var parentErr))
+                    {
+                        return new ParseResult.Failure(parentErr);
+                    }
+
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (requireName && kind is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --kind <Composition> (e.g. Screens, Tags, DiscreteAlarms).{Environment.NewLine}{Usage}");
+        }
+
+        if (requireName && name is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <name>.{Environment.NewLine}{Usage}");
+        }
+
+        var options = new HmiObjectOptions(
+            projectIdentifier, kind ?? string.Empty, name ?? string.Empty, parent, allowAnyName,
+            confirm || !requireConfirm, json, tiaInstall, timeoutConnect, timeoutOpen);
+
+        return verb switch
+        {
+            "hmi-new" => new ParseResult.HmiNewSuccess(options),
+            "hmi-delete" => new ParseResult.HmiDeleteSuccess(options),
+            _ => new ParseResult.HmiInventorySuccess(options),
+        };
     }
 
     private static ParseResult ParseHmiCreateTag(string[] args)

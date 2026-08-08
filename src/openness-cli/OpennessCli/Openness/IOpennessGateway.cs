@@ -117,6 +117,21 @@ public interface IOpennessGateway : IDisposable
     string CreateHmiTag(string tagName, string tableName, string dataType);
 
     /// <summary>
+    /// Metamodel-driven create/delete/census over any composition on <c>HmiSoftware</c>, resolved by
+    /// name at runtime. One trio instead of a subcommand per kind — there are 80 creatable kinds and
+    /// 184 deletable types, and the API describes itself well enough that hand-writing wrappers
+    /// would be transcription rather than engineering.
+    ///
+    /// <see cref="DeleteHmiObject"/> enforces the probe-artifact prefix in code unless explicitly
+    /// overridden: it is the only destructive path here and it runs unattended.
+    /// </summary>
+    string CreateHmiObject(string kind, string name, string? parent);
+
+    string DeleteHmiObject(string kind, string name, bool allowAnyName);
+
+    IReadOnlyList<HmiObjectInfo> InventoryHmi(string? kindFilter);
+
+    /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
     /// <see cref="SafetyContentRefusedException"/>) before calling Export() at all if the block
     /// classifies as safety. <paramref name="deviceFilter"/> disambiguates when the same block
@@ -352,6 +367,61 @@ public sealed class GroupNotFoundException : Exception
 /// <see cref="GroupNotFoundException"/>, kept separate because the correction is different: not a typo
 /// in the path, but the wrong device item named along it.
 /// </summary>
+public sealed class HmiUnknownKindException : Exception
+{
+    public HmiUnknownKindException(string kind, IReadOnlyList<string> available)
+        : base($"'{kind}' is not a composition on HmiSoftware." +
+               (available.Count > 0 ? $" Available kinds: {string.Join(", ", available)}." : string.Empty))
+    {
+    }
+}
+
+public sealed class HmiKindNotCreatableException : Exception
+{
+    public HmiKindNotCreatableException(string kind)
+        : base($"The '{kind}' composition has no string-argument Create — objects of this kind cannot be created through Openness (script modules and text lists are import-only, for example).")
+    {
+    }
+}
+
+public sealed class HmiKindNotDeletableException : Exception
+{
+    public HmiKindNotDeletableException(string kind, string typeName)
+        : base($"'{typeName}' (in {kind}) declares no Delete() — this kind cannot be deleted through Openness. System tags, system text lists and the audit trail are like this by design.")
+    {
+    }
+}
+
+public sealed class HmiObjectAlreadyExistsException : Exception
+{
+    public HmiObjectAlreadyExistsException(string kind, string name)
+        : base($"A {kind} object named '{name}' already exists. This command creates and never overwrites — choose a different name, or delete the existing one first.")
+    {
+    }
+}
+
+public sealed class HmiObjectNotFoundException : Exception
+{
+    public HmiObjectNotFoundException(string kind, string name)
+        : base($"No {kind} object named '{name}' was found. List what exists with `openness-cli hmi-inventory <project> --kind {kind}`.")
+    {
+    }
+}
+
+/// <summary>
+/// The one place the data boundary is enforced in CODE rather than procedurally. Everything else in
+/// this tool is general-purpose and relies on a recorded scope; deletion runs unattended, so a
+/// mistyped name must not be able to remove a real screen, tag or alarm.
+/// </summary>
+public sealed class HmiRefusedToDeleteRealObjectException : Exception
+{
+    public HmiRefusedToDeleteRealObjectException(string name, string requiredPrefix)
+        : base($"Refusing to delete '{name}': this tool only deletes its own probe artifacts, whose names start with '{requiredPrefix}'. " +
+               "Pass --allow-any-name to override, which is never correct for unattended work and must be a deliberate, supervised choice.")
+    {
+    }
+}
+
 public sealed class HmiDynamizationsNotSupportedException : Exception
 {
     public HmiDynamizationsNotSupportedException(string typeName)

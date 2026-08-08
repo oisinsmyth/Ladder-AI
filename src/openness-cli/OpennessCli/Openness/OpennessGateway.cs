@@ -929,6 +929,211 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    /// <summary>
+    /// The prefix every object this tool creates must carry, and the ONLY prefix it will delete by
+    /// default. The data-boundary restriction is procedural everywhere else in this tool; for the
+    /// destructive path it is enforced in code, because this programme runs unattended and a
+    /// mistyped name must not be able to delete one of the 48 real screens or 233 real tags.
+    /// </summary>
+    public const string ProbeArtifactPrefix = "ZZ_AI_";
+
+    /// <summary>
+    /// Metamodel-driven create: resolves a composition on <c>HmiSoftware</c> BY NAME at runtime and
+    /// invokes its <c>Create</c>. One method instead of a subcommand per kind — there are 80
+    /// creatable composition kinds, and the API is self-describing enough that hand-writing 80
+    /// wrappers would be transcription, not engineering.
+    /// </summary>
+    /// <param name="parent">Second Create argument where the composition takes one (e.g. a tag's
+    /// table name). Ignored by single-argument Creates.</param>
+    public string CreateHmiObject(string kind, string name, string? parent)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CreateHmiObject)}.");
+        }
+
+        var (software, devicePath) = FindSingleUnifiedSoftware();
+        var composition = ResolveComposition(software, kind);
+
+        if (FindInComposition(composition, name) is not null)
+        {
+            throw new HmiObjectAlreadyExistsException(kind, name);
+        }
+
+        // Prefer the overload whose argument count matches what the caller supplied, so `--in`
+        // selects Tags.Create(name, table) over Tags.Create(name) without special-casing tags.
+        var creates = composition.GetType().GetMethods()
+            .Where(m => m.Name == "Create" && !m.IsGenericMethodDefinition)
+            .Where(m => m.GetParameters().All(p => p.ParameterType == typeof(string)))
+            .OrderByDescending(m => m.GetParameters().Length)
+            .ToList();
+
+        if (creates.Count == 0)
+        {
+            throw new HmiKindNotCreatableException(kind);
+        }
+
+        var wanted = parent is null ? 1 : 2;
+        var create = creates.FirstOrDefault(m => m.GetParameters().Length == wanted) ?? creates[0];
+        var args = create.GetParameters().Length == 2 ? new object[] { name, parent ?? string.Empty } : new object[] { name };
+
+        var created = create.Invoke(composition, args)
+            ?? throw new InvalidOperationException($"{kind}.Create returned null for '{name}'.");
+
+        SaveProject();
+        return $"created {kind} '{name}'{(parent is not null ? $" in '{parent}'" : string.Empty)} on {devicePath} [{created.GetType().Name}]";
+    }
+
+    /// <summary>
+    /// Metamodel-driven delete. Enumerates the composition and matches on <c>Name</c> rather than
+    /// using <c>Find</c>, because Find's signature varies across compositions (some key on an enum,
+    /// some on a string) while every composition is enumerable and every deletable object has a
+    /// Name.
+    /// </summary>
+    public string DeleteHmiObject(string kind, string name, bool allowAnyName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(DeleteHmiObject)}.");
+        }
+
+        if (!allowAnyName && !name.StartsWith(ProbeArtifactPrefix, StringComparison.Ordinal))
+        {
+            throw new HmiRefusedToDeleteRealObjectException(name, ProbeArtifactPrefix);
+        }
+
+        var (software, devicePath) = FindSingleUnifiedSoftware();
+        var composition = ResolveComposition(software, kind);
+
+        var target = FindInComposition(composition, name)
+            ?? throw new HmiObjectNotFoundException(kind, name);
+
+        var delete = target.GetType().GetMethod("Delete", Type.EmptyTypes)
+            ?? throw new HmiKindNotDeletableException(kind, target.GetType().Name);
+
+        var typeName = target.GetType().Name;
+        delete.Invoke(target, null);
+        SaveProject();
+
+        // Prove it by re-reading rather than trusting the call: Openness has no transaction, so
+        // "did not throw" is not the same as "is gone".
+        var stillThere = FindInComposition(ResolveComposition(software, kind), name) is not null;
+        return stillThere
+            ? $"DELETE CALLED but '{name}' is STILL PRESENT in {kind} — the object did not go away"
+            : $"deleted {kind} '{name}' [{typeName}] on {devicePath}; confirmed absent on re-read";
+    }
+
+    public IReadOnlyList<HmiObjectInfo> InventoryHmi(string? kindFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(InventoryHmi)}.");
+        }
+
+        var (software, _) = FindSingleUnifiedSoftware();
+        var results = new List<HmiObjectInfo>();
+
+        foreach (var property in software.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (!property.PropertyType.Name.EndsWith("Composition", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (kindFilter is not null && !string.Equals(property.Name, kindFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryReadObject(() => property.GetValue(software)) is not System.Collections.IEnumerable items)
+            {
+                continue;
+            }
+
+            try
+            {
+                foreach (var item in items)
+                {
+                    if (item is null)
+                    {
+                        continue;
+                    }
+
+                    var itemName = TryRead(() => item.GetType().GetProperty("Name")?.GetValue(item) as string) ?? "(unnamed)";
+                    results.Add(new HmiObjectInfo(property.Name, itemName, item.GetType().Name));
+                }
+            }
+            catch (Exception)
+            {
+                // A composition that refuses to enumerate is reported by its absence, not by an
+                // exception that would lose the other 19.
+            }
+        }
+
+        return results;
+    }
+
+    // Resolves e.g. "Tags" / "DiscreteAlarms" / "Screens" to the composition object on HmiSoftware.
+    private static object ResolveComposition(HmiSoftware software, string kind)
+    {
+        var property = software.GetType()
+            .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .FirstOrDefault(p => string.Equals(p.Name, kind, StringComparison.OrdinalIgnoreCase)
+                && p.PropertyType.Name.EndsWith("Composition", StringComparison.Ordinal));
+
+        if (property is null)
+        {
+            var available = software.GetType()
+                .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.PropertyType.Name.EndsWith("Composition", StringComparison.Ordinal))
+                .Select(p => p.Name)
+                .OrderBy(n => n, StringComparer.Ordinal);
+            throw new HmiUnknownKindException(kind, available.ToList());
+        }
+
+        return property.GetValue(software)
+            ?? throw new HmiUnknownKindException(kind, new List<string>());
+    }
+
+    // Screens are the one kind where enumeration is not enough — Screens is root-only and a screen
+    // may live in a group (survey §7) — so that case delegates to the recursive finder.
+    private object? FindInComposition(object composition, string name)
+    {
+        if (composition is HmiScreenComposition screens)
+        {
+            var software = FindSingleUnifiedSoftware().Software;
+            return FindScreenAnywhere(software, name);
+        }
+
+        if (composition is not System.Collections.IEnumerable items)
+        {
+            return null;
+        }
+
+        try
+        {
+            foreach (var item in items)
+            {
+                if (item is null)
+                {
+                    continue;
+                }
+
+                var itemName = TryRead(() => item.GetType().GetProperty("Name")?.GetValue(item) as string);
+                if (string.Equals(itemName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
     public IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems)
     {
         if (_project is null)

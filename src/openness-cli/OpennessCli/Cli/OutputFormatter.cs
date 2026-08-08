@@ -350,6 +350,53 @@ public static class OutputFormatter
             },
             new JsonSerializerOptions { WriteIndented = true });
 
+    /// <summary>
+    /// The census. Grouped by kind with counts, and it calls out surviving `ZZ_AI_*` probe artifacts
+    /// explicitly — the end-of-programme check is "zero of these left", and a listing that buried
+    /// them among 233 real tags would not answer it.
+    /// </summary>
+    public static string FormatHmiInventoryTable(IReadOnlyList<HmiObjectInfo> objects)
+    {
+        if (objects.Count == 0)
+        {
+            return "(no HMI objects found)";
+        }
+
+        var sb = new StringBuilder();
+        foreach (var group in objects.GroupBy(o => o.Kind).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            sb.Append(group.Key).Append("  (").Append(group.Count().ToString(CultureInfo.InvariantCulture)).AppendLine(")");
+            foreach (var item in group.OrderBy(o => o.Name, StringComparer.Ordinal))
+            {
+                sb.Append("    ").Append(item.Name).Append("  [").Append(item.TypeName).AppendLine("]");
+            }
+        }
+
+        var probeArtifacts = objects.Where(o => o.Name.StartsWith("ZZ_AI_", StringComparison.Ordinal)).ToList();
+        sb.AppendLine();
+        sb.Append("PROBE ARTIFACTS (ZZ_AI_*): ").Append(probeArtifacts.Count.ToString(CultureInfo.InvariantCulture));
+        if (probeArtifacts.Count > 0)
+        {
+            sb.AppendLine(" — these are this tool's own and must be zero at end of programme:");
+            foreach (var item in probeArtifacts.OrderBy(o => o.Kind, StringComparer.Ordinal).ThenBy(o => o.Name, StringComparer.Ordinal))
+            {
+                sb.Append("    ").Append(item.Kind).Append(" / ").AppendLine(item.Name);
+            }
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatHmiInventoryJson(IReadOnlyList<HmiObjectInfo> objects) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                total = objects.Count,
+                probeArtifacts = objects.Count(o => o.Name.StartsWith("ZZ_AI_", StringComparison.Ordinal)),
+                objects = objects.Select(o => new { kind = o.Kind, name = o.Name, typeName = o.TypeName }),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+
     public static string FormatHmiSchemaJson(IReadOnlyList<HmiSchemaReport> reports)
     {
         var payload = reports.Select(r => new

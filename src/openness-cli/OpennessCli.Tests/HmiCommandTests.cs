@@ -92,25 +92,9 @@ public class HmiCommandTests
     [Fact]
     public void CommonOptions_HandlesEverySuccessParseResultVariant()
     {
-        var successTypes = new List<Type>();
-        foreach (var nested in typeof(ParseResult).GetNestedTypes())
+        foreach (var successType in SuccessVariants())
         {
-            if (nested.Name.EndsWith("Success", StringComparison.Ordinal))
-            {
-                successTypes.Add(nested);
-            }
-        }
-
-        Assert.NotEmpty(successTypes);
-
-        foreach (var successType in successTypes)
-        {
-            var optionsType = successType.GetConstructors()[0].GetParameters()[0].ParameterType;
-            // Uninitialized is fine: CommonOptions type-tests the variant and reads properties whose
-            // default values it never interprets. Constructing real options for nine records would
-            // couple this guard to each one's shape, which is the coupling it exists to avoid.
-            var options = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(optionsType);
-            var result = (ParseResult)Activator.CreateInstance(successType, options)!;
+            var result = UninitialisedVariant(successType);
 
             var exception = Record.Exception(() => ArgumentParser.CommonOptions(result));
 
@@ -147,6 +131,53 @@ public class HmiCommandTests
         Assert.Equal("MyProject", ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "hmi", "MyProject" })));
         Assert.Equal("MyProject", ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "list", "MyProject" })));
         Assert.Null(ArgumentParser.ProjectIdentifier(ArgumentParser.Parse(new[] { "portal-status" })));
+    }
+
+    /// <summary>
+    /// The companion to <see cref="CommonOptions_HandlesEverySuccessParseResultVariant"/>, added
+    /// 2026-08-08. `ProjectIdentifier` has the SAME every-variant `throw` default as `CommonOptions`
+    /// but was only spot-checked by three hardcoded asserts above — so a new subcommand that forgot
+    /// it would build clean, pass the whole suite, and die at runtime exactly the way `hmi` did.
+    /// One guard covering one of two identical switches is a guard that will be bypassed.
+    /// </summary>
+    [Fact]
+    public void ProjectIdentifier_HandlesEverySuccessParseResultVariant()
+    {
+        foreach (var successType in SuccessVariants())
+        {
+            var result = UninitialisedVariant(successType);
+
+            var exception = Record.Exception(() => ArgumentParser.ProjectIdentifier(result));
+
+            Assert.True(
+                exception is null,
+                $"ArgumentParser.ProjectIdentifier does not handle {successType.Name} — add a case for it.");
+        }
+    }
+
+    private static List<Type> SuccessVariants()
+    {
+        var found = new List<Type>();
+        foreach (var nested in typeof(ParseResult).GetNestedTypes())
+        {
+            if (nested.Name.EndsWith("Success", StringComparison.Ordinal))
+            {
+                found.Add(nested);
+            }
+        }
+
+        Assert.NotEmpty(found);
+        return found;
+    }
+
+    // Uninitialized on purpose: both switches type-test the variant and read properties whose
+    // default values they never interpret. Constructing real options for every record would couple
+    // these guards to each record's shape, which is the coupling they exist to avoid.
+    private static ParseResult UninitialisedVariant(Type successType)
+    {
+        var optionsType = successType.GetConstructors()[0].GetParameters()[0].ParameterType;
+        var options = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(optionsType);
+        return (ParseResult)Activator.CreateInstance(successType, options)!;
     }
 
     [Fact]
@@ -449,6 +480,83 @@ public class HmiCommandTests
         Assert.Contains("(UInt32)", text, StringComparison.Ordinal);
         Assert.Contains("ran, returned no errors and no warnings", text, StringComparison.Ordinal);
         Assert.Contains("project saved: yes", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_HmiNew_RequiresKindAndName()
+    {
+        Assert.IsType<ParseResult.Failure>(ArgumentParser.Parse(new[] { "hmi-new", "P", "--name", "ZZ_AI_X", "--yes" }));
+        Assert.IsType<ParseResult.Failure>(ArgumentParser.Parse(new[] { "hmi-new", "P", "--kind", "Screens", "--yes" }));
+    }
+
+    [Fact]
+    public void Parse_HmiNew_CarriesKindNameAndParent()
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi-new", "P", "--kind", "Tags", "--name", "ZZ_AI_T", "--in", "ZZ_AI_Table", "--yes" });
+        var success = Assert.IsType<ParseResult.HmiNewSuccess>(result);
+        Assert.Equal("Tags", success.Options.Kind);
+        Assert.Equal("ZZ_AI_T", success.Options.Name);
+        Assert.Equal("ZZ_AI_Table", success.Options.Parent);
+        Assert.True(success.Options.Confirm);
+    }
+
+    [Fact]
+    public void Parse_HmiNewAndDelete_DefaultToUnconfirmed()
+    {
+        Assert.False(Assert.IsType<ParseResult.HmiNewSuccess>(
+            ArgumentParser.Parse(new[] { "hmi-new", "P", "--kind", "Screens", "--name", "ZZ_AI_S" })).Options.Confirm);
+        Assert.False(Assert.IsType<ParseResult.HmiDeleteSuccess>(
+            ArgumentParser.Parse(new[] { "hmi-delete", "P", "--kind", "Screens", "--name", "ZZ_AI_S" })).Options.Confirm);
+    }
+
+    [Fact]
+    public void Parse_HmiDelete_AllowAnyNameDefaultsOff()
+    {
+        // The prefix guard is the one place the data boundary is enforced in code rather than
+        // procedurally, because deletion runs unattended. It must default to protecting.
+        var guarded = Assert.IsType<ParseResult.HmiDeleteSuccess>(
+            ArgumentParser.Parse(new[] { "hmi-delete", "P", "--kind", "Tags", "--name", "ZZ_AI_T", "--yes" }));
+        Assert.False(guarded.Options.AllowAnyName);
+
+        var overridden = Assert.IsType<ParseResult.HmiDeleteSuccess>(
+            ArgumentParser.Parse(new[] { "hmi-delete", "P", "--kind", "Tags", "--name", "Real", "--yes", "--allow-any-name" }));
+        Assert.True(overridden.Options.AllowAnyName);
+    }
+
+    [Fact]
+    public void Parse_HmiInventory_NeedsNeitherKindNorConfirmation()
+    {
+        // Read-only: requiring --yes on a census would be noise, and requiring --kind would stop it
+        // being usable as the end-of-programme "is anything of mine left?" check.
+        var result = ArgumentParser.Parse(new[] { "hmi-inventory", "P" });
+        var success = Assert.IsType<ParseResult.HmiInventorySuccess>(result);
+        Assert.True(success.Options.Confirm);
+        Assert.Equal(string.Empty, success.Options.Kind);
+    }
+
+    [Fact]
+    public void FormatHmiInventory_CallsOutSurvivingProbeArtifacts()
+    {
+        var objects = new[]
+        {
+            new HmiObjectInfo("Screens", "RealScreen", "HmiScreen"),
+            new HmiObjectInfo("Screens", "ZZ_AI_TestScreen", "HmiScreen"),
+            new HmiObjectInfo("Tags", "ZZ_AI_TestTag", "HmiTag"),
+        };
+
+        var text = OutputFormatter.FormatHmiInventoryTable(objects);
+
+        Assert.Contains("PROBE ARTIFACTS (ZZ_AI_*): 2", text, StringComparison.Ordinal);
+        Assert.Contains("must be zero at end of programme", text, StringComparison.Ordinal);
+        Assert.Contains("Screens / ZZ_AI_TestScreen", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiInventory_CleanRunReportsZeroArtifacts()
+    {
+        var text = OutputFormatter.FormatHmiInventoryTable(new[] { new HmiObjectInfo("Screens", "RealScreen", "HmiScreen") });
+        Assert.Contains("PROBE ARTIFACTS (ZZ_AI_*): 0", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("must be zero", text, StringComparison.Ordinal);
     }
 
     [Fact]

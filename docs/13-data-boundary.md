@@ -250,7 +250,35 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
           §4d of the write-api note says nothing currently answers.
         - **Still excluded:** binding to any real HMI or PLC tag, and everything previously excluded.
           The clause "any dynamization bound to a real tag" stands unchanged — this extension covers
-          bindings to tags this session itself invented, which is a different thing. That is
+          bindings to tags this session itself invented, which is a different thing.
+      - **Extended 2026-08-08 to the whole CAPABILITY PROBE PROGRAMME, including DELETION.** Owner
+        instruction: work through the measured gaps autonomously ("This is autonomus work so try not
+        involve me"), against the plan approved the same day. This is deliberately a **single**
+        extension covering the programme rather than one per object kind — the previous pattern of
+        asking per escalation is incompatible with an instruction to proceed without involvement, so
+        the scope is stated once, in full, here.
+        - **Covered:** creating, modifying and **deleting** HMI objects of any kind — screens, screen
+          items, event handlers, dynamizations, tags, tag tables, screen groups, alarms, alarm
+          classes, connections, data/alarm logs, logging tags, plant views — **provided every object
+          involved carries an invented `ZZ_AI_*` name and was created by this programme**, in
+          **JOB9002's scratch copy only**.
+        - **DELETION is the significant new grant** and the reason this entry exists: no previous
+          entry authorised deleting anything, and 0 of 184 deletable types had ever been touched.
+          Deletion applies **only to this programme's own `ZZ_AI_*` artifacts** — never to any of the
+          48 pre-existing screens, the 233 real tags, the 311 real alarms, or any real tag table,
+          connection or log.
+        - **Read-only, explicitly:** device-level `RuntimeSettings` (start screen, resolution,
+          languages). These are observed and mapped, never written — changing a device's start screen
+          is a real change to a real project, not a probe.
+        - **Still excluded, unchanged:** any write to a real (non-scratch) project; any create,
+          modify or delete touching a pre-existing object; binding to a real HMI or PLC tag;
+          committing any real HMI name or comment text; and HMI work on any other project.
+        - **Cleanup is part of the scope, not an afterthought:** the programme ends by deleting its
+          own artifacts and proving a clean device compile with none of them present.
+        - **`10-non-goals.md` is NOT amended.** This stays a capability probe. Making HMI engineering
+          a goal needs ADR-0007, which this programme *drafts as Proposed* for the owner to accept or
+          reject — it does not self-accept, and the probe tooling remains general-purpose with the
+          restriction procedural and recorded here rather than enforced in code. That is
           worth stating plainly rather than implying the tool is safe by construction.
       - **Standing intent:** the artifact is disposable and removable on request. Its name is
         invented, so no real HMI name is created or committed either.
