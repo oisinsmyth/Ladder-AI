@@ -25,6 +25,11 @@ it (§6).
 | HMI tags / tag tables / groups | yes | yes | yes | shape-only |
 | Alarms (discrete/analog) + classes | yes | yes | yes | shape-only |
 | Screen groups | yes | name only | yes | shape-only |
+| Connections | yes | yes (by address string) | yes | shape-only |
+| Data logs / alarm logs / logging tags | yes | yes | yes | shape-only |
+| OPC UA alarm types | yes | yes | yes | shape-only |
+| Audit trail | **NO** (TIA singleton) | configure only | **NO** | wall |
+| Connection driver properties | **NO** (fixed by driver) | `.Value` only | — | wall |
 | Text lists | **NO** | import only | — | wall |
 | Graphic lists | **n/a — no such type in Unified** | — | — | wall |
 | Plant views / view nodes | **yes** | — | yes | shape-only |
@@ -235,6 +240,40 @@ verification.
 `ICompilable` (the parent survey notes `HmiSoftware` has no `GetService<T>()`, so this must go via the
 device item), or the runtime's own load-time errors. Until one of those is proven, treat "it saved
 without complaint" as meaning exactly that.
+
+## 4d. Everything binds by NAME STRING — and that compounds §4c
+
+The data-plumbing half (connections, logs, logging tags, audit, OPC UA alarms) was surveyed
+separately, and it produced a structural finding that matters more than any individual signature:
+
+**Not one typed cross-link exists anywhere in this subtree.** A tag names its connection with a
+string. A logging tag names its data log with a string. A dynamization names its tag with a string.
+An alarm names its alarm class with a string. A screen window names its screen with a string. The
+partner PLC of a connection is not even a reference — `Partner`/`Station`/`Node` are read-only, and
+the writable knob is `InitialAddress`, a semicolon-separated `key=value` **string** (e.g.
+`CommunicationInterface=…;HostAddress=…;PlcAddress=…;Rack=…;ExpansionSlot=…`).
+
+Put that next to §4c and the consequence is sharp:
+
+> **Every reference in a Unified HMI is an unchecked string, and the only thing that could check
+> them — `Validate()` — has been measured not to.**
+
+A typo in a tag name, a connection name, a data-log name or a screen name is therefore invisible to
+every automated check available at engineering time. Nothing fails; the object simply refers to
+something that is not there. This is precisely the failure mode the PLC side spends `tagstatus`,
+`preflight` and the compile gate defending against — and on the HMI side none of those defences has
+an equivalent.
+
+**For a generation capability this is the central design constraint**, more than the flat item tree or
+the faceplate wall: any tool that writes HMI content must **verify its own references before writing
+them**, because nothing downstream will. That is the HMI analogue of hard rule 3, and it has to be
+built rather than borrowed.
+
+**What is creatable here** (reflection-confirmed): `HmiConnection`, `HmiDataLog`, `HmiAlarmLog`,
+`HmiLoggingTag` (on `HmiTag.LoggingTags`), `HmiAlarmAuditClass` (`Create()`, no parameters),
+`HmiOpcUaAlarmType(nodeId, connection, name)`. **Not creatable:** `HmiAuditTrail` (no `Create`, no
+`Find`, no `Delete` — a TIA-made singleton reached by index), and `DriverProperty` (the set is fixed
+by the chosen `CommunicationDriver`; only `.Value` is writable).
 
 ## 5. What "do anything to it" would still require
 

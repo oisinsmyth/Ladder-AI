@@ -96,6 +96,13 @@ public interface IOpennessGateway : IDisposable
     /// ignored. Targets and event names that do not exist are hard errors: a skipped edit and a
     /// successful one look identical in the output otherwise.
     /// </summary>
+    /// <summary>
+    /// Compiles the HMI device. <see cref="CompileResult"/> is the same shape the PLC path returns,
+    /// so the diagnostics render identically. Exists because <c>Compile</c> resolves through
+    /// PLC-only device discovery and cannot target an HMI at all.
+    /// </summary>
+    CompileResult CompileHmi(string? deviceFilter);
+
     HmiEditScreenResult EditHmiScreen(
         string screenName,
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,

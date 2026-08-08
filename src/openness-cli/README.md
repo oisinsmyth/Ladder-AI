@@ -295,6 +295,26 @@ call). `--event Target:Type` with no `=script` creates an empty handler, which i
 misleading gap, where a button reporting no dynamizations read as "not bound" when it meant "not
 looked at".
 
+## `hmi-compile` — compiling the HMI device
+
+```
+openness-cli hmi-compile <project> [--device <name>] [--json]
+```
+
+Same flags and same `CompileResult` shape as `compile`, so diagnostics render identically. It exists
+as a separate subcommand because `compile` resolves its target through PLC-only device discovery and
+**cannot see an HMI device at all** — the same blind spot the read walker had.
+
+Its purpose is the open question left by `Validate()` being measurably shallow
+(`docs/notes/openness-hmi-write-api.md` §4c): if per-object validation does not gate, does a device
+compile? Whatever it reports is the answer, including "nothing".
+
+**It deliberately does NOT carry `compile`'s FI-52 consistency backstop.** That check is built on
+`PlcBlock.IsConsistent`, and there is no HMI equivalent — no per-screen consistency flag exists to
+cross-examine a green result with. So `hmi-compile` reporting Success means only that the compiler
+said so, and nothing in this tool can strengthen that claim. Exit codes are `0` / `8 = CompileFailed`
+only; there is no `11 = CompileIncomplete` analogue, because there is nothing to detect it with.
+
 ### Attaching under Portal pileup
 
 `Connect` prefers a running Portal that already has the requested project open, reading

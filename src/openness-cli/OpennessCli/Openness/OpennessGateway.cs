@@ -1705,6 +1705,61 @@ public sealed class OpennessGateway : IOpennessGateway
         return result;
     }
 
+    /// <summary>
+    /// Compiles the HMI device. Separate from <see cref="Compile"/> because that one resolves its
+    /// target through <c>FindPlcDeviceItems</c> and so cannot see an HMI device at all — the same
+    /// PLC-only-by-construction blind spot the read walker had.
+    ///
+    /// The point of this is the open question in <c>openness-hmi-write-api.md</c> §4c: `Validate()`
+    /// is measurably shallow, so is a device compile the real gate instead? Whatever this reports is
+    /// the answer, including "it reports nothing".
+    /// </summary>
+    public CompileResult CompileHmi(string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CompileHmi)}.");
+        }
+
+        var candidates = new List<(DeviceItem Item, string Path)>();
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectHmiDeviceItems(item, device.Name, candidates);
+            }
+        }
+
+        if (deviceFilter is not null)
+        {
+            candidates = candidates.Where(c => c.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (candidates.Count != 1)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        var result = CompileDeviceItem(candidates[0].Item, candidates[0].Path);
+        SaveProject();
+        return result;
+    }
+
+    private static void CollectHmiDeviceItems(DeviceItem item, string parentPath, List<(DeviceItem, string)> found)
+    {
+        var path = $"{parentPath}/{item.Name}";
+        var software = item.GetService<SoftwareContainer>()?.Software;
+        if (software is HmiSoftware || software is HmiTarget)
+        {
+            found.Add((item, path));
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            CollectHmiDeviceItems(child, path, found);
+        }
+    }
+
     private static CompileResult CompileDeviceItem(DeviceItem deviceItem, string path)
     {
         var compilable = deviceItem.GetService<ICompilable>();

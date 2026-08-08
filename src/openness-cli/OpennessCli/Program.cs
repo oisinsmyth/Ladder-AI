@@ -80,6 +80,8 @@ internal static class Program
                     return RunHmiCreateScreen(gateway, hmiCreate.Options, timeoutOpenSeconds);
                 case ParseResult.HmiEditScreenSuccess hmiEdit:
                     return RunHmiEditScreen(gateway, hmiEdit.Options, timeoutOpenSeconds);
+                case ParseResult.HmiCompileSuccess hmiCompile:
+                    return RunHmiCompile(gateway, hmiCompile.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -206,6 +208,19 @@ internal static class Program
         return result.Validation.Any(m => m.Severity is "Error" or "ValidateThrew")
             ? ExitCodes.CompileFailed
             : ExitCodes.Success;
+    }
+
+    // Deliberately does NOT carry the FI-52 consistency backstop that `compile` has: that check is
+    // built on PlcBlock.IsConsistent, which has no HMI equivalent — there is no per-screen
+    // consistency flag to cross-examine a green result with. So an HMI compile reporting Success
+    // means only that the compiler said so, and nothing here can strengthen it.
+    private static int RunHmiCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var result = gateway.CompileHmi(options.Device);
+        Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
+
+        return result.State != Model.CompileState.Success ? ExitCodes.CompileFailed : ExitCodes.Success;
     }
 
     private static int RunExport(IOpennessGateway gateway, ExportCommandOptions options, int timeoutOpenSeconds)

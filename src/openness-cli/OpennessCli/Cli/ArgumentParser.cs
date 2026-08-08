@@ -154,6 +154,10 @@ public abstract record ParseResult
 
     public sealed record HmiEditScreenSuccess(HmiEditScreenOptions Options) : ParseResult;
 
+    // Reuses CompileCommandOptions: an HMI compile takes the same device/json/timeout shape, and a
+    // parallel record would only invite the two to drift.
+    public sealed record HmiCompileSuccess(CompileCommandOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -217,6 +221,7 @@ public static class ArgumentParser
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiEditScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiCompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -238,6 +243,7 @@ public static class ArgumentParser
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiEditScreenSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiCompileSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -261,6 +267,13 @@ public static class ArgumentParser
             "hmi" => ParseHmi(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
             "hmi-edit-screen" => ParseHmiEditScreen(args),
+            // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
+            // differs, which is what routes it to the HMI-aware device lookup.
+            "hmi-compile" => ParseCompile(args) switch
+            {
+                ParseResult.CompileSuccess ok => new ParseResult.HmiCompileSuccess(ok.Options),
+                var other => other,
+            },
             var other => new ParseResult.Failure(
                 $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-create-screen, hmi-edit-screen.{Environment.NewLine}{Usage}"),
         };
