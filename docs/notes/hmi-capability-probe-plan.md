@@ -45,7 +45,7 @@ Rationale for one generic trio rather than ~80 wrappers, and the delete-path re-
 
 | # | Phase | Closes | Status |
 |---|---|---|---|
-| **P1** | Deletion lifecycle | 0 of 184 deletable types | **blocked — Portal contention** |
+| **P1** | Deletion lifecycle | 0 of 184 deletable types | **DONE 2026-08-08 — see §4j** |
 | **P2** | Item-type breadth | 3 of 56 item types | not started |
 | **P3** | Dynamization kinds | 1 of 6 | not started |
 | **P4** | Alarms (+ `MultilingualText`) | FI-35's own use case | not started |
@@ -58,25 +58,34 @@ The largest single gap, and the prerequisite for cleaning up every later phase.
 
 | Probe | What | Expected | Result |
 |---|---|---|---|
-| P1.0 | baseline `hmi-inventory` | census incl. the 3 surviving `ZZ_AI_*` artifacts | **not run — connect wedge** |
-| P1.1 | delete a screen item | gone on read-back | |
-| P1.2 | delete a dynamization | binding gone, item intact | |
-| P1.3 | delete an event handler | handler gone, script gone with it | |
-| P1.4 | delete a screen | screen count −1 | |
-| P1.5 | delete a tag, then its table | both gone | |
-| P1.6 | delete a nonexistent object | clean `CommandError`, not an internal fault | |
-| **P1.7** | **delete a tag a live binding still references** | **unknown — cascade, orphan, or refuse?** | |
+| P1.0 | baseline `hmi-inventory` | census incl. 3 surviving artifacts | ✅ 3 found |
+| P1.1 | delete a screen item | gone on read-back | ✅ confirmed absent |
+| P1.2 | delete a dynamization | binding gone, item intact | ✅ |
+| P1.3 | delete an event handler | handler gone, script with it | ✅ |
+| P1.4 | delete a screen | screen count −1 | ✅ |
+| P1.5 | delete the tag table | gone | ✅ |
+| P1.6 | delete a nonexistent object | clean `CommandError` | ⚠️ correct message, **wrong exit code (5)** — defect, now fixed |
+| P1.6a | delete a REAL object (guard test) | refused | ✅ refused `MainScreen` |
+| **P1.7** | **delete a tag two live bindings reference** | cascade / orphan / refuse? | 🔴 **ORPHANS — silently** |
+| P1.7b | compile after the orphaning | ? | ✅ **caught it — `STATE: Error`** |
+| P1.9 | final inventory | zero artifacts | ✅ **0** |
+| P1.10 | final compile | clean | ✅ **`STATE: Success`, 0 errors** |
 
-**P1.7 is the probe that matters.** Cascade / orphan / refuse is the difference between deletion being
-safe to automate and not. If it orphans silently, then the compile (which *does* catch dangling tag
-references — §4f) becomes mandatory after every delete, not optional.
+**P1.7's answer: ORPHAN.** Deleting a tag with live bindings neither refuses nor cascades — the
+bindings survive pointing at nothing, and only the compile notices. **A compile is therefore
+mandatory after any delete**, not optional. Full write-up in `openness-hmi-write-api.md` §4j.
 
 ## Open questions — answered in place as they resolve
 
-1. **Does deletion cascade, orphan, or refuse when the object is still referenced?** — open (P1.7).
-2. **Does `Delete()` need a `Save()` to persist, or is it immediate?** — open. Openness has no
-   transaction and a *failed create* persisted (§4h), so the symmetric question matters.
-3. **Can a tag table be deleted while it still contains tags?** — open (P1.5).
+1. ~~**Does deletion cascade, orphan, or refuse when the object is still referenced?**~~ —
+   **ANSWERED 2026-08-08: it ORPHANS, silently.** Bindings survive pointing at a deleted tag; only
+   the compile catches it. A compile after any delete is mandatory (§4j).
+2. ~~**Does `Delete()` need a `Save()` to persist?**~~ — **ANSWERED: no, it is immediate.** Every
+   delete confirmed absent on re-read. Together with the *failed create* that persisted without a
+   `Save()` (§4h), this says **Openness commits eagerly** in both directions.
+3. ~~**Can a tag table be deleted while it still contains tags?**~~ — **ANSWERED: yes** (P1.5
+   deleted `ZZ_AI_TestTags` after its tag was already gone; a fuller test with a populated table is
+   worth doing when one exists).
 4. **Do the five untested dynamization kinds resolve at all?** — open (P3).
 5. **Can alarm text be written via `MultilingualText.Items.Find(language)`?** — open (P4). Known
    awkward: `Items` has no `Create`, and runtime languages cannot be added.
@@ -91,5 +100,11 @@ references — §4f) becomes mandatory after every delete, not optional.
   earlier). Cause confirmed as contention: a second Claude Code session is driving `openness-cli`
   against a live engineering job on the same machine, intermittently, all day. Per the protocol the
   correct response is to wait rather than compete — retrying in a loop would add load to live
-  site work and would not succeed anyway. **The programme resumes at P1.0 when the machine is
-  quiet; nothing about the tooling or the plan is blocked, only Portal access.**
+  site work and would not succeed anyway.
+- **2026-08-08** — **P1 COMPLETE**, run as one chained 13-probe sweep once the machine was quiet
+  (chaining matters: the first attach is slow, subsequent ones reuse it — the whole sweep cost about
+  what one probe would have cost separately). Headline: **deletion orphans**. Device left with zero
+  probe artifacts and a clean compile. Two tooling gaps closed on the way: screen-scoped deletes
+  (`--delete-item`/`--delete-bind`/`--delete-event`, since items hang off a screen not off
+  `HmiSoftware`), and an exception-classification guard after P1 caught six unmapped exceptions
+  exiting 5.

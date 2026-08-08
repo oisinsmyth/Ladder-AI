@@ -498,6 +498,84 @@ tag existed on the next run. Openness has no rollback: **anything a command did 
 persist.** Commands must therefore be written to be re-runnable, and a failure must never be read as
 "nothing happened".
 
+## 4j. Deletion, measured — it ORPHANS (2026-08-08) [LIVE]
+
+P1 of the probe programme. Thirteen probes; the whole deletion lifecycle, ending with the device
+returned to a clean compile and **zero surviving probe artifacts**.
+
+### The answer that mattered: delete-in-use orphans silently
+
+`ZZ_AI_TestTag` had **two live bindings** on the test screen. Deleting it:
+
+```
+deleted Tags 'ZZ_AI_TestTag' [HmiTag]; confirmed absent on re-read
+```
+
+It did **not** refuse, and it did **not** cascade. Reading the screen back afterwards:
+
+```
+HmiRectangle_1   Visible <- Tag  tag=ZZ_AI_TestTag      <-- the tag no longer exists
+HmiText_2        Visible <- Tag  tag=ZZ_AI_TestTag
+```
+
+**The bindings survive as orphans, pointing at nothing.** Then compiling:
+
+```
+STATE: Error   ERRORS: 8
+```
+
+So the three-way question — cascade, orphan, or refuse — resolves to **orphan**, with the compile as
+the only thing that notices.
+
+**Operational consequence, and it is not optional: a compile is MANDATORY after any delete.** Nothing
+at delete time warns you; `Validate()` stays silent (as ever); and the only signal is a compile error
+that arrives whenever someone next compiles — which, on a project nobody compiles for a week, is a
+week later. Any generated-HMI workflow that deletes must compile in the same breath.
+
+The mirror-image finding to §4h: **binding to a missing tag and deleting a bound tag produce exactly
+the same end state** — a dangling reference — reached from opposite directions, and caught by exactly
+the same check.
+
+### The rest of the lifecycle works, and self-verifies
+
+| Probe | Result |
+|---|---|
+| P1.1 delete screen item | deleted, confirmed absent |
+| P1.2 delete dynamization | deleted, item intact |
+| P1.3 delete event handler | deleted, script gone with it |
+| P1.4 delete screen | deleted |
+| P1.5 delete tag table | deleted |
+| P1.6 delete nonexistent | clean, actionable error |
+| P1.9 final inventory | **0 probe artifacts** |
+| P1.10 final compile | **`STATE: Success`, 0 errors** |
+
+Every delete re-reads afterwards; all reported "confirmed absent on re-read". Deletion appears to be
+immediate and durable — no separate `Save()` was needed for it to take (unlike the *failed create*
+in §4h, which persisted without one; both point the same way: **Openness commits eagerly**).
+
+**The prefix guard was verified against a real object.** Attempting to delete `MainScreen` — one of
+the 48 real screens — was refused:
+
+> Refusing to delete 'MainScreen': this tool only deletes its own probe artifacts, whose names start
+> with 'ZZ_AI_'.
+
+A safety mechanism that has never been seen to refuse is not yet a safety mechanism; this one has.
+
+### A defect in my own code, found by the probe, worth recording as process
+
+P1.6 and P1.6a both exited **5 (UnexpectedError)** instead of 7. The cause: the entire `Hmi*`
+exception family was mapped to `CommandError` that *morning* — and six new exceptions were added
+that *afternoon* for the metamodel commands without being mapped. **The same defect, recreated within
+hours of fixing it.**
+
+The existing reflection guard covers `ParseResult` variants, not exception types, so nothing caught
+it. Fixed, and a second guard added (`HmiExceptionsAreClassified`) that enumerates the exception
+family by reflection and fails if any member falls through to `UnexpectedError`.
+
+The lesson is about the shape of the defence, not this instance: **a guard that enumerates a family
+survives someone adding to it; a list that must be remembered does not.** Two of this session's
+defects were the same shape — a second switch nobody updated, and a second family nobody extended.
+
 ## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
 
 "Mapped" and "walked" are different questions and give very different answers. The surface, measured:

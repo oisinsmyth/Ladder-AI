@@ -496,7 +496,8 @@ public sealed class OpennessGateway : IOpennessGateway
         string screenName,
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,
         IReadOnlyList<(string Target, string EventType, string? Script)> events,
-        IReadOnlyList<(string Target, string Property, string Tag)> binds)
+        IReadOnlyList<(string Target, string Property, string Tag)> binds,
+        IReadOnlyList<(string What, string Target, string? Detail)> deletes)
     {
         if (_project is null)
         {
@@ -532,6 +533,13 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             var subject = ResolveTarget(screen, target);
             applied.Add(CreateTagBinding(subject, property, tag));
+        }
+
+        // Screen-scoped deletes. These cannot go through `hmi-delete`, which resolves compositions
+        // on HmiSoftware — items, bindings and handlers hang off a SCREEN, not off the device.
+        foreach (var (what, target, detail) in deletes)
+        {
+            applied.Add(DeleteScreenScoped(screen, what, target, detail));
         }
 
         var validation = ReadValidation(screen).Concat(syntaxFindings).ToList();
@@ -585,6 +593,83 @@ public sealed class OpennessGateway : IOpennessGateway
             : $"resolved: plcTag='{plcTag}' dataType='{dataType}'";
 
         return $"bind {(replaced ? "replaced" : "created")} {subject.GetType().Name}.{propertyName} <- tag '{tagName}' [{resolved}]";
+    }
+
+    /// <summary>
+    /// Deletes something that lives ON a screen: an item, a tag binding, or an event handler. Each
+    /// re-reads afterwards and says whether the thing actually went away — Openness has no
+    /// transaction, so a `Delete()` that did not throw is not proof it took effect.
+    /// </summary>
+    private static string DeleteScreenScoped(HmiScreen screen, string what, string target, string? detail)
+    {
+        switch (what)
+        {
+            case "item":
+            {
+                var item = FindScreenItem(screen, target) ?? throw new HmiScreenItemNotFoundException(target, TryRead(() => screen.Name) ?? string.Empty);
+                item.Delete();
+                var gone = FindScreenItem(screen, target) is null;
+                return gone
+                    ? $"deleted item '{target}'; confirmed absent on re-read"
+                    : $"DELETE CALLED on item '{target}' but it is STILL PRESENT";
+            }
+
+            case "bind":
+            {
+                var subject = ResolveTarget(screen, target);
+                var property = detail ?? throw new InvalidOperationException("--delete-bind needs <Target>.<Property>.");
+                var dynamizations = subject.GetType().GetProperty("Dynamizations")?.GetValue(subject)
+                    ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+                var find = dynamizations.GetType().GetMethods()
+                    .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(string));
+                var existing = find?.Invoke(dynamizations, new object[] { property })
+                    ?? throw new HmiObjectNotFoundException("Dynamizations", $"{target}.{property}");
+                existing.GetType().GetMethod("Delete", Type.EmptyTypes)?.Invoke(existing, null);
+                var stillThere = find?.Invoke(dynamizations, new object[] { property }) is not null;
+                return stillThere
+                    ? $"DELETE CALLED on binding {target}.{property} but it is STILL PRESENT"
+                    : $"deleted binding {target}.{property}; confirmed absent on re-read";
+            }
+
+            case "event":
+            {
+                var subject = ResolveTarget(screen, target);
+                var eventTypeName = detail ?? throw new InvalidOperationException("--delete-event needs <Target>:<EventType>.");
+                var composition = subject.GetType().GetProperty("EventHandlers")?.GetValue(subject)
+                    ?? throw new HmiEventsNotSupportedException(subject.GetType().Name);
+                var findEv = composition.GetType().GetMethods()
+                    .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.IsEnum)
+                    ?? throw new HmiEventsNotSupportedException(subject.GetType().Name);
+                var enumType = findEv.GetParameters()[0].ParameterType;
+                var names = Enum.GetNames(enumType);
+                var match = names.FirstOrDefault(n => string.Equals(n, eventTypeName, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new HmiUnknownEventTypeException(eventTypeName, subject.GetType().Name, names);
+                object parsed = Enum.Parse(enumType, match);
+                var handler = findEv.Invoke(composition, new object[] { parsed })
+                    ?? throw new HmiObjectNotFoundException("EventHandlers", $"{target}:{eventTypeName}");
+                handler.GetType().GetMethod("Delete", Type.EmptyTypes)?.Invoke(handler, null);
+                var survives = findEv.Invoke(composition, new object[] { parsed }) is not null;
+                return survives
+                    ? $"DELETE CALLED on event {target}:{match} but it is STILL PRESENT"
+                    : $"deleted event {target}:{match}; confirmed absent on re-read";
+            }
+
+            default:
+                throw new InvalidOperationException($"Unknown delete kind '{what}'.");
+        }
+    }
+
+    private static HmiScreenItemBase? FindScreenItem(HmiScreen screen, string name)
+    {
+        foreach (HmiScreenItemBase item in screen.ScreenItems)
+        {
+            if (string.Equals(TryRead(() => item.Name), name, StringComparison.OrdinalIgnoreCase))
+            {
+                return item;
+            }
+        }
+
+        return null;
     }
 
     // "Screen" addresses the screen itself; anything else is an item name on it. Unknown names are a

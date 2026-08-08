@@ -215,6 +215,11 @@ internal static class Program
             Console.Error.WriteLine($"  bind {target}.{property} <- tag '{tag}'");
         }
 
+        foreach (var (what, target, detail) in options.Deletes)
+        {
+            Console.Error.WriteLine($"  DELETE {what} {target}{(detail is null ? string.Empty : $" ({detail})")}");
+        }
+
         Console.Error.WriteLine("Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
         return ExitCodes.NotConfirmed;
     }
@@ -254,7 +259,7 @@ internal static class Program
     private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds);
+        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));
@@ -523,6 +528,18 @@ public static class ExitCodes
         HmiUnknownEventTypeException => CommandError,
         HmiEventsNotSupportedException => CommandError,
         HmiDynamizationsNotSupportedException => CommandError,
+
+        // The metamodel-command family. Added after P1 measured them exiting 5: the fix above was
+        // made in the morning and these six exceptions were introduced in the afternoon WITHOUT
+        // being mapped, recreating the same defect within hours. The reflection guard covers
+        // ParseResult variants, not exception types — so nothing caught it. `HmiExceptionsAreClassified`
+        // now closes that hole.
+        HmiUnknownKindException => CommandError,
+        HmiKindNotCreatableException => CommandError,
+        HmiKindNotDeletableException => CommandError,
+        HmiObjectAlreadyExistsException => CommandError,
+        HmiObjectNotFoundException => CommandError,
+        HmiRefusedToDeleteRealObjectException => CommandError,
 
         _ => UnexpectedError,
     };

@@ -155,6 +155,42 @@ public class HmiCommandTests
         }
     }
 
+    /// <summary>
+    /// Every `Hmi*Exception` must classify to something other than `UnexpectedError`. Added
+    /// 2026-08-08 after P1 measured two of them exiting 5: the whole family had been mapped to
+    /// `CommandError` that morning, then six NEW exceptions were added the same afternoon without
+    /// being mapped — recreating the exact defect within hours. The existing reflection guard covers
+    /// `ParseResult` variants, not exception types, so nothing caught it.
+    ///
+    /// These are all user-fixable naming or usage mistakes whose messages already say how to fix
+    /// them; reporting one as an internal fault with a full inner-exception dump is wrong, and the
+    /// only durable defence is a guard that enumerates the family rather than a list someone must
+    /// remember to extend.
+    /// </summary>
+    [Fact]
+    public void HmiExceptionsAreClassified_NotLeftAsInternalFaults()
+    {
+        var hmiExceptions = typeof(OpennessCli.Openness.IOpennessGateway).Assembly.GetTypes()
+            .Where(t => typeof(Exception).IsAssignableFrom(t) && t.IsPublic && !t.IsAbstract)
+            .Where(t => t.Name.StartsWith("Hmi", StringComparison.Ordinal)
+                || t.Name.StartsWith("NoUnifiedHmi", StringComparison.Ordinal)
+                || t.Name.StartsWith("AmbiguousHmi", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(hmiExceptions);
+
+        foreach (var type in hmiExceptions)
+        {
+            // Uninitialized: ExitCodes.ForException type-tests only, and constructing each would
+            // couple this guard to every constructor's shape.
+            var instance = (Exception)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(type);
+
+            Assert.True(
+                ExitCodes.ForException(instance) != ExitCodes.UnexpectedError,
+                $"{type.Name} falls through to UnexpectedError(5). It is a user-fixable error and belongs in ExitCodes.ForException — add a case for it.");
+        }
+    }
+
     private static List<Type> SuccessVariants()
     {
         var found = new List<Type>();

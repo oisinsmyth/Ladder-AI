@@ -107,7 +107,10 @@ public interface IOpennessGateway : IDisposable
         string screenName,
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,
         IReadOnlyList<(string Target, string EventType, string? Script)> events,
-        IReadOnlyList<(string Target, string Property, string Tag)> binds);
+        IReadOnlyList<(string Target, string Property, string Tag)> binds,
+        // Screen-scoped deletes — items, bindings and event handlers hang off a SCREEN, not off
+        // HmiSoftware, so `hmi-delete` (which resolves device-level compositions) cannot reach them.
+        IReadOnlyList<(string What, string Target, string? Detail)> deletes);
 
     /// <summary>
     /// Creates an HMI tag (and its table if absent) to serve as a dynamization bind target.

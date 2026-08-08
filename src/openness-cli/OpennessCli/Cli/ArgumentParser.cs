@@ -121,6 +121,9 @@ public sealed record HmiEditScreenOptions(
     IReadOnlyList<(string Target, string Attribute, string Value)> Sets,
     IReadOnlyList<(string Target, string EventType, string? Script)> Events,
     IReadOnlyList<(string Target, string Property, string Tag)> Binds,
+    // (What, Target, Detail): What is "item" | "bind" | "event"; Detail is the property or event
+    // type where one applies. Screen-scoped, so it cannot go through hmi-delete.
+    IReadOnlyList<(string What, string Target, string? Detail)> Deletes,
     bool Confirm,
     bool Json,
     string? TiaInstallOverride,
@@ -1077,6 +1080,7 @@ public static class ArgumentParser
         var sets = new List<(string, string, string)>();
         var events = new List<(string, string, string?)>();
         var binds = new List<(string, string, string)>();
+        var deletes = new List<(string, string, string?)>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1125,6 +1129,43 @@ public static class ArgumentParser
                     }
 
                     events.Add(ev);
+                    break;
+                case "--delete-item":
+                    if (!TryTakeValue(args, ref i, "--delete-item", out var delItem, out var delItemErr))
+                    {
+                        return new ParseResult.Failure(delItemErr);
+                    }
+
+                    deletes.Add(("item", delItem!, null));
+                    break;
+                case "--delete-bind":
+                    if (!TryTakeValue(args, ref i, "--delete-bind", out var delBind, out var delBindErr))
+                    {
+                        return new ParseResult.Failure(delBindErr);
+                    }
+
+                    // "<Target>.<Property>" — same left-hand grammar as --set/--bind.
+                    var bindDot = delBind!.LastIndexOf('.');
+                    if (bindDot <= 0 || bindDot == delBind.Length - 1)
+                    {
+                        return new ParseResult.Failure($"--delete-bind expects '<Target>.<Property>', got '{delBind}'.");
+                    }
+
+                    deletes.Add(("bind", delBind.Substring(0, bindDot), delBind.Substring(bindDot + 1)));
+                    break;
+                case "--delete-event":
+                    if (!TryTakeValue(args, ref i, "--delete-event", out var delEvent, out var delEventErr))
+                    {
+                        return new ParseResult.Failure(delEventErr);
+                    }
+
+                    var evColon = delEvent!.IndexOf(':');
+                    if (evColon <= 0 || evColon == delEvent.Length - 1)
+                    {
+                        return new ParseResult.Failure($"--delete-event expects '<Target>:<EventType>', got '{delEvent}'.");
+                    }
+
+                    deletes.Add(("event", delEvent.Substring(0, evColon), delEvent.Substring(evColon + 1)));
                     break;
                 case "--bind":
                     if (!TryTakeValue(args, ref i, "--bind", out var rawBind, out var bindErr))
@@ -1183,13 +1224,13 @@ public static class ArgumentParser
 
         // An edit command with no edits is a mistake worth catching at parse time — it would
         // otherwise open the project, change nothing, save, and report success.
-        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0)
+        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0)
         {
-            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event or --bind.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind or --delete-*.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
-            projectIdentifier, name, sets, events, binds, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, sets, events, binds, deletes, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the
