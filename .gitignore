@@ -57,6 +57,19 @@ LiveRuns/
 Live-Runs/
 live_runs/
 
+# LIVE-RUN CONTENT THAT ESCAPED THE FOLDER (2026-08-08). The patterns above protect the DIRECTORY;
+# they do nothing about a file carrying live-run content written somewhere else in the tree. That
+# happened: an agent doing a tag sweep left two scratch files full of real production tag names in the
+# REPO ROOT, untracked and NOT ignored — one `git add -A` from being committed, and several were run
+# that day. Caught by the agent declaring them in its own report, not by any rule.
+#
+# So: ignore anything named for a job, at any depth. Job folders are named `J####` by convention, so
+# a scratch file derived from one almost always carries the number. This is a backstop for an
+# accident, not a licence to write live-run content outside its folder — that is still forbidden.
+# A leak is unrecoverable once pushed; redundant patterns cost nothing.
+J[0-9][0-9][0-9][0-9]*
+j[0-9][0-9][0-9][0-9]*
+
 # Never commit Siemens DLLs — reference Siemens.Engineering.dll by install path
 Siemens.Engineering*.dll
 

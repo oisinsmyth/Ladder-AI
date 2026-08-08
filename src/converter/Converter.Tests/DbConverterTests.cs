@@ -318,10 +318,75 @@ public class DbConverterTests
         Assert.Contains("InstanceOfType", ex.Message);
     }
 
+    // FI-56 (2026-08-08). A doubly-nested member whose type is NAMED now COLLAPSES to the type
+    // reference instead of hard-erroring. This test previously asserted the error and is inverted
+    // deliberately.
+    //
+    // Why the behaviour changed: TIA expands a member whose type is a named UDT — including an
+    // ARRAY of one — into a nested <Sections> on re-export. The IR names such a member by type
+    // reference, so the expansion is TIA rendering a type we already name, and it carries nothing
+    // the IR needs. Refusing it made the whole re-export unreadable: `to-ir` hard-errored on any
+    // block or DB with an array-of-UDT interface member, so a re-export could not be verified and
+    // `drift-check` reported DRIFTED for files that were themselves the to-ir output of the exports
+    // it compared them against. Two agents hit it and fell back to grepping raw XML.
     [Fact]
-    public void Parse_DoublyNestedMember_HardErrors()
+    public void Parse_DoublyNestedNamedTypeMember_CollapsesToTheTypeReference()
     {
-        var ex = Assert.Throws<UnsupportedConstructException>(() => DbSourceParser.Parse(LoadFixture("GlobalDbWithDoublyNestedMember.xml")));
+        var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithDoublyNestedMember.xml"));
+
+        var outer = Assert.Single(db.Members!);
+        var inner = Assert.Single(outer.NestedMembers!);
+
+        Assert.Equal("Inner", inner.Name);
+        Assert.Contains("InnerType", inner.Datatype);
+        // The expansion is dropped, not flattened in — the type reference is where it lives.
+        Assert.True(inner.NestedMembers is null or { Count: 0 });
+    }
+
+    // The half of the old guard that still matters. An ANONYMOUS Struct's expansion is its ONLY
+    // definition — there is no named type to recover it from — so collapsing it would silently
+    // discard real members. That must still be refused.
+    [Fact]
+    public void Parse_DoublyNestedAnonymousStructMember_StillHardErrors()
+    {
+        var xml = XDocument.Parse("""
+            <Document>
+              <Engineering version="V20" />
+              <SW.Blocks.GlobalDB ID="0">
+                <AttributeList>
+                  <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+              <Section Name="Static">
+                <Member Name="Outer" Datatype="&quot;OuterType&quot;" Remanence="NonRetain" Accessibility="Public">
+                  <AttributeList>
+                    <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+                  </AttributeList>
+                  <Sections>
+                    <Section Name="None">
+                      <Member Name="Inner" Datatype="Struct">
+                        <Sections>
+                          <Section Name="None">
+                            <Member Name="Leaf" Datatype="Bool" />
+                          </Section>
+                        </Sections>
+                      </Member>
+                    </Section>
+                  </Sections>
+                </Member>
+              </Section>
+            </Sections></Interface>
+                  <Name>RealDbName</Name>
+                  <Namespace />
+                  <Number>7</Number>
+                  <ProgrammingLanguage>DB</ProgrammingLanguage>
+                </AttributeList>
+              </SW.Blocks.GlobalDB>
+            </Document>
+            """);
+
+        var ex = Assert.Throws<UnsupportedConstructException>(() => DbSourceParser.Parse(xml));
         Assert.Contains("Inner", ex.Message);
     }
 
