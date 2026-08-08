@@ -216,6 +216,15 @@ Why this bit twice: from inside the block it looks exactly like a converter type
 because the type genuinely is not knowable without the other DB in scope. Both agents concluded
 they had found one, and both were reasonable to.
 
-**Related, not the same:** `CONVERT` cannot target a `USInt` — TIA rejects
-`"The data type USInt ... does not match the data type DInt of the formal parameter"`. That is a
-TIA constraint on the CONVERT box, not a typing bug, and casting around it is the wrong response.
+**A claim that was recorded here and is WRONG — corrected 2026-08-08, same day.** This entry
+briefly said "CONVERT cannot target a USInt". IT CAN. The failure that produced that claim
+(`"The data type USInt ... does not match the data type DInt of the formal parameter"`) was the
+CONVERTER emitting `DestType=DInt` because the SOURCE was a Real. With an `Int` source the
+converter emits `Int -> USInt` and TIA compiles it clean — verified by inspecting the emitted
+DestType before import, then by a live compile.
+
+Recorded rather than quietly deleted, because the mechanism of the mistake is the useful part: a
+compile error names the FORMAL parameter type, which is the converter's output, not the author's
+input. Reading it as a constraint on the target rather than on what the converter chose for the
+source sends you looking in the wrong place. **When a type error names a type you did not write,
+check what the converter emitted before concluding TIA forbids something.**
