@@ -192,13 +192,19 @@ The load-bearing question of both notes, finally tested, and the answer is the u
 
 Two deliberately invalid states were written to a real screen and `Validate()` was called on each:
 
-| Probe | State created | `Validate()` result |
-|---|---|---|
-| 1 | Screen `Width = 0` — a zero-pixel-wide screen | **no errors, no warnings** |
-| 2 | Item at `Left = 99999, Top = 99999` — far outside the screen | **no errors, no warnings** |
+| Probe | State created | `Validate()` result | Is it actually invalid? |
+|---|---|---|---|
+| 1 | Screen `Width = 0` — a zero-pixel-wide screen | **no errors, no warnings** | yes — a zero-width screen is nonsense on any reading |
+| 2 | Item at `Left = 99999, Top = 99999` | **no errors, no warnings** | **probably NOT** — see below |
 
 Both were accepted, saved, and read back. `Validate()` ran in each case (it is not a no-op that
 throws), and it objected to nothing.
+
+> **Self-correction on probe 2.** Siemens documentation indicates Unified **deliberately supports
+> screen content outside the viewport**, so an off-screen item may be perfectly legal rather than an
+> error. If so, `Validate()` passing it proves nothing, and probe 2 is not evidence of anything. The
+> conclusion below therefore rests on **probe 1 alone** — which is still decisive, but it is one
+> probe, not two, and it was presented as two. A single clean result is weaker evidence than a pair.
 
 **So `Validate()` is not a semantic gate.** It does not check geometry, bounds, or the coherence of a
 screen. Whatever it does check — probably per-property type/format legality, which the `SetAttribute`
@@ -236,10 +242,44 @@ our machinery but weak gate* versus *Unified = doesn't fit but better gate*. The
 is now false. Unified's real advantages are its object model and its readable tag/PlcTag join — not
 verification.
 
-**What could still provide a gate**, none of it tested: compiling the HMI device through
-`ICompilable` (the parent survey notes `HmiSoftware` has no `GetService<T>()`, so this must go via the
-device item), or the runtime's own load-time errors. Until one of those is proven, treat "it saved
-without complaint" as meaning exactly that.
+### Why `Validate()` is shallow — it is structural, not a bug
+
+`HmiValidationResult` carries a **`PropertyName`**. That is the tell: `Validate()` is a
+**per-property** checker. It is therefore *structurally incapable* of answering cross-object
+questions — "does this tag exist", "does this screen window point at a real screen", "do these two
+items overlap" — because none of those belong to a single property.
+
+So this is not a shortcoming that a later TIA version might fix, and not something to be worked
+around by calling it differently. **`Validate()` will never be the reference-checking gate**, and any
+design that assumed it might should stop.
+
+### The compile question, and how to test it properly
+
+**Siemens documents no list of what a Unified HMI compile checks.** The compiling, screens,
+cross-reference, scripting and readme chapters contain no such list; the Classic RT Professional page
+*does* claim consistency checking, and the Unified pages carry no equivalent sentence. So the answer
+cannot be read off the documentation — it has to be measured.
+
+Two documented facts argue that compile will *not* catch our probes: Siemens explicitly declares
+dangling cross-references harmless, and `Info > Compile` is documented as incomplete (some errors
+surface under `Info > General` instead).
+
+**The experiment needs a POSITIVE CONTROL**, and this is the methodological point worth keeping: if a
+compile of a broken screen returns Success, that result is **uninterpretable on its own** — it cannot
+distinguish "compile checked and found nothing wrong" from "compile does not check this at all, or
+did not run". A known-bad state that compile *must* reject has to be included in the same run. A
+deliberate JavaScript syntax error in an event handler is the strongest candidate, since script code
+is genuinely built into the runtime.
+
+Reflection facts for whoever runs it: `ICompilable` has exactly one member, parameterless `Compile()`
+(no options overload — claims otherwise are wrong for V20). `CompilerResult` has `State`,
+`ErrorCount`, `WarningCount`, `Messages` and **no `Success` flag**. `CompilerResultMessage` has its
+own nested `Messages`, so **messages nest arbitrarily and counts are subtree aggregates — any gate
+must walk recursively** (`openness-cli` already does; verified rather than assumed).
+`CompilerResultState` is `Success | Information | Warning | Error` — there is **no "not attempted"
+value**, which is exactly the gap FI-52 exists to cover PLC-side and which cannot be covered here.
+
+Until that experiment runs, treat "it saved without complaint" as meaning exactly that.
 
 ## 4d. Everything binds by NAME STRING — and that compounds §4c
 

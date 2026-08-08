@@ -245,11 +245,16 @@ This is **easier to write and harder to review**, and the asymmetry matters:
 - ~~**Better gate.**~~ **WITHDRAWN 2026-08-07 — measured false.** This section originally argued that
   `UIBase.Validate()` was a genuine pre-commit check with no PLC-side analogue, and that this was the
   strongest argument for Unified. It is not. `Validate()` accepts a **zero-width screen** and an item
-  positioned **99999 px outside** its screen, reporting no errors and no warnings in both cases
-  (`openness-hmi-write-api.md` §4c). Its script-side counterpart `SyntaxCheck()` is shallow too —
-  syntax only, no name resolution (§4b there). **There is no compile gate on the HMI side, on either
-  family.** Unified's real advantages are its object model and its readable `Tag`/`PlcTag` join;
-  verification is not among them.
+  positioned 99999 px outside its screen, reporting no errors and no warnings in both cases
+  (`openness-hmi-write-api.md` §4c — note the self-correction there: the off-screen item may be
+  *legal* in Unified, so the zero-width screen is the load-bearing probe). Its script-side
+  counterpart `SyntaxCheck()` is shallow too — syntax only, no name resolution (§4b there). And the
+  shallowness is **structural**: `HmiValidationResult` carries a `PropertyName`, so `Validate()` is a
+  per-property checker, incapable by construction of cross-object questions like "does this tag
+  exist". **There is no per-object gate on the HMI side, on either family** (whether a device
+  *compile* gates is measured separately and was still unanswered at time of writing). Unified's real
+  advantages are its object model and its readable `Tag`/`PlcTag` join; verification is not among
+  them.
 - **No diff surface.** With no export, there is no text artifact to diff, hash, or store. This
   repo's entire review model — IR diffs, `ir-hash`, golden round-trips, "prove the untouched
   networks identical" — assumes a serialisable representation. On Unified you would have to
