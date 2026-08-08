@@ -46,7 +46,7 @@ Rationale for one generic trio rather than ~80 wrappers, and the delete-path re-
 | # | Phase | Closes | Status |
 |---|---|---|---|
 | **P1** | Deletion lifecycle | 0 of 184 deletable types | **DONE 2026-08-08 — see §4j** |
-| **P2** | Item-type breadth | 3 of 56 item types | not started |
+| **P2** | Item-type breadth | 3 of 56 item types | **DONE 2026-08-09 — 35 create, 21 refuse; see §4k** |
 | **P3** | Dynamization kinds | 1 of 6 | not started |
 | **P4** | Alarms (+ `MultilingualText`) | FI-35's own use case | not started |
 | **P5** | Data plumbing (connections, logs) | never created | not started |
@@ -87,6 +87,13 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
    deleted `ZZ_AI_TestTags` after its tag was already gone; a fuller test with a populated table is
    worth doing when one exists).
 4. **Do the five untested dynamization kinds resolve at all?** — open (P3).
+6. ~~**Is `GetCreationInfos`' creatable list honest?**~~ — **ANSWERED 2026-08-09: no.** It reports 56
+   creatable screen-item types; 35 create. The 21 refusals are the 17 `*Base` types (none marked
+   `abstract`) plus `HmiLabel`, `HmiProcessControl` and the two custom containers, and every refusal
+   gives the same opaque error. The creatable list must be established by trial and cached (§4k).
+7. **Why do `HmiLabel` and `HmiProcessControl` refuse?** — UNKNOWN. The containers plausibly need
+   the two-argument `Create<T>(name, containedTypeValue)`; these two have no such explanation.
+   Worth one targeted probe with the second overload.
 5. **Can alarm text be written via `MultilingualText.Items.Find(language)`?** — open (P4). Known
    awkward: `Items` has no `Create`, and runtime languages cannot be added.
 
@@ -108,3 +115,12 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
   (`--delete-item`/`--delete-bind`/`--delete-event`, since items hang off a screen not off
   `HmiSoftware`), and an exception-classification guard after P1 caught six unmapped exceptions
   exiting 5.
+- **2026-08-09** — **P2 COMPLETE.** 56 item types attempted, 35 created, 21 refused; `GetCreationInfos`
+  overstates by 60%. 34 of the 35 compile clean bare — the single error was a faceplate container
+  with no type, i.e. the third independent route to a dangling reference and the third time the
+  compile was the only detector. Screen deleted, device left clean with zero artifacts.
+  **The contention guard earned its keep here**: the first P2 attempt was refused because the other
+  session had resumed with two live-run `export` commands. Rather than block, an autonomous waiter
+  polled for two consecutive quiet intervals and launched the sweep unattended when the machine
+  freed up — the right shape for this programme, since Portal availability is the binding constraint
+  and it is not predictable.

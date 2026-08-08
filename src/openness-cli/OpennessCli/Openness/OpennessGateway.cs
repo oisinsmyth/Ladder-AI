@@ -497,7 +497,8 @@ public sealed class OpennessGateway : IOpennessGateway
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,
         IReadOnlyList<(string Target, string EventType, string? Script)> events,
         IReadOnlyList<(string Target, string Property, string Tag)> binds,
-        IReadOnlyList<(string What, string Target, string? Detail)> deletes)
+        IReadOnlyList<(string What, string Target, string? Detail)> deletes,
+        IReadOnlyList<string> addItems)
     {
         if (_project is null)
         {
@@ -533,6 +534,25 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             var subject = ResolveTarget(screen, target);
             applied.Add(CreateTagBinding(subject, property, tag));
+        }
+
+        // Adding items to an EXISTING screen, one attempt per type, each failure caught and
+        // reported rather than aborting the rest. That tolerance is the point: the breadth sweep
+        // asks "which of the 56 types can actually be created", and an all-or-nothing command
+        // answers it one type at a time at one Portal round trip each.
+        foreach (var itemType in addItems)
+        {
+            var itemName = $"{itemType}_P2";
+            try
+            {
+                CreateScreenItem(screen, itemType, itemName);
+                applied.Add($"add-item {itemType} -> OK");
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"add-item {itemType} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
         }
 
         // Screen-scoped deletes. These cannot go through `hmi-delete`, which resolves compositions

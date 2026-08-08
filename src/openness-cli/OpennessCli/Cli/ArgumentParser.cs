@@ -124,6 +124,7 @@ public sealed record HmiEditScreenOptions(
     // (What, Target, Detail): What is "item" | "bind" | "event"; Detail is the property or event
     // type where one applies. Screen-scoped, so it cannot go through hmi-delete.
     IReadOnlyList<(string What, string Target, string? Detail)> Deletes,
+    IReadOnlyList<string> AddItems,
     bool Confirm,
     bool Json,
     string? TiaInstallOverride,
@@ -1081,6 +1082,7 @@ public static class ArgumentParser
         var events = new List<(string, string, string?)>();
         var binds = new List<(string, string, string)>();
         var deletes = new List<(string, string, string?)>();
+        var addItems = new List<string>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1129,6 +1131,14 @@ public static class ArgumentParser
                     }
 
                     events.Add(ev);
+                    break;
+                case "--add-item":
+                    if (!TryTakeValue(args, ref i, "--add-item", out var addItem, out var addItemErr))
+                    {
+                        return new ParseResult.Failure(addItemErr);
+                    }
+
+                    addItems.Add(addItem!);
                     break;
                 case "--delete-item":
                     if (!TryTakeValue(args, ref i, "--delete-item", out var delItem, out var delItemErr))
@@ -1224,13 +1234,13 @@ public static class ArgumentParser
 
         // An edit command with no edits is a mistake worth catching at parse time — it would
         // otherwise open the project, change nothing, save, and report success.
-        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0)
+        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0 && addItems.Count == 0)
         {
-            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind or --delete-*.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind, --add-item or --delete-*.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
-            projectIdentifier, name, sets, events, binds, deletes, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, sets, events, binds, deletes, addItems, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the

@@ -576,6 +576,78 @@ The lesson is about the shape of the defence, not this instance: **a guard that 
 survives someone adding to it; a list that must be remembered does not.** Two of this session's
 defects were the same shape — a second switch nobody updated, and a second family nobody extended.
 
+## 4k. Item-type breadth — `GetCreationInfos` OVERSTATES by 21 of 56 (2026-08-09) [LIVE]
+
+P2. All 56 concrete screen-item types attempted on one throwaway screen, each independently so a
+refusal reports rather than aborting the rest. One Portal round trip, 56 verdicts.
+
+**35 created. 21 refused.**
+
+### The metamodel's creatable list is not trustworthy
+
+`GetCreationInfos("ScreenItems")` reports **56** creatable types (§8). Only **35** actually create.
+The API advertises 60% more than it will deliver, and `Create<T>` carries **zero generic
+constraints**, so nothing rejects the other 21 until runtime.
+
+The 21 refusals are:
+
+- **All 17 `*Base` types** — `HmiScreenItemBase`, `HmiWidgetBase`, `HmiShapeBase`, `HmiWindowBase`,
+  `HmiSurfaceShapeBase`, `HmiCentricShapeBase`, `HmiCircularShapeBase`, `HmiEllipticalShapeBase`,
+  `HmiPointBasedShapeBase`, `HmiTextWidgetBase`, `HmiScaleWidgetBase`, `HmiSelectionGroupBase`,
+  `HmiControlWindowBase`, `HmiCompanionBase`, `HmiContainerBase`, `HmiSimpleScreenItemBase`,
+  `HmiTrendControlBase`. **None of these is marked `abstract` in the assembly** — so neither the CLR,
+  nor the generic signature, nor the metamodel will tell you they are not instantiable. Only trying
+  will.
+- **Four concrete types**: `HmiCustomWebControlContainer`, `HmiCustomWidgetContainer`, **`HmiLabel`**
+  and **`HmiProcessControl`**.
+
+The two custom containers are explicable — they are the types whose `ContainedType` names an external
+control, and the composition has a second `Create<T>(name, containedTypeValue)` overload precisely
+for them. **`HmiLabel` and `HmiProcessControl` are not explicable** and are recorded as UNKNOWN. A
+label refusing to be created is genuinely odd.
+
+**Every refusal produces the same opaque error**, with no distinguishing detail:
+
+```
+EngineeringTargetInvocationException: Error when calling method 'Create'
+of type 'Siemens.Engineering.HmiUnified.UI.Base.HmiScreenItemBaseComposition'.
+```
+
+So the API will not even tell you *why* it refused — abstract-in-spirit, needs-a-second-argument, and
+whatever afflicts `HmiLabel` are indistinguishable.
+
+**Consequence for a generator: the creatable list must be established by trial and cached, not read
+from the metamodel.** This qualifies §8's claim that self-description beats an exported example. It
+still does for *attributes* — `AccessMode` and `CreateRelevance` are real and useful — but the
+*creatable-type* list is aspirational. The honest summary is: the schema tells you the shape of what
+exists; it does not reliably tell you what you may do.
+
+### 34 of the 35 are valid bare — and the 35th is the same old story
+
+Compiling with all 35 present produced exactly **one** error:
+
+```
+[Error] ZZ_AI_P2Screen: → HmiFaceplateContainer_P2:
+  The referenced faceplate type does not exist. Select a valid faceplate type.
+```
+
+So **34 of 35 item types are valid with nothing but a name** — no mandatory follow-up configuration,
+consistent with the schema's "nothing is `Mandatory`" (§8). A generator can create an item and style
+it afterwards.
+
+The one exception is `HmiFaceplateContainer`, and it fails for **the same reason as everything else
+that has failed in this survey**: a reference to something that does not exist. That is now the
+**third independent instance** of the pattern —
+
+| Route to a dangling reference | Caught by |
+|---|---|
+| bind a property to a missing tag (§4h) | compile |
+| delete a tag that bindings still use (§4j) | compile |
+| create a faceplate container with no type (here) | compile |
+
+Three different operations, one failure mode, one detector. **Reference integrity is the whole of HMI
+correctness checking, and the device compile is the only thing that performs it.**
+
 ## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
 
 "Mapped" and "walked" are different questions and give very different answers. The surface, measured:
@@ -596,7 +668,7 @@ defects were the same shape — a second switch nobody updated, and a second fam
 |---|---|---|---|
 | Distinct API members invoked | ~85 | 4549 | **~2%** |
 | Creatable kinds actually created | **7** | 80 | 9% |
-| Screen-item types instantiated | **3** (Rectangle, Text, Button) | 56 | 5% |
+| Screen-item types instantiated | **35 created / 56 attempted** (§4k) | 56 | **63% created, 100% attempted** |
 | Event values attached | **2** (`Tapped`, `Loaded`) | 246 | <1% |
 | Dynamization kinds created | **1** (`TagDynamization`) | 6 | 17% |
 | **Deletions performed** | **0** | 184 | **0%** |

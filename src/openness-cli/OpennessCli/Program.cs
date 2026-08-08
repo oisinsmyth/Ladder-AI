@@ -215,6 +215,11 @@ internal static class Program
             Console.Error.WriteLine($"  bind {target}.{property} <- tag '{tag}'");
         }
 
+        foreach (var itemType in options.AddItems)
+        {
+            Console.Error.WriteLine($"  add item {itemType}");
+        }
+
         foreach (var (what, target, detail) in options.Deletes)
         {
             Console.Error.WriteLine($"  DELETE {what} {target}{(detail is null ? string.Empty : $" ({detail})")}");
@@ -259,7 +264,7 @@ internal static class Program
     private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes);
+        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes, options.AddItems);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));
