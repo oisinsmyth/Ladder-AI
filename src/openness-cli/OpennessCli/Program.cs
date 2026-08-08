@@ -116,6 +116,8 @@ internal static class Program
                     return RunHmiObject(gateway, hmiDel.Options, timeoutOpenSeconds, isDelete: true);
                 case ParseResult.HmiInventorySuccess hmiInv:
                     return RunHmiInventory(gateway, hmiInv.Options, timeoutOpenSeconds);
+                case ParseResult.HmiSetSuccess hmiSet:
+                    return RunHmiSet(gateway, hmiSet.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -243,6 +245,23 @@ internal static class Program
         return message.IndexOf("STILL PRESENT", StringComparison.Ordinal) >= 0 ? ExitCodes.CommandError : ExitCodes.Success;
     }
 
+    private static int RunHmiSet(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var applied = gateway.SetHmiObjectAttributes(options.Kind, options.Name, options.Sets, options.Texts);
+        Console.WriteLine($"{options.Kind} '{options.Name}': {applied.Count} change(s)");
+        foreach (var line in applied)
+        {
+            Console.WriteLine("  " + line);
+        }
+
+        // Individual refusals are reported, not fatal — the probe wants every verdict — but if
+        // NOTHING succeeded the command achieved nothing and should say so with its exit code.
+        return applied.Any(a => a.IndexOf("REFUSED", StringComparison.Ordinal) < 0)
+            ? ExitCodes.Success
+            : ExitCodes.CommandError;
+    }
+
     private static int RunHmiInventory(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -264,7 +283,7 @@ internal static class Program
     private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes, options.AddItems);
+        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes, options.AddItems, options.BindKinds);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));

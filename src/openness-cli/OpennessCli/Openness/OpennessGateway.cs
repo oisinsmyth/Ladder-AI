@@ -498,7 +498,8 @@ public sealed class OpennessGateway : IOpennessGateway
         IReadOnlyList<(string Target, string EventType, string? Script)> events,
         IReadOnlyList<(string Target, string Property, string Tag)> binds,
         IReadOnlyList<(string What, string Target, string? Detail)> deletes,
-        IReadOnlyList<string> addItems)
+        IReadOnlyList<string> addItems,
+        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds)
     {
         if (_project is null)
         {
@@ -534,6 +535,22 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             var subject = ResolveTarget(screen, target);
             applied.Add(CreateTagBinding(subject, property, tag));
+        }
+
+        // Non-tag dynamization kinds, each attempted independently so one refusal does not hide the
+        // other four — the P3 question is which of the six kinds can be created at all.
+        foreach (var (target, property, kindName) in bindKinds)
+        {
+            try
+            {
+                var subject = ResolveTarget(screen, target);
+                applied.Add(CreateDynamizationOfKind(subject, property, kindName));
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"dynamization {kindName} on {target}.{property} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
         }
 
         // Adding items to an EXISTING screen, one attempt per type, each failure caught and
@@ -577,6 +594,39 @@ public sealed class OpennessGateway : IOpennessGateway
     /// existence check of any kind at assign time, which is exactly what makes §4d's
     /// unchecked-reference problem real.
     /// </summary>
+    /// <summary>
+    /// Creates a dynamization of ANY kind on a property. `TagDynamization` gets the tag assigned;
+    /// the other five kinds are created bare, because the point of P3 is to learn whether they can
+    /// be created at all and what they demand afterwards.
+    /// </summary>
+    private static string CreateDynamizationOfKind(IEngineeringObject subject, string propertyName, string kindName)
+    {
+        var dynamizations = subject.GetType().GetProperty("Dynamizations")?.GetValue(subject)
+            ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+
+        var kindType = typeof(TagDynamization).Assembly.GetTypes()
+            .FirstOrDefault(t => t.Name.Equals(kindName, StringComparison.OrdinalIgnoreCase) && typeof(DynamizationBase).IsAssignableFrom(t) && !t.IsAbstract)
+            ?? throw new HmiUnknownKindException(kindName, new List<string> { "TagDynamization", "ScriptDynamization", "FlashingDynamization", "ExpressionDynamization", "ResourceListDynamization", "TagParameterDynamization" });
+
+        var find = dynamizations.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(string));
+        var existing = find?.Invoke(dynamizations, new object[] { propertyName });
+        if (existing is not null)
+        {
+            existing.GetType().GetMethod("Delete", Type.EmptyTypes)?.Invoke(existing, null);
+        }
+
+        var create = dynamizations.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == 1)
+            ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+
+        var created = create.MakeGenericMethod(kindType).Invoke(dynamizations, new object[] { propertyName })
+            ?? throw new InvalidOperationException($"Creating a {kindName} on '{propertyName}' returned null.");
+
+        var actualKind = TryRead(() => ((DynamizationBase)created).DynamizationType.ToString()) ?? "?";
+        return $"dynamization {kindName} created on {subject.GetType().Name}.{propertyName} [DynamizationType={actualKind}]";
+    }
+
     private static string CreateTagBinding(IEngineeringObject subject, string propertyName, string tagName)
     {
         var dynamizations = subject.GetType().GetProperty("Dynamizations")?.GetValue(subject)
@@ -1126,6 +1176,91 @@ public sealed class OpennessGateway : IOpennessGateway
         return stillThere
             ? $"DELETE CALLED but '{name}' is STILL PRESENT in {kind} — the object did not go away"
             : $"deleted {kind} '{name}' [{typeName}] on {devicePath}; confirmed absent on re-read";
+    }
+
+    /// <summary>
+    /// Sets attributes on any object in any composition — the counterpart to
+    /// <see cref="CreateHmiObject"/>, for the objects that are useless bare (an alarm needs a
+    /// trigger, a log needs a path). <paramref name="texts"/> goes through the MultilingualText
+    /// path, which is the one this survey flagged as awkward: `Items` has no `Create`, so a language
+    /// must already exist in the project.
+    /// </summary>
+    public IReadOnlyList<string> SetHmiObjectAttributes(
+        string kind,
+        string name,
+        IReadOnlyList<(string Attribute, string Value)> sets,
+        IReadOnlyList<(string Attribute, string Value)> texts)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(SetHmiObjectAttributes)}.");
+        }
+
+        var (software, _) = FindSingleUnifiedSoftware();
+        var composition = ResolveComposition(software, kind);
+        var target = FindInComposition(composition, name) ?? throw new HmiObjectNotFoundException(kind, name);
+
+        var applied = new List<string>();
+
+        foreach (var (attribute, value) in sets)
+        {
+            try
+            {
+                applied.Add("set " + SetAttributeCoerced((IEngineeringObject)target, attribute, value) + $"  -> {attribute}");
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"set {attribute} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        foreach (var (attribute, value) in texts)
+        {
+            applied.Add(SetMultilingualText(target, attribute, value));
+        }
+
+        SaveProject();
+        return applied;
+    }
+
+    /// <summary>
+    /// Writes a language-specific string into a <c>MultilingualText</c> property. The awkward part,
+    /// per the survey: the property is get-only, <c>Items</c> has no <c>Create</c>, and runtime
+    /// languages cannot be added — so the text can only go into a language the project already has.
+    /// Reports which language it used, since that is the fact worth knowing.
+    /// </summary>
+    private string SetMultilingualText(object target, string attribute, string value)
+    {
+        try
+        {
+            var mlt = target.GetType().GetProperty(attribute)?.GetValue(target);
+            if (mlt is null)
+            {
+                return $"text {attribute} -> REFUSED (no such property, or it returned null)";
+            }
+
+            if (mlt is not MultilingualText multilingual)
+            {
+                return $"text {attribute} -> REFUSED (property is {mlt.GetType().Name}, not MultilingualText)";
+            }
+
+            // Items has no Create, so the language must already exist. Take the first item rather
+            // than guessing a culture: which languages a project has is a project fact, not ours.
+            foreach (MultilingualTextItem item in multilingual.Items)
+            {
+                var culture = TryRead(() => item.Language?.Culture?.Name) ?? "?";
+                item.Text = value;
+                return $"text {attribute} -> set in language '{culture}'";
+            }
+
+            return $"text {attribute} -> REFUSED (MultilingualText has no language items; Items has no Create and runtime languages cannot be added)";
+        }
+        catch (Exception ex)
+        {
+            var root = ex.GetBaseException();
+            return $"text {attribute} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})";
+        }
     }
 
     public IReadOnlyList<HmiObjectInfo> InventoryHmi(string? kindFilter)

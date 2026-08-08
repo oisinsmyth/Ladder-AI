@@ -113,7 +113,10 @@ public interface IOpennessGateway : IDisposable
         IReadOnlyList<(string What, string Target, string? Detail)> deletes,
         // Item types to add to the existing screen. Each is attempted independently and a failure is
         // REPORTED rather than aborting the rest — the breadth sweep needs a per-type verdict.
-        IReadOnlyList<string> addItems);
+        IReadOnlyList<string> addItems,
+        // Non-tag dynamization kinds (Script/Flashing/Expression/ResourceList/TagParameter), each
+        // attempted independently so one refusal does not hide the others.
+        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds);
 
     /// <summary>
     /// Creates an HMI tag (and its table if absent) to serve as a dynamization bind target.
@@ -136,6 +139,18 @@ public interface IOpennessGateway : IDisposable
     string DeleteHmiObject(string kind, string name, bool allowAnyName);
 
     IReadOnlyList<HmiObjectInfo> InventoryHmi(string? kindFilter);
+
+    /// <summary>
+    /// Sets attributes on any object in any composition — the counterpart to
+    /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the
+    /// MultilingualText path (alarm texts and the like), which can only write into a language the
+    /// project already has.
+    /// </summary>
+    IReadOnlyList<string> SetHmiObjectAttributes(
+        string kind,
+        string name,
+        IReadOnlyList<(string Attribute, string Value)> sets,
+        IReadOnlyList<(string Attribute, string Value)> texts);
 
     /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws

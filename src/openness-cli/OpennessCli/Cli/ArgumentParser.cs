@@ -125,6 +125,8 @@ public sealed record HmiEditScreenOptions(
     // type where one applies. Screen-scoped, so it cannot go through hmi-delete.
     IReadOnlyList<(string What, string Target, string? Detail)> Deletes,
     IReadOnlyList<string> AddItems,
+    // (Target, Property, DynamizationKind) — the non-tag dynamization kinds.
+    IReadOnlyList<(string Target, string Property, string Kind)> BindKinds,
     bool Confirm,
     bool Json,
     string? TiaInstallOverride,
@@ -140,6 +142,10 @@ public sealed record HmiObjectOptions(
     string Name,
     string? Parent,
     bool AllowAnyName,
+    // `hmi-set` only: plain attributes, and MultilingualText attributes, which need a different
+    // write path entirely.
+    IReadOnlyList<(string Attribute, string Value)> Sets,
+    IReadOnlyList<(string Attribute, string Value)> Texts,
     bool Confirm,
     bool Json,
     string? TiaInstallOverride,
@@ -197,6 +203,8 @@ public abstract record ParseResult
     public sealed record HmiDeleteSuccess(HmiObjectOptions Options) : ParseResult;
 
     public sealed record HmiInventorySuccess(HmiObjectOptions Options) : ParseResult;
+
+    public sealed record HmiSetSuccess(HmiObjectOptions Options) : ParseResult;
 
     public sealed record Failure(string Message) : ParseResult;
 }
@@ -273,6 +281,7 @@ public static class ArgumentParser
         ParseResult.HmiNewSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiDeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiInventorySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiSetSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -299,6 +308,7 @@ public static class ArgumentParser
         ParseResult.HmiNewSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiDeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiInventorySuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiSetSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -326,6 +336,7 @@ public static class ArgumentParser
             "hmi-new" => ParseHmiObject(args, "hmi-new", requireName: true, requireConfirm: true),
             "hmi-delete" => ParseHmiObject(args, "hmi-delete", requireName: true, requireConfirm: true),
             "hmi-inventory" => ParseHmiObject(args, "hmi-inventory", requireName: false, requireConfirm: false),
+            "hmi-set" => ParseHmiObject(args, "hmi-set", requireName: true, requireConfirm: true),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -1083,6 +1094,7 @@ public static class ArgumentParser
         var binds = new List<(string, string, string)>();
         var deletes = new List<(string, string, string?)>();
         var addItems = new List<string>();
+        var bindKinds = new List<(string, string, string)>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1131,6 +1143,21 @@ public static class ArgumentParser
                     }
 
                     events.Add(ev);
+                    break;
+                case "--bind-kind":
+                    if (!TryTakeValue(args, ref i, "--bind-kind", out var rawBindKind, out var bindKindErr))
+                    {
+                        return new ParseResult.Failure(bindKindErr);
+                    }
+
+                    // "<Target>.<Property>=<DynamizationKind>" — same grammar as --bind, but the
+                    // value names the dynamization type rather than a tag.
+                    if (!TryParseSet(rawBindKind!, out var bindKind, out var bindKindParseErr))
+                    {
+                        return new ParseResult.Failure(bindKindParseErr.Replace("--set", "--bind-kind"));
+                    }
+
+                    bindKinds.Add(bindKind);
                     break;
                 case "--add-item":
                     if (!TryTakeValue(args, ref i, "--add-item", out var addItem, out var addItemErr))
@@ -1234,13 +1261,13 @@ public static class ArgumentParser
 
         // An edit command with no edits is a mistake worth catching at parse time — it would
         // otherwise open the project, change nothing, save, and report success.
-        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0 && addItems.Count == 0)
+        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0 && addItems.Count == 0 && bindKinds.Count == 0)
         {
-            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind, --add-item or --delete-*.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind, --bind-kind, --add-item or --delete-*.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
-            projectIdentifier, name, sets, events, binds, deletes, addItems, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, sets, events, binds, deletes, addItems, bindKinds, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the
@@ -1343,6 +1370,8 @@ public static class ArgumentParser
         string? name = null;
         string? parent = null;
         var allowAnyName = false;
+        var objSets = new List<(string, string)>();
+        var objTexts = new List<(string, string)>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1375,6 +1404,32 @@ public static class ArgumentParser
                         return new ParseResult.Failure(nameErr);
                     }
 
+                    break;
+                case "--set":
+                    if (!TryTakeValue(args, ref i, "--set", out var objSet, out var objSetErr))
+                    {
+                        return new ParseResult.Failure(objSetErr);
+                    }
+
+                    if (!TryParseNameValue(objSet!, "--set", out var parsedSet, out var parsedSetErr))
+                    {
+                        return new ParseResult.Failure(parsedSetErr);
+                    }
+
+                    objSets.Add(parsedSet);
+                    break;
+                case "--text":
+                    if (!TryTakeValue(args, ref i, "--text", out var objText, out var objTextErr))
+                    {
+                        return new ParseResult.Failure(objTextErr);
+                    }
+
+                    if (!TryParseNameValue(objText!, "--text", out var parsedText, out var parsedTextErr))
+                    {
+                        return new ParseResult.Failure(parsedTextErr);
+                    }
+
+                    objTexts.Add(parsedText);
                     break;
                 case "--in":
                     if (!TryTakeValue(args, ref i, "--in", out parent, out var parentErr))
@@ -1429,16 +1484,38 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --name <name>.{Environment.NewLine}{Usage}");
         }
 
+        if (verb == "hmi-set" && objSets.Count == 0 && objTexts.Count == 0)
+        {
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set <Attr>=<Value> or --text <Attr>=<Value>.{Environment.NewLine}{Usage}");
+        }
+
         var options = new HmiObjectOptions(
             projectIdentifier, kind ?? string.Empty, name ?? string.Empty, parent, allowAnyName,
-            confirm || !requireConfirm, json, tiaInstall, timeoutConnect, timeoutOpen);
+            objSets, objTexts, confirm || !requireConfirm, json, tiaInstall, timeoutConnect, timeoutOpen);
 
         return verb switch
         {
             "hmi-new" => new ParseResult.HmiNewSuccess(options),
             "hmi-delete" => new ParseResult.HmiDeleteSuccess(options),
+            "hmi-set" => new ParseResult.HmiSetSuccess(options),
             _ => new ParseResult.HmiInventorySuccess(options),
         };
+    }
+
+    // "<Name>=<Value>", split on the first '=' so values may contain one.
+    private static bool TryParseNameValue(string raw, string flag, out (string Name, string Value) parsed, out string error)
+    {
+        parsed = default;
+        var eq = raw.IndexOf('=');
+        if (eq <= 0)
+        {
+            error = $"{flag} expects '<Attribute>=<Value>', got '{raw}'.";
+            return false;
+        }
+
+        parsed = (raw.Substring(0, eq), raw.Substring(eq + 1));
+        error = string.Empty;
+        return true;
     }
 
     private static ParseResult ParseHmiCreateTag(string[] args)
