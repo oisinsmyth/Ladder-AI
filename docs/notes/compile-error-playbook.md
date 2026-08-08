@@ -192,3 +192,30 @@ with no dialog and nobody touching the machine.
 `portal-status` — if it shows an in-use process already holding YOUR project, the approval dialog
 is unlikely, because that binary has plainly been connected to before; (3) only then go looking for
 a dialog. The 180 s default is simply short for a large project on a busy machine.
+
+## "The data type UInt of the actual parameter does not match the data type Int"
+**Confirmed live twice on one day, 2026-08-08.** Two separate causes, and the second is the common one.
+
+**Cause 1 — converter FI-55, fixed.** A comparison's SrcType was chosen by ranking the tag's type
+against the literal's inferred type on one ladder, and the ladder listed only six types, returning
+0 for everything else. So `UInt`, `USInt`, `Byte`, `Word` and `SInt` all ranked BELOW `Int` and lost
+to their own literal. Fixed by precedence: a tag's declared type is a fact and a literal's is a
+guess, so the tag wins whenever one is present.
+
+**Cause 2 — CONVERTING WITHOUT `--project`, and this is the one that will keep happening.**
+A block converted with `converter to-xml <file>` and no `--project` cannot see any other DB, so a
+comparison against a member of one falls back to the literal's type. Measured:
+`DB_HmiCmd.Heartbeat <> 0` where Heartbeat is a `UInt` emits `SrcType=Int` blind and `SrcType=UInt`
+with `--project`.
+
+**ALWAYS CONVERT WITH `--project <ir-dir>`.** The converter now warns when it converts a block that
+references a DB it cannot see (FI-57), naming the roots. The warning is advisory and does not
+change the exit code.
+
+Why this bit twice: from inside the block it looks exactly like a converter type-inference bug,
+because the type genuinely is not knowable without the other DB in scope. Both agents concluded
+they had found one, and both were reasonable to.
+
+**Related, not the same:** `CONVERT` cannot target a `USInt` — TIA rejects
+`"The data type USInt ... does not match the data type DInt of the formal parameter"`. That is a
+TIA constraint on the CONVERT box, not a typing bug, and casting around it is the wrong response.

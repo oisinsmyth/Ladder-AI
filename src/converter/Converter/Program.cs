@@ -181,6 +181,8 @@ internal static class Program
         var callees = BuildCalleeRegistry(files, projectDir);
         var tagTypes = BuildTagTypeRegistry(files, projectDir);
 
+        WarnIfConvertingBlindToExternalTypes(mode, files, projectDir);
+
         foreach (var file in files)
         {
             try
@@ -1422,6 +1424,80 @@ internal static class Program
         }
 
         return CalleeInterfaceRegistry.FromBlocks(blocks);
+    }
+
+    // FI-57 (2026-08-08). Converting a block WITHOUT `--project` silently mistypes every comparison
+    // against a member of another DB.
+    //
+    // Measured: `DB_HmiCmd.Heartbeat <> 0`, where Heartbeat is a UInt, emits `SrcType=Int` with no
+    // --project and `SrcType=UInt` with it. TIA then rejects the block:
+    //     "The data type UInt of the actual parameter does not match the data type Int of the
+    //      formal parameter"
+    //
+    // It is LOUD — the compile gate catches it — so nothing has ever shipped wrong on it. What it
+    // costs is a whole import-and-compile cycle, every time, and it has now cost two separately.
+    // Both agents reasonably concluded they had found a converter type-inference bug, because from
+    // inside the block that is exactly what it looks like: the type is simply not knowable without
+    // the other DB in scope, and nothing said so.
+    //
+    // So: say so. Warn when a block references a root this run cannot see, naming the roots. The
+    // warning is advisory and never changes an exit code — a block that genuinely references
+    // nothing external is silent, and one that does gets told what it is guessing about.
+    private static void WarnIfConvertingBlindToExternalTypes(string mode, string[] files, string? projectDir)
+    {
+        if (projectDir is not null)
+        {
+            return;
+        }
+
+        var localRoots = new HashSet<string>(StringComparer.Ordinal);
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in files)
+        {
+            string text;
+            try
+            {
+                text = File.ReadAllText(file);
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+
+            // Everything this batch declares itself — its own blocks, DBs and types — is in scope
+            // whatever else is missing.
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex
+                         .Matches(text, @"^\s*(?:BLOCK\s+\w+|TYPE|DB|TAGTABLE)\s+""?([A-Za-z_]\w*)""?",
+                             System.Text.RegularExpressions.RegexOptions.Multiline))
+            {
+                localRoots.Add(m.Groups[1].Value);
+            }
+
+            // A dotted reference whose root looks like a global container (a DB or an instance DB).
+            // Deliberately narrow: roots that are plainly the block's own interface (IO, and
+            // anything the block declares) are excluded below, so this does not fire on ordinary
+            // local structure access.
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex
+                         .Matches(text, @"\b((?:DB|iDB)_\w+)\."))
+            {
+                referenced.Add(m.Groups[1].Value);
+            }
+        }
+
+        referenced.ExceptWith(localRoots);
+        if (referenced.Count == 0)
+        {
+            return;
+        }
+
+        var names = string.Join(", ", referenced.OrderBy(r => r, StringComparer.Ordinal).Take(6));
+        var more = referenced.Count > 6 ? $" (+{referenced.Count - 6} more)" : string.Empty;
+
+        Console.Error.WriteLine(
+            $"WARNING: converted without --project, so member types in {names}{more} could not be " +
+            "resolved. Comparisons against them fall back to a type inferred from the literal, which " +
+            "TIA rejects when the real member is unsigned. Re-run with --project <ir-dir> to type them.");
     }
 
     // Builds the tag/member-type registry for typed box/compare synthesis from the batch's own .ir
