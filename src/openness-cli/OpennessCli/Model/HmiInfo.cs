@@ -40,7 +40,10 @@ public sealed record HmiScreenInfo(
     long? Width,
     long? Height,
     int ItemCount,
-    IReadOnlyList<HmiScreenItemInfo> Items);
+    IReadOnlyList<HmiScreenItemInfo> Items,
+    // Screens carry their own handlers (Loaded/Unloaded/Tapped/ContextTapped), on a different
+    // composition from their items'. Omitting them made a created screen-level event unverifiable.
+    IReadOnlyList<HmiEventInfo> Events);
 
 /// <summary>
 /// One object on a screen. <see cref="ItemType"/> is the CLR type name (e.g. <c>HmiIOField</c>) —
@@ -55,7 +58,23 @@ public sealed record HmiScreenItemInfo(
     long? Top,
     long? Width,
     long? Height,
-    IReadOnlyList<HmiDynamizationInfo> Dynamizations);
+    IReadOnlyList<HmiDynamizationInfo> Dynamizations,
+    IReadOnlyList<HmiEventInfo> Events);
+
+/// <summary>
+/// One event handler on a screen or screen item. Reading these closes the walker's one genuinely
+/// misleading gap: a button reported with no dynamizations is not unbound, its behaviour simply
+/// lives in <c>EventHandlers</c>, which is a different composition entirely.
+///
+/// The event vocabulary is touch-first — there is no "Click". Interactive items expose
+/// <c>Tapped</c>/<c>ContextTapped</c>/<c>KeyDown</c>/<c>KeyUp</c> (buttons add <c>Down</c>/<c>Up</c>),
+/// screens expose <c>Loaded</c>/<c>Unloaded</c>, and controls expose <c>Initialized</c>/
+/// <c>CommandFired</c>. Each event type is an enum member of a per-item-type enum, not a string.
+/// </summary>
+public sealed record HmiEventInfo(
+    string EventType,
+    bool HasScript,
+    string? ScriptPreview);
 
 /// <summary>
 /// A single property-to-source binding. This is the whole reason the walker exists: on Unified
@@ -128,5 +147,17 @@ public sealed record HmiCreateScreenResult(
     long Width,
     long Height,
     IReadOnlyList<string> CreatedItems,
+    IReadOnlyList<HmiValidationMessage> Validation,
+    bool Saved);
+
+/// <summary>
+/// Result of editing an existing screen. <see cref="Applied"/> records each change in the form it was
+/// actually made, which is not always the form it was asked for — an attribute declared as an enum
+/// or a number takes a converted value, and saying so makes a silent coercion visible.
+/// </summary>
+public sealed record HmiEditScreenResult(
+    string DevicePath,
+    string ScreenName,
+    IReadOnlyList<string> Applied,
     IReadOnlyList<HmiValidationMessage> Validation,
     bool Saved);

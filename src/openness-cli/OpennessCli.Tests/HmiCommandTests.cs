@@ -16,7 +16,24 @@ public class HmiCommandTests
         string name,
         string type,
         params HmiDynamizationInfo[] dynamizations) =>
-        new(name, type, 10, 20, 100, 40, dynamizations);
+        new(name, type, 10, 20, 100, 40, dynamizations, Array.Empty<HmiEventInfo>());
+
+    private static HmiScreenItemInfo ItemWithEvents(
+        string name,
+        string type,
+        params HmiEventInfo[] events) =>
+        new(name, type, 10, 20, 100, 40, Array.Empty<HmiDynamizationInfo>(), events);
+
+    // Screen-level events are exercised separately; most tests care about items, so this keeps the
+    // call sites readable rather than trailing an empty array through every one of them.
+    private static HmiScreenInfo ScreenInfo(
+        string name,
+        int? number,
+        long? width,
+        long? height,
+        int itemCount,
+        IReadOnlyList<HmiScreenItemInfo> items) =>
+        new(name, number, width, height, itemCount, items, Array.Empty<HmiEventInfo>());
 
     private static HmiDeviceInfo UnifiedDevice(params HmiScreenInfo[] screens) =>
         new("station/Panel_1", "PanelRuntime", HmiFamily.Unified, screens.Length, 2, 300, 40, 5, 6, 3, screens);
@@ -249,6 +266,115 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void Parse_HmiEditScreen_RequiresAtLeastOneChange()
+    {
+        // An edit with no edits would open the project, change nothing, save, and report success.
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--yes" });
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("Nothing to do", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_ParsesSetsAndEvents()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-edit-screen", "P", "--name", "S",
+            "--set", "Screen.Width=800",
+            "--set", "Button_1.Left=42",
+            "--event", "Button_1:Tapped=HMIRuntime.Trace('hi');",
+            "--event", "Screen:Loaded",
+            "--yes",
+        });
+
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        Assert.Equal(("Screen", "Width", "800"), success.Options.Sets[0]);
+        Assert.Equal(("Button_1", "Left", "42"), success.Options.Sets[1]);
+        Assert.Equal(("Button_1", "Tapped", "HMIRuntime.Trace('hi');"), success.Options.Events[0]);
+        // An event handler with no script is legitimate, and must stay distinguishable from "".
+        Assert.Equal(("Screen", "Loaded", (string?)null), success.Options.Events[1]);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_SetValueMayContainEquals()
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--set", "Screen.OutputFormat={D,@dd=MM}", "--yes" });
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        Assert.Equal("{D,@dd=MM}", success.Options.Sets[0].Value);
+    }
+
+    [Theory]
+    [InlineData("NoDotOrEquals")]
+    [InlineData("Screen.Width")]
+    [InlineData("=42")]
+    public void Parse_HmiEditScreen_MalformedSetIsRejected(string raw)
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--set", raw, "--yes" });
+        Assert.IsType<ParseResult.Failure>(result);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_DefaultsToUnconfirmed()
+    {
+        var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--set", "Screen.Width=800" });
+        Assert.False(Assert.IsType<ParseResult.HmiEditScreenSuccess>(result).Options.Confirm);
+    }
+
+    [Fact]
+    public void FormatHmiReport_RendersEventsWithAndWithoutScripts()
+    {
+        // The gap this closes: a button with no dynamizations is not unbound, its behaviour is here.
+        var device = UnifiedDevice(ScreenInfo(
+            "Overview", 1, 1920, 1080, 1,
+            new[]
+            {
+                ItemWithEvents(
+                    "Start",
+                    "HmiButton",
+                    new HmiEventInfo("Tapped", true, "HMIRuntime.Trace('go');"),
+                    new HmiEventInfo("Up", false, null)),
+            }));
+
+        var report = OutputFormatter.FormatHmiReport(new[] { device }, "Overview");
+
+        Assert.Contains("on Tapped  script: HMIRuntime.Trace('go');", report, StringComparison.Ordinal);
+        Assert.Contains("on Up  (no script)", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiReport_RendersScreenLevelEvents()
+    {
+        // Screens carry their own handlers (Loaded/Unloaded), on a different composition from their
+        // items'. Omitting them made a created screen-level event impossible to verify by read-back.
+        var device = UnifiedDevice(new HmiScreenInfo(
+            "Overview", 1, 1920, 1080, 0,
+            Array.Empty<HmiScreenItemInfo>(),
+            new[] { new HmiEventInfo("Loaded", false, null) }));
+
+        var report = OutputFormatter.FormatHmiReport(new[] { device }, "Overview");
+
+        Assert.Contains("on Loaded  (no script)", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiEditScreenResult_ListsAppliedChangesAndValidation()
+    {
+        var result = new HmiEditScreenResult(
+            "station/Panel_1",
+            "TestScreen",
+            new[] { "set Screen.Width = 800 (UInt32)", "event HmiButton.Tapped (script set)" },
+            Array.Empty<HmiValidationMessage>(),
+            true);
+
+        var text = OutputFormatter.FormatHmiEditScreenResult(result);
+
+        Assert.Contains("changes applied: 2", text, StringComparison.Ordinal);
+        Assert.Contains("(UInt32)", text, StringComparison.Ordinal);
+        Assert.Contains("ran, returned no errors and no warnings", text, StringComparison.Ordinal);
+        Assert.Contains("project saved: yes", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FormatHmiReport_NoDevices_SaysSo()
     {
         Assert.Equal("(no HMI devices found)", OutputFormatter.FormatHmiReport(Array.Empty<HmiDeviceInfo>(), null));
@@ -263,7 +389,7 @@ public class HmiCommandTests
             HmiFamily.Classic,
             1,
             0, 0, 0, 0, 0, 0,
-            new[] { new HmiScreenInfo("Overview", null, null, null, 0, Array.Empty<HmiScreenItemInfo>()) });
+            new[] { ScreenInfo("Overview", null, null, null, 0, Array.Empty<HmiScreenItemInfo>()) });
 
         var report = OutputFormatter.FormatHmiReport(new[] { device }, null);
 
@@ -275,7 +401,7 @@ public class HmiCommandTests
     [Fact]
     public void FormatHmiReport_UnifiedSummary_InvitesTheDetailPass()
     {
-        var device = UnifiedDevice(new HmiScreenInfo("Overview", 1, 1920, 1080, 12, Array.Empty<HmiScreenItemInfo>()));
+        var device = UnifiedDevice(ScreenInfo("Overview", 1, 1920, 1080, 12, Array.Empty<HmiScreenItemInfo>()));
 
         var report = OutputFormatter.FormatHmiReport(new[] { device }, null);
 
@@ -287,7 +413,7 @@ public class HmiCommandTests
     [Fact]
     public void FormatHmiReport_RendersItemsAndTagDynamizations()
     {
-        var device = UnifiedDevice(new HmiScreenInfo(
+        var device = UnifiedDevice(ScreenInfo(
             "Overview",
             1,
             1920,
@@ -307,7 +433,7 @@ public class HmiCommandTests
     [Fact]
     public void FormatHmiReport_NonTagDynamization_ReportsKindWithoutInventingATag()
     {
-        var device = UnifiedDevice(new HmiScreenInfo(
+        var device = UnifiedDevice(ScreenInfo(
             "Overview",
             1,
             1920,
@@ -325,7 +451,7 @@ public class HmiCommandTests
     public void FormatHmiReport_TruncatedItemList_NeverReadsAsComplete()
     {
         // ItemCount is the truth; Items is what was read. A cap must never present as a full listing.
-        var device = UnifiedDevice(new HmiScreenInfo(
+        var device = UnifiedDevice(ScreenInfo(
             "Overview",
             1,
             1920,
@@ -342,7 +468,7 @@ public class HmiCommandTests
     [Fact]
     public void FormatHmiJson_EmitsFamilyAndDynamizations()
     {
-        var device = UnifiedDevice(new HmiScreenInfo(
+        var device = UnifiedDevice(ScreenInfo(
             "Overview",
             1,
             1920,

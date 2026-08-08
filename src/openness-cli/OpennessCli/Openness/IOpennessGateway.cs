@@ -87,6 +87,21 @@ public interface IOpennessGateway : IDisposable
     HmiCreateScreenResult CreateHmiScreen(string screenName, long width, long height, IReadOnlyList<string> itemTypes);
 
     /// <summary>
+    /// Modifies an existing screen: sets attributes on the screen or its items, and creates event
+    /// handlers. Separate from <see cref="CreateHmiScreen"/> because the risk is different —
+    /// creating touches nothing anyone depends on; editing changes something that already works.
+    ///
+    /// Attribute values are coerced using the target's own <c>GetAttributeInfos</c> (enum parse or
+    /// <c>Convert.ChangeType</c>), and a read-only attribute is refused rather than silently
+    /// ignored. Targets and event names that do not exist are hard errors: a skipped edit and a
+    /// successful one look identical in the output otherwise.
+    /// </summary>
+    HmiEditScreenResult EditHmiScreen(
+        string screenName,
+        IReadOnlyList<(string Target, string Attribute, string Value)> sets,
+        IReadOnlyList<(string Target, string EventType, string? Script)> events);
+
+    /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
     /// <see cref="SafetyContentRefusedException"/>) before calling Export() at all if the block
     /// classifies as safety. <paramref name="deviceFilter"/> disambiguates when the same block
@@ -322,6 +337,54 @@ public sealed class GroupNotFoundException : Exception
 /// <see cref="GroupNotFoundException"/>, kept separate because the correction is different: not a typo
 /// in the path, but the wrong device item named along it.
 /// </summary>
+public sealed class HmiScreenNotFoundException : Exception
+{
+    public HmiScreenNotFoundException(string name)
+        : base($"No screen named '{name}' was found on the HMI device (screens inside screen groups were searched too). This command edits existing screens and never creates one — check the name with `openness-cli hmi <project>`.")
+    {
+    }
+}
+
+public sealed class HmiScreenItemNotFoundException : Exception
+{
+    public HmiScreenItemNotFoundException(string itemName, string screenName)
+        : base($"Screen '{screenName}' has no item named '{itemName}'. Use 'Screen' to target the screen itself, or list the item names with `openness-cli hmi <project> --screen {screenName}`.")
+    {
+    }
+}
+
+public sealed class HmiUnknownAttributeException : Exception
+{
+    public HmiUnknownAttributeException(string attribute, string typeName)
+        : base($"'{typeName}' declares no attribute named '{attribute}'. List the real ones, with their access modes, using `openness-cli hmi <project> --schema`.")
+    {
+    }
+}
+
+public sealed class HmiAttributeNotWritableException : Exception
+{
+    public HmiAttributeNotWritableException(string attribute, string typeName, string accessMode)
+        : base($"'{typeName}.{attribute}' has access mode {accessMode} and cannot be set. Read-only sub-parts (Font, Padding, InputBehavior, ToolTipText) are configured by reaching into the object they return, not by assigning to them.")
+    {
+    }
+}
+
+public sealed class HmiEventsNotSupportedException : Exception
+{
+    public HmiEventsNotSupportedException(string typeName)
+        : base($"'{typeName}' exposes no EventHandlers composition, so no event can be attached to it.")
+    {
+    }
+}
+
+public sealed class HmiUnknownEventTypeException : Exception
+{
+    public HmiUnknownEventTypeException(string eventType, string typeName, IReadOnlyList<string> valid)
+        : base($"'{typeName}' has no event '{eventType}'. Valid events for it: {string.Join(", ", valid)}. Note the vocabulary is touch-first — there is no 'Click'; use 'Tapped'.")
+    {
+    }
+}
+
 public sealed class HmiScreenAlreadyExistsException : Exception
 {
     public HmiScreenAlreadyExistsException(string name)

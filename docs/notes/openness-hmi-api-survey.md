@@ -513,11 +513,13 @@ against a schema the API hands you. Consequences, all of them already visible in
 - **`Validate()`'s DEPTH is still unproven** — see §10. It has now been invoked and it works, but it
   was asked about a screen with nothing wrong with it, and it said nothing. That is consistent with a
   thorough checker and equally consistent with a shallow one.
-- **Nothing has been *modified*.** The write path is proven for *creation* only. Editing an existing
-  screen, re-binding a dynamization, or deleting a screen have never been exercised, and creation
-  being easy says little about them — creation touches nothing anyone else depends on.
+- **Modification is proven only on a screen this session created** (§10b) — never on a pre-existing
+  one, which is the case with real consequences. Deleting a screen has never been exercised at all.
 - **No dynamization has been created**, only read. `Dynamizations.Create<TagDynamization>` remains
-  reflection-only, and it is the step that would actually bind a screen to the PLC.
+  reflection-only, and it is the step that would actually bind a screen to the PLC — so nothing
+  proven so far demonstrates the PLC↔HMI coupling half of screen generation.
+- **`IHmiScript.SyntaxCheck()` has never been called**, even though event scripts have now been
+  written. Script bodies were accepted verbatim and never checked by anything.
 - **The compile path is inferred, not observed.** `ICompilable` exists (`Compile() : CompilerResult`)
   and `HmiTarget` implements `IEngineeringServiceProvider`, so `HmiTarget.GetService<ICompilable>()`
   *compiles*. Whether it returns non-null is untested. Note that **`HmiSoftware` (Unified) does not
@@ -584,6 +586,56 @@ Two smaller observations worth keeping:
   in principle: during the wedge (`openness-quirks.md`) every Portal-touching command failed, while
   the dry run kept answering in 0.4 s. A confirmation step that needs a working session is a
   confirmation step that stops working exactly when things are going wrong.
+
+## 10b. Modify + events, also proven (2026-08-07)
+
+Second write pass on the same throwaway screen: three attribute changes and two event handlers, via
+`openness-cli hmi-edit-screen`. Applied, validated, saved, and confirmed by read-back — the screen
+went 1280→1000 wide, its rectangle moved `@0,0`→`@120,80`, and its button came back carrying
+`on Tapped  script: HMIRuntime.Trace(...)`.
+
+**Events are enum-keyed per item type, and the vocabulary is touch-first.** Each concrete type owns
+its own `EventHandlers` composition whose `Create()` takes *that type's* event enum
+(`HmiButtonEventType`, `HmiRectangleEventType`, … ~40 of them, no shared base). **There is no
+`Click`:**
+
+| Where | Events |
+|---|---|
+| Interactive items | `Tapped`, `ContextTapped`, `KeyDown`, `KeyUp` (+ `Down`/`Up` on buttons and toggles; `StateChanged` on toggles) |
+| Screens | `Loaded`, `Unloaded`, `Tapped`, `ContextTapped` |
+| Controls (alarm, trend, process, …) | `Initialized`, `CommandFired` |
+| Touch area | `GestureDetected` only |
+
+Anyone generating HMI behaviour from mouse-based intuition gets this wrong on the first attempt, and
+the enum makes it a hard error rather than a silent no-op. Handlers carry a `Script` with
+`ScriptCode`, `Async` and a `SyntaxCheck()` — that syntax check is **still uncalled**, and is the
+obvious companion to the `Validate()` depth question below.
+
+**Attribute writes need coercion, and the schema supplies it.** `SetAttribute` is strict about
+runtime type — `Width` is a `UInt32` and rejects a string or an `Int32`. Driving the conversion off
+the target's own `GetAttributeInfos()` (enum-parse or `ChangeType` into the declared type) means the
+API's schema does the work, and reporting the converted value *with its type* keeps a coercion
+visible instead of silent.
+
+**Two failures worth recording, because both were informative:**
+
+1. **`EngineeringSecurityException: Security error.`** — the edit failed once with this while a
+   *read* through the identical binary succeeded seconds later. So it is **operation-specific, not
+   session- or binary-wide**: reads were fine, writes were refused. It also arrives with **no
+   dialog** (window enumeration confirmed), which finally gives the silent refusal in
+   `openness-quirks.md` a name. Circumstantial cause: the screen had been opened and its items moved
+   in the TIA UI between runs, and the write succeeded on retry — consistent with the Portal editor
+   holding the object, though that was not isolated conclusively.
+2. **A verification gap in this tool, not the API.** The `Screen:Loaded` handler was created and
+   reported, but the walker read events only on *items*, never on the screen — so the one change
+   could not be confirmed by read-back. Screens carry their own handler composition. Fixed; the
+   lesson is that a write is only as trustworthy as the reader used to check it, and here the reader
+   was quietly incomplete in exactly the area being tested.
+
+**What this does and does not add to §10.** Modification and event attachment now join creation as
+proven. `Validate()` still returned clean — on changes that were all individually valid — so its
+**depth remains unmeasured**, exactly as §10 says. Nothing here touched a real screen, a real tag, or
+a dynamization.
 
 ## 11. If this is ever picked up
 

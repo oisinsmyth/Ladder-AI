@@ -256,6 +256,45 @@ openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <
 This exists as a capability *probe* — the cheapest way to answer the survey's own open question of
 whether `Validate()` does anything — not as an HMI authoring capability.
 
+## `hmi-edit-screen` — modify an existing screen, and attach events
+
+```
+openness-cli hmi-edit-screen <project> --name <screen> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>]]... --yes
+```
+
+`Target` is an item name, or the literal `Screen` for the screen itself. Same `--yes` gate as
+`hmi-create-screen`, and the same no-Portal dry run — which here prints the **whole change list**, so
+the refusal is a reviewable plan rather than a count.
+
+**Attribute values are coerced from the API's own schema**, not guessed: the target's
+`GetAttributeInfos()` supplies the declared type, and the value is enum-parsed or
+`Convert.ChangeType`-d into it (`Width` is a `UInt32` and will not accept a string). The applied
+change is reported with the converted value *and its type*, so a silent coercion is visible. A
+read-only attribute is **refused**, with a message pointing out that read-only sub-parts (`Font`,
+`Padding`, `InputBehavior`, `ToolTipText`) are configured by reaching into the object they return
+rather than by assignment.
+
+**Unknown targets, attributes and event names are hard errors**, never no-ops — a skipped edit and a
+successful one look identical in the output otherwise.
+
+### Events are enum-keyed, and the vocabulary is touch-first
+
+Each concrete item type has its own `EventHandlers` composition whose `Create()` takes *that type's*
+event enum — `HmiButtonEventType`, `HmiRectangleEventType`, and so on for ~40 types. There is no
+shared base, so both reading and writing bind reflectively rather than through a hand-written switch.
+
+**There is no `Click`.** Interactive items expose `Tapped`, `ContextTapped`, `KeyDown`, `KeyUp`
+(buttons and toggle switches add `Down`/`Up`; toggles add `StateChanged`); screens expose `Loaded`,
+`Unloaded`, `Tapped`, `ContextTapped`; controls expose `Initialized` and `CommandFired`; a touch area
+exposes only `GestureDetected`. An invalid name is rejected with the valid list for that type.
+
+Each handler carries a `Script` (`ScriptCode`, `Async`, and a `SyntaxCheck()` this tool does not yet
+call). `--event Target:Type` with no `=script` creates an empty handler, which is legitimate.
+
+`openness-cli hmi --screen <name>` now **reads events back** — closing the walker's one previously
+misleading gap, where a button reporting no dynamizations read as "not bound" when it meant "not
+looked at".
+
 ### Attaching under Portal pileup
 
 `Connect` prefers a running Portal that already has the requested project open, reading

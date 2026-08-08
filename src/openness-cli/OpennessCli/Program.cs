@@ -51,6 +51,11 @@ internal static class Program
                 return RefuseUnconfirmedHmiCreateScreen(unconfirmed.Options);
             }
 
+            if (parseResult is ParseResult.HmiEditScreenSuccess { Options.Confirm: false } unconfirmedEdit)
+            {
+                return RefuseUnconfirmedHmiEditScreen(unconfirmedEdit.Options);
+            }
+
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds), ArgumentParser.ProjectIdentifier(parseResult));
 
             switch (parseResult)
@@ -73,6 +78,8 @@ internal static class Program
                     return RunHmi(gateway, hmi.Options, timeoutOpenSeconds);
                 case ParseResult.HmiCreateScreenSuccess hmiCreate:
                     return RunHmiCreateScreen(gateway, hmiCreate.Options, timeoutOpenSeconds);
+                case ParseResult.HmiEditScreenSuccess hmiEdit:
+                    return RunHmiEditScreen(gateway, hmiEdit.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -151,6 +158,37 @@ internal static class Program
             (options.ItemTypes.Count > 0 ? $" with items: {string.Join(", ", options.ItemTypes)}" : " with no items") +
             $" in project '{options.ProjectIdentifier}'. Nothing was created, and Portal was not contacted. Re-run with --yes to proceed.");
         return ExitCodes.NotConfirmed;
+    }
+
+    private static int RefuseUnconfirmedHmiEditScreen(HmiEditScreenOptions options)
+    {
+        // Lists every change, so the dry run is a reviewable plan rather than a count.
+        Console.Error.WriteLine($"Would edit screen '{options.ScreenName}' in project '{options.ProjectIdentifier}':");
+        foreach (var (target, attribute, value) in options.Sets)
+        {
+            Console.Error.WriteLine($"  set {target}.{attribute} = {value}");
+        }
+
+        foreach (var (target, eventType, script) in options.Events)
+        {
+            Console.Error.WriteLine($"  event {target}:{eventType}" + (script is null ? " (no script)" : " (with script)"));
+        }
+
+        Console.Error.WriteLine("Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatHmiEditScreenJson(result)
+            : OutputFormatter.FormatHmiEditScreenResult(result));
+
+        return result.Validation.Any(m => m.Severity is "Error" or "ValidateThrew")
+            ? ExitCodes.CompileFailed
+            : ExitCodes.Success;
     }
 
     // The only writing HMI path. Gated on --yes like `delete`; the unconfirmed case never reaches

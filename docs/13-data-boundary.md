@@ -225,6 +225,20 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
       - **Deliberately still excluded:** any modification of an *existing* screen, tag, alarm or
         script; any binding to real HMI/PLC tags; and any write to the real (non-scratch) project.
         The test screen references nothing that already exists.
+      - **Extended 2026-08-07, same session: MODIFY + EVENTS, on the test artifact only.** Project
+        owner's instruction — "now modify this screen (action 1) and add events to objects
+        (action 2)". Note what this does and does not move: the exclusion above was written against
+        *pre-existing* screens, and the thing being modified here is **the throwaway this session
+        created minutes earlier**, which nothing depends on. Editing `ZZ_AI_TestScreen` and editing
+        one of the 48 real screens are materially different acts, and only the first is authorized.
+        - Covered: setting attributes on that screen and its own items, and attaching event handlers
+          (with or without script bodies) to them.
+        - **Still excluded, unchanged:** touching any of the 48 pre-existing screens, any real HMI
+          tag/alarm/script, any dynamization bound to a real tag, and the non-scratch project. The
+          event scripts written are self-contained trace calls that reference no project data.
+        - The tooling built for this (`hmi-edit-screen`) is general-purpose and *could* edit a real
+          screen; the restriction is procedural and recorded here, not enforced in code. That is
+          worth stating plainly rather than implying the tool is safe by construction.
       - **Standing intent:** the artifact is disposable and removable on request. Its name is
         invented, so no real HMI name is created or committed either.
       - **Executed 2026-08-07.** One screen created in the scratch copy with three default items,

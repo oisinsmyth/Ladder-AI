@@ -112,6 +112,20 @@ public sealed record HmiCreateScreenOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// The second writing HMI command. Sets are "<Target>.<Attribute>=<Value>"; events are
+// "<Target>:<EventType>[=<script>]". Target is an item name, or the literal "Screen" for the screen
+// itself. Same --yes gate as the other mutating commands.
+public sealed record HmiEditScreenOptions(
+    string ProjectIdentifier,
+    string ScreenName,
+    IReadOnlyList<(string Target, string Attribute, string Value)> Sets,
+    IReadOnlyList<(string Target, string EventType, string? Script)> Events,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -137,6 +151,8 @@ public abstract record ParseResult
     public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
 
     public sealed record HmiCreateScreenSuccess(HmiCreateScreenOptions Options) : ParseResult;
+
+    public sealed record HmiEditScreenSuccess(HmiEditScreenOptions Options) : ParseResult;
 
     public sealed record Failure(string Message) : ParseResult;
 }
@@ -173,7 +189,10 @@ public static class ArgumentParser
         "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
         "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
         "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "    THE ONLY HMI COMMAND THAT WRITES. Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.";
+        "    Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.\n" +
+        "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>]]... --yes [--json] [...]\n" +
+        "    Modifies an EXISTING screen and/or attaches event handlers. Target is an item name, or 'Screen' for the screen itself. --yes required.\n" +
+        "    Event names are touch-first: Tapped/ContextTapped/KeyDown/KeyUp (buttons add Down/Up), screens use Loaded/Unloaded. There is no 'Click'.";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
@@ -196,6 +215,7 @@ public static class ArgumentParser
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiEditScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -216,6 +236,7 @@ public static class ArgumentParser
         ParseResult.PortalStatusSuccess => null,
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiEditScreenSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -238,8 +259,9 @@ public static class ArgumentParser
             "portal-status" => ParsePortalStatus(args),
             "hmi" => ParseHmi(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
+            "hmi-edit-screen" => ParseHmiEditScreen(args),
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-create-screen.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-create-screen, hmi-edit-screen.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -977,6 +999,172 @@ public static class ArgumentParser
 
         return new ParseResult.HmiCreateScreenSuccess(new HmiCreateScreenOptions(
             projectIdentifier, name, width, height, itemTypes, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseHmiEditScreen(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? name = null;
+        var sets = new List<(string, string, string)>();
+        var events = new List<(string, string, string?)>();
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    break;
+                case "--set":
+                    if (!TryTakeValue(args, ref i, "--set", out var rawSet, out var setErr))
+                    {
+                        return new ParseResult.Failure(setErr);
+                    }
+
+                    if (!TryParseSet(rawSet!, out var set, out var setParseErr))
+                    {
+                        return new ParseResult.Failure(setParseErr);
+                    }
+
+                    sets.Add(set);
+                    break;
+                case "--event":
+                    if (!TryTakeValue(args, ref i, "--event", out var rawEvent, out var evErr))
+                    {
+                        return new ParseResult.Failure(evErr);
+                    }
+
+                    if (!TryParseEvent(rawEvent!, out var ev, out var evParseErr))
+                    {
+                        return new ParseResult.Failure(evParseErr);
+                    }
+
+                    events.Add(ev);
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (name is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <screen name>.{Environment.NewLine}{Usage}");
+        }
+
+        // An edit command with no edits is a mistake worth catching at parse time — it would
+        // otherwise open the project, change nothing, save, and report success.
+        if (sets.Count == 0 && events.Count == 0)
+        {
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set or --event.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
+            projectIdentifier, name, sets, events, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the
+    // LAST '.' before it so a target name may contain dots.
+    private static bool TryParseSet(string raw, out (string Target, string Attribute, string Value) set, out string error)
+    {
+        set = default;
+        var eq = raw.IndexOf('=');
+        if (eq <= 0)
+        {
+            error = $"--set expects '<Target>.<Attribute>=<Value>', got '{raw}'.";
+            return false;
+        }
+
+        var lhs = raw.Substring(0, eq);
+        var value = raw.Substring(eq + 1);
+        var dot = lhs.LastIndexOf('.');
+        if (dot <= 0 || dot == lhs.Length - 1)
+        {
+            error = $"--set expects '<Target>.<Attribute>=<Value>', got '{raw}'. Use 'Screen' as the target for the screen itself.";
+            return false;
+        }
+
+        set = (lhs.Substring(0, dot), lhs.Substring(dot + 1), value);
+        error = string.Empty;
+        return true;
+    }
+
+    // "<Target>:<EventType>[=<script>]". The script is optional — an event handler with no script is
+    // a legitimate thing to create.
+    private static bool TryParseEvent(string raw, out (string Target, string EventType, string? Script) ev, out string error)
+    {
+        ev = default;
+        var colon = raw.IndexOf(':');
+        if (colon <= 0 || colon == raw.Length - 1)
+        {
+            error = $"--event expects '<Target>:<EventType>[=<script>]', got '{raw}'.";
+            return false;
+        }
+
+        var target = raw.Substring(0, colon);
+        var rest = raw.Substring(colon + 1);
+        var eq = rest.IndexOf('=');
+        if (eq < 0)
+        {
+            ev = (target, rest, null);
+        }
+        else if (eq == 0)
+        {
+            error = $"--event is missing an event type before '=', got '{raw}'.";
+            return false;
+        }
+        else
+        {
+            ev = (target, rest.Substring(0, eq), rest.Substring(eq + 1));
+        }
+
+        error = string.Empty;
+        return true;
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

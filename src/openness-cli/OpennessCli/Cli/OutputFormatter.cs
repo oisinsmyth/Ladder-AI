@@ -106,6 +106,18 @@ public static class OutputFormatter
 
                 sb.AppendLine();
 
+                foreach (var handler in screen.Events)
+                {
+                    sb.Append("    on ").Append(handler.EventType);
+                    sb.Append(handler.HasScript ? "  script: " : "  (no script)");
+                    if (handler.HasScript)
+                    {
+                        sb.Append(handler.ScriptPreview);
+                    }
+
+                    sb.AppendLine();
+                }
+
                 if (screen.Items.Count < screen.ItemCount)
                 {
                     // Never let a cap read as a complete listing (docs/04 design philosophy: no
@@ -129,6 +141,18 @@ public static class OutputFormatter
                     }
 
                     sb.AppendLine();
+
+                    foreach (var handler in item.Events)
+                    {
+                        sb.Append("      on ").Append(handler.EventType);
+                        sb.Append(handler.HasScript ? "  script: " : "  (no script)");
+                        if (handler.HasScript)
+                        {
+                            sb.Append(handler.ScriptPreview);
+                        }
+
+                        sb.AppendLine();
+                    }
 
                     foreach (var dynamization in item.Dynamizations)
                     {
@@ -243,16 +267,42 @@ public static class OutputFormatter
             sb.Append("    ").AppendLine(item);
         }
 
-        var errors = result.Validation.Count(m => m.Severity == "Error");
-        var warnings = result.Validation.Count(m => m.Severity == "Warning");
-        var threw = result.Validation.Count(m => m.Severity == "ValidateThrew");
+        AppendValidation(sb, result.Validation);
+
+        // Saved is reported explicitly because an unsaved create survives only as long as the Portal
+        // process holding it — the trap SaveProject's own comment records.
+        sb.Append("  project saved: ").Append(result.Saved ? "yes" : "NO");
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatHmiEditScreenResult(HmiEditScreenResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("EDITED screen '").Append(result.ScreenName).Append("' on ").AppendLine(result.DevicePath);
+        sb.Append("  changes applied: ").Append(result.Applied.Count.ToString(CultureInfo.InvariantCulture)).AppendLine();
+        foreach (var change in result.Applied)
+        {
+            sb.Append("    ").AppendLine(change);
+        }
+
+        AppendValidation(sb, result.Validation);
+        sb.Append("  project saved: ").Append(result.Saved ? "yes" : "NO");
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    // Shared by create and edit so the two cannot drift in how they report a gate result.
+    private static void AppendValidation(StringBuilder sb, IReadOnlyList<HmiValidationMessage> validation)
+    {
+        var errors = validation.Count(m => m.Severity == "Error");
+        var warnings = validation.Count(m => m.Severity == "Warning");
+        var threw = validation.Count(m => m.Severity == "ValidateThrew");
 
         sb.Append("  Validate(): ");
         if (threw > 0)
         {
             sb.AppendLine("THREW — see below (this is a finding, not a pass)");
         }
-        else if (result.Validation.Count == 0)
+        else if (validation.Count == 0)
         {
             sb.AppendLine("ran, returned no errors and no warnings");
         }
@@ -262,7 +312,7 @@ public static class OutputFormatter
               .Append(warnings.ToString(CultureInfo.InvariantCulture)).AppendLine(" warning(s)");
         }
 
-        foreach (var message in result.Validation)
+        foreach (var message in validation)
         {
             sb.Append("    [").Append(message.Severity).Append("] ");
             if (!string.IsNullOrEmpty(message.PropertyName))
@@ -272,12 +322,19 @@ public static class OutputFormatter
 
             sb.AppendLine(message.Message);
         }
-
-        // Saved is reported explicitly because an unsaved create survives only as long as the Portal
-        // process holding it — the trap SaveProject's own comment records.
-        sb.Append("  project saved: ").Append(result.Saved ? "yes" : "NO");
-        return sb.ToString().TrimEnd('\n', '\r');
     }
+
+    public static string FormatHmiEditScreenJson(HmiEditScreenResult result) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                devicePath = result.DevicePath,
+                screenName = result.ScreenName,
+                applied = result.Applied,
+                validation = result.Validation.Select(m => new { property = m.PropertyName, severity = m.Severity, message = m.Message }),
+                saved = result.Saved,
+            },
+            new JsonSerializerOptions { WriteIndented = true });
 
     public static string FormatHmiCreateScreenJson(HmiCreateScreenResult result) =>
         JsonSerializer.Serialize(
@@ -338,6 +395,7 @@ public static class OutputFormatter
                 width = s.Width,
                 height = s.Height,
                 itemCount = s.ItemCount,
+                events = s.Events.Select(e => new { eventType = e.EventType, hasScript = e.HasScript, scriptPreview = e.ScriptPreview }),
                 items = s.Items.Select(i => new
                 {
                     name = i.Name,
@@ -352,6 +410,12 @@ public static class OutputFormatter
                         kind = dyn.Kind,
                         tag = dyn.Tag,
                         plcTag = dyn.PlcTag,
+                    }),
+                    events = i.Events.Select(e => new
+                    {
+                        eventType = e.EventType,
+                        hasScript = e.HasScript,
+                        scriptPreview = e.ScriptPreview,
                     }),
                 }),
             }),

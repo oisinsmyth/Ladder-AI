@@ -487,6 +487,170 @@ public sealed class OpennessGateway : IOpennessGateway
         return new HmiCreateScreenResult(devicePath, screenName, width, height, created, validation, true);
     }
 
+    /// <summary>
+    /// Modifies an EXISTING screen: sets attributes, and creates event handlers. The second write
+    /// path, and deliberately separate from creation — creating a screen touches nothing anyone
+    /// depends on, whereas editing one changes something that already works.
+    /// </summary>
+    public HmiEditScreenResult EditHmiScreen(
+        string screenName,
+        IReadOnlyList<(string Target, string Attribute, string Value)> sets,
+        IReadOnlyList<(string Target, string EventType, string? Script)> events)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EditHmiScreen)}.");
+        }
+
+        var (software, devicePath) = FindSingleUnifiedSoftware();
+        var screen = FindScreenAnywhere(software, screenName) ?? throw new HmiScreenNotFoundException(screenName);
+
+        var applied = new List<string>();
+
+        foreach (var (target, attribute, value) in sets)
+        {
+            var subject = ResolveTarget(screen, target);
+            var coerced = SetAttributeCoerced(subject, attribute, value);
+            applied.Add($"set {target}.{attribute} = {coerced}");
+        }
+
+        foreach (var (target, eventType, script) in events)
+        {
+            var subject = ResolveTarget(screen, target);
+            var created = CreateEventHandler(subject, eventType, script);
+            applied.Add(created);
+        }
+
+        var validation = ReadValidation(screen);
+        SaveProject();
+
+        return new HmiEditScreenResult(devicePath, screenName, applied, validation, true);
+    }
+
+    // "Screen" addresses the screen itself; anything else is an item name on it. Unknown names are a
+    // hard error rather than a no-op, because a silently-skipped edit is indistinguishable from a
+    // successful one in the output.
+    private static IEngineeringObject ResolveTarget(HmiScreen screen, string target)
+    {
+        if (string.Equals(target, "Screen", StringComparison.OrdinalIgnoreCase))
+        {
+            return screen;
+        }
+
+        foreach (HmiScreenItemBase item in screen.ScreenItems)
+        {
+            if (string.Equals(TryRead(() => item.Name), target, StringComparison.OrdinalIgnoreCase))
+            {
+                return item;
+            }
+        }
+
+        throw new HmiScreenItemNotFoundException(target, TryRead(() => screen.Name) ?? string.Empty);
+    }
+
+    // SetAttribute takes an object, and the API is strict about the runtime type: a UInt32 property
+    // will not accept a string or an Int32. The declared type comes from the object's own
+    // GetAttributeInfos, so the coercion is driven by the API's own schema rather than guesswork.
+    private static string SetAttributeCoerced(IEngineeringObject subject, string attribute, string value)
+    {
+        var info = subject.GetAttributeInfos().FirstOrDefault(i => string.Equals(i.Name, attribute, StringComparison.OrdinalIgnoreCase));
+        if (info is null)
+        {
+            throw new HmiUnknownAttributeException(attribute, subject.GetType().Name);
+        }
+
+        if (info.AccessMode is EngineeringAttributeAccessMode.Read or EngineeringAttributeAccessMode.None)
+        {
+            throw new HmiAttributeNotWritableException(attribute, subject.GetType().Name, info.AccessMode.ToString());
+        }
+
+        var targetType = info.SupportedTypes?.FirstOrDefault();
+        object converted = targetType is null
+            ? value
+            : targetType.IsEnum
+                ? Enum.Parse(targetType, value, ignoreCase: true)
+                : Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture);
+
+        subject.SetAttribute(info.Name, converted);
+        return $"{converted} ({converted.GetType().Name})";
+    }
+
+    // Each item type has its own EventHandlers composition whose Create() takes that type's own
+    // event enum — Create(HmiButtonEventType) and so on. Bound at runtime for the same reason
+    // CreateScreenItem is: there are ~40 of them and a hand-written switch would rot.
+    private static string CreateEventHandler(IEngineeringObject subject, string eventTypeName, string? script)
+    {
+        var composition = subject.GetType().GetProperty("EventHandlers")?.GetValue(subject)
+            ?? throw new HmiEventsNotSupportedException(subject.GetType().Name);
+
+        var create = composition.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Create" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.IsEnum)
+            ?? throw new HmiEventsNotSupportedException(subject.GetType().Name);
+
+        // net48 has no non-generic Enum.TryParse(Type, ...), and matching against the declared names
+        // first means the error can list what IS valid rather than just saying "no".
+        var enumType = create.GetParameters()[0].ParameterType;
+        var names = Enum.GetNames(enumType);
+        var match = names.FirstOrDefault(n => string.Equals(n, eventTypeName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new HmiUnknownEventTypeException(eventTypeName, subject.GetType().Name, names);
+
+        object parsed = Enum.Parse(enumType, match);
+
+        var handler = create.Invoke(composition, new object[] { parsed })
+            ?? throw new InvalidOperationException($"Creating the '{eventTypeName}' handler returned null.");
+
+        if (script is not null)
+        {
+            var scriptObject = handler.GetType().GetProperty("Script")?.GetValue(handler)
+                ?? throw new InvalidOperationException($"The '{eventTypeName}' handler exposes no Script to set.");
+            scriptObject.GetType().GetProperty("ScriptCode")?.SetValue(scriptObject, script);
+        }
+
+        return $"event {subject.GetType().Name}.{eventTypeName}" + (script is null ? " (no script)" : " (script set)");
+    }
+
+    private static HmiScreen? FindScreenAnywhere(HmiSoftware software, string screenName)
+    {
+        var direct = software.Screens.Find(screenName);
+        if (direct is not null)
+        {
+            return direct;
+        }
+
+        // Screens.Find is root-only for the same reason Screens is (survey §7) — a screen inside a
+        // group is invisible to it, so the group tree has to be walked too.
+        foreach (HmiScreenGroup group in software.ScreenGroups)
+        {
+            var found = FindScreenInGroup(group, screenName);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private static HmiScreen? FindScreenInGroup(HmiScreenGroup group, string screenName)
+    {
+        var direct = group.Screens.Find(screenName);
+        if (direct is not null)
+        {
+            return direct;
+        }
+
+        foreach (HmiScreenGroup child in group.Groups)
+        {
+            var found = FindScreenInGroup(child, screenName);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     // Create<T> is generic over the item type, but the caller names types as strings, so the type
     // argument has to be bound at runtime. Resolved against the assembly that actually defines the
     // Unified UI types rather than a hand-maintained switch — the device reports 56 creatable types
@@ -879,7 +1043,7 @@ public sealed class OpennessGateway : IOpennessGateway
         var itemCount = CountOrZero(() => screen.ScreenItems.Count);
         if (!WantsDetail(name, screenFilter))
         {
-            return new HmiScreenInfo(name, number, width, height, itemCount, Array.Empty<HmiScreenItemInfo>());
+            return new HmiScreenInfo(name, number, width, height, itemCount, Array.Empty<HmiScreenItemInfo>(), ReadEvents(screen));
         }
 
         var items = new List<HmiScreenItemInfo>();
@@ -893,7 +1057,7 @@ public sealed class OpennessGateway : IOpennessGateway
             items.Add(ReadUnifiedScreenItem(item));
         }
 
-        return new HmiScreenInfo(name, number, width, height, itemCount, items);
+        return new HmiScreenInfo(name, number, width, height, itemCount, items, ReadEvents(screen));
     }
 
     private static HmiScreenItemInfo ReadUnifiedScreenItem(HmiScreenItemBase item)
@@ -926,7 +1090,76 @@ public sealed class OpennessGateway : IOpennessGateway
             ReadLongAttribute(item, "Top"),
             ReadLongAttribute(item, "Width"),
             ReadLongAttribute(item, "Height"),
-            dynamizations);
+            dynamizations,
+            ReadEvents(item));
+    }
+
+    // EventHandlers is declared on each CONCRETE item type with its own composition and its own
+    // event enum (HmiButtonEventHandlerComposition/HmiButtonEventType, and so on for ~40 types) —
+    // there is no shared base to cast to, so this reads it reflectively. Until this existed, a
+    // button reported "no dynamizations" and that read as "not bound" when it meant "not looked at".
+    private static IReadOnlyList<HmiEventInfo> ReadEvents(object owner)
+    {
+        var events = new List<HmiEventInfo>();
+        try
+        {
+            if (owner.GetType().GetProperty("EventHandlers")?.GetValue(owner) is not System.Collections.IEnumerable handlers)
+            {
+                return events;
+            }
+
+            foreach (var handler in handlers)
+            {
+                if (handler is null)
+                {
+                    continue;
+                }
+
+                var type = handler.GetType();
+                var eventType = TryRead(() => type.GetProperty("EventType")?.GetValue(handler)?.ToString()) ?? "?";
+                var script = TryReadObject(() => type.GetProperty("Script")?.GetValue(handler));
+                var code = script is null
+                    ? null
+                    : TryRead(() => script.GetType().GetProperty("ScriptCode")?.GetValue(script) as string);
+
+                events.Add(new HmiEventInfo(
+                    eventType,
+                    !string.IsNullOrWhiteSpace(code),
+                    Preview(code)));
+            }
+        }
+        catch (Exception)
+        {
+            // Same defensive posture as the rest of the walker: an item that will not describe its
+            // events still belongs in the listing.
+        }
+
+        return events;
+    }
+
+    // Script bodies can be long and are not the point of a structural listing; the first line is
+    // enough to tell "there is real code here" from "an empty handler was created and never filled".
+    private static string? Preview(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return null;
+        }
+
+        var firstLine = code!.Split('\n')[0].Trim();
+        return firstLine.Length > 80 ? firstLine.Substring(0, 77) + "..." : firstLine;
+    }
+
+    private static object? TryReadObject(Func<object?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static HmiDynamizationInfo ReadDynamization(DynamizationBase dynamization)
@@ -971,7 +1204,8 @@ public sealed class OpennessGateway : IOpennessGateway
     {
         foreach (Screen screen in folder.Screens)
         {
-            results.Add(new HmiScreenInfo(screen.Name, null, null, null, 0, Array.Empty<HmiScreenItemInfo>()));
+            // Classic: no items, and no event model either — Screen exposes neither.
+            results.Add(new HmiScreenInfo(screen.Name, null, null, null, 0, Array.Empty<HmiScreenItemInfo>(), Array.Empty<HmiEventInfo>()));
         }
 
         foreach (ScreenUserFolder child in folder.Folders)
