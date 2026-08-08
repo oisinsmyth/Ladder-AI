@@ -43,6 +43,17 @@ internal static class Program
                 return RunPortalStatus(gateway, portalStatus.Options);
             }
 
+            // FI-61: warn BEFORE the attach, because an unapproved binary is refused silently and
+            // the attach then burns the whole --timeout-connect with nothing on screen to explain
+            // it. Advisory only — never blocks (see OpennessWhitelist's class comment for why).
+            var approval = OpennessWhitelist.CheckRunningExecutable();
+            var approvalWarning = OpennessWhitelist.DescribeIfNotApproved(
+                approval, System.Reflection.Assembly.GetEntryAssembly()?.Location ?? "(unknown)");
+            if (approvalWarning is not null)
+            {
+                Console.Error.WriteLine(approvalWarning);
+            }
+
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds));
 
             switch (parseResult)

@@ -136,12 +136,22 @@ public interface IOpennessGateway : IDisposable
 
 public sealed class ConnectTimeoutException : Exception
 {
+    // FI-61 (2026-08-08): this message used to assert the approval dialog as the usual cause, full
+    // stop. That sent two separate investigations hunting a dialog that did not exist — the proven
+    // cause on this machine was an UNAPPROVED (rebuilt) binary, which Openness refuses SILENTLY with
+    // no dialog, no exception and no log. The two causes are now listed in order of how silently
+    // they fail, and the message no longer claims to know which one it is.
     public ConnectTimeoutException(TimeSpan timeout)
         : base(
             $"TIA Portal did not respond to attach/launch within {timeout.TotalMinutes:0} minute(s). " +
-            "This is usually the first-connect approval dialog waiting inside TIA Portal — check Portal, " +
-            "accept the dialog if it's there, then re-run. Not retrying automatically, to avoid piling up " +
-            "redundant Portal processes while the state is unclear.")
+            "Two known causes, in order of likelihood on a machine where this used to work: " +
+            "(1) THIS EXECUTABLE IS NOT APPROVED for Openness — TIA whitelists callers by (Path, FileHash), " +
+            "so ANY rebuild, or running from a different directory, revokes approval. It is refused silently: " +
+            "no dialog appears and nothing is logged. The check that runs before this connect prints a warning " +
+            "when it can detect that case; a build known to be approved will connect in well under a minute. " +
+            "(2) the first-connect approval dialog genuinely waiting inside TIA Portal — check for it, but do " +
+            "not assume it, and note portal-status cannot see one because it never attaches. " +
+            "Not retrying automatically, to avoid piling up redundant Portal processes while the state is unclear.")
     {
     }
 }

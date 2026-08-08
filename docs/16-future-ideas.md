@@ -1223,3 +1223,39 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   working, and it is not mechanical.** The mechanical floor's job is to make the clean results
   trustworthy enough that distrust is rare; the honest reading of today is that it is not there yet.
 - **Verdict.** Closed. 787 converter tests, 39 golden tests.
+
+### FI-61 — a rebuilt binary is refused by Openness silently, and every message we had blamed the wrong thing
+
+- **The bug is not in our code; the bug is that our code could not say so.** TIA whitelists Openness
+  callers by `(Path, FileHash)` in `HKLM\SOFTWARE\Siemens\Automation\Openness\<version>\Whitelist\`.
+  Rebuild the executable and no entry matches its hash, so Openness refuses it and **never
+  responds** — `Attach()` blocks until the caller's own timeout expires, with **no dialog, no
+  exception and no log entry**. It is externally indistinguishable from a wedged Portal.
+- **What it cost.** A `dotnet test` on `openness-cli.sln`, run to check something unrelated, rebuilt
+  the binary while an agent was mid-run. Every attach after that hung for its full timeout — 3 min,
+  then 15, then more. About an hour went into "Portal is wedged, a human must clear a dialog".
+- **Two pieces of our own tooling actively pointed away from the cause.**
+  `ConnectTimeoutException`'s text asserted the approval dialog as the usual cause, and `portal-status`
+  was taken as evidence that no dialog existed — which it can never be, since it is the one
+  subcommand that deliberately never attaches. **A tool that cannot observe X is not evidence about
+  X**, and it read as evidence because its output was clean and confident.
+- **How it was settled.** `EnumWindows` across both Portal processes showed every main window visible
+  *and enabled*; that is suggestive but not conclusive for a WPF app, where a modal can be an
+  in-window overlay with no HWND. So each window was captured with `PrintWindow` and **looked at**.
+  Both idle, no dialog. Then the decisive comparison: a known-approved build listed the same project
+  in **57 s** while the rebuilt one hung. One command separates the two hypotheses.
+- **Built.** `OpennessWhitelist` hashes the running executable and checks it against every Openness
+  version key before attaching, warning with the cause and the count of prior approvals. Verified
+  live: *"84 earlier build(s) of this exact path are approved, but none of them matches this file's
+  current hash."* `ConnectTimeoutException` now lists both causes and no longer claims to know which.
+- **Deliberately advisory, never blocking.** A false negative — a whitelist layout it does not
+  understand, a registry view it cannot read — would refuse every Portal command on a machine where
+  everything works. That is strictly worse than the hang it prevents, so it warns and proceeds.
+  Re-approving a build means writing to an `HKLM` security control, which is the machine owner's
+  call and deliberately out of scope for the tooling.
+- **Same family as FI-44 and FI-52, and the sharpest instance yet.** Those were checks that reported
+  a clean result over something they had not examined. This one is a *diagnostic* that reported a
+  clean result about something it structurally could not see, and then that clean result was quoted
+  back as proof. The lesson worth keeping is narrow and general: **when a check clears a hypothesis,
+  confirm the check can observe the thing it is clearing.**
+- **Verdict.** Built and verified live. 148 openness-cli tests (+8).

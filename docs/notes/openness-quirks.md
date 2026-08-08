@@ -6,6 +6,12 @@ Working notes on TIA Openness friction (risk R-06). Record here as encountered.
 Per Portal version/binary, the first Openness connect triggers a manual approval dialog inside TIA Portal. If a connect hangs, check Portal for the dialog.
 TODO: paste exact dialog text/screenshot on first connect (S0 exit item).
 
+> **READ THIS BEFORE ACTING ON THE PARAGRAPH ABOVE (2026-08-08).** "If a connect hangs, check Portal
+> for the dialog" has now sent three separate investigations hunting a dialog that did not exist. The
+> measured cause of a silent connect hang on this machine is an **unapproved (rebuilt) binary**, which
+> Openness refuses with no dialog at all. See *"A rebuilt binary is refused SILENTLY"* at the end of
+> this file for the mechanism, the registry evidence and the one-command diagnostic.
+
 2026-07-10: first live `openness-cli list` run (attach to an already-running Portal V20 with
 project "JOB9003 - K150" already open) completed immediately — no approval dialog appeared, no
 `ConnectTimeoutException`. Either this machine had already approved Openness for this Portal
@@ -666,3 +672,66 @@ This project carries an inherited `"Inputs or outputs are used that do not exist
 hardware"` warning on every block, which sets `STATE: Warning`, and `RunCompile` returns
 `CompileFailed` for any state that is not `Success`. **Read the `ERRORS:` count, not the exit code**,
 for per-block compiles here. The exit code remains meaningful for `sanity-check`, which is the gate.
+
+## A rebuilt binary is refused SILENTLY — the whitelist is keyed on (Path, FileHash) (2026-08-08)
+
+**The mechanism, from the registry rather than from inference.** TIA keeps an allow-list of Openness
+callers:
+
+```
+HKLM\SOFTWARE\Siemens\Automation\Openness\<version>\Whitelist\<exe name>\Entry (N)
+  Path         = C:\...\src\openness-cli\OpennessCli\bin\Debug\net48\openness-cli.exe
+  DateModified = 2026/07/10 08:40:17.964
+  FileHash     = PY8nw9ndT2J/qsmq1G289KwAEM10YkvRPjcY1j5MlTE=     <- base64 SHA-256
+```
+
+**One entry is added per approved build**, so the key accumulates — this machine had **84** entries
+for a single Debug path, 3 for the Release path, and 10+ for various worktree builds. Rebuild the
+executable and its hash matches none of them. Openness then **refuses the caller and never
+responds**: `Attach()` blocks until the caller's own timeout expires. No dialog. No exception. No log
+entry. From outside it is indistinguishable from a wedged Portal.
+
+**What it cost, so the shape is recognisable.** A `dotnet test` on the openness-cli solution, run to
+check something unrelated, rebuilt the binary *while an agent was mid-run*. Every attach after that
+moment hung for its full `--timeout-connect` — 3 min, then 15 min, then more. Roughly an hour went
+into "Portal is wedged, someone must clear a dialog". Two things made it hard to see:
+
+- **The CLI's own error text asserted the dialog**, and the reader believed it.
+- **`portal-status` was used as evidence that no dialog existed**, which it cannot be: it is the one
+  subcommand that never attaches, so it is structurally incapable of observing one. A clean
+  `portal-status` says nothing at all about a dialog.
+
+**Proof there was no dialog, and the technique is reusable.** `EnumWindows` over both Portal
+processes showed only the two real project windows plus the usual hidden plumbing
+(`ThreadSynchronizer`, `SCP Communication`, IME, GDI+) — every main window `visible` **and
+`enabled`**, which a modal owner would not be. That is suggestive but not conclusive on a WPF app,
+where a dialog can be an in-window overlay with no HWND of its own, so it was settled by capturing
+each window with `PrintWindow` and **looking at the pixels**: both Portals idle, no dialog anywhere.
+Screenshot-the-window is the check worth reaching for when window enumeration is ambiguous.
+
+**The one-command diagnostic.** Run a build that is already approved against the same project:
+
+```
+"...\src\openness-cli\OpennessCli\bin\Release\net48\openness-cli.exe" list "<project>.ap20" --timeout-connect 90
+```
+
+It connected and listed blocks in **57 s** while the rebuilt Debug binary was hanging on the identical
+project. That single comparison separates "this executable is not approved" from "Portal/project is
+unhealthy", and costs one minute.
+
+**Now detected automatically (FI-61).** `openness-cli` hashes itself and checks the whitelist
+*before* attaching, printing a warning that names the cause and predicts the hang. Verified live: it
+reported `84 earlier build(s) of this exact path are approved, but none of them matches this file's
+current hash`. The check is **advisory and must stay advisory** — it warns and proceeds, never
+blocks. A false negative (a whitelist layout it does not understand, a registry view it cannot read)
+would otherwise refuse every Portal command on a machine where everything works, which is far worse
+than the hang it prevents. `ConnectTimeoutException`'s text now lists both causes and no longer
+claims to know which one it is.
+
+**Practical rules.**
+- **Do not rebuild `openness-cli` while Portal work is in flight.** `dotnet test` on
+  `openness-cli.sln` is a rebuild. `converter.sln` is safe — it never touches Portal.
+- Approval does **not** carry across build locations, so a worktree build is a different application
+  to Openness even from identical source.
+- Re-approving a build means adding a whitelist entry under `HKLM`, which is a privileged security
+  control and the machine owner's call — not something the tooling should do for itself.
