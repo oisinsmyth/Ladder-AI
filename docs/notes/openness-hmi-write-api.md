@@ -25,6 +25,8 @@ it (§6).
 | HMI tags / tag tables / groups | yes | yes | yes | shape-only |
 | Alarms (discrete/analog) + classes | yes | yes | yes | shape-only |
 | Screen groups | yes | name only | yes | shape-only |
+| Text lists | **NO** | import only | — | wall |
+| Graphic lists | **n/a — no such type in Unified** | — | — | wall |
 | Plant views / view nodes | **yes** | — | yes | shape-only |
 | Runtime settings (start screen, resolution) | n/a | yes | n/a | shape-only |
 | **Script modules** | **NO** | import only | **NO** | wall |
@@ -132,12 +134,63 @@ need, and runtime languages themselves cannot be added (`LanguageAndFonts` has n
 individual API call. On a device with 311 discrete alarms that is the difference between a spreadsheet
 and a loop, and it is an argument *for* driving them programmatically rather than by hand.
 
+## 4b. Event scripts — the runtime surface, and two traps
+
+Event handlers are the behaviour half of an HMI, and their bodies are JavaScript evaluated by the
+Unified runtime, not by Openness. Two different worlds meet at `IHmiScript.ScriptCode`, and the
+mismatch between them is where the traps are.
+
+**Engineering side (reflection-confirmed).** `IHmiScript` is `ScriptCode`,
+`GlobalDefinitionAreaScriptCode`, `Async` and `SyntaxCheck()`. **All 42 event-handler types expose
+`Script : IHmiScript`** — no exceptions — so every event on every item type can carry code.
+`SyntaxCheck()` returns `HmiValidationResult`, whose `Errors`/`Warnings` are plain
+`IEnumerable<string>`: **no severity, no line numbers.** Useful as a yes/no, poor as a diagnostic.
+
+**Runtime side (Siemens documentation).** The pieces that matter for self-contained behaviour:
+
+```javascript
+HMIRuntime.Trace("message");                       // goes to the RTIL Trace Viewer
+let item = Screen.FindItem("Button_4");            // by-name lookup
+item.Text = "Changed";
+for (let scritem of Screen.Items) { … }            // Screen.Items is the ITERABLE
+scritem.BackColor = HMIRuntime.Math.RGB(255,0,0);
+Screen.ParentScreen.Windows("Window2").Screen = "OtherScreen";   // navigation
+UI.RootWindow.Screen = "OtherScreen";
+```
+
+`alert()` is unavailable and `console` is undocumented. **`OpenScreenInScreenWindow` does not exist in
+V20** — it is absent from the system-function list, so older examples using it are stale.
+
+**Trap 1 — `Screen.Items` is not a by-name accessor.** `Screen.Items` iterates; the by-name lookup is
+`Screen.FindItem(name)`. Calling `Screen.Items("SomeName")` **aborts the handler at runtime**. This
+bit here: the first version of the probe script used `Screen.Items("…")` and would have failed
+silently on tap. It was caught only because the runtime API was researched *after* the script was
+written — and the write happened to fail on an unrelated Portal wedge before it landed, which is luck,
+not process. **Write the script against the runtime docs first.**
+
+**Trap 2 — `SyntaxCheck()` cannot see any of this.** It checks syntax, not names. A script that
+references a nonexistent screen item, or uses `Screen.Items` as a function, is syntactically perfect
+and will pass. So a green `SyntaxCheck()` says *"this parses"*, never *"this works"* — and it is the
+only automated check available on the script half. Treat it exactly as far as it goes.
+
+**Trap 3 — `.Text` means two different things.** In Openness it is a `MultilingualText` (get-only,
+written via `Items.Find(language).Text`). At runtime it is a plain string. Code that looks identical
+behaves differently depending on which side of the fence it runs on.
+
+**Also confirmed walls on the script/list side:** `HmiScriptModuleComposition` and
+`HmiTextListComposition` both have **no `Create`** — import-only, undocumented format — and **Unified
+has no graphic-list type at all**.
+
 ## 5. What "do anything to it" would still require
 
 Ordered by what actually blocks a general capability:
 
 1. **Test whether `Validate()` has any depth.** Still the load-bearing unknown; it has only ever been
-   shown valid input. Everything called a "gate" here rests on it.
+   shown valid input. Everything called a "gate" here rests on it — and §4b now adds that its
+   script-side counterpart, `SyntaxCheck()`, is *definitely* shallow (syntax only, no name
+   resolution). If `Validate()` turns out to be the same, then **Unified has no real verification
+   story at all**, and §5.B of the parent survey — the main argument for the Unified architecture —
+   collapses. That makes this test more important than it looked when it was merely "nice to have".
 2. **Prove the dynamization write path live**, including the nonexistent-tag question in §3.
 3. **Decide the faceplate story**, because the nesting + faceplate-authoring walls together mean
    reuse cannot be expressed structurally — only by repeating flat items.
