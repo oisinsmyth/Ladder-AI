@@ -150,3 +150,45 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 - **Cause:** modern .NET target — the DLL internally uses a .NET-Framework-only `Assembly.Load` overload.
 - **Fix:** target `net48` (builds fine on net8.0-windows; fails only at runtime).
 - **Source:** quirks ".NET target framework".
+
+## "The value 'T#0MS' cannot be set for the parameter of the type 'Time'" — on IMPORT, not compile
+**Confirmed live 2026-08-08 (converter FI-54).** The whole block import fails and nothing is
+created. The converter was emitting a duration literal as `LiteralConstant` carrying
+`ConstantType="Time"` whenever it appeared anywhere other than a TON's `PT`. TIA rejects that form
+outright.
+
+The accepted shape, confirmed against a real export (`simatic-ml/reference/TimerSample.xml`):
+`<Access Scope="TypedConstant">` with a bare `<ConstantValue>T#100MS</ConstantValue>` and **no
+`<ConstantType>` child at all**.
+
+Fixed in `SidecarSynthesizer` — a duration literal is now always a TypedConstant, keyed on the
+literal's own kind rather than on its position. If this reappears, check whether a new statement
+kind is passing a `constantTypeOverride` that reaches a `T#` literal.
+
+**Related limitation, deliberately not fixed:** the IR parser recognises only `T#` UPPER CASE as a
+duration literal. `t#5s`, `LT#`, `TIME#` and `LTIME#` parse as TAG REFERENCES and emit as a
+component of that name, which TIA then rejects as an undefined tag. Loud, not silent. Guarded by a
+test so widening the parser has to be a deliberate act.
+
+## Per-block compiles must be run to a FIXPOINT, not once through a list
+**Confirmed live 2026-08-08.** Compiling a changed set in dependency order in ONE pass reported
+45 errors on one FB and 2 on another; re-running the same commands immediately afterwards gave
+`ERRORS: 0` on both, with no file changed in between. The first pass compiles against dependencies
+that are themselves still flagged inconsistent.
+
+**Do not read a first-pass error count as a defect count.** Re-run until the set is stable, then
+run `sanity-check` and read its `INCONSISTENT:` line. Expect `sanity-check` to surface further
+knock-on blocks (callers of what you changed) that need their own pass — on this project a two-FB
+change pulled in five more blocks across two rounds.
+
+## A connect timeout is NOT usually the approval dialog — raise the timeout first
+**Confirmed live 2026-08-08.** `openness-cli`'s own message on a connect timeout says it is
+"almost always the first-connect approval dialog … check Portal, then re-run", and an agent
+correctly stopped work and wrote a claim board on the strength of it. It was wrong: the same
+command with `--timeout-connect 900` attached on the first attempt, to the same running Portal,
+with no dialog and nobody touching the machine.
+
+**Order to work through, cheapest first:** (1) re-run with `--timeout-connect 900`; (2)
+`portal-status` — if it shows an in-use process already holding YOUR project, the approval dialog
+is unlikely, because that binary has plainly been connected to before; (3) only then go looking for
+a dialog. The 180 s default is simply short for a large project on a busy machine.

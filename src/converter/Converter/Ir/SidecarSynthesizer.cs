@@ -696,7 +696,27 @@ public static class SidecarSynthesizer
                 // constantTypeOverride carries the operation's own type where magnitude can't infer it
                 // (a WAND mask `16#89` is a Word, not the Int its digits suggest) — from the caller's
                 // resolved SrcType.
-                var constantType = typedConstant ? null : (constantTypeOverride ?? InferLiteralConstantType(literal.Value));
+                // FI-54 (2026-08-08). A DURATION LITERAL IS ALWAYS A TypedConstant, whatever
+                // position it appears in — never a LiteralConstant carrying ConstantType="Time".
+                //
+                // TIA REJECTS THE OTHER FORM OUTRIGHT, at import, not at compile:
+                //   "The value 'T#0MS' cannot be set for the parameter of the type 'Time'"
+                // and the whole block import fails. Found live, importing a `MOVE(IN := T#0MS)`
+                // into a Time member — the first duration literal this corpus had ever placed
+                // anywhere but a TON's PT.
+                //
+                // Why the old rule produced it: `typedConstant` is passed true only at a TON's PT,
+                // so everywhere else the type came from `constantTypeOverride` (the operation's own
+                // resolved type). For a MOVE into a Time member that override is "Time", which is
+                // the one value that must never be written. The rule was keyed on POSITION when the
+                // thing that actually decides is the LITERAL'S OWN KIND.
+                //
+                // The accepted shape is confirmed against a real TIA export
+                // (`simatic-ml/reference/TimerSample.xml`): Scope="TypedConstant", a bare
+                // <ConstantValue>T#100MS</ConstantValue>, and NO <ConstantType> child at all.
+                var constantType = typedConstant || IsDurationLiteral(literal.Value)
+                    ? null
+                    : (constantTypeOverride ?? InferLiteralConstantType(literal.Value));
                 constantEntries.Add(new SidecarConstantEntry(literal.Value, constantUId, constantType));
                 var literalWireUId = nextUid++;
                 return new OperandSidecar.LiteralOperand(constantUId, literalWireUId);
@@ -705,6 +725,19 @@ public static class SidecarSynthesizer
                 throw new UnsupportedSynthesisConstructException(
                     $"Operand must be a tag reference or literal, found '{expr.GetType().Name}'.");
         }
+    }
+
+    // FI-54. IEC duration literals: `T#`/`TIME#` and the LTime forms, case-insensitive. Matched on
+    // the prefix rather than by parsing the duration, because the question here is only "is this a
+    // duration literal" — a malformed one is still a duration literal and still must not be given a
+    // ConstantType, and TIA is the right thing to reject it rather than this.
+    private static bool IsDurationLiteral(string value)
+    {
+        var v = value.TrimStart();
+        return v.StartsWith("T#", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("LT#", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("TIME#", StringComparison.OrdinalIgnoreCase)
+            || v.StartsWith("LTIME#", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string InferLiteralConstantType(string value) =>
