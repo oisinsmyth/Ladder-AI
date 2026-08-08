@@ -56,6 +56,15 @@ internal static class Program
                 return RefuseUnconfirmedHmiEditScreen(unconfirmedEdit.Options);
             }
 
+            if (parseResult is ParseResult.HmiCreateTagSuccess { Options.Confirm: false } unconfirmedTag)
+            {
+                Console.Error.WriteLine(
+                    $"Would create HMI tag '{unconfirmedTag.Options.TagName}' (type {unconfirmedTag.Options.DataType}) in table " +
+                    $"'{unconfirmedTag.Options.TableName}' of project '{unconfirmedTag.Options.ProjectIdentifier}'. " +
+                    "Nothing was created, and Portal was not contacted. Re-run with --yes to proceed.");
+                return ExitCodes.NotConfirmed;
+            }
+
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds), ArgumentParser.ProjectIdentifier(parseResult));
 
             switch (parseResult)
@@ -82,6 +91,8 @@ internal static class Program
                     return RunHmiEditScreen(gateway, hmiEdit.Options, timeoutOpenSeconds);
                 case ParseResult.HmiCompileSuccess hmiCompile:
                     return RunHmiCompile(gateway, hmiCompile.Options, timeoutOpenSeconds);
+                case ParseResult.HmiCreateTagSuccess hmiTag:
+                    return RunHmiCreateTag(gateway, hmiTag.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -176,14 +187,26 @@ internal static class Program
             Console.Error.WriteLine($"  event {target}:{eventType}" + (script is null ? " (no script)" : " (with script)"));
         }
 
+        foreach (var (target, property, tag) in options.Binds)
+        {
+            Console.Error.WriteLine($"  bind {target}.{property} <- tag '{tag}'");
+        }
+
         Console.Error.WriteLine("Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
         return ExitCodes.NotConfirmed;
+    }
+
+    private static int RunHmiCreateTag(IOpennessGateway gateway, HmiCreateTagOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        Console.WriteLine(gateway.CreateHmiTag(options.TagName, options.TableName, options.DataType));
+        return ExitCodes.Success;
     }
 
     private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events);
+        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));

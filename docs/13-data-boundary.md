@@ -237,15 +237,32 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
           tag/alarm/script, any dynamization bound to a real tag, and the non-scratch project. The
           event scripts written are self-contained trace calls that reference no project data.
         - The tooling built for this (`hmi-edit-screen`) is general-purpose and *could* edit a real
-          screen; the restriction is procedural and recorded here, not enforced in code. That is
+          screen; the restriction is procedural and recorded here, not enforced in code.
+      - **Extended again 2026-08-08: DYNAMIZATIONS, against invented tags only.** Owner instruction
+        ("now try the dynamizations"). Binding a screen property to a tag is the PLC↔HMI coupling and
+        the largest untested capability. Scope:
+        - **A new tag table and tag, both with invented `ZZ_AI_*` names**, created in the scratch
+          copy purely as a bind target. No existing tag table is modified and no real tag is read,
+          bound or altered.
+        - **Dynamizations on the throwaway test screen only**, bound to that invented tag — and, as a
+          deliberate experiment, to a tag name that does not exist, to establish whether anything
+          (Validate, or the device compile) catches a dangling reference. That question is the one
+          §4d of the write-api note says nothing currently answers.
+        - **Still excluded:** binding to any real HMI or PLC tag, and everything previously excluded.
+          The clause "any dynamization bound to a real tag" stands unchanged — this extension covers
+          bindings to tags this session itself invented, which is a different thing. That is
           worth stating plainly rather than implying the tool is safe by construction.
       - **Standing intent:** the artifact is disposable and removable on request. Its name is
         invented, so no real HMI name is created or committed either.
       - **Executed 2026-08-07.** One screen created in the scratch copy with three default items,
         `Validate()` clean, saved, and confirmed by read-back (49 screens where there were 48).
-        Details in `notes/openness-hmi-api-survey.md` §10. **The artifact is still present** in the
-        scratch copy — it is the only thing this session wrote to any project, and it can be deleted
-        in TIA Portal or left as a reference; nothing depends on it either way.
+        Details in `notes/openness-hmi-api-survey.md` §10.
+      - **Artifacts left in the scratch copy (2026-08-08), all invented names, all disposable:**
+        `ZZ_AI_TestScreen` (3 items, a `Tapped` handler with a self-contained script, a `Loaded`
+        handler, two tag bindings), the tag `ZZ_AI_TestTag`, and its table `ZZ_AI_TestTags`. These
+        are everything this session wrote to any project. The device **compiles clean** with them
+        present (`STATE: Success`, 0 errors; the 156 warnings are pre-existing, from the project's
+        own screens). Delete them in TIA Portal whenever convenient — nothing depends on them.
       - **`10-non-goals.md` is NOT amended by this.** HMI engineering remains a non-goal there,
         "revisit only via ADR". This is a capability *probe* answering the survey's own cheapest
         open question (does `Validate()` do anything?), not the opening of an HMI capability — that

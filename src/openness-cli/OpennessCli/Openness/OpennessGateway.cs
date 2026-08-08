@@ -495,7 +495,8 @@ public sealed class OpennessGateway : IOpennessGateway
     public HmiEditScreenResult EditHmiScreen(
         string screenName,
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,
-        IReadOnlyList<(string Target, string EventType, string? Script)> events)
+        IReadOnlyList<(string Target, string EventType, string? Script)> events,
+        IReadOnlyList<(string Target, string Property, string Tag)> binds)
     {
         if (_project is null)
         {
@@ -527,10 +528,63 @@ public sealed class OpennessGateway : IOpennessGateway
             applied.Add(created);
         }
 
+        foreach (var (target, property, tag) in binds)
+        {
+            var subject = ResolveTarget(screen, target);
+            applied.Add(CreateTagBinding(subject, property, tag));
+        }
+
         var validation = ReadValidation(screen).Concat(syntaxFindings).ToList();
         SaveProject();
 
         return new HmiEditScreenResult(devicePath, screenName, applied, validation, true);
+    }
+
+    /// <summary>
+    /// Binds a property to a tag by creating a <c>TagDynamization</c> on it. This is the PLC↔HMI
+    /// coupling — see <c>openness-hmi-write-api.md</c> §3.
+    ///
+    /// The composition is keyed by PROPERTY NAME and <c>PropertyName</c> is get-only, so re-binding
+    /// is delete-then-create rather than assignment. <c>Tag</c> is a plain string with no
+    /// existence check of any kind at assign time, which is exactly what makes §4d's
+    /// unchecked-reference problem real.
+    /// </summary>
+    private static string CreateTagBinding(IEngineeringObject subject, string propertyName, string tagName)
+    {
+        var dynamizations = subject.GetType().GetProperty("Dynamizations")?.GetValue(subject)
+            ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+
+        // Replace rather than stack: a property can carry only one dynamization, and Find is keyed
+        // by the property name.
+        var find = dynamizations.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(string));
+        var existing = find?.Invoke(dynamizations, new object[] { propertyName });
+        var replaced = existing is not null;
+        if (existing is not null)
+        {
+            existing.GetType().GetMethod("Delete", Type.EmptyTypes)?.Invoke(existing, null);
+        }
+
+        var create = dynamizations.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == 1)
+            ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+
+        var dynamization = create.MakeGenericMethod(typeof(TagDynamization)).Invoke(dynamizations, new object[] { propertyName })
+            ?? throw new InvalidOperationException($"Creating a TagDynamization on '{propertyName}' returned null.");
+
+        var typed = (TagDynamization)dynamization;
+        typed.Tag = tagName;
+
+        // PlcTag/Address/DataType are GET-ONLY read-backs derived from the tag itself. Reading them
+        // straight back is the only available evidence that the name resolved to anything — empty
+        // means unresolved, and nothing else will say so.
+        var plcTag = TryRead(() => typed.PlcTag);
+        var dataType = TryRead(() => typed.DataType);
+        var resolved = string.IsNullOrEmpty(plcTag) && string.IsNullOrEmpty(dataType)
+            ? "UNRESOLVED (PlcTag and DataType both empty — the tag name may not exist)"
+            : $"resolved: plcTag='{plcTag}' dataType='{dataType}'";
+
+        return $"bind {(replaced ? "replaced" : "created")} {subject.GetType().Name}.{propertyName} <- tag '{tagName}' [{resolved}]";
     }
 
     // "Screen" addresses the screen itself; anything else is an item name on it. Unknown names are a
@@ -815,6 +869,63 @@ public sealed class OpennessGateway : IOpennessGateway
         foreach (DeviceItem child in item.DeviceItems)
         {
             CollectUnifiedSoftware(child, path, found);
+        }
+    }
+
+    /// <summary>
+    /// Creates an HMI tag (and its tag table if absent). Exists to give the dynamization probe a
+    /// bind target that this session invented, rather than binding to a real project tag.
+    ///
+    /// Deliberately minimal: name, table, data type. A tag intended to reach a PLC would also need
+    /// `Connection` and `PlcTag` set, which is out of scope here — an internal tag is enough to test
+    /// whether a binding resolves.
+    /// </summary>
+    public string CreateHmiTag(string tagName, string tableName, string dataType)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CreateHmiTag)}.");
+        }
+
+        var (software, devicePath) = FindSingleUnifiedSoftware();
+
+        var table = software.TagTables.Find(tableName);
+        var createdTable = table is null;
+        table ??= software.TagTables.Create(tableName);
+
+        if (software.Tags.Find(tagName) is not null)
+        {
+            throw new HmiTagAlreadyExistsException(tagName);
+        }
+
+        var tag = software.Tags.Create(tagName, tableName);
+
+        // Data-type assignment is attempted, not required. Measured 2026-08-08: setting
+        // HmiDataType on a freshly created tag throws
+        //   "Set is not allowed for disabled fields"
+        // — writability here is CONTEXTUAL, depending on other properties (connection/tag type), and
+        // GetAttributeInfos' static AccessMode does not predict it. Failing the whole create over an
+        // optional refinement would be wrong, so the outcome is reported instead.
+        var typeNote = TrySetDataType(tag, dataType);
+
+        SaveProject();
+
+        var readBack = TryRead(() => tag.HmiDataType) ?? "(unreadable)";
+        return $"created tag '{tagName}' in table '{tableName}'{(createdTable ? " (table created)" : "")} on {devicePath}; " +
+               $"requested type '{dataType}' -> {typeNote}; HmiDataType now '{readBack}'";
+    }
+
+    private static string TrySetDataType(Siemens.Engineering.HmiUnified.HmiTags.HmiTag tag, string dataType)
+    {
+        try
+        {
+            tag.HmiDataType = dataType;
+            return "HmiDataType set";
+        }
+        catch (Exception ex)
+        {
+            var first = ex.GetBaseException().Message.Split('\n')[0].Trim();
+            return $"HmiDataType REFUSED ({first})";
         }
     }
 

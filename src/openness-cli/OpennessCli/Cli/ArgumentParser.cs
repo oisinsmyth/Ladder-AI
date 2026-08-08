@@ -120,8 +120,21 @@ public sealed record HmiEditScreenOptions(
     string ScreenName,
     IReadOnlyList<(string Target, string Attribute, string Value)> Sets,
     IReadOnlyList<(string Target, string EventType, string? Script)> Events,
+    IReadOnlyList<(string Target, string Property, string Tag)> Binds,
     bool Confirm,
     bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
+// The one HMI-tag write. Kept separate from screen editing because a tag is device-scoped, not
+// screen-scoped, and creating one is not part of editing a screen.
+public sealed record HmiCreateTagOptions(
+    string ProjectIdentifier,
+    string TagName,
+    string TableName,
+    string DataType,
+    bool Confirm,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -157,6 +170,8 @@ public abstract record ParseResult
     // Reuses CompileCommandOptions: an HMI compile takes the same device/json/timeout shape, and a
     // parallel record would only invite the two to drift.
     public sealed record HmiCompileSuccess(CompileCommandOptions Options) : ParseResult;
+
+    public sealed record HmiCreateTagSuccess(HmiCreateTagOptions Options) : ParseResult;
 
     public sealed record Failure(string Message) : ParseResult;
 }
@@ -222,6 +237,7 @@ public static class ArgumentParser
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiEditScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiCreateTagSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -244,6 +260,7 @@ public static class ArgumentParser
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiEditScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCompileSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiCreateTagSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -267,6 +284,7 @@ public static class ArgumentParser
             "hmi" => ParseHmi(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
             "hmi-edit-screen" => ParseHmiEditScreen(args),
+            "hmi-create-tag" => ParseHmiCreateTag(args),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -1021,6 +1039,7 @@ public static class ArgumentParser
         string? name = null;
         var sets = new List<(string, string, string)>();
         var events = new List<(string, string, string?)>();
+        var binds = new List<(string, string, string)>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1070,6 +1089,20 @@ public static class ArgumentParser
 
                     events.Add(ev);
                     break;
+                case "--bind":
+                    if (!TryTakeValue(args, ref i, "--bind", out var rawBind, out var bindErr))
+                    {
+                        return new ParseResult.Failure(bindErr);
+                    }
+
+                    // Same "<Target>.<Property>=<Value>" grammar as --set; the value is a tag name.
+                    if (!TryParseSet(rawBind!, out var bind, out var bindParseErr))
+                    {
+                        return new ParseResult.Failure(bindParseErr.Replace("--set", "--bind"));
+                    }
+
+                    binds.Add(bind);
+                    break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
                     {
@@ -1113,13 +1146,13 @@ public static class ArgumentParser
 
         // An edit command with no edits is a mistake worth catching at parse time — it would
         // otherwise open the project, change nothing, save, and report success.
-        if (sets.Count == 0 && events.Count == 0)
+        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0)
         {
-            return new ParseResult.Failure($"Nothing to do: pass at least one --set or --event.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event or --bind.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
-            projectIdentifier, name, sets, events, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, sets, events, binds, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the
@@ -1210,6 +1243,96 @@ public static class ArgumentParser
         ev = (target, eventType, System.IO.File.ReadAllText(payload));
         error = string.Empty;
         return true;
+    }
+
+    private static ParseResult ParseHmiCreateTag(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? name = null;
+        string? table = null;
+        var dataType = "Bool";
+        var confirm = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    break;
+                case "--table":
+                    if (!TryTakeValue(args, ref i, "--table", out table, out var tableErr))
+                    {
+                        return new ParseResult.Failure(tableErr);
+                    }
+
+                    break;
+                case "--datatype":
+                    if (!TryTakeValue(args, ref i, "--datatype", out var dt, out var dtErr))
+                    {
+                        return new ParseResult.Failure(dtErr);
+                    }
+
+                    dataType = dt!;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (name is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <tag name>.{Environment.NewLine}{Usage}");
+        }
+
+        if (table is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --table <tag table name>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiCreateTagSuccess(new HmiCreateTagOptions(
+            projectIdentifier, name, table, dataType, confirm, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

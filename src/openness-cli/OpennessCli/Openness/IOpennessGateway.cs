@@ -106,7 +106,15 @@ public interface IOpennessGateway : IDisposable
     HmiEditScreenResult EditHmiScreen(
         string screenName,
         IReadOnlyList<(string Target, string Attribute, string Value)> sets,
-        IReadOnlyList<(string Target, string EventType, string? Script)> events);
+        IReadOnlyList<(string Target, string EventType, string? Script)> events,
+        IReadOnlyList<(string Target, string Property, string Tag)> binds);
+
+    /// <summary>
+    /// Creates an HMI tag (and its table if absent) to serve as a dynamization bind target.
+    /// Minimal by design — name, table, data type — since an internal tag is enough to test whether
+    /// a binding resolves.
+    /// </summary>
+    string CreateHmiTag(string tagName, string tableName, string dataType);
 
     /// <summary>
     /// Exports the named block to <paramref name="outPath"/>. Refuses (throws
@@ -344,6 +352,22 @@ public sealed class GroupNotFoundException : Exception
 /// <see cref="GroupNotFoundException"/>, kept separate because the correction is different: not a typo
 /// in the path, but the wrong device item named along it.
 /// </summary>
+public sealed class HmiDynamizationsNotSupportedException : Exception
+{
+    public HmiDynamizationsNotSupportedException(string typeName)
+        : base($"'{typeName}' exposes no Dynamizations composition, so no property on it can be bound to a tag.")
+    {
+    }
+}
+
+public sealed class HmiTagAlreadyExistsException : Exception
+{
+    public HmiTagAlreadyExistsException(string name)
+        : base($"An HMI tag named '{name}' already exists. This command creates tags and never modifies an existing one — choose a different name.")
+    {
+    }
+}
+
 public sealed class HmiScreenNotFoundException : Exception
 {
     public HmiScreenNotFoundException(string name)

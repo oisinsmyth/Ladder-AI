@@ -347,14 +347,15 @@ disagreement note fired exactly as intended against the real compiler.
 
 | Fault | Caught by compile? |
 |---|---|
-| Script syntax error | **YES** — exact location |
+| Script syntax error | **YES** — exact line/column |
+| **Dangling tag reference in a dynamization** | **YES** — names the tag *and* the property (§4h) |
 | Missing release button (per object) | **YES** — as a warning (baseline, 154 of them) |
 | Zero-width screen | **NO** — silent, in both runs |
 
-So compile checks **script content and per-object configuration**, and does **not** sanity-check
-geometry. Untested, and the next thing worth probing: dangling references — a dynamization naming a
-tag that does not exist. That is the failure mode §4d says nothing else catches, and compile is now
-the only remaining candidate.
+So compile checks **script content, reference integrity, and per-object configuration**, and does
+**not** sanity-check geometry. That is a genuinely useful gate — it covers the failure mode that
+matters most for generated content (a reference to something that is not there) and misses the one
+that matters least (a shape a human would spot instantly).
 
 **`SyntaxCheck()` also caught it, and better than expected** — it returned
 `Unexpected identifier 's' in Line 12 at Col 8` at *write* time, before any compile. So the
@@ -407,27 +408,95 @@ partner PLC of a connection is not even a reference — `Partner`/`Station`/`Nod
 the writable knob is `InitialAddress`, a semicolon-separated `key=value` **string** (e.g.
 `CommunicationInterface=…;HostAddress=…;PlcAddress=…;Rack=…;ExpansionSlot=…`).
 
-Put that next to §4c and the consequence is sharp:
+Put that next to §4c and the alarming reading is that nothing checks any of it. **That reading was
+wrong, and §4h measured it wrong** — recorded here rather than quietly rewritten, because the
+corrected version is the useful one:
 
-> **Every reference in a Unified HMI is an unchecked string, and the only thing that could check
-> them — `Validate()` — has been measured not to.**
+> **CORRECTED 2026-08-08.** A dangling reference is invisible to `Validate()`, but **the device
+> compile catches it**, by name, with the property named too:
+>
+> ```
+> [Error] ZZ_AI_TestScreen: → HmiRectangle_1:
+>   The tag 'ZZ_AI_NoSuchTag_Dangling' for dynamization of the property 'Visibility'
+>   does not exist. Select an existing tag.
+> ```
+>
+> So the string-typed model is **not** unchecked — it is unchecked *at write time* and checked *at
+> compile time*. That is a materially different, and much better, position.
 
-A typo in a tag name, a connection name, a data-log name or a screen name is therefore invisible to
-every automated check available at engineering time. Nothing fails; the object simply refers to
-something that is not there. This is precisely the failure mode the PLC side spends `tagstatus`,
-`preflight` and the compile gate defending against — and on the HMI side none of those defences has
-an equivalent.
+What remains true, and still matters: **nothing checks a reference at the moment you write it.** The
+API accepts `Tag = "<anything>"` without complaint, and `Validate()` stays silent. So a generator
+still wants its own pre-write check — but it now has two ways to get one, neither requiring
+invention:
 
-**For a generation capability this is the central design constraint**, more than the flat item tree or
-the faceplate wall: any tool that writes HMI content must **verify its own references before writing
-them**, because nothing downstream will. That is the HMI analogue of hard rule 3, and it has to be
-built rather than borrowed.
+1. **Ask the object.** The derived read-backs (`DataType`, `PlcTag`, `Address`) come back empty when
+   the name did not resolve — §4h. Immediate, per-binding, free.
+2. **Compile.** Slower and project-wide, but authoritative and it names the offender precisely.
+
+The PLC analogy therefore holds better than first thought: `tagstatus`/`preflight` are the fast
+pre-write checks, and the compile is the gate. The HMI side has both — they are just less obvious,
+and the fast one has to be assembled from a read-back rather than called by name.
 
 **What is creatable here** (reflection-confirmed): `HmiConnection`, `HmiDataLog`, `HmiAlarmLog`,
 `HmiLoggingTag` (on `HmiTag.LoggingTags`), `HmiAlarmAuditClass` (`Create()`, no parameters),
 `HmiOpcUaAlarmType(nodeId, connection, name)`. **Not creatable:** `HmiAuditTrail` (no `Create`, no
 `Find`, no `Delete` — a TIA-made singleton reached by index), and `DriverProperty` (the set is fixed
 by the chosen `CommunicationDriver`; only `.Value` is writable).
+
+## 4h. Dynamizations, proven live — and how to detect a dangling tag (2026-08-08) [LIVE]
+
+The largest untested capability, now exercised. A throwaway tag (`ZZ_AI_*`, invented, in its own
+invented table) was created as a bind target, then two bindings were made on the test screen: one to
+that tag, one to a name that does not exist.
+
+```
+bind created HmiText.Visible      <- tag 'ZZ_AI_TestTag'              [resolved: plcTag='' dataType='Int']
+bind created HmiRectangle.Visible <- tag 'ZZ_AI_NoSuchTag_Dangling'   [UNRESOLVED (PlcTag and DataType both empty)]
+Validate(): ran, returned no errors and no warnings
+```
+
+**Creating a dynamization works** — `Dynamizations.Create<TagDynamization>(propertyName)` then
+`Tag = "<name>"`, exactly as §3's recipe predicted. The PLC↔HMI coupling is drivable.
+
+**Binding to a nonexistent tag is accepted silently.** No exception at assignment, and `Validate()`
+had nothing to say — confirming §4d's fear directly rather than by inference.
+
+### But the derived read-backs ARE a usable detector
+
+This is the practically useful discovery. `PlcTag`, `Address` and `DataType` are get-only fields
+*derived from the resolved tag*. On the good binding `DataType` came back `'Int'`; on the dangling
+one **both came back empty**. So although nothing *checks* the reference for you, the API will tell
+you whether it resolved — if you ask immediately after setting it:
+
+```csharp
+d.Tag = tagName;
+if (string.IsNullOrEmpty(d.DataType) && string.IsNullOrEmpty(d.PlcTag))
+    // the name did not resolve — treat as an error
+```
+
+That is the "verify your own references before writing them" mechanism §4d said had to be built. It
+turns out not to need building from scratch: **the API supplies the evidence, it just does not act on
+it.** `openness-cli hmi-edit-screen --bind` now reports `resolved:` / `UNRESOLVED` per binding on
+this basis.
+
+Caveat on the check's strength: `plcTag` was empty on the *good* binding too (an internal tag has no
+PLC counterpart), so `PlcTag` alone is not the signal — `DataType` is the discriminator here, and
+whether that holds for every tag kind is unverified.
+
+### Two API behaviours worth knowing
+
+**Writability is CONTEXTUAL, not what the schema says.** Setting `HmiDataType` on a freshly created
+tag threw `Set is not allowed for disabled fields`. `GetAttributeInfos()` reports a static
+`AccessMode`; actual writability depends on the object's *current state* (here, presumably that a
+connection/tag type is not yet established). So the schema (§8 of the parent survey) predicts what
+*may* be writable, not what is writable *now* — a generator must tolerate refusal on individual
+properties rather than treating the schema as a contract.
+
+**There is no transaction, and a failed command can leave a partial object.** The tag-creation run
+that threw on `HmiDataType` had already called `Tags.Create`, and never reached `Save()` — yet the
+tag existed on the next run. Openness has no rollback: **anything a command did before it failed may
+persist.** Commands must therefore be written to be re-runnable, and a failure must never be read as
+"nothing happened".
 
 ## 4g. Coverage — how much of the HMI surface is actually mapped (2026-08-08)
 
