@@ -26,7 +26,20 @@ internal static class DbInterfaceMembers
     // Confirmed real, 2026-07-11: both a structured member's own nested members (a DB's) and an
     // FB's Temp-section members share this same minimal shape — only Name/Datatype attributes
     // and an optional StartValue child, no Remanence/Accessibility/AttributeList/further nesting.
-    private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype" };
+    //
+    // FI-58 (2026-08-08) adds `Version`. A nested member whose type is a SYSTEM STRUCTURED TYPE —
+    // `DTL` is the one this corpus hit — carries a `Version` attribute in TIA's own export, and
+    // refusing it hard-errored `to-ir` on any DB with such a member nested inside a structure:
+    //     "member 'Silo' has a nested/bare member 'LastCleaned' with unexpected attribute(s)
+    //      [Version]"
+    // Two DBs could not be read back at all, so a re-export could not be verified and the agent
+    // had to extract member sets from the raw XML by hand instead.
+    //
+    // Same family as FI-56 and the same reasoning: this is TIA stating the version of a type it
+    // owns, on a member the IR names BY TYPE. It carries nothing the IR needs and nothing that can
+    // be lost by ignoring it — `ParseMember` already accepts and discards `Version` on the
+    // full-member shape for exactly this reason. Accepting it here makes the two shapes agree.
+    private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype", "Version" };
 
     /// <summary>
     /// Parses a full member (Static-section shape): Name/Datatype/Remanence/Version, BooleanAttributes, and either a StartValue or nested structured content.

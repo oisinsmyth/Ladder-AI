@@ -343,6 +343,71 @@ public class DbConverterTests
         Assert.True(inner.NestedMembers is null or { Count: 0 });
     }
 
+    // FI-58 (2026-08-08). A nested member whose type is a SYSTEM STRUCTURED TYPE carries a
+    // `Version` attribute in TIA's own export, and refusing it hard-errored `to-ir` on any DB with
+    // such a member nested inside a structure:
+    //     "member 'Silo' has a nested/bare member 'LastCleaned' with unexpected attribute(s)
+    //      [Version]"
+    // Two DBs could not be read back at all, so a re-export could not be verified and their member
+    // sets had to be extracted from raw XML by hand.
+    //
+    // Same family as FI-56: TIA stating the version of a type it owns, on a member the IR names BY
+    // TYPE. `ParseMember` already accepts and discards `Version` on the full-member shape, so
+    // accepting it here makes the two shapes agree rather than inventing a new tolerance.
+    [Fact]
+    public void NestedSystemTypeMemberWithVersionAttribute_IsAccepted()
+    {
+        var xml = XDocument.Parse("""
+            <Document>
+              <Engineering version="V20" />
+              <SW.Blocks.GlobalDB ID="0">
+                <AttributeList>
+                  <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+              <Section Name="Static">
+                <Member Name="Silo" Datatype="&quot;UDT_SiloRet&quot;" Remanence="Retain" Accessibility="Public">
+                  <AttributeList>
+                    <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+                    <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+                  </AttributeList>
+                  <Sections>
+                    <Section Name="None">
+                      <Member Name="LastCleaned" Datatype="DTL" Version="1.0" />
+                      <Member Name="Plain" Datatype="Bool" />
+                    </Section>
+                  </Sections>
+                </Member>
+              </Section>
+            </Sections></Interface>
+                  <Name>RealDbName</Name>
+                  <Namespace />
+                  <Number>7</Number>
+                  <ProgrammingLanguage>DB</ProgrammingLanguage>
+                </AttributeList>
+                <ObjectList>
+                  <MultilingualText ID="1" CompositionName="Comment">
+                    <ObjectList>
+                      <MultilingualTextItem ID="2" CompositionName="Items">
+                        <AttributeList>
+                          <Culture>en-US</Culture>
+                          <Text />
+                        </AttributeList>
+                      </MultilingualTextItem>
+                    </ObjectList>
+                  </MultilingualText>
+                </ObjectList>
+              </SW.Blocks.GlobalDB>
+            </Document>
+            """);
+
+        var db = DbSourceParser.Parse(xml);
+        var nested = Assert.Single(db.Members!).NestedMembers!;
+
+        Assert.Equal(new[] { "LastCleaned", "Plain" }, nested.Select(m => m.Name).ToArray());
+        Assert.Equal("DTL", nested[0].Datatype);
+    }
+
     // The half of the old guard that still matters. An ANONYMOUS Struct's expansion is its ONLY
     // definition — there is no named type to recover it from — so collapsing it would silently
     // discard real members. That must still be refused.

@@ -228,3 +228,35 @@ compile error names the FORMAL parameter type, which is the converter's output, 
 input. Reading it as a constraint on the target rather than on what the converter chose for the
 source sends you looking in the wrong place. **When a type error names a type you did not write,
 check what the converter emitted before concluding TIA forbids something.**
+
+## A GREEN GATE DOES NOT PROVE THE FILE YOU MEANT WAS IMPORTED
+**Confirmed live 2026-08-08, and it is the most dangerous thing in this file.**
+
+An agent imported a **stale `.xml`** for two DBs — generated in an earlier unit, before the edits it
+had just made to the `.ir`, and not included in that pass's `to-xml` batch. The import silently put
+the OLD text back into TIA. **Every gate still read green**, because the difference was comment
+text and a comment is not a compile error. It was caught only by a residual `grep` over `ir/*.xml`
+at the very end of the run.
+
+**Rule: `to-xml` the file you are about to import, in the same pass, every time.** Not "at some
+point earlier". The `.xml` on disk is a build artefact of unknown age, and nothing in the toolchain
+tells you which `.ir` it came from.
+
+What the compile gate does and does not cover: it proves the imported logic compiles. It says
+NOTHING about whether the imported file was the one you edited, and nothing about comments, member
+comments, block headers or bit-map documentation — all of which this project treats as
+load-bearing. **`sanity-check` green plus a stale import is a real and silent combination.**
+
+Cheap confirmations, in order: re-convert immediately before importing; after importing, grep the
+`.xml` you sent for a string you know you just changed; and where it matters, re-export from TIA and
+diff against the disk copy — which is what FI-56 and FI-58 exist to make possible.
+
+## "member '<X>' has a nested/bare member '<Y>' with unexpected attribute(s) [Version]"
+**Converter FI-58, fixed 2026-08-08.** A nested member whose type is a SYSTEM STRUCTURED TYPE
+(`DTL` is the one this corpus hit) carries a `Version` attribute in TIA's own export, and the
+bare-member parser refused it — so `to-ir` hard-errored on any DB with such a member nested inside
+a structure, and two DBs could not be read back at all.
+
+Same family as FI-56: TIA stating the version of a type it owns, on a member the IR names BY TYPE.
+`ParseMember` already accepted and discarded `Version` on the full-member shape, so the two shapes
+now agree rather than one growing a special tolerance.
