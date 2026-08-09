@@ -2162,6 +2162,59 @@ consumer recomputes the hash and discards the cache on mismatch (hash-on-read, t
 Deliberately **not** `digest --fingerprint` (that abstracts tag names → a rename wouldn't invalidate). Exit
 1 on a missing/unparseable/non-block file.
 
+## `claim` / `claims` — reserve a shared resource before writing IR (2026-08-07, FI-65 component 1)
+
+```
+converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k>
+                 (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>])
+                 [--purpose <text>] [--json]
+converter claims --project <ir-dir> --claims <dir> [--check] [--agent <id>] [--json]
+converter claims --project <ir-dir> --claims <dir> --release --agent <id> (--kind <k> --value <v> | --all) [--force]
+```
+
+Lets several agents work one project without stepping on each other. The collisions this prevents are
+decided **while writing IR** and never reach TIA: two agents each scan the corpus for the next free FB
+number and both pick 51; both verify alarm bit `%X9` is free and both take it; both append "network 8"
+to the same shared FC. Each agent's own `converter diff --only` invariance check passes — the conflict
+exists only between them. See `docs/16-future-ideas.md` FI-65.
+
+**Six kinds, two semantics.** *Allocation* (`block-number`, `alarm-bit`, `db-member`, `block-network`,
+`tag`) reserves something not yet used, and is refused if the corpus already uses it. *Exclusive*
+(`block-edit`) reserves write access to something that does exist, and is refused only if another agent
+holds it.
+
+**`--claims <dir>` is required** (or `LADDER_CLAIMS_DIR`) and there is deliberately **no default**. It
+must be a directory shared by every agent on the project: agents run in separate git worktrees, so a
+per-worktree claims directory is always empty, grants every claim, and turns the registry into a no-op
+that looks like success — FI-44's "empty is not clean" in its purest form.
+
+**Acquisition is atomic** — a claim is written to a temp file and `File.Move`d into its slot, so the
+filesystem decides the winner and a claim file is never observed half-written or locked. One file per
+claim, never a table: a shared table would be a read-modify-write race between processes and a merge
+conflict per claim once committed. Claims are machine state and are never committed.
+
+**`--allocate` takes the lowest free value atomically** and prints what it took. There is no read-only
+"suggest" mode on purpose: a non-binding suggestion is the exact race the tool removes — two agents are
+both told "FB51 is free", both act on it, and one finds out only after doing the work.
+
+**`--check` gates on conflicts only.** A *fulfilled* allocation claim (the agent wrote the block, so the
+resource now exists) is the normal end state and is reported without gating — a check that failed on
+success would be ignored on failure. What gates: an exclusive claim on a block that no longer exists,
+a malformed value, and the **cross-kind conflict the filesystem cannot see** — agent A holding
+`block-edit FC_ControlMain` while agent B holds `block-network FC_ControlMain:8`. Those are two
+different values, so both acquisitions legitimately succeed; only the check relates them.
+
+Stale claims are reported, never auto-released — an agent can legitimately hold one across a long
+stage, and expiring a claim out from under live work causes the collision the registry exists to stop.
+Releasing another agent's claim needs `--force` and says that it was forced.
+
+**Exit codes:** `0` acquired / clean · `1` refused, or `--check` found a conflict · `2` unusable input
+(no `--claims`, missing project, unknown kind, empty corpus). The 1-vs-2 split is for the calling
+agent: 1 is a real answer ("someone has it, pick another"), 2 means nothing was decided.
+
+**Boundary:** claims prevent only the kinds someone enumerated. The six cover every collision source
+this repo has evidence for; a resource class outside them is still an undetected collision.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.
