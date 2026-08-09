@@ -690,6 +690,11 @@ public static class OutputFormatter
         sb.Append("OVERALL: ").Append(result.IsHealthy ? "HEALTHY" : "ISSUES FOUND").Append('\n');
         sb.Append("BLOCKS: ").Append(result.TotalBlocks).Append("  INCONSISTENT: ").Append(result.InconsistentBlocks.Count).Append('\n');
 
+        // FI-62: types get their own line, always printed even at zero. A reader who has only ever
+        // seen BLOCKS/INCONSISTENT needs to see that types were actually looked at — a silent
+        // absence is what let an inconsistent UDT pass a HEALTHY gate in the first place.
+        sb.Append("TYPES: ").Append(result.TotalTypes).Append("  INCONSISTENT: ").Append(result.InconsistentTypes.Count).Append('\n');
+
         if (result.InconsistentBlocks.Count > 0)
         {
             sb.Append('\n').Append("Inconsistent blocks:\n");
@@ -697,6 +702,17 @@ public static class OutputFormatter
             {
                 sb.Append("  ").Append(block.Path).Append('/').Append(block.Name).Append(" (").Append(block.Language).Append(")\n");
             }
+        }
+
+        if (result.InconsistentTypes.Count > 0)
+        {
+            sb.Append('\n').Append("Inconsistent PLC data types:\n");
+            foreach (var type in result.InconsistentTypes)
+            {
+                sb.Append("  ").Append(type.Path).Append('/').Append(type.Name).Append('\n');
+            }
+
+            sb.Append("  -> clear with: openness-cli compile <project> --type <name>\n");
         }
 
         sb.Append('\n').Append("Device compiles:\n");
@@ -717,6 +733,8 @@ public static class OutputFormatter
             healthy = result.IsHealthy,
             totalBlocks = result.TotalBlocks,
             inconsistentBlocks = result.InconsistentBlocks.Select(b => new { name = b.Name, path = b.Path, language = b.Language }),
+            totalTypes = result.TotalTypes,
+            inconsistentTypes = result.InconsistentTypes.Select(t => new { name = t.Name, path = t.Path }),
             deviceCompiles = result.DeviceCompiles.Select(d => new
             {
                 device = d.DevicePath,

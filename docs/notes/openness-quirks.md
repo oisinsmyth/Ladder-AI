@@ -6,6 +6,12 @@ Working notes on TIA Openness friction (risk R-06). Record here as encountered.
 Per Portal version/binary, the first Openness connect triggers a manual approval dialog inside TIA Portal. If a connect hangs, check Portal for the dialog.
 TODO: paste exact dialog text/screenshot on first connect (S0 exit item).
 
+> **READ THIS BEFORE ACTING ON THE PARAGRAPH ABOVE (2026-08-08).** "If a connect hangs, check Portal
+> for the dialog" has now sent three separate investigations hunting a dialog that did not exist. The
+> measured cause of a silent connect hang on this machine is an **unapproved (rebuilt) binary**, which
+> Openness refuses with no dialog at all. See *"A rebuilt binary is refused SILENTLY"* at the end of
+> this file for the mechanism, the registry evidence and the one-command diagnostic.
+
 2026-07-10: first live `openness-cli list` run (attach to an already-running Portal V20 with
 project "JOB9003 - K150" already open) completed immediately — no approval dialog appeared, no
 `ConnectTimeoutException`. Either this machine had already approved Openness for this Portal
@@ -643,179 +649,130 @@ network that was just redesigned reads as a *design* failure rather than a wrong
 before is worth importing as a two-network throwaway *before* it goes into a real block. That cost
 one probe cycle here and would have cost a misdiagnosed redesign otherwise.
 
-## `Attach()` intermittently hangs with NO dialog — transient, and it is not about which binary (2026-08-07)
+## `converter to-ir <file>` overwrites `<file>.ir` in place, and emits a sidecar by default
+**Confirmed live 2026-08-08, by an agent that destroyed its own work with it and reported it.**
 
-**The one solid, reusable fact: it does not prompt.** Prior notes and memory said a freshly-built
-binary "hangs at TIA's first-connect approval dialog". The hang is real; **the dialog is not.**
-Enumerated every top-level window — visible *and* hidden — across all five Portal processes via
-`EnumWindows`: only the two real project windows and the usual hidden plumbing
-(`ThreadSynchronizer`, `SCP Communication`, IME, GDI+). Nothing to accept, anywhere. So the tool's
-own `ConnectTimeout` message ("accept the dialog if it's there") sends the reader hunting for
-something that does not exist, and waiting for a human to click is waiting forever. Note also that
-`Get-Process`'s `MainWindowTitle` alone is **not** sufficient evidence — a modal child window need
-not appear there — which is why the full enumeration is the check worth doing.
+Converting a TIA re-export to compare it against the working IR is an obvious move — and running
+`to-ir ir/FB_Drum.xml` writes `ir/FB_Drum.ir`, **overwriting the file you were about to compare it
+against.** The agent lost every edit in two blocks this way. Worse, the rewritten files carried
+`SIDECAR` sections, which this corpus does not use, so the damage was not a clean revert either.
 
-**What is NOT established: any binary-level cause. This section originally claimed one and was
-wrong.** The full record over ~2.5 hours against one unchanged project:
+**Convert an export on a COPY, in a scratch directory, never against `ir/`.** If you must convert in
+place, `--no-sidecar` at least matches this corpus's shape — and it verifies the sidecar is
+derivable (ADR-0005) as a side effect, which is a useful check in its own right.
 
-| Binary | Result |
-|---|---|
-| worktree build A | hung (3 min) |
-| worktree build A | **succeeded twice** |
-| worktree build A | hung (15 min), hung (10 min) |
-| main checkout binary | **succeeded** (<90 s) ← the observation this section first over-read |
-| worktree build B, staged at the approved path | **succeeded twice** |
-| worktree build C, staged at the same path | hung (3 min), hung (10 min) |
-| main checkout binary, restored | **hung (90 s)** |
+The repair is worth recording too, because it is the standard to hold: the agent re-derived the
+files, re-applied every edit from a scripted patch asserting exactly one match per anchor (17 of
+17), and then separately proved it had not reverted a *concurrent* agent's work on one of the same
+files, by diffing against a timestamped baseline and showing 13 networks of that agent's later work
+still present. Reporting the accident is the minimum; proving the blast radius is the bar.
 
-**Both binaries have succeeded and both have failed.** The main-vs-worktree comparison that looked
-decisive was confounded by *when* it was run — it happened to fall in a good window. The honest
-reading is a **transient, time-varying failure of `Attach()`**, which is exactly what this file
-already recorded on 2026-07-14 ("A second concurrent Portal instance sometimes won't connect at
-all — transient, resolved on retry"). That earlier entry was right and this one should not have
-tried to replace it.
+## A per-block `compile` exits 8 at `ERRORS: 0` on a project with a standing warning
+This project carries an inherited `"Inputs or outputs are used that do not exist in the configured
+hardware"` warning on every block, which sets `STATE: Warning`, and `RunCompile` returns
+`CompileFailed` for any state that is not `Success`. **Read the `ERRORS:` count, not the exit code**,
+for per-block compiles here. The exit code remains meaningful for `sanity-check`, which is the gate.
 
-**The lesson worth keeping is methodological.** One successful A/B run is not a root cause when the
-failure is intermittent. The comparison needs repeating in both directions before it means anything,
-and here it inverted on the second pass. `portal-status` keeps working throughout, because it never
-calls `Attach()` — so "portal-status works" says nothing about whether an attach will.
+## A rebuilt binary is refused SILENTLY — the whitelist is keyed on (Path, FileHash) (2026-08-08)
 
-**Practical guidance, unchanged and still sound:** prefer the main checkout's binary for Portal work
-(it is the one with the longest approval history), raise `--timeout-connect` well above the 180 s
-default on a loaded machine, retry rather than concluding, and clear Portal pileup periodically —
-`openness-cli portal-status` classifies what is safe to close and never closes anything itself.
+**The mechanism, from the registry rather than from inference.** TIA keeps an allow-list of Openness
+callers:
 
-### ROOT CAUSE FOUND, 2026-08-08: a CONCURRENT SESSION on the same machine
-
-The intermittent attach hangs above were never about the binary. **Another Claude Code session was
-driving `openness-cli` against a different project on the same machine at the same time**, and the
-two contend for Portal.
-
-It was identified by reading the command line of a running client rather than assuming it was ours:
-
-```powershell
-Get-CimInstance Win32_Process -Filter "Name = 'openness-cli.exe'" |
-  ForEach-Object { "$($_.ProcessId): $($_.CommandLine)" }
+```
+HKLM\SOFTWARE\Siemens\Automation\Openness\<version>\Whitelist\<exe name>\Entry (N)
+  Path         = C:\...\src\openness-cli\OpennessCli\bin\Debug\net48\openness-cli.exe
+  DateModified = 2026/07/10 08:40:17.964
+  FileHash     = PY8nw9ndT2J/qsmq1G289KwAEM10YkvRPjcY1j5MlTE=     <- base64 SHA-256
 ```
 
-which showed a **Release**-build client (ours is Debug) compiling a block in an entirely different
-project. That single command distinguishes "my stuck client" from "someone else's running work", and
-it should be the first thing run whenever a Portal operation hangs.
+**One entry is added per approved build**, so the key accumulates — this machine had **84** entries
+for a single Debug path, 3 for the Release path, and 10+ for various worktree builds. Rebuild the
+executable and its hash matches none of them. Openness then **refuses the caller and never
+responds**: `Attach()` blocks until the caller's own timeout expires. No dialog. No exception. No log
+entry. From outside it is indistinguishable from a wedged Portal.
 
-This fits every observation: attaches succeed in quiet windows and hang while the other session is
-mid-operation, both binaries succeed and fail at different times, and `portal-status` keeps working
-throughout because it never attaches. CLAUDE.md already records that two Openness sessions on the
-*same project* are unsupported; what this adds is that **two sessions on the same machine, on
-different projects, contend badly enough to look like a wedge** even though the concurrency design
-itself is sound.
+**What it cost, so the shape is recognisable.** A `dotnet test` on the openness-cli solution, run to
+check something unrelated, rebuilt the binary *while an agent was mid-run*. Every attach after that
+moment hung for its full `--timeout-connect` — 3 min, then 15 min, then more. Roughly an hour went
+into "Portal is wedged, someone must clear a dialog". Two things made it hard to see:
 
-**The shared build output path is a contested resource — do not stage into it.** This session
-repeatedly copied its worktree build over
-`src/openness-cli/OpennessCli/bin/Debug/net48/openness-cli.exe` (the main checkout's output) to reuse
-that path. That was a mistake once a second session existed: **the other session runs the same
-binary from the same path**, and was observed running `list` against a live engineering job while the
-staged build was in place. It later rebuilt the path itself, silently discarding the staged build.
-So two sessions were overwriting one executable, each unaware of the other.
+- **The CLI's own error text asserted the dialog**, and the reader believed it.
+- **`portal-status` was used as evidence that no dialog existed**, which it cannot be: it is the one
+  subcommand that never attaches, so it is structurally incapable of observing one. A clean
+  `portal-status` says nothing at all about a dialog.
 
-Nothing broke — the staged build is a strict superset of the original's commands, and a running
-process holds its image so a mid-run replacement cannot affect it — but that is luck again. **Use the
-worktree's own binary directly.** The staging was originally adopted on the theory that only the
-main-checkout path was Openness-approved; that theory is dead (the worktree binary demonstrably
-worked in quiet windows), so the staging has no remaining justification.
+**Proof there was no dialog, and the technique is reusable.** `EnumWindows` over both Portal
+processes showed only the two real project windows plus the usual hidden plumbing
+(`ThreadSynchronizer`, `SCP Communication`, IME, GDI+) — every main window `visible` **and
+`enabled`**, which a modal owner would not be. That is suggestive but not conclusive on a WPF app,
+where a dialog can be an in-window overlay with no HWND of its own, so it was settled by capturing
+each window with `PrintWindow` and **looking at the pixels**: both Portals idle, no dialog anywhere.
+Screenshot-the-window is the check worth reaching for when window enumeration is ambiguous.
 
-**Operational rules that follow:**
+**The one-command diagnostic.** Run a build that is already approved against the same project:
 
-- **Never kill an `openness-cli` process without reading its command line first.** Done wrong here:
-  a stuck client was killed on the assumption it was ours, without checking, while a concurrent
-  session was working a **live engineering job**. A killed Openness client does not corrupt the project
-  (Portal keeps its own state, and `openness-cli` never closes a project it did not open), so the
-  worst case is someone else's command failing and needing a retry — but that is luck, not design.
-  The check costs one command.
-- **Expect long operations to be genuinely long.** A Unified HMI compile regenerates the runtime;
-  Portal was observed burning ~45 minutes of CPU on one project while another session compiled a
-  block on another.
-- **Don't fight it.** Raising `--timeout-connect` does not help when the contention lasts longer than
-  any sane timeout. Check who else is running, and wait for them.
+```
+"...\src\openness-cli\OpennessCli\bin\Release\net48\openness-cli.exe" list "<project>.ap20" --timeout-connect 90
+```
 
-### PARTIAL CORRECTION, 2026-08-09: the approval whitelist keys on the binary's HASH, so a REBUILD does re-arm the dialog
+It connected and listed blocks in **57 s** while the rebuilt Debug binary was hanging on the identical
+project. That single comparison separates "this executable is not approved" from "Portal/project is
+unhealthy", and costs one minute.
 
-The section above opens *"the intermittent attach hangs were never about the binary"* and declares
-the binary theory dead. **That was too strong, and it was the wrong half that died.** The correct
-statement is: the hangs were not about **which path** the binary ran from. They are absolutely about
-**which build**.
+**Now detected automatically (FI-61).** `openness-cli` hashes itself and checks the whitelist
+*before* attaching, printing a warning that names the cause and predicts the hang. Verified live: it
+reported `84 earlier build(s) of this exact path are approved, but none of them matches this file's
+current hash`. The check is **advisory and must stay advisory** — it warns and proceeds, never
+blocks. A false negative (a whitelist layout it does not understand, a registry view it cannot read)
+would otherwise refuse every Portal command on a machine where everything works, which is far worse
+than the hang it prevents. `ConnectTimeoutException`'s text now lists both causes and no longer
+claims to know which one it is.
 
-Measured 2026-08-09 during the P8 mapping-table work (`openness-hmi-write-api.md` §4n): TIA's
-`Openness access` whitelist is keyed on the **binary's hash**, not its path — 103 entries were
-present on this machine. So **every rebuild of `openness-cli` produces a client TIA has never seen,
-and needs a fresh human click inside Portal before it can attach.** Until that click arrives,
-`Attach()` **hangs**, indistinguishable from contention. This cost about 40 minutes before it was
-diagnosed, and it is a standing tax on any edit-build-test loop that touches Portal.
+**Practical rules.**
+- **Do not rebuild `openness-cli` while Portal work is in flight.** `dotnet test` on
+  `openness-cli.sln` is a rebuild. `converter.sln` is safe — it never touches Portal.
+- Approval does **not** carry across build locations, so a worktree build is a different application
+  to Openness even from identical source.
+- Re-approving a build means adding a whitelist entry under `HKLM`, which is a privileged security
+  control and the machine owner's call — not something the tooling should do for itself.
 
-**Two hangs, one symptom.** A wedged attach now has (at least) two independent causes that look
-identical from outside:
+### The same refusal has a SECOND face: it sometimes THROWS instead of hanging (2026-08-09)
 
-| Cause | Distinguishing check |
-|---|---|
-| Another session holds Portal | `Get-CimInstance Win32_Process -Filter "Name='openness-cli.exe'"` — read the **command line**, not just the count |
-| This build has never been approved | Look for an `Openness access` dialog in the running Portal processes' **window titles** |
+Found from the other side, by a branch that hit this wall while the section above was being written
+on master. The section above documents the **silent** presentation. There is another, and it looks
+like a completely different bug.
 
-Run **both** before concluding anything. The 2026-08-08 diagnosis was made with only the first, and
-the concurrent session it found was real and independently evidenced (a Release-build client working
-a different project) — so that finding stands. What does not stand is the generalisation that the
-binary never matters: the worktree binary "demonstrably worked in quiet windows" because it had
-already been approved once, and it would have wedged again after its next rebuild. Two true causes,
-one of them mistaken for the whole explanation.
-
-**Consequences for unattended work.** A sweep launched to run while nobody is watching can sit on an
-invisible modal dialog indefinitely. So: **do not rebuild between authoring a sweep and running it**
-if the run is meant to be unattended, and if a rebuild is unavoidable, get the approval interactively
-before arming the sweep.
-
-#### The refusal has TWO faces, and they look like different bugs (measured 2026-08-09)
-
-An unapproved build was run twice, minutes apart, same binary, same project, nobody clicking:
+An unapproved build was run twice, minutes apart — same binary, same project, nobody clicking:
 
 | Run | Result | Exit |
 |---|---|---|
-| 1 | `AggregateException … ---> EngineeringSecurityException: Security error.` — fast | **5**, now **2** |
+| 1 | `AggregateException … ---> EngineeringSecurityException: Security error.` — fast, loud | **5**, now **2** |
 | 2 | attach never completed; the CLI's own 15-minute connect timeout fired | **3** |
 
-**Same cause, two presentations**, and neither names the approval. The plausible reading is that it
-depends on which Portal the client reaches: an already-running process that has previously refused
-this hash rejects immediately, while a freshly-launched one puts up the dialog and waits. That is a
-hypothesis from two data points, not a rule.
+Same cause, two presentations, **neither of which names the approval**. The plausible reading is that
+it depends on which Portal the client reaches — a process that has already refused this hash rejects
+outright, while a freshly-launched one goes quiet — but that is a hypothesis from two data points.
 
-What matters operationally: **`EngineeringSecurityException` and a connect timeout are the same
-problem**, so the diagnosis for a wedged attach is now *three*-way — another session's client, an
-unapproved build refused outright, or an unapproved build waiting on a dialog. Exit code **3 on a
-freshly rebuilt binary should be read as "needs approval" first and contention second.**
+So the diagnosis for a wedged or failed attach is **three-way**: another session's client, an
+unapproved build refused silently, or an unapproved build refused loudly. Concretely:
+**exit 3 OR exit 5-with-a-security-error on a freshly rebuilt binary both mean "needs approval"**,
+and neither should be read as contention or as a broken install.
 
-`EngineeringSecurityException` used to exit **5 = UnexpectedError** with a full inner-exception dump;
-it now exits **2 = EnvironmentError** and prints what to do. The exception arrives *wrapped* (the
-connect path runs through `Task`), so the classifier walks the chain including every
-`AggregateException` branch — matching only the top-level type finds nothing.
+**Also fixed on that branch, and it complements FI-61 rather than duplicating it.**
+`EngineeringSecurityException` was exiting **5 = UnexpectedError** with a full inner-exception dump —
+the most predictable consequence of editing this program, reported as an internal fault. It now exits
+**2 = EnvironmentError** and prints what to do. It arrives *wrapped* (the connect path runs through
+`Task`), so the classifier walks the chain including every `AggregateException` branch; matching only
+the top-level type finds nothing.
 
-**Related, same session:** `openness-cli` launches Portal as a **child process that inherits stdout**,
-so piping its output through anything that waits for the stream to close (`| Out-File`, `| Tee-Object`,
-`$(...)`) **hangs forever** even after the command itself finishes — the pipe stays open as long as
-the Portal child lives. Redirect to a file with `>` / `Out-File` on the *outer* invocation instead of
-piping the inner one.
+The two mechanisms cover different halves and **neither subsumes the other**: FI-61's pre-attach
+whitelist check cannot see a refusal that only materialises on connect, and the post-hoc message
+cannot fire when the attach hangs instead of throwing.
 
-### Unrelated but found at the same time: `Connect` attached to `GetProcesses()[0]` blindly
+### Never PIPE `openness-cli` output (2026-08-09)
 
-`Connect()` took `TiaPortal.GetProcesses()[0]` unconditionally, which is fine with one Portal and
-poor with five — it can attach to a wedged or busy instance even when a healthy one holding the
-target project is in the same list. `TiaPortalProcess.ProjectPath` is readable **without** calling
-`Attach()` (recorded in `openness-api-surface-v20.md` on 2026-07-14 as "a real simplification
-opportunity … noted here, not acted on yet"), so `Connect` now takes an optional project hint and
-prefers the process already holding it, falling back to `[0]` otherwise.
-
-**This was NOT the cause of the hang above and did not fix it** — the hang was the unapproved binary,
-and the fix was written while that was still the leading hypothesis. It is kept because it is
-correct on its own terms and costs one property read per process, but it must not be recorded as the
-remedy for this symptom. Pileup is still worth clearing separately: `openness-cli portal-status`
-classifies which instances are safe to close, and never closes anything itself.
-
-**One genuinely separate cause, also seen:** a cold Portal V20 launch on a loaded machine can exceed
-the **180 s default** connect timeout legitimately. That is slowness, not refusal — raise
-`--timeout-connect` before concluding anything is wrong.
+`openness-cli` launches Portal as a **child process that inherits stdout**, so anything that waits for
+the stream to close — `| Out-File`, `| Tee-Object`, `$(...)` — **hangs forever even after the command
+itself has finished**, because the pipe stays open as long as the Portal child lives. Redirect with
+`>` / `Out-File` on the *outer* invocation instead. Cost two harness hangs before it was spotted, and
+it presents as yet another "Portal is wedged".

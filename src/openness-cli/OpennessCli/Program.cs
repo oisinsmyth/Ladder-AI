@@ -83,6 +83,28 @@ internal static class Program
                 return ExitCodes.NotConfirmed;
             }
 
+            // FI-61: warn BEFORE the attach, because an unapproved binary is refused silently and
+            // the attach then burns the whole --timeout-connect with nothing on screen to explain
+            // it. Advisory only — never blocks (see OpennessWhitelist's class comment for why).
+            //
+            // Merged 2026-08-09: this arrived on master while this branch independently hit the same
+            // wall from the other side (an unapproved `library` build exiting 5 with a raw
+            // "Security error", then exiting 3 on a silent 15-minute timeout). The two halves are
+            // complementary and BOTH are kept — this one warns before the attach, and
+            // ExitCodes.DescribeSecurityRefusal explains it afterwards when the refusal is thrown
+            // rather than silent. Neither subsumes the other: the pre-check cannot see a refusal
+            // that only materialises on connect, and the post-hoc message cannot fire when the
+            // attach hangs instead of throwing.
+            var approval = OpennessWhitelist.CheckRunningExecutable();
+            var approvalWarning = OpennessWhitelist.DescribeIfNotApproved(
+                approval, System.Reflection.Assembly.GetEntryAssembly()?.Location ?? "(unknown)");
+            if (approvalWarning is not null)
+            {
+                Console.Error.WriteLine(approvalWarning);
+            }
+
+            // The project-preference argument is this branch's: it steers Connect toward a Portal
+            // process that already has this project open instead of attaching to GetProcesses()[0].
             gateway.Connect(TimeSpan.FromSeconds(timeoutConnectSeconds), ArgumentParser.ProjectIdentifier(parseResult));
 
             switch (parseResult)

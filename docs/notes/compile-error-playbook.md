@@ -150,3 +150,113 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 - **Cause:** modern .NET target — the DLL internally uses a .NET-Framework-only `Assembly.Load` overload.
 - **Fix:** target `net48` (builds fine on net8.0-windows; fails only at runtime).
 - **Source:** quirks ".NET target framework".
+
+## "The value 'T#0MS' cannot be set for the parameter of the type 'Time'" — on IMPORT, not compile
+**Confirmed live 2026-08-08 (converter FI-54).** The whole block import fails and nothing is
+created. The converter was emitting a duration literal as `LiteralConstant` carrying
+`ConstantType="Time"` whenever it appeared anywhere other than a TON's `PT`. TIA rejects that form
+outright.
+
+The accepted shape, confirmed against a real export (`simatic-ml/reference/TimerSample.xml`):
+`<Access Scope="TypedConstant">` with a bare `<ConstantValue>T#100MS</ConstantValue>` and **no
+`<ConstantType>` child at all**.
+
+Fixed in `SidecarSynthesizer` — a duration literal is now always a TypedConstant, keyed on the
+literal's own kind rather than on its position. If this reappears, check whether a new statement
+kind is passing a `constantTypeOverride` that reaches a `T#` literal.
+
+**Related limitation, deliberately not fixed:** the IR parser recognises only `T#` UPPER CASE as a
+duration literal. `t#5s`, `LT#`, `TIME#` and `LTIME#` parse as TAG REFERENCES and emit as a
+component of that name, which TIA then rejects as an undefined tag. Loud, not silent. Guarded by a
+test so widening the parser has to be a deliberate act.
+
+## Per-block compiles must be run to a FIXPOINT, not once through a list
+**Confirmed live 2026-08-08.** Compiling a changed set in dependency order in ONE pass reported
+45 errors on one FB and 2 on another; re-running the same commands immediately afterwards gave
+`ERRORS: 0` on both, with no file changed in between. The first pass compiles against dependencies
+that are themselves still flagged inconsistent.
+
+**Do not read a first-pass error count as a defect count.** Re-run until the set is stable, then
+run `sanity-check` and read its `INCONSISTENT:` line. Expect `sanity-check` to surface further
+knock-on blocks (callers of what you changed) that need their own pass — on this project a two-FB
+change pulled in five more blocks across two rounds.
+
+## A connect timeout is NOT usually the approval dialog — raise the timeout first
+**Confirmed live 2026-08-08.** `openness-cli`'s own message on a connect timeout says it is
+"almost always the first-connect approval dialog … check Portal, then re-run", and an agent
+correctly stopped work and wrote a claim board on the strength of it. It was wrong: the same
+command with `--timeout-connect 900` attached on the first attempt, to the same running Portal,
+with no dialog and nobody touching the machine.
+
+**Order to work through, cheapest first:** (1) re-run with `--timeout-connect 900`; (2)
+`portal-status` — if it shows an in-use process already holding YOUR project, the approval dialog
+is unlikely, because that binary has plainly been connected to before; (3) only then go looking for
+a dialog. The 180 s default is simply short for a large project on a busy machine.
+
+## "The data type UInt of the actual parameter does not match the data type Int"
+**Confirmed live twice on one day, 2026-08-08.** Two separate causes, and the second is the common one.
+
+**Cause 1 — converter FI-55, fixed.** A comparison's SrcType was chosen by ranking the tag's type
+against the literal's inferred type on one ladder, and the ladder listed only six types, returning
+0 for everything else. So `UInt`, `USInt`, `Byte`, `Word` and `SInt` all ranked BELOW `Int` and lost
+to their own literal. Fixed by precedence: a tag's declared type is a fact and a literal's is a
+guess, so the tag wins whenever one is present.
+
+**Cause 2 — CONVERTING WITHOUT `--project`, and this is the one that will keep happening.**
+A block converted with `converter to-xml <file>` and no `--project` cannot see any other DB, so a
+comparison against a member of one falls back to the literal's type. Measured:
+`DB_HmiCmd.Heartbeat <> 0` where Heartbeat is a `UInt` emits `SrcType=Int` blind and `SrcType=UInt`
+with `--project`.
+
+**ALWAYS CONVERT WITH `--project <ir-dir>`.** The converter now warns when it converts a block that
+references a DB it cannot see (FI-57), naming the roots. The warning is advisory and does not
+change the exit code.
+
+Why this bit twice: from inside the block it looks exactly like a converter type-inference bug,
+because the type genuinely is not knowable without the other DB in scope. Both agents concluded
+they had found one, and both were reasonable to.
+
+**A claim that was recorded here and is WRONG — corrected 2026-08-08, same day.** This entry
+briefly said "CONVERT cannot target a USInt". IT CAN. The failure that produced that claim
+(`"The data type USInt ... does not match the data type DInt of the formal parameter"`) was the
+CONVERTER emitting `DestType=DInt` because the SOURCE was a Real. With an `Int` source the
+converter emits `Int -> USInt` and TIA compiles it clean — verified by inspecting the emitted
+DestType before import, then by a live compile.
+
+Recorded rather than quietly deleted, because the mechanism of the mistake is the useful part: a
+compile error names the FORMAL parameter type, which is the converter's output, not the author's
+input. Reading it as a constraint on the target rather than on what the converter chose for the
+source sends you looking in the wrong place. **When a type error names a type you did not write,
+check what the converter emitted before concluding TIA forbids something.**
+
+## A GREEN GATE DOES NOT PROVE THE FILE YOU MEANT WAS IMPORTED
+**Confirmed live 2026-08-08, and it is the most dangerous thing in this file.**
+
+An agent imported a **stale `.xml`** for two DBs — generated in an earlier unit, before the edits it
+had just made to the `.ir`, and not included in that pass's `to-xml` batch. The import silently put
+the OLD text back into TIA. **Every gate still read green**, because the difference was comment
+text and a comment is not a compile error. It was caught only by a residual `grep` over `ir/*.xml`
+at the very end of the run.
+
+**Rule: `to-xml` the file you are about to import, in the same pass, every time.** Not "at some
+point earlier". The `.xml` on disk is a build artefact of unknown age, and nothing in the toolchain
+tells you which `.ir` it came from.
+
+What the compile gate does and does not cover: it proves the imported logic compiles. It says
+NOTHING about whether the imported file was the one you edited, and nothing about comments, member
+comments, block headers or bit-map documentation — all of which this project treats as
+load-bearing. **`sanity-check` green plus a stale import is a real and silent combination.**
+
+Cheap confirmations, in order: re-convert immediately before importing; after importing, grep the
+`.xml` you sent for a string you know you just changed; and where it matters, re-export from TIA and
+diff against the disk copy — which is what FI-56 and FI-58 exist to make possible.
+
+## "member '<X>' has a nested/bare member '<Y>' with unexpected attribute(s) [Version]"
+**Converter FI-58, fixed 2026-08-08.** A nested member whose type is a SYSTEM STRUCTURED TYPE
+(`DTL` is the one this corpus hit) carries a `Version` attribute in TIA's own export, and the
+bare-member parser refused it — so `to-ir` hard-errored on any DB with such a member nested inside
+a structure, and two DBs could not be read back at all.
+
+Same family as FI-56: TIA stating the version of a type it owns, on a member the IR names BY TYPE.
+`ParseMember` already accepted and discarded `Version` on the full-member shape, so the two shapes
+now agree rather than one growing a special tolerance.

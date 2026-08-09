@@ -26,7 +26,20 @@ internal static class DbInterfaceMembers
     // Confirmed real, 2026-07-11: both a structured member's own nested members (a DB's) and an
     // FB's Temp-section members share this same minimal shape — only Name/Datatype attributes
     // and an optional StartValue child, no Remanence/Accessibility/AttributeList/further nesting.
-    private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype" };
+    //
+    // FI-58 (2026-08-08) adds `Version`. A nested member whose type is a SYSTEM STRUCTURED TYPE —
+    // `DTL` is the one this corpus hit — carries a `Version` attribute in TIA's own export, and
+    // refusing it hard-errored `to-ir` on any DB with such a member nested inside a structure:
+    //     "member 'Silo' has a nested/bare member 'LastCleaned' with unexpected attribute(s)
+    //      [Version]"
+    // Two DBs could not be read back at all, so a re-export could not be verified and the agent
+    // had to extract member sets from the raw XML by hand instead.
+    //
+    // Same family as FI-56 and the same reasoning: this is TIA stating the version of a type it
+    // owns, on a member the IR names BY TYPE. It carries nothing the IR needs and nothing that can
+    // be lost by ignoring it — `ParseMember` already accepts and discards `Version` on the
+    // full-member shape for exactly this reason. Accepting it here makes the two shapes agree.
+    private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype", "Version" };
 
     /// <summary>
     /// Parses a full member (Static-section shape): Name/Datatype/Remanence/Version, BooleanAttributes, and either a StartValue or nested structured content.
@@ -214,10 +227,18 @@ internal static class DbInterfaceMembers
         return nestedMembers.Select(m => ParseBareMember(m, context, ownerMemberName)).ToList();
     }
 
+    // FI-56. A datatype that NAMES a type — `"UDT_X"`, or `Array[1..8] of "UDT_X"` — as opposed to
+    // an anonymous `Struct`. The quotes are TIA's own marker for a named-type reference, which is
+    // what makes this decidable without a type table: a member whose type is named elsewhere has its
+    // definition elsewhere, so an inline expansion of it is redundant. `Struct` has no name and no
+    // definition but the inline one, so its expansion is load-bearing and is still refused.
+    private static bool IsNamedTypeReference(string datatype) => datatype.Contains('"');
+
     /// <summary>Parses the minimal Name/Datatype[/StartValue]-only member shape — a structured member's own nested members, and an FB's Temp-section members.</summary>
     public static DbMember ParseBareMember(XElement member, string context, string ownerMemberName)
     {
         var bareName = (string?)member.Attribute("Name") ?? "<unnamed>";
+        var datatypeAttribute = (string?)member.Attribute("Datatype") ?? string.Empty;
 
         var unexpectedAttributes = member.Attributes()
             .Select(a => a.Name.LocalName)
@@ -230,9 +251,30 @@ internal static class DbInterfaceMembers
                 $"[{string.Join(", ", unexpectedAttributes)}] — only Name/Datatype/StartValue have been observed on this shape.");
         }
 
+        // FI-56 (2026-08-08). TIA EXPANDS A MEMBER WHOSE TYPE IS A NAMED UDT — including an ARRAY
+        // OF ONE — into a nested <Sections> on re-export, and this refused it outright.
+        //
+        // The IR names such a member BY TYPE REFERENCE (`Claim : Array[1..8] of "UDT_ResourceClaim"`),
+        // so the expansion is TIA rendering a type we already name and carries nothing the IR needs.
+        // Collapsing it back to the reference is the faithful read; rejecting it made the whole
+        // re-export unreadable.
+        //
+        // What it cost before the fix: `to-ir` hard-errored on any block or DB carrying an
+        // array-of-UDT interface member, so a re-export could not be verified at all and
+        // `drift-check` reported DRIFTED for files that were themselves the to-ir output of the very
+        // exports it was comparing them against. Two separate agents hit it and had to fall back to
+        // grepping raw XML to prove a round trip.
+        //
+        // Same family as the multi-instance expansion handled above, and the same reasoning: an
+        // expansion of a NAMED type is redundant. The distinction that matters is `Struct` — an
+        // ANONYMOUS structured member's <Sections> carries its only definition and must still be
+        // refused here, because collapsing it would silently discard real members.
+        var isNamedTypeReference = IsNamedTypeReference(datatypeAttribute);
+
         var unexpectedChildren = member.Elements()
             .Select(e => e.Name.LocalName)
             .Where(n => n != "StartValue")
+            .Where(n => !(n == "Sections" && isNamedTypeReference))
             .ToList();
         if (unexpectedChildren.Count > 0)
         {

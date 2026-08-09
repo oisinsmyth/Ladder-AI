@@ -39,7 +39,7 @@ openness-cli list <project> [--json] [--tia-install <dir>] [--timeout-connect <s
 
 `<project>` is either the **name** of a project already open in the attached TIA Portal instance, or a **path** to a `.apNN` file to open fresh — the already-open case is checked first, so a project you already have open in Portal is never re-opened.
 
-Attaches to a running TIA Portal instance if one exists, otherwise launches one. If attach/launch doesn't respond within `--timeout-connect` (default 180s), this is almost always the first-connect approval dialog waiting inside TIA Portal — the CLI says so and exits non-zero rather than retrying. `--timeout-open` (default 1800s) covers the project-open step, which can legitimately take minutes on a large project.
+Attaches to a running TIA Portal instance if one exists, otherwise launches one. If attach/launch doesn't respond within `--timeout-connect` (default 180s), there are two known causes and the CLI no longer guesses between them: **(1) this executable is not approved for Openness** — TIA whitelists callers by `(Path, FileHash)`, so *any* rebuild or a different build directory revokes approval, and the refusal is completely silent (no dialog, no exception, no log). Since FI-61 the CLI hashes itself against the whitelist before attaching and warns when it can detect this. **(2)** the first-connect approval dialog genuinely waiting inside Portal. Note `portal-status` **cannot** rule (2) in or out — it never attaches. See `docs/notes/openness-quirks.md`, *"A rebuilt binary is refused SILENTLY"*. `--timeout-open` (default 1800s) covers the project-open step, which can legitimately take minutes on a large project.
 
 **Safe to run concurrently with a human's own separate Portal session, on a different project** (fixed 2026-07-13, live-verified against `SampleProject` + `JOB9002` open at once). If the Portal process this CLI attaches to already has an *unrelated* project open, it never touches it — it launches its own dedicated Portal instance instead and opens the target project there. Two `openness-cli` invocations (or a human + `openness-cli`) working on **different** projects at the same time is fully supported; two Openness sessions on the **same** project concurrently is not (a genuine single-writer-file constraint on TIA's side, not a policy choice here). One residual, non-fixable caveat: the very first attach to an already-running process can still trigger the first-connect approval dialog above, even if that process turns out to belong to someone else's unrelated session — a one-time visual interruption only, no data risk (attaching alone never opens/closes/saves anything).
 
@@ -101,11 +101,21 @@ this directly and fast:
 2. Enumerates every block and reads its `IsConsistent` flag — metadata-only, no export attempt,
    so it's cheap and doesn't risk touching anything (same safety handling as `list`: skipped
    for safety-classified blocks).
-3. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
+3. Enumerates every **PLC data type** and reads its `IsConsistent` flag too (**FI-62**, 2026-08-09).
+   A UDT is not a `PlcBlock`, so step 2 never saw one: measured live, `sanity-check` reported
+   `OVERALL: HEALTHY`, `BLOCKS: 52  INCONSISTENT: 0` and a device compile of
+   `Success (errors=0, warnings=0)`, and TIA then refused `export --type UDT_Drum` as inconsistent.
+   The device compile stayed green because **nothing in that corpus instantiated the type** — an
+   uninstantiated UDT has nothing to make a compile fail. No safety handling is needed here: a
+   `PlcType` carries no `ProgrammingLanguage` at all, so there is nothing for the F-prefix
+   classifier to check. The `TYPES:` line is printed **always**, including at zero, so a reader can
+   see that types were actually examined rather than silently absent.
+4. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
    disambiguate with `--device` if there's more than one PLC; `sanity-check` checks them all).
 
-Exit code 0 only if every block is consistent and every device compiles clean; non-zero
-otherwise, with the inconsistent blocks and per-device compile results listed. A device
+Exit code 0 only if every block is consistent, **every PLC data type is consistent**, and every
+device compiles clean; non-zero otherwise, with the inconsistent blocks, the inconsistent types
+(each with the `compile --type <name>` line that clears it) and per-device compile results listed. A device
 compiling clean does **not** imply its blocks are all consistent — confirmed for real,
 2026-07-10: `docs/notes/openness-quirks.md` has a live example where every device compiled
 `Success` while 15 blocks stayed flagged inconsistent. Run this any time something in the
@@ -408,7 +418,7 @@ shell should branch on these rather than on stderr text.
 | 0 | `Success` | The command did what it was asked. For `compile`, also means `State == Success`; for `sanity-check`, every block consistent and every device compiling clean. `portal-status` always exits 0 — it is informational, never a gate |
 | 1 | `UsageError` | Argument parsing failed before anything was touched: unknown subcommand, missing/duplicated flag value, an unexpected positional, mutually-exclusive flags together |
 | 2 | `EnvironmentError` | The TIA install couldn't be resolved (`TiaInstallNotFoundException`) — checked up front, before any Portal contact, so this never means a half-done operation. Fix `--tia-install` / `TIA_OPENNESS_PATH` |
-| 3 | `ConnectTimeout` | Attach/launch didn't respond within `--timeout-connect` (default 180s). Almost always the first-connect approval dialog waiting inside TIA Portal — check for it rather than retrying |
+| 3 | `ConnectTimeout` | Attach/launch didn't respond within `--timeout-connect` (default 180s). **First suspect the binary, not Portal**: an unapproved (rebuilt, or run from a different directory) executable is refused *silently* — the pre-attach whitelist check warns when it detects this. Otherwise the first-connect approval dialog. Confirm by running a known-approved build against the same project; it connects in under a minute |
 | 4 | `ProjectOpenTimeout` | The project-open step exceeded `--timeout-open` (default 1800s). A large project legitimately takes minutes; raise the timeout before assuming a hang |
 | 5 | `UnexpectedError` | Catch-all for any exception not classified below. Prints the full inner-exception chain. Treat as "a bug or an unmodelled Openness failure", not as user error — but see the caveat below |
 | 6 | `SafetyRefused` | `SafetyContentRefusedException` — the command touched safety-classified content and was refused (hard rule 2). Not retryable, by design |

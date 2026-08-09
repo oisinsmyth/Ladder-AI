@@ -1245,3 +1245,65 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **PROGRAMME RUN AND CLOSED, 2026-08-08/09.** Six phases (`docs/notes/hmi-capability-probe-plan.md`), raw transcripts in `docs/evidence/hmi-capability-probes.md`. The Unified phases named above are **all done**; only phase 4 (classic) remains, and it is externally gated as cost 6 says. Live coverage went ~2% → ~3% of members, but the useful movement is that **item types and dynamization kinds are now exhaustively attempted**, so their refusal sets are facts rather than gaps. The bet in Merits paid out again, and again mostly in negatives: **deletion orphans silently**, **alarm text cannot be written at all**, ~~**3 of 6 dynamization kinds refuse** (including `Flashing`)~~ **— RETRACTED by P7, see below —** and **`GetCreationInfos` overstates creatability by 21 of 56**. **P7 (2026-08-09, unplanned, prompted by the owner asking about the refusals) showed the dynamization finding was the PROBE's fault**: kinds are gated on the target property's type, and P3 had bound all three to a Boolean. `Flashing` creates on colour properties, `ResourceList` on text properties — **5 of 6 kinds create**. The bet paid out a third way there: walking corrected the walk. The methodological finding is the durable one — **a refusal is evidence about that call, never about the capability**, because the message never says why; this project has now generalised from one refusal and been wrong twice. Cost 1 is closed (deletion exercised across nine kinds, all cleaned up). Cost 2 held exactly as written — a failed create persisted without a `Save()`. The programme also exposed three defects in the probe *tooling*, all one class: **it reported the intent rather than the outcome** (`--in` silently discarded while claiming success; refusals counted as changes; partial refusal exiting 0). All fixed and guarded.
 
 **Verdict / revisit trigger:** Open, but **its Unified half is spent** — the remaining Unified questions are narrow follow-ups (why `set_Text` refuses; whether `RaisedStateTagBitNumber` is contextual; whether the three refused dynamization kinds have another route), not a programme. **The decision now sits with ADR-0007, which has the measurement it was waiting for.** Revisit if ADR-0007 is rejected (the write commands then need a disposition) or if a classic job arrives and unblocks phase 4.
+### FI-61 — a rebuilt binary is refused by Openness silently, and every message we had blamed the wrong thing
+
+- **The bug is not in our code; the bug is that our code could not say so.** TIA whitelists Openness
+  callers by `(Path, FileHash)` in `HKLM\SOFTWARE\Siemens\Automation\Openness\<version>\Whitelist\`.
+  Rebuild the executable and no entry matches its hash, so Openness refuses it and **never
+  responds** — `Attach()` blocks until the caller's own timeout expires, with **no dialog, no
+  exception and no log entry**. It is externally indistinguishable from a wedged Portal.
+- **What it cost.** A `dotnet test` on `openness-cli.sln`, run to check something unrelated, rebuilt
+  the binary while an agent was mid-run. Every attach after that hung for its full timeout — 3 min,
+  then 15, then more. About an hour went into "Portal is wedged, a human must clear a dialog".
+- **Two pieces of our own tooling actively pointed away from the cause.**
+  `ConnectTimeoutException`'s text asserted the approval dialog as the usual cause, and `portal-status`
+  was taken as evidence that no dialog existed — which it can never be, since it is the one
+  subcommand that deliberately never attaches. **A tool that cannot observe X is not evidence about
+  X**, and it read as evidence because its output was clean and confident.
+- **How it was settled.** `EnumWindows` across both Portal processes showed every main window visible
+  *and enabled*; that is suggestive but not conclusive for a WPF app, where a modal can be an
+  in-window overlay with no HWND. So each window was captured with `PrintWindow` and **looked at**.
+  Both idle, no dialog. Then the decisive comparison: a known-approved build listed the same project
+  in **57 s** while the rebuilt one hung. One command separates the two hypotheses.
+- **Built.** `OpennessWhitelist` hashes the running executable and checks it against every Openness
+  version key before attaching, warning with the cause and the count of prior approvals. Verified
+  live: *"84 earlier build(s) of this exact path are approved, but none of them matches this file's
+  current hash."* `ConnectTimeoutException` now lists both causes and no longer claims to know which.
+- **Deliberately advisory, never blocking.** A false negative — a whitelist layout it does not
+  understand, a registry view it cannot read — would refuse every Portal command on a machine where
+  everything works. That is strictly worse than the hang it prevents, so it warns and proceeds.
+  Re-approving a build means writing to an `HKLM` security control, which is the machine owner's
+  call and deliberately out of scope for the tooling.
+- **Same family as FI-44 and FI-52, and the sharpest instance yet.** Those were checks that reported
+  a clean result over something they had not examined. This one is a *diagnostic* that reported a
+  clean result about something it structurally could not see, and then that clean result was quoted
+  back as proof. The lesson worth keeping is narrow and general: **when a check clears a hypothesis,
+  confirm the check can observe the thing it is clearing.**
+- **Verdict.** Built and verified live. 148 openness-cli tests (+8).
+
+### FI-62 — `sanity-check` enumerated blocks only, so a UDT could be inconsistent behind a green gate
+
+- **Hard rule 4 names `sanity-check` as THE gate, and it had a blind spot.** It walked `PlcBlock`
+  and nothing else. A `PlcType` is not a block, so a freshly-imported UDT was never examined.
+- **Measured, not theorised.** On a live job it reported `OVERALL: HEALTHY`, `BLOCKS: 52`,
+  `INCONSISTENT: 0`, device compile `Success (errors=0, warnings=0)`, exit 0 — and TIA then refused
+  `export --type UDT_Drum` with *"Inconsistent blocks and PLC data types (UDT) cannot be exported."*
+  The agent checked the source rather than guessing: `ExportType` has no consistency guard of its
+  own, so the refusal came from TIA.
+- **Why the compile did not catch it either.** Nothing in that corpus instantiated the type. An
+  uninstantiated UDT has nothing to make a device compile fail, so both halves of the gate were
+  green simultaneously while the type was inconsistent.
+- **Built.** `RunSanityCheck` now walks `PlcTypeGroup` alongside blocks, reports a `TYPES:` line
+  **always** (including at zero, so a reader can see types were examined rather than silently
+  absent), lists any inconsistent type with the `compile --type <name>` line that clears it, and
+  counts types toward `IsHealthy`. The existing type walk was reused with a null-means-all filter
+  rather than growing a parallel "enumerate all" copy that could drift from the lookup path.
+- **Same family as FI-52 and FI-44, and the third instance in four days:** a check reporting a clean
+  result over something it never examined. The recurring shape is worth naming — *a gate's scope is
+  a claim, and an unstated scope reads as "everything".* `BLOCKS: 52` was on screen the whole time;
+  nobody read it as "and zero types".
+- **Sequencing note.** Landing this needs a rebuild, and per FI-61 a rebuild revokes the binary's
+  TIA Openness approval. The source change is committed; the rebuild is deliberately left for the
+  machine owner to approve rather than done mid-delivery.
+- **Verdict.** Built, 152 openness-cli tests (+4). Not yet live-verified — it cannot be, until the
+  rebuilt binary is approved.

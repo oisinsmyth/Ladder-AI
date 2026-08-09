@@ -14,11 +14,27 @@ public static class PreflightRunner
     public static PreflightReport Run(IReadOnlyList<string> paths, string projectDir)
     {
         var index = ProjectIndex.Build(projectDir, paths);
-        var files = paths.Select(path => PreflightFile(path, index)).ToList();
+
+        // FI-60 (2026-08-08). Preflight's convert pass used to synthesize with NO callee registry
+        // and NO tag types, so a block containing a WIRED CALL always reported
+        //     "cannot synthesize the wired CALL to '<X>' - the callee's interface is not
+        //      available ... or pass --project <ir-dir>"
+        // EVEN ON A RUN WHERE --project WAS PASSED. The advice in the message was the one thing
+        // that could not help, because preflight already had the project and simply never used it.
+        //
+        // It is a false positive, not a missed defect — `to-xml --project` converted the same files
+        // cleanly and the import and compile both passed — which makes it the worse kind: it fires
+        // for anyone who adds a parameterised FC call, on a check whose whole value is that a
+        // finding means something.
+        var callees = Program.BuildCalleeRegistry(paths, projectDir);
+        var tagTypes = Program.BuildTagTypeRegistry(paths, projectDir);
+
+        var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes)).ToList();
         return new PreflightReport(files, index.Warnings);
     }
 
-    private static FilePreflight PreflightFile(string path, ProjectIndex index)
+    private static FilePreflight PreflightFile(
+        string path, ProjectIndex index, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
     {
         var findings = new List<PreflightFinding>();
         string? name = null;
@@ -51,7 +67,7 @@ public static class PreflightRunner
             }
             else
             {
-                name = PreflightBlock(text, index, findings);
+                name = PreflightBlock(text, index, findings, callees, tagTypes);
             }
         }
         catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
@@ -64,7 +80,9 @@ public static class PreflightRunner
         return new FilePreflight(path, name, findings);
     }
 
-    private static string PreflightBlock(string text, ProjectIndex index, List<PreflightFinding> findings)
+    private static string PreflightBlock(
+        string text, ProjectIndex index, List<PreflightFinding> findings,
+        CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
     {
         IrBlock block;
         IReadOnlyList<NetworkSidecar>? sidecars;
@@ -78,7 +96,7 @@ public static class PreflightRunner
             block = IrParser.ParseBlockWithoutSidecar(text);
             try
             {
-                sidecars = SidecarSynthesizer.SynthesizeBlock(block);
+                sidecars = SidecarSynthesizer.SynthesizeBlock(block, callees, tagTypes);
             }
             catch (UnsupportedSynthesisConstructException ex)
             {

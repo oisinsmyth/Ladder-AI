@@ -3221,6 +3221,16 @@ public sealed class OpennessGateway : IOpennessGateway
             .Select(b => new BlockConsistencyIssue(b.Name, b.Path, b.Language))
             .ToList();
 
+        // FI-62: PLC data types, walked separately because a UDT is not a PlcBlock and was
+        // therefore invisible to the block enumeration above. No safety refusal is needed — a
+        // PlcType carries no ProgrammingLanguage at all, so there is nothing for the F-prefix
+        // classifier to check (same reasoning as ExportType's own doc comment).
+        var types = FindMatchingTypes(_project, typeName: null).ToList();
+        var inconsistentTypes = types
+            .Where(t => !t.Type.IsConsistent)
+            .Select(t => new TypeConsistencyIssue(t.Type.Name, t.Path))
+            .ToList();
+
         var deviceCompiles = new List<DeviceCompileSummary>();
         foreach (var (item, path) in FindPlcDeviceItems(_project))
         {
@@ -3232,7 +3242,8 @@ public sealed class OpennessGateway : IOpennessGateway
         // save once at the end so that side effect doesn't silently evaporate either.
         SaveProject();
 
-        return new SanityCheckResult(blocks.Count, inconsistentBlocks, deviceCompiles);
+        return new SanityCheckResult(
+            blocks.Count, inconsistentBlocks, deviceCompiles, types.Count, inconsistentTypes);
     }
 
     private static ModelCompileState MapCompileState(CompilerResultState state) => state switch
@@ -3303,7 +3314,7 @@ public sealed class OpennessGateway : IOpennessGateway
     // PlcSoftware.TypeGroup/PlcTypeGroup.Types/.Groups instead of .BlockGroup/PlcBlockGroup.
     // Blocks/.Groups — confirmed real, 2026-07-14 (reflecting on the installed DLL): the same
     // recursive group shape, just for PLC data types (UDTs) instead of blocks.
-    private static IEnumerable<(PlcType Type, string Path)> FindMatchingTypes(Project project, string typeName)
+    private static IEnumerable<(PlcType Type, string Path)> FindMatchingTypes(Project project, string? typeName)
     {
         foreach (Device device in project.Devices)
         {
@@ -3317,7 +3328,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
-    private static IEnumerable<(PlcType Type, string Path)> FindTypesInDeviceItem(DeviceItem item, string parentPath, string typeName)
+    private static IEnumerable<(PlcType Type, string Path)> FindTypesInDeviceItem(DeviceItem item, string parentPath, string? typeName)
     {
         var path = $"{parentPath}/{item.Name}";
 
@@ -3339,11 +3350,14 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
-    private static IEnumerable<(PlcType Type, string Path)> FindTypesInGroup(PlcTypeGroup group, string groupPath, string typeName)
+    // typeName == null means EVERY type, which is what sanity-check needs (FI-62). Threading a
+    // nullable filter through the existing walk keeps one traversal rather than growing a parallel
+    // "enumerate all" copy that could drift from the lookup path.
+    private static IEnumerable<(PlcType Type, string Path)> FindTypesInGroup(PlcTypeGroup group, string groupPath, string? typeName)
     {
         foreach (PlcType type in group.Types)
         {
-            if (type.Name == typeName)
+            if (typeName is null || type.Name == typeName)
             {
                 yield return (type, groupPath);
             }
