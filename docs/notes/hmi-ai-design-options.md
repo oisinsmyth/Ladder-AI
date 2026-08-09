@@ -1639,6 +1639,23 @@ does not inherit it.
 
 ### 14b. Take the division of labour the API is forcing on you
 
+> ⚠️ **Corrected 2026-08-09 — the premise below is weaker than stated, and the path is stronger.**
+> *"Faceplate types cannot be authored"* was inferred from `GetSupportedExportFormats()` returning
+> empty. That inference is **unsound**: `CreateFromDocuments` takes no format argument, and
+> `LibraryTypeVersion.Export(FileInfo, ExportOptions)` was never called. **Authoring is reopened, not
+> refuted** (`hmi-faceplate-gap-probe.md`). Two harder facts landed alongside it, one helping and one
+> hurting:
+> - **Helping** — `HmiFaceplateInterface` derives from `UIBase`, so a faceplate parameter is itself a
+>   dynamization host. Wiring one uses the mechanism already proven live on ordinary items.
+> - **Hurting** — `HmiSoftware` implements none of `IUpdateProjectScope`, `IInstanceSearchScope` or
+>   `ILibraryTypeInstantiationTarget`. So **you cannot push a type-version update out to its
+>   instances, and cannot even ask where a type is used**, through Openness. "Author once, stamp
+>   hundreds" survives; *"and maintain them"* is UI-only. Any plan resting on this spine must budget
+>   re-stamping, or accept that maintenance leaves the automated path.
+>
+> Master copies, the obvious fallback, are **closed for Unified**: no `HmiUnified.*` type implements
+> `IMasterCopySource` or `IMasterCopyTarget`.
+
 **Faceplate types cannot be authored — measured, not assumed** (`openness-hmi-faceplate-library.md`).
 Screens are flat, one level deep, absolutely positioned. Read together, those two facts look fatal to
 reuse, and ADR-0007 says so.
@@ -1715,3 +1732,136 @@ Both are ADR-0007's crux, and this path narrows them rather than removing them. 
 answer to the ADR is "no", Phase 0 and Phase 2 are still worth doing on their own merits** — they are
 read-only, they need no scope grant, and they catch defect classes nothing else on the machine
 catches.
+
+---
+
+## 15. The web-tooling route (added 2026-08-09, from external research)
+
+Source: `docs/notes/hmi-web-tooling-research.md` (~1,480 lines, sourced and cited). Everything here is
+**[EXTERNAL]** — vendor documentation, published products, academic results — unless it repeats
+something this project measured live. **None of it has been run on this machine.** Read it as a
+corrected map, not as capability.
+
+### 15a. The wall §14a was built around is lower than it was measured to be
+
+§14a's rule stands: *build the thing that makes output reviewable before the thing that produces
+output.* What was wrong was the cost estimate. This programme established, five independent ways,
+that **WinCC Unified has no screen export**, and then drew the consequence *"therefore no diff, no
+hash, no golden round-trip."*
+
+That consequence does not follow. There is no export **function**; there is nothing stopping a
+**serialiser** built on the property walk `openness-cli hmi --screen` already performs. And this is
+not a hopeful argument — **two shipped products do exactly that**: Siemens' own Openness-based
+exporter (SIOS 109792619, covering simple *and* complex properties, dynamizations, events and fonts,
+with a command-driven "export all configured HMI screens"), and a commercial JSON exporter for
+V15–V21 claiming full preservation of properties, text and dynamizations.
+
+**It is a format wall, not an inspection wall, and other people have walked around it twice.** That
+makes the serialiser the highest-value item on this entire menu: diff, content hash, golden round-trip
+and version control all sit behind it, and it needs no new Openness capability — only stable ordering
+and a canonical form over a read this tooling already performs.
+
+### 15b. Custom Web Controls are where the web toolchain actually lands
+
+The strongest external finding. A **Custom Web Control** is `manifest.json` + `assets/` + `control/`
+(HTML/JS/CSS plus Siemens' `webcc.min.js`), zipped as `{GUID}.zip` and installed by **file copy** into
+the project's `UserFiles\CustomControls\`. Documented for V20 and V21 with a Siemens system manual and
+a V20-specific application example.
+
+Three properties make it decisive, and each is the exact inverse of the screen surface:
+
+1. **It is plain files.** It diffs, it version-controls, it round-trips. The no-export problem does
+   not exist there.
+2. **Siemens states it "can be displayed as an independent Web page in any browser"** — so the whole
+   generate → render → inspect → fix loop runs **outside TIA Portal**, in milliseconds. That is the
+   only way any iterative method survives Openness's multi-minute, non-transactional write cycle.
+3. **Inside its rectangle there is a real layout engine.** Unified's flat, absolutely-positioned,
+   one-level-deep constraint stops at the control boundary.
+
+The architectural consequence: a Unified screen becomes a **thin placement surface** for a few CWC
+rectangles plus native controls, instead of a canvas of two hundred hand-placed primitives.
+
+Costs are real and must not be glossed: a CWC does not travel with a project copy, library storage is
+unverified, and on Unified Comfort Panels there is **no `fetch`/`XHR`, no external links and no
+debugger**. Whether an *instance* can be placed via Openness is **not established** — one
+`hmi --schema` probe settles it.
+
+Related, and cheaper for symbol-level work: **Dynamic SVG** is also file-based and diffable, and
+unlike a CWC it *can* live in a library. Worth investigating before committing to CWCs everywhere.
+
+### 15c. The correction that matters most — pixels must not be the gate
+
+§14, and the discussion that produced it, treated screenshot diffing as "the closest thing to hard
+rule 4 the HMI side can have." **That is wrong, and wrong in this project's own signature failure
+mode.** With no independent ground truth, an approved screenshot baseline is generated from the same
+source as the artifact it checks — the **correlated check** that
+`docs/evidence/PlantAutoControl-bench-autopsy.md` exists to prevent. It fails precisely when the generator
+is confidently mistaken, which is the case that matters.
+
+The layering that follows:
+
+- **The gate is render-free and geometric** — a comparator of *intended* item tuples against
+  *read-back* item tuples, plus arithmetic over ~200 boxes (overlap, containment, alignment, reading
+  order, minimum sizes). Deterministic, explainable, no thresholds, no baselines, no vision model.
+  This is `converter diff` and `converter review`, for screens.
+- **Pixels are a tripwire**, never an oracle.
+- **A vision model is advisory only** — measured at 66% expert agreement against an 84.8% human
+  baseline.
+
+A genuinely *independent* second oracle may exist: the runtime is browser-delivered (HTML5/SVG/JS) and
+Siemens documents a screen debugger on the standard CDP port, so the live DOM's geometry could be read
+back independently of Openness. That is the one route to breaking the correlation — gated on whether
+the runtime DOM carries item identity, which a single DevTools session answers.
+
+### 15d. The design rules are not optional and will not emerge
+
+An LLM steeped in web UI will produce a screen that reviews well and operates badly. The collisions
+are specific and citable: grey backgrounds rather than dark mode; colour reserved for **abnormal**
+state only — **green-for-running is explicitly "an improper use of color"**; no gradients, 3-D or
+photorealism; **no animation except alarm flashing**; analog indicators preferred over bare numbers;
+a four-level hierarchy whose top level must *not* look like the plant.
+
+Sizing is quantitative and wrong by default: a 2 m viewing distance implies ~9.3 mm minimum character
+height ≈ **44 px on an MTP1900**, roughly **4× larger** than the 10–11 pt vendor style guides specify.
+WCAG's 4.5:1 is derived for self-selected reading distance and does not transfer unexamined.
+
+Two traps worth naming. **Siemens argues both sides** — its Template Suite commits to flat design with
+no 3-D effects, while its own Unified training material teaches binding a tag to an animated flame,
+colouring pipes by contents, and rotating a fan. And the top-ranking public "ISA-101 palette"
+republishes **Google Material Design hex values** verbatim. Neither an LLM's priors nor a plain web
+search lands on the right answer.
+
+The architecture for fixing that already exists in this repo: written-down, cited rules plus a
+mechanical checker — `docs/06-lad-conventions.md` and `converter review`. The HMI side needs the same,
+storing thresholds in **millimetres** and deriving pixels per panel.
+
+### 15e. What this does to §14's phases
+
+- **Phase 1 changes shape.** It was "serialiser + renderer". It becomes **serialiser + comparator +
+  geometric linter**, and the renderer drops out of the critical path entirely — rendering is for
+  humans, the gate is arithmetic.
+- **A new Phase 0 item:** decide CWC-first versus native primitives, because that determines whether
+  the layout problem is ours at all. Two cheap probes settle it — an `hmi --schema` check for a
+  custom-control creatable type, and whether a CWC instance can be placed via Openness.
+- **§14b's spine is unchanged in direction but now carries a measured maintenance cost** — see the
+  correction box in §14b.
+- **Buy-before-build moves earlier.** Siemens' free Excel exporter and the free tier of the commercial
+  JSON exporter should be **tested for round-trip fidelity before item 1 is written from scratch**. If
+  either holds up, the highest-value build becomes an integration instead.
+
+### 15f. What is rejected, and the honest limits
+
+Essentially the whole design-to-code industry is the **wrong direction**: those tools exist to convert
+flat-absolute layouts *into* nested-responsive code, and this target needs the inverse. Cloud visual-
+testing SaaS is rejected before any technical argument — uploading deployed plant screens collides
+with `docs/13-data-boundary.md`. Siemens' own **iX design system** is rejected *as an authority*: it is
+MIT, genuinely Siemens, and a design system for industrial **web apps** — accent colours, gradients,
+dark mode, no ISA-101 claim — which amounts to a Siemens badge on exactly the vocabulary to steer away
+from. And 🔴 **`toHaveScreenshot` does not exist in Playwright .NET or Python**; only the Node runner
+has it.
+
+**Limits of this section.** None of it has been run here. The CWC route rests on vendor documentation,
+not on a control this project built and installed. Five Siemens PDFs remain unread behind an anti-bot
+wall — retrieving them by hand is the highest-yield hour available. The fidelity claims of both shipped
+serialisers are **vendor marketing until tested**. Nothing in §15 should be promoted from [EXTERNAL] to
+measured without a probe of its own.

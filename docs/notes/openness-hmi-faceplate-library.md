@@ -1,5 +1,27 @@
 # Faceplates are LIBRARY types — and the library has the export/import surface the HMI device lacks
 
+> ## ⚠️ THE VERDICT BELOW IS OVERSTATED — REOPENED THE SAME DAY (2026-08-09)
+>
+> The two *measurements* below stand: a Unified faceplate is a plain `LibraryType`, and
+> `GetSupportedExportFormats()` really does return empty for every one. **The inference drawn from
+> them does not.** Consequence 1 reads *"no export format ⇒ no `CreateFromDocuments` route"* — but
+> **`CreateFromDocuments` takes no format argument**, so the two calls share no parameter and the
+> first cannot constrain the second. And `GetSupportedExportFormats()` is declared on `LibraryType`
+> only: **`LibraryTypeVersion.Export(FileInfo, ExportOptions)` is a second, format-free export that
+> was never called.**
+>
+> The supporting clause is weak the same way: *"there is no `Create` on any faceplate composition
+> either"* is true — and now known to be true of **every** library type in the API, PLC included, so
+> it is not evidence about faceplates. `CreateFromDocuments` is the only constructor of a library type
+> anywhere.
+>
+> **Faceplate authoring is UNTESTED, not refuted.** This is the third time this project has read a
+> single negative result as a capability limit — the standing rule (*vary the target; pair every
+> negative with a negative control*) was written after the first two and did not prevent the third.
+> Details and the probe list: `hmi-faceplate-gap-probe.md`.
+>
+> Left standing below, unedited, because the mistake is the lesson.
+
 > # VERDICT: TESTED LIVE, HYPOTHESIS FALSE (2026-08-09) [LIVE]
 >
 > `openness-cli library` was built and run against the reference project. **The load-bearing

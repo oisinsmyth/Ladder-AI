@@ -69,13 +69,15 @@ against 6). Gate on `State`; count from the message tree.
 | **Alarm text cannot be written** — `MultilingualTextItem.set_Text` throws | Blocks FI-35's alarm generation. The spreadsheet route remains the only demonstrated path for text |
 | **Deletion ORPHANS silently** | Bindings survive pointing at nothing; only the compile notices. **A post-delete compile is mandatory** |
 | **21 of 56 item types refuse**, with no reason given | The creatable set must be established by trial and cached; `GetCreationInfos` overstates by 60% |
-| **No Unified screen export** — confirmed **five** ways | No diff, no hash, no golden round-trip **for screens** |
-| **No faceplate document round trip** | Unified faceplates are plain `LibraryType` with **empty** export formats. Types cannot be authored |
+| **No Unified screen export FUNCTION** — confirmed **five** ways | ⚠️ **The consequence originally recorded here — *"no diff, no hash, no golden round-trip"* — was WRONG (2026-08-09).** A **serialiser over the property walk `hmi --screen` already performs** recovers all three, and there are **two independent existence proofs**: Siemens' own Openness-based exporter (SIOS 109792619, simple *and* complex properties, dynamizations, events, fonts) and a commercial JSON one for V15–V21. This is a **format** wall, not an **inspection** wall. See `hmi-web-tooling-research.md` |
+| **No faceplate document round trip via `ExportAsDocuments`** | ⚠️ **"Types cannot be authored" is NOT established (2026-08-09).** `GetSupportedExportFormats()` is empty — but `CreateFromDocuments` takes **no format argument**, and `LibraryTypeVersion.Export(FileInfo, ExportOptions)` exists and was **never called**. P10's inference linked two calls that share no parameter. **Reopened**; see `hmi-faceplate-gap-probe.md` |
+| **Master copies are unavailable on Unified** | `MasterCopyComposition.Create(IMasterCopySource)` exists, but **none** of the 45 `IMasterCopySource` and 30 `IMasterCopyTarget` implementers is under `HmiUnified.*`, and `HmiScreenComposition` has no `CreateFrom`. The obvious fallback to faceplates is **closed**. Classic HMI has the full surface |
+| **Unified cannot propagate a type update, or find a type's instances** | `HmiSoftware` implements none of `IUpdateProjectScope`, `IInstanceSearchScope`, `ILibraryTypeInstantiationTarget` — classic `HmiTarget` and `PlcSoftware` implement all three. Type-version propagation and instance discovery are **UI-only**. A real cost to any "author once, stamp hundreds" path |
 | **Screens are FLAT** — one level deep, absolutely positioned | All layout intelligence would be ours |
 | **No transaction** | A failed command keeps what it already did. Commands must be re-runnable |
 | Screens cannot be created into a group, or moved between groups | Grouping is programmatically unreachable |
 | Bitmask entries come only from `Create(BitDynamizationType)` | And **cannot be deleted** |
-| `TagParameterDynamization` refuses outside a faceplate | Faceplate-scoped; and types cannot be authored, so likely unreachable in practice |
+| `TagParameterDynamization` refuses outside a faceplate | Faceplate-scoped. ⚠️ *"Likely unreachable in practice"* was **premature** — a faceplate **container's** interface entries are themselves dynamization hosts (`HmiFaceplateInterface` derives from `UIBase`, which carries `Dynamizations`), so binding one uses the mechanism already proven live. No probe has yet had a resolved faceplate to try it on |
 | **Classic HMI: zero live contact** | No classic device exists locally, and adding one is its own non-goal |
 
 **What DOES round-trip on Unified:** tags, text lists and script modules all carry
@@ -129,8 +131,14 @@ regular, so it is breadth rather than risk.
 - The tag / text-list / script-module `Export`/`Import` pairs have **never been run**.
 - Why `set_Text` refuses, and whether `RaisedStateTagBitNumber` is merely contextual — **unknown**,
   one targeted probe each.
-- **Nobody can review an AI-designed screen before it reaches a panel.** No export, no renderer, no
-  diff. This is the open problem, not a detail.
+- **Nobody can review an AI-designed screen before it reaches a panel.** ⚠️ **Reframed 2026-08-09:**
+  the original wording — *"no export, no renderer, no diff"* — treated this as a capability limit. It
+  is not. The serialiser that recovers diff/hash/round-trip is **unbuilt, not impossible**, and two
+  shipped products prove it works. Still the open problem; no longer an open *question*.
+- **Faceplate INSTANTIATION has never been attempted** — the half the recommended path rests on.
+  It needs **no new CLI code**. Blocked only on an Openness approval.
+- **`LibraryTypeVersion.Export` has never been called.** It is the untried route to a faceplate
+  document, and P10's refutation did not touch it.
 - Every faceplate type in the reference project reports `DefaultVersionInconsistent` while every PLC
   type reports `Consistent`. Whether that is normal or a real finding about the project is
   **unknown** and worth an engineer's eye.
@@ -144,7 +152,9 @@ regular, so it is breadth rather than risk.
 | `docs/notes/openness-hmi-write-api.md` | the capability map, §4a–§4n, with corrections visible in place |
 | `docs/notes/openness-hmi-api-survey.md` | the read survey; §8 is "decode the XML — there isn't one" |
 | `docs/notes/hmi-capability-probe-plan.md` | the probe programme, phases P1–P10, questions answered in place |
-| `docs/notes/openness-hmi-faceplate-library.md` | the faceplate hypothesis and its live refutation |
+| `docs/notes/openness-hmi-faceplate-library.md` | the faceplate hypothesis and its live refutation — **whose reasoning is now known to be unsound**, see the next row |
+| `docs/notes/hmi-faceplate-gap-probe.md` | what P10 did **not** test: instantiation (untested, needs no new code), the untried `LibraryTypeVersion.Export`, master copies closed for Unified, and the instance-discovery cost |
+| `docs/notes/hmi-web-tooling-research.md` | the external-research answer to "how far does web tooling carry over": **Custom Web Controls**, the browser-delivered runtime, the two shipped screen serialisers, ISA-101 vs web-design defaults, and a 39-item build/buy/reject ranking |
 | `docs/notes/hmi-ai-design-options.md` | 47 options for using this in engineering, ranked — an options menu, not a plan. **§14 is a recommended path**, added separately and separable from the menu |
 | `docs/evidence/hmi-capability-probes.md` | transcripts, redacted/anonymised per `docs/13` |
 | `docs/adr/adr-0007-hmi-engineering-scope.md` | **the open decision** |

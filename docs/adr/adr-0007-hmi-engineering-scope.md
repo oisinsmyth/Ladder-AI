@@ -174,6 +174,23 @@ faceplate once, stamp it forty times" can have its *second* half automated and n
 with the nesting wall, **reuse cannot be expressed structurally at all** — only by repeating flat
 items. That is the opposite of this project's whole pattern-library premise.
 
+> **REOPENED 2026-08-09 (`hmi-faceplate-gap-probe.md`).** The *authoring* half of this paragraph is
+> **untested, not refuted** — see the export-bullet correction below for why the reasoning failed. The
+> *instantiation* half — the one this paragraph concedes works — **has still never been attempted**,
+> and it needs no new CLI code. Three harder facts now bear on it, and they do not all point one way:
+> - `HmiFaceplateInterface` derives from `UIBase`, so a faceplate parameter is itself a dynamization
+>   host: wiring one uses the mechanism already proven live. **Helps.**
+> - `HmiSoftware` implements none of `IUpdateProjectScope`, `IInstanceSearchScope` or
+>   `ILibraryTypeInstantiationTarget` — classic `HmiTarget` and `PlcSoftware` implement all three. So
+>   a type-version update **cannot be propagated to its instances**, and you cannot ask where a type is
+>   used. "Stamp it forty times" survives; *maintaining* those forty is UI-only. **Hurts, and this is
+>   a new cost the ADR did not price.**
+> - Master copies — the obvious fallback — are **closed for Unified**: no `HmiUnified.*` type
+>   implements `IMasterCopySource` or `IMasterCopyTarget`. **Closes an escape route.**
+>
+> Net: the paragraph's *conclusion* about reuse is not yet safe to rely on in either direction. One
+> approval and one probe settle the half that matters.
+
 **`Validate()` is useless as a gate, and structurally so.** It accepted a **zero-pixel-wide screen**
 with no errors and no warnings, and stayed silent on a screen carrying a deliberately unparseable
 script. `HmiValidationResult` carries a `PropertyName` — it is a per-property checker, therefore
@@ -264,6 +281,24 @@ LAD one.** Stated plainly, because it is the crux:
   > reduced only for tags, text lists and script modules. Screens and faceplates — the two things a
   > UI capability would actually have to review — remain unserialisable. That is a *stronger* case
   > for this bullet than when it was written.
+  >
+  > **CORRECTED AGAIN, LATER THE SAME DAY (2026-08-09). The word "unserialisable" is wrong, and it is
+  > the load-bearing word in this whole bullet.** There is no export *function*; that does not make a
+  > screen unserialisable. The property walk `openness-cli hmi --screen` **already performs** yields
+  > items, geometry, dynamizations and events — a canonical form over that recovers diff, content hash
+  > and golden round-trip. Two shipped products do exactly this: Siemens' own Openness-based exporter
+  > (SIOS 109792619 — simple *and* complex properties, dynamizations, events, fonts, with a
+  > command-driven "export all screens") and a commercial JSON exporter for V15–V21. **It is a format
+  > wall, not an inspection wall.** The serialiser remains the long pole and must still be written
+  > first — but it is *ordinary work with two existence proofs*, not a capability that Openness denies.
+  > A decision taken on the earlier wording would have been taken on a false constraint.
+  > `docs/notes/hmi-web-tooling-research.md`. **[EXTERNAL — sourced, not run here.]**
+  >
+  > Second correction: the faceplate half above rests on `GetSupportedExportFormats()` returning empty.
+  > `CreateFromDocuments` takes **no format argument**, and `LibraryTypeVersion.Export(FileInfo,
+  > ExportOptions)` was never called — so "no export formats ⇒ no document route" links two calls that
+  > share no parameter. **Faceplate authoring is untested, not refuted**
+  > (`docs/notes/hmi-faceplate-gap-probe.md`).
 - **Commands must be written re-runnable**, because a failure can leave partial state and there is no
   rollback.
 - **We own the layout model and the reuse story.** Flat, absolutely-positioned items with no
