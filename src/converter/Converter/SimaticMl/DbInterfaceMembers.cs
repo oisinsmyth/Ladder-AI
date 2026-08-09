@@ -369,10 +369,34 @@ internal static class DbInterfaceMembers
         var name = RequireAttribute(member, "Name");
         var datatype = RequireAttribute(member, "Datatype");
 
-        if (member.Elements().Any(e => e.Name.LocalName == "Sections"))
+        // FI-64 (2026-08-09). THE SAME NAMED-TYPE EXPANSION FI-56 FIXED, ON THE THIRD PARSE PATH.
+        //
+        // TIA expands a member whose type is a NAMED UDT — including an array of one — into a
+        // nested <Sections> on re-export. FI-56 taught `ParseBareMember` to collapse that back to
+        // the type reference the IR already names; `ParseTypeMember` was left refusing it outright,
+        // so a PLC data type carrying such a member could not be read back at all:
+        //     "member 'Claim' has nested structured content (<Sections>)"
+        //
+        // WHY THAT MATTERS MORE THAN A PARSE ERROR. The re-export round trip is the only check on
+        // this project that has caught defects every other gate passed — three separate times on one
+        // job: a stale .xml imported with every gate green; a UDT member present in the type but
+        // missing from a block's inline interface expansion, preflight clean over it; and a
+        // comment-only edit left out of a to-xml list. A type the converter cannot read back loses
+        // that check entirely and degrades to reading raw XML by hand, which is what an agent had to
+        // do here.
+        //
+        // The rule is the same one FI-56 established, applied rather than re-derived: an expansion of
+        // a NAMED type is redundant, because the IR names the type. THE DISTINCTION THAT MUST HOLD is
+        // an ANONYMOUS structured member — its <Sections> carries its only definition, and collapsing
+        // it would silently discard real members. Anonymous nesting on this path arrives as direct
+        // <Member> children with Datatype "Struct" (handled below), so refusing <Sections> for
+        // anything that is not a named-type reference keeps that case exactly as it was.
+        var hasNestedSections = member.Elements().Any(e => e.Name.LocalName == "Sections");
+        if (hasNestedSections && !IsNamedTypeReference(datatype))
         {
             throw new UnsupportedConstructException(
-                $"{context} member '{name}' has nested structured content (<Sections>) — not confirmed real for a PLC data type's own member, refused rather than guessed at.");
+                $"{context} member '{name}' has nested structured content (<Sections>) with Datatype '{datatype}', which is not a named type reference — " +
+                "an anonymous structured member's <Sections> carries its only definition, so collapsing it would discard real members. Refused rather than guessed at.");
         }
 
         var booleanAttributes = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: true);

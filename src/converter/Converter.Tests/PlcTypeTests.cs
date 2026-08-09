@@ -179,8 +179,18 @@ public class PlcTypeTests
         Assert.Contains("Static", ex.Message);
     }
 
+    // FI-64 (2026-08-09) REPOINTED THIS TEST. It used to assert that a member with Datatype
+    // "SomeOtherType" — a NAMED TYPE REFERENCE — hard-errored on nested <Sections>. That was the
+    // behaviour, and it was wrong: TIA expands a named type's members inline on re-export, so the
+    // rule refused to read back any PLC data type carrying one, which cost the re-export round trip
+    // (the only check that has caught defects every other gate passed). FI-56 had already fixed the
+    // same shape on the bare-member path; this path was left behind.
+    //
+    // The test now guards the half that MUST still refuse: an ANONYMOUS structured member, whose
+    // nested content is its only definition. Collapsing that would silently discard real members.
+    // The named-type collapse is covered in NamedTypeExpansionReadBackTests.
     [Fact]
-    public void Parse_MemberWithNestedSections_HardErrors()
+    public void Parse_AnonymousStructMemberWithNestedSections_HardErrors()
     {
         var xml = XDocument.Parse("""
             <Document>
@@ -189,7 +199,7 @@ public class PlcTypeTests
                 <AttributeList>
                   <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
               <Section Name="None">
-                <Member Name="Nested" Datatype="&quot;SomeOtherType&quot;">
+                <Member Name="Nested" Datatype="Struct">
                   <AttributeList>
                     <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
                     <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
