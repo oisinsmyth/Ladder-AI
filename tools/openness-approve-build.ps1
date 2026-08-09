@@ -44,6 +44,11 @@
     whitelist accumulates one entry per approved build and had 84 for a single Debug path here.
     Nothing is ever deleted without this switch.
 
+.PARAMETER Status
+    Read-only. Dumps what TIA has actually stored for this exe name -- every entry, its path, its
+    hash, its value names, and which one (if any) is this build. Nothing is written. Ask this before
+    believing any verdict here, since every verdict rests on matching TIA's own records.
+
 .PARAMETER Quiet
     One summary line instead of per-version detail. Used by the post-build hook.
 
@@ -68,6 +73,7 @@ param(
     [string]$Exe,
     [string[]]$Version,
     [switch]$Prune,
+    [switch]$Status,
     [switch]$Quiet
 )
 
@@ -188,35 +194,66 @@ try {
         Exit-With "HKLM\$WhitelistRoot exists but contains no version keys." 2
     }
 
+    # Read before writing. Re-running must be a no-op, and the read path needs no privilege, so an
+    # already-approved build never touches write access at all.
+    function Read-Entries($BaseKey, [string]$KeyPath) {
+        $entries = @()
+        $appKeyRead = $BaseKey.OpenSubKey($KeyPath, $false)
+        if (-not $appKeyRead) { return $entries }
+        try {
+            foreach ($entryName in $appKeyRead.GetSubKeyNames()) {
+                $entryKey = $appKeyRead.OpenSubKey($entryName, $false)
+                if (-not $entryKey) { continue }
+                try {
+                    $entries += [PSCustomObject]@{
+                        Name       = $entryName
+                        Path       = [string]$entryKey.GetValue("Path")
+                        FileHash   = [string]$entryKey.GetValue("FileHash")
+                        ValueNames = @($entryKey.GetValueNames())
+                    }
+                }
+                finally { $entryKey.Dispose() }
+            }
+        }
+        finally { $appKeyRead.Dispose() }
+        return $entries
+    }
+
+    # Read-only. Answers "what did TIA actually store?" -- the question worth asking before believing
+    # anything this script concludes, since every verdict here rests on matching TIA's own records.
+    if ($Status) {
+        foreach ($versionName in $versionNames) {
+            $appKeyPath = "$WhitelistRoot\$versionName\Whitelist\$exeName"
+            $entries = @(Read-Entries $baseKey $appKeyPath)
+            Write-Host ""
+            Write-Host "[$versionName] $($entries.Count) entry/entries under HKLM\$appKeyPath"
+
+            $forThisPath = @($entries | Where-Object {
+                $_.Path -and $_.Path.Equals($exePath, [System.StringComparison]::OrdinalIgnoreCase) })
+            Write-Host "        $($forThisPath.Count) name this exact path; $(@($forThisPath | Where-Object { $_.FileHash -ceq $fileHash }).Count) match this file's hash"
+
+            foreach ($e in $entries) {
+                $mark = if ($e.FileHash -ceq $fileHash -and $e.Path -and
+                            $e.Path.Equals($exePath, [System.StringComparison]::OrdinalIgnoreCase)) { "THIS BUILD" }
+                        elseif ($e.Path -and $e.Path.Equals($exePath, [System.StringComparison]::OrdinalIgnoreCase)) { "same path, older hash" }
+                        else { "other path" }
+                Write-Host "  $($e.Name.PadRight(12)) $mark"
+                Write-Host "        path   $($e.Path)"
+                Write-Host "        hash   $($e.FileHash)"
+                Write-Host "        values $($e.ValueNames -join ', ')"
+            }
+        }
+        Write-Host ""
+        exit 0
+    }
+
     $approvedCount = 0
     $alreadyCount = 0
     $prunedCount = 0
 
     foreach ($versionName in $versionNames) {
         $appKeyPath = "$WhitelistRoot\$versionName\Whitelist\$exeName"
-
-        # Read before writing. Re-running must be a no-op, and the read path needs no privilege, so
-        # an already-approved build never touches write access at all.
-        $existingEntries = @()
-        $appKeyRead = $baseKey.OpenSubKey($appKeyPath, $false)
-        if ($appKeyRead) {
-            try {
-                foreach ($entryName in $appKeyRead.GetSubKeyNames()) {
-                    $entryKey = $appKeyRead.OpenSubKey($entryName, $false)
-                    if (-not $entryKey) { continue }
-                    try {
-                        $existingEntries += [PSCustomObject]@{
-                            Name       = $entryName
-                            Path       = [string]$entryKey.GetValue("Path")
-                            FileHash   = [string]$entryKey.GetValue("FileHash")
-                            ValueNames = @($entryKey.GetValueNames())
-                        }
-                    }
-                    finally { $entryKey.Dispose() }
-                }
-            }
-            finally { $appKeyRead.Dispose() }
-        }
+        $existingEntries = @(Read-Entries $baseKey $appKeyPath)
 
         # Paths compare case-insensitively (Windows); base64 hashes compare exactly. Same rule as
         # OpennessWhitelist.Evaluate in the CLI, which reads this same data.
@@ -240,10 +277,14 @@ try {
 
         try {
             if ($match.Count -eq 0) {
-                if ($PSCmdlet.ShouldProcess("HKLM\$appKeyPath", "add whitelist entry for $exeName")) {
+                # Named BEFORE ShouldProcess so -WhatIf shows the whole change. Computing it inside
+                # left the dry run unable to say what it would create, which is the one detail a
+                # reviewer of this script most wants to see.
+                $entryName = New-EntryName -ExistingNames @($existingEntries | ForEach-Object { $_.Name })
+
+                if ($PSCmdlet.ShouldProcess("HKLM\$appKeyPath", "add whitelist entry '$entryName' for $exeName")) {
                     $appKey = $baseKey.CreateSubKey($appKeyPath)
                     try {
-                        $entryName = New-EntryName -ExistingNames @($appKey.GetSubKeyNames())
                         $entryKey = $appKey.CreateSubKey($entryName)
                         try {
                             $entryKey.SetValue("Path", $exePath, [Microsoft.Win32.RegistryValueKind]::String)
@@ -303,11 +344,20 @@ try {
     }
     else {
         Write-Detail ""
+        # "Nothing was written" has three very different causes and they must not share a message:
+        # an earlier version reported a -WhatIf run as "already approved", which is the exact false
+        # reassurance this tool exists to remove.
         if ($approvedCount -gt 0) {
             Write-Detail "Done. This build can now connect without anyone accepting a dialog."
         }
-        else {
+        elseif ($alreadyCount -gt 0) {
             Write-Detail "Nothing to do -- this build was already approved."
+        }
+        elseif ($WhatIfPreference) {
+            Write-Detail "-WhatIf: nothing was written. The lines above are what a real run would add."
+        }
+        else {
+            Write-Detail "Nothing was written, and nothing matched. Run with -Status to see what is stored."
         }
         Write-Detail "Verify empirically, which is the only proof that counts: run any openness-cli"
         Write-Detail "command that attaches to Portal and confirm it connects without prompting."

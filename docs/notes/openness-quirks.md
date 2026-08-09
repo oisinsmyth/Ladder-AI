@@ -836,8 +836,27 @@ passed, acts only inside a window whose visible text matches `-TextPattern`, and
 text that justified every action. Capture the real wording on your Portal build and language in
 observe mode first, then tighten the pattern before enabling clicks.
 
-**What is verified and what is not.** The scripts parse clean; the post-build target was measured
-firing with the correct quoted `$(TargetPath)`, skipping under the opt-out, and warning-not-failing
-when approval exits 3. The registry write itself was **not** executed by the agent that wrote this —
-registry access was denied to that session — so the first real run is the proof: build, then run any
-`openness-cli` command that attaches and confirm it connects with nobody accepting anything.
+**What is verified, measured against the live registry on 2026-08-10.**
+
+- **The layout is exactly as assumed.** `20.0\Whitelist\openness-cli.exe` holds **113** entries; every
+  one carries `Path`, `DateModified`, `FileHash` and **nothing else**, so there is no unknown value to
+  forge. `17.0` and `19.0` exist but hold none. FI-61's recorded hash `PY8nw9ndT2J/...` is still there,
+  which cross-checks the note above against the registry itself.
+- **Entry naming is `Entry`, then `Entry (1)` ... `Entry (112)`.** The derive-from-siblings logic
+  proposed `Entry (113)` -- correct without the shape being hardcoded.
+- **Elevation is genuinely required.** An unelevated write returns ACCESS DENIED and exit 3 with the
+  pointer to the setup script, so the one-time grant is load-bearing, not ceremony.
+- **The elevation guard fires**: run unelevated, `openness-approve-setup.ps1` exits 3, resolves the
+  real account name into the command to copy, and touches nothing.
+- The post-build target fires with the correct quoted `$(TargetPath)`, skips under the opt-out, and
+  warns rather than fails when approval exits 3.
+
+**What is still unproven.** The privileged half -- the ACL grant, the write that follows it, and a
+Portal connect with nobody present -- has not been executed, because the session that built this could
+not elevate. That is the one remaining step, and it is the only proof that counts: run the setup once
+elevated, then any `openness-cli` command that attaches.
+
+**A live finding from that same run, worth repeating as a warning.** The main checkout's Debug binary
+was *already* unapproved: **86** entries named its exact path and **none** matched its current hash. A
+rebuild had silently revoked it, exactly as FI-61 describes, and nothing in the working tree showed
+it. `openness-approve-build.ps1 -Status` is the cheap way to ask.
