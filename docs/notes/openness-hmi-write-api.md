@@ -1041,11 +1041,16 @@ what happened.** `--map` and `--bind-kind` already catch per item and report `RE
 not. Fixed to match, so one bad set is now a reported refusal and a non-zero exit rather than a
 silent partial write.
 
-**Verification status of that last fix: unit-tested, live verification PENDING.** It needed a
-rebuild, and a rebuild changes the binary's hash — which TIA treats as a new client and re-prompts a
-human for, through the `Openness access` dialog inside Portal. The verification sweep (P9) was
-sitting on that dialog when this was written. Everything else in §4n was measured with the binary
-that had already been approved.
+**Verification status of that last fix: unit-tested, NOT live-verified.** It needed a rebuild, and a
+rebuild changes the binary's hash — which TIA treats as a new client and re-prompts a human for,
+through the `Openness access` dialog inside Portal. The verification sweep (P9) sat on that dialog
+for ten minutes and was then **stopped deliberately**: it is self-cleaning, but leaving an
+unsupervised sweep armed to run whenever someone happens to click would put probe artifacts on the
+device after this session had already certified it clean. It never connected, so it created nothing.
+
+Everything else in §4n was measured with the binary that had already been approved. The one-line
+verification still owed: a command carrying a good `--set`, a bad one, and another good one must
+report all three, apply two, and exit 7.
 
 ### The approval dialog is a real constraint on unattended work
 
