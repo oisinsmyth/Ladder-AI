@@ -50,6 +50,9 @@ work counts toward that tally — it is a validation fixture and the tooling tha
 
 ## Awaiting the project owner — ADR-0007 (HMI engineering scope)
 
+**One-page measured capability record: `docs/notes/hmi-capability-record.md`.** Read that before any
+HMI conversation — it states what works, what does not, the coverage numbers, and what is owed.
+
 **The FI-54 probe programme is finished** (2026-08-07 → 09, all six phases; see `docs/notes/stage-gates.md`'s
 cross-stage evidence section for the map). **One decision is open and it is the owner's**: ADR-0007 is
 **Proposed** with the measurement it was drafted waiting for, and deliberately carries no

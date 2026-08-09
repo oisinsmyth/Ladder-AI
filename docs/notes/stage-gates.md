@@ -45,7 +45,8 @@ correlated-check root cause), `…-review-conventions.md`, `…-review-functiona
 adversarial design rounds `docs/evidence/four-rung-design-validation.md` / `…-round2.md`.
 
 **HMI capability probe (FI-54), 2026-08-07 → 2026-08-09 — RUN AND CLOSED, and it is NOT a stage or a
-capability.** TIA Openness's HMI surface walked live against JOB9002's scratch copy, so that ADR-0007
+capability. → START AT `docs/notes/hmi-capability-record.md`**, the one-page measured record of what
+the tooling can and cannot do; everything below is its supporting detail. TIA Openness's HMI surface walked live against JOB9002's scratch copy, so that ADR-0007
 would rest on measurement. `docs/10-non-goals.md`'s "not now" line for HMI engineering **still
 stands** — nothing here may be used as HMI engineering capability, and `openness-cli hmi-create-screen`
 / `hmi-edit-screen` / `hmi-new` / `hmi-delete` / `hmi-set` remain **probe commands pending
