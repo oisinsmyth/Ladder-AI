@@ -100,11 +100,21 @@ this directly and fast:
 2. Enumerates every block and reads its `IsConsistent` flag — metadata-only, no export attempt,
    so it's cheap and doesn't risk touching anything (same safety handling as `list`: skipped
    for safety-classified blocks).
-3. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
+3. Enumerates every **PLC data type** and reads its `IsConsistent` flag too (**FI-62**, 2026-08-09).
+   A UDT is not a `PlcBlock`, so step 2 never saw one: measured live, `sanity-check` reported
+   `OVERALL: HEALTHY`, `BLOCKS: 52  INCONSISTENT: 0` and a device compile of
+   `Success (errors=0, warnings=0)`, and TIA then refused `export --type UDT_Drum` as inconsistent.
+   The device compile stayed green because **nothing in that corpus instantiated the type** — an
+   uninstantiated UDT has nothing to make a compile fail. No safety handling is needed here: a
+   `PlcType` carries no `ProgrammingLanguage` at all, so there is nothing for the F-prefix
+   classifier to check. The `TYPES:` line is printed **always**, including at zero, so a reader can
+   see that types were actually examined rather than silently absent.
+4. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
    disambiguate with `--device` if there's more than one PLC; `sanity-check` checks them all).
 
-Exit code 0 only if every block is consistent and every device compiles clean; non-zero
-otherwise, with the inconsistent blocks and per-device compile results listed. A device
+Exit code 0 only if every block is consistent, **every PLC data type is consistent**, and every
+device compiles clean; non-zero otherwise, with the inconsistent blocks, the inconsistent types
+(each with the `compile --type <name>` line that clears it) and per-device compile results listed. A device
 compiling clean does **not** imply its blocks are all consistent — confirmed for real,
 2026-07-10: `docs/notes/openness-quirks.md` has a live example where every device compiled
 `Success` while 15 blocks stayed flagged inconsistent. Run this any time something in the

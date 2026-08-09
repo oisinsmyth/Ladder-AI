@@ -1259,3 +1259,30 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   back as proof. The lesson worth keeping is narrow and general: **when a check clears a hypothesis,
   confirm the check can observe the thing it is clearing.**
 - **Verdict.** Built and verified live. 148 openness-cli tests (+8).
+
+### FI-62 — `sanity-check` enumerated blocks only, so a UDT could be inconsistent behind a green gate
+
+- **Hard rule 4 names `sanity-check` as THE gate, and it had a blind spot.** It walked `PlcBlock`
+  and nothing else. A `PlcType` is not a block, so a freshly-imported UDT was never examined.
+- **Measured, not theorised.** On a live job it reported `OVERALL: HEALTHY`, `BLOCKS: 52`,
+  `INCONSISTENT: 0`, device compile `Success (errors=0, warnings=0)`, exit 0 — and TIA then refused
+  `export --type UDT_Drum` with *"Inconsistent blocks and PLC data types (UDT) cannot be exported."*
+  The agent checked the source rather than guessing: `ExportType` has no consistency guard of its
+  own, so the refusal came from TIA.
+- **Why the compile did not catch it either.** Nothing in that corpus instantiated the type. An
+  uninstantiated UDT has nothing to make a device compile fail, so both halves of the gate were
+  green simultaneously while the type was inconsistent.
+- **Built.** `RunSanityCheck` now walks `PlcTypeGroup` alongside blocks, reports a `TYPES:` line
+  **always** (including at zero, so a reader can see types were examined rather than silently
+  absent), lists any inconsistent type with the `compile --type <name>` line that clears it, and
+  counts types toward `IsHealthy`. The existing type walk was reused with a null-means-all filter
+  rather than growing a parallel "enumerate all" copy that could drift from the lookup path.
+- **Same family as FI-52 and FI-44, and the third instance in four days:** a check reporting a clean
+  result over something it never examined. The recurring shape is worth naming — *a gate's scope is
+  a claim, and an unstated scope reads as "everything".* `BLOCKS: 52` was on screen the whole time;
+  nobody read it as "and zero types".
+- **Sequencing note.** Landing this needs a rebuild, and per FI-61 a rebuild revokes the binary's
+  TIA Openness approval. The source change is committed; the rebuild is deliberately left for the
+  machine owner to approve rather than done mid-delivery.
+- **Verdict.** Built, 152 openness-cli tests (+4). Not yet live-verified — it cannot be, until the
+  rebuilt binary is approved.

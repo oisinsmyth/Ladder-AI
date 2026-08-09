@@ -133,7 +133,9 @@ public class OutputFormatterTests
     private static readonly SanityCheckResult HealthyResult = new(
         TotalBlocks: 42,
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) });
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
+        TotalTypes: 7,
+        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
 
     private static readonly SanityCheckResult UnhealthyResult = new(
         TotalBlocks: 42,
@@ -141,7 +143,57 @@ public class OutputFormatterTests
         {
             new BlockConsistencyIssue("ControlMain", "S7-1200 G2 station_2/JOB9002_PLC/Control", "LAD"),
         },
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) });
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
+        TotalTypes: 7,
+        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
+
+    // FI-62: the exact live shape — every block consistent, every device compile clean, and one
+    // UDT inconsistent. This MUST be unhealthy; before the fix it reported HEALTHY and the first
+    // symptom was TIA refusing to export the type much later.
+    private static readonly SanityCheckResult InconsistentTypeOnlyResult = new(
+        TotalBlocks: 52,
+        InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile) },
+        TotalTypes: 7,
+        InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Drum", "S7-1200 station_1/PLC_1") });
+
+    [Fact]
+    public void SanityCheckResult_Unhealthy_WhenOnlyATypeIsInconsistent()
+    {
+        Assert.False(InconsistentTypeOnlyResult.IsHealthy);
+    }
+
+    [Fact]
+    public void SanityCheckTable_AlwaysReportsTypes_SoZeroIsVisiblyChecked()
+    {
+        var text = OutputFormatter.FormatSanityCheckTable(HealthyResult);
+
+        Assert.Contains("TYPES: 7  INCONSISTENT: 0", text);
+        Assert.Contains("OVERALL: HEALTHY", text);
+    }
+
+    [Fact]
+    public void SanityCheckTable_NamesTheInconsistentTypeAndHowToClearIt()
+    {
+        var text = OutputFormatter.FormatSanityCheckTable(InconsistentTypeOnlyResult);
+
+        Assert.Contains("OVERALL: ISSUES FOUND", text);
+        Assert.Contains("TYPES: 7  INCONSISTENT: 1", text);
+        Assert.Contains("UDT_Drum", text);
+        Assert.Contains("--type", text);
+    }
+
+    [Fact]
+    public void SanityCheckJson_CarriesTypeCounts()
+    {
+        var json = OutputFormatter.FormatSanityCheckJson(InconsistentTypeOnlyResult);
+        var root = JsonDocument.Parse(json).RootElement;
+
+        Assert.False(root.GetProperty("healthy").GetBoolean());
+        Assert.Equal(7, root.GetProperty("totalTypes").GetInt32());
+        Assert.Equal(1, root.GetProperty("inconsistentTypes").GetArrayLength());
+        Assert.Equal("UDT_Drum", root.GetProperty("inconsistentTypes")[0].GetProperty("name").GetString());
+    }
 
     [Fact]
     public void SanityCheckResult_Healthy_WhenNoIssuesAndAllCompilesSucceed()
@@ -161,7 +213,9 @@ public class OutputFormatterTests
         var result = new SanityCheckResult(
             TotalBlocks: 1,
             InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
-            DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile) });
+            DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile) },
+            TotalTypes: 0,
+            InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
 
         Assert.False(result.IsHealthy);
     }
