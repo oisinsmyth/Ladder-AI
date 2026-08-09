@@ -654,6 +654,13 @@ Thirty probes in one chained run. Device left with zero artifacts and a clean co
 
 ### P3 — only 3 of 6 dynamization kinds can be created
 
+> **WRONG — SUPERSEDED BY P7 (§4m, 2026-08-09). Left standing because the mistake is the lesson.**
+> **5 of 6 kinds create.** The gate is the **target property's type**, not the kind: this probe bound
+> all three "refused" kinds to `Visible`, a Boolean, and read the resulting refusals as a property of
+> the API. `Flashing` works on any colour property; `ResourceList` works on any text property. The
+> paragraph below calling `Flashing` unreachable — and the alarm-display consequence drawn from it —
+> is the reverse of the truth. Read §4m instead; keep reading here only for how the error was made.
+
 | Kind | Result |
 |---|---|
 | `TagDynamization` | ✅ (§4h) |
@@ -758,6 +765,92 @@ Guarded by `DescribeAppliedCount_ExcludesRefusalsAndSaysHowMany`.
 
 **Raw transcripts for all six phases: `docs/evidence/hmi-capability-probes.md`.**
 
+## 4m. P7 — the dynamization refusals were MY PROBE, not the API (2026-08-09) [LIVE]
+
+**P3's headline was wrong.** It reported three of six dynamization kinds as refused and concluded
+half the vocabulary was unreachable. It is not. **A dynamization kind is gated on the type of the
+property it is bound to**, and P3 bound all three to `Visible` — a Boolean — because holding the
+property constant felt like the clean experimental design. It was the opposite: it confounded the
+kind with the target.
+
+Measured, one session, hypothesis and negative control together:
+
+| Probe | Kind → property | Result |
+|---|---|---|
+| P7.2 | `FlashingDynamization` → `HmiRectangle.BackColor` | ✅ **created**, `DynamizationType=Flashing` |
+| P7.3 | `ResourceListDynamization` → `HmiText.Text` | ✅ **created**, `DynamizationType=ResourceList` |
+| P7.6 | `FlashingDynamization` → `BorderColor`, `HmiButton.BackColor` | ✅ both created |
+| P7.7 | `ResourceListDynamization` → `HmiButton.Text` | ✅ created |
+| **P7.4** | **`FlashingDynamization` → `HmiText.Visible`** | ❌ **REFUSED** (negative control) |
+| **P7.5** | **`ResourceListDynamization` → `BorderColor`** | ❌ **REFUSED** (negative control) |
+| P7.8 | `TagParameterDynamization` → `ProcessValue`, `Text`, `Width` | ❌ all three refused |
+
+The negative controls are what make this conclusive rather than suggestive: the *same kinds* that
+succeeded moments earlier refuse again the moment the property type is wrong, in the same session,
+against the same screen.
+
+**So the creatable tally is 5 of 6, not 3 of 6**, and the two kinds this project called unreachable
+are not only reachable but reachable on every item that has a colour or a text property.
+
+### Why the reflection map already said so, and why it was missed
+
+`FlashingDynamization`'s own properties are `Color`, `AlternateColor`, `FlashingRate`,
+`FlashingCondition`. `ResourceListDynamization` carries `ResourceList` (a name string) and `Tag`.
+Neither has any meaning on a Boolean. The type shapes were dumped in P3's own session and read as
+*what the object holds* rather than as *what it can attach to* — the same reading error as the
+alarm-class "states" (§6) and the plant model. **Third time. The reflection map keeps being right
+about structure and being read wrong about scope.**
+
+Siemens documents it directly. The *Engineering Guideline for WinCC Unified* (SIOS entry 109827603):
+*"Depending on the property it is also possible to use a resource list or flashing as a
+dynamization"* — flashing for **colour** properties, resource lists for **text** properties. Recorded
+as DOCUMENTED-and-now-MEASURED; Siemens' server 403s a direct fetch, but the same sentence surfaced
+via two independent searches and the live probe agrees with it.
+
+### `TagParameterDynamization` — refused in every position tried, and probably correctly
+
+Three property shapes, all refused. The likely reason is not the property type but the **context**:
+a *tag parameter* is a faceplate concept — a property bound to a parameter of the faceplate
+interface, resolved per instance. Community sources state that tag parameters work inside faceplate
+instances and not in screen windows. Every P7 target was an ordinary item on an ordinary screen, so
+there was no faceplate interface for a parameter to refer to.
+
+**UNVERIFIED** — no faceplate instance was tested. And it may stay unverified in practice: faceplate
+*types* cannot be authored through Openness at all (§2), so this kind is reachable, if ever, only on
+instances of faceplate types a human already built.
+
+### Compile, again, named exactly what was missing
+
+```
+[Error] HmiButton_4:
+[Error] No tag is configured for dynamization of the property 'Text'. Select an existing tag.
+[Error] No resource list is selected for dynamization of the property 'Text'. Select an existing resource list.
+```
+
+A bare `ResourceListDynamization` needs both a tag and a resource list, and the compile says so by
+name. **Sixth independent route to a dangling reference caught only by the compile.**
+
+### A tooling gap this exposed
+
+P7.9 tried `--set HmiRectangle_1.BackColor.FlashingRate=Fast` and was rejected: `hmi-edit-screen`
+resolves a target as an **item name only**, so it cannot reach a property *of a dynamization*.
+Creating a flashing dynamization is therefore currently possible while configuring its colours and
+rate is not — an incomplete capability, not a broken one. `--set` needs a nested-path target
+(`<Item>.<Property>.<DynAttr>`) before flashing is actually usable.
+
+### The correction that matters most
+
+**`Flashing` is available on every colour property**, and there is a *second* route to flashing that
+P3 never touched: `TagDynamization.ValueConverter` → `MappingTable` → `Entries`, where each entry
+carries `Value`, `AlternateValue`, **`Flashing`**, `FlashingRate`, with `ConditionType` ∈
+{`Range`, `Bitmask`, `Singlebit`, `Expression`}. That is the value-range-to-colour-and-flash
+mechanism a real alarm display is built from, hanging off a kind that already works. **UNVERIFIED
+live** — `MappingTableEntryBaseComposition.Create<T>()` exists (no arguments, plus a non-generic
+`Create(BitDynamizationType)`), but no probe has created one.
+
+So the FI-35 picture improves on the display side and is unchanged on the text side: alarm *state
+display* is expressible; alarm *text* still cannot be written (§4l).
+
 ## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
 
 "Mapped" and "walked" are different questions and give very different answers. The surface, measured:
@@ -780,7 +873,7 @@ Guarded by `DescribeAppliedCount_ExcludesRefusalsAndSaysHowMany`.
 | Creatable kinds actually created | **15** | 80 | 19% |
 | Screen-item types instantiated | **35 created / 56 attempted** (§4k) | 56 | **63% created, 100% attempted** |
 | Event values attached | **2** (`Tapped`, `Loaded`) | 246 | <1% |
-| Dynamization kinds created | **3 created / 6 attempted** (§4l) | 6 | **50% created, 100% attempted** |
+| Dynamization kinds created | **5 created / 6 attempted** (§4m) | 6 | **83% created, 100% attempted** |
 | **Deletions performed** | **~20, across 9 kinds** (§4j, §4l) | 184 | ~5% of types |
 
 *Updated 2026-08-09 after P1–P6. The two "attempted" rows are the useful ones: item types and
@@ -814,9 +907,11 @@ same `Create<T>` as `HmiButton`; attaching `KeyDown` uses the same enum-keyed `C
 3. ~~**Connections, data logs, alarm logs**~~ — **CLOSED (P5, §4l).** All create trivially; the work
    is entirely in configuration, and the compile enumerates the required fields precisely enough to
    serve as a specification. (Logging *tags* still unwalked.)
-4. ~~**The other 5 dynamization kinds**~~ — **CLOSED, half-negative (P3, §4l).** `Script` and
-   `Expression` create; **`Flashing`, `ResourceList` and `TagParameter` refuse.** `Flashing` is how a
-   real HMI shows an unacknowledged alarm, so this compounds gap 2.
+4. ~~**The other 5 dynamization kinds**~~ — **CLOSED, and POSITIVE once the probe was fixed (P3 then
+   P7, §4m).** `Script`, `Expression`, **`Flashing` and `ResourceList` all create** — flashing on any
+   colour property, resource lists on any text property. P3's "three refuse" was a confounded probe
+   (all three bound to a Boolean). Only `TagParameter` still refuses, and that is a faceplate-context
+   concept, plausibly correct. **This gap is closed favourably, not adversely.**
 5. **Plant views, runtime settings, faceplate containers, text lists** — still read/reflected only.
    Screen *groups* now create (P6), but **a screen cannot be created into one** through the
    device-level composition, and screens cannot be moved between groups — so grouping is
@@ -840,6 +935,14 @@ answer has to come down slightly: not from anything failing to build, but becaus
 things refuse and none of them say why** — alarm text, three dynamization kinds, and 21 of 56 item
 types. "Anything to it" is bounded by a refusal set that only trial-and-error reveals, and that set
 happens to contain the two capabilities alarm generation most needs.
+
+**Revised again after P7 (§4m) — and the revision cuts the other way.** Two of those "three specific
+things" were **my probe, not the API**: `Flashing` and `ResourceList` create fine on correctly-typed
+properties. The additive answer goes back up. What survives is narrower and should be stated
+precisely: **alarm text cannot be written**, `TagParameter` needs a faceplate context, and 21 of 56
+item types refuse. The general lesson stands and is now better evidenced — *the refusal message never
+says why*, so a refusal is only ever evidence about **that call**, never about the capability. Twice
+now this project has generalised from one and been wrong.
 
 The three findings that most changed the design picture all came from *walking*, not reading:
 `Validate()` being useless, the compile catching dangling references, and writability being

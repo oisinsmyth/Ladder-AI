@@ -238,7 +238,7 @@ EXIT=0
 
 ## P3-P6 -- dynamizations, alarms, logs, structure (2026-08-09, 30 probes)
 
-Headlines: **only 3 of 6 dynamization kinds create**; **alarm text cannot be written at all** (`set_Text` throws); bare alarms/logs are useless and the compile names exactly which fields are missing.
+Headlines: ~~**only 3 of 6 dynamization kinds create**~~ **— WRONG, retracted by P7 below: 5 of 6 create; this run bound every kind to a Boolean property** —; **alarm text cannot be written at all** (`set_Text` throws); bare alarms/logs are useless and the compile names exactly which fields are missing.
 
 ```
 
@@ -432,5 +432,124 @@ EXIT=0
   ... [7 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
   ... [156 pre-existing [Warning] line(s) elided -- same 156 device warnings in every compile] ...
   ... [1 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+```
+
+## P7 -- are the dynamization refusals property-type gating? (2026-08-09, 14 probes)
+
+Headline: **YES -- and P3's "3 of 6 kinds create" was a confounded probe, not an API limit.**
+P3 bound all three "refused" kinds to `Visible`, a Boolean. Here `Flashing` creates on colour
+properties and `ResourceList` on text properties, with **negative controls in the same session**
+(P7.4/P7.5) showing the same kinds refuse again the moment the property type is wrong.
+**5 of 6 kinds create.** `TagParameter` refused in every position tried -- probably faceplate-scoped.
+
+```
+
+==================== P7.1 host screen: rectangle, text, IO field, button ====================
+EXIT=0
+  CREATED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+  ... [6 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.2 Flashing on a COLOUR property (hypothesis: SUCCEEDS) ====================
+EXIT=0
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 1
+      dynamization FlashingDynamization created on HmiRectangle.BackColor [DynamizationType=Flashing]
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.3 ResourceList on a TEXT property (hypothesis: SUCCEEDS) ====================
+EXIT=0
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 1
+      dynamization ResourceListDynamization created on HmiText.Text [DynamizationType=ResourceList]
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.4 NEGATIVE CONTROL Flashing on Visible (must still REFUSE) ====================
+EXIT=7
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 0 (1 REFUSED)
+      dynamization FlashingDynamization on HmiText_2.Visible -> REFUSED (EngineeringTargetInvocationException: Error when calling method 'Create' of type 'Siemens.Engineering.HmiUnified.UI.Dynamization.DynamizationBaseComposition'.)
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.5 NEGATIVE CONTROL ResourceList on a colour property (must REFUSE if it is text-only) ====================
+EXIT=7
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 0 (1 REFUSED)
+      dynamization ResourceListDynamization on HmiRectangle_1.BorderColor -> REFUSED (EngineeringTargetInvocationException: Error when calling method 'Create' of type 'Siemens.Engineering.HmiUnified.UI.Dynamization.DynamizationBaseComposition'.)
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.6 Flashing on other colour properties ====================
+EXIT=0
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 2
+      dynamization FlashingDynamization created on HmiRectangle.BorderColor [DynamizationType=Flashing]
+      dynamization FlashingDynamization created on HmiButton.BackColor [DynamizationType=Flashing]
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.7 ResourceList on other text/graphic properties ====================
+EXIT=0
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 1
+      dynamization ResourceListDynamization created on HmiButton.Text [DynamizationType=ResourceList]
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.8 TagParameter across several property shapes ====================
+EXIT=7
+  EDITED screen 'ZZ_AI_P7Screen' on HMI_1/HMI_RT_1
+    changes applied: 0 (3 REFUSED)
+      dynamization TagParameterDynamization on HmiIOField_3.ProcessValue -> REFUSED (EngineeringTargetInvocationException: Error when calling method 'Create' of type 'Siemens.Engineering.HmiUnified.UI.Dynamization.DynamizationBaseComposition'.)
+      dynamization TagParameterDynamization on HmiText_2.Text -> REFUSED (EngineeringTargetInvocationException: Error when calling method 'Create' of type 'Siemens.Engineering.HmiUnified.UI.Dynamization.DynamizationBaseComposition'.)
+      dynamization TagParameterDynamization on HmiRectangle_1.Width -> REFUSED (EngineeringTargetInvocationException: Error when calling method 'Create' of type 'Siemens.Engineering.HmiUnified.UI.Dynamization.DynamizationBaseComposition'.)
+    Validate(): ran, returned no errors and no warnings
+    project saved: yes
+
+==================== P7.9 configure the flashing dynamization ====================
+EXIT=7
+  Screen 'ZZ_AI_P7Screen' has no item named 'HmiRectangle_1.BackColor'. Use 'Screen' to target the screen itself, or list the item names with `openness-cli hmi <project> --screen ZZ_AI_P7Screen`.
+
+==================== P7.10 read back the screen ====================
+EXIT=0
+  ... [8 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+    SCREEN  ZZ_AI_P7Screen  #0  1280x615  items=4
+  ... [98 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+
+==================== P7.11 compile ====================
+EXIT=8
+  STATE: Error
+  ERRORS: 7  WARNINGS: 156
+  ... [2 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+  [Error] HMI_1: 
+  ... [3 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+  [Error] Screens: 
+  [Error] ZZ_AI_P7Screen: 
+  ... [1 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+  [Error] No tag is configured for dynamization of the property 'Text'. Select an existing tag.
+  [Error] No resource list is selected for dynamization of the property 'Text'. Select an existing resource list.
+  ... [156 pre-existing [Warning] line(s) elided -- same 156 device warnings in every compile] ...
+  [Error] Compiling finished (errors: 2; warnings: 0)
+
+==================== P7.12 delete the screen ====================
+EXIT=0
+  deleted Screens 'ZZ_AI_P7Screen' [HmiScreen] on HMI_1/HMI_RT_1; confirmed absent on re-read
+
+==================== P7.13 FINAL compile - expect clean ====================
+EXIT=0
+  STATE: Success
+  ERRORS: 0  WARNINGS: 156
+  ... [7 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+  ... [156 pre-existing [Warning] line(s) elided -- same 156 device warnings in every compile] ...
+  ... [1 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+
+==================== P7.14 FINAL inventory - expect zero artifacts ====================
+EXIT=0
+  ... [628 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
+  PROBE ARTIFACTS (ZZ_AI_*): 0
 ```
 

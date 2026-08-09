@@ -48,13 +48,15 @@ Rationale for one generic trio rather than ~80 wrappers, and the delete-path re-
 |---|---|---|---|
 | **P1** | Deletion lifecycle | 0 of 184 deletable types | **DONE 2026-08-08 — see §4j** |
 | **P2** | Item-type breadth | 3 of 56 item types | **DONE 2026-08-09 — 35 create, 21 refuse; see §4k** |
-| **P3** | Dynamization kinds | 1 of 6 | **DONE — only 3 of 6 creatable; §4l** |
+| **P3** | Dynamization kinds | 1 of 6 | **DONE — ~~3~~ 5 of 6 creatable; P3's answer was wrong, corrected by P7; §4l + §4m** |
 | **P4** | Alarms (+ `MultilingualText`) | FI-35's own use case | **DONE — alarms create, TEXT REFUSED; §4l** |
 | **P5** | Data plumbing (connections, logs) | never created | **DONE — create trivially, config is the work; §4l** |
 | **P6** | Structure (groups, windows, plant views) | read-only so far | **DONE — works; `--in` found to be a no-op; §4l** |
 
-**All six phases complete, 2026-08-09.** Device returned to zero probe artifacts and a clean compile
-after every phase.
+| **P7** | Dynamization refusals re-probed | P3's wrong answer | **DONE 2026-08-09 — property-type gating; 5 of 6; §4m** |
+
+**All six phases complete, 2026-08-09**, plus an unplanned **P7** that retracted one of P3's
+headlines. Device returned to zero probe artifacts and a clean compile after every phase.
 
 ### What the programme changed
 
@@ -64,8 +66,9 @@ reflection map could not have, and three of them are **negative**:
 1. **Deletion orphans silently.** Automatable only with a mandatory post-delete compile.
 2. **Alarm text cannot be written.** `MultilingualTextItem.set_Text` throws. This is FI-35's own use
    case, and it is blocked on an unexplained refusal rather than on missing tooling.
-3. **Half the dynamization vocabulary refuses**, including `Flashing` — which is how alarm state is
-   shown. Compounds (2).
+3. ~~**Half the dynamization vocabulary refuses**, including `Flashing`.~~ **RETRACTED by P7 (§4m):
+   5 of 6 kinds create.** The gate is the target property's type and the probe had held the property
+   constant at a Boolean. This was a **self-inflicted** negative — see the P7 row in the log.
 4. **`GetCreationInfos` overstates creatability by 21 of 56.** The creatable set is discoverable only
    by trial.
 
@@ -76,6 +79,22 @@ to serve as a specification for a generator.
 
 The honest summary for the ADR: *additively capable, destructively unsafe-by-default, and bounded by
 a refusal set that only trial reveals — which happens to contain what alarm generation needs most.*
+
+**Amended after P7 (2026-08-09):** finding 3 above is **retracted** — 5 of 6 dynamization kinds
+create; the two "refusals" were the probe binding every kind to a Boolean. So the summary reads:
+*additively capable and more so than P3 concluded, destructively unsafe-by-default, and bounded by a
+refusal set that is smaller than reported but still discoverable only by trial.* The residue is
+**alarm text** (a real block) and 21 of 56 item types. Nothing about the ADR's structure changes;
+one of its four measured negatives does.
+
+### The methodological finding, which outlasts the API details
+
+**A refusal is evidence about that CALL, never about the capability** — because the message never
+says why. This project has now generalised from a single refusal and been wrong twice: the
+alarm-class "states" reading, and this one. The probe design rule that follows: when a call refuses,
+**vary the target before concluding anything**, and record a negative control alongside every
+negative result. P3 held the property constant across three kinds, which felt like the clean
+experiment and was in fact the confound.
 
 ### P1 — deletion lifecycle
 
@@ -111,10 +130,13 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
 3. ~~**Can a tag table be deleted while it still contains tags?**~~ — **ANSWERED: yes** (P1.5
    deleted `ZZ_AI_TestTags` after its tag was already gone; a fuller test with a populated table is
    worth doing when one exists).
-4. ~~**Do the five untested dynamization kinds resolve at all?**~~ — **ANSWERED 2026-08-09: only two
-   do.** `Script` and `Expression` create; `Flashing`, `ResourceList` and `TagParameter` refuse with
-   the same opaque error the item-type refusals give. **Half the dynamization vocabulary is
-   unreachable** — including `Flashing`, which is how a real HMI shows an unacknowledged alarm (§4l).
+4. ~~**Do the five untested dynamization kinds resolve at all?**~~ — **ANSWERED TWICE. The first
+   answer was wrong.** P3 said only `Script` and `Expression` create. **P7 (§4m) showed the gate is
+   the TARGET PROPERTY'S TYPE, not the kind** — P3 had bound all three "refused" kinds to `Visible`,
+   a Boolean. `Flashing` creates on any **colour** property, `ResourceList` on any **text** property,
+   with negative controls in the same session confirming the same kinds refuse again on the wrong
+   property. **5 of 6 kinds create.** Only `TagParameter` still refuses, and that is a faceplate
+   concept with no faceplate in the test — plausibly a correct refusal.
 6. ~~**Is `GetCreationInfos`' creatable list honest?**~~ — **ANSWERED 2026-08-09: no.** It reports 56
    creatable screen-item types; 35 create. The 21 refusals are the 17 `*Base` types (none marked
    `abstract`) plus `HmiLabel`, `HmiProcessControl` and the two custom containers, and every refusal
@@ -185,3 +207,14 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
   Rebuilt with `-cmatch` and anchored patterns, then verified by searching the output for known real
   equipment tokens. A whitelist matched case-insensitively, or on unanchored prefixes, is not
   fail-closed — it only looks it.
+- **2026-08-09 — P7, an unplanned seventh phase: the programme corrected itself.** Prompted by the
+  owner asking to explore the three dynamization refusals. Reflection on the assembly plus Siemens'
+  own *Engineering Guideline for WinCC Unified* (SIOS 109827603) suggested the kinds are gated on the
+  target property's TYPE; a 14-probe sweep with negative controls confirmed it live. **`Flashing`
+  creates on colour properties, `ResourceList` on text properties — 5 of 6 kinds, not 3.** P3's
+  headline is retracted in place. `TagParameter` still refuses everywhere tried and is probably
+  faceplate-scoped (UNVERIFIED — faceplate types cannot be authored, so it may stay that way). Also
+  surfaced: a second, untouched route to flashing via `TagDynamization.ValueConverter` →
+  `MappingTable` → entries carrying `Flashing`/`FlashingRate`; and a tooling gap — `--set` resolves
+  item names only, so a flashing dynamization can be created but not configured. Device returned to
+  zero artifacts and `STATE: Success`.

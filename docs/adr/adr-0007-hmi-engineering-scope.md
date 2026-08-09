@@ -54,8 +54,19 @@ paragraph.
 2. **"Only ~2% has been walked" is answered, and answered in the ADR's own favour as an argument.**
    Live coverage moved to ~3% of members — but item types and dynamization kinds are now
    **exhaustively attempted**, and the exhaustive results are negatives: **21 of 56 item types
-   refuse**, **3 of 6 dynamization kinds refuse** (including `Flashing`, which is how alarm state is
-   displayed), and every refusal gives the same message with no reason. The predicted base rate held.
+   refuse**, ~~**3 of 6 dynamization kinds refuse** (including `Flashing`, which is how alarm state
+   is displayed)~~, and every refusal gives the same message with no reason. The predicted base rate
+   held.
+
+   > **Corrected 2026-08-09 (P7, write-api §4m).** The dynamization half of that sentence was wrong,
+   > and wrongly in the ADR's favour as an argument *against*. **5 of 6 kinds create** — a
+   > dynamization is gated on the **target property's type**, and the probe had bound every kind to a
+   > Boolean. `Flashing` works on colour properties, `ResourceList` on text properties, with negative
+   > controls confirming both directions. Alarm-state *display* is therefore fully expressible.
+   > **The base-rate argument survives and arguably strengthens** — but note which way it cut: the
+   > surprise here was that a measured negative was the *measurer's* error, not the API's. That is a
+   > reason to demand negative controls before a refusal is entered as evidence in this decision, not
+   > a reason to discount the walking.
 3. **Deletion — "0 of 184, the unrecoverable half" — is walked, and the answer is bad.** Deleting an
    object that is still referenced neither cascades nor refuses: **it orphans silently**, and only
    the compile notices. Automating deletion therefore requires a mandatory post-delete compile.
@@ -185,8 +196,9 @@ is the honest base rate for the remaining 98%.
 > members, **15 of 80** creatable kinds, **35 created of all 56** item types attempted, **3 created
 > of all 6** dynamization kinds attempted, ~20 deletions across 9 kinds. The *argument* survives the
 > update — the base rate held, and the new surprises (deletion orphans; alarm text refuses; a third
-> of the item catalogue and half the dynamization kinds refuse without saying why) are again mostly
-> negative. Event breadth is unchanged at **2 of 246**.
+> of the item catalogue refuses without saying why) are again mostly negative. Event breadth is
+> unchanged at **2 of 246**. *(Amended 2026-08-09: this blockquote first said "half the dynamization
+> kinds refuse". P7 retracted that — 5 of 6 create, and the counts above already reflect it.)*
 
 ## Options considered
 

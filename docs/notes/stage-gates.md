@@ -54,8 +54,11 @@ phases), `docs/notes/openness-hmi-write-api.md` (findings), `docs/notes/openness
 (the read survey), `docs/evidence/hmi-capability-probes.md` (transcripts, redacted per `docs/13`),
 `docs/adr/adr-0007-hmi-engineering-scope.md` (**Proposed — awaiting the project owner's decision**).
 Headline results: the create/modify/bind/script/compile chain works end to end; **deletion orphans
-silently**; **alarm text cannot be written at all**; 3 of 6 dynamization kinds and 21 of 56 item
-types refuse without saying why; and the device compile is a genuine reference-integrity gate.
+silently**; **alarm text cannot be written at all**; 21 of 56 item types refuse without saying why;
+and the device compile is a genuine reference-integrity gate. A seventh phase (P7, 2026-08-09)
+**retracted one of those headlines**: dynamization kinds are gated on the target property's type, so
+**5 of 6 create** (`Flashing` on colour properties, `ResourceList` on text) — the earlier "3 of 6"
+was a confounded probe, not an API limit.
 
 **Appending history going forward:** add dated entries to the relevant
 `docs/evidence/stage-SN.md`, and update this file's status table in place. Keep large
