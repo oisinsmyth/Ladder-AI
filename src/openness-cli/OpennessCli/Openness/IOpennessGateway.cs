@@ -149,6 +149,16 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<HmiObjectInfo> InventoryHmi(string? kindFilter);
 
     /// <summary>
+    /// READ-ONLY walk of the PROJECT LIBRARY — types, their versions, and the master copies.
+    /// Separate from the HMI walk on purpose: the library is not device content, and every earlier
+    /// search for a faceplate type looked under <c>HmiSoftware</c> and concluded types could not be
+    /// authored. Faceplates are library types. This reports each type's CLR class name and its
+    /// <c>GetSupportedExportFormats()</c>, which together settle whether a Unified faceplate has a
+    /// document round trip. Writes nothing.
+    /// </summary>
+    LibraryInventory InventoryLibrary(bool includeMasterCopies);
+
+    /// <summary>
     /// Sets attributes on any object in any composition — the counterpart to
     /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the
     /// MultilingualText path (alarm texts and the like), which can only write into a language the

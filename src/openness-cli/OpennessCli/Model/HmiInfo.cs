@@ -174,3 +174,32 @@ public sealed record HmiEditScreenResult(
     IReadOnlyList<string> Applied,
     IReadOnlyList<HmiValidationMessage> Validation,
     bool Saved);
+
+/// <summary>
+/// A project-library type. <paramref name="ClrTypeName"/> is the point of the whole command:
+/// faceplates are library types (`Hmi.Faceplate.FaceplateLibraryType`), and whether a *Unified*
+/// faceplate surfaces as that class or as a plain `LibraryType` is the load-bearing unknown in
+/// `docs/notes/openness-hmi-faceplate-library.md`. Reporting the CLR name of every type answers it
+/// by observation instead of by inference.
+/// </summary>
+public sealed record LibraryTypeInfo(
+    string FolderPath,
+    string Name,
+    string ClrTypeName,
+    string? Namespace,
+    string Status,
+    IReadOnlyList<string> ExportFormats,
+    IReadOnlyList<LibraryVersionInfo> Versions);
+
+public sealed record LibraryVersionInfo(
+    string VersionNumber,
+    string State,
+    string ClrTypeName,
+    bool IsDefault,
+    int InstanceCount);
+
+public sealed record MasterCopyInfo(string FolderPath, string Name, IReadOnlyList<string> ContentTypes);
+
+public sealed record LibraryInventory(
+    IReadOnlyList<LibraryTypeInfo> Types,
+    IReadOnlyList<MasterCopyInfo> MasterCopies);

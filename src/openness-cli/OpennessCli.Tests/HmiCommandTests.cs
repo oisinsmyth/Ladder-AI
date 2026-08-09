@@ -832,6 +832,58 @@ public class HmiCommandTests
         Assert.Equal(3, OutputFormatter.CountRefusals(applied));
     }
 
+    /// <summary>
+    /// Measured 2026-08-09: a freshly-rebuilt binary exited 5 with "AggregateException ... --->
+    /// EngineeringSecurityException: Security error." — the most routine environmental condition
+    /// this tool has, reported as an internal fault. It arrives WRAPPED (the connect path runs
+    /// through Task), so the chain has to be walked; matching only the top-level type would silently
+    /// stop working the moment the wrapping changed.
+    /// </summary>
+    private sealed class StandInException : Exception
+    {
+        public StandInException(string message) : base(message)
+        {
+        }
+    }
+
+    /// <summary>
+    /// The chain walk behind the security-refusal classification. Tested with a stand-in exception
+    /// rather than `EngineeringSecurityException` on purpose: this project's tests deliberately do
+    /// not reference the Siemens assembly, and the TYPE MATCH is compiler-checked anyway — what is
+    /// not compiler-checked, and what actually broke in the field, is that the interesting exception
+    /// arrives WRAPPED (the connect path runs through Task, producing
+    /// "AggregateException ... ---> EngineeringSecurityException"). A classifier matching only the
+    /// top-level type reports the single most routine environmental condition this tool has as an
+    /// internal fault.
+    /// </summary>
+    [Fact]
+    public void FindInChain_LooksThroughInnerExceptionsAndAggregateBranches()
+    {
+        var directInner = new InvalidOperationException("outer", new StandInException("target"));
+        Assert.NotNull(ExitCodes.FindInChain<StandInException>(directInner));
+
+        var wrappedInAggregate = new AggregateException(
+            "One or more errors occurred.",
+            new InvalidOperationException("outer", new StandInException("target")));
+        Assert.NotNull(ExitCodes.FindInChain<StandInException>(wrappedInAggregate));
+
+        // Not the first branch — a walk that stopped at InnerExceptions[0] would miss this.
+        var secondBranch = new AggregateException(
+            new InvalidOperationException("unrelated"),
+            new StandInException("target"));
+        Assert.NotNull(ExitCodes.FindInChain<StandInException>(secondBranch));
+
+        Assert.Null(ExitCodes.FindInChain<StandInException>(new InvalidOperationException("nothing here")));
+        Assert.Null(ExitCodes.FindInChain<StandInException>(null));
+    }
+
+    [Fact]
+    public void UnrelatedException_IsNotMistakenForASecurityRefusal()
+    {
+        Assert.Null(ExitCodes.DescribeSecurityRefusal(new InvalidOperationException("something else")));
+        Assert.Equal(ExitCodes.UnexpectedError, ExitCodes.ForException(new InvalidOperationException("something else")));
+    }
+
     [Fact]
     public void DescribeAppliedCount_IsABareNumberWhenNothingWasRefused()
     {

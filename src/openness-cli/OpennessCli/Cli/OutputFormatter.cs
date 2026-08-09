@@ -32,6 +32,97 @@ public static class OutputFormatter
             : $"{text} ({refused.ToString(CultureInfo.InvariantCulture)} REFUSED)";
     }
 
+    /// <summary>
+    /// The CLR class name is printed for every type and every version, not just for the ones that
+    /// look interesting. That is the whole point of the command: the question it answers is which
+    /// class a Unified faceplate actually turns out to be, and a report that pretty-printed only the
+    /// friendly name would answer nothing.
+    /// </summary>
+    public static string FormatLibraryReport(LibraryInventory inventory, bool includeMasterCopies)
+    {
+        var sb = new StringBuilder();
+        sb.Append("PROJECT LIBRARY — types: ").Append(inventory.Types.Count.ToString(CultureInfo.InvariantCulture));
+        if (includeMasterCopies)
+        {
+            sb.Append("  masterCopies: ").Append(inventory.MasterCopies.Count.ToString(CultureInfo.InvariantCulture));
+        }
+
+        sb.AppendLine();
+
+        if (inventory.Types.Count == 0)
+        {
+            sb.AppendLine("  (no library types — the project library is empty)");
+        }
+
+        foreach (var type in inventory.Types)
+        {
+            sb.Append("  ").Append(type.FolderPath).Append("  ").Append(type.Name)
+              .Append("  [").Append(type.ClrTypeName).Append(']');
+            if (!string.IsNullOrEmpty(type.Namespace))
+            {
+                sb.Append("  ns=").Append(type.Namespace);
+            }
+
+            sb.Append("  status=").Append(type.Status).AppendLine();
+
+            sb.Append("      exportFormats: ")
+              .AppendLine(type.ExportFormats.Count == 0 ? "(NONE — no document round trip for this type)" : string.Join(", ", type.ExportFormats));
+
+            foreach (var version in type.Versions)
+            {
+                sb.Append("      v").Append(version.VersionNumber)
+                  .Append("  ").Append(version.State)
+                  .Append(version.IsDefault ? "  (default)" : string.Empty)
+                  .Append("  [").Append(version.ClrTypeName).Append(']')
+                  .AppendLine();
+            }
+        }
+
+        foreach (var copy in inventory.MasterCopies)
+        {
+            sb.Append("  MASTERCOPY  ").Append(copy.FolderPath).Append("  ").Append(copy.Name);
+            if (copy.ContentTypes.Count > 0)
+            {
+                sb.Append("  contains: ").Append(string.Join(", ", copy.ContentTypes));
+            }
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatLibraryJson(LibraryInventory inventory)
+    {
+        var payload = new
+        {
+            types = inventory.Types.Select(t => new
+            {
+                folderPath = t.FolderPath,
+                name = t.Name,
+                clrTypeName = t.ClrTypeName,
+                @namespace = t.Namespace,
+                status = t.Status,
+                exportFormats = t.ExportFormats,
+                versions = t.Versions.Select(v => new
+                {
+                    versionNumber = v.VersionNumber,
+                    state = v.State,
+                    clrTypeName = v.ClrTypeName,
+                    isDefault = v.IsDefault,
+                }),
+            }),
+            masterCopies = inventory.MasterCopies.Select(m => new
+            {
+                folderPath = m.FolderPath,
+                name = m.Name,
+                contentTypes = m.ContentTypes,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatTable(IReadOnlyList<BlockInfo> blocks)
     {
         if (blocks.Count == 0)

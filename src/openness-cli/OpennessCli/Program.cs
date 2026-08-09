@@ -1,6 +1,7 @@
 using System;
 using OpennessCli.Cli;
 using OpennessCli.Openness;
+using Siemens.Engineering;
 
 namespace OpennessCli;
 
@@ -118,6 +119,8 @@ internal static class Program
                     return RunHmiInventory(gateway, hmiInv.Options, timeoutOpenSeconds);
                 case ParseResult.HmiSetSuccess hmiSet:
                     return RunHmiSet(gateway, hmiSet.Options, timeoutOpenSeconds);
+                case ParseResult.LibrarySuccess library:
+                    return RunLibrary(gateway, library.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -130,9 +133,14 @@ internal static class Program
             // internal fault. ExitCodes.ForException is where the classification now lives, and it is
             // unit-tested — the old form could only be checked by running the real CLI.
             var exitCode = ExitCodes.ForException(ex);
-            Console.Error.WriteLine(exitCode == ExitCodes.UnexpectedError
+
+            // The approval refusal gets its own message: the exception's own text is "Security
+            // error.", which is worse than useless here because the reader's next move is a click
+            // inside Portal, not a change to what they typed.
+            var securityHelp = ExitCodes.DescribeSecurityRefusal(ex);
+            Console.Error.WriteLine(securityHelp ?? (exitCode == ExitCodes.UnexpectedError
                 ? $"openness-cli {args[0]} failed: {DescribeWithInnerExceptions(ex)}"
-                : ex.Message);
+                : ex.Message));
             return exitCode;
         }
     }
@@ -276,6 +284,16 @@ internal static class Program
         // (P4.4): the alarm's class was set, its bit number and its EventText were both refused, and
         // the command exited 0. Partial success is not success.
         return OutputFormatter.CountRefusals(applied) > 0 ? ExitCodes.CommandError : ExitCodes.Success;
+    }
+
+    private static int RunLibrary(IOpennessGateway gateway, LibraryOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var inventory = gateway.InventoryLibrary(options.IncludeMasterCopies);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatLibraryJson(inventory)
+            : OutputFormatter.FormatLibraryReport(inventory, options.IncludeMasterCopies));
+        return ExitCodes.Success;
     }
 
     private static int RunHmiInventory(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds)
@@ -594,6 +612,68 @@ public static class ExitCodes
         HmiObjectNotFoundException => CommandError,
         HmiRefusedToDeleteRealObjectException => CommandError,
 
+        // The Openness approval refusal, added 2026-08-09. Measured: a freshly-rebuilt `library`
+        // binary exited 5 with "AggregateException ... ---> EngineeringSecurityException: Security
+        // error." and a full inner-exception dump. That is not an internal fault — it is the single
+        // most routine environmental condition this tool has, because TIA's whitelist keys on the
+        // CLIENT BINARY'S HASH, so EVERY REBUILD needs a fresh human approval. Reporting the most
+        // predictable consequence of editing this program as an unexpected error is exactly the
+        // defect audit F-09 fixed for the naming families above.
+        // It arrives wrapped (Task machinery), so the chain has to be walked rather than matched.
+        _ when FindInChain<EngineeringSecurityException>(ex) is not null => EnvironmentError,
+
         _ => UnexpectedError,
     };
+
+    /// <summary>
+    /// Walks an exception chain — inner exceptions and every branch of an
+    /// <see cref="AggregateException"/> — for the first exception of type <typeparamref name="T"/>.
+    /// The connect path runs through <c>Task</c>, so the interesting exception is never the top one.
+    /// </summary>
+    public static T? FindInChain<T>(Exception? ex) where T : Exception
+    {
+        while (ex is not null)
+        {
+            if (ex is T match)
+            {
+                return match;
+            }
+
+            if (ex is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions)
+                {
+                    if (FindInChain<T>(inner) is { } found)
+                    {
+                        return found;
+                    }
+                }
+
+                return null;
+            }
+
+            ex = ex.InnerException;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The actionable message for an Openness approval refusal. `EngineeringSecurityException`'s own
+    /// message is the two-word "Security error.", which tells the reader nothing and — because the
+    /// cause is a rebuild rather than anything they typed — is very easily misread as contention or
+    /// as a broken install.
+    /// </summary>
+    public static string? DescribeSecurityRefusal(Exception ex) =>
+        FindInChain<EngineeringSecurityException>(ex) is null
+            ? null
+            : "Openness refused this client: EngineeringSecurityException (\"Security error\").\n" +
+              "  This is almost always the APPROVAL WHITELIST, not a broken install and not contention.\n" +
+              "  TIA keys the whitelist on the CLIENT BINARY'S HASH, so every rebuild of openness-cli is\n" +
+              "  a client TIA has never seen and needs a one-time human approval:\n" +
+              "    1. Open TIA Portal.\n" +
+              "    2. Re-run this command; a dialog titled 'Openness access' appears inside Portal.\n" +
+              "    3. Click Yes. The approval then persists for THIS build only.\n" +
+              "  Also confirm Windows group membership of 'Siemens TIA Openness'.\n" +
+              "  See docs/notes/openness-quirks.md ('the approval whitelist keys on the binary's HASH').";
 }

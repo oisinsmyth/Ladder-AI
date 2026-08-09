@@ -1755,6 +1755,160 @@ public sealed class OpennessGateway : IOpennessGateway
         return results;
     }
 
+    public LibraryInventory InventoryLibrary(bool includeMasterCopies)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(InventoryLibrary)}.");
+        }
+
+        var types = new List<LibraryTypeInfo>();
+        var masterCopies = new List<MasterCopyInfo>();
+
+        // Everything below goes through reflection rather than the typed Library API on purpose:
+        // the whole question is WHICH CLR CLASS each type turns out to be, and a typed walk would
+        // erase exactly that by upcasting to LibraryType.
+        var library = TryReadObject(() => _project.GetType().GetProperty("ProjectLibrary")?.GetValue(_project));
+        if (library is null)
+        {
+            return new LibraryInventory(types, masterCopies);
+        }
+
+        var typeFolder = TryReadObject(() => library.GetType().GetProperty("TypeFolder")?.GetValue(library));
+        if (typeFolder is not null)
+        {
+            WalkTypeFolder(typeFolder, "TypeFolder", types);
+        }
+
+        if (includeMasterCopies)
+        {
+            var copyFolder = TryReadObject(() => library.GetType().GetProperty("MasterCopyFolder")?.GetValue(library));
+            if (copyFolder is not null)
+            {
+                WalkMasterCopyFolder(copyFolder, "MasterCopyFolder", masterCopies);
+            }
+        }
+
+        return new LibraryInventory(types, masterCopies);
+    }
+
+    // Library type folders nest, exactly like screen groups do — and the screen walk was wrong for
+    // weeks because it read only the root (§4a). Recurse from the start.
+    private static void WalkTypeFolder(object folder, string path, List<LibraryTypeInfo> results)
+    {
+        if (TryReadObject(() => folder.GetType().GetProperty("Types")?.GetValue(folder)) is System.Collections.IEnumerable typeItems)
+        {
+            foreach (var type in typeItems)
+            {
+                if (type is null)
+                {
+                    continue;
+                }
+
+                results.Add(ReadLibraryType(type, path));
+            }
+        }
+
+        if (TryReadObject(() => folder.GetType().GetProperty("Folders")?.GetValue(folder)) is System.Collections.IEnumerable subFolders)
+        {
+            foreach (var sub in subFolders)
+            {
+                if (sub is null)
+                {
+                    continue;
+                }
+
+                var name = TryRead(() => sub.GetType().GetProperty("Name")?.GetValue(sub) as string) ?? "(unnamed)";
+                WalkTypeFolder(sub, path + "/" + name, results);
+            }
+        }
+    }
+
+    private static LibraryTypeInfo ReadLibraryType(object type, string folderPath)
+    {
+        var name = TryRead(() => type.GetType().GetProperty("Name")?.GetValue(type) as string) ?? "(unnamed)";
+        var ns = TryRead(() => type.GetType().GetProperty("Namespace")?.GetValue(type) as string);
+        var status = TryRead(() => type.GetType().GetProperty("Status")?.GetValue(type)?.ToString()) ?? "(unknown)";
+
+        // The half that decides whether a document round trip exists for this type at all.
+        var formats = new List<string>();
+        if (TryReadObject(() => type.GetType().GetMethod("GetSupportedExportFormats")?.Invoke(type, null)) is System.Collections.IEnumerable formatItems)
+        {
+            foreach (var f in formatItems)
+            {
+                formats.Add(f?.ToString() ?? "(null)");
+            }
+        }
+
+        var versions = new List<LibraryVersionInfo>();
+        if (TryReadObject(() => type.GetType().GetProperty("Versions")?.GetValue(type)) is System.Collections.IEnumerable versionItems)
+        {
+            foreach (var version in versionItems)
+            {
+                if (version is null)
+                {
+                    continue;
+                }
+
+                var number = TryRead(() => version.GetType().GetProperty("VersionNumber")?.GetValue(version)?.ToString()) ?? "(?)";
+                var state = TryRead(() => version.GetType().GetProperty("State")?.GetValue(version)?.ToString()) ?? "(?)";
+                // TryRead is string-typed; IsDefault is a bool, so it goes through the object helper.
+                var isDefault = TryReadObject(() => version.GetType().GetProperty("IsDefault")?.GetValue(version)) is true;
+
+                // FindInstances needs a scope object we do not have here; the instance count is a
+                // nice-to-have, so report -1 (unknown) rather than inventing one or throwing.
+                versions.Add(new LibraryVersionInfo(number, state, version.GetType().Name, isDefault, -1));
+            }
+        }
+
+        return new LibraryTypeInfo(folderPath, name, type.GetType().Name, ns, status, formats, versions);
+    }
+
+    private static void WalkMasterCopyFolder(object folder, string path, List<MasterCopyInfo> results)
+    {
+        if (TryReadObject(() => folder.GetType().GetProperty("MasterCopies")?.GetValue(folder)) is System.Collections.IEnumerable copies)
+        {
+            foreach (var copy in copies)
+            {
+                if (copy is null)
+                {
+                    continue;
+                }
+
+                var name = TryRead(() => copy.GetType().GetProperty("Name")?.GetValue(copy) as string) ?? "(unnamed)";
+                var contents = new List<string>();
+                if (TryReadObject(() => copy.GetType().GetProperty("ContentDescriptions")?.GetValue(copy)) is System.Collections.IEnumerable descriptions)
+                {
+                    foreach (var d in descriptions)
+                    {
+                        if (d is null)
+                        {
+                            continue;
+                        }
+
+                        contents.Add(TryRead(() => d.GetType().GetProperty("TypeName")?.GetValue(d) as string) ?? d.GetType().Name);
+                    }
+                }
+
+                results.Add(new MasterCopyInfo(path, name, contents));
+            }
+        }
+
+        if (TryReadObject(() => folder.GetType().GetProperty("Folders")?.GetValue(folder)) is System.Collections.IEnumerable subFolders)
+        {
+            foreach (var sub in subFolders)
+            {
+                if (sub is null)
+                {
+                    continue;
+                }
+
+                var name = TryRead(() => sub.GetType().GetProperty("Name")?.GetValue(sub) as string) ?? "(unnamed)";
+                WalkMasterCopyFolder(sub, path + "/" + name, results);
+            }
+        }
+    }
+
     // Resolves e.g. "Tags" / "DiscreteAlarms" / "Screens" to the composition object on HmiSoftware.
     private static object ResolveComposition(HmiSoftware software, string kind)
     {

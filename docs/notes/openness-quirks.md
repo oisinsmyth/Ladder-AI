@@ -771,6 +771,30 @@ invisible modal dialog indefinitely. So: **do not rebuild between authoring a sw
 if the run is meant to be unattended, and if a rebuild is unavoidable, get the approval interactively
 before arming the sweep.
 
+#### The refusal has TWO faces, and they look like different bugs (measured 2026-08-09)
+
+An unapproved build was run twice, minutes apart, same binary, same project, nobody clicking:
+
+| Run | Result | Exit |
+|---|---|---|
+| 1 | `AggregateException … ---> EngineeringSecurityException: Security error.` — fast | **5**, now **2** |
+| 2 | attach never completed; the CLI's own 15-minute connect timeout fired | **3** |
+
+**Same cause, two presentations**, and neither names the approval. The plausible reading is that it
+depends on which Portal the client reaches: an already-running process that has previously refused
+this hash rejects immediately, while a freshly-launched one puts up the dialog and waits. That is a
+hypothesis from two data points, not a rule.
+
+What matters operationally: **`EngineeringSecurityException` and a connect timeout are the same
+problem**, so the diagnosis for a wedged attach is now *three*-way — another session's client, an
+unapproved build refused outright, or an unapproved build waiting on a dialog. Exit code **3 on a
+freshly rebuilt binary should be read as "needs approval" first and contention second.**
+
+`EngineeringSecurityException` used to exit **5 = UnexpectedError** with a full inner-exception dump;
+it now exits **2 = EnvironmentError** and prints what to do. The exception arrives *wrapped* (the
+connect path runs through `Task`), so the classifier walks the chain including every
+`AggregateException` branch — matching only the top-level type finds nothing.
+
 **Related, same session:** `openness-cli` launches Portal as a **child process that inherits stdout**,
 so piping its output through anything that waits for the stream to close (`| Out-File`, `| Tee-Object`,
 `$(...)`) **hangs forever** even after the command itself finishes — the pipe stays open as long as

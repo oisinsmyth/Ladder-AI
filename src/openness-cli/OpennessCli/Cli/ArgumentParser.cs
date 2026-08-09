@@ -141,6 +141,14 @@ public sealed record HmiEditScreenOptions(
 // Metamodel-driven object commands. `Kind` names a composition on HmiSoftware (Screens, Tags,
 // DiscreteAlarms, ...); one options record serves create, delete and inventory because the shape is
 // the same and three near-identical records would only drift.
+public sealed record LibraryOptions(
+    string ProjectIdentifier,
+    bool IncludeMasterCopies,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public sealed record HmiObjectOptions(
     string ProjectIdentifier,
     string Kind,
@@ -211,6 +219,8 @@ public abstract record ParseResult
 
     public sealed record HmiSetSuccess(HmiObjectOptions Options) : ParseResult;
 
+    public sealed record LibrarySuccess(LibraryOptions Options) : ParseResult;
+
     public sealed record Failure(string Message) : ParseResult;
 }
 
@@ -235,6 +245,8 @@ public static class ArgumentParser
         "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli library       <project> [--master-copies] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    READ-ONLY walk of the project library: every type with its CLR class name, status, supported export formats and versions. Faceplates are library types, not device content.\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
         "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
@@ -300,6 +312,7 @@ public static class ArgumentParser
         ParseResult.HmiDeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiInventorySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSetSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.LibrarySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -327,6 +340,7 @@ public static class ArgumentParser
         ParseResult.HmiDeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiInventorySuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiSetSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.LibrarySuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -355,6 +369,7 @@ public static class ArgumentParser
             "hmi-delete" => ParseHmiObject(args, "hmi-delete", requireName: true, requireConfirm: true),
             "hmi-inventory" => ParseHmiObject(args, "hmi-inventory", requireName: false, requireConfirm: false),
             "hmi-set" => ParseHmiObject(args, "hmi-set", requireName: true, requireConfirm: true),
+            "library" => ParseLibrary(args),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -363,7 +378,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1414,6 +1429,70 @@ public static class ArgumentParser
     // One parser for hmi-new / hmi-delete / hmi-inventory: the flag shape is identical and three
     // near-copies would drift. `verb` decides which ParseResult comes back and whether --name and
     // --yes are required (inventory is read-only, so neither is).
+    private static ParseResult ParseLibrary(string[] args)
+    {
+        string? projectIdentifier = null;
+        var includeMasterCopies = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--json":
+                    json = true;
+                    break;
+                case "--master-copies":
+                    includeMasterCopies = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.LibrarySuccess(new LibraryOptions(
+            projectIdentifier,
+            includeMasterCopies,
+            json,
+            tiaInstall,
+            timeoutConnect,
+            timeoutOpen));
+    }
+
     private static ParseResult ParseHmiObject(string[] args, string verb, bool requireName, bool requireConfirm)
     {
         string? projectIdentifier = null;
