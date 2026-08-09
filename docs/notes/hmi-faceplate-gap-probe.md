@@ -1,5 +1,68 @@
 # The faceplate gap — what P10 did not test
 
+> # 🔬 P13 — THE LIBRARY-WIDE COMPARISON, AND WHY AUTHORING IS NOT DEAD (2026-08-10) [LIVE]
+>
+> Prompted by the owner: *"don't give up on authoring faceplates; investigate ALL library types, not
+> just faceplates — they may lead to a clue."* **That was the right instinct**, and it converted a
+> faceplate-shaped dead end into a structural rule with an identifiable single point of failure.
+>
+> ## The negative control that had never been run
+>
+> The same call — `LibraryTypeVersion.Export(FileInfo, ExportOptions.None)` — across three kinds:
+>
+> | Library type | CLR class | Bytes | `ContentObject`? |
+> |---|---|---|---|
+> | PLC data type | `PlcTypeLibraryType` | 4,244 | ✅ **full definition** — `SW.Types.PlcStruct` with the complete `Interface`/`Sections`/`Member` tree |
+> | Faceplate | `LibraryType` | 2,642 | ❌ absent |
+> | **Image file** | `LibraryType` | 2,641 | ❌ absent |
+>
+> **The image is the discriminating case.** An icon is about as un-secret as content gets, and it is
+> withheld identically to the faceplate. So the difference is **not** "HMI content is protected" and
+> **not** "faceplates are special". It is the **CLR class**:
+>
+> > **Empty `GetSupportedExportFormats()` ⟺ plain `LibraryType` ⟺ no `ContentObject`.**
+> > Three views of ONE fact: **Openness ships no content serialiser for HMI-side library types.**
+>
+> This also **corrects a claim made a few hours earlier in P12**, that `LibraryTypeVersion.Export`
+> "writes a wrapper with no payload". Wrong as a general statement — it writes payloads perfectly
+> well. Only this one CLR class lacks the serialiser.
+>
+> ## Why that is a better position than "refuted"
+>
+> The three symptoms are **one** point of failure, not three independent walls. Everything around it
+> is demonstrably functional: versions, the document schema, and `CreateFromDocuments` all work for
+> PLC types. And **export and import are separate code paths** — nothing requires both to exist.
+>
+> ## The two live leads, in priority order
+>
+> 1. **`CreateFromDocuments` with a hand-authored document.** We now hold two real worked examples of
+>    the wrapper schema — one WITH a `ContentObject` and one WITHOUT — from the same TIA version. If
+>    TIA accepts a `LibraryTypeVersion` document carrying a `ContentObject` we write ourselves, the
+>    missing *exporter* stops mattering, because only the *importer* would be needed. **This is the
+>    prize, and it is only reachable because the PLC document showed what a valid one looks like.**
+> 2. **`ExportAsDocuments` called anyway, despite the empty format list.** Since P10 that emptiness
+>    has been treated as a gate and **never once tested as one**. An empty ADVERTISEMENT is not a
+>    REFUSAL — this project has concluded "impossible" from not finding the right method four times.
+>
+> ## Status of lead 2: tooling BUILT, probe NOT RUN
+>
+> `openness-cli library --probe-documents <TypeName> --out <dir>` is implemented and unit-tested. It
+> invokes **every** `Export*` overload on the type, including `ExportAsDocuments` with the first enum
+> value when nothing is advertised, and reports each binding and outcome. It deliberately does not
+> gate — a throw is a RESULT and the whole output is the finding.
+>
+> 🔴 **It has never executed.** The build that carries it revoked the Openness whitelist approval
+> (FI-61: keyed on `(Path, FileHash)`), and in this state TIA refuses **silently** — no dialog, so it
+> cannot be approved reactively; the connect simply burns the timeout. Running it needs an approved
+> build. **Do not record any conclusion about lead 2 — it is untested, not negative.**
+>
+> ## Also still open
+>
+> - A **third data point**: does `CodeBlockLibraryType` carry a `ContentObject` too? That confirms
+>   whether "content-bearing" tracks PLC specifically or merely tracks having a typed subclass.
+> - The **global** library rather than the project library — different storage, possibly different
+>   serialisation.
+
 > # 🔎 P12 — THE GAPS CLOSED, AND THE ARCHITECTURE THIS PROJECT ACTUALLY USES (2026-08-10) [LIVE]
 >
 > Run against the reference project's scratch copy, `ZZ_AI_*` names, restored to baseline

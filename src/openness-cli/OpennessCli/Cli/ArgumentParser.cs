@@ -151,7 +151,8 @@ public sealed record LibraryOptions(
     int TimeoutOpenSeconds,
     string? ExportTypeName = null,
     string? ExportVersion = null,
-    string? OutDirectory = null);
+    string? OutDirectory = null,
+    string? ProbeDocumentsTypeName = null);
 
 public sealed record HmiObjectOptions(
     string ProjectIdentifier,
@@ -286,6 +287,9 @@ public static class ArgumentParser
         "    GetSupportedExportFormats() is empty for every HMI type, but CreateFromDocuments takes no format either, so that emptiness never constrained this call.\n" +
         "    Without --version the DEFAULT version is exported. Reports how the call was bound (overload, parameter type, options value) so a negative result is diagnosable.\n" +
         "    Exits 7 if the call returns without writing anything: an export that produced nothing is a failed export, not a quiet success.\n" +
+        "  openness-cli library       <project> --probe-documents <TypeName> --out <directory>\n" +
+        "    Calls EVERY Export* overload on the type - including ExportAsDocuments when GetSupportedExportFormats() is EMPTY - and reports each binding and outcome.\n" +
+        "    An empty format list has been treated as a gate since P10 and has never been TESTED as one. An empty advertisement is not a refusal. A throw here is a RESULT.\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
         "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
@@ -1486,6 +1490,7 @@ public static class ArgumentParser
         string? exportTypeName = null;
         string? exportVersion = null;
         string? outDirectory = null;
+        string? probeDocumentsTypeName = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
 
@@ -1503,6 +1508,13 @@ public static class ArgumentParser
                     if (!TryTakeValue(args, ref i, "--export-version", out exportTypeName, out var exportErr))
                     {
                         return new ParseResult.Failure(exportErr);
+                    }
+
+                    break;
+                case "--probe-documents":
+                    if (!TryTakeValue(args, ref i, "--probe-documents", out probeDocumentsTypeName, out var probeErr))
+                    {
+                        return new ParseResult.Failure(probeErr);
                     }
 
                     break;
@@ -1558,14 +1570,19 @@ public static class ArgumentParser
 
         // --out is meaningless without a type to export, and an export with nowhere to write is a
         // silent no-op waiting to happen. Both directions are hard errors rather than defaults.
-        if (exportTypeName is not null && outDirectory is null)
+        if ((exportTypeName is not null || probeDocumentsTypeName is not null) && outDirectory is null)
         {
-            return new ParseResult.Failure($"--export-version requires --out <directory>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--export-version and --probe-documents require --out <directory>.{Environment.NewLine}{Usage}");
         }
 
-        if (exportTypeName is null && (outDirectory is not null || exportVersion is not null))
+        if (exportTypeName is null && probeDocumentsTypeName is null && (outDirectory is not null || exportVersion is not null))
         {
-            return new ParseResult.Failure($"--out and --version are only meaningful with --export-version <TypeName>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--out and --version are only meaningful with --export-version or --probe-documents.{Environment.NewLine}{Usage}");
+        }
+
+        if (exportTypeName is not null && probeDocumentsTypeName is not null)
+        {
+            return new ParseResult.Failure($"--export-version and --probe-documents are alternatives; pass one.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.LibrarySuccess(new LibraryOptions(
@@ -1577,7 +1594,8 @@ public static class ArgumentParser
             timeoutOpen,
             exportTypeName,
             exportVersion,
-            outDirectory));
+            outDirectory,
+            probeDocumentsTypeName));
     }
 
     private static ParseResult ParseHmiObject(string[] args, string verb, bool requireName, bool requireConfirm)

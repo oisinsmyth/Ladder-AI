@@ -312,6 +312,17 @@ internal static class Program
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
 
+        if (options.ProbeDocumentsTypeName is { } probeType && options.OutDirectory is { } probeOut)
+        {
+            foreach (var line in gateway.ProbeExportAsDocuments(probeType, probeOut))
+            {
+                Console.WriteLine(line);
+            }
+
+            // A probe reports; it does not pass or fail. Its whole output is the finding.
+            return ExitCodes.Success;
+        }
+
         if (options.ExportTypeName is { } exportTypeName && options.OutDirectory is { } outDirectory)
         {
             var export = gateway.ExportLibraryTypeVersion(exportTypeName, options.ExportVersion, outDirectory);

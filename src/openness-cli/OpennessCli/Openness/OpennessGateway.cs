@@ -1882,6 +1882,136 @@ public sealed class OpennessGateway : IOpennessGateway
             produced);
     }
 
+    /// <summary>
+    /// Calls <c>LibraryType.ExportAsDocuments</c> even when <c>GetSupportedExportFormats()</c> is
+    /// EMPTY, and reports every candidate overload it found.
+    /// </summary>
+    /// <remarks>
+    /// The whole faceplate question has rested since P10 on treating an empty format list as a
+    /// gate. It has never been tested as one. An empty ADVERTISEMENT is not a REFUSAL, and this
+    /// project has concluded "impossible" from not finding the right method four separate times.
+    ///
+    /// Every attempt is reported with its binding and its outcome, so a refusal is diagnosable
+    /// rather than becoming another unexplained empty answer. A throw here is a RESULT, not a bug.
+    /// </remarks>
+    public IReadOnlyList<string> ProbeExportAsDocuments(string typeName, string outDirectory)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ProbeExportAsDocuments)}.");
+        }
+
+        var library = TryReadObject(() => _project.GetType().GetProperty("ProjectLibrary")?.GetValue(_project))
+            ?? throw new InvalidOperationException("Project has no ProjectLibrary.");
+        var typeFolder = TryReadObject(() => library.GetType().GetProperty("TypeFolder")?.GetValue(library))
+            ?? throw new InvalidOperationException("Project library has no TypeFolder.");
+
+        var liveType = FindLibraryTypeObject(typeFolder, typeName)
+            ?? throw new InvalidOperationException($"No library type named '{typeName}'.");
+
+        Directory.CreateDirectory(outDirectory);
+
+        var report = new List<string>
+        {
+            $"type: {typeName}  [{liveType.GetType().Name}]",
+        };
+
+        var formats = TryReadObject(() => liveType.GetType().GetMethod("GetSupportedExportFormats")?.Invoke(liveType, null))
+            as System.Collections.IEnumerable;
+        var formatList = new List<object>();
+        if (formats is not null)
+        {
+            foreach (var format in formats)
+            {
+                if (format is not null)
+                {
+                    formatList.Add(format);
+                }
+            }
+        }
+
+        report.Add($"advertised export formats: {(formatList.Count == 0 ? "(NONE)" : string.Join(", ", formatList))}");
+
+        var candidates = liveType.GetType().GetMethods()
+            .Where(m => m.Name.IndexOf("Export", StringComparison.Ordinal) >= 0)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            report.Add("no Export* method on this type at all.");
+            return report;
+        }
+
+        foreach (var method in candidates)
+        {
+            var signature = $"{method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))})";
+
+            if (method.Name == "GetSupportedExportFormats")
+            {
+                continue;
+            }
+
+            var parameters = method.GetParameters();
+            var arguments = new object?[parameters.Length];
+            var buildable = true;
+
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                var parameterType = parameters[i].ParameterType;
+                if (parameterType == typeof(DirectoryInfo))
+                {
+                    arguments[i] = new DirectoryInfo(outDirectory);
+                }
+                else if (parameterType == typeof(FileInfo))
+                {
+                    arguments[i] = new FileInfo(Path.Combine(outDirectory, $"{typeName}.xml"));
+                }
+                else if (parameterType.IsEnum)
+                {
+                    // Prefer an advertised format; otherwise take the first enum value anyway —
+                    // that IS the experiment.
+                    var advertised = formatList.FirstOrDefault(f => f.GetType() == parameterType);
+                    arguments[i] = advertised ?? Enum.GetValues(parameterType).Cast<object>().FirstOrDefault();
+                }
+                else if (parameterType == typeof(string))
+                {
+                    arguments[i] = Path.Combine(outDirectory, $"{typeName}.xml");
+                }
+                else
+                {
+                    buildable = false;
+                    break;
+                }
+            }
+
+            if (!buildable)
+            {
+                report.Add($"{signature} -> SKIPPED (cannot construct an argument of an unrecognised type)");
+                continue;
+            }
+
+            try
+            {
+                method.Invoke(liveType, arguments);
+                report.Add($"{signature} -> RETURNED WITHOUT THROWING");
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                report.Add($"{signature} -> THREW ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        var produced = Directory.GetFileSystemEntries(outDirectory, "*", SearchOption.AllDirectories);
+        report.Add($"files in output directory afterwards: {produced.Length}");
+        foreach (var path in produced)
+        {
+            report.Add($"  {path}");
+        }
+
+        return report;
+    }
+
     private static object? FindLibraryTypeObject(object folder, string typeName)
     {
         if (TryReadObject(() => folder.GetType().GetProperty("Types")?.GetValue(folder)) is System.Collections.IEnumerable types)

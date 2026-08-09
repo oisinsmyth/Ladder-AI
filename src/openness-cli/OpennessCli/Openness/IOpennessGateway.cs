@@ -160,6 +160,8 @@ public interface IOpennessGateway : IDisposable
 
     LibraryExportResult ExportLibraryTypeVersion(string typeName, string? version, string outDirectory);
 
+    IReadOnlyList<string> ProbeExportAsDocuments(string typeName, string outDirectory);
+
     /// <summary>
     /// Sets attributes on any object in any composition — the counterpart to
     /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the
