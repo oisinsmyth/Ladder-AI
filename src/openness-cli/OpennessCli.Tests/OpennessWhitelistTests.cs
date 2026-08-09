@@ -49,8 +49,11 @@ public class OpennessWhitelistTests
         var warning = OpennessWhitelist.DescribeIfNotApproved(result, Exe);
         Assert.NotNull(warning);
         Assert.Contains("REBUILT", warning);
-        // The operationally important half: say that it will hang and that nothing will appear.
-        Assert.Contains("NO DIALOG", warning);
+        // The operationally important half, corrected 2026-08-10: a new build needs a PERSON to
+        // approve it. With someone at the machine that costs seconds; unattended there is nobody to
+        // accept and the attach sits until the timeout — which is what actually stalls an agent.
+        Assert.Contains("PERSON", warning);
+        Assert.Contains("UNATTENDED", warning);
     }
 
     // A worktree build is a different application to Openness even though it is the same source.
@@ -61,7 +64,7 @@ public class OpennessWhitelistTests
 
         Assert.Equal(OpennessWhitelist.Verdict.PathNotListed, result.Verdict);
         Assert.Equal(0, result.EntriesForPath);
-        Assert.Contains("no whitelist entry names this path", OpennessWhitelist.DescribeIfNotApproved(result, Other));
+        Assert.Contains("no TIA Openness approval entry names this path", OpennessWhitelist.DescribeIfNotApproved(result, Other));
     }
 
     // Identical hash at a different path must NOT approve: copying an approved build elsewhere is

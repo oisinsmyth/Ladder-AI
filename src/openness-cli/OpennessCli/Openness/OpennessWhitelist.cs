@@ -24,9 +24,29 @@ namespace OpennessCli.Openness;
 ///
 /// That failure is indistinguishable, from the outside, from a wedged Portal — which is exactly how
 /// it burned an hour on 2026-08-08: a `dotnet test` on the openness-cli solution rebuilt the binary
-/// while an agent was mid-run, and every subsequent attach hung for its full timeout. Both the CLI's
-/// own error text and `docs/notes/openness-quirks.md` blamed the first-connect approval dialog, and
-/// a direct `PrintWindow` capture of every Portal window proved no dialog existed anywhere.
+/// while an agent was mid-run, and every subsequent attach hung for its full timeout.
+///
+/// CORRECTED 2026-08-10, AND THE MECHANISM IS NOT FULLY SETTLED — read both observations, because
+/// each is measured and they do not sit comfortably together:
+///
+///   2026-08-08, UNATTENDED. Rebuilt binary, attaches hung for their whole timeout (60 s, then
+///   15 min). A `PrintWindow` capture of every Portal window showed NO dialog anywhere, and both
+///   main windows were visible and enabled. Nobody was at the machine.
+///
+///   2026-08-10, OWNER PRESENT. Rebuilt Release binary; the owner approved it; the connect
+///   completed in ~8 s and a whitelist entry appeared for the new hash. The previously-hanging
+///   Debug binary then connected in ~7 s as well.
+///
+/// WHAT IS SAFE TO CONCLUDE, and all this class acts on: a build TIA has not seen before needs a
+/// PERSON to approve it. With someone at the machine that costs seconds. UNATTENDED THERE IS NOBODY
+/// TO ACCEPT, and the attach sits until the caller's timeout expires — which is the practical rule
+/// that matters for an agent, and it is why rebuilding mid-run stalls one.
+///
+/// WHAT IS NOT SETTLED: why no dialog was visible on 08-08. It may never have been raised (the
+/// concurrent HMI session on another project was hammering Portal at the time and is an independently
+/// recorded cause of intermittent attach wedges), or it may be raised in a way that capture missed.
+/// DO NOT write either explanation up as fact without new evidence — an earlier version of this
+/// comment asserted "refused silently, no dialog, ever" and that overstated what was measured.
 ///
 /// THIS CHECK IS ADVISORY AND MUST STAY THAT WAY. It warns and lets the connect proceed; it never
 /// blocks. A false negative here (a whitelist layout this code does not understand, a registry view
@@ -188,21 +208,22 @@ public static class OpennessWhitelist
         {
             case Verdict.StaleHash:
                 return
-                    $"WARNING: this executable is NOT approved for TIA Openness — it has been REBUILT since it was last approved.\r\n" +
+                    $"WARNING: this build has never connected to TIA Openness — it was REBUILT since its last approval.\r\n" +
                     $"  {executablePath}\r\n" +
-                    $"  TIA whitelists callers by (Path, FileHash). {result.EntriesForPath} earlier build(s) of this exact path are\r\n" +
-                    $"  approved, but none of them matches this file's current hash.\r\n" +
-                    $"  EXPECT THE CONNECT BELOW TO HANG UNTIL --timeout-connect EXPIRES, WITH NO DIALOG AND NO ERROR.\r\n" +
-                    $"  Openness refuses an unapproved caller silently; it does not prompt. Use a build that is already\r\n" +
-                    $"  approved, or have the machine owner approve this one.";
+                    $"  TIA records approved callers by (Path, FileHash). {result.EntriesForPath} earlier build(s) of this exact\r\n" +
+                    $"  path are approved; none matches this file's hash.\r\n" +
+                    $"  A NEW BUILD NEEDS A PERSON TO APPROVE IT AT THE MACHINE. Approved live 2026-08-10: the connect\r\n" +
+                    $"  completed in ~8 s once the owner accepted it. UNATTENDED, THERE IS NOBODY TO ACCEPT, and the\r\n" +
+                    $"  connect will sit until --timeout-connect expires — which is why rebuilding mid-run stalls an agent.\r\n" +
+                    $"  If you are running unattended: use an already-approved build. If someone is at the machine: proceed.";
 
             case Verdict.PathNotListed:
                 return
-                    $"WARNING: this executable is NOT approved for TIA Openness — no whitelist entry names this path.\r\n" +
+                    $"WARNING: no TIA Openness approval entry names this path — this build has never connected.\r\n" +
                     $"  {executablePath}\r\n" +
-                    $"  Approval does not carry across build locations, so a worktree or freshly-copied build is a\r\n" +
-                    $"  different application as far as Openness is concerned.\r\n" +
-                    $"  EXPECT THE CONNECT BELOW TO HANG UNTIL --timeout-connect EXPIRES, WITH NO DIALOG AND NO ERROR.";
+                    $"  Approval does not carry across build locations, so a worktree or copied build is a new application\r\n" +
+                    $"  to Openness. IT NEEDS A PERSON TO APPROVE IT AT THE MACHINE; unattended, the connect will sit\r\n" +
+                    $"  until --timeout-connect expires.";
 
             default:
                 return null;
