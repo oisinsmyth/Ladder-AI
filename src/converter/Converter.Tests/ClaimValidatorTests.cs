@@ -4,7 +4,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-50 component 1 — the corpus half. A claim is only meaningful if the thing reserved is actually
+/// FI-65 component 1 — the corpus half. A claim is only meaningful if the thing reserved is actually
 /// free, so every kind gets both a grant and a refusal against a real indexed project. The alarm-bit
 /// cases reproduce this project's own recorded near-miss: the telemetry line "ShredderAlarm0.%X9 &lt;-
 /// HopperBlockedAlarm, X9 verified free" is exactly the check two agents can both pass at once.

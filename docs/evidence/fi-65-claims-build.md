@@ -1,7 +1,7 @@
-# FI-50 component 1 — `converter claim` / `claims`: build and test record
+# FI-65 component 1 — `converter claim` / `claims`: build and test record
 
-**Date:** 2026-08-07 · **Branch:** `worktree-fi-48-openness-manager` · **Entry:** `docs/16-future-ideas.md` FI-50
-**Commits:** `23faf49` (implementation) · `fa2f318` (renumber FI-48 → FI-50) · `c0aaeaf` (merge master)
+**Date:** 2026-08-07 · **Branch:** `worktree-fi-48-openness-manager` · **Entry:** `docs/16-future-ideas.md` FI-65
+**Commits:** `23faf49` (implementation) · `fa2f318` (renumber FI-48 → FI-65) · `c0aaeaf` (merge master)
 
 What this records: what was built, what was tested, **what the standing testing requirements are**, and
 — explicitly — what has *not* been tested. The last section is the load-bearing one: this is a
@@ -12,7 +12,7 @@ looks correct.
 
 ## 1. Scope
 
-Built: FI-50b component 1 only — the claims registry. Six resource kinds, corpus validation, atomic
+Built: FI-65b component 1 only — the claims registry. Six resource kinds, corpus validation, atomic
 acquisition, `--check`, `--release`.
 
 Not built, deliberately: components 2–5 (per-agent workspaces, canonical lease, integration, ledger).
@@ -56,7 +56,7 @@ software rules apply. No `.ir`, `patterns/`, `ir/` or `gen/` file is touched by 
   slice path differently from the rule that audits it.
 - **`Program.cs`** — `claim` / `claims` dispatch, argument parsing, exit-code mapping, usage lines.
 - **Docs** — `src/converter/README.md` (command section), `CLAUDE.md` (command block), `CHANGELOG.md`,
-  FI-50 entry status.
+  FI-65 entry status.
 
 ### Two design decisions that changed during the build
 
@@ -263,7 +263,7 @@ distinct holder named by the losers. Run at least 3 times; the winner should var
 
 ## 7. Note on the FI number
 
-This entry was written as FI-48 and renumbered to FI-50 (`fa2f318`): master took FI-48 (`d8ed95c`,
+This entry was written as FI-48 and renumbered to FI-65 (`fa2f318`): master took FI-48 (`d8ed95c`,
 to-xml coil reordering) and FI-49 (`e5423f5`) while this branch was building. Two agents each scanned
 the ideas doc for "the next free number", both picked 48, and nothing detected it — no check failed,
 both entries were internally consistent, and the conflict existed only between them.

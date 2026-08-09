@@ -25,7 +25,7 @@ fix could not claim. The same probe found the other half was still broken.
 
 **`converter claim` / `claims` — reservations, so two agents on one project stop colliding**
 
-FI-50 component 1. The collisions that break same-project multi-agent work are decided **while
+FI-65 component 1. The collisions that break same-project multi-agent work are decided **while
 writing IR** and never reach TIA: two agents each scan the corpus for the next free FB number and
 both pick 51; both verify alarm bit `%X9` is free and both take it; both append "network 8" to the
 same shared FC. Each agent's own `converter diff --only` invariance check passes — the conflict

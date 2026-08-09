@@ -5,7 +5,7 @@ using Xunit;
 namespace Converter.Tests;
 
 /// <summary>
-/// FI-50 component 1 — the property the entire design rests on.
+/// FI-65 component 1 — the property the entire design rests on.
 ///
 /// Acquisition is `FileMode.CreateNew`, i.e. the filesystem is the mutex. If that guarantee does not
 /// hold, every other test in the claim suite still passes and the tool silently grants the same
