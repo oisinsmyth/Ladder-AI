@@ -83,7 +83,18 @@ Each is measured; each kills or enables specific options downstream.
    faceplate once, stamp it forty times" can have its second half automated and not its first. This
    is the opposite of this repo's pattern-library premise.
 
-   > **⚠ FACT 3 IS NOW CONTESTED, and the challenge landed while this document was being written.**
+   > **✅ RESOLVED 2026-08-09 — FACT 3 STANDS. The challenge below was tested live and defeated.**
+   > `openness-cli library` walked the reference project's library: every Unified faceplate is a
+   > plain `LibraryType` (**not** a `FaceplateLibraryType`) and `GetSupportedExportFormats()` returns
+   > **empty** for all of them, so there is no document round trip. Negative control in the same
+   > read: PLC types and code blocks in that same library return full format lists, so the mechanism
+   > exists and is simply not offered for HMI content. **Every option in this menu that was
+   > provisionally weakened by the challenge — G-6, V-1, V-2, the faceplate probe P-1 — reverts to
+   > its original standing**, and the layout problem (fact 2) is *not* relieved by a reusable
+   > component. The challenge text is kept below because its critique of write-api §2's *reasoning*
+   > was correct even though its conclusion was wrong.
+   >
+   > **⚠ FACT 3 WAS CONTESTED, and the challenge landed while this document was being written.**
    > `docs/notes/openness-hmi-faceplate-library.md` (2026-08-09, **REFLECTION ONLY — nothing in it
    > verified live**) argues that write-api §2's reasoning is invalid: `HmiFaceplateInterface
    > Composition` is the *instance's parameter list*, not the type, so its lack of a `Create` says

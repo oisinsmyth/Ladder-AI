@@ -148,6 +148,15 @@ reference an external type by *name string*, not by containment. Through Opennes
 list of absolutely-positioned items; grouping is a naming convention, not a structure. The API
 contributes nothing to layout (write-api §2).
 
+> **✅ CHALLENGE TESTED AND DEFEATED, 2026-08-09 — THIS PARAGRAPH'S CONCLUSION STANDS.** The library
+> was walked live (`openness-cli library`): every Unified faceplate is a plain `LibraryType`, **not**
+> a `FaceplateLibraryType`, and `GetSupportedExportFormats()` returns **empty** for all of them — so
+> there is no `ExportAsDocuments`/`CreateFromDocuments` route. Negative control in the same read: PLC
+> types and code blocks in that same library return full format lists, so the mechanism works and is
+> simply not offered for HMI content. **The reasoning below is still invalid** (see the note) and
+> should not be relied on; the conclusion is now supported by evidence instead. The challenge text is
+> kept below for the record.
+>
 > **CONTESTED 2026-08-09, and the reasoning below is invalid — see
 > `docs/notes/openness-hmi-faceplate-library.md`.** `HmiFaceplateInterfaceComposition` is the
 > *instance's parameter list*, not the type, so its lack of a `Create` was never evidence about
@@ -247,6 +256,14 @@ LAD one.** Stated plainly, because it is the crux:
   > Corollary correction: **"script modules and text lists cannot be authored (no `Create`)"**, stated
   > elsewhere in these docs, is **wrong** — both have `Import`; the constructor is a document. All
   > REFLECTION-only; none of these round trips has been run.
+  >
+  > **PARTLY WITHDRAWN 2026-08-09, tested live.** The library half of the narrowing is **wrong**:
+  > Unified faceplates have **no export formats at all**, so library types do *not* soften this
+  > bullet. The device half stands — tags, text lists and script modules do carry `Export`/`Import`
+  > (still unrun). Net effect: **the serialiser cost is NOT reduced for anything visual**; it is
+  > reduced only for tags, text lists and script modules. Screens and faceplates — the two things a
+  > UI capability would actually have to review — remain unserialisable. That is a *stronger* case
+  > for this bullet than when it was written.
 - **Commands must be written re-runnable**, because a failure can leave partial state and there is no
   rollback.
 - **We own the layout model and the reuse story.** Flat, absolutely-positioned items with no

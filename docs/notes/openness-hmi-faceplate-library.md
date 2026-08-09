@@ -1,6 +1,49 @@
 # Faceplates are LIBRARY types — and the library has the export/import surface the HMI device lacks
 
-**Status: REFLECTION ONLY, 2026-08-09. Nothing here has been verified against a live project.**
+> # VERDICT: TESTED LIVE, HYPOTHESIS FALSE (2026-08-09) [LIVE]
+>
+> `openness-cli library` was built and run against the reference project. **The load-bearing
+> question is answered, and the answer is no.**
+>
+> | Question | Answer |
+> |---|---|
+> | Is a Unified faceplate a `FaceplateLibraryType`? | **NO — every one is a plain `LibraryType`**, versions plain `LibraryTypeVersion` |
+> | Does it have a document round trip? | **NO — `GetSupportedExportFormats()` returns EMPTY for every faceplate type** |
+>
+> **The negative control is built into the same read**, which is what makes this conclusive rather
+> than another unexplained empty result: in the *same library*, PLC data types
+> (`PlcTypeLibraryType`) and code blocks (`CodeBlockLibraryType`) return a full format list —
+> `SimaticMLWithExportOptions{None,WithDefaults,WithReadOnly,WithoutDocumentInfo}`, plus `UDT` /
+> `SCL` / `SimaticSD`. So `ExportAsDocuments` works, the library plumbing works, and this project's
+> own PLC round trip is exactly that mechanism. **It is simply not offered for HMI library content.**
+> `Hmi.Faceplate.FaceplateLibraryType` exists in the assembly but is evidently the *classic* HMI
+> faceplate class; nothing in a Unified project instantiates it.
+>
+> **Consequences — the opposite of what §3 hoped:**
+> 1. **ADR-0007's faceplate paragraph STANDS.** Its *reasoning* was still invalid (§1 below is
+>    correct about that: `HmiFaceplateInterfaceComposition` is the instance's parameter list, not the
+>    type). But the conclusion holds for a better reason: **no export format ⇒ no
+>    `CreateFromDocuments` route**, and there is no `Create` on any faceplate composition either.
+>    Right answer, wrong reasoning, and now the right reasoning too.
+> 2. **ADR-0007's "no export ⇒ no review machinery" paragraph STANDS, and stands MORE BROADLY than
+>    it did** — not just screens, faceplates too. The serialiser cost is not reduced. §3's claim that
+>    "the long pole is already carried" is **withdrawn**.
+> 3. §7's separate finding is **unaffected**: tags, text lists and script modules really do have
+>    `Export`/`Import`. Those are *device* compositions, not library types, and were measured by a
+>    different route.
+>
+> **What was gained anyway:** the library is now readable — 23 types across nested folders, each with
+> versions, states (`Committed`/`InWork`), default flags and consistency status. And one live
+> observation worth the owner's attention: **every faceplate type in the reference project reports
+> `DefaultVersionInconsistent`, while every PLC type reports `Consistent`.** That is a real third
+> consistency model (`ConsistencyStatus`), separate from `PlcBlock.IsConsistent` and from the HMI
+> compile, and nothing in this project had ever looked at it.
+>
+> Everything below this line is the original reflection-stage reasoning, left standing. §2a's
+> conditional — *"**if** a Unified faceplate exports as a document"* — is now answered NO.
+
+**Status: REFLECTION ONLY, 2026-08-09 — SUPERSEDED BY THE VERDICT ABOVE. Nothing below was verified
+when written.**
 Written up immediately because it contradicts two claims this project has already committed, and
 because the last two times a reflection reading went unverified for a while it turned out wrong (see
 `openness-hmi-write-api.md` §4m). Treat every line below as a hypothesis with a named test.

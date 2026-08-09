@@ -65,7 +65,11 @@ capable* than `FlashingDynamization` — so **alarm-state display is fully expre
 operational facts came with it, both of which bite outside HMI work: 🔴
 **`MappingTableEntrySimple.Create<T>()` CRASHES TIA PORTAL** (treat as forbidden), and the Openness
 approval whitelist keys on the **client binary's hash**, so every rebuild needs a fresh human click
-and hangs indistinguishably from contention until it arrives (`openness-quirks.md`).
+and hangs indistinguishably from contention until it arrives (`openness-quirks.md`). **P10
+(2026-08-09) tested the faceplate-library challenge and DEFEATED it**: Unified faceplates are plain
+`LibraryType` with **no supported export formats**, so there is no document round trip and ADR-0007's
+faceplate and no-export arguments both stand — with a negative control in the same read, since PLC
+types and code blocks in that library export fine. New read-only command: `openness-cli library`.
 
 **Appending history going forward:** add dated entries to the relevant
 `docs/evidence/stage-SN.md`, and update this file's status table in place. Keep large

@@ -54,6 +54,8 @@ Rationale for one generic trio rather than ~80 wrappers, and the delete-path re-
 | **P6** | Structure (groups, windows, plant views) | read-only so far | **DONE — works; `--in` found to be a no-op; §4l** |
 
 | **P7** | Dynamization refusals re-probed | P3's wrong answer | **DONE 2026-08-09 — property-type gating; 5 of 6; §4m** |
+| **P8** | Mapping-table route to flashing | §4m's open hypothesis | **DONE 2026-08-09 — TRUE, and broader than `FlashingDynamization`; §4n** |
+| **P10** | Project library / faceplate types | "types unauthorable" reasoning | **DONE 2026-08-09 — hypothesis FALSE, no export formats; `openness-hmi-faceplate-library.md`** |
 
 **All six phases complete, 2026-08-09**, plus an unplanned **P7** that retracted one of P3's
 headlines. Device returned to zero probe artifacts and a clean compile after every phase.
@@ -218,3 +220,16 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
   `MappingTable` → entries carrying `Flashing`/`FlashingRate`; and a tooling gap — `--set` resolves
   item names only, so a flashing dynamization can be created but not configured. Device returned to
   zero artifacts and `STATE: Success`.
+- **2026-08-09 — P10, prompted by the owner's hint that "faceplates live in the library in the TIA
+  UI".** The hint was right about the *location* and it exposed genuinely invalid reasoning in
+  write-api §2 — but the hypothesis built on it was **wrong**. Built `openness-cli library` (read-only)
+  and walked the reference project: **every Unified faceplate is a plain `LibraryType`, not a
+  `FaceplateLibraryType`, and `GetSupportedExportFormats()` is EMPTY for all of them.** No document
+  round trip. The negative control came free in the same read — PLC types and code blocks in that
+  same library return full format lists — so this is "not offered for HMI content", not "mechanism
+  missing". ADR-0007's faceplate and no-export arguments both stand, the second more broadly than
+  before. **Worth noting how this differs from P7:** there the refusal was over-generalised and the
+  capability existed; here the capability genuinely does not. The lesson is not "always assume the
+  negative is wrong" — it is that a negative needs a control either way, and this one had one.
+  Byproduct: the library is now readable (types, nested folders, versions, `Committed`/`InWork`
+  states, and a **third consistency model** — `ConsistencyStatus` — that nothing here had looked at).

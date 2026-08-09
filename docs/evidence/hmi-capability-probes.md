@@ -970,3 +970,171 @@ EXIT=0
   ... [1 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
 ```
 
+## P10 -- the project library, and the faceplate question settled (2026-08-09)
+
+Headline: **hypothesis FALSE.** Unified faceplates are plain `LibraryType`, NOT
+`FaceplateLibraryType`, and `GetSupportedExportFormats()` is EMPTY for every one -- so there is no
+document round trip for them. The negative control is in the same read: PLC types and code blocks
+in the SAME library return full format lists, so the mechanism works and is simply not offered for
+HMI content. Also visible: every faceplate type reports `DefaultVersionInconsistent` while every
+PLC type reports `Consistent`.
+
+**ANONYMISED, not whitelisted** -- type and folder names are restricted content and are
+replaced by stable invented labels grouped by CLR class (docs/13). Every structural field that
+carries the finding -- CLR class, status, export formats, version numbers and states -- is verbatim.
+
+```
+PROJECT LIBRARY — types: 23  masterCopies: 0
+  Folder_1  HmiType_1  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  (default)  [LibraryTypeVersion]
+      v0.0.5  InWork  [LibraryTypeVersion]
+  Folder_1  HmiType_2  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  [LibraryTypeVersion]
+      v0.0.6  Committed  [LibraryTypeVersion]
+      v0.0.7  Committed  [LibraryTypeVersion]
+      v0.0.8  Committed  [LibraryTypeVersion]
+      v0.0.9  Committed  [LibraryTypeVersion]
+      v0.0.10  Committed  [LibraryTypeVersion]
+      v0.0.11  Committed  [LibraryTypeVersion]
+      v0.0.12  Committed  [LibraryTypeVersion]
+      v0.0.13  Committed  [LibraryTypeVersion]
+      v0.0.14  Committed  [LibraryTypeVersion]
+      v0.0.15  Committed  (default)  [LibraryTypeVersion]
+  Folder_1  HmiType_3  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  (default)  [LibraryTypeVersion]
+      v0.0.5  InWork  [LibraryTypeVersion]
+  Folder_1  HmiType_4  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  [LibraryTypeVersion]
+      v0.0.6  Committed  [LibraryTypeVersion]
+      v0.0.7  Committed  [LibraryTypeVersion]
+      v0.0.8  Committed  [LibraryTypeVersion]
+      v0.0.9  Committed  [LibraryTypeVersion]
+      v0.0.10  Committed  [LibraryTypeVersion]
+      v0.0.11  Committed  (default)  [LibraryTypeVersion]
+  Folder_2  HmiType_5  [LibraryType]  status=Consistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  (default)  [LibraryTypeVersion]
+  Folder_2  HmiType_6  [LibraryType]  status=Consistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  (default)  [LibraryTypeVersion]
+  Folder_2  HmiType_7  [LibraryType]  status=Consistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  (default)  [LibraryTypeVersion]
+  Folder_3  PlcTypeType_1  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v0.0.4  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_3  PlcTypeType_2  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v0.0.1  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.2  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_3  PlcTypeType_3  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v0.0.1  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.2  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.3  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.4  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.5  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_3  PlcTypeType_4  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v0.0.1  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.2  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_3  PlcTypeType_5  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v0.0.1  Committed  [PlcTypeLibraryTypeVersion]
+      v0.0.2  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_4  HmiType_8  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  [LibraryTypeVersion]
+      v0.0.6  Committed  [LibraryTypeVersion]
+      v0.0.7  Committed  (default)  [LibraryTypeVersion]
+      v0.0.8  InWork  [LibraryTypeVersion]
+  Folder_4  HmiType_9  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  (default)  [LibraryTypeVersion]
+      v0.0.4  InWork  [LibraryTypeVersion]
+  Folder_4  HmiType_10  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  [LibraryTypeVersion]
+      v0.0.6  Committed  [LibraryTypeVersion]
+      v0.0.7  Committed  [LibraryTypeVersion]
+      v0.0.8  Committed  [LibraryTypeVersion]
+      v0.0.9  Committed  [LibraryTypeVersion]
+      v0.0.10  Committed  [LibraryTypeVersion]
+      v0.0.11  Committed  [LibraryTypeVersion]
+      v0.0.12  Committed  [LibraryTypeVersion]
+      v0.0.13  Committed  [LibraryTypeVersion]
+      v0.0.14  Committed  (default)  [LibraryTypeVersion]
+  Folder_4  HmiType_11  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  (default)  [LibraryTypeVersion]
+  Folder_5  HmiType_12  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  (default)  [LibraryTypeVersion]
+      v0.0.3  InWork  [LibraryTypeVersion]
+  Folder_5  HmiType_13  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  [LibraryTypeVersion]
+      v0.0.6  Committed  [LibraryTypeVersion]
+      v0.0.7  Committed  [LibraryTypeVersion]
+      v0.0.8  Committed  (default)  [LibraryTypeVersion]
+  Folder_5  HmiType_14  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  [LibraryTypeVersion]
+      v0.0.3  Committed  [LibraryTypeVersion]
+      v0.0.4  Committed  [LibraryTypeVersion]
+      v0.0.5  Committed  (default)  [LibraryTypeVersion]
+  Folder_5  HmiType_15  [LibraryType]  status=DefaultVersionInconsistent
+      exportFormats: (NONE — no document round trip for this type)
+      v0.0.1  Committed  [LibraryTypeVersion]
+      v0.0.2  Committed  (default)  [LibraryTypeVersion]
+      v0.0.3  InWork  [LibraryTypeVersion]
+  Folder_6  CodeBlockType_1  [CodeBlockLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, SimaticSD, SCL
+      v3.0.2  Committed  (default)  [CodeBlockLibraryTypeVersion]
+  Folder_7  PlcTypeType_6  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v1.0.0  Committed  (default)  [PlcTypeLibraryTypeVersion]
+  Folder_7  PlcTypeType_7  [PlcTypeLibraryType]  status=Consistent
+      exportFormats: SimaticMLWithExportOptionsNone, SimaticMLWithExportOptionsWithDefaults, SimaticMLWithExportOptionsWithReadOnly, SimaticMLWithExportOptionsWithoutDocumentInfo, UDT, SimaticSD
+      v1.0.0  Committed  (default)  [PlcTypeLibraryTypeVersion]
+```
+
+Anonymised: 23 type names, 7 folder names.
+
