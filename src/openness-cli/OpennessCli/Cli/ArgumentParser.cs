@@ -95,7 +95,8 @@ public sealed record HmiOptions(
     bool Schema,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
-    int TimeoutOpenSeconds);
+    int TimeoutOpenSeconds,
+    bool Scripts = false);
 
 // The only HMI command that writes. Confirm mirrors `delete`'s own gate: the mutating commands in
 // this tool state what they will do and require --yes before doing it. ItemTypes are CLR type names
@@ -147,7 +148,10 @@ public sealed record LibraryOptions(
     bool Json,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
-    int TimeoutOpenSeconds);
+    int TimeoutOpenSeconds,
+    string? ExportTypeName = null,
+    string? ExportVersion = null,
+    string? OutDirectory = null);
 
 public sealed record HmiObjectOptions(
     string ProjectIdentifier,
@@ -277,6 +281,11 @@ public static class ArgumentParser
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli library       <project> [--master-copies] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY walk of the project library: every type with its CLR class name, status, supported export formats and versions. Faceplates are library types, not device content.\n" +
+        "  openness-cli library       <project> --export-version <TypeName> [--version <v>] --out <directory>\n" +
+        "    Calls LibraryTypeVersion.Export(FileInfo, ExportOptions) - a SECOND, format-free export distinct from the type-level ExportAsDocuments.\n" +
+        "    GetSupportedExportFormats() is empty for every HMI type, but CreateFromDocuments takes no format either, so that emptiness never constrained this call.\n" +
+        "    Without --version the DEFAULT version is exported. Reports how the call was bound (overload, parameter type, options value) so a negative result is diagnosable.\n" +
+        "    Exits 7 if the call returns without writing anything: an export that produced nothing is a failed export, not a quiet success.\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
         "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
@@ -285,6 +294,8 @@ public static class ArgumentParser
         "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
         "  list --tagtables enumerates tag tables instead of blocks.\n" +
         "  hmi is read-only. Without --screen it summarises screens; --screen <name> (or * for all) also reads that screen's items and dynamizations.\n" +
+        "  hmi --scripts dumps the FULL body of every event handler, not just the one-line preview. On a real Unified project the behaviour lives in these\n" +
+        "    handlers (274 of them in the reference project, against zero script modules), so the structural listing alone describes the skeleton and omits the animal.\n" +
         "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
         "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
         "  openness-cli hmi-create-tag <project> --name <name> --table <table> [--datatype <t>] --yes\n" +
@@ -978,6 +989,7 @@ public static class ArgumentParser
         var maxItems = DefaultHmiMaxItems;
         var json = false;
         var schema = false;
+        var scripts = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -991,6 +1003,9 @@ public static class ArgumentParser
                     break;
                 case "--schema":
                     schema = true;
+                    break;
+                case "--scripts":
+                    scripts = true;
                     break;
                 case "--screen":
                     if (!TryTakeValue(args, ref i, "--screen", out screen, out var screenErr))
@@ -1049,7 +1064,7 @@ public static class ArgumentParser
             screen = "*";
         }
 
-        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen, scripts));
     }
 
     private static ParseResult ParseHmiCreateScreen(string[] args)
@@ -1468,6 +1483,9 @@ public static class ArgumentParser
         var includeMasterCopies = false;
         var json = false;
         string? tiaInstall = null;
+        string? exportTypeName = null;
+        string? exportVersion = null;
+        string? outDirectory = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
 
@@ -1480,6 +1498,27 @@ public static class ArgumentParser
                     break;
                 case "--master-copies":
                     includeMasterCopies = true;
+                    break;
+                case "--export-version":
+                    if (!TryTakeValue(args, ref i, "--export-version", out exportTypeName, out var exportErr))
+                    {
+                        return new ParseResult.Failure(exportErr);
+                    }
+
+                    break;
+                case "--version":
+                    if (!TryTakeValue(args, ref i, "--version", out exportVersion, out var versionErr))
+                    {
+                        return new ParseResult.Failure(versionErr);
+                    }
+
+                    break;
+                case "--out":
+                    if (!TryTakeValue(args, ref i, "--out", out outDirectory, out var outErr))
+                    {
+                        return new ParseResult.Failure(outErr);
+                    }
+
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -1517,13 +1556,28 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
+        // --out is meaningless without a type to export, and an export with nowhere to write is a
+        // silent no-op waiting to happen. Both directions are hard errors rather than defaults.
+        if (exportTypeName is not null && outDirectory is null)
+        {
+            return new ParseResult.Failure($"--export-version requires --out <directory>.{Environment.NewLine}{Usage}");
+        }
+
+        if (exportTypeName is null && (outDirectory is not null || exportVersion is not null))
+        {
+            return new ParseResult.Failure($"--out and --version are only meaningful with --export-version <TypeName>.{Environment.NewLine}{Usage}");
+        }
+
         return new ParseResult.LibrarySuccess(new LibraryOptions(
             projectIdentifier,
             includeMasterCopies,
             json,
             tiaInstall,
             timeoutConnect,
-            timeoutOpen));
+            timeoutOpen,
+            exportTypeName,
+            exportVersion,
+            outDirectory));
     }
 
     private static ParseResult ParseHmiObject(string[] args, string verb, bool requireName, bool requireConfirm)

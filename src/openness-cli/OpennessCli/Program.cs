@@ -214,7 +214,7 @@ internal static class Program
         var devices = gateway.EnumerateHmi(options.Screen, options.MaxItems);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiJson(devices)
-            : OutputFormatter.FormatHmiReport(devices, options.Screen));
+            : OutputFormatter.FormatHmiReport(devices, options.Screen, options.Scripts));
 
         return ExitCodes.Success;
     }
@@ -311,6 +311,17 @@ internal static class Program
     private static int RunLibrary(IOpennessGateway gateway, LibraryOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        if (options.ExportTypeName is { } exportTypeName && options.OutDirectory is { } outDirectory)
+        {
+            var export = gateway.ExportLibraryTypeVersion(exportTypeName, options.ExportVersion, outDirectory);
+            Console.WriteLine(OutputFormatter.FormatLibraryExport(export));
+
+            // An export that produced nothing is a FAILED export, not a quiet success — the whole
+            // point of the call is whether a document exists.
+            return export.ProducedPaths.Count > 0 ? ExitCodes.Success : ExitCodes.CommandError;
+        }
+
         var inventory = gateway.InventoryLibrary(options.IncludeMasterCopies);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatLibraryJson(inventory)

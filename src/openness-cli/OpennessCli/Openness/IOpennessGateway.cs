@@ -158,6 +158,8 @@ public interface IOpennessGateway : IDisposable
     /// </summary>
     LibraryInventory InventoryLibrary(bool includeMasterCopies);
 
+    LibraryExportResult ExportLibraryTypeVersion(string typeName, string? version, string outDirectory);
+
     /// <summary>
     /// Sets attributes on any object in any composition — the counterpart to
     /// <see cref="CreateHmiObject"/>, since most objects are useless bare. <c>texts</c> takes the

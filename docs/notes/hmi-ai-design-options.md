@@ -1639,6 +1639,19 @@ does not inherit it.
 
 ### 14b. Take the division of labour the API is forcing on you
 
+> 🔎 **P12, 2026-08-10 — the spine is real, and a human already built it. But not with containers.**
+> A sweep of all 49 screens (1,404 items) found **zero faceplate containers**: the reference project
+> opens faceplates as **popups from JavaScript**, parameterised per instance by a single tag name in
+> a six-line handler. Every part of that except authoring the type is inside measured write
+> capability, so "author once, stamp hundreds" is **generation of script**, not of layout.
+>
+> The two routes trade off, and neither dominates: the **container** is statically checked (the
+> compile verifies the parameter's user-data-type structure *and* version) but takes whatever type
+> version is current at write time; the **popup** pins its version explicitly in the string and is
+> plain reviewable text, but is **not statically checked at all** — a wrong tag surfaces only on a
+> live panel. Pick per use: containers where correctness must be gated, popups where the artifact
+> must be diffable. Detail and the corrections this supersedes: `hmi-faceplate-gap-probe.md` §P12.
+>
 > ✅ **RUN LIVE, later on 2026-08-09 — the load-bearing half of this spine is now MEASURED.**
 > A faceplate container was created, pointed at a human-authored library type via `ContainedType`,
 > and **compiled clean**; the instance adopted the type's own geometry, and its parameter list

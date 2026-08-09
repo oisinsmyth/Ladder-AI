@@ -59,7 +59,29 @@ public sealed record HmiScreenItemInfo(
     long? Width,
     long? Height,
     IReadOnlyList<HmiDynamizationInfo> Dynamizations,
-    IReadOnlyList<HmiEventInfo> Events);
+    IReadOnlyList<HmiEventInfo> Events,
+    string? ContainedType = null,
+    IReadOnlyList<HmiFaceplateParameterInfo>? Interface = null);
+
+/// <summary>
+/// One parameter of a faceplate INSTANCE — the container's own view of the type's interface.
+/// </summary>
+/// <remarks>
+/// Reading these is what makes a faceplate screen reviewable. A faceplate instance carries almost
+/// no state of its own: the type supplies geometry, visuals and behaviour, so the whole reviewable
+/// delta of an instance is <c>(ContainedType, position, parameter values)</c>. Writing them was
+/// already possible (<c>--set Item.Interface[0].Value=…</c>) while reading them was not, which left
+/// the walker able to change a faceplate it could not describe — no diff, no serialiser, no review.
+///
+/// The composition only populates once <c>ContainedType</c> names a type that resolves; on a bare
+/// container it is empty, which is why <c>Find</c> could never answer the question. Measured
+/// 2026-08-09.
+/// </remarks>
+public sealed record HmiFaceplateParameterInfo(
+    string PropertyName,
+    string? Value,
+    string? DataType,
+    IReadOnlyList<HmiDynamizationInfo> Dynamizations);
 
 /// <summary>
 /// One event handler on a screen or screen item. Reading these closes the walker's one genuinely
@@ -71,10 +93,21 @@ public sealed record HmiScreenItemInfo(
 /// screens expose <c>Loaded</c>/<c>Unloaded</c>, and controls expose <c>Initialized</c>/
 /// <c>CommandFired</c>. Each event type is an enum member of a per-item-type enum, not a string.
 /// </summary>
+/// <summary>
+/// One event handler, with its script body.
+/// </summary>
+/// <remarks>
+/// <c>Script</c> carries the FULL body, not a preview. On a real Unified project the behaviour is
+/// almost entirely in these handlers — 274 of them in the reference project, against zero
+/// script modules — so a walker that reports only "a handler exists" describes the skeleton and
+/// omits the animal. It is printed only under <c>--scripts</c> because a full dump of a
+/// 49-screen project is thousands of lines.
+/// </remarks>
 public sealed record HmiEventInfo(
     string EventType,
     bool HasScript,
-    string? ScriptPreview);
+    string? ScriptPreview,
+    string? Script = null);
 
 /// <summary>
 /// A single property-to-source binding. This is the whole reason the walker exists: on Unified
@@ -203,3 +236,22 @@ public sealed record MasterCopyInfo(string FolderPath, string Name, IReadOnlyLis
 public sealed record LibraryInventory(
     IReadOnlyList<LibraryTypeInfo> Types,
     IReadOnlyList<MasterCopyInfo> MasterCopies);
+
+/// <summary>
+/// The outcome of a <c>LibraryTypeVersion.Export</c> attempt — the call P10 never made.
+/// </summary>
+/// <remarks>
+/// Deliberately reports the BINDING as well as the files: which overload was found, what the first
+/// parameter's declared type was, and which options value was passed. A bare "0 files" is not
+/// interpretable on its own — it could mean the type has no document form, or that the wrong
+/// overload was bound. Recording the binding keeps a negative result diagnosable instead of
+/// becoming another unexplained empty answer.
+/// </remarks>
+public sealed record LibraryExportResult(
+    string TypeName,
+    string Version,
+    string ClrTypeName,
+    string FirstParameterType,
+    string OptionsTypeName,
+    string OptionsValue,
+    IReadOnlyList<string> ProducedPaths);

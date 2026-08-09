@@ -51,7 +51,9 @@ exported example could not, like which attributes are `Mandatory` vs `Relevant` 
 | Alarms | classes, discrete, analog; `Priority`, `StateMachine`, `AlarmClass` settable | `hmi-new`, `hmi-set` |
 | Data plumbing | data logs, alarm logs, connections | `hmi-new` |
 | Any of 80 kinds | generic metamodel-driven create/delete/set by composition name | `hmi-new`/`hmi-delete`/`hmi-set --kind` |
-| **Faceplate INSTANCES** | **create a container, point `ContainedType` at a human-authored library type, compile clean, and set its parameters.** The instance **adopts the type's own geometry**. Needed no new tooling — 2026-08-09 | `--item HmiFaceplateContainer`, `--set …ContainedType=`, `--set …Interface[n].Value=` |
+| **Faceplate INSTANCES** | **create a container, point `ContainedType` at a human-authored library type, compile clean, and set its parameters.** The instance **adopts the type's own geometry**. Needed no new tooling — 2026-08-09. Reads back **with the resolved version** (`V0.0.11\<Name>`) and the full parameter list | `--item HmiFaceplateContainer`, `--set …ContainedType=`, `--set …Interface[n].Value=str:…` |
+| **Event-handler SCRIPTS** | read the **full body** of every handler. Until 2026-08-10 all 274 in the reference project reported empty — the preview took the first line rather than the first non-blank one, so the walker described the skeleton and omitted the animal. **On a real Unified project the behaviour is almost entirely here** (274 handlers, zero script modules) | `hmi --screen … --scripts` |
+| **Library type DOCUMENT** | `LibraryTypeVersion.Export` runs and writes a file — **but for HMI types the payload is metadata only** (author, version, empty comment). Reports how the call was bound, and exits 7 if nothing is written | `library --export-version <T> [--version <v>] --out <dir>` |
 | Gate | compiles the HMI device | `hmi-compile` |
 
 ### The gate
@@ -65,6 +67,14 @@ specification for a generator.
 located screen → item → property — e.g. *`Interface.IO: The object "…" at the property "IO" does not
 exist.`* For a faceplate-first architecture this is a real analogue of hard rule 4, because what the
 compiler checks is exactly what a generator produces. It does **not** gate layout or aesthetics.
+
+**Sharpened 2026-08-10, in both directions.** *Stronger* than recorded: the check is **structural**,
+not existential — it compares the bound tag's user-data-type structure *and version* against the
+interface's, and states the remedy. *Weaker* than recorded: **an entirely unwired parameter compiles
+clean.** So the compile catches *wrong*, never *missing* — the PLC side's `undriven-scan` lesson
+repeating exactly. That check is ours to build, and is now buildable because the read-back reports
+`(unset)`. **Only the CONTAINER route is checked at all**: a scripted `OpenFaceplateInPopup` passes
+its tag as a string inside JavaScript, so nothing verifies it until a live panel runs it.
 
 **`Validate()` is NOT a gate** — it accepts a zero-pixel-wide screen. It is a per-property checker
 and structurally incapable of cross-object questions.
@@ -81,7 +91,7 @@ against 6). Gate on `State`; count from the message tree.
 | 🔴 **`MappingTableEntrySimple` CRASHES TIA Portal** | Forbidden. Use `MappingTableEntryRange`. Three occurrences with controls isolating it from attributes and target |
 | **Alarm text cannot be written** — `MultilingualTextItem.set_Text` throws | Blocks FI-35's alarm generation. The spreadsheet route remains the only demonstrated path for text |
 | **Deletion ORPHANS silently** | Bindings survive pointing at nothing; only the compile notices. **A post-delete compile is mandatory** |
-| **21 of 56 item types refuse**, with no reason given | The creatable set must be established by trial and cached; `GetCreationInfos` overstates by 60% |
+| **21 of 56 item types refuse**, with no reason given | The creatable set must be established by trial and cached; `GetCreationInfos` overstates by 60%. ⚠️ **Put in proportion 2026-08-10:** a full sweep of the reference project (49 screens, 1,404 items) uses **12 item types, and all 12 are creatable**. The refusals fall entirely outside what a real plant HMI uses |
 | **No Unified screen export FUNCTION** — confirmed **five** ways | ⚠️ **The consequence originally recorded here — *"no diff, no hash, no golden round-trip"* — was WRONG (2026-08-09).** A **serialiser over the property walk `hmi --screen` already performs** recovers all three, and there are **two independent existence proofs**: Siemens' own Openness-based exporter (SIOS 109792619, simple *and* complex properties, dynamizations, events, fonts) and a commercial JSON one for V15–V21. This is a **format** wall, not an **inspection** wall. See `hmi-web-tooling-research.md` |
 | **No faceplate document round trip via `ExportAsDocuments`** | ⚠️ **"Types cannot be authored" is NOT established (2026-08-09).** `GetSupportedExportFormats()` is empty — but `CreateFromDocuments` takes **no format argument**, and `LibraryTypeVersion.Export(FileInfo, ExportOptions)` exists and was **never called**. P10's inference linked two calls that share no parameter. **Reopened**; see `hmi-faceplate-gap-probe.md` |
 | **Master copies are unavailable on Unified** | `MasterCopyComposition.Create(IMasterCopySource)` exists, but **none** of the 45 `IMasterCopySource` and 30 `IMasterCopyTarget` implementers is under `HmiUnified.*`, and `HmiScreenComposition` has no `CreateFrom`. The obvious fallback to faceplates is **closed**. Classic HMI has the full surface |

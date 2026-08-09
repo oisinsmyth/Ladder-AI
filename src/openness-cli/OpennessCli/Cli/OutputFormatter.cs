@@ -38,6 +38,41 @@ public static class OutputFormatter
     /// class a Unified faceplate actually turns out to be, and a report that pretty-printed only the
     /// friendly name would answer nothing.
     /// </summary>
+    /// <summary>
+    /// Reports a <c>LibraryTypeVersion.Export</c> attempt, including how the call was BOUND.
+    /// </summary>
+    /// <remarks>
+    /// A bare "0 files produced" would be another unexplained empty answer, and this project has
+    /// been misled by one of those before. Printing the overload's parameter type and the options
+    /// value passed makes a negative result diagnosable: it separates "this type has no document
+    /// form" from "the wrong overload was bound".
+    /// </remarks>
+    public static string FormatLibraryExport(LibraryExportResult export)
+    {
+        var sb = new StringBuilder();
+        sb.Append("LIBRARY TYPE EXPORT  ").Append(export.TypeName)
+          .Append("  version=").Append(string.IsNullOrEmpty(export.Version) ? "(default)" : export.Version)
+          .Append("  [").Append(export.ClrTypeName).AppendLine("]");
+        sb.Append("  bound: Export(").Append(export.FirstParameterType).Append(", ")
+          .Append(export.OptionsTypeName).Append(") with ").AppendLine(export.OptionsValue);
+
+        if (export.ProducedPaths.Count == 0)
+        {
+            sb.AppendLine("  PRODUCED NOTHING - the call returned without throwing and wrote no file.");
+            sb.AppendLine("  That is a FAILED export, not a quiet success. Exit 7.");
+            return sb.ToString().TrimEnd();
+        }
+
+        sb.Append("  produced ").Append(export.ProducedPaths.Count.ToString(CultureInfo.InvariantCulture))
+          .AppendLine(export.ProducedPaths.Count == 1 ? " file/directory:" : " files/directories:");
+        foreach (var path in export.ProducedPaths)
+        {
+            sb.Append("    ").AppendLine(path);
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
     public static string FormatLibraryReport(LibraryInventory inventory, bool includeMasterCopies)
     {
         var sb = new StringBuilder();
@@ -168,7 +203,7 @@ public static class OutputFormatter
     /// readable. The family line is the most important thing on the page — it is what tells the
     /// reader whether screen contents were unavailable or merely not requested.
     /// </summary>
-    public static string FormatHmiReport(IReadOnlyList<HmiDeviceInfo> devices, string? screenFilter)
+    public static string FormatHmiReport(IReadOnlyList<HmiDeviceInfo> devices, string? screenFilter, bool includeScripts = false)
     {
         if (devices.Count == 0)
         {
@@ -251,7 +286,50 @@ public static class OutputFormatter
                         sb.Append("  ").Append(iw.ToString(CultureInfo.InvariantCulture)).Append('x').Append(ih.ToString(CultureInfo.InvariantCulture));
                     }
 
+                    // A container's contained type is the single most load-bearing fact about it:
+                    // unset, the item is an empty box the compiler rejects; set, the type supplies
+                    // the geometry, the visuals and the parameter list.
+                    if (!string.IsNullOrEmpty(item.ContainedType))
+                    {
+                        sb.Append("  contains: ").Append(item.ContainedType);
+                    }
+
                     sb.AppendLine();
+
+                    if (item.Interface is { } faceplateInterface)
+                    {
+                        sb.Append("      interface: ")
+                          .Append(faceplateInterface.Count.ToString(CultureInfo.InvariantCulture))
+                          .AppendLine(faceplateInterface.Count == 1 ? " parameter" : " parameters");
+
+                        for (var p = 0; p < faceplateInterface.Count; p++)
+                        {
+                            var parameter = faceplateInterface[p];
+                            sb.Append("        [").Append(p.ToString(CultureInfo.InvariantCulture)).Append("] ")
+                              .Append(string.IsNullOrEmpty(parameter.PropertyName) ? "(unnamed)" : parameter.PropertyName);
+
+                            sb.Append(" = ").Append(string.IsNullOrEmpty(parameter.Value) ? "(unset)" : parameter.Value);
+
+                            if (!string.IsNullOrEmpty(parameter.DataType))
+                            {
+                                sb.Append(" (").Append(parameter.DataType).Append(')');
+                            }
+
+                            sb.AppendLine();
+
+                            foreach (var dynamization in parameter.Dynamizations)
+                            {
+                                sb.Append("            ").Append(dynamization.PropertyName)
+                                  .Append(" <- ").Append(dynamization.Kind);
+                                if (!string.IsNullOrEmpty(dynamization.Tag))
+                                {
+                                    sb.Append("  tag: ").Append(dynamization.Tag);
+                                }
+
+                                sb.AppendLine();
+                            }
+                        }
+                    }
 
                     foreach (var handler in item.Events)
                     {
@@ -263,6 +341,14 @@ public static class OutputFormatter
                         }
 
                         sb.AppendLine();
+
+                        if (includeScripts && handler.HasScript && !string.IsNullOrEmpty(handler.Script))
+                        {
+                            foreach (var scriptLine in handler.Script!.Replace("\r\n", "\n").Split('\n'))
+                            {
+                                sb.Append("        | ").AppendLine(scriptLine.TrimEnd());
+                            }
+                        }
                     }
 
                     foreach (var dynamization in item.Dynamizations)

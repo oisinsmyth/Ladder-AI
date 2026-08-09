@@ -1,5 +1,87 @@
 # The faceplate gap — what P10 did not test
 
+> # 🔎 P12 — THE GAPS CLOSED, AND THE ARCHITECTURE THIS PROJECT ACTUALLY USES (2026-08-10) [LIVE]
+>
+> Run against the reference project's scratch copy, `ZZ_AI_*` names, restored to baseline
+> afterwards (`Success`, 0 errors, 156 warnings, 0 residue). Names below **genericized**.
+>
+> ## The headline: faceplates here are opened from SCRIPT, not placed in containers
+>
+> A full sweep — **49 screens, 1,404 items — contains ZERO faceplate containers.** The nine
+> faceplate types are authored and never instantiated as items. They are opened as **popups from
+> JavaScript**, from hot-zone polygons on the overview screens:
+>
+> ```js
+> let data = {IO:{Tag:"<MotorTagA>"}, ScreenSelection:{Tag:"Constant0"}};
+> let po = UI.OpenFaceplateInPopup("<MotorHolderDOL>_V_0_0_11", "Motor Pop Up", data);
+> po.Left = 490; po.Top = 80; po.Visible = true; po.WindowFlags = 67;
+> ```
+>
+> **This is §14b's spine, already built by a human**, and every part except authoring the type is
+> inside measured write capability: polygon, `Tapped` handler, six lines of JS, one tag name. The
+> per-instance delta between call sites is **a single identifier**.
+>
+> ## The two routes, and the trade-off is real (this corrects two claims made while probing)
+>
+> | | Faceplate CONTAINER | Scripted POPUP |
+> |---|---|---|
+> | Type reference checked at compile | ✅ | ❌ it is a string in JS |
+> | Parameter **structure + UDT version** checked | ✅ **with the reason** | ❌ none |
+> | Version choice at write time | ❌ takes current | ✅ pinned in the string |
+> | Version *readable* afterwards | ✅ stores `V0.0.11\<Name>` | ✅ it is text |
+> | Per-instance artifact | object state | reviewable text |
+> | Unwired parameter detected | ❌ **ours to check** | ❌ ours to check |
+>
+> Mid-probe this note claimed containers "drift silently, and nothing can tell you which". **Wrong**
+> — the container stores the resolved version and it reads back. It also claimed the popup route was
+> therefore better; that is **at best half true**, because the popup is not statically checked at
+> all. A wrong tag in a popup is a runtime failure on a live panel.
+>
+> ## Gaps closed
+>
+> | Gap | Result |
+> |---|---|
+> | **Type authoring** | **CLOSED.** `LibraryTypeVersion.Export` **works** and writes a real document — of **2,642 bytes containing author, version number and an empty comment. No content.** The owner supplied a screenshot of the type's actual contents (selector, Start/Stop, status lamps, command buttons) as ground truth. The call succeeds; the payload is not in it. P10's conclusion survives, now for a *demonstrated* reason |
+> | **Reading `Interface` back** | **BUILT.** Reports contained type **with version**, parameter names, values, `(unset)`, and per-parameter dynamizations. Returns null for non-containers so "not a container" ≠ "container with no parameters" |
+> | **Script bodies** | **FIXED — and this was the big one.** All **274** handlers reported empty. Root cause: the preview took `Split('\n')[0]` rather than the first NON-BLANK line, and scripts are conventionally written with a leading newline. The walker had been describing the skeleton and omitting the animal. `--scripts` now dumps full bodies |
+> | **Interface arity** | `<MotorHolderDOL>` = 2 (`IO`, `ScreenSelection`); `<FP_MotorMain>` = 1 (`IO`). Both `String` |
+> | **Version pinning** | Container: write a bare name, TIA stores `V0.0.11\<Name>`. The JS `_V_0_0_11` form is **REFUSED** by `set_ContainedType` — different syntax for different mechanisms |
+> | **Item types in real use** | **12 of 56**, and **all 12 are creatable**: Text 421, Circle 301, Rectangle 254, Button 147, Line 94, Polygon 84, GraphicView 41, IOField 38, ScreenWindow 10, ToggleSwitch 8, SymbolicIOField 3, AlarmControl 3. **The 21 refusing types fall entirely outside what a real plant HMI uses** |
+>
+> ## What the compile does and does not gate — corrected twice, in both directions
+>
+> | Defect | Caught? |
+> |---|---|
+> | Faceplate type does not exist | ✅ |
+> | Parameter names a non-existent object | ✅ by property |
+> | Parameter bound to the **wrong structure / UDT version** | ✅ **with the remedy** |
+> | **Parameter left entirely unwired** | ❌ **compiles clean** — ours to check, and now checkable via `(unset)` |
+> | Right structure, wrong instance | ❌ requirements-level |
+> | Layout, legibility | ❌ |
+>
+> The unwired case is the PLC side's `undriven-scan` lesson repeating exactly: a thing that is never
+> driven compiles perfectly well, and the check has to be built separately.
+>
+> ## A real finding about the reference project, for the engineer
+>
+> **The faceplate types are STALE against the current motor UDT.** Binding a real motor tag to `IO`
+> fails on *"The structure of the user data type configured at tag '…' does not match the structure
+> defined at interface tag 'IO'. Select a valid user data type version."* — and **every** faceplate
+> type reports `DefaultVersionInconsistent` while **every** PLC type reports `Consistent`. Those are
+> one fact seen twice. This is why a fully-wired container could not be made to compile clean here,
+> and it is a project-maintenance matter, not a tooling limit. **Not touched** — real content.
+>
+> ## Still open, honestly
+>
+> - **A fully-wired faceplate compiling clean was NOT achieved.** One binding was accepted
+>   (`ScreenSelection`); `IO` failed on the staleness above. Partial, not complete.
+> - **Writing a parameter needs the explicit `str:` tag.** A bare value fails with
+>   `FormatException: String was not recognized as a valid Boolean` — on a property whose read-back
+>   says `String`. Misleading; worth a usability fix.
+> - Re-pointing `ContainedType` on a wired container, and geometry override, remain untested.
+>
+> P11's verdict box follows, unchanged.
+
 > # ✅ VERDICT: INSTANTIATION WORKS. RUN LIVE 2026-08-09 [LIVE]
 >
 > **Q1 — the load-bearing question this whole document was written around — is answered, and the

@@ -1771,6 +1771,157 @@ public sealed class OpennessGateway : IOpennessGateway
         return results;
     }
 
+    /// <summary>
+    /// Calls <c>LibraryTypeVersion.Export(FileInfo, ExportOptions)</c> on a named library type.
+    /// </summary>
+    /// <remarks>
+    /// This is the call P10 never made, and the reason its refutation was unsound.
+    /// <c>GetSupportedExportFormats()</c> is declared on <c>LibraryType</c> and returns empty for
+    /// every HMI type — from which this project concluded "no document round trip, therefore no
+    /// <c>CreateFromDocuments</c> route". But the VERSION carries its own format-free
+    /// <c>Export</c>, and <c>CreateFromDocuments</c> takes no format argument either, so the two
+    /// calls share no parameter and the first cannot constrain the second.
+    ///
+    /// Reflection throughout, for the same reason as the inventory walk: the question is what the
+    /// CLR types actually offer, and a typed call would presuppose the answer. Whatever comes back
+    /// — a document, an empty directory, or a refusal that finally names a reason — is the answer
+    /// to whether a faceplate type can be authored.
+    /// </remarks>
+    public LibraryExportResult ExportLibraryTypeVersion(string typeName, string? version, string outDirectory)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ExportLibraryTypeVersion)}.");
+        }
+
+        var inventory = InventoryLibrary(includeMasterCopies: false);
+        var match = inventory.Types.FirstOrDefault(t => t.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            var known = string.Join(", ", inventory.Types.Select(t => t.Name));
+            throw new InvalidOperationException($"No library type named '{typeName}'. Known types: {known}");
+        }
+
+        // Re-walk to the live object: LibraryTypeInfo is a value snapshot, deliberately, so the
+        // inventory can be produced without holding Openness objects open.
+        var library = TryReadObject(() => _project.GetType().GetProperty("ProjectLibrary")?.GetValue(_project))
+            ?? throw new InvalidOperationException("Project has no ProjectLibrary.");
+        var typeFolder = TryReadObject(() => library.GetType().GetProperty("TypeFolder")?.GetValue(library))
+            ?? throw new InvalidOperationException("Project library has no TypeFolder.");
+
+        var liveType = FindLibraryTypeObject(typeFolder, typeName)
+            ?? throw new InvalidOperationException($"Library type '{typeName}' resolved in the inventory but not on a re-walk.");
+
+        var versions = TryReadObject(() => liveType.GetType().GetProperty("Versions")?.GetValue(liveType)) as System.Collections.IEnumerable
+            ?? throw new InvalidOperationException($"Library type '{typeName}' exposes no Versions composition.");
+
+        object? chosen = null;
+        var chosenLabel = string.Empty;
+        foreach (var candidate in versions)
+        {
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            var label = TryReadObject(() => candidate.GetType().GetProperty("VersionNumber")?.GetValue(candidate))?.ToString() ?? string.Empty;
+            var isDefault = TryReadObject(() => candidate.GetType().GetProperty("IsDefault")?.GetValue(candidate)) as bool? ?? false;
+
+            if (version is null ? isDefault : label.Equals(version, StringComparison.OrdinalIgnoreCase))
+            {
+                chosen = candidate;
+                chosenLabel = label;
+                break;
+            }
+        }
+
+        if (chosen is null)
+        {
+            throw new InvalidOperationException(version is null
+                ? $"Library type '{typeName}' has no default version to export."
+                : $"Library type '{typeName}' has no version '{version}'.");
+        }
+
+        Directory.CreateDirectory(outDirectory);
+
+        var export = chosen.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Export" && m.GetParameters().Length == 2);
+
+        if (export is null)
+        {
+            throw new InvalidOperationException(
+                $"{chosen.GetType().Name} exposes no two-argument Export(FileInfo, ExportOptions) on this Openness version.");
+        }
+
+        var parameters = export.GetParameters();
+        var target = new DirectoryInfo(outDirectory);
+
+        // Export's first parameter is FileInfo on some types and DirectoryInfo on others; bind to
+        // whichever this one declares rather than guessing and reading the failure as a capability.
+        object first = parameters[0].ParameterType == typeof(DirectoryInfo)
+            ? target
+            : new FileInfo(Path.Combine(outDirectory, $"{typeName}.xml"));
+
+        var optionsType = parameters[1].ParameterType;
+        var optionsValue = Enum.GetValues(optionsType).Cast<object>().FirstOrDefault()
+            ?? throw new InvalidOperationException($"Could not construct a value of {optionsType.Name}.");
+
+        export.Invoke(chosen, new[] { first, optionsValue });
+
+        var produced = Directory.Exists(outDirectory)
+            ? Directory.GetFileSystemEntries(outDirectory, "*", SearchOption.AllDirectories)
+            : Array.Empty<string>();
+
+        return new LibraryExportResult(
+            typeName,
+            chosenLabel,
+            match.ClrTypeName,
+            parameters[0].ParameterType.Name,
+            optionsType.Name,
+            optionsValue.ToString() ?? string.Empty,
+            produced);
+    }
+
+    private static object? FindLibraryTypeObject(object folder, string typeName)
+    {
+        if (TryReadObject(() => folder.GetType().GetProperty("Types")?.GetValue(folder)) is System.Collections.IEnumerable types)
+        {
+            foreach (var candidate in types)
+            {
+                if (candidate is null)
+                {
+                    continue;
+                }
+
+                var name = TryReadObject(() => candidate.GetType().GetProperty("Name")?.GetValue(candidate))?.ToString();
+                if (string.Equals(name, typeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        // Recursive, because the screen walk was wrong for weeks by reading only the root folder.
+        if (TryReadObject(() => folder.GetType().GetProperty("Folders")?.GetValue(folder)) is System.Collections.IEnumerable folders)
+        {
+            foreach (var child in folders)
+            {
+                if (child is null)
+                {
+                    continue;
+                }
+
+                var found = FindLibraryTypeObject(child, typeName);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public LibraryInventory InventoryLibrary(bool includeMasterCopies)
     {
         if (_project is null)
@@ -2330,7 +2481,86 @@ public sealed class OpennessGateway : IOpennessGateway
             ReadLongAttribute(item, "Width"),
             ReadLongAttribute(item, "Height"),
             dynamizations,
-            ReadEvents(item));
+            ReadEvents(item),
+            ReadStringAttribute(item, "ContainedType"),
+            ReadFaceplateInterface(item));
+    }
+
+    /// <summary>
+    /// Reads a container's <c>Interface</c> composition — the faceplate instance's parameter list.
+    /// </summary>
+    /// <remarks>
+    /// Reflection rather than a cast, for the same reason the geometry read uses generic attribute
+    /// access: three distinct container types carry this (faceplate, custom web control, custom
+    /// widget), they do not share a usable base, and a container type added by a future TIA version
+    /// still reports. Returns null — not an empty list — for an item that has no such composition
+    /// at all, so "not a container" stays visibly different from "a container with no parameters".
+    /// </remarks>
+    private static IReadOnlyList<HmiFaceplateParameterInfo>? ReadFaceplateInterface(HmiScreenItemBase item)
+    {
+        var property = item.GetType().GetProperty("Interface");
+        if (property is null)
+        {
+            return null;
+        }
+
+        var composition = TryReadObject(() => property.GetValue(item));
+        if (composition is not System.Collections.IEnumerable entries)
+        {
+            return null;
+        }
+
+        var parameters = new List<HmiFaceplateParameterInfo>();
+        try
+        {
+            foreach (var entry in entries)
+            {
+                if (entry is null)
+                {
+                    continue;
+                }
+
+                var entryType = entry.GetType();
+                var name = TryReadObject(() => entryType.GetProperty("PropertyName")?.GetValue(entry))?.ToString();
+                var value = TryReadObject(() => entryType.GetProperty("Value")?.GetValue(entry));
+
+                // A faceplate parameter derives UIBase, so it is a full dynamization host — the same
+                // mechanism as an ordinary screen item, not a special case. Reached by reflection
+                // rather than a cast so this does not depend on where the base type lives.
+                var entryDynamizations = new List<HmiDynamizationInfo>();
+                try
+                {
+                    if (TryReadObject(() => entryType.GetProperty("Dynamizations")?.GetValue(entry)) is System.Collections.IEnumerable entryDyn)
+                    {
+                        foreach (var dynamization in entryDyn)
+                        {
+                            if (dynamization is DynamizationBase typed)
+                            {
+                                entryDynamizations.Add(ReadDynamization(typed));
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // Same tolerance as the item-level read: a parameter that refuses to enumerate
+                    // still belongs in the listing.
+                }
+
+                parameters.Add(new HmiFaceplateParameterInfo(
+                    name ?? string.Empty,
+                    value?.ToString(),
+                    value?.GetType().Name,
+                    entryDynamizations));
+            }
+        }
+        catch (Exception)
+        {
+            // Partial is better than nothing: an interface that throws part-way through still
+            // reports what it yielded, and the count difference is visible against the type.
+        }
+
+        return parameters;
     }
 
     // EventHandlers is declared on each CONCRETE item type with its own composition and its own
@@ -2364,7 +2594,8 @@ public sealed class OpennessGateway : IOpennessGateway
                 events.Add(new HmiEventInfo(
                     eventType,
                     !string.IsNullOrWhiteSpace(code),
-                    Preview(code)));
+                    Preview(code),
+                    code));
             }
         }
         catch (Exception)
@@ -2378,6 +2609,11 @@ public sealed class OpennessGateway : IOpennessGateway
 
     // Script bodies can be long and are not the point of a structural listing; the first line is
     // enough to tell "there is real code here" from "an empty handler was created and never filled".
+    //
+    // FIRST NON-BLANK line, not first line. Taking [0] blindly reported an EMPTY preview for every
+    // one of 274 handlers in the reference project, because scripts are conventionally written with
+    // a leading newline — so the walker said "there is a script here" and then showed nothing,
+    // which reads as "the handler is empty". Measured and fixed 2026-08-09.
     private static string? Preview(string? code)
     {
         if (string.IsNullOrWhiteSpace(code))
@@ -2385,7 +2621,16 @@ public sealed class OpennessGateway : IOpennessGateway
             return null;
         }
 
-        var firstLine = code!.Split('\n')[0].Trim();
+        var firstLine = code!
+            .Split('\n')
+            .Select(line => line.Trim())
+            .FirstOrDefault(line => line.Length > 0);
+
+        if (firstLine is null)
+        {
+            return null;
+        }
+
         return firstLine.Length > 80 ? firstLine.Substring(0, 77) + "..." : firstLine;
     }
 

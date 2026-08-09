@@ -895,6 +895,58 @@ public class HmiCommandTests
 
     // A plain type stays plain: the overwhelmingly common case must not acquire a contained type
     // by accident, because passing one selects a DIFFERENT Create overload on the Openness side.
+    // An export with nowhere to write silently produces nothing and looks like a negative result
+    // about the API. It is a usage error and must be refused up front.
+    [Fact]
+    public void Library_ExportVersionWithoutOut_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--export-version", "SomeType" });
+
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("--out", failure.Message);
+    }
+
+    [Fact]
+    public void Library_OutWithoutExportVersion_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--out", "C:\\tmp" });
+
+        var failure = Assert.IsType<ParseResult.Failure>(result);
+        Assert.Contains("--export-version", failure.Message);
+    }
+
+    [Fact]
+    public void Library_ExportVersionWithOut_Parses()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--export-version", "SomeType", "--out", "C:\\tmp" });
+
+        var ok = Assert.IsType<ParseResult.LibrarySuccess>(result);
+        Assert.Equal("SomeType", ok.Options.ExportTypeName);
+        Assert.Equal("C:\\tmp", ok.Options.OutDirectory);
+        Assert.Null(ok.Options.ExportVersion);
+    }
+
+    // No --version means the DEFAULT version, which must stay distinguishable from "version not
+    // yet parsed" — a wrong default here would silently export the wrong revision of a type.
+    [Fact]
+    public void Library_ExplicitVersion_IsCarried()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj", "--export-version", "T", "--version", "0.0.3", "--out", "C:\\tmp" });
+
+        var ok = Assert.IsType<ParseResult.LibrarySuccess>(result);
+        Assert.Equal("0.0.3", ok.Options.ExportVersion);
+    }
+
+    [Fact]
+    public void Library_PlainInventory_StillParses()
+    {
+        var result = ArgumentParser.Parse(new[] { "library", "Proj" });
+
+        var ok = Assert.IsType<ParseResult.LibrarySuccess>(result);
+        Assert.Null(ok.Options.ExportTypeName);
+        Assert.Null(ok.Options.OutDirectory);
+    }
+
     [Fact]
     public void SplitItemSpec_LeavesAnOrdinaryTypeAlone()
     {
