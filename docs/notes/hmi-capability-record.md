@@ -145,6 +145,6 @@ regular, so it is breadth rather than risk.
 | `docs/notes/openness-hmi-api-survey.md` | the read survey; §8 is "decode the XML — there isn't one" |
 | `docs/notes/hmi-capability-probe-plan.md` | the probe programme, phases P1–P10, questions answered in place |
 | `docs/notes/openness-hmi-faceplate-library.md` | the faceplate hypothesis and its live refutation |
-| `docs/notes/hmi-ai-design-options.md` | 47 options for using this in engineering, ranked — an options menu, not a plan |
+| `docs/notes/hmi-ai-design-options.md` | 47 options for using this in engineering, ranked — an options menu, not a plan. **§14 is a recommended path**, added separately and separable from the menu |
 | `docs/evidence/hmi-capability-probes.md` | transcripts, redacted/anonymised per `docs/13` |
 | `docs/adr/adr-0007-hmi-engineering-scope.md` | **the open decision** |

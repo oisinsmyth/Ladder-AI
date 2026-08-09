@@ -140,6 +140,20 @@ Each is measured; each kills or enables specific options downstream.
    HMI shows an unacknowledged alarm), and **alarm text** (`MultilingualTextItem.set_Text` throws).
    The creatable set is discoverable only by trial.
 
+   > **✅ PARTLY RESOLVED 2026-08-09 (P7 + P8, write-api §4m/§4n) — the dynamization third of this
+   > fact was WRONG.** Kinds are gated on the **target property's type**, and the probe had bound all
+   > three to a Boolean. **5 of 6 create**: `Flashing` on colour properties, `ResourceList` on text
+   > properties. Better still, a `TagDynamization` **mapping table** carries a per-entry `Flashing`
+   > flag that works on *any* bound property — so it is strictly more capable than
+   > `FlashingDynamization`, it compiles clean, and **alarm-state DISPLAY is fully expressible**.
+   > `TagParameter` remains refused (faceplate-scoped) and is likely unreachable, since faceplate
+   > types cannot be authored.
+   >
+   > **Still true and still blocking: alarm TEXT, and 21 of 56 item types.** So G-4 loses its display
+   > blocker but keeps its text blocker; probe **P-2** is now the single highest-value unknown left.
+   > 🔴 And one new hard limit: **`MappingTableEntrySimple` CRASHES TIA Portal** — forbidden, use
+   > `MappingTableEntryRange`.
+
 One more, from the read side, because it is what makes Group A possible at all:
 
 9. **The PLC↔HMI join is READABLE, per property, and the names do not match.** [MEASURED] survey §7,
@@ -1524,9 +1538,12 @@ Say these plainly; they are the reasons a "no" to ADR-0007 would be defensible.
    problem, not a tooling backlog item.
 2. **Reuse cannot be expressed structurally.** Fact 3 + fact 2. Unless G-6's probe passes, the only
    reuse mechanism is repetition, which is the opposite of this repo's pattern-library premise and is
-   named as such in ADR-0007's case against. **⚠ This is the one item on this list with a live
-   challenge against it** — see fact 3's contest box and `openness-hmi-faceplate-library.md`. It is
-   still true as measured; it may not be true for long, and it is cheap to find out.
+   named as such in ADR-0007's case against. ~~**⚠ This is the one item on this list with a live
+   challenge against it**~~ — **the challenge was tested and DEFEATED, 2026-08-09**: Unified
+   faceplates are plain `LibraryType` with no export formats, so types genuinely cannot be authored
+   (`openness-hmi-faceplate-library.md`). **This item is now confirmed, not merely measured.**
+   §14b argues it is survivable anyway — by putting type authoring on the human side of the boundary
+   and instantiation on the AI's — but it is survivable, not solved.
 3. **Alarm text cannot be written.** Fact 8. FI-35's use case — the one real delivery job that
    motivated all of this — is blocked on an unexplained refusal, and the workaround is the very
    spreadsheet the API was supposed to replace.
@@ -1595,3 +1612,106 @@ probably be added to it:
    we build" but "what do these two already do, and what would ours do that they do not".** Both
    evaluations are S-sized (**G-10**, **V-7**), neither needs a scope grant, and both are cheaper than
    discovering the answer halfway through Group L.
+
+---
+
+## 14. A recommended path (added 2026-08-09, at the owner's request)
+
+Everything above this section is deliberately a *menu* — it ranks, but it does not choose. This
+section does choose. It is **one opinion, written after the probe programme closed**, and it is
+separable from the rest of the document: disagree with it and the menu still stands.
+
+### 14a. Reframe the goal, because "total HMI development" names the wrong obstacle
+
+The programme did not find a capability wall. We can create screens and items, set attributes with
+coercion, bind properties to tags, build mapping tables with per-value colours and flashing, attach
+JavaScript, delete, and compile against a gate that catches dangling references by name. That is most
+of an HMI.
+
+**What is missing is not capability. It is verifiability.** There is no screen export, therefore no
+diff, no hash, no golden round-trip, and **no way for a human to review a generated screen before it
+reaches a panel** (§11.1). Every ambitious option in Group G is downstream of that, so the build
+order should follow it rather than follow enthusiasm.
+
+Stated as a rule: **build the thing that makes output reviewable before building the thing that
+produces output.** This is the same instinct as hard rule 4 on the PLC side, applied to a side that
+does not inherit it.
+
+### 14b. Take the division of labour the API is forcing on you
+
+**Faceplate types cannot be authored — measured, not assumed** (`openness-hmi-faceplate-library.md`).
+Screens are flat, one level deep, absolutely positioned. Read together, those two facts look fatal to
+reuse, and ADR-0007 says so.
+
+They are not, if the boundary is drawn in the right place:
+
+> **A human authors a handful of faceplate types in TIA, once. The AI instantiates and wires them,
+> hundreds of times.**
+
+That is how competent HMI engineering already works. It puts the taste-heavy, layout-heavy,
+review-heavy work where a human is good and the API is closed, and the repetitive, error-prone,
+tag-wiring work where the AI is good and the API is open. It also **dissolves the layout problem**:
+layout *inside* a faceplate is the human's; the AI places boxes on a grid and fills in parameters.
+And it maps cleanly onto this repo's existing pattern-library premise instead of contradicting it.
+
+**This should be the spine of any HMI plan here.** It is also the cheapest thing on the list to
+falsify: nobody has ever pointed an `HmiFaceplateContainer` at a real faceplate type and compiled.
+P2 created the container and the compile said *"The referenced faceplate type does not exist"*, which
+is consistent with it working, and proves nothing on its own.
+
+### 14c. The path
+
+Phases are gates, not a schedule. Each ends with something checkable.
+
+**Phase 0 — days. No scope grant needed; do it regardless of how ADR-0007 goes.**
+
+| Do | Why |
+|---|---|
+| **V-4** fix compile-result counting | XS, named defect. Everything that gates on a compile is wrong until it lands |
+| **A-1** census · **A-2** dangling bindings · **A-8** geometry linter | the substrate for eight other options, plus two detectors nothing else covers |
+| **L-4** harvest the house style · **A-10** `explain-hmi-screen` | converts an unwritten convention into a checkable one; makes screens discussable at all |
+| **V-7** read Siemens' 109792619 | prior art for the two most expensive options in this document. Read it *before* scoping them |
+| **NEW probe — faceplate stamping** | point a container at a real type, compile. XS, and it is the keystone of §14b |
+| **P-2** alarm text, in a controlled order | the single highest-value unknown left; it is what FI-35 is blocked on |
+
+**Phase 1 — the keystone. `V-1` canonical serialiser, then `W-1` schematic renderer.**
+One build yields five things: a diff surface, a regression baseline, a content hash, the review
+artifact, and the renderer's input. Its reader half already exists. **Scope it only after V-7** —
+Siemens may already have shipped half of it.
+
+**Phase 2 — the boundary, still read-only. `A-4` PLC↔HMI reconciliation · `B-1` contract · `A-6`
+navigation graph.** This is FI-18's actual substance, and it is what makes a generated HMI
+*checkable* rather than merely produced. The `(connection, plcTag)` join is readable and the naive
+name-equality assumption is **measurably wrong** on a real project — that alone justifies A-4.
+
+**Phase 3 — first writes, smallest blast radius first.** `W-6` deletion policy (prefix guard +
+mandatory compile — deletion orphans silently) → `G-7` compile-driven retrofit (a *fix* driven by the
+compiler's own findings, not a design act) → `G-2` IO/diagnostic screens (the one place the layout
+problem legitimately collapses to a table) → `G-6` faceplate stamping at scale.
+
+**Phase 4 — only after answering buy-vs-build.** Evaluate **SiVArc** (`G-10`) before funding a
+bespoke generator. Anything built here has to be better than it at something nameable.
+
+### 14d. What I would not build, and what stays blocked
+
+- **`L-3` constraint solver — reject.** Its failure mode is unexplainable output, and every finding
+  in this repo is required to be arguable.
+- **`G-4`/`G-9` stay blocked** until P-2 answers the alarm-text refusal. P7/P8 removed their *display*
+  blocker (flashing works, via mapping tables, on any bound property) but not their *text* blocker.
+- **`G-5` navigation scaffold stays hobbled**: screens cannot be created into a group or moved into
+  one. A generated HMI is a permanently flat root unless P-5 finds another route.
+
+### 14e. The two things this path does not fix
+
+Said plainly, because a path that hides its own holes is worth less than the menu it came from.
+
+1. **Screen grouping is a one-way door.** No phase above solves it.
+2. **Hard rule 4 still has no clean analogue.** The compile gates references and scripts and is blind
+   to geometry; a zero-width screen compiles clean. "Proven valid before presentation" would have to
+   be **redefined** for HMI work, not inherited. `V-1` + `W-1` + `V-3` is the closest this path gets,
+   and it is an approximation — a schematic, not a rendering.
+
+Both are ADR-0007's crux, and this path narrows them rather than removing them. **If the owner's
+answer to the ADR is "no", Phase 0 and Phase 2 are still worth doing on their own merits** — they are
+read-only, they need no scope grant, and they catch defect classes nothing else on the machine
+catches.
