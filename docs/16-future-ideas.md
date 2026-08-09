@@ -1307,6 +1307,37 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   machine owner to approve rather than done mid-delivery.
 - **Verdict.** Built, 152 openness-cli tests (+4). Not yet live-verified — it cannot be, until the
   rebuilt binary is approved.
+### FI-64 — a PLC data type carrying a named-type member could not be read back at all
+
+- **The same expansion FI-56 fixed, on the third parse path.** TIA expands a member whose type is a
+  named UDT — including an array of one — into a nested `<Sections>` on re-export. FI-56 taught
+  `ParseBareMember` to collapse that back to the type reference the IR already names.
+  **`ParseTypeMember` was left refusing it outright**, so a PLC data type carrying such a member
+  hard-errored on `to-ir`: *"member 'Claim' has nested structured content (`<Sections>`)"*.
+- **Why it mattered more than a parse error.** The re-export round trip is the only check on this
+  project that has caught defects **every other gate passed** — three separate times on one job: a
+  stale `.xml` imported with every gate green; a UDT member present in the type but missing from a
+  block's inline interface expansion, preflight clean over it; and a comment-only edit left out of a
+  `to-xml` list. **A type the converter cannot read back loses that check entirely**, degrading to
+  reading raw XML by hand — which is exactly what an agent had to do to prove one member existed.
+- **Fixed as the rule, not a third special case.** The standing preference on this project is one
+  general fix over stacked special cases, and FI-56 had already established the rule: an expansion of
+  a **named** type is redundant because the IR names the type. Applied to `ParseTypeMember` rather
+  than re-derived.
+- **The distinction that had to hold.** An **anonymous** structured member's `<Sections>` carries its
+  only definition, and collapsing it would silently discard real members — strictly worse than
+  refusing to parse. Anonymous nesting arrives on this path as direct `<Member>` children with
+  Datatype `Struct`, so refusing `<Sections>` for anything that is not a named-type reference leaves
+  that case exactly as it was.
+- **One existing test had to be repointed, and that is worth recording.**
+  `Parse_MemberWithNestedSections_HardErrors` asserted the old behaviour using
+  `Datatype="SomeOtherType"` — a *named* reference. It encoded the rule being fixed rather than
+  catching a mistake in the fix, so it now guards the anonymous-`Struct` half that must still refuse.
+- **Verified against the file that caused it**, not just in unit tests: `to-ir` on the real
+  `UDT_ResourceQueue` export now exits 0, collapses `Claim : Array[1..8] of "UDT_ResourceClaim"` to
+  its reference, and reads back all nine members including the one previously provable only by hand.
+- **Verdict.** Built and verified. 865 converter tests (+6), 39 golden.
+
 ### FI-65 — an Openness manager: multi-agent Portal access, bulk transfer, and an import/export ledger
 - **Status:** **Implemented (partial) 2026-08-07 — component 1 (claims) shipped; components 2–5
   (workspaces, lease, integration, ledger) open.** `converter claim` / `converter claims`
