@@ -148,6 +148,17 @@ reference an external type by *name string*, not by containment. Through Opennes
 list of absolutely-positioned items; grouping is a naming convention, not a structure. The API
 contributes nothing to layout (write-api §2).
 
+> **CONTESTED 2026-08-09, and the reasoning below is invalid — see
+> `docs/notes/openness-hmi-faceplate-library.md`.** `HmiFaceplateInterfaceComposition` is the
+> *instance's parameter list*, not the type, so its lack of a `Create` was never evidence about
+> authoring. Faceplates are **library types** (`Hmi.Faceplate.FaceplateLibraryType : LibraryType`) —
+> the search looked under `HmiSoftware`, the wrong container. Library types carry
+> `ExportAsDocuments`/`CreateFromDocuments` and an `Edit()`→`Release()` cycle, which if they apply to
+> Unified faceplates would contest **this paragraph and the "no export ⇒ no review machinery" one
+> below, together**. **REFLECTION ONLY — nothing run.** The load-bearing unknown is whether a
+> *Unified* faceplate is a `FaceplateLibraryType` at all; that note's §6 step 1 is a cheap read-only
+> test. Do not weigh this paragraph heavily either way until it is run.
+
 **Faceplate types cannot be authored, only instantiated.** There is no Unified faceplate *type* class
 in the assembly, and `HmiFaceplateInterfaceComposition` has `Find` and no `Create`. "Define a pump
 faceplate once, stamp it forty times" can have its *second* half automated and not its first. Combined
@@ -227,6 +238,15 @@ LAD one.** Stated plainly, because it is the crux:
   round-trip, no "prove the untouched networks identical". A **canonical serialiser must be written
   first** — it is the long pole, not the generation. Hard rule 7 also has no XML to protect here, and
   the `.rdf` runtime format is exactly what it exists to forbid touching.
+  > **NARROWED 2026-08-09 (exhaustive Export/Import sweep, faceplate-library note §7).** "No export"
+  > is true **for screens only**, and that is now confirmed a fifth way: `HmiScreenComposition` has
+  > `Create(name)`, `Find`, and **no `Export`/`Import` at all**. But Unified *does* export
+  > **tags, text lists and script modules** (`DirectoryInfo`-based pairs), and library types export
+  > as documents. So the serialiser is needed for less than this bullet assumes — and the "long pole"
+  > framing should be re-costed against what already round-trips before it is used to decide.
+  > Corollary correction: **"script modules and text lists cannot be authored (no `Create`)"**, stated
+  > elsewhere in these docs, is **wrong** — both have `Import`; the constructor is a document. All
+  > REFLECTION-only; none of these round trips has been run.
 - **Commands must be written re-runnable**, because a failure can leave partial state and there is no
   rollback.
 - **We own the layout model and the reuse story.** Flat, absolutely-positioned items with no
