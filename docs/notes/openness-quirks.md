@@ -737,6 +737,46 @@ worked in quiet windows), so the staging has no remaining justification.
 - **Don't fight it.** Raising `--timeout-connect` does not help when the contention lasts longer than
   any sane timeout. Check who else is running, and wait for them.
 
+### PARTIAL CORRECTION, 2026-08-09: the approval whitelist keys on the binary's HASH, so a REBUILD does re-arm the dialog
+
+The section above opens *"the intermittent attach hangs were never about the binary"* and declares
+the binary theory dead. **That was too strong, and it was the wrong half that died.** The correct
+statement is: the hangs were not about **which path** the binary ran from. They are absolutely about
+**which build**.
+
+Measured 2026-08-09 during the P8 mapping-table work (`openness-hmi-write-api.md` §4n): TIA's
+`Openness access` whitelist is keyed on the **binary's hash**, not its path — 103 entries were
+present on this machine. So **every rebuild of `openness-cli` produces a client TIA has never seen,
+and needs a fresh human click inside Portal before it can attach.** Until that click arrives,
+`Attach()` **hangs**, indistinguishable from contention. This cost about 40 minutes before it was
+diagnosed, and it is a standing tax on any edit-build-test loop that touches Portal.
+
+**Two hangs, one symptom.** A wedged attach now has (at least) two independent causes that look
+identical from outside:
+
+| Cause | Distinguishing check |
+|---|---|
+| Another session holds Portal | `Get-CimInstance Win32_Process -Filter "Name='openness-cli.exe'"` — read the **command line**, not just the count |
+| This build has never been approved | Look for an `Openness access` dialog in the running Portal processes' **window titles** |
+
+Run **both** before concluding anything. The 2026-08-08 diagnosis was made with only the first, and
+the concurrent session it found was real and independently evidenced (a Release-build client working
+a different project) — so that finding stands. What does not stand is the generalisation that the
+binary never matters: the worktree binary "demonstrably worked in quiet windows" because it had
+already been approved once, and it would have wedged again after its next rebuild. Two true causes,
+one of them mistaken for the whole explanation.
+
+**Consequences for unattended work.** A sweep launched to run while nobody is watching can sit on an
+invisible modal dialog indefinitely. So: **do not rebuild between authoring a sweep and running it**
+if the run is meant to be unattended, and if a rebuild is unavoidable, get the approval interactively
+before arming the sweep.
+
+**Related, same session:** `openness-cli` launches Portal as a **child process that inherits stdout**,
+so piping its output through anything that waits for the stream to close (`| Out-File`, `| Tee-Object`,
+`$(...)`) **hangs forever** even after the command itself finishes — the pipe stays open as long as
+the Portal child lives. Redirect to a file with `>` / `Out-File` on the *outer* invocation instead of
+piping the inner one.
+
 ### Unrelated but found at the same time: `Connect` attached to `GetProcesses()[0]` blindly
 
 `Connect()` took `TiaPortal.GetProcesses()[0]` unconditionally, which is fine with one Portal and

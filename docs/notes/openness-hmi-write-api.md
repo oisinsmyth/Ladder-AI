@@ -792,6 +792,14 @@ against the same screen.
 **So the creatable tally is 5 of 6, not 3 of 6**, and the two kinds this project called unreachable
 are not only reachable but reachable on every item that has a colour or a text property.
 
+> **Read §4n before generalising from this section.** P8 showed the rule below is a rule about
+> **`FlashingDynamization` the kind**, not about flashing the capability: a mapping-table entry
+> carries its own `Flashing` flag, and one was created and read back on a **Boolean `Visible`** in the
+> same session where `FlashingDynamization` on a Boolean `Visible` was refused. Flashing goes wherever
+> a tag can bind. Taking "flashing is available on colour properties" away from this section as a
+> statement about the API would be the same over-generalisation this section exists to correct — one
+> level down.
+
 ### Why the reflection map already said so, and why it was missed
 
 `FlashingDynamization`'s own properties are `Color`, `AlternateColor`, `FlashingRate`,
