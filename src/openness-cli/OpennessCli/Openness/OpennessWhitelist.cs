@@ -215,7 +215,10 @@ public static class OpennessWhitelist
                     $"  A NEW BUILD NEEDS A PERSON TO APPROVE IT AT THE MACHINE. Approved live 2026-08-10: the connect\r\n" +
                     $"  completed in ~8 s once the owner accepted it. UNATTENDED, THERE IS NOBODY TO ACCEPT, and the\r\n" +
                     $"  connect will sit until --timeout-connect expires — which is why rebuilding mid-run stalls an agent.\r\n" +
-                    $"  If you are running unattended: use an already-approved build. If someone is at the machine: proceed.";
+                    $"  If you are running unattended: use an already-approved build. If someone is at the machine: proceed.\r\n" +
+                    $"  TO STOP NEEDING A PERSON AT ALL: run tools\\openness-approve-setup.ps1 once (elevated), after which\r\n" +
+                    $"  every build approves itself as part of the build. See docs/notes/openness-quirks.md, \"Approving a\r\n" +
+                    $"  rebuilt binary WITHOUT a human at the machine\".";
 
             case Verdict.PathNotListed:
                 return
@@ -223,7 +226,10 @@ public static class OpennessWhitelist
                     $"  {executablePath}\r\n" +
                     $"  Approval does not carry across build locations, so a worktree or copied build is a new application\r\n" +
                     $"  to Openness. IT NEEDS A PERSON TO APPROVE IT AT THE MACHINE; unattended, the connect will sit\r\n" +
-                    $"  until --timeout-connect expires.";
+                    $"  until --timeout-connect expires.\r\n" +
+                    $"  TO STOP NEEDING A PERSON AT ALL: run tools\\openness-approve-setup.ps1 once (elevated), then approve\r\n" +
+                    $"  this path with tools\\openness-approve-build.ps1 -Exe <this exe>. See docs/notes/openness-quirks.md,\r\n" +
+                    $"  \"Approving a rebuilt binary WITHOUT a human at the machine\".";
 
             default:
                 return null;

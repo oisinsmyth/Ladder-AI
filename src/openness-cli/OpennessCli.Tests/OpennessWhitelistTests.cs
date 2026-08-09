@@ -56,6 +56,20 @@ public class OpennessWhitelistTests
         Assert.Contains("UNATTENDED", warning);
     }
 
+    // Both warnings fire at the exact moment someone needs to know the manual step is avoidable, so
+    // both must name the way out. Asserted rather than left to prose: a message that stops mentioning
+    // the escape hatch reads as "there is nothing to do but fetch a human", which is no longer true.
+    [Theory]
+    [InlineData(OpennessWhitelist.Verdict.StaleHash)]
+    [InlineData(OpennessWhitelist.Verdict.PathNotListed)]
+    public void EveryWarning_NamesTheOneTimeSetupThatRemovesTheManualStep(OpennessWhitelist.Verdict verdict)
+    {
+        var warning = OpennessWhitelist.DescribeIfNotApproved(new OpennessWhitelist.Result(verdict, 1), Exe);
+
+        Assert.NotNull(warning);
+        Assert.Contains("openness-approve-setup.ps1", warning);
+    }
+
     // A worktree build is a different application to Openness even though it is the same source.
     [Fact]
     public void PathNeverApproved_IsPathNotListed()
