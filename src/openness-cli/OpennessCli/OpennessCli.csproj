@@ -25,4 +25,32 @@
     <PackageReference Include="System.Text.Json" />
   </ItemGroup>
 
+  <!--
+    FI-61: TIA approves an Openness caller by (Path, FileHash), so THIS build — the one that just
+    produced a new hash — is a caller TIA has never seen, and needs a person to approve it at the
+    machine. Unattended there is nobody, and the next attach hangs until the connect timeout expires.
+
+    So the build approves itself: the script writes the same whitelist entry TIA's dialog writes.
+
+    Deliberately never fails the build. It needs a one-time elevated grant
+    (tools\openness-approve-setup.ps1); until that is run it exits 3 and this warns. A build failing
+    because of a registry permission would be a far worse trade than the hang it prevents — the same
+    reason the CLI's own whitelist check is advisory (Openness/OpennessWhitelist.cs).
+
+    Opt out:  dotnet build -p:AutoApproveOpenness=false   (or set LADDER_AUTO_APPROVE_OPENNESS=0)
+  -->
+  <PropertyGroup>
+    <AutoApproveOpenness Condition="'$(AutoApproveOpenness)' == '' And '$(LADDER_AUTO_APPROVE_OPENNESS)' == '0'">false</AutoApproveOpenness>
+    <AutoApproveOpenness Condition="'$(AutoApproveOpenness)' == ''">true</AutoApproveOpenness>
+    <OpennessApproveScript>$(MSBuildThisFileDirectory)..\..\..\tools\openness-approve-build.ps1</OpennessApproveScript>
+  </PropertyGroup>
+
+  <Target Name="ApproveForOpenness"
+          AfterTargets="Build"
+          Condition="'$(OS)' == 'Windows_NT' And '$(AutoApproveOpenness)' == 'true' And Exists('$(OpennessApproveScript)') And Exists('$(TargetPath)')">
+    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(OpennessApproveScript)&quot; -Exe &quot;$(TargetPath)&quot; -Quiet"
+          ContinueOnError="WarnAndContinue"
+          StandardOutputImportance="high" />
+  </Target>
+
 </Project>

@@ -776,3 +776,68 @@ the stream to close — `| Out-File`, `| Tee-Object`, `$(...)` — **hangs forev
 itself has finished**, because the pipe stays open as long as the Portal child lives. Redirect with
 `>` / `Out-File` on the *outer* invocation instead. Cost two harness hangs before it was spotted, and
 it presents as yet another "Portal is wedged".
+
+## Approving a rebuilt binary WITHOUT a human at the machine (2026-08-10)
+
+The sections above establish the cost: every rebuild is a caller TIA has never seen, and a caller TIA
+has never seen needs a person to accept it. Seconds when someone is sitting there, fatal when nobody
+is.
+
+**Accepting that dialog writes a registry entry and nothing else.** So the entry can be written
+directly, and then the dialog is never raised at all. Three scripts under `tools/`, in order of
+preference:
+
+| Script | What it does | Needs |
+|---|---|---|
+| `openness-approve-setup.ps1` | **One time.** Grants ONE account read/write on `HKLM\...\Openness\<ver>\Whitelist\openness-cli.exe` — that key only | Elevation, once |
+| `openness-approve-build.ps1` | Approves a built exe: computes base64 SHA-256, writes `Path`/`DateModified`/`FileHash` | Nothing, after setup |
+| `openness-approve-watch-dialog.ps1` | **Fallback.** Watches Portal via UI Automation and accepts the dialog if one appears | Nothing |
+
+**Builds of `src/openness-cli` now approve themselves.** The `ApproveForOpenness` target in
+`OpennessCli.csproj` runs the approve script `AfterTargets="Build"` with `$(TargetPath)`. It **never
+fails the build** — before the one-time setup it exits 3 and MSBuild emits `MSB3073` as a *warning*,
+which is the same trade as the CLI's own advisory whitelist check: a build broken by a registry
+permission is worse than the hang it prevents. Opt out with `-p:AutoApproveOpenness=false` or
+`LADDER_AUTO_APPROVE_OPENNESS=0`.
+
+This blunts the sharpest edge of the FI-61 rule. `dotnet test` on `openness-cli.sln` is still a
+rebuild, but the rebuild re-approves itself as part of the build, so it no longer silently revokes a
+running agent's ability to connect.
+
+**Details that matter if any of it stops working.**
+
+- **`Registry64` explicitly.** A 32-bit host is redirected to `WOW6432Node`, where TIA does not look.
+  The entry gets written, the script reports success, and the dialog still appears.
+- **`DateModified` uses TIA's own format string**, `yyyy'/'MM'/'dd HH:mm:ss.fff`, taken from the
+  file's real `LastWriteTime`.
+- **Entry subkey names are copied from siblings TIA created**, never guessed. `Entry (N)` is what this
+  machine has, but that is an observation, not a contract — the script reuses an existing sibling's
+  prefix/suffix and takes the next free number.
+- **Unknown values are reported, not ignored.** If a real entry ever carries a value the script does
+  not write, it warns. That is the one way this could write a dead entry that *looks* approved, and it
+  should surface immediately rather than during an unattended run.
+- **Approval is per PATH as well as per hash**, so a worktree build still needs its own approval —
+  pass `-Exe` with that path, or simply build it there (the post-build target handles it).
+- The whitelist accumulates one entry per build (84 for one path here); `-Prune` clears a path's stale
+  hashes.
+
+**The security trade, stated rather than buried.** The whitelist is what stops arbitrary programs from
+driving TIA Portal. After the one-time grant, anything running as that account can approve that one
+executable *name* without prompting — including malware that drops its own `openness-cli.exe` and
+approves it. On a single-engineer workstation building its own tool that is a fair trade for
+unattended automation; on a shared machine it is not. It is scoped to one key and one exe name, and
+`openness-approve-setup.ps1 -Revoke` undoes it. The approval capability is deliberately **not** a
+subcommand of `openness-cli.exe`: it stays a separate, auditable act, and the binary that needs
+approval cannot be the thing that grants it.
+
+**The watcher is the fallback, and it clicks nothing by default.** A robot that accepts dialogs inside
+TIA can accept one you badly wanted to read. It reports what it *would* click until `-Click` is
+passed, acts only inside a window whose visible text matches `-TextPattern`, and prints the dialog
+text that justified every action. Capture the real wording on your Portal build and language in
+observe mode first, then tighten the pattern before enabling clicks.
+
+**What is verified and what is not.** The scripts parse clean; the post-build target was measured
+firing with the correct quoted `$(TargetPath)`, skipping under the opt-out, and warning-not-failing
+when approval exits 3. The registry write itself was **not** executed by the agent that wrote this —
+registry access was denied to that session — so the first real run is the proof: build, then run any
+`openness-cli` command that attaches and confirm it connects with nobody accepting anything.
