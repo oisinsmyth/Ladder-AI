@@ -42,9 +42,41 @@ public sealed record IoBoundaryFact(string Block, string Path, string Direction)
 // sibling dependencies a reusable equipment FB must not contain.
 public sealed record SiblingRefFact(string Block, IReadOnlyList<string> Calls, IReadOnlyList<string> InstanceDbRoots);
 
+/// <summary>
+/// FI-67 (2026-08-09). THE COMPLEMENT OF <see cref="MultiWriterFact"/>, AND THE ONE QUESTION A
+/// BACK-OUT MUST ASK.
+///
+/// `multiWriters` lists, by construction, only paths written by MORE THAN ONE site. The sole-writer
+/// set is precisely its complement and was never emitted — so the writer graph this tool already
+/// builds could not be asked *"which members would lose their only writer if I deleted this?"*
+///
+/// WHY THAT MATTERS MORE THAN A MISSING VIEW. Deleting a feature that is the sole writer of a
+/// RETENTIVE member leaves that member frozen at its last value with nothing able to clear it. On
+/// one live job that included a resource reservation whose surviving reader gates every grant:
+/// removing the writer with the bit standing would have made a shared machine ungrantable
+/// permanently, curable only by an online write. Three successive hand-written passes over that
+/// deletion each added one more item and still missed a whole class of four.
+///
+/// <see cref="Readers"/> is carried because it is what separates a hazard from dead data: a member
+/// whose readers all disappear with the feature is inert, while one with a surviving reader is live.
+/// The two questions are answered from the same graph, so answering only the first would leave the
+/// caller to re-derive the second by hand — which is how the class of four was missed.
+///
+/// Retention is deliberately NOT filtered here: this layer does not model it, and guessing would be
+/// worse than leaving the caller to intersect this set with the declarations. Facts, not verdicts —
+/// the same contract as every other table in this report.
+/// </summary>
+public sealed record SoleWriterFact(string Path, WriterRef Writer, IReadOnlyList<ReaderRef> Readers);
+
 public sealed record CrossCheckReport(
     IReadOnlyList<MultiWriterFact> MultiWriters,
     IReadOnlyList<DeadMemberFact> DeadMembers,
     IReadOnlyList<IoBoundaryFact> IoBoundary,
     IReadOnlyList<SiblingRefFact> SiblingRefs,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    // FI-67. Appended last so every existing positional construction keeps compiling; defaulted so a
+    // caller that does not care about back-out surface is unaffected.
+    IReadOnlyList<SoleWriterFact>? SoleWriters = null)
+{
+    public IReadOnlyList<SoleWriterFact> SoleWriters { get; init; } = SoleWriters ?? Array.Empty<SoleWriterFact>();
+}

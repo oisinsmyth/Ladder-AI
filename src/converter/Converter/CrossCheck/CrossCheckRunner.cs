@@ -21,6 +21,19 @@ public static class CrossCheckRunner
             .Select(kv => new MultiWriterFact(kv.Key, kv.Value.Writers.Select(ToWriter).ToList()))
             .ToList();
 
+        // FI-67: the complement multiWriters structurally omits. Exactly one writer is what makes a
+        // member vulnerable to a deletion — remove that writer and nothing can ever set it again.
+        // Readers travel with it because a member whose readers die with the same feature is inert,
+        // while one with a surviving reader is live; both answers come off this one graph.
+        var soleWriters = graph.Usages
+            .Where(kv => kv.Value.Writers.Count == 1)
+            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => new SoleWriterFact(
+                kv.Key,
+                ToWriter(kv.Value.Writers[0]),
+                kv.Value.Readers.Select(ToReader).ToList()))
+            .ToList();
+
         var deadMembers = new List<DeadMemberFact>();
         foreach (var path in graph.GlobalDbMemberPaths.Distinct(StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -51,7 +64,7 @@ public static class CrossCheckRunner
 
         var siblingRefs = BuildSiblingRefs(graph);
 
-        return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings);
+        return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings, soleWriters);
     }
 
     // Interface-UDT dead members. Each FB interface member aliases between the FB-internal bare form
@@ -141,6 +154,11 @@ public static class CrossCheckRunner
 
     private static WriterRef ToWriter(ProjectUsageGraph.UsageSite site) =>
         new(site.Block, site.Network, KindLabel(site.Kind));
+
+    // FI-67. A read has no coil kind, so ReaderRef carries only where it happens — the same shape
+    // DeadMemberFact's readers already use.
+    private static ReaderRef ToReader(ProjectUsageGraph.UsageSite site) =>
+        new(site.Block, site.Network);
 
     private static string KindLabel(CoilKind? kind) => kind switch
     {

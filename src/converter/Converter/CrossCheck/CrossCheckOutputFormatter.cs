@@ -83,6 +83,16 @@ public static class CrossCheckOutputFormatter
             ioBoundary = report.IoBoundary.Select(io => new { block = io.Block, path = io.Path, direction = io.Direction }),
             siblingRefs = report.SiblingRefs.Select(s => new { block = s.Block, calls = s.Calls, instanceDbRoots = s.InstanceDbRoots }),
             warnings = report.Warnings,
+            // FI-67: JSON ONLY, DELIBERATELY. Most members have exactly one writer, so this is the
+            // largest table in the report by a wide margin — printing it in the human view would
+            // drown the four fact tables a reader actually scans. It exists to be queried (which
+            // members lose their only writer if I delete this?), and a query wants JSON.
+            soleWriters = report.SoleWriters.Select(s => new
+            {
+                path = s.Path,
+                writer = new { block = s.Writer.Block, network = s.Writer.Network, kind = s.Writer.Kind },
+                readers = s.Readers.Select(r => new { block = r.Block, network = r.Network }),
+            }),
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });

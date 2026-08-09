@@ -263,4 +263,62 @@ public class CrossCheckTests : IDisposable
         Assert.True(byPath.ContainsKey("DB_Pre.Slot"));
         Assert.Empty(byPath["DB_Pre.Slot"].Readers);
     }
+
+    // FI-67. `multiWriters` lists only paths written by MORE THAN ONE site, so the sole-writer set —
+    // its exact complement — was never emitted, and the writer graph could not be asked the one
+    // question a back-out must ask: which members lose their ONLY writer if this is deleted?
+    //
+    // That is not academic. Deleting the sole writer of a RETENTIVE member leaves it frozen with
+    // nothing able to clear it; on one live job that included a resource reservation whose surviving
+    // reader gates every grant, so removing the writer with the bit standing would have made a shared
+    // machine ungrantable permanently. Three hand-written passes over that deletion each added one
+    // more item and still missed a whole class of four — which is why this is derived, not listed.
+    [Fact]
+    public void SoleWriters_AreExactlyTheComplementOfMultiWriters()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+
+        var sole = report.SoleWriters.Select(s => s.Path).ToHashSet(StringComparer.Ordinal);
+        var multi = report.MultiWriters.Select(m => m.Path).ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(report.SoleWriters);
+        Assert.Empty(sole.Intersect(multi));                                   // disjoint
+        Assert.All(report.MultiWriters, m => Assert.True(m.Writers.Count >= 2));
+    }
+
+    // Readers travel with the fact because they are what separates a hazard from dead data: a member
+    // whose readers all disappear with the same feature is inert, one with a surviving reader is
+    // live. Both answers come off the one graph, so answering only the first would leave the caller
+    // to re-derive the second by hand — which is how that class of four was missed.
+    [Fact]
+    public void SoleWriters_CarryTheirReaders_AndAnEmptyListIsARealAnswer()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+
+        Assert.All(report.SoleWriters, s => Assert.NotNull(s.Readers));
+
+        // DB_Buf.Dead is written once and read nowhere — written-once-read-never is a useful answer
+        // (dead data), not a missing one.
+        var dead = report.SoleWriters.SingleOrDefault(s => s.Path == "DB_Buf.Dead");
+        Assert.NotNull(dead);
+        Assert.Empty(dead!.Readers);
+    }
+
+    // Output contract: JSON only. Most members have exactly one writer, so this is the largest table
+    // in the report — printing it in the human view would drown the four tables a reader scans. It
+    // exists to be queried, and a query wants JSON.
+    [Fact]
+    public void SoleWriters_AreInJsonOnly_NotInTheHumanTable()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+
+        var root = System.Text.Json.JsonDocument.Parse(CrossCheckOutputFormatter.FormatJson(report)).RootElement;
+        Assert.True(root.TryGetProperty("soleWriters", out var arr));
+        Assert.Equal(report.SoleWriters.Count, arr.GetArrayLength());
+        Assert.True(arr[0].TryGetProperty("writer", out var w));
+        Assert.True(w.TryGetProperty("block", out _));
+        Assert.True(arr[0].TryGetProperty("readers", out _));
+
+        Assert.DoesNotContain("soleWriters", CrossCheckOutputFormatter.FormatText(report));
+    }
 }

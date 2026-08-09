@@ -1655,3 +1655,30 @@ are buildable now and are justified by recorded evidence
 (author-allocated `NUMBER`, the `%X9` alarm-bit claim, the stale-process compile block) rather than by an
 assumed bottleneck. Bulk *import*, a queue proper and any daemon stay shut until either FI-16 gains
 per-call timing or a real run records agents actually contending for the canonical project.
+
+### FI-67 — `cross-check` could not be asked the one question a back-out must ask
+
+- **The gap was structural, not an oversight of scope.** `multiWriters` lists, *by construction*, only
+  paths written by **more than one** site. The sole-writer set is precisely its complement and was
+  never emitted — so the writer graph the tool already builds could not answer *"which members lose
+  their only writer if I delete this feature?"*
+- **Why that matters.** Deleting the sole writer of a **retentive** member leaves it frozen at its
+  last value with nothing able to clear it. On a live job that included a resource reservation whose
+  surviving reader gates every grant: removing the writer with the bit standing would have made a
+  shared machine **ungrantable permanently**, curable only by an online write.
+- **The finding that forced it.** Three successive review passes each hand-added *one more* residue to
+  a back-out list — three, then five, then six. When the set was finally **derived** instead of
+  listed, it came out at 20 members in four consequence classes, and it contained **a whole class of
+  four that every hand pass had missed**. Same lesson as the hold anchors that took five attempts:
+  *an enumerated list is one the next item is not on.*
+- **Built.** `SoleWriterFact(Path, Writer, Readers)`, computed off the same graph as its complement.
+  **Readers are carried deliberately** — a member whose readers all disappear with the feature is
+  inert; one with a surviving reader is live. Both answers come from one graph, and answering only
+  the first is what left the earlier passes re-deriving the second by hand.
+- **JSON only, on purpose.** Most members have exactly one writer, so this is the largest table in the
+  report; printing it in the human view would drown the four fact tables a reader actually scans. It
+  exists to be queried.
+- **Retention is deliberately not filtered.** This layer does not model it, and guessing would be
+  worse than leaving the caller to intersect the set with the declarations. Facts, not verdicts — the
+  same contract as every other table here.
+- **Verdict.** Built. 868 converter tests (+3).
