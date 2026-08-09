@@ -513,11 +513,24 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var applied = new List<string>();
 
+        // Each set is caught independently, like the dynamization and mapping-table loops below.
+        // Measured 2026-08-09 (P8.13): four sets in one command, the second threw, and the report
+        // showed only the exception — so the two that had already been WRITTEN, and persisted
+        // (Openness commits eagerly, §4h), went unrecorded, and which one failed was unrecoverable
+        // from the output. Aborting mid-command does not undo anything; it only hides what was done.
         foreach (var (target, attribute, value) in sets)
         {
-            var subject = ResolveTarget(screen, target);
-            var coerced = SetAttributeCoerced(subject, attribute, value);
-            applied.Add($"set {target}.{attribute} = {coerced}");
+            try
+            {
+                var subject = ResolveTarget(screen, target);
+                var coerced = SetAttributeCoerced(subject, attribute, value);
+                applied.Add($"set {target}.{attribute} = {coerced}");
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"set {target}.{attribute} = '{value}' -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
         }
 
         // Syntax findings join the validation list rather than living only in the applied-change

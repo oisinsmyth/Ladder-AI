@@ -844,12 +844,221 @@ rate is not — an incomplete capability, not a broken one. `--set` needs a nest
 P3 never touched: `TagDynamization.ValueConverter` → `MappingTable` → `Entries`, where each entry
 carries `Value`, `AlternateValue`, **`Flashing`**, `FlashingRate`, with `ConditionType` ∈
 {`Range`, `Bitmask`, `Singlebit`, `Expression`}. That is the value-range-to-colour-and-flash
-mechanism a real alarm display is built from, hanging off a kind that already works. **UNVERIFIED
-live** — `MappingTableEntryBaseComposition.Create<T>()` exists (no arguments, plus a non-generic
-`Create(BitDynamizationType)`), but no probe has created one.
+mechanism a real alarm display is built from, hanging off a kind that already works. ~~**UNVERIFIED
+live**~~ — **MEASURED 2026-08-09, and it works: see §4n.** The route is real, it compiles clean, and
+it reaches flashing on property types where `FlashingDynamization` itself refuses.
 
 So the FI-35 picture improves on the display side and is unchanged on the text side: alarm *state
 display* is expressible; alarm *text* still cannot be written (§4l).
+
+## 4n. P8 — the mapping table IS how an HMI flashes (2026-08-09) [LIVE]
+
+**The hypothesis §4m raised is TRUE.** A `TagDynamization` on a property, with a mapping table whose
+entries map tag values to values and set `Flashing`, creates, saves, reads back from a fresh process,
+and **compiles clean**. 47 probe records across three chained runs (two of them one sweep resumed
+after a harness fault); device returned to zero artifacts and `STATE: Success`.
+
+It is also **strictly more capable than `FlashingDynamization`**, which is the finding that matters
+most and the one nobody expected.
+
+```
+bind    HmiRectangle_1.BackColor <- tag 'ZZ_AI_MapTag'        (TagDynamization — colour property, accepted)
+map     Create<MappingTableEntryRange>()
+        From=1 To=5 Value=#FFFF0000 AlternateValue=#FF0000FF Flashing=True FlashingRate=Fast
+read back, fresh process:
+        mapping: ConditionType=Range entries=1 { MappingTableEntryRange From=1<Int32> To=5<Int32>
+          RangeType=Range<RangeType> Value=#FFFF0000<Color> AlternateValue=#FF0000FF<Color>
+          Flashing=True<Boolean> FlashingRate=Fast<FlashingRate> }
+compile: STATE: Success   ERRORS: 0
+```
+
+### The seven questions, answered
+
+**1. Which entry types does `Entries.Create<T>()` create?** One of four — and one of the failures is
+not a refusal.
+
+| Entry type | `Create<T>()` | Note |
+|---|---|---|
+| `MappingTableEntryRange` | ✅ **creates** | the workhorse; every positive result below is one of these |
+| `MappingTableEntryBitmask` | ❌ refused | opaque `Error when calling method 'Create'` — but reachable another way, see Q5 |
+| `MappingTableEntryBase` (**not** marked abstract) | ❌ refused | same non-message; §4k's "*Base types refuse" pattern again |
+| **`MappingTableEntrySimple`** | 🔴 **CRASHES TIA PORTAL** | the Portal process dies; the client then throws `EngineeringObjectDisposedException: Access to a disposed object of type 'Siemens.Engineering.Project'` |
+
+**The crash is isolated, not incidental.** Three occurrences, and the controls separate every
+confound: with attributes set and without them (so it is the *create*, not a subsequent write); on
+`HmiButton_3.BackColor` and again on a different screen's `HmiRectangle_2.BackColor` (so it is not
+the target); and — the decisive one — **a `Range` entry on the exact target `Simple` had just killed
+Portal on succeeded immediately afterwards** (so it is not a poisoned object, it is the type).
+
+This is a **new failure class for this survey**. Everything that has failed so far *refused* — loudly,
+changing nothing. This one takes the engineering tool down, and every subsequent command pays a full
+Portal relaunch and project reopen. `MappingTableEntrySimple` must be treated as forbidden by any
+generator.
+
+The entry itself did **not** survive: the read-back shows `HmiButton_3` carrying no mapping at all,
+so the crash happened before anything was committed. Everything created *before* that command did
+survive, as always.
+
+**2. Must `ConditionType` be set before creating a matching entry? NO** — and the expectation that it
+would was wrong.
+
+| Order | Result |
+|---|---|
+| `ConditionType=Range` then `Create<MappingTableEntryRange>()` | ✅ created |
+| `Create<MappingTableEntryRange>()` with `ConditionType` still `None` | ✅ **created, identical read-back** |
+| setting `ConditionType=Range` afterwards | ✅ accepted, entry unaffected |
+
+So this is *not* another instance of §4h's contextual writability. Both orders work, and entries live
+happily under `ConditionType=None` — three of the probe's mapping tables ended that way and compiled
+clean. Testing both orders was worth it precisely because it produced the negative answer.
+
+*(UNVERIFIED: the `Create(BitDynamizationType)` path was only ever exercised with `ConditionType`
+already `Bitmask`. Whether it works from `None` was not tested.)*
+
+**3. What CLR type do `Value`/`AlternateValue` take?** They are declared `object`, so the metamodel
+says nothing — and the answer is **the target property's own type**, discoverable only by trying.
+
+| Target property | Written as | Result |
+|---|---|---|
+| `BackColor` (a `System.Drawing.Color`) | `Color` | ✅ stored, reads back `#FF00FFFF<Color>` |
+| `BackColor` | `String` ("Lime") | ❌ `set_Value` throws **`-Invalid value type`** |
+| `BackColor` | `Int32` (65280) | ❌ same throw |
+| `Visible` (a Boolean) | `Boolean` | ✅ stored, reads back `Value=True<Boolean>` |
+
+**No silent coercion anywhere** — a wrong type throws rather than being converted, which is the
+better of the two failure modes and worth recording as such. `AlternateValue` behaves identically.
+This is the same shape as §4m's finding one level down: the *entry* is gated on the bound property's
+type exactly as the *dynamization kind* is.
+
+Defaults on an entry created bare: `Value=#FF7D7D85` (grey), `AlternateValue=#FFFF0000` (red) on a
+colour target; `AlternateValue` comes back **null** on the Boolean target. So a bare entry on a
+colour property is already a grey/red pair — never assume unset means empty.
+
+**4. Does `Flashing` + `FlashingRate` stick? Yes, verified by read-back from a FRESH process** — two
+separate `hmi --screen` runs in new processes, after save, on both sweeps. `Flashing=True<Boolean>`
+and `FlashingRate=Fast|Slow|Medium<FlashingRate>` on entries across three items and two screens. Both
+are also settable *after* creation through the nested `--set` path.
+
+**5. `Create(BitDynamizationType)` returns `IList<MappingTableEntryBitmask>`** — a whole SET in one
+call, and it is the **only** way to get a bitmask entry, since the generic `Create<T>` refuses one.
+
+| Argument | Entries created | Shape |
+|---|---|---|
+| `SingleBit` | **2** | `Condition=0` and `Condition=1`, `Relevant=1` — the bit-clear and bit-set rows |
+| `MultiBit` | **1** | `Condition=1`, `Relevant=1` |
+
+**And they cannot be deleted.** `MappingTableEntryBitmask.Delete()` throws `Error when calling method
+'Delete'`. `Delete()` is declared on `MappingTableEntryBase` and works on a `Range` entry, so this is
+per-subtype, not per-composition. A bitmask entry is therefore **create-only**: the only route back
+is deleting the whole dynamization. Anything that writes bitmask entries has no undo short of that.
+
+**6. Does it compile? `STATE: Success`, 0 errors** — twice, on two different screens, with mapping
+tables carrying ranges, colours and flashing on four properties across three items, and only the
+device's 156 pre-existing warnings.
+
+That is worth stopping on, because **every previous BINDING this programme created failed to compile
+bare**: a `ScriptDynamization` with no script read as "the configured tag is invalid" (§4l), a
+`ResourceListDynamization` wanted both a tag and a list by name (§4m), a faceplate container wanted a
+type (§4k). A tag dynamization plus a mapping table is **complete on its own** — nothing further has
+to be configured for the compiler to accept it. For a generator that is the difference between a
+capability and a capability with homework.
+
+*(Not a first for the programme overall — §4l's P6 compiled clean with a screen group and a screen
+window, because nothing there left a dangling reference either. The claim is about bindings, which
+until now had always left one.)*
+
+**7. Does it work where `FlashingDynamization` refuses? YES — and that is the headline.**
+
+Same session, same screen, minutes apart:
+
+| Probe | What | Result |
+|---|---|---|
+| P8.14 | mapping-table entry, `Flashing=True`, `FlashingRate=Fast`, on `HmiText_2.**Visible**` (Boolean) | ✅ **created**, read back from a fresh process |
+| P8.14b | `FlashingDynamization` on `HmiIOField_4.**Visible**` (Boolean) | ❌ **REFUSED** |
+
+So **§4m's rule is a rule about `FlashingDynamization`, not about flashing.** "Flashing is available
+on colour properties" is true of that *kind*; the mapping-table route carries `Flashing`/
+`FlashingRate` on **any** property a tag can bind to, because the flashing lives on the entry rather
+than on the dynamization. The two routes are not equivalent and the second is broader.
+
+### The negative controls
+
+§4m exists because a refusal was over-generalised without one. What a failure looks like here, so a
+success is interpretable:
+
+| Control | Result |
+|---|---|
+| `--map` onto a `FlashingDynamization` | refused, naming why: *only a TagDynamization carries a ValueConverter* |
+| `--map` onto a property with **no** dynamization | refused: *there is no dynamization on that property — create one with --bind first* |
+| nested `--set` at `Entries[99]` | refused: *index 99 is out of range — the composition holds 1 element(s)* |
+| a `Range` entry on the target `Simple` had just crashed Portal on | **succeeded** — which is what makes the crash a fact about the type |
+
+The refusals are the tool's own, not the API's, and that is the point: the two "no ValueConverter"
+cases are structurally impossible rather than experimentally refused, so they had to be distinguished
+from the API saying no. The `Entries[99]` control proves the nested path resolves for real rather
+than swallowing what it cannot reach.
+
+### What this changes, and what it does not
+
+**Alarm-state DISPLAY is now fully expressible, by a route that compiles clean.** §4m improved the
+display side by finding `FlashingDynamization` reachable; this proves the mechanism a real alarm
+display is actually built from — value ranges mapping to colours, with per-range flashing — and shows
+it is broader than the dedicated kind.
+
+**Nothing about alarm TEXT changes.** §4l's block stands: `MultilingualTextItem.set_Text` throws, so
+alarm *text* still cannot be written. FI-35's picture is now: state display solved, text blocked.
+
+**A third thing changes, and it is not favourable.** Until now the refusal set was the boundary of
+this API, and refusals are safe — they fail loudly and change nothing. `MappingTableEntrySimple`
+introduces a call that **destroys the session**. A survey that only records "creates / refuses" has
+no column for it. Recorded here as a category, not just an instance: *before trusting a Create on this
+API, know that the failure mode may be worse than a refusal.*
+
+### Tooling built for this (`openness-cli`, all shipped and tested)
+
+- **Nested `--set` targets.** `<Item>.<Property>.<DynAttr>`, continuing through engineering objects
+  and compositions: `Rect_1.BackColor.ValueConverter.MappingTable.Entries[0].Flashing=True`. This
+  closes §4m's recorded gap — a dynamization could be created and not configured. Each step resolves
+  a dynamization by property name first, then a CLR property; `[n]` indexes a composition.
+- **`--map` / `--map-clear`.** Entry specs `<EntryType>[;<Attr>=<Value>]...`, including `bits:SingleBit`
+  / `bits:MultiBit` for the non-generic overload. Every created entry is read back field by field
+  **with the CLR type stored**, which is the only way Q3 was answerable at all.
+- **Explicit value type tags** (`color:`, `int:`, `bool:`, `str:`, …) for members declared `object`,
+  and `System.Drawing.Color` parsing, without which no colour could be set from a command line.
+- **Mapping tables in the read path.** `hmi --screen` reports `ConditionType`, the formula flag and
+  every entry. Unified has no screen export, so a fresh-process read *is* the evidence.
+
+### A defect in my own tooling, found by this probe
+
+**A `--set` that throws loses the record of the sets that already succeeded in the same command.**
+P8.13 chained four value-type experiments; the first bad type aborted the command and the output
+showed only the exception — so which of the four failed was unrecoverable from the transcript, and
+Q3 had to be re-run one set per command. Openness commits eagerly, so the earlier sets *had*
+persisted while the report said nothing about them.
+
+This is the §4l `--in` defect again in a new place: **the output described the request rather than
+what happened.** `--map` and `--bind-kind` already catch per item and report `REFUSED`; `--set` did
+not. Fixed to match, so one bad set is now a reported refusal and a non-zero exit rather than a
+silent partial write.
+
+**Verification status of that last fix: unit-tested, live verification PENDING.** It needed a
+rebuild, and a rebuild changes the binary's hash — which TIA treats as a new client and re-prompts a
+human for, through the `Openness access` dialog inside Portal. The verification sweep (P9) was
+sitting on that dialog when this was written. Everything else in §4n was measured with the binary
+that had already been approved.
+
+### The approval dialog is a real constraint on unattended work
+
+Worth recording because it shaped this whole session and is not in the operating protocol.
+`HKLM\SOFTWARE\Siemens\Automation\Openness\20.0\Whitelist\openness-cli.exe` holds **one entry per
+binary HASH**, not per path — 103 of them on this machine, 13 for this worktree's path alone. So
+**every rebuild needs a fresh human approval**, and until it is granted `Attach()` simply hangs: no
+error, no timeout distinguishable from a busy Portal, no message anywhere.
+
+Two diagnostics turn a 25-minute mystery into a 10-second answer, and both are worth keeping:
+compare the binary's base64 SHA-256 against the `FileHash` values in that registry key, and enumerate
+window titles of the running Portal processes looking for `Openness access`. A hang with the dialog
+up is a human gate; a hang without it is contention (`openness-quirks.md`).
 
 ## 4i. Gap register — what has actually been WALKED, and what has not (2026-08-08)
 
