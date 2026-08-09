@@ -11,6 +11,13 @@
       <HintPath>$(TiaOpennessDir)\Siemens.Engineering.dll</HintPath>
       <Private>true</Private>
     </Reference>
+
+    <!--
+      Every HMI colour property (BackColor, BorderColor, FlashingDynamization.Color, ...) is a
+      System.Drawing.Color, which Convert.ChangeType cannot produce from a string — so setting one
+      needs this reference, not just a cast. Framework assembly, so no package: net48 only.
+    -->
+    <Reference Include="System.Drawing" />
   </ItemGroup>
 
   <!-- Version comes from the repo-root Directory.Packages.props (F-38, central package management). -->

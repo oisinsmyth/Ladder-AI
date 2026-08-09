@@ -116,7 +116,15 @@ public interface IOpennessGateway : IDisposable
         IReadOnlyList<string> addItems,
         // Non-tag dynamization kinds (Script/Flashing/Expression/ResourceList/TagParameter), each
         // attempted independently so one refusal does not hide the others.
-        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds);
+        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds,
+        // Mapping-table maintenance, applied BEFORE the creates below so a re-run lands on a known
+        // state: Openness has no transaction and the entries composition has no upsert.
+        IReadOnlyList<(string Target, string Property)> mapClears,
+        // Mapping-table entry specs — "<EntryType>[;<Attr>=<Value>]..." — driving
+        // TagDynamization -> ValueConverter -> MappingTable -> Entries. This is the second route to
+        // flashing (openness-hmi-write-api.md §4m/§4n), reached through the one dynamization kind
+        // that is not gated on the target property's type.
+        IReadOnlyList<(string Target, string Property, string EntrySpec)> maps);
 
     /// <summary>
     /// Creates an HMI tag (and its table if absent) to serve as a dynamization bind target.
@@ -439,6 +447,46 @@ public sealed class HmiRefusedToDeleteRealObjectException : Exception
     public HmiRefusedToDeleteRealObjectException(string name, string requiredPrefix)
         : base($"Refusing to delete '{name}': this tool only deletes its own probe artifacts, whose names start with '{requiredPrefix}'. " +
                "Pass --allow-any-name to override, which is never correct for unattended work and must be a deliberate, supervised choice.")
+    {
+    }
+}
+
+/// <summary>
+/// A nested <c>--set</c> target named a step that does not resolve. Distinct from
+/// <see cref="HmiScreenItemNotFoundException"/>, which is about the FIRST segment: this one means the
+/// item was found and the path then went somewhere that is not there — a dynamization that was never
+/// created, a property that is null, or an index past the end of a composition.
+/// </summary>
+public sealed class HmiTargetPathNotResolvableException : Exception
+{
+    public HmiTargetPathNotResolvableException(string path, string segment, string reason)
+        : base($"Cannot resolve '{segment}' in target path '{path}': {reason} " +
+               "A nested target steps through dynamizations and engineering objects, e.g. " +
+               "'HmiRectangle_1.BackColor.ValueConverter.MappingTable.Entries[0]'.")
+    {
+    }
+}
+
+/// <summary>
+/// The mapping-table route was asked for on something that has no mapping table. Only a
+/// <c>TagDynamization</c> carries a <c>ValueConverter</c>, and only a value converter carries a
+/// mapping table — so this is the error for "bind it first" and for "that binding is the wrong kind".
+/// </summary>
+public sealed class HmiMappingTableNotAvailableException : Exception
+{
+    public HmiMappingTableNotAvailableException(string typeName, string propertyName, string reason)
+        : base($"No mapping table is reachable on {typeName}.{propertyName}: {reason}. " +
+               "A mapping table hangs off a TagDynamization's ValueConverter, so bind the property to a tag first (--bind).")
+    {
+    }
+}
+
+public sealed class HmiUnknownMappingEntryTypeException : Exception
+{
+    public HmiUnknownMappingEntryTypeException(string entryType)
+        : base($"'{entryType}' is not a mapping-table entry type. Use Simple, Range, Bitmask or Base " +
+               "(or their MappingTableEntry* CLR names), or 'bits:SingleBit'/'bits:MultiBit' for the " +
+               "non-generic Create(BitDynamizationType) overload, which creates a whole set of bitmask entries at once.")
     {
     }
 }

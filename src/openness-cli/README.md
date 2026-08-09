@@ -277,6 +277,79 @@ rather than by assignment.
 **Unknown targets, attributes and event names are hard errors**, never no-ops — a skipped edit and a
 successful one look identical in the output otherwise.
 
+### Targets NEST — reaching a property OF a dynamization
+
+`Target` was an item name only until 2026-08-09, which meant a dynamization could be *created* and
+not *configured*: `--set Rect_1.BackColor.FlashingRate=Fast` was rejected because `Rect_1.BackColor`
+is not an item (`openness-hmi-write-api.md` §4m). A target is now a **path**, walked one segment at a
+time:
+
+```
+Rect_1.BackColor.FlashingRate=Fast
+Rect_1.BackColor.ValueConverter.MappingTable.ConditionType=Range
+Rect_1.BackColor.ValueConverter.MappingTable.Entries[0].Flashing=True
+```
+
+Each step resolves a **dynamization on that property name first**, then a CLR property of that name;
+`[n]` indexes into a composition, which is not itself an engineering object and so cannot be a target
+on its own. The split is unchanged — last `.` before the first `=` — so the existing grammar is
+untouched and a one-segment target still means an item. A step that does not resolve is a hard error
+naming the segment and why (`HmiTargetPathNotResolvableException`), never a silent no-op.
+
+### Explicitly-typed values
+
+A value may carry a CLR type tag: `color:#FF0000`, `color:#80FF0000` (ARGB), `int:`, `uint:`,
+`long:`, `ulong:`, `double:`, `bool:`, `str:`. Untagged values are coerced from the target's own
+schema exactly as before.
+
+The tag exists because some members are declared `object` and the metamodel then says nothing about
+what they want — a mapping-table entry's `Value` is the case that forced it. Colours also need it in
+spirit: every HMI colour is a `System.Drawing.Color`, which `Convert.ChangeType` cannot produce from
+a string, so a declared-`Color` attribute is parsed rather than converted (`#RRGGBB`, `#AARRGGBB`, or
+an HTML colour name).
+
+When an attribute is absent from `GetAttributeInfos()` the write falls back to the CLR property and
+**says so** in the result (`[via CLR property, not GetAttributeInfos; read back: …]`). The two are
+not interchangeable and reporting them identically would describe intent rather than outcome.
+
+## `--map` / `--map-clear` — mapping tables, the second route to flashing
+
+```
+openness-cli hmi-edit-screen <project> --name <screen> [--map-clear <Target>.<Property>]... [--map <Target>.<Property>=<EntrySpec>]... --yes
+```
+
+Drives `TagDynamization -> ValueConverter -> MappingTable -> Entries` — the value-to-colour-and-flash
+mechanism a real alarm display is built from. It hangs off `TagDynamization`, the one dynamization
+kind that is not gated on the target property's type, so it reaches properties where
+`FlashingDynamization` refuses.
+
+`<EntrySpec>` is `<EntryType>[;<Attr>=<Value>]...`:
+
+| EntryType | Creates via |
+|---|---|
+| `Simple` / `Range` / `Bitmask` / `Base` | `Entries.Create<T>()` — **no arguments**, unlike every other composition in this API |
+| `bits:SingleBit` / `bits:MultiBit` | the non-generic `Entries.Create(BitDynamizationType)`, which returns an `IList` — a whole SET of bitmask entries in one call |
+
+```
+--map "Rect_1.BackColor=Range;From=int:1;To=int:5;Value=color:#FF0000;Flashing=True;FlashingRate=Fast"
+```
+
+Every entry created is **read back field by field** and reported with the CLR type stored, because
+`Value`/`AlternateValue` are declared `object` and nothing in the metamodel says what they accept —
+what came back is the only evidence of what went in.
+
+`--map-clear` deletes every entry on that mapping table and is applied **before** `--map`, so a
+command carrying both is re-runnable: Openness has no transaction and the composition has no upsert,
+so re-running a bare `--map` would stack duplicates.
+
+The property must already carry a **tag binding** (`--bind`): only a `TagDynamization` has a
+`ValueConverter`. Asking for a mapping table on any other kind, or on an unbound property, is a hard
+error that names the reason.
+
+`openness-cli hmi --screen <name>` reads mapping tables back — `ConditionType`, the formula flag, and
+every entry with its stored types. Unified has no screen export, so a fresh-process read of the live
+model is the only independent evidence a write took.
+
 ### Events are enum-keyed, and the vocabulary is touch-first
 
 Each concrete item type has its own `EventHandlers` composition whose `Create()` takes *that type's*

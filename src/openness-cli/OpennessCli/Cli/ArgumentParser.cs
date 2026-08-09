@@ -127,6 +127,11 @@ public sealed record HmiEditScreenOptions(
     IReadOnlyList<string> AddItems,
     // (Target, Property, DynamizationKind) — the non-tag dynamization kinds.
     IReadOnlyList<(string Target, string Property, string Kind)> BindKinds,
+    // (Target, Property) — wipe the mapping table on that tag dynamization. Applied before Maps, so
+    // a command carrying both is re-runnable rather than duplicating entries each time.
+    IReadOnlyList<(string Target, string Property)> MapClears,
+    // (Target, Property, EntrySpec) — "<EntryType>[;<Attr>=<Value>]..." per entry.
+    IReadOnlyList<(string Target, string Property, string EntrySpec)> Maps,
     bool Confirm,
     bool Json,
     string? TiaInstallOverride,
@@ -252,7 +257,20 @@ public static class ArgumentParser
         "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>|@<file>]]... --yes [--json] [...]\n" +
         "    --event is idempotent: an existing handler for that event is UPDATED, not duplicated. '@<file>' loads a multi-line script body; the script's SyntaxCheck() is run and reported.\n" +
         "    Modifies an EXISTING screen and/or attaches event handlers. Target is an item name, or 'Screen' for the screen itself. --yes required.\n" +
-        "    Event names are touch-first: Tapped/ContextTapped/KeyDown/KeyUp (buttons add Down/Up), screens use Loaded/Unloaded. There is no 'Click'.";
+        "    Event names are touch-first: Tapped/ContextTapped/KeyDown/KeyUp (buttons add Down/Up), screens use Loaded/Unloaded. There is no 'Click'.\n" +
+        "    --set targets NEST: '<Item>.<Property>.<DynAttr>' reaches a dynamization's own attributes, and the path continues through\n" +
+        "      engineering objects and compositions — e.g. 'Rect_1.BackColor.FlashingRate=Fast' or\n" +
+        "      'Rect_1.BackColor.ValueConverter.MappingTable.ConditionType=Range' or '...MappingTable.Entries[0].Flashing=True'.\n" +
+        "    A value may carry an explicit CLR type when the API declares the member as 'object': color:#FF0000, int:3, uint:7, long:, ulong:,\n" +
+        "      double:, bool:True, str:literal. Untagged values are coerced from the target's own GetAttributeInfos, as before.\n" +
+        "  openness-cli hmi-edit-screen ... [--map-clear <Target>.<Property>]... [--map <Target>.<Property>=<EntrySpec>]...\n" +
+        "    Drives TagDynamization -> ValueConverter -> MappingTable -> Entries: the value-to-colour-and-flash mechanism an alarm display is built from.\n" +
+        "    <EntrySpec> is '<EntryType>[;<Attr>=<Value>]...' where EntryType is Simple | Range | Bitmask | Base, or 'bits:SingleBit' / 'bits:MultiBit'\n" +
+        "      for the non-generic Create(BitDynamizationType) overload, which creates a whole SET of bitmask entries in one call.\n" +
+        "      e.g. --map \"Rect_1.BackColor=Range;From=int:1;To=int:5;Value=color:#FF0000;Flashing=True;FlashingRate=Fast\"\n" +
+        "    Every entry created is READ BACK field by field and reported with the CLR type stored, because Value/AlternateValue are declared 'object'\n" +
+        "      and nothing in the metamodel says what they want. --map-clear deletes all entries first, so a re-run does not stack duplicates.\n" +
+        "    Requires a tag binding on that property already (--bind): only a TagDynamization carries a ValueConverter.";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
@@ -1095,6 +1113,8 @@ public static class ArgumentParser
         var deletes = new List<(string, string, string?)>();
         var addItems = new List<string>();
         var bindKinds = new List<(string, string, string)>();
+        var mapClears = new List<(string, string)>();
+        var maps = new List<(string, string, string)>();
         var confirm = false;
         var json = false;
         string? tiaInstall = null;
@@ -1158,6 +1178,36 @@ public static class ArgumentParser
                     }
 
                     bindKinds.Add(bindKind);
+                    break;
+                case "--map":
+                    if (!TryTakeValue(args, ref i, "--map", out var rawMap, out var mapErr))
+                    {
+                        return new ParseResult.Failure(mapErr);
+                    }
+
+                    // "<Target>.<Property>=<EntrySpec>" — same LHS grammar as --bind; the value is
+                    // the entry spec, which may itself contain '=' inside its Attr=Value pairs, and
+                    // TryParseSet splits on the FIRST '=' so the whole spec survives intact.
+                    if (!TryParseSet(rawMap!, out var map, out var mapParseErr))
+                    {
+                        return new ParseResult.Failure(mapParseErr.Replace("--set", "--map"));
+                    }
+
+                    maps.Add(map);
+                    break;
+                case "--map-clear":
+                    if (!TryTakeValue(args, ref i, "--map-clear", out var rawMapClear, out var mapClearErr))
+                    {
+                        return new ParseResult.Failure(mapClearErr);
+                    }
+
+                    var mapDot = rawMapClear!.LastIndexOf('.');
+                    if (mapDot <= 0 || mapDot == rawMapClear.Length - 1)
+                    {
+                        return new ParseResult.Failure($"--map-clear expects '<Target>.<Property>', got '{rawMapClear}'.");
+                    }
+
+                    mapClears.Add((rawMapClear.Substring(0, mapDot), rawMapClear.Substring(mapDot + 1)));
                     break;
                 case "--add-item":
                     if (!TryTakeValue(args, ref i, "--add-item", out var addItem, out var addItemErr))
@@ -1261,13 +1311,14 @@ public static class ArgumentParser
 
         // An edit command with no edits is a mistake worth catching at parse time — it would
         // otherwise open the project, change nothing, save, and report success.
-        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0 && addItems.Count == 0 && bindKinds.Count == 0)
+        if (sets.Count == 0 && events.Count == 0 && binds.Count == 0 && deletes.Count == 0 && addItems.Count == 0
+            && bindKinds.Count == 0 && mapClears.Count == 0 && maps.Count == 0)
         {
-            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind, --bind-kind, --add-item or --delete-*.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Nothing to do: pass at least one --set, --event, --bind, --bind-kind, --map, --map-clear, --add-item or --delete-*.{Environment.NewLine}{Usage}");
         }
 
         return new ParseResult.HmiEditScreenSuccess(new HmiEditScreenOptions(
-            projectIdentifier, name, sets, events, binds, deletes, addItems, bindKinds, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, sets, events, binds, deletes, addItems, bindKinds, mapClears, maps, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     // "<Target>.<Attribute>=<Value>". Split on the FIRST '=' so a value may contain one, and on the

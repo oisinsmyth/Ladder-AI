@@ -499,7 +499,9 @@ public sealed class OpennessGateway : IOpennessGateway
         IReadOnlyList<(string Target, string Property, string Tag)> binds,
         IReadOnlyList<(string What, string Target, string? Detail)> deletes,
         IReadOnlyList<string> addItems,
-        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds)
+        IReadOnlyList<(string Target, string Property, string Kind)> bindKinds,
+        IReadOnlyList<(string Target, string Property)> mapClears,
+        IReadOnlyList<(string Target, string Property, string EntrySpec)> maps)
     {
         if (_project is null)
         {
@@ -550,6 +552,36 @@ public sealed class OpennessGateway : IOpennessGateway
             {
                 var root = ex.GetBaseException();
                 applied.Add($"dynamization {kindName} on {target}.{property} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        // Mapping tables. Clears run before creates so a re-run of the same command lands on a known
+        // state rather than stacking duplicate entries — Openness has no transaction and no upsert.
+        foreach (var (target, property) in mapClears)
+        {
+            try
+            {
+                applied.Add(ClearMappingEntries(ResolveTarget(screen, target), property));
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"map-clear {target}.{property} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+            }
+        }
+
+        // Each entry spec is attempted independently, like the dynamization kinds above: the probe
+        // question is which entry types create at all, and an all-or-nothing command answers one.
+        foreach (var (target, property, entrySpec) in maps)
+        {
+            try
+            {
+                applied.Add(CreateMappingEntry(ResolveTarget(screen, target), property, entrySpec));
+            }
+            catch (Exception ex)
+            {
+                var root = ex.GetBaseException();
+                applied.Add($"map-entry '{entrySpec}' on {target}.{property} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
             }
         }
 
@@ -666,6 +698,195 @@ public sealed class OpennessGateway : IOpennessGateway
     }
 
     /// <summary>
+    /// Resolves the <c>MappingTable</c> hanging off a tag dynamization:
+    /// <c>TagDynamization -> ValueConverter -> MappingTable</c>. Neither intermediate object has a
+    /// public constructor — you configure the one the getter returns, in place.
+    ///
+    /// Only a <c>TagDynamization</c> has a value converter, which is the whole point of this route:
+    /// mapping-table flashing hangs off the ONE dynamization kind that was already proven to work,
+    /// rather than off <c>FlashingDynamization</c>, whose availability is gated on the target
+    /// property's type.
+    /// </summary>
+    private static object ResolveMappingTable(IEngineeringObject subject, string propertyName)
+    {
+        var dynamizations = subject.GetType().GetProperty("Dynamizations")?.GetValue(subject)
+            ?? throw new HmiDynamizationsNotSupportedException(subject.GetType().Name);
+
+        var find = dynamizations.GetType().GetMethods()
+            .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(string));
+        var existing = find?.Invoke(dynamizations, new object[] { propertyName })
+            ?? throw new HmiMappingTableNotAvailableException(subject.GetType().Name, propertyName, "there is no dynamization on that property — create one with --bind first");
+
+        if (existing is not TagDynamization tagDynamization)
+        {
+            throw new HmiMappingTableNotAvailableException(
+                subject.GetType().Name,
+                propertyName,
+                $"the dynamization there is a {existing.GetType().Name}; only a TagDynamization carries a ValueConverter");
+        }
+
+        var converter = TryReadObject(() => tagDynamization.ValueConverter)
+            ?? throw new HmiMappingTableNotAvailableException(subject.GetType().Name, propertyName, "ValueConverter read back null");
+
+        return converter.GetType().GetProperty("MappingTable")?.GetValue(converter)
+            ?? throw new HmiMappingTableNotAvailableException(subject.GetType().Name, propertyName, "MappingTable read back null");
+    }
+
+    /// <summary>
+    /// Creates one mapping-table entry and applies the attributes named in its spec.
+    ///
+    /// <c>MappingTableEntryBaseComposition.Create&lt;T&gt;()</c> takes NO arguments — unlike every
+    /// other composition in this API, which is keyed by a name or an enum. There is also a
+    /// non-generic <c>Create(BitDynamizationType)</c> returning an <c>IList</c>, reached through the
+    /// <c>bits:</c> form, which creates a whole SET of bitmask entries in one call.
+    ///
+    /// Every entry created is read back and reported field by field. That is not decoration: the
+    /// entry's <c>Value</c>/<c>AlternateValue</c> are declared <c>Object</c>, so what the API
+    /// actually stored is the only way to know whether a written type survived or was coerced.
+    /// </summary>
+    private static string CreateMappingEntry(IEngineeringObject subject, string propertyName, string entrySpec)
+    {
+        var table = ResolveMappingTable(subject, propertyName);
+        var entries = table.GetType().GetProperty("Entries")?.GetValue(table)
+            ?? throw new HmiMappingTableNotAvailableException(subject.GetType().Name, propertyName, "the MappingTable exposes no Entries composition");
+
+        var parts = entrySpec.Split(';');
+        var entryTypeName = parts[0].Trim();
+        var attributes = parts.Skip(1).Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+
+        var conditionBefore = Describe(TryReadObject(() => table.GetType().GetProperty("ConditionType")?.GetValue(table)));
+        var created = new List<object>();
+        string createdVia;
+
+        if (entryTypeName.StartsWith("bits:", StringComparison.OrdinalIgnoreCase))
+        {
+            var bitTypeName = entryTypeName.Substring("bits:".Length);
+            var bitEnum = typeof(TagDynamization).Assembly.GetTypes()
+                .FirstOrDefault(t => t.IsEnum && t.Name == "BitDynamizationType")
+                ?? throw new HmiUnknownMappingEntryTypeException(entryTypeName);
+            var bitNames = Enum.GetNames(bitEnum);
+            var bitMatch = bitNames.FirstOrDefault(n => string.Equals(n, bitTypeName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new HmiUnknownMappingEntryTypeException($"bits:{bitTypeName} (valid: {string.Join(", ", bitNames)})");
+
+            var createBits = entries.GetType().GetMethods()
+                .FirstOrDefault(m => m.Name == "Create" && !m.IsGenericMethodDefinition && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType.IsEnum)
+                ?? throw new HmiUnknownMappingEntryTypeException("bits: — the composition declares no Create(BitDynamizationType) on this install");
+
+            var result = createBits.Invoke(entries, new[] { Enum.Parse(bitEnum, bitMatch) });
+            foreach (var element in (System.Collections.IEnumerable)(result ?? Array.Empty<object>()))
+            {
+                created.Add(element);
+            }
+
+            createdVia = $"Create(BitDynamizationType.{bitMatch}) -> {created.Count} entry(ies)";
+        }
+        else
+        {
+            var entryType = ResolveMappingEntryType(entryTypeName);
+            var createGeneric = entries.GetType().GetMethods()
+                .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == 0)
+                ?? throw new HmiUnknownMappingEntryTypeException("the composition declares no parameterless Create<T>() on this install");
+
+            var entry = createGeneric.MakeGenericMethod(entryType).Invoke(entries, null)
+                ?? throw new InvalidOperationException($"Create<{entryType.Name}>() returned null.");
+            created.Add(entry);
+            createdVia = $"Create<{entryType.Name}>()";
+        }
+
+        var applied = new List<string>();
+        foreach (var entry in created)
+        {
+            foreach (var attribute in attributes)
+            {
+                var eq = attribute.IndexOf('=');
+                if (eq <= 0)
+                {
+                    throw new HmiUnknownMappingEntryTypeException($"'{attribute}' is not '<Attribute>=<Value>' — an entry spec is '<EntryType>[;<Attr>=<Value>]...'");
+                }
+
+                var attrName = attribute.Substring(0, eq).Trim();
+                var attrValue = attribute.Substring(eq + 1);
+                applied.Add($"{attrName}={SetAttributeCoerced((IEngineeringObject)entry, attrName, attrValue)}");
+            }
+        }
+
+        var countAfter = TryReadObject(() => entries.GetType().GetProperty("Count")?.GetValue(entries));
+        var conditionAfter = Describe(TryReadObject(() => table.GetType().GetProperty("ConditionType")?.GetValue(table)));
+
+        var readBacks = created.Select(DescribeMappingEntry).ToList();
+        var appliedText = applied.Count == 0 ? "no attributes set" : string.Join(", ", applied);
+        return $"map-entry {createdVia} on {subject.GetType().Name}.{propertyName} " +
+               $"[ConditionType {conditionBefore} -> {conditionAfter}, entries={Describe(countAfter)}] " +
+               $"set: {appliedText} | read back: {string.Join(" / ", readBacks)}";
+    }
+
+    private static Type ResolveMappingEntryType(string entryTypeName)
+    {
+        // Both the short form (Simple/Range/Bitmask/Base) and the CLR name resolve, because the
+        // short form is what a caller wants to type and the CLR name is what the error messages and
+        // the reflection map say.
+        var wanted = entryTypeName.StartsWith("MappingTableEntry", StringComparison.OrdinalIgnoreCase)
+            ? entryTypeName
+            : "MappingTableEntry" + (string.Equals(entryTypeName, "Base", StringComparison.OrdinalIgnoreCase) ? string.Empty : entryTypeName);
+
+        if (string.Equals(entryTypeName, "Base", StringComparison.OrdinalIgnoreCase))
+        {
+            wanted = "MappingTableEntryBase";
+        }
+
+        return typeof(TagDynamization).Assembly.GetTypes()
+            .FirstOrDefault(t => string.Equals(t.Name, wanted, StringComparison.OrdinalIgnoreCase)
+                && t.Namespace == "Siemens.Engineering.HmiUnified.UI.Dynamization.Tag"
+                && !t.IsAbstract)
+            ?? throw new HmiUnknownMappingEntryTypeException(entryTypeName);
+    }
+
+    private static string DescribeMappingEntry(object entry)
+    {
+        var fields = new List<string> { entry.GetType().Name };
+        foreach (var name in new[] { "Condition", "From", "To", "RangeType", "BitDynamizationType", "Relevant", "Value", "AlternateValue", "Flashing", "FlashingRate" })
+        {
+            var property = entry.GetType().GetProperty(name);
+            if (property is null)
+            {
+                continue;
+            }
+
+            var value = TryReadObject(() => property.GetValue(entry));
+            fields.Add($"{name}={Describe(value)}<{value?.GetType().Name ?? "null"}>");
+        }
+
+        return string.Join(" ", fields);
+    }
+
+    /// <summary>
+    /// Deletes every entry on a mapping table, so the create path is re-runnable. Openness has no
+    /// transaction — a command that throws keeps whatever it already did (§4h) — so a probe that
+    /// creates entries must be able to get back to a known state without deleting the dynamization
+    /// and losing everything else configured on it.
+    /// </summary>
+    private static string ClearMappingEntries(IEngineeringObject subject, string propertyName)
+    {
+        var table = ResolveMappingTable(subject, propertyName);
+        var entries = table.GetType().GetProperty("Entries")?.GetValue(table)
+            ?? throw new HmiMappingTableNotAvailableException(subject.GetType().Name, propertyName, "the MappingTable exposes no Entries composition");
+
+        var doomed = new List<object>();
+        foreach (var entry in (System.Collections.IEnumerable)entries)
+        {
+            doomed.Add(entry);
+        }
+
+        foreach (var entry in doomed)
+        {
+            entry.GetType().GetMethod("Delete", Type.EmptyTypes)?.Invoke(entry, null);
+        }
+
+        var remaining = TryReadObject(() => entries.GetType().GetProperty("Count")?.GetValue(entries));
+        return $"map-clear {subject.GetType().Name}.{propertyName}: deleted {doomed.Count} entry(ies); {Describe(remaining)} remain on re-read";
+    }
+
+    /// <summary>
     /// Deletes something that lives ON a screen: an item, a tag binding, or an event handler. Each
     /// re-reads afterwards and says whether the thing actually went away — Openness has no
     /// transaction, so a `Delete()` that did not throw is not proof it took effect.
@@ -742,10 +963,38 @@ public sealed class OpennessGateway : IOpennessGateway
         return null;
     }
 
+    /// <summary>
+    /// Resolves a target PATH, not just a name. The first segment is <c>Screen</c> or an item name;
+    /// every further segment steps into a nested engineering object —
+    /// <c>HmiRectangle_1.BackColor.ValueConverter.MappingTable.Entries[0]</c>.
+    ///
+    /// The nesting exists because the interesting configuration is not on the item. A flashing
+    /// dynamization's colours and rate, and a mapping table's entries, are properties of objects
+    /// hanging OFF a property of an item, and until 2026-08-09 this resolver stopped at the item —
+    /// so `--set` could create a dynamization it could not then configure (§4m's tooling gap).
+    ///
+    /// A step resolves in one order, deliberately: a DYNAMIZATION on that property name first, then
+    /// a CLR property of that name. Dynamizations win because the two collide by design — a colour
+    /// property and its binding share a name — and the binding is what a caller means when it
+    /// writes a further segment after it.
+    /// </summary>
+    private static IEngineeringObject ResolveTarget(HmiScreen screen, string target)
+    {
+        var segments = target.Split('.');
+        var current = ResolveRootTarget(screen, segments[0]);
+
+        for (var i = 1; i < segments.Length; i++)
+        {
+            current = ResolveTargetStep(current, segments[i], target);
+        }
+
+        return current;
+    }
+
     // "Screen" addresses the screen itself; anything else is an item name on it. Unknown names are a
     // hard error rather than a no-op, because a silently-skipped edit is indistinguishable from a
     // successful one in the output.
-    private static IEngineeringObject ResolveTarget(HmiScreen screen, string target)
+    private static IEngineeringObject ResolveRootTarget(HmiScreen screen, string target)
     {
         if (string.Equals(target, "Screen", StringComparison.OrdinalIgnoreCase))
         {
@@ -763,6 +1012,78 @@ public sealed class OpennessGateway : IOpennessGateway
         throw new HmiScreenItemNotFoundException(target, TryRead(() => screen.Name) ?? string.Empty);
     }
 
+    // One step of a nested path. `Entries[0]` is one segment: the composition is fetched by name and
+    // then indexed, because a composition is not itself an IEngineeringObject and cannot be a target.
+    private static IEngineeringObject ResolveTargetStep(IEngineeringObject current, string segment, string wholePath)
+    {
+        var name = segment;
+        int? index = null;
+        var bracket = segment.IndexOf('[');
+        if (bracket > 0 && segment.EndsWith("]", StringComparison.Ordinal))
+        {
+            var inner = segment.Substring(bracket + 1, segment.Length - bracket - 2);
+            if (!int.TryParse(inner, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                throw new HmiTargetPathNotResolvableException(wholePath, segment, $"'{inner}' is not an integer index.");
+            }
+
+            name = segment.Substring(0, bracket);
+            index = parsed;
+        }
+
+        object? value = null;
+
+        // Dynamization first — see the doc comment on ResolveTarget for why.
+        var dynamizations = current.GetType().GetProperty("Dynamizations")?.GetValue(current);
+        if (dynamizations is not null)
+        {
+            var find = dynamizations.GetType().GetMethods()
+                .FirstOrDefault(m => m.Name == "Find" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(string));
+            value = find?.Invoke(dynamizations, new object[] { name });
+        }
+
+        value ??= current.GetType().GetProperty(name)?.GetValue(current);
+
+        if (value is null)
+        {
+            throw new HmiTargetPathNotResolvableException(
+                wholePath,
+                segment,
+                $"'{current.GetType().Name}' has neither a dynamization nor a property named '{name}' (or it is currently null).");
+        }
+
+        if (index is { } wanted)
+        {
+            value = IndexInto(value, wanted, wholePath, segment);
+        }
+
+        return value as IEngineeringObject
+            ?? throw new HmiTargetPathNotResolvableException(
+                wholePath,
+                segment,
+                $"'{name}' is a {value.GetType().Name}, which is not an engineering object and so cannot carry attributes. " +
+                "Set it as an ATTRIBUTE of its owner instead, or index into it if it is a composition.");
+    }
+
+    private static object IndexInto(object composition, int index, string wholePath, string segment)
+    {
+        if (composition is not System.Collections.IEnumerable enumerable)
+        {
+            throw new HmiTargetPathNotResolvableException(wholePath, segment, $"'{composition.GetType().Name}' is not enumerable, so it cannot be indexed.");
+        }
+
+        var position = 0;
+        foreach (var element in enumerable)
+        {
+            if (position++ == index)
+            {
+                return element;
+            }
+        }
+
+        throw new HmiTargetPathNotResolvableException(wholePath, segment, $"index {index} is out of range — the composition holds {position} element(s).");
+    }
+
     // SetAttribute takes an object, and the API is strict about the runtime type: a UInt32 property
     // will not accept a string or an Int32. The declared type comes from the object's own
     // GetAttributeInfos, so the coercion is driven by the API's own schema rather than guesswork.
@@ -771,7 +1092,13 @@ public sealed class OpennessGateway : IOpennessGateway
         var info = subject.GetAttributeInfos().FirstOrDefault(i => string.Equals(i.Name, attribute, StringComparison.OrdinalIgnoreCase));
         if (info is null)
         {
-            throw new HmiUnknownAttributeException(attribute, subject.GetType().Name);
+            // Not every writable member is described by GetAttributeInfos: a mapping-table entry's
+            // `Value`/`AlternateValue` are declared `Object` and the entry types report no schema for
+            // them at all. Falling back to the CLR property keeps those reachable, and the route is
+            // NAMED in the result so a caller can tell which mechanism actually did the write —
+            // "attribute" and "CLR property" are not interchangeable and pretending they are is how
+            // a report starts describing intent instead of outcome.
+            return SetClrPropertyCoerced(subject, attribute, value);
         }
 
         if (info.AccessMode is EngineeringAttributeAccessMode.Read or EngineeringAttributeAccessMode.None)
@@ -780,15 +1107,105 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var targetType = info.SupportedTypes?.FirstOrDefault();
-        object converted = targetType is null
-            ? value
-            : targetType.IsEnum
-                ? Enum.Parse(targetType, value, ignoreCase: true)
-                : Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture);
+        object converted = CoerceValue(value, targetType);
 
         subject.SetAttribute(info.Name, converted);
-        return $"{converted} ({converted.GetType().Name})";
+        return $"{Describe(converted)} ({converted.GetType().Name})";
     }
+
+    private static string SetClrPropertyCoerced(IEngineeringObject subject, string attribute, string value)
+    {
+        var property = subject.GetType().GetProperties()
+            .FirstOrDefault(p => string.Equals(p.Name, attribute, StringComparison.OrdinalIgnoreCase))
+            ?? throw new HmiUnknownAttributeException(attribute, subject.GetType().Name);
+
+        if (!property.CanWrite)
+        {
+            throw new HmiAttributeNotWritableException(attribute, subject.GetType().Name, "get-only CLR property");
+        }
+
+        // `object`-declared members carry no type information to coerce towards, so an untagged value
+        // stays a string and the caller is told so. That is the honest answer to "what type does this
+        // want" — the API declines to say, and guessing on its behalf would hide the finding.
+        var declared = property.PropertyType == typeof(object) ? null : property.PropertyType;
+        var converted = CoerceValue(value, declared);
+        property.SetValue(subject, converted);
+        var readBack = TryReadObject(() => property.GetValue(subject));
+        return $"{Describe(converted)} ({converted.GetType().Name}) [via CLR property, not GetAttributeInfos; read back: {Describe(readBack)}]";
+    }
+
+    /// <summary>
+    /// Converts a command-line string to the CLR type the API wants. Three sources of truth, in
+    /// order: an explicit <c>type:</c> tag on the value, the declared target type, then string.
+    ///
+    /// The explicit tag exists for genuinely untyped members. A mapping-table entry's <c>Value</c> is
+    /// declared <c>Object</c>, so nothing in the metamodel says whether a colour property's entry
+    /// wants a <c>Color</c>, an ARGB integer or a string — which is precisely the question the
+    /// mapping-table probe has to answer, and it can only be answered by writing each and reading
+    /// back.
+    /// </summary>
+    private static object CoerceValue(string value, Type? targetType)
+    {
+        var colon = value.IndexOf(':');
+        if (colon > 0)
+        {
+            var tag = value.Substring(0, colon).ToLowerInvariant();
+            var rest = value.Substring(colon + 1);
+            switch (tag)
+            {
+                case "color": return ParseColor(rest);
+                case "str": return rest;
+                case "bool": return bool.Parse(rest);
+                case "int": return int.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+                case "uint": return uint.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+                case "long": return long.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+                case "ulong": return ulong.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+                case "double": return double.Parse(rest, System.Globalization.CultureInfo.InvariantCulture);
+                default: break;
+            }
+        }
+
+        if (targetType is null)
+        {
+            return value;
+        }
+
+        if (targetType.IsEnum)
+        {
+            return Enum.Parse(targetType, value, ignoreCase: true);
+        }
+
+        if (targetType == typeof(System.Drawing.Color))
+        {
+            return ParseColor(value);
+        }
+
+        return Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // Colour properties are System.Drawing.Color (verified by reflection), which Convert.ChangeType
+    // cannot produce from a string — so every colour set failed before this existed.
+    private static System.Drawing.Color ParseColor(string value)
+    {
+        var text = value.Trim();
+        if (text.StartsWith("#", StringComparison.Ordinal) && text.Length == 9)
+        {
+            // #AARRGGBB — ColorTranslator handles #RRGGBB but not the alpha form.
+            var argb = uint.Parse(text.Substring(1), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+            return System.Drawing.Color.FromArgb(unchecked((int)argb));
+        }
+
+        return System.Drawing.ColorTranslator.FromHtml(text);
+    }
+
+    // Color.ToString() is "Color [Red]" / "Color [A=255, R=255, ...]", which is unreadable in a
+    // one-line change report; the ARGB form is what a caller would write back.
+    private static string Describe(object? value) => value switch
+    {
+        null => "(null)",
+        System.Drawing.Color c => $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}",
+        _ => value.ToString() ?? string.Empty,
+    };
 
     // Each item type has its own EventHandlers composition whose Create() takes that type's own
     // event enum — Create(HmiButtonEventType) and so on. Bound at runtime for the same reason
@@ -1813,7 +2230,80 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var propertyName = TryRead(() => dynamization.PropertyName) ?? string.Empty;
         var kind = TryRead(() => dynamization.DynamizationType.ToString()) ?? dynamization.GetType().Name;
-        return new HmiDynamizationInfo(propertyName, kind, tag, plcTag);
+        return new HmiDynamizationInfo(propertyName, kind, tag, plcTag, ReadValueConverter(dynamization));
+    }
+
+    /// <summary>
+    /// Reads the value-converter half of a tag dynamization — the formula, the mapping table's
+    /// condition type, and every entry. Returns null when there is nothing configured, so the 48
+    /// real screens on a device do not each grow an empty line.
+    ///
+    /// This is what makes a mapping table VERIFIABLE. Unified has no screen export, so a fresh
+    /// process re-reading the live model is the only independent evidence that a write took; the
+    /// writing command's own report is not evidence.
+    /// </summary>
+    private static string? ReadValueConverter(DynamizationBase dynamization)
+    {
+        if (dynamization is not TagDynamization tagDynamization)
+        {
+            return null;
+        }
+
+        try
+        {
+            var converter = TryReadObject(() => tagDynamization.ValueConverter);
+            if (converter is null)
+            {
+                return null;
+            }
+
+            var formula = TryReadObject(() => converter.GetType().GetProperty("Formula")?.GetValue(converter)) as string;
+            var formulaSelected = TryReadObject(() => converter.GetType().GetProperty("IsFormulaSelected")?.GetValue(converter)) as bool?;
+            var table = TryReadObject(() => converter.GetType().GetProperty("MappingTable")?.GetValue(converter));
+            var conditionType = table is null
+                ? null
+                : Describe(TryReadObject(() => table.GetType().GetProperty("ConditionType")?.GetValue(table)));
+
+            var entries = new List<string>();
+            if (table?.GetType().GetProperty("Entries")?.GetValue(table) is System.Collections.IEnumerable composition)
+            {
+                foreach (var entry in composition)
+                {
+                    entries.Add(DescribeMappingEntry(entry));
+                }
+            }
+
+            var interesting = entries.Count > 0
+                || (formulaSelected ?? false)
+                || !string.IsNullOrEmpty(formula)
+                || (conditionType is not null && !string.Equals(conditionType, "None", StringComparison.Ordinal));
+
+            if (!interesting)
+            {
+                return null;
+            }
+
+            var parts = new List<string> { $"ConditionType={conditionType ?? "(no table)"}" };
+            if (formulaSelected ?? false)
+            {
+                parts.Add("IsFormulaSelected=True");
+            }
+
+            if (!string.IsNullOrEmpty(formula))
+            {
+                parts.Add($"Formula='{formula}'");
+            }
+
+            parts.Add($"entries={entries.Count}");
+            var header = string.Join(" ", parts);
+            return entries.Count == 0 ? header : header + " { " + string.Join(" | ", entries) + " }";
+        }
+        catch (Exception ex)
+        {
+            // A read that throws is itself a finding — losing it would leave a mapping table looking
+            // like an absent one.
+            return $"(reading the ValueConverter threw {ex.GetBaseException().GetType().Name})";
+        }
     }
 
     // Classic exposes no screen contents at all: Siemens.Engineering.Hmi.Screen.Screen has no

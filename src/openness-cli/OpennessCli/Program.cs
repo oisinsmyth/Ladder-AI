@@ -217,6 +217,21 @@ internal static class Program
             Console.Error.WriteLine($"  bind {target}.{property} <- tag '{tag}'");
         }
 
+        foreach (var (target, property, kind) in options.BindKinds)
+        {
+            Console.Error.WriteLine($"  dynamization {kind} on {target}.{property}");
+        }
+
+        foreach (var (target, property) in options.MapClears)
+        {
+            Console.Error.WriteLine($"  CLEAR mapping table on {target}.{property}");
+        }
+
+        foreach (var (target, property, entrySpec) in options.Maps)
+        {
+            Console.Error.WriteLine($"  map entry on {target}.{property}: {entrySpec}");
+        }
+
         foreach (var itemType in options.AddItems)
         {
             Console.Error.WriteLine($"  add item {itemType}");
@@ -284,7 +299,9 @@ internal static class Program
     private static int RunHmiEditScreen(IOpennessGateway gateway, HmiEditScreenOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = gateway.EditHmiScreen(options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes, options.AddItems, options.BindKinds);
+        var result = gateway.EditHmiScreen(
+            options.ScreenName, options.Sets, options.Events, options.Binds, options.Deletes,
+            options.AddItems, options.BindKinds, options.MapClears, options.Maps);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatHmiEditScreenJson(result)
             : OutputFormatter.FormatHmiEditScreenResult(result));
@@ -558,6 +575,12 @@ public static class ExitCodes
         HmiUnknownEventTypeException => CommandError,
         HmiEventsNotSupportedException => CommandError,
         HmiDynamizationsNotSupportedException => CommandError,
+
+        // The nested-target and mapping-table family, added 2026-08-09 with the --map work. Same
+        // class as everything above: a path or an entry type the caller can correct.
+        HmiTargetPathNotResolvableException => CommandError,
+        HmiMappingTableNotAvailableException => CommandError,
+        HmiUnknownMappingEntryTypeException => CommandError,
 
         // The metamodel-command family. Added after P1 measured them exiting 5: the fix above was
         // made in the morning and these six exceptions were introduced in the afternoon WITHOUT

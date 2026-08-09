@@ -188,6 +188,13 @@ public static class OutputFormatter
                         }
 
                         sb.AppendLine();
+
+                        // On its own line: a mapping table is several entries wide and inlining it
+                        // would push the tag name off the end of the row it belongs to.
+                        if (!string.IsNullOrEmpty(dynamization.Mapping))
+                        {
+                            sb.Append("        mapping: ").AppendLine(dynamization.Mapping);
+                        }
                     }
                 }
             }
@@ -477,6 +484,7 @@ public static class OutputFormatter
                         kind = dyn.Kind,
                         tag = dyn.Tag,
                         plcTag = dyn.PlcTag,
+                        mapping = dyn.Mapping,
                     }),
                     events = i.Events.Select(e => new
                     {

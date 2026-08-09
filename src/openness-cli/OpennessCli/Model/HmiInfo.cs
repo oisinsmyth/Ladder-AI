@@ -87,7 +87,14 @@ public sealed record HmiDynamizationInfo(
     string PropertyName,
     string Kind,
     string? Tag,
-    string? PlcTag);
+    string? PlcTag,
+    // The value-converter half of a TagDynamization, rendered as one line: ConditionType, the
+    // formula if one is selected, and every mapping-table entry with its value, alternate value and
+    // flashing state. Null when the dynamization is not a tag one, or carries no converter
+    // configuration at all — a screen full of plain bindings must not grow a column of empty
+    // mapping summaries. This is the only way to observe a mapping table from outside the writing
+    // process: Unified has no screen export, so read-back IS the evidence.
+    string? Mapping = null);
 
 /// <summary>
 /// One writable/readable property of a screen-item type, as the API itself describes it.

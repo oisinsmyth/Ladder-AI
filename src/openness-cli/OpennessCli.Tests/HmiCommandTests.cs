@@ -420,6 +420,114 @@ public class HmiCommandTests
     }
 
     [Fact]
+    public void Parse_HmiEditScreen_NestedSetTargetKeepsTheWholePathAsTheTarget()
+    {
+        // The §4m tooling gap: a dynamization's own attributes were unreachable because the target
+        // was resolved as an item NAME. The split is unchanged — last '.' before the first '=' — so
+        // everything before the attribute must survive as one target path for the gateway to walk.
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-edit-screen", "P", "--name", "S",
+            "--set", "Rect_1.BackColor.FlashingRate=Fast",
+            "--set", "Rect_1.BackColor.ValueConverter.MappingTable.Entries[0].Flashing=True",
+            "--yes",
+        });
+
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        Assert.Equal(("Rect_1.BackColor", "FlashingRate", "Fast"), success.Options.Sets[0]);
+        Assert.Equal(
+            ("Rect_1.BackColor.ValueConverter.MappingTable.Entries[0]", "Flashing", "True"),
+            success.Options.Sets[1]);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_MapEntrySpecSurvivesItsOwnEqualsSigns()
+    {
+        // An entry spec is "<EntryType>;<Attr>=<Value>;..." — it is full of '=' signs, and only the
+        // FIRST one separates the dynamization path from the spec.
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-edit-screen", "P", "--name", "S",
+            "--map", "Rect_1.BackColor=Range;From=int:1;To=int:5;Value=color:#FF0000;Flashing=True",
+            "--yes",
+        });
+
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        var (target, property, entrySpec) = success.Options.Maps[0];
+        Assert.Equal("Rect_1", target);
+        Assert.Equal("BackColor", property);
+        Assert.Equal("Range;From=int:1;To=int:5;Value=color:#FF0000;Flashing=True", entrySpec);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_MapClearTakesTargetAndProperty()
+    {
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-edit-screen", "P", "--name", "S", "--map-clear", "Rect_1.BackColor", "--yes",
+        });
+
+        var success = Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+        Assert.Equal(("Rect_1", "BackColor"), success.Options.MapClears[0]);
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_MalformedMapClearIsRejected()
+    {
+        Assert.IsType<ParseResult.Failure>(
+            ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--map-clear", "NoDot", "--yes" }));
+    }
+
+    [Fact]
+    public void Parse_HmiEditScreen_MapAloneCountsAsSomethingToDo()
+    {
+        // The "nothing to do" guard is a list that has to be extended with every new change kind;
+        // forgetting one turns a real command into a usage error.
+        var result = ArgumentParser.Parse(new[]
+        {
+            "hmi-edit-screen", "P", "--name", "S", "--map", "Rect_1.BackColor=Simple", "--yes",
+        });
+
+        Assert.IsType<ParseResult.HmiEditScreenSuccess>(result);
+    }
+
+    [Fact]
+    public void FormatHmiReport_RendersAMappingTableOnItsOwnLine()
+    {
+        // Read-back from a fresh process is the ONLY evidence a mapping table was written: Unified
+        // has no screen export, so if the walker cannot show it, nothing can.
+        var device = UnifiedDevice(ScreenInfo(
+            "Overview", 1, 1920, 1080, 1,
+            new[]
+            {
+                Item(
+                    "Lamp",
+                    "HmiRectangle",
+                    new HmiDynamizationInfo(
+                        "BackColor",
+                        "Tag",
+                        "ZZ_AI_Tag",
+                        null,
+                        "ConditionType=Range entries=1 { MappingTableEntryRange Flashing=True<Boolean> }")),
+            }));
+
+        var report = OutputFormatter.FormatHmiReport(new[] { device }, "Overview");
+
+        Assert.Contains("mapping: ConditionType=Range entries=1", report, StringComparison.Ordinal);
+        Assert.Contains("Flashing=True<Boolean>", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatHmiReport_PlainBindingGrowsNoMappingLine()
+    {
+        var device = UnifiedDevice(ScreenInfo(
+            "Overview", 1, 1920, 1080, 1,
+            new[] { Item("Lamp", "HmiRectangle", new HmiDynamizationInfo("Visible", "Tag", "ZZ_AI_Tag", null)) }));
+
+        Assert.DoesNotContain("mapping:", OutputFormatter.FormatHmiReport(new[] { device }, "Overview"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Parse_HmiEditScreen_DefaultsToUnconfirmed()
     {
         var result = ArgumentParser.Parse(new[] { "hmi-edit-screen", "P", "--name", "S", "--set", "Screen.Width=800" });
