@@ -1138,3 +1138,107 @@ PROJECT LIBRARY — types: 23  masterCopies: 0
 
 Anonymised: 23 type names, 7 folder names.
 
+> ⚠️ **This anonymisation was later found to be LOSSY in a way that misled a reader.** It erased the
+> distinction between a **faceplate** type and an **image-file** type, both rendered `HmiType_n`. A
+> follow-up agent read this transcript, saw three `Consistent` `HmiType_n` entries, and recommended
+> probing "a `Consistent` faceplate" — which does not exist in this project; the three `Consistent`
+> entries are images, and **every** faceplate is `DefaultVersionInconsistent`. **When anonymising,
+> preserve the KIND even while erasing the NAME.** See P11 below.
+
+---
+
+## P11 — faceplate instantiation, live (2026-08-09)
+
+**Scope:** reference project's **scratch copy**, invented `ZZ_AI_*` names, under
+`docs/13-data-boundary.md`'s write extension. Library type and screen names below are
+**genericized** — the real ones identify a site's plant. Structure, sizes, error text and
+sequence are verbatim.
+
+**Q1 — the load-bearing question — answered YES.** Full analysis in
+`docs/notes/hmi-faceplate-gap-probe.md`'s verdict box; this is the transcript.
+
+```
+# 1. create — a container plus a Custom Web Control container in one call
+$ openness-cli hmi-create-screen <project> --name ZZ_AI_FP_Probe --width 1920 --height 1080 \
+      --item HmiFaceplateContainer --item HmiCustomWebControlContainer --yes
+
+openness-cli hmi-create-screen failed: TargetInvocationException: ... --->
+  EngineeringTargetInvocationException: Error when calling method 'Create' of type
+  'Siemens.Engineering.HmiUnified.UI.Base.HmiScreenItemBaseComposition'.
+'ContainedTypeValue' parameter is missing. Please use correct method for object creation.
+```
+
+**Read carefully — this refusal came from the SECOND item, not the first.** No transaction exists,
+so the screen and the faceplate container survived; the read-back below shows `items=1`. The
+`ContainedTypeValue` requirement is a fact about **`HmiCustomWebControlContainer`**, and the
+one-argument `Create<T>` is sufficient for `HmiFaceplateContainer`. *(This was initially attributed
+to the faceplate container — wrong, and corrected by one cheap read.)*
+
+```
+# 2. read back — the container survived
+  SCREEN  ZZ_AI_FP_Probe  #0  1920x1080  items=1
+    HmiFaceplateContainer  HmiFaceplateContainer_1  @0,0  120x80
+
+# 3. point it at a real, human-authored library faceplate type
+$ openness-cli hmi-edit-screen <project> --name ZZ_AI_FP_Probe \
+      --set HmiFaceplateContainer_1.ContainedType=<FP_MotorMain> --yes
+EDITED screen 'ZZ_AI_FP_Probe'
+  changes applied: 1
+    set HmiFaceplateContainer_1.ContainedType = <FP_MotorMain> (String)
+  Validate(): ran, returned no errors and no warnings
+  project saved: yes
+
+# 4. THE GATE
+$ openness-cli hmi-compile <project>
+STATE: Success
+ERRORS: 0  WARNINGS: 156
+# and NO occurrence of "faceplate", "ZZ_AI" or "does not exist" anywhere in the 166-line tree.
+# P2's "The referenced faceplate type does not exist" is GONE.
+
+# 5. read back from a FRESH process — the item RESIZED ITSELF
+    HmiFaceplateContainer  HmiFaceplateContainer_1  @0,0  300x430
+# 120x80 -> 300x430, which is exactly the size of every *Main screen in this project.
+# The type's geometry was adopted. Physical confirmation, independent of the compile.
+
+# 6. the parameter list populates once a type resolves
+$ ... --set "HmiFaceplateContainer_1.Interface[0].Value=str:ZZ_AI_TEST" --yes
+    set HmiFaceplateContainer_1.Interface[0].Value = ZZ_AI_TEST (String)
+  Validate(): ran, returned no errors and no warnings      <-- Validate() is BLIND to this. See 8.
+
+# 7. P7's missing negative control, finally runnable, plus an arity probe
+$ ... --bind-kind "HmiFaceplateContainer_1.Interface[0].Value=TagParameterDynamization" \
+      --bind-kind "HmiFaceplateContainer_1.Interface[1].Value=FlashingDynamization" --yes
+  changes applied: 0 (2 REFUSED)
+    TagParameterDynamization on ...Interface[0].Value -> REFUSED (EngineeringTargetInvocationException:
+      Error when calling method 'Create' of type '...Dynamization.DynamizationBaseComposition'.)
+    FlashingDynamization on ...Interface[1].Value -> REFUSED (HmiTargetPathNotResolvableException:
+      index 1 is out of range - the composition holds 1 element(s).)
+# TagParameter refuses even INSIDE a faceplate parameter - P7's conclusion survives its first real
+# test, and still names no reason. The second refusal is the useful one: ARITY = 1.
+
+# 8. does the compile check the parameter VALUE, or only the type reference?
+$ openness-cli hmi-compile <project>
+STATE: Error
+ERRORS: 6  WARNINGS: 156
+[Error] ZZ_AI_FP_Probe:
+[Error] HmiFaceplateContainer_1:
+[Error] Interface.IO: The object "ZZ_AI_TEST" at the property "IO" does not exist.
+        Please select an existing object.
+# IT CHECKS. The single parameter is named IO and wants an EXISTING OBJECT, not a literal.
+# Located screen -> item -> property. This is a specification a generator can consume.
+
+# 9. cleanup, and the mandatory post-delete compile
+$ openness-cli hmi-delete <project> --kind Screens --name ZZ_AI_FP_Probe --yes
+deleted Screens 'ZZ_AI_FP_Probe' [HmiScreen] on <device>; confirmed absent on re-read
+
+$ openness-cli hmi-compile <project>
+STATE: Success
+ERRORS: 0  WARNINGS: 156        <-- identical to the pre-probe baseline; 0 ZZ_AI residue
+```
+
+**Counts lied again, in both directions:** step 4 self-reported `ErrorCount=0, WarningCount=0`
+against 156 warnings in the tree; step 8 reported `ErrorCount=1` against 6. Gate on `State`, count
+from the message tree.
+
+Genericized: 1 library type name, screen-name family. Sizes, error strings and sequence verbatim.
+

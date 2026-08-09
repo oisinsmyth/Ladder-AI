@@ -1,5 +1,66 @@
 # The faceplate gap — what P10 did not test
 
+> # ✅ VERDICT: INSTANTIATION WORKS. RUN LIVE 2026-08-09 [LIVE]
+>
+> **Q1 — the load-bearing question this whole document was written around — is answered, and the
+> answer is YES.** An AI can place a faceplate instance on a screen, point it at a human-authored
+> library type, and have TIA's own compiler accept it. **It needed no new tooling.** The capability
+> was already there and nobody had tried it.
+>
+> Measured against a real Unified panel, in the reference project's scratch copy, with invented
+> `ZZ_AI_*` names. Library type names below are **genericized** per `docs/13-data-boundary.md`.
+>
+> | # | Step | Result |
+> |---|---|---|
+> | 1 | `hmi-create-screen --item HmiFaceplateContainer` | ✅ created — the **one-argument** `Create<T>` works for faceplates |
+> | 2 | `--set <item>.ContainedType=<FP_MotorMain>` | ✅ **writable after creation**, coerced to `String`, saved |
+> | 3 | `hmi-compile` | ✅ **`STATE: Success`, 0 errors.** P2's *"The referenced faceplate type does not exist"* is **GONE** |
+> | 4 | read back, fresh process | ✅ **the item auto-resized 120x80 → 300x430**, the type's own size |
+> | 5 | `--set <item>.Interface[0].Value=…` | ✅ the parameter list **populates once a type resolves** |
+> | 6 | `--bind-kind …Interface[0].Value=TagParameterDynamization` | ❌ REFUSED — see below |
+> | 7 | `--bind-kind …Interface[1].Value=…` | ❌ out of range: **the interface holds exactly ONE element** |
+> | 8 | compile with a bogus parameter value | ✅ **CAUGHT**: `Interface.IO: The object "ZZ_AI_TEST" at the property "IO" does not exist.` |
+> | 9 | delete screen, re-compile | ✅ `Success`, 0 errors, 156 warnings — **identical to baseline** |
+>
+> **Three independent confirmations, not one.** The previously-observed error disappeared; the
+> instance physically adopted the type's geometry; and a deliberately-invalid parameter produced a
+> precise, located error. Any one alone would be weak. Together they are conclusive.
+>
+> ### The four findings that matter more than the yes
+>
+> 1. **A faceplate exposes ONE parameter here, named `IO`, and it wants an EXISTING OBJECT.** So
+>    wiring an instance is *(type, position, one binding)* — three facts a human can check at a
+>    glance and a serialiser can diff exactly. This is what makes "stamp hundreds" economically real,
+>    and it collapses screen review from *inspect a picture* to *check a table*. Measured on one type;
+>    the other eight may differ, and an out-of-range index reports the arity for free.
+> 2. **The compile is a REAL GATE for faceplate work** — it validates the type reference *and* the
+>    parameter binding, and locates failures screen → item → property. **This retracts §14e of
+>    `hmi-ai-design-options.md`**, written hours earlier, which said hard rule 4 has no clean HMI
+>    analogue. For a faceplate-first architecture it has one, and the error text doubles as a
+>    specification a generator can consume.
+> 3. **The type owns the layout** (step 4's auto-resize). Placement is a grid decision, not a design
+>    decision — exactly the division of labour §14b proposed, now observed instead of argued.
+> 4. **`Validate()` passed the bogus parameter, twice.** Only the compile caught it. Another
+>    confirmation of a split this project has now measured six-plus times.
+>
+> ### What is still NOT established — do not let the yes leak into these
+>
+> - **Type AUTHORING remains untested.** `LibraryTypeVersion.Export` has still never been called
+>   (§3). Instantiation working says nothing about it.
+> - **Maintenance is still UI-only** (§5): no `IUpdateProjectScope`, no `IInstanceSearchScope`. Stamp
+>   a hundred instances and you cannot push a type update to them, or find them.
+> - **`TagParameterDynamization` refused INSIDE a real faceplate parameter** — the negative control
+>   §2 asked for, finally run. P7's conclusion survives its first genuine test, and what the kind is
+>   *for* remains unknown. The refusal named no reason.
+> - **Custom Web Control containers are a different story**: `HmiCustomWebControlContainer` IS in the
+>   creatable list, but refuses the one-argument create with `'ContainedTypeValue' parameter is
+>   missing` — the two-argument overload is **mandatory** for it. Tooling support written and
+>   unit-tested; **not yet run**.
+> - Every faceplate in this project is `DefaultVersionInconsistent`, so the clean-variable version of
+>   this experiment was **never available** — see the redaction lesson in §8.
+>
+> Original reflection-stage analysis below, unedited.
+
 **Date: 2026-08-09.** Closes the five questions left open by probe P10
 (`openness-hmi-faceplate-library.md`), which tested one hypothesis and answered it, leaving the
 load-bearing half — **instantiation** — untouched.
@@ -348,6 +409,18 @@ no-new-code Q1 probe to exhaustion first**, then decide whether the export quest
 ---
 
 ## 8. Corrections owed to other documents
+
+> **A redaction lesson, added 2026-08-09 after the live run.** This section's original advice was
+> *"use a faceplate type whose status is `Consistent` — P10's transcript shows three
+> (`HmiType_5/6/7`)."* **That advice was impossible to follow.** The three `Consistent` entries are
+> **image files**, not faceplates; every actual faceplate in the project is
+> `DefaultVersionInconsistent`. P10's evidence had been anonymised to `HmiType_n`, which correctly
+> removed the site's vocabulary and **also removed the distinction between an image and a
+> faceplate** — so a later reader built a recommendation on a set that does not exist.
+>
+> The redaction was right; the *scheme* was lossy in a way nobody checked. **Anonymisation that
+> preserves structure can still destroy the category that the next question turns on.** When
+> anonymising, keep the type's KIND even when erasing its name.
 
 Recorded here rather than edited in place, so the correction is reviewable before it propagates.
 

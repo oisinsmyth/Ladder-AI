@@ -226,6 +226,36 @@ public abstract record ParseResult
 
 public static class ArgumentParser
 {
+    /// <summary>
+    /// Splits an item spec of the form <c>TypeName[:ContainedTypeValue]</c>, as taken by
+    /// <c>hmi-create-screen --item</c> and <c>hmi-edit-screen --add-item</c>.
+    /// </summary>
+    /// <remarks>
+    /// The contained type is not decoration. Container types refuse the one-argument
+    /// <c>Create&lt;T&gt;(name)</c> outright, and Openness says so in as many words —
+    /// <c>'ContainedTypeValue' parameter is missing. Please use correct method for object
+    /// creation.</c> — so for a faceplate, custom web control or custom widget container the
+    /// two-argument overload is the ONLY way to construct one. Measured 2026-08-09; it is also
+    /// one of the few Openness refusals that names its own reason.
+    /// </remarks>
+    public static (string ItemType, string? ContainedType) SplitItemSpec(string spec)
+    {
+        if (spec is null)
+        {
+            throw new ArgumentNullException(nameof(spec));
+        }
+
+        var separator = spec.IndexOf(':');
+        if (separator < 0)
+        {
+            return (spec.Trim(), null);
+        }
+
+        var itemType = spec.Substring(0, separator).Trim();
+        var contained = spec.Substring(separator + 1).Trim();
+        return (itemType, contained.Length == 0 ? null : contained);
+    }
+
     public const int DefaultTimeoutConnectSeconds = 180;
     public const int DefaultTimeoutOpenSeconds = 1800;
 
@@ -264,8 +294,11 @@ public static class ArgumentParser
         "  openness-cli hmi-delete     <project> --kind <Composition> --name <name> --yes [--allow-any-name]\n" +
         "    --kind names a composition on HmiSoftware (Screens, Tags, TagTables, ScreenGroups, DiscreteAlarms, AlarmClasses, Connections, DataLogs, ...).\n" +
         "    hmi-delete refuses any name not starting with 'ZZ_AI_' unless --allow-any-name is given: it only removes its own probe artifacts.\n" +
-        "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli hmi-create-screen <project> --name <name> [--width <n>] [--height <n>] [--item <TypeName>[:<ContainedType>]]... --yes [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Creates a screen, runs Validate(), saves. Never overwrites an existing screen; --yes required. --item takes a type from `hmi --schema`'s creatable list.\n" +
+        "    CONTAINER types (HmiFaceplateContainer, HmiCustomWebControlContainer, HmiCustomWidgetContainer) REFUSE the plain form: Openness answers\n" +
+        "      \"'ContainedTypeValue' parameter is missing\". Give the contained type after a colon - e.g. --item HmiFaceplateContainer:MyFaceplateType\n" +
+        "      (a library type name from `openness-cli library`). Same syntax on hmi-edit-screen's --add-item.\n" +
         "  openness-cli hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>|@<file>]]... --yes [--json] [...]\n" +
         "    --event is idempotent: an existing handler for that event is UPDATED, not duplicated. '@<file>' loads a multi-line script body; the script's SyntaxCheck() is run and reported.\n" +
         "    Modifies an EXISTING screen and/or attaches event handlers. Target is an item name, or 'Screen' for the screen itself. --yes required.\n" +

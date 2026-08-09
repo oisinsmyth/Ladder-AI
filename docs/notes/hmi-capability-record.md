@@ -30,6 +30,13 @@ the documents listed at the bottom; this is the index, not the record of record.
 (`GetAttributeInfos`/`GetCreationInfos`) is the only self-description — and it tells you things an
 exported example could not, like which attributes are `Mandatory` vs `Relevant` at create time.
 
+> ⚠️ **Qualified 2026-08-09: it self-describes the USED surface, not the CREATABLE one.** `--schema`
+> lists all 56 creatable type *names*, but dumps **attributes only for types that already appear on
+> a screen in that project** — 8 of 56 here. It could therefore say nothing at all about
+> `HmiFaceplateContainer.ContainedType`, the exact attribute a faceplate probe needed, because no
+> existing screen used one. Where the metamodel is silent, the only way to learn an attribute is to
+> create the object and try.
+
 ### Write — proven end to end, each verified by read-back from a fresh process
 
 | Object | Capability | Command |
@@ -44,6 +51,7 @@ exported example could not, like which attributes are `Mandatory` vs `Relevant` 
 | Alarms | classes, discrete, analog; `Priority`, `StateMachine`, `AlarmClass` settable | `hmi-new`, `hmi-set` |
 | Data plumbing | data logs, alarm logs, connections | `hmi-new` |
 | Any of 80 kinds | generic metamodel-driven create/delete/set by composition name | `hmi-new`/`hmi-delete`/`hmi-set --kind` |
+| **Faceplate INSTANCES** | **create a container, point `ContainedType` at a human-authored library type, compile clean, and set its parameters.** The instance **adopts the type's own geometry**. Needed no new tooling — 2026-08-09 | `--item HmiFaceplateContainer`, `--set …ContainedType=`, `--set …Interface[n].Value=` |
 | Gate | compiles the HMI device | `hmi-compile` |
 
 ### The gate
@@ -52,6 +60,11 @@ exported example could not, like which attributes are `Mandatory` vs `Relevant` 
 times** — it names dangling tags *by property*, locates script syntax errors by line and column, and
 for a bare alarm or log enumerates exactly which fields are missing, precisely enough to serve as a
 specification for a generator.
+
+**It also gates FACEPLATE WIRING** (2026-08-09): both the type reference and the parameter binding,
+located screen → item → property — e.g. *`Interface.IO: The object "…" at the property "IO" does not
+exist.`* For a faceplate-first architecture this is a real analogue of hard rule 4, because what the
+compiler checks is exactly what a generator produces. It does **not** gate layout or aesthetics.
 
 **`Validate()` is NOT a gate** — it accepts a zero-pixel-wide screen. It is a per-property checker
 and structurally incapable of cross-object questions.
@@ -135,8 +148,14 @@ regular, so it is breadth rather than risk.
   the original wording — *"no export, no renderer, no diff"* — treated this as a capability limit. It
   is not. The serialiser that recovers diff/hash/round-trip is **unbuilt, not impossible**, and two
   shipped products prove it works. Still the open problem; no longer an open *question*.
-- **Faceplate INSTANTIATION has never been attempted** — the half the recommended path rests on.
-  It needs **no new CLI code**. Blocked only on an Openness approval.
+- ~~**Faceplate INSTANTIATION has never been attempted**~~ — **DONE 2026-08-09, and it WORKS.** See
+  `hmi-faceplate-gap-probe.md`'s verdict box. Left visible because the gap was real for a day and the
+  path rested on it unmeasured for longer than that.
+- **Faceplate interface ARITY is known for exactly one type** (one parameter, named `IO`, wanting an
+  existing object). The other eight are unread — and an out-of-range index reports arity for free.
+- **`HmiCustomWebControlContainer` requires the two-argument `Create<T>(name, containedType)`** —
+  measured. Tooling support is written and unit-tested but **has never been run**; running it is the
+  probe that would turn the Custom Web Control route from documentation into capability.
 - **`LibraryTypeVersion.Export` has never been called.** It is the untried route to a faceplate
   document, and P10's refutation did not touch it.
 - Every faceplate type in the reference project reports `DefaultVersionInconsistent` while every PLC

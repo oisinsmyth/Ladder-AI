@@ -892,4 +892,46 @@ public class HmiCommandTests
         Assert.Equal("2", OutputFormatter.DescribeAppliedCount(applied));
         Assert.Equal(0, OutputFormatter.CountRefusals(applied));
     }
+
+    // A plain type stays plain: the overwhelmingly common case must not acquire a contained type
+    // by accident, because passing one selects a DIFFERENT Create overload on the Openness side.
+    [Fact]
+    public void SplitItemSpec_LeavesAnOrdinaryTypeAlone()
+    {
+        var (itemType, containedType) = ArgumentParser.SplitItemSpec("HmiRectangle");
+
+        Assert.Equal("HmiRectangle", itemType);
+        Assert.Null(containedType);
+    }
+
+    [Fact]
+    public void SplitItemSpec_SplitsAContainerSpecOnTheFirstColon()
+    {
+        var (itemType, containedType) = ArgumentParser.SplitItemSpec("HmiFaceplateContainer:MotorFaceplate");
+
+        Assert.Equal("HmiFaceplateContainer", itemType);
+        Assert.Equal("MotorFaceplate", containedType);
+    }
+
+    // Whitespace around either half is the user's typing, not part of the name — a contained type
+    // that keeps a leading space will not resolve, and Openness will not say why.
+    [Fact]
+    public void SplitItemSpec_TrimsBothHalves()
+    {
+        var (itemType, containedType) = ArgumentParser.SplitItemSpec(" HmiFaceplateContainer : MotorFaceplate ");
+
+        Assert.Equal("HmiFaceplateContainer", itemType);
+        Assert.Equal("MotorFaceplate", containedType);
+    }
+
+    // A trailing colon with nothing after it must fall back to the one-argument overload rather
+    // than passing an empty contained type, which would be a different and worse failure.
+    [Fact]
+    public void SplitItemSpec_TreatsAnEmptyContainedTypeAsAbsent()
+    {
+        var (itemType, containedType) = ArgumentParser.SplitItemSpec("HmiFaceplateContainer:");
+
+        Assert.Equal("HmiFaceplateContainer", itemType);
+        Assert.Null(containedType);
+    }
 }

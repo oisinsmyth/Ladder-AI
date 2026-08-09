@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using OpennessCli.Cli;
 using OpennessCli.Model;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
@@ -473,11 +474,14 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var created = new List<string>();
         var index = 1;
-        foreach (var itemType in itemTypes)
+        foreach (var itemSpec in itemTypes)
         {
+            var (itemType, containedType) = ArgumentParser.SplitItemSpec(itemSpec);
             var itemName = $"{itemType}_{index++}";
-            CreateScreenItem(screen, itemType, itemName);
-            created.Add($"{itemType} {itemName}");
+            CreateScreenItem(screen, itemType, itemName, containedType);
+            created.Add(containedType is null
+                ? $"{itemType} {itemName}"
+                : $"{itemType} {itemName} contained-type={containedType}");
         }
 
         var validation = ReadValidation(screen);
@@ -602,18 +606,20 @@ public sealed class OpennessGateway : IOpennessGateway
         // reported rather than aborting the rest. That tolerance is the point: the breadth sweep
         // asks "which of the 56 types can actually be created", and an all-or-nothing command
         // answers it one type at a time at one Portal round trip each.
-        foreach (var itemType in addItems)
+        foreach (var itemSpec in addItems)
         {
+            var (itemType, containedType) = ArgumentParser.SplitItemSpec(itemSpec);
             var itemName = $"{itemType}_P2";
+            var label = containedType is null ? itemType : $"{itemType}:{containedType}";
             try
             {
-                CreateScreenItem(screen, itemType, itemName);
-                applied.Add($"add-item {itemType} -> OK");
+                CreateScreenItem(screen, itemType, itemName, containedType);
+                applied.Add($"add-item {label} -> OK (name {itemName})");
             }
             catch (Exception ex)
             {
                 var root = ex.GetBaseException();
-                applied.Add($"add-item {itemType} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
+                applied.Add($"add-item {label} -> REFUSED ({root.GetType().Name}: {root.Message.Split('\n')[0].Trim()})");
             }
         }
 
@@ -1365,7 +1371,7 @@ public sealed class OpennessGateway : IOpennessGateway
     // argument has to be bound at runtime. Resolved against the assembly that actually defines the
     // Unified UI types rather than a hand-maintained switch — the device reports 56 creatable types
     // and enumerating them here by hand would rot.
-    private static void CreateScreenItem(HmiScreen screen, string itemTypeName, string itemName)
+    private static void CreateScreenItem(HmiScreen screen, string itemTypeName, string itemName, string? containedTypeValue = null)
     {
         var composition = screen.ScreenItems;
         var type = typeof(HmiScreenItemBase).Assembly
@@ -1379,16 +1385,26 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new HmiUnknownScreenItemTypeException(itemTypeName);
         }
 
+        // Container types need Create<T>(name, containedTypeValue); everything else needs
+        // Create<T>(name). Selecting on parameter count keeps this a runtime binding decision,
+        // which it has to be — the caller knows the contained type, the metamodel does not.
+        var parameterCount = containedTypeValue is null ? 1 : 2;
+
         var create = composition.GetType()
             .GetMethods()
-            .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == 1);
+            .FirstOrDefault(m => m.Name == "Create" && m.IsGenericMethodDefinition && m.GetParameters().Length == parameterCount);
 
         if (create is null)
         {
-            throw new InvalidOperationException("HmiScreenItemBaseComposition.Create<T>(string) was not found on the installed Openness assembly.");
+            throw new InvalidOperationException(
+                $"HmiScreenItemBaseComposition.Create<T> with {parameterCount} parameter(s) was not found on the installed Openness assembly.");
         }
 
-        create.MakeGenericMethod(type).Invoke(composition, new object[] { itemName });
+        var arguments = containedTypeValue is null
+            ? new object[] { itemName }
+            : new object[] { itemName, containedTypeValue };
+
+        create.MakeGenericMethod(type).Invoke(composition, arguments);
     }
 
     private static IReadOnlyList<HmiValidationMessage> ReadValidation(HmiScreen screen)

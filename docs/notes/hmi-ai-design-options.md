@@ -1639,6 +1639,16 @@ does not inherit it.
 
 ### 14b. Take the division of labour the API is forcing on you
 
+> ✅ **RUN LIVE, later on 2026-08-09 — the load-bearing half of this spine is now MEASURED.**
+> A faceplate container was created, pointed at a human-authored library type via `ContainedType`,
+> and **compiled clean**; the instance adopted the type's own geometry, and its parameter list
+> populated and took a value. It needed **no new tooling**. Two further facts sharpen the plan:
+> **the type tested exposes a single parameter wanting an existing object** — so an instance is
+> *(type, position, one binding)*, which is cheap to generate, cheap to review and cheap to
+> serialise — and **the compile gates that binding by name and location**, which is a real
+> correctness gate on exactly what a generator emits. Evidence: `hmi-faceplate-gap-probe.md`.
+> **Authoring a type is still untested**, and the maintenance cost below is unchanged.
+>
 > ⚠️ **Corrected 2026-08-09 — the premise below is weaker than stated, and the path is stronger.**
 > *"Faceplate types cannot be authored"* was inferred from `GetSupportedExportFormats()` returning
 > empty. That inference is **unsound**: `CreateFromDocuments` takes no format argument, and
@@ -1727,6 +1737,19 @@ Said plainly, because a path that hides its own holes is worth less than the men
    to geometry; a zero-width screen compiles clean. "Proven valid before presentation" would have to
    be **redefined** for HMI work, not inherited. `V-1` + `W-1` + `V-3` is the closest this path gets,
    and it is an approximation — a schematic, not a rendering.
+
+> ⚠️ **Point 2 is RETRACTED for the faceplate-first architecture (run live, 2026-08-09).** It was
+> written hours before the instantiation probe and is too broad. The compile **does** gate faceplate
+> wiring — the type reference *and* the parameter binding, located screen → item → property
+> (*`Interface.IO: The object "…" at the property "IO" does not exist.`*). In a faceplate-first
+> screen, what a generator emits is *(type, position, parameter binding)* — and the compiler checks
+> every one of those. That is a real analogue of hard rule 4, not an approximation of one.
+>
+> What survives of point 2, and it is narrower: the compile is still blind to **geometry and
+> aesthetics**, so a badly *laid out* screen of correctly-wired faceplates compiles clean. Placement
+> is what `V-1` + the geometric linter of §15c must cover. The correctness half is gated; the design
+> half is not. **This is a much better position than the sentence above describes**, and it is the
+> single biggest reason to prefer faceplate-first over generating flat primitives.
 
 Both are ADR-0007's crux, and this path narrows them rather than removing them. **If the owner's
 answer to the ADR is "no", Phase 0 and Phase 2 are still worth doing on their own merits** — they are

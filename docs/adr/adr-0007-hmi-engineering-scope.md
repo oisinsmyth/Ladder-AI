@@ -174,10 +174,17 @@ faceplate once, stamp it forty times" can have its *second* half automated and n
 with the nesting wall, **reuse cannot be expressed structurally at all** — only by repeating flat
 items. That is the opposite of this project's whole pattern-library premise.
 
+> ✅ **RUN LIVE, 2026-08-09 — "reuse cannot be expressed structurally at all" is now FALSE as
+> written.** A faceplate container was created, pointed at a human-authored library type, and
+> **compiled clean**; the instance adopted the type's geometry and its parameter list populated and
+> accepted a value. The type tested exposes **one** parameter, wanting an existing object — so an
+> instance is *(type, position, one binding)*. **And the compile gates that binding**, by name and
+> location, which is a genuine correctness gate on what a generator emits. So the second half of
+> "define a pump faceplate once, stamp it forty times" is not merely automatable in principle — it
+> is measured, and it is checkable. Evidence: `hmi-faceplate-gap-probe.md` verdict box.
+>
 > **REOPENED 2026-08-09 (`hmi-faceplate-gap-probe.md`).** The *authoring* half of this paragraph is
-> **untested, not refuted** — see the export-bullet correction below for why the reasoning failed. The
-> *instantiation* half — the one this paragraph concedes works — **has still never been attempted**,
-> and it needs no new CLI code. Three harder facts now bear on it, and they do not all point one way:
+> **untested, not refuted** — see the export-bullet correction below for why the reasoning failed. Three harder facts now bear on it, and they do not all point one way:
 > - `HmiFaceplateInterface` derives from `UIBase`, so a faceplate parameter is itself a dynamization
 >   host: wiring one uses the mechanism already proven live. **Helps.**
 > - `HmiSoftware` implements none of `IUpdateProjectScope`, `IInstanceSearchScope` or
