@@ -808,8 +808,19 @@ running agent's ability to connect.
 
 - **`Registry64` explicitly.** A 32-bit host is redirected to `WOW6432Node`, where TIA does not look.
   The entry gets written, the script reports success, and the dialog still appears.
-- **`DateModified` uses TIA's own format string**, `yyyy'/'MM'/'dd HH:mm:ss.fff`, taken from the
-  file's real `LastWriteTime`.
+- **`DateModified` is `yyyy'/'MM'/'dd HH:mm:ss.fff` in UTC**, not local time. Found on 2026-08-10 only
+  by getting TIA to write an entry for a file this script had already written one for, and reading the
+  two side by side:
+
+  ```
+  hand-written  2026/08/10 00:49:08.728    <- LastWriteTime, local (UTC+1 here in August)
+  TIA itself    2026/08/09 23:49:08.728    <- LastWriteTimeUtc
+  ```
+
+  Same instant, same milliseconds, one hour apart. Whether TIA *compares* the field or treats it as
+  decoration is still unknown -- but a hand-written entry that disagrees with TIA's own format is a
+  variable worth removing. **On a machine at UTC+0 this bug is invisible**, which is worth knowing
+  before trusting any of this on a second machine.
 - **Entry subkey names are copied from siblings TIA created**, never guessed. `Entry (N)` is what this
   machine has, but that is an observation, not a contract — the script reuses an existing sibling's
   prefix/suffix and takes the next free number.

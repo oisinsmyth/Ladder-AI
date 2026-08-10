@@ -74,6 +74,7 @@ param(
     [string[]]$Version,
     [switch]$Prune,
     [switch]$Status,
+    [switch]$Forget,
     [switch]$Quiet
 )
 
@@ -184,9 +185,16 @@ try {
 }
 finally { $sha.Dispose() }
 
-# TIA's own format string, verbatim. Written from the file's real LastWriteTime so the entry stays
-# self-consistent if TIA ever uses it as a pre-check rather than decoration.
-$dateModified = $file.LastWriteTime.ToString("yyyy'/'MM'/'dd HH:mm:ss.fff")
+# TIA's own format string, verbatim, and UTC -- NOT local time.
+#
+# Measured 2026-08-10, and it took getting TIA to write an entry for the very same file to see it.
+# For one binary, side by side:
+#     this script (was)  2026/08/10 00:49:08.728     <- LastWriteTime, local (UTC+1 in August here)
+#     TIA itself         2026/08/09 23:49:08.728     <- LastWriteTimeUtc
+# Same instant, same milliseconds, one hour apart. Whether TIA compares this field or treats it as
+# decoration is unknown, but a hand-written entry that disagrees with TIA's own format is a variable
+# worth removing -- and on a machine at UTC+0 the bug would have been invisible.
+$dateModified = $file.LastWriteTimeUtc.ToString("yyyy'/'MM'/'dd HH:mm:ss.fff")
 
 Write-Detail ""
 Write-Detail "Approving for TIA Openness:"
@@ -287,6 +295,40 @@ try {
             }
         }
         Write-Host ""
+        exit 0
+    }
+
+    # Revokes this path entirely: every entry naming it goes, whatever the hash. -Prune only drops
+    # stale hashes and so cannot remove a CURRENT approval -- which is exactly what you need gone to
+    # test whether a hand-written entry is honoured, rather than some older approval covering for it.
+    if ($Forget) {
+        $forgotten = 0
+        foreach ($versionName in $versionNames) {
+            $appKeyPath = "$WhitelistRoot\$versionName\Whitelist\$exeName"
+            $doomed = @(Read-Entries $baseKey $appKeyPath | Where-Object {
+                $_.Path -and $_.Path.Equals($exePath, [System.StringComparison]::OrdinalIgnoreCase) })
+            if ($doomed.Count -eq 0) { continue }
+
+            if ($PSCmdlet.ShouldProcess("HKLM\$appKeyPath", "delete all $($doomed.Count) entry/entries naming this path")) {
+                try {
+                    $appKey = $baseKey.OpenSubKey($appKeyPath, $true)
+                    if ($appKey) {
+                        try {
+                            foreach ($d in $doomed) {
+                                $appKey.DeleteSubKeyTree($d.Name, $false)
+                                Write-Host "  [$versionName] deleted $($d.Name)"
+                                $forgotten++
+                            }
+                        }
+                        finally { $appKey.Dispose() }
+                    }
+                }
+                catch [System.UnauthorizedAccessException] { Deny-Report $appKeyPath }
+                catch [System.Security.SecurityException]  { Deny-Report $appKeyPath }
+            }
+        }
+        Write-Host ""
+        Write-Host "Forgot $forgotten entry/entries for this path. It is now unapproved."
         exit 0
     }
 
