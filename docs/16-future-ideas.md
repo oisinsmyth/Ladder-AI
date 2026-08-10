@@ -1706,6 +1706,41 @@ per-call timing or a real run records agents actually contending for the canonic
 - **Verdict.** Built, 221 openness-cli tests (+1). Not yet live-verified — that needs another
   owner-approved rebuild (FI-61).
 
+### FI-71 — `to-xml` guessed a member type and only warned about it, for the third time
+
+- **FI-57's remedy did not remedy.** Converting a block without `--project` cannot type a comparison
+  against another DB's member, so it falls back to a type inferred from the literal — which TIA rejects
+  when the real member is unsigned. FI-57 answered it with a warning on stderr and recorded that it had
+  "cost two separately". It has now cost a **third** import-and-compile cycle, and the third time **the
+  untyped file was the one about to be imported**. A warning competes with the tool's own success line
+  on the same stream, and loses.
+- **`to-xml` now fails closed, and only `to-xml`.** That is the direction whose output goes into a
+  controller, where a guessed member type is a defect waiting on a compile to find it. `to-ir` reads an
+  export and cannot produce anything a PLC will execute, so it stays advisory. `--allow-blind-types`
+  is the escape hatch for a block that genuinely references roots outside the project.
+- **Same family as FI-52/FI-62/FI-66**, with a twist worth naming: there the gate did not look. Here it
+  looked, saw the problem, and *asked nicely*. A check whose only consequence is a line of text is a
+  check that gets skimmed past.
+- **Verdict.** Built, 888 converter tests (+7), and verified end-to-end on a real 89-network block: the
+  refusal fires, **no `.xml` is written**, exit 1; with `--project` the same file converts clean.
+
+### FI-72 — both converters wrote beside their input, and silently overwrote hand-authored IR
+
+- **Two agents, independently, in one day.** `converter to-ir X.xml` writes `X.ir` beside its input.
+  One agent lost **eight hand-edited `.ir` files** that way (recovered only because `ir-hash` could
+  prove the readable content identical); another lost its own review snapshot *mid-review*, which is
+  the worse case — the file it was measuring against moved under it.
+- **Not fixed by refusing to overwrite.** Overwriting is the normal case and the correct one in the
+  export-and-read-back loop, so a refusal would break every routine run and be switched off within a
+  day. Fixed by giving the caller **somewhere else to put the output** (`--out <dir>` — what both
+  agents actually needed and neither had) and by making the overwrite **visible at the moment it
+  happens** rather than silent.
+- **Applied to all four write paths**, not just the block one: DB, UDT and tag-table conversions have
+  their own write sites, and fixing only the path that was reported would have been exactly the partial
+  fix this repo keeps re-learning about.
+- **Verdict.** Built, tests as above, verified end-to-end (`--out` redirects and creates the directory;
+  a second run reports the overwrite). Default behaviour is unchanged, with a test saying so.
+
 ### FI-68 — a relative `--out` failed with an exception that named a different problem entirely
 
 - **The cost was the misdiagnosis, not the failure.** `openness-cli export --out <relative>` throws

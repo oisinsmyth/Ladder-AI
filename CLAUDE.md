@@ -47,6 +47,10 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, stand
                                     # FlgNetParser.SupportedPartNames (33 names) plus CALL, which is a <Call> sibling with its own parse path. Anything outside it is a correct hard error,
                                     # not a bug — see docs/evidence/stage-S1.md. Conversion scope != synthesis scope: LIMIT/WAIT/FillBlockI/Modbus_* and InOut CALL params hard-error on the
                                     # derive/--synthesize path (src/converter/README.md "Sidecar synthesis").
+converter to-ir|to-xml <file> --out <dir>   # FI-72: write the result THERE instead of BESIDE THE INPUT. Beside-the-input is still the default (right for the export-and-read-back loop) but it silently
+                                    # overwrote hand-authored .ir for two agents in one day, so an overwrite is now REPORTED when it happens. Convert a copy in a scratch dir when the .ir beside it is authored.
+                                    # FI-71: `to-xml` now REFUSES (exit 1, nothing written) when a member type could not be resolved — pass --project <ir-dir>, or --allow-blind-types if the roots really are external.
+                                    # That guess is what TIA rejects at compile on an unsigned member, and it had cost three full round trips as a warning nobody saw.
 converter to-ir <file> --no-sidecar # readable-only IR: VERIFIES the sidecar is derivable (Normalizer-compares synth vs the source export), then omits it; hard error if not (ADR-0005)
 converter sanitize <file> --map <mapping.json> --out <path>   # real-project data → invented names, for scratch/live-verification use (docs/13-data-boundary.md)
 converter review    <file...> [--project <ir-dir>] [--ignore-errors] [--json]      # mechanical convention checks — 18 mechanized C-IDs as of 2026-08-05 (3 of them vacuous against
