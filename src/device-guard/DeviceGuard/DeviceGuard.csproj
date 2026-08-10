@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DeviceGuard</RootNamespace>
+    <AssemblyName>device-guard</AssemblyName>
+  </PropertyGroup>
+
+  <!-- System.Text.Json is in-box for net8.0; no package reference needed. -->
+
+</Project>

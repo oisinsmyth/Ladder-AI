@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      Pure logic — no Siemens.Engineering, no network, no Portal — so this is net8.0 like the
+      converter, not net48 like openness-cli. It is deliberately kept free of any TIA/network
+      dependency so that changing the safeguard NEVER triggers the TIA Openness (Path,FileHash)
+      re-approval cycle that a rebuild of openness-cli does.
+
+      Warnings-as-errors matches the other two solutions (audit F-37): there is no CI, so the
+      compiler is the only thing that notices drift.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
