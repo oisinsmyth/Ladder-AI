@@ -770,6 +770,69 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    // FI-70. The one thing this report must never do is let a partial dump read as a whole one — the
+    // directory is about to be handed to `converter drift-check --complete`, which treats a missing
+    // file as "this block is not in the controller". So what was NOT produced leads, and the summary
+    // states the conclusion in words rather than leaving it to be inferred from three counts.
+    public static string FormatExportAllTable(ExportAllResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("OUT: ").Append(result.OutDir).Append('\n');
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ExportAllOutcome.Failed))
+        {
+            sb.Append("FAILED:  ").Append(entry.Name).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ExportAllOutcome.Refused))
+        {
+            sb.Append("REFUSED: ").Append(entry.Name).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        sb.Append("SUMMARY: ").Append(result.ExportedCount).Append(" exported, ")
+            .Append(result.RefusedCount).Append(" refused, ")
+            .Append(result.FailedCount).Append(" failed\n");
+
+        if (result.IsComplete)
+        {
+            sb.Append("COMPLETE: every block and type in the project was exported. Safe to compare against with\n")
+                .Append("          converter drift-check --project <ir-dir> --exports ").Append(result.OutDir).Append(" --complete\n");
+        }
+        else
+        {
+            sb.Append("INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-check --complete\n")
+                .Append("            as-is — that reads a missing file as 'this block is not in the controller', so the\n")
+                .Append("            ").Append(result.RefusedCount + result.FailedCount)
+                .Append(" item(s) above would come back as findings about the controller that are really\n")
+                .Append("            findings about this dump.\n");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatExportAllJson(ExportAllResult result)
+    {
+        var payload = new
+        {
+            outDir = result.OutDir,
+            complete = result.IsComplete,
+            exported = result.ExportedCount,
+            refused = result.RefusedCount,
+            failed = result.FailedCount,
+            entries = result.Entries.Select(e => new
+            {
+                name = e.Name,
+                kind = e.Kind,
+                path = e.Path,
+                outPath = e.OutPath,
+                outcome = e.Outcome.ToString(),
+                detail = e.Detail,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatSanityCheckTable(SanityCheckResult result)
     {
         var sb = new StringBuilder();

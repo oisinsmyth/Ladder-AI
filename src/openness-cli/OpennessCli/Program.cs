@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using OpennessCli.Cli;
 using OpennessCli.Openness;
 using Siemens.Engineering;
@@ -113,6 +115,8 @@ internal static class Program
                     return RunList(gateway, list.Options, timeoutOpenSeconds);
                 case ParseResult.ExportSuccess export:
                     return RunExport(gateway, export.Options, timeoutOpenSeconds);
+                case ParseResult.ExportAllSuccess exportAll:
+                    return RunExportAll(gateway, exportAll.Options, timeoutOpenSeconds);
                 case ParseResult.ImportSuccess import:
                     return RunImport(gateway, import.Options, timeoutOpenSeconds);
                 case ParseResult.CompileSuccess compile:
@@ -430,6 +434,81 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    // FI-70. Produces the thing there was never anything to compare against: a directory holding the
+    // controller's own copy of every block and PLC data type, for
+    // `converter drift-check --project <ir-dir> --exports <dir> --complete`.
+    //
+    // Two properties this command must have, both because of what the directory is FOR:
+    //   - a refusal is REPORTED, never a silent omission. The completeness check reads a missing file
+    //     as "this block is not in the controller", so quietly skipping a safety block would turn a
+    //     correct refusal into a false finding about the controller.
+    //   - one failure does not abort the rest. A partial dump that names its own holes is useful; a
+    //     dump that stopped at the first problem tells you nothing about the other 90 blocks.
+    private static int RunExportAll(IOpennessGateway gateway, ExportAllCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        Directory.CreateDirectory(options.OutDir);
+
+        var plan = ExportAllPlanner.Build(
+            gateway.EnumerateBlocks(),
+            gateway.EnumerateTypes(),
+            options.IncludeTagTables ? gateway.EnumerateTagTables() : Array.Empty<Model.TagTableInfo>(),
+            options.OutDir,
+            options.IncludeTagTables);
+
+        var entries = new List<Model.ExportAllEntry>();
+        foreach (var item in plan.Items)
+        {
+            if (!item.WillExport)
+            {
+                entries.Add(new Model.ExportAllEntry(
+                    item.Name, item.Kind.ToString(), item.Path, OutPath: null,
+                    Model.ExportAllOutcome.Refused, item.RefusedReason));
+                continue;
+            }
+
+            try
+            {
+                switch (item.Kind)
+                {
+                    case ExportAllPlanner.ItemKind.Block:
+                        gateway.ExportBlock(item.Name, options.Device, item.OutPath!);
+                        break;
+                    case ExportAllPlanner.ItemKind.Type:
+                        gateway.ExportType(item.Name, options.Device, item.OutPath!);
+                        break;
+                    default:
+                        gateway.ExportTagTable(item.Name, options.Device, item.OutPath!);
+                        break;
+                }
+
+                entries.Add(new Model.ExportAllEntry(
+                    item.Name, item.Kind.ToString(), item.Path, item.OutPath,
+                    Model.ExportAllOutcome.Exported, Detail: null));
+            }
+            catch (Exception ex)
+            {
+                // Recorded and carried on: see the header. The exception type is included because
+                // "which of 90 blocks failed and why" is the whole value of the report.
+                entries.Add(new Model.ExportAllEntry(
+                    item.Name, item.Kind.ToString(), item.Path, item.OutPath,
+                    Model.ExportAllOutcome.Failed, $"{ex.GetType().Name}: {ex.Message}"));
+            }
+        }
+
+        var result = new Model.ExportAllResult(options.OutDir, entries);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatExportAllJson(result)
+            : OutputFormatter.FormatExportAllTable(result));
+
+        if (result.FailedCount > 0)
+        {
+            return ExitCodes.CommandError;
+        }
+
+        return result.IsComplete ? ExitCodes.Success : ExitCodes.ExportIncomplete;
+    }
+
     private static int RunImport(IOpennessGateway gateway, ImportCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -583,6 +662,19 @@ public static class ExitCodes
     /// everything, which is the failure mode that matters most because it looks like a pass.
     /// </summary>
     public const int CompileIncomplete = 11;
+
+    /// <summary>
+    /// FI-70, and deliberately the same shape as <see cref="CompileIncomplete"/>. Every export that
+    /// was attempted succeeded, but the directory is NOT a complete picture of the project — some
+    /// content was refused (safety, or a basename collision). Distinct from
+    /// <see cref="CommandError"/>: nothing went wrong, the dump is simply not whole.
+    ///
+    /// It has its own code because of what the directory is FOR. `converter drift-check --complete`
+    /// reads a missing file as "this block is not in the controller", so comparing against a partial
+    /// dump manufactures findings about the controller that are really findings about the dump. A
+    /// caller has to be able to tell the two apart without parsing the report.
+    /// </summary>
+    public const int ExportIncomplete = 12;
 
     /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).

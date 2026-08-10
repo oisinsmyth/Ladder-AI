@@ -1750,16 +1750,29 @@ per-call timing or a real run records agents actually contending for the canonic
   line now states which question was answered, so a clean `SUMMARY` cannot be read as "disk and
   controller agree" when nothing established that. Same family as FI-52/FI-62/FI-66 — a gate whose
   green result carried more than it earned.
-- **Not built (the export half), and deliberately not here.** Dumping every block and type out of the
-  controller belongs in `openness-cli`: the converter is a pure in-process file transformer that never
-  touches the environment, and that invariant was held on purpose (FI-24). The smallest correct shape
-  is a two-command recipe — an `openness-cli` bulk export, then this command with `--complete` — not a
-  second comparison implementation.
+- **Built (the export half), in `openness-cli` where it belongs.** `export-all` dumps every block and
+  PLC data type to one directory. It lives there, not in the converter, because the converter is a
+  pure in-process file transformer that never touches the environment (FI-24, held on purpose), so
+  the smallest correct shape is a two-command recipe rather than a second comparison implementation.
+  Three properties, each for a reason the report has to survive: a **refusal is named, never a silent
+  omission** (the completeness check reads a missing file as "not in the controller", so quietly
+  skipping a safety block would turn a correct refusal into a false finding about the controller); a
+  **basename collision is refused rather than resolved** (a suffix would break the basename pairing
+  the recipe depends on, and silent overwriting makes the comparison run against the wrong object);
+  and **one failure does not abort the rest**, because a partial dump naming its own holes is worth
+  something and one that stops at the first problem is not. New exit code 12 `ExportIncomplete`,
+  deliberately the same shape as FI-52's 11 — nothing went wrong, the dump is simply not whole.
+  Types needed a new `EnumerateTypes()` on the gateway: they had been walked internally since FI-62
+  but were never on the interface, and a bulk export silently omitting every UDT would have been
+  exactly the partial-read-as-complete failure this whole item is about.
 - **Three caveats, all measured rather than anticipated.** Compare **normalised, never bytes**: two
   files whose raw text differed by 776 and 282 lines were semantically identical, because a
   `--no-sidecar` disk copy legitimately omits the sidecar TIA appends — a byte compare would have
   called both drifted. Line endings vary per file within one corpus. And such a tool must **never
   import or decide a side**: on the case that prompted this, "fixing" the divergence automatically
   would have overwritten a convention-compliant disk copy with a non-compliant one, twice.
-- **Verdict.** Comparison half built, 881 converter tests (+3), verified against a real 102-file
-  corpus: the same directory exits 0 without `--complete` and 1 with it. Export half open.
+- **Verdict.** Both halves built. 881 converter tests (+3) and 232 openness-cli tests (+11);
+  the comparison half verified against a real 102-file corpus, where the same directory exits 0
+  without `--complete` and 1 with it. **`export-all` is not live-verified** — that needs a Release
+  rebuild, which revokes the binary's Openness approval until a person re-approves it at the machine
+  (FI-61), so it waits for a moment when no Portal work is in flight.

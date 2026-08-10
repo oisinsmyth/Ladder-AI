@@ -3705,6 +3705,22 @@ public sealed class OpennessGateway : IOpennessGateway
     // PlcSoftware.TypeGroup/PlcTypeGroup.Types/.Groups instead of .BlockGroup/PlcBlockGroup.
     // Blocks/.Groups — confirmed real, 2026-07-14 (reflecting on the installed DLL): the same
     // recursive group shape, just for PLC data types (UDTs) instead of blocks.
+    // FI-70. Types were already walked in here (sanity-check has counted them since FI-62) but were
+    // never exposed, so no caller could ask what they are — and a bulk export that silently omitted
+    // every UDT would be exactly the kind of partial dump FI-70 exists to stop being read as a whole
+    // one. Same walk as everything else that resolves a type; `typeName: null` means "all".
+    public IReadOnlyList<PlcTypeInfo> EnumerateTypes()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EnumerateTypes)}.");
+        }
+
+        return FindMatchingTypes(_project, typeName: null)
+            .Select(t => new PlcTypeInfo(t.Type.Name, t.Path))
+            .ToList();
+    }
+
     private static IEnumerable<(PlcType Type, string Path)> FindMatchingTypes(Project project, string? typeName)
     {
         foreach (Device device in project.Devices)

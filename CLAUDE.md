@@ -28,6 +28,9 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 ```
 openness-cli list          <project> [--json]                                            # enumerate blocks; F-/safety blocks flagged, never opened; --tagtables lists tag tables instead
 openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>
+openness-cli export-all    <project> --out <dir> [--device <name>] [--tagtables] [--json]   # FI-70: every block + PLC data type to one dir, so `converter drift-check --exports <dir> --complete` can compare
+                                    # the IR ON DISK against WHAT IS ACTUALLY IN THE CONTROLLER — the comparison neither drift-check nor a re-export proof could make. Safety content is REFUSED AND NAMED, never silently
+                                    # omitted (an absent file reads downstream as "not in the controller"); a basename collision is refused too. Exit 12 = ExportIncomplete: everything attempted worked, the dump is not whole
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json]   # non-zero exit on error (8 = CompileFailed; 11 = CompileIncomplete, the device compiled clean but left blocks unverified — FI-52; full table in src/openness-cli/README.md). A bare whole-device run is NOT the gate: see hard rule 4, use sanity-check or per-block
 openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)

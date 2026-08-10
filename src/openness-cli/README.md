@@ -408,6 +408,49 @@ observed live 2026-08-07, two runs against the same project succeeded and a thir
 connect under process pileup" symptom CLAUDE.md records. The hint narrows *which* process is
 attached, never *whether* one is, and falls back to the old behaviour when absent or unmatched.
 
+## `export-all` — the disk-vs-controller check's missing half (2026-08-10, FI-70)
+
+`openness-cli export-all <project> --out <dir> [--device <name>] [--tagtables] [--json]`
+
+`converter drift-check` compares `ir/*.ir` against `simatic-ml/*.xml` and **neither side is the
+controller**, so a file edited on disk and never imported — or a block changed in TIA and never
+exported — was invisible to every automated check this project has. This produces the thing there
+was never anything to compare against: the controller's own copy of **every block and PLC data
+type** in one directory, ready for `converter drift-check --project <ir-dir> --exports <dir>
+--complete`.
+
+Two properties matter more than the export itself, both because of what the directory is *for*:
+
+- **A refusal is reported, never a silent omission.** Safety content is refused (hard rule 2) and
+  **named**. The completeness check reads a missing file as "this block is not in the controller",
+  so quietly skipping a safety block would convert a correct refusal into a false finding about the
+  controller.
+- **One failure does not abort the rest.** A partial dump that names its own holes is useful; one
+  that stopped at the first problem tells you nothing about the other ninety blocks.
+
+**Basename collisions are refused rather than resolved.** `drift-check` pairs by basename, so a UDT
+and a block sharing a name would both write `<name>.xml` — one silently overwriting the other, after
+which the comparison runs against the wrong object and yields a false `MATCH` or a false `DRIFTED`
+with nothing to indicate which. A disambiguating suffix would break the basename pairing the recipe
+depends on, so the collision is reported and both are left for a human.
+
+`--tagtables` is opt-in: a tag table has no `.ir` counterpart in the shape the corpus uses, so
+including it by default would manufacture `EXPORT-ONLY` findings that mean nothing.
+
+Exit **0** only when the directory is the whole project; **12** (`ExportIncomplete`) when everything
+attempted succeeded but something was refused; **7** when an export failed.
+
+```
+$ openness-cli export-all "C:\proj\P.ap20" --out C:\dump
+OUT: C:\dump
+REFUSED: FB_EStopChain  (classifies as safety content and is never exported by this pipeline (hard rule 2))
+SUMMARY: 64 exported, 1 refused, 0 failed
+INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-check --complete
+            as-is — that reads a missing file as 'this block is not in the controller', so the
+            1 item(s) above would come back as findings about the controller that are really
+            findings about this dump.
+```
+
 ## Exit codes
 
 Every code this CLI can return (`OpennessCli/Program.cs`, `ExitCodes`). Anything driving it from a
@@ -427,6 +470,7 @@ shell should branch on these rather than on stderr text.
 | 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block, or at least one device failing to compile. Both lists are printed |
 | 10 | `NotConfirmed` | `delete` resolved the block and printed what it *would* delete, but `--yes` was absent. **Nothing was deleted.** The only subcommand with a confirmation gate, because it's the only irreversible one |
 | 11 | `CompileIncomplete` | A **whole-device** `compile` returned `Success` with no errors, but blocks remain flagged `IsConsistent=false` — so it did not compile them and proved less than it appears to. The unverified blocks are listed on stderr. Distinct from `CompileFailed`: nothing reported an error, the gate simply did not examine everything (FI-52) |
+| 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

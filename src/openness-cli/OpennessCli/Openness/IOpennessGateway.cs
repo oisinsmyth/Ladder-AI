@@ -38,6 +38,15 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<TagTableInfo> EnumerateTagTables();
 
     /// <summary>
+    /// Enumerates every PLC data type (UDT) in the project. Added for FI-70's bulk export: types
+    /// were already walked internally (sanity-check has counted them since FI-62) but were never on
+    /// this interface, so no caller could ask what they are. A bulk export that silently omitted
+    /// every UDT would be precisely the kind of partial dump FI-70 exists to stop being mistaken for
+    /// a complete one.
+    /// </summary>
+    IReadOnlyList<PlcTypeInfo> EnumerateTypes();
+
+    /// <summary>
     /// Read-only walk of every HMI device in the project. Exists because the rest of this gateway
     /// is PLC-only by construction — every other walker filters
     /// <c>SoftwareContainer.Software is PlcSoftware</c>, so an HMI device was previously invisible
