@@ -184,6 +184,7 @@ regular, so it is breadth rather than risk.
 | `docs/notes/openness-hmi-faceplate-library.md` | the faceplate hypothesis and its live refutation — **whose reasoning is now known to be unsound**, see the next row |
 | `docs/notes/hmi-faceplate-gap-probe.md` | what P10 did **not** test: instantiation (untested, needs no new code), the untried `LibraryTypeVersion.Export`, master copies closed for Unified, and the instance-discovery cost |
 | `docs/notes/hmi-web-tooling-research.md` | the external-research answer to "how far does web tooling carry over": **Custom Web Controls**, the browser-delivered runtime, the two shipped screen serialisers, ISA-101 vs web-design defaults, and a 39-item build/buy/reject ranking |
+| `docs/notes/hmi-rdf-store.md` | **why there is no screen export** — Unified stores each screen and faceplate as its own binary `.rdf` in the project's HMI store, so no document exists to hand out. Also: a change rewrites **only** its own object's file (measured over ~15 save cycles), which supplies **per-screen invariance checking without decoding anything** |
 | `docs/notes/hmi-ai-design-options.md` | 47 options for using this in engineering, ranked — an options menu, not a plan. **§14 is a recommended path**, added separately and separable from the menu |
 | `docs/evidence/hmi-capability-probes.md` | transcripts, redacted/anonymised per `docs/13` |
 | `docs/adr/adr-0007-hmi-engineering-scope.md` | **the open decision** |
