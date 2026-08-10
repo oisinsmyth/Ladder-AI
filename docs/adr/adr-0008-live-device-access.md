@@ -95,7 +95,9 @@ weakest to strongest:
   `(address, label, "test-rig")` entries; any target not on it is refused, and an empty registry
   grants nothing. Mirrors the `LaunchedInstanceRegistry` and the multi-agent claims-dir posture
   already in this repo ("empty is not clean" — FI-44). Cheap, auditable, and the failure mode is
-  refusal, not accident. **Recommended floor.**
+  refusal, not accident. **Recommended floor — and BUILT (2026-08-10): `src/device-guard/`.** Exact
+  match only (no prefix/subnet), no default path, refuses on every load problem; 30 tests, CLI
+  smoke-tested. This is the safeguard; what remains is the read-only fetch client that consults it.
 - **Network/subnet confinement.** Only addresses on a designated rig subnet are permissible. Stronger
   in theory, but this PC already routes to a 10.10.10.0/24 that is *not* obviously a lab segment
   (the earlier reachability check traced production-looking public hops), so subnet alone would not
@@ -172,11 +174,12 @@ force) is `10-non-goals.md` #3. That is deliberate and sufficient — #3 is a pe
 it means the hard-rules list no longer restates it, so any future reader who treats the hard-rules
 list as the complete operational contract must be pointed at #3. The tombstone at slot 6 does that.
 
-**A fence must still exist before any read is built** — removing hard rule 6 lifted the *prohibition*,
-it did not create the *safeguard*. Until the test-rig allowlist (or equivalent fence, question 2) and
-a read-only-by-construction client exist, there is nothing that stops a live read from being aimed at
-a production device, so no live read should be performed yet. The removal unblocks the build; it is
-not itself permission to connect to arbitrary hardware.
+**The fence now exists (`src/device-guard/`, built 2026-08-10)** — removing hard rule 6 lifted the
+*prohibition*, and this is the *safeguard* that had to follow it. It is fail-closed, exact-match, with
+no default allowlist path. What is still missing is the **read-only-by-construction fetch client** that
+consults it; until that exists, there is still no tooling that reads from a device at all, so the
+working answer to "read X off the device" remains "export it to disk yourself." The guard gates
+*which* device; it does not itself connect to anything.
 
 **Dangling references to "hard rule 6" now exist in secondary docs** (e.g.
 `docs/notes/hmi-ai-design-options.md`, `docs/audit/README.md`) plus historical/evidence/changelog
