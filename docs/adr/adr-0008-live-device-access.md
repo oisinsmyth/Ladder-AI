@@ -1,10 +1,14 @@
 # ADR-0008 — Read-only live-device access, test rigs only
 
-- **Status:** **Proposed** — put to the owner, undecided. Nothing in this document changes scope, and
-  nothing may be built on it until it is accepted. Hard rule 6 (CLAUDE.md, "No hardware access") and
-  `10-non-goals.md` stand in full until then. In particular, until this is accepted the tooling still
-  has **no** path to a device at an IP, and the correct answer to "read the log off 10.10.10.15"
-  remains "export it to disk yourself, then hand me the file".
+- **Status:** **Accepted in principle (read-only, test rigs) — 2026-08-10; build scope still open.**
+  The owner narrowed `10-non-goals.md` permanent exclusion #3 the same day so it no longer forbids
+  read-only online access (the write bans stay permanent). So question 1 below is answered **yes**.
+  **Still undecided and blocking any build:** the *fence* (question 2 — how "test rig" is enforced)
+  and the *surface* (question 3). **Still true regardless:** the tooling has **no** path to a device
+  at an IP yet — nothing has been built — so until it is, the working answer to "read the log off
+  10.10.10.15" remains "export it to disk yourself, then hand me the file". **Also still open:**
+  CLAUDE.md **hard rule 6** ("No hardware access…") has not yet been aligned with the narrowed item 3
+  and currently contradicts it; that alignment needs the owner's word on wording (see Consequences).
 - **Date:** 2026-08-10
 - **Relates to:** CLAUDE.md **hard rule 6** (no hardware access; "you must not try to add support") ·
   CLAUDE.md **hard rule 2** (never touch safety) · `10-non-goals.md` Permanent #3 (download to
@@ -49,19 +53,22 @@ content, never silently include it — the same fail-closed posture the export p
 
 ## Decision
 
-**None taken.** The questions put to the owner are:
+**Question 1 — decided yes (2026-08-10).** Read-only live-device access, restricted to test rigs,
+moves into scope: `10-non-goals.md` #3 was narrowed the same day so its permanent ban is now the
+*write* direction only (download / online-edit / tag-force), and read-only online access is explicitly
+not excluded by it. **The remaining questions are open and each blocks a build:**
 
-1. Should **read-only live-device access, restricted to test rigs**, move out of hard rule 6's blanket
-   prohibition and into scope (a bounded carve-out to rule 6, mirrored in `02-roadmap.md` and
-   `10-non-goals.md`)?
-2. If yes, **how is "test rig" defined and enforced** — so the capability cannot be pointed at a
-   production device by mistake or by drift? (Options under *The fence* below; this is the crux, not a
-   detail.)
-3. If yes, **at what surface** — the minimal "fetch a named diagnostic/log artifact to disk" only, or
-   a broader read capability (online-state comparison, upload-for-inspection) as the "Not now" line on
-   online-state comparison anticipated?
-4. If no, does the answer stay "export to disk yourself, then hand me the file" permanently, or is
-   this parked as a future idea pending a real second occurrence?
+2. **How is "test rig" defined and enforced** — so the capability cannot be pointed at a production
+   device by mistake or by drift? (Options under *The fence* below; this is the crux, not a detail.)
+   *Recommendation: the allowlist floor, fail-closed.* **Undecided.**
+3. **At what surface** — the minimal "fetch a named diagnostic/log artifact to disk" only, or a
+   broader read capability (online-state comparison, upload-for-inspection) as the "Not now" line on
+   online-state comparison anticipated? *Recommendation: option 2, the minimal fetch, to serve the
+   trace-log case first.* **Undecided.**
+4. **Aligning hard rule 6.** CLAUDE.md hard rule 6 still opens "No hardware access" and so contradicts
+   the narrowed item 3. It needs the same read carve-out to be coherent. Proposed wording is in
+   Consequences; **the edit to a governing hard rule awaits the owner's explicit OK, not taken
+   silently here.**
 
 ## The near-term use case, concretely
 
@@ -157,9 +164,26 @@ genuine category change:**
 **Deferring (option 4)** costs the same manual step once and defers the build decision to evidence —
 appropriate if it is genuinely unclear whether this recurs.
 
+**Hard rule 6 must be aligned before any build, and the wording matters.** With item 3 narrowed, the
+CLAUDE.md hard rule still says "No hardware access. Never attempt downloads, online edits, or tag
+forcing" — its opening now over-reaches. Proposed replacement, kept fail-closed and write-banning,
+for the owner to accept or amend:
+
+> **6. No *writing* to hardware; read-only access only on approved test rigs.** Never download,
+> online-edit, or force tags — ever, on any device (permanent, `10-non-goals.md` #3). *Read-only*
+> access to a live device (fetching diagnostics, logs, or state — changing nothing) is permitted
+> **only** against a device on the test-rig allowlist, and only through read/fetch verbs that cannot
+> write. Off-allowlist targets are refused. Safety content (hard rule 2) is never read off a device,
+> exactly as it is never read from an export. The tooling does not yet implement any of this — until
+> it does, the answer to "read X off the device" is "export it to disk yourself."
+
+Until that edit is made, the repo is internally contradictory and I operate to the *stricter* of the
+two (hard rule 6 as written) — i.e. still no live reads — which is why aligning it is on the critical
+path, not a tidy-up.
+
 **Either way, one thing is already true and should be recorded:** the request has been made and the
-capability gap is real. Rejecting requires saying so explicitly (and keeping the manual-export answer
-documented), not leaving hard rule 6 to absorb the question silently each time it comes up.
+capability gap is real. Rejecting the *build* still requires saying so explicitly (and keeping the
+manual-export answer documented), not leaving the question to be re-litigated each time it comes up.
 
 ## Revisit triggers
 

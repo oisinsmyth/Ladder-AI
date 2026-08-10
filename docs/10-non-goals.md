@@ -6,7 +6,7 @@ Explicit list of what this project will not do. "Permanent" items are never revi
 
 1. **Safety logic.** No AI reading, writing, converting, or explaining of F-blocks, F-runtime groups, safety signatures, or anything in the safety program. Enforced in tooling at export time, not by convention. Safety engineering remains an entirely human, formally-assessed activity.
 2. **Non-LAD PLC languages.** No SCL, STL, FBD, GRAPH, or CFC deliverables — workplace constraint. (Reading a stray SCL block to *explain* it is also out: the pipeline treats non-LAD blocks as opaque.)
-3. **Direct download to hardware.** No tool in this repo ever downloads to a PLC, online-edits, or forces tags. The pipeline ends at "imported and compiled in the TIA project"; going online is a human act in TIA Portal.
+3. **Writing to hardware.** No tool in this repo ever downloads to a PLC, online-edits, or forces tags — the *write* direction stays permanently excluded, and applying any change to a live device remains a human act in TIA Portal. The pipeline still ends at "imported and compiled in the TIA project" for anything it *produces*. **Read-only online access is not excluded here** (narrowed 2026-08-10): connecting to a device to fetch diagnostics, logs or state — changing nothing — is governed by ADR-0008 (read-only, test rigs), not forbidden by this item.
 4. **Autonomous operation.** No AI change enters the TIA project without a human review step. There is no "auto-apply" mode, ever.
 
 ## Not now (revisit only via ADR)
