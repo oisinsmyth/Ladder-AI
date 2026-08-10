@@ -1852,7 +1852,7 @@ SUMMARY: 19 candidate(s), 35 likely-implemented, 15 disqualified, 0 withdrawn   
 
 ## `drift-check` — ir↔simatic-ml export-drift detector (2026-07-20, FI-26)
 
-`converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]`
+`converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]`
 
 Detects **silent export drift**: a fix that landed in a committed `ir/<proj>/*.ir` but was never
 re-exported, leaving its `simatic-ml/<proj>/<name>.xml` stale (the exact landmine that poisoned a
@@ -1863,21 +1863,52 @@ this is the complementary **detector** they don't provide.
 For each `ir/<proj>/*.ir`, pairs it with `<exports>/<name>.xml` by basename, rebuilds the SimaticML
 in-memory (the *same* code path `to-xml` uses — `BuildXmlFromIrText`, all four `.ir` kinds), and
 `Normalizer.AreSemanticallyEquivalent`-compares it to the committed export. Per block: `MATCH`,
-`DRIFTED`, `SKIPPED` (no paired `.xml` — an ir-only block), or `ERROR` (the `.ir` couldn't be
-converted). Decoupled — no knowledge of which drift is "known/tolerated" (that lives in the
-`ExportDriftDetectorTests` golden-test baseline, which excludes the answer-key blocks). **Exit
-non-zero if any block DRIFTED.**
+`DRIFTED`, `SKIPPED` (no paired `.xml` — an ir-only block), `EXPORT-ONLY` (an `.xml` with no `.ir`),
+or `ERROR` (the `.ir` couldn't be converted). Decoupled — no knowledge of which drift is
+"known/tolerated" (that lives in the `ExportDriftDetectorTests` golden-test baseline, which excludes
+the answer-key blocks). **Exit non-zero if any block DRIFTED.**
+
+### `--complete` — when an ABSENCE is a finding (2026-08-10, FI-70)
+
+The exports directory means two different things and the tool cannot tell them apart from the
+inside. As a **committed corpus** it may legitimately lag the `.ir`, so an unpaired file is ordinary.
+As a **fresh dump of the controller** an unpaired `.ir` means *this block is not in the controller*
+and an unpaired `.xml` means *this block is in the controller and no `.ir` describes it*. `--complete`
+is the caller's declaration that the directory is the whole picture; it never changes what is
+compared, only whether an absence fails.
+
+Two things changed here beyond the flag, both because a green result was carrying a claim it hadn't
+earned:
+
+- **`EXPORT-ONLY` is new, and is always reported.** The runner enumerates `.ir` files, so a block
+  that exists only in the controller — added by hand in TIA, or left behind by a rename — could not
+  appear in the report under *any* status. Silence about that half was the actual defect; `--complete`
+  only decides whether it fails.
+- **A `SCOPE:` line now states which question was answered**, so a clean `SUMMARY` can't be read as
+  "disk and controller agree" when nothing established that.
+
+This is the comparison half of the disk-vs-controller check. The **export half belongs in
+`openness-cli`, not here** — the converter is a pure in-process file transformer that never touches
+the environment, and that invariant was held deliberately (FI-24). The intended recipe is
+`openness-cli` dumping every block and type to a directory, then this command with `--complete`.
 
 ```
 $ converter drift-check --project ir/test-project001 --exports simatic-ml/test-project001
 DRIFTED: DB_Settings  (semantic divergence between .ir and committed export)
 DRIFTED: FB_ShredderSequencer  (semantic divergence between .ir and committed export)
 ...
+EXPORT-ONLY: FB_AddedInPortal  (no paired .ir in project dir)
 SKIPPED: FB_HopperBlockageMonitor  (no paired .xml in exports dir)
 MATCH: DB_Alarms
 ...
-SUMMARY: 6 drifted, 17 match, 3 skipped, 0 error          # exit 1
+SUMMARY: 6 drifted, 17 match, 3 skipped, 1 export-only, 0 error          # exit 1
+SCOPE: comparison only. 4 file(s) had no counterpart and were NOT judged — pass --complete when the exports
+       dir is a full dump (e.g. straight from the controller) and an absence should fail.
 ```
+
+Two caveats measured on a real corpus rather than anticipated: compare **normalised, never bytes**
+(a `--no-sidecar` disk copy differs from its export by hundreds of lines and is not drift), and line
+endings vary per file, so neither side may be assumed CRLF or LF.
 
 ## `cross-check` — whole-project cross-block facts (2026-07-20, FI-22)
 

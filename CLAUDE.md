@@ -54,7 +54,10 @@ converter tagstatus <name...> --project <ir-dir> [--json] [--roots-only]   # cla
 converter diff <old.ir> <new.ir> [--only <network>...] [--json] # which networks changed, rest provably identical in IR (S7 invariance check); with --only, exit 1 on any change outside the set
 converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found
 converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built, bucketed candidate/likely-impl/disqualified (FI-30); exit 1 if no clean candidate
-converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect silent ir<->simatic-ml export drift, Normalizer-compared (FI-26); exit 1 if any block drifted
+converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect silent ir<->simatic-ml export drift, Normalizer-compared (FI-26); exit 1 if any block drifted.
+                                    # --complete (FI-70) declares the exports dir the WHOLE picture (a fresh controller dump, not a possibly-lagging committed corpus), so an absence FAILS in either
+                                    # direction: a missing .xml (block not in the controller) or an .xml with no .ir (block in the controller that no .ir describes — a class the runner never reported at all
+                                    # before FI-70, since it enumerates .ir files). Without it, a green SUMMARY only means "everything paired matched"; the SCOPE: line now says which question was answered
 converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0
 converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint/timing) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 converter ir-hash <file.ir...> [--json]   # stable readable-IR content hash (SerializeBlockReadable/SHA-256) keying FI-17 explanation sidecars; immune to SIDECAR/UId churn; exit 1 on error

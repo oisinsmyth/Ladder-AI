@@ -1705,3 +1705,61 @@ per-call timing or a real run records agents actually contending for the canonic
   against a still-flagged type; that ordering is worth testing as the general remedy.
 - **Verdict.** Built, 221 openness-cli tests (+1). Not yet live-verified — that needs another
   owner-approved rebuild (FI-61).
+
+### FI-69 — a statement-order violation in the IR blamed the network header
+
+- **The rule is fine; the diagnostic named the wrong thing.** Within a network, statements are parsed
+  as a fixed sequence of per-kind sections (`ir/SPEC.md`, "Statement-kind ordering within one
+  network"). A statement written out of that order is consumed by no loop, so the parser concluded
+  the network had ended and went looking for the next header: `Expected 'NETWORK <n> "<title>"' at
+  line 47`. That names a header which is **perfectly well-formed**, at a line number pointing at the
+  first statement it could not place. Nothing in it named the rule, the kind, or the expected order.
+  **Cost two import passes on a live job** before the actual rule was recognised.
+- **Fixed with one table, not one special case.** `IrParser.StatementSections` drives both the check
+  and the message, so every one of the 19 kinds gets the same diagnostic rather than only the pair
+  that happened to be hit, and a section loop added without its row trips an arity guard instead of
+  silently losing the message. The same table covers the network `COMMENT`'s own position rule, which
+  failed the same misleading way — the standing preference here is one general fix over stacked
+  special cases.
+- **Fourth instance of the family**, alongside FI-61's `ConnectTimeout`, FI-66's non-converging count
+  and FI-68's relative-path export: a message that confidently names the wrong cause. Every one cost
+  an investigation.
+- **The stale claim was in the spec, not just the code.** `ir/SPEC.md` documented the old message as
+  expected behaviour and listed only 7 of the 19 kinds. Both corrected, with the old message recorded
+  so an older transcript still reads.
+- **Verdict.** Built (`a053467`), 878 converter tests (+10), including 102 real `.ir` files parsed
+  clean to confirm the guard has no false positives on a real corpus.
+
+### FI-70 — nothing compared the IR on disk against what is actually in the controller
+
+- **The blind spot.** `drift-check` compares `ir/<proj>/*.ir` against `simatic-ml/<proj>/*.xml`.
+  **Neither side is the controller.** A file edited on disk and never imported, or a block changed in
+  TIA and never exported, is invisible to every automated check this project has. Found when an
+  **unrecorded editing pass touched seven files**; two were caught only because a later wave happened
+  to import them, and the other five — including a library block used by every valve on that plant —
+  had never been imported by any recorded wave.
+- **Why it does real damage rather than being untidy.** A live job has twice imported a stale export
+  with every gate green, because old valid logic is still valid logic. The next wave then either
+  imports a stale version over good work, or exports a version nobody authored.
+- **Two directions, and only one of them was even representable.** The runner enumerates `.ir` files,
+  so a block existing **only in the controller** — added by hand in TIA, or left behind by a rename —
+  could not appear in the report under any status. That half was pure silence.
+- **Built (the comparison half).** `EXPORT-ONLY` is a new status, always reported. `--complete` is the
+  caller's declaration that the exports directory is the whole picture, which is what makes an
+  *absence* a finding rather than an ordinary state; it never changes what is compared. A `SCOPE:`
+  line now states which question was answered, so a clean `SUMMARY` cannot be read as "disk and
+  controller agree" when nothing established that. Same family as FI-52/FI-62/FI-66 — a gate whose
+  green result carried more than it earned.
+- **Not built (the export half), and deliberately not here.** Dumping every block and type out of the
+  controller belongs in `openness-cli`: the converter is a pure in-process file transformer that never
+  touches the environment, and that invariant was held on purpose (FI-24). The smallest correct shape
+  is a two-command recipe — an `openness-cli` bulk export, then this command with `--complete` — not a
+  second comparison implementation.
+- **Three caveats, all measured rather than anticipated.** Compare **normalised, never bytes**: two
+  files whose raw text differed by 776 and 282 lines were semantically identical, because a
+  `--no-sidecar` disk copy legitimately omits the sidecar TIA appends — a byte compare would have
+  called both drifted. Line endings vary per file within one corpus. And such a tool must **never
+  import or decide a side**: on the case that prompted this, "fixing" the divergence automatically
+  would have overwritten a convention-compliant disk copy with a non-compliant one, twice.
+- **Verdict.** Comparison half built, 881 converter tests (+3), verified against a real 102-file
+  corpus: the same directory exits 0 without `--complete` and 1 with it. Export half open.

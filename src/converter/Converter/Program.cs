@@ -130,7 +130,8 @@ internal static class Program
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
-            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("                    --complete: the exports dir is the WHOLE picture (e.g. a fresh controller dump, FI-70), so a missing .xml OR a .xml with no .ir also fails");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
@@ -1432,6 +1433,7 @@ internal static class Program
         string? projectDir = null;
         string? exportsDir = null;
         var json = false;
+        var complete = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -1446,6 +1448,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--complete":
+                    complete = true;
+                    break;
                 default:
                     Console.Error.WriteLine($"Unexpected argument: {args[i]}");
                     return 1;
@@ -1454,7 +1459,7 @@ internal static class Program
 
         if (projectDir is null || exportsDir is null)
         {
-            Console.Error.WriteLine("Usage: converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]");
+            Console.Error.WriteLine("Usage: converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]");
             return 1;
         }
 
@@ -1470,7 +1475,7 @@ internal static class Program
             return 1;
         }
 
-        var report = DriftCheckRunner.Run(projectDir, exportsDir);
+        var report = DriftCheckRunner.Run(projectDir, exportsDir, complete);
         Console.WriteLine(json ? DriftCheckOutputFormatter.FormatJson(report) : DriftCheckOutputFormatter.FormatText(report));
 
         return report.HasDrift ? 1 : 0;
