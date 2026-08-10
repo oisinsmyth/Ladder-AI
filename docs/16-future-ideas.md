@@ -1682,3 +1682,26 @@ per-call timing or a real run records agents actually contending for the canonic
   worse than leaving the caller to intersect the set with the declarations. Facts, not verdicts — the
   same contract as every other table here.
 - **Verdict.** Built. 868 converter tests (+3).
+
+### FI-66 — `sanity-check` reported a count its own documented remedy could not reduce
+
+- **Re-reading is not a fixpoint, and the output implied it was.** The working assumption on a live job
+  was *"run `sanity-check` again and the count drops to 0"*. That is true for a block the **previous
+  pass compiled**, and false for one that **nothing** has compiled. Measured: a block sat
+  `INCONSISTENT` across **three consecutive reads** while never appearing in any import list.
+- **Why an agent cannot escape it unaided.** The device compile does not clear these — that is FI-52's
+  whole finding — and the block is not in the import list, so nothing prompts a per-block compile.
+  Following the documented loop, you re-read for ever, with no indication of why.
+- **Fixed by naming the remedy where the count is**, exactly as the FI-62 types list already does:
+  the block list now states that a device compile will not clear them, that re-running will not
+  either, and gives the `--block` command that does.
+- **Same family as FI-52 and FI-62, and the fourth instance:** a gate whose output implies an action
+  that does not work. FI-52 was a compile reporting success over unverified blocks; FI-62 was a scope
+  silently excluding types; this is a remedy that does not remedy.
+- **Related, not fixed, recorded for whoever picks it up:** the *phantom* first-pass compile error —
+  `"Block could not be compiled"` with no reason, clean on an identical second pass with no file
+  changed — has now been seen **eight** times, always on a block whose dependency compiled in the same
+  round. One agent avoided it entirely by compiling the UDT **before** any block, so nothing compiled
+  against a still-flagged type; that ordering is worth testing as the general remedy.
+- **Verdict.** Built, 221 openness-cli tests (+1). Not yet live-verified — that needs another
+  owner-approved rebuild (FI-61).

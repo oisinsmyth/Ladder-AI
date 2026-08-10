@@ -788,6 +788,22 @@ public static class OutputFormatter
             {
                 sb.Append("  ").Append(block.Path).Append('/').Append(block.Name).Append(" (").Append(block.Language).Append(")\n");
             }
+
+            // FI-66 (2026-08-09). RE-READING IS NOT A FIXPOINT, AND THE OUTPUT USED TO IMPLY IT WAS.
+            //
+            // The working assumption on a live job was "run sanity-check again and the count drops to
+            // 0". That holds for a block the PREVIOUS pass compiled, and is false for one that nothing
+            // has compiled — measured: a block sat inconsistent across THREE consecutive reads while
+            // never appearing in any import list. An agent following the documented loop can re-read
+            // for ever and never reach INCONSISTENT: 0, with nothing saying why, and no prompt to
+            // compile it because it is not in the import list.
+            //
+            // The device compile below does NOT clear these — that is FI-52's whole finding. So the
+            // remedy has to be named here, next to the count, the way the types list already names
+            // its own. A check that reports a number the documented remedy cannot reduce is the same
+            // family as FI-52 and FI-62: output that implies an action which does not work.
+            sb.Append("  -> a device compile does NOT clear these, and re-running sanity-check will not either.\n");
+            sb.Append("     clear with: openness-cli compile <project> --block <name>   (per block, in dependency order)\n");
         }
 
         if (result.InconsistentTypes.Count > 0)
