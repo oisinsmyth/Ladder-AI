@@ -96,6 +96,38 @@ function Exit-With($message, [int]$code) {
     exit $code
 }
 
+# Says WHICH of the two situations a denial is, then exits 3. "Run the setup" is useless advice to
+# someone who just ran it -- and that is exactly what happened during this tool's own bring-up: the
+# setup threw while elevated, and the denial that followed was indistinguishable from never having
+# run it. Reading the DACL separates "not granted" from "granted, and something else is wrong".
+function Deny-Report([string]$KeyPath) {
+    Write-Host ""
+    Write-Host "ACCESS DENIED writing HKLM\$KeyPath" -ForegroundColor Yellow
+
+    try {
+        $acl = (Get-Acl -Path "HKLM:\$KeyPath").Access
+        $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $explicit = @($acl | Where-Object { -not $_.IsInherited -and $_.IdentityReference.Value -ieq $me })
+
+        if ($explicit.Count -eq 0) {
+            Write-Host "  No explicit permission entry for $me on this key: the one-time setup has NOT taken effect." -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "  $me DOES hold: $(($explicit | ForEach-Object { $_.RegistryRights }) -join '; ')" -ForegroundColor Yellow
+            Write-Host "  The grant is present, so the write failed for some other reason. Report this output." -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "  (could not read this key's permissions to diagnose further)"
+    }
+
+    Write-Host "TIA writes this key elevated -- that is the UAC prompt behind its own approval dialog."
+    Write-Host "Run this ONCE, elevated, and this script never needs elevation again:"
+    Write-Host "    .\tools\openness-approve-setup.ps1"
+    Write-Host "Or approve just this build now by re-running the present script as Administrator."
+    exit 3
+}
+
 <#
     Entry subkey names are derived from the siblings TIA created, never guessed: this machine has
     them as 'Entry (N)', but that shape is an observation, not a contract. Copying an existing
@@ -283,7 +315,12 @@ try {
                 $entryName = New-EntryName -ExistingNames @($existingEntries | ForEach-Object { $_.Name })
 
                 if ($PSCmdlet.ShouldProcess("HKLM\$appKeyPath", "add whitelist entry '$entryName' for $exeName")) {
-                    $appKey = $baseKey.CreateSubKey($appKeyPath)
+                    # Open the leaf writable when it already exists. CreateSubKey walks the whole path
+                    # and asks for write on every intermediate, which the deliberately narrow grant
+                    # (leaf key only) does not cover -- that would fail as ACCESS DENIED on a machine
+                    # where the setup had in fact worked perfectly.
+                    $appKey = $baseKey.OpenSubKey($appKeyPath, $true)
+                    if (-not $appKey) { $appKey = $baseKey.CreateSubKey($appKeyPath) }
                     try {
                         $entryKey = $appKey.CreateSubKey($entryName)
                         try {
@@ -321,20 +358,11 @@ try {
                 }
             }
         }
-        catch [System.UnauthorizedAccessException] {
-            Write-Host ""
-            Write-Host "ACCESS DENIED writing HKLM\$appKeyPath" -ForegroundColor Yellow
-            Write-Host "TIA writes this key elevated -- that is the UAC prompt behind its own approval dialog."
-            Write-Host "Run this ONCE, elevated, and this script never needs elevation again:"
-            Write-Host "    .\tools\openness-approve-setup.ps1"
-            Write-Host "Or approve just this build now by re-running the present script as Administrator."
-            exit 3
-        }
-        catch [System.Security.SecurityException] {
-            Write-Host ""
-            Write-Host "ACCESS DENIED writing HKLM\$appKeyPath -- run .\tools\openness-approve-setup.ps1 once, elevated." -ForegroundColor Yellow
-            exit 3
-        }
+        # BOTH types, and they are not interchangeable: OpenSubKey(writable) throws SecurityException
+        # where CreateSubKey throws UnauthorizedAccessException. Handling only one leaves the other
+        # reporting a bare "run the setup" with no diagnosis -- which is what happened here.
+        catch [System.UnauthorizedAccessException] { Deny-Report $appKeyPath }
+        catch [System.Security.SecurityException]  { Deny-Report $appKeyPath }
     }
 
     if ($Quiet) {

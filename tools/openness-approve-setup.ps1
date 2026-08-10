@@ -147,9 +147,28 @@ try {
 
         # Created if absent: an exe's whitelist key only exists once something has been approved from
         # it, and the point here is to approve the first build without a human.
-        $appKey = $baseKey.CreateSubKey($appKeyPath)
+        $created = $baseKey.CreateSubKey($appKeyPath)
+        $created.Dispose()
+
+        # Re-opened asking for ChangePermissions explicitly. SetAccessControl fails on a handle that
+        # lacks WRITE_DAC, and a plain CreateSubKey handle does -- it carries KEY_READ|KEY_WRITE and
+        # nothing more. An earlier version of this script did exactly that and threw
+        # UnauthorizedAccessException while running elevated, which reads as "not admin enough" and is
+        # nothing of the sort: Administrator was never the missing part, the requested right was.
+        $appKey = $baseKey.OpenSubKey(
+            $appKeyPath,
+            [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,
+            [System.Security.AccessControl.RegistryRights]::ChangePermissions `
+                -bor [System.Security.AccessControl.RegistryRights]::ReadPermissions)
+
+        if (-not $appKey) {
+            Exit-With "Could not open HKLM\$appKeyPath for permission changes." 1
+        }
+
         try {
-            $acl = $appKey.GetAccessControl()
+            # Access section only: the DACL is all this changes, and asking for Owner/Group as well
+            # would demand rights it does not need.
+            $acl = $appKey.GetAccessControl([System.Security.AccessControl.AccessControlSections]::Access)
             $rule = New-Object System.Security.AccessControl.RegistryAccessRule(
                 $account, $rights, $inheritance, $propagation, $allow)
 
@@ -162,6 +181,28 @@ try {
                 $acl.AddAccessRule($rule)
                 $appKey.SetAccessControl($acl)
                 Write-Host "  [$versionName] granted: $Identity can write HKLM\$appKeyPath"
+            }
+
+            # Read back rather than trust the write. The previous failure mode was a SetAccessControl
+            # that threw, and the one before that would have been a grant that silently applied to
+            # nothing -- neither is visible without looking at the DACL afterwards.
+            $after = $appKey.GetAccessControl([System.Security.AccessControl.AccessControlSections]::Access)
+            $mine = @($after.GetAccessRules($true, $false, [System.Security.Principal.NTAccount]) |
+                Where-Object { $_.IdentityReference.Value -ieq $Identity })
+
+            if ($Revoke) {
+                if ($mine.Count -eq 0) { Write-Host "        confirmed: no explicit entry remains" }
+                else { Write-Warning "        $($mine.Count) explicit entry/entries for $Identity still present" }
+            }
+            else {
+                if ($mine.Count -eq 0) {
+                    Write-Warning "        NOT CONFIRMED: no explicit entry for $Identity is present after the write."
+                }
+                else {
+                    foreach ($m in $mine) {
+                        Write-Host "        confirmed: $($m.AccessControlType) $($m.RegistryRights)"
+                    }
+                }
             }
         }
         finally { $appKey.Dispose() }
