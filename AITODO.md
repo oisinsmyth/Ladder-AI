@@ -20,7 +20,26 @@ documented/committed, delete it from this file rather than letting it accumulate
 4. Cross-check: does the code in the diff match what this doc claims is done? If not, trust the
    code/diff and fix this doc.
 
-## Current task / in flight — nothing mid-execution; four items left open by the S6-Killer-Plan wave
+## Current task / in flight — nothing mid-execution; one owner decision waiting, four items left open by the S6-Killer-Plan wave
+
+**OWNER DECISION WAITING (2026-08-10): five committed tooling fixes cannot be verified without a
+Release rebuild.** FI-63, FI-66, FI-68 and FI-70's `export-all` are built, unit-tested and committed,
+and **none has been exercised against a live Portal**. A rebuild revokes the binary's TIA Openness
+approval until a person re-approves it at the machine (FI-61) — unattended there is nobody to accept —
+so this must be scheduled when the owner is present and no Portal work is in flight. FI-62 is the
+exception: already live-verified, and it found **9 inconsistent UDTs** behind a fully green gate on its
+first real run. Worth doing deliberately rather than letting it drift, because `export-all` is the
+export half of the disk-vs-controller check (FI-70) and until it runs once, *nothing has ever compared
+the IR on disk against what is actually in the controller*. Suggested order and full detail are in the
+task board. The Debug binary is a separate whitelist entry and can be rebuilt freely; the approved
+Release binary is byte-identical to where it started.
+
+**Tooling landed 2026-08-10, all committed on `master`, all recorded in `docs/16-future-ideas.md`:**
+FI-63, FI-68, FI-69, FI-70 (both halves), FI-71, FI-72. Five of the six are the same defect family this
+repo keeps paying for — **a gate or a message that confidently names the wrong cause, or reports a
+result stronger than it earned** — and FI-71 is the sharpest instance: the check *looked*, *saw the
+problem*, and only warned, so the same mistake cost a third full import-and-compile cycle. Suites:
+888 converter, 244 openness-cli, 39 golden.
 
 **That wave LANDED on `master`** (2026-08-05, merge `242e5e2`, ~25 commits): the S6-Killer-Plan
 answer-key validation end-to-end (score: MATCH 14 / IMPROVEMENT 1 / DEFECT 3 / REGRESSION 1 /
