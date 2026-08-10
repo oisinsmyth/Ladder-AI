@@ -851,10 +851,54 @@ observe mode first, then tighten the pattern before enabling clicks.
 - The post-build target fires with the correct quoted `$(TargetPath)`, skips under the opt-out, and
   warns rather than fails when approval exits 3.
 
-**What is still unproven.** The privileged half -- the ACL grant, the write that follows it, and a
-Portal connect with nobody present -- has not been executed, because the session that built this could
-not elevate. That is the one remaining step, and it is the only proof that counts: run the setup once
-elevated, then any `openness-cli` command that attaches.
+**The privileged half now works, measured 2026-08-10.** The setup was run elevated and reported
+`confirmed: Allow SetValue, CreateSubKey, Delete, ReadKey` on all three version keys, read back from
+the DACL rather than assumed. The approve script then wrote `Entry (113)` for a worktree binary
+**unelevated**, and a re-run was a clean no-op.
+
+### But the entry did NOT suppress the dialog on an already-running Portal (2026-08-10) — OPEN
+
+Do not treat the approach above as proven. Minutes after `Entry (113)` was written, an
+`Openness access (0033:000666)` dialog appeared naming **that exact worktree binary**, requesting
+access to Portal **PID 29412**. The entry did not prevent the prompt.
+
+What is established:
+
+- **The entry is not malformed.** Field-for-field against an entry TIA wrote itself: same three
+  values, same `String` kinds (`Path`, `DateModified`, `FileHash`), same `yyyy/MM/dd HH:mm:ss.fff`
+  date format. There is no structural difference to blame.
+- **The write happened before the request.** `Entry (113)` was written, then `portal-status` was the
+  only run of that binary that contacted Portal, and the dialog followed.
+- **The Portal in question had been running since 00:04:36**, roughly an hour before the entry existed.
+
+**Leading hypothesis, NOT yet evidence: a Portal process consults the whitelist it loaded at startup,
+so an entry written after that process started does not apply to it.** That would make the approach
+work fine for a Portal launched afterwards -- which is the normal unattended case, where `openness-cli`
+launches its own instance -- and fail exactly as seen against a long-running one. It is untested. Two
+experiments settle it, neither yet run: attach with an approved binary so a **fresh** Portal is
+launched and see whether it prompts; or accept the pending dialog with "Yes to all" and see whether
+TIA writes a **duplicate** entry for a (path, hash) that already has one, which would prove it never
+found the hand-written entry.
+
+**A second finding, incidental but real: `portal-status` triggers the approval dialog.** It is
+documented as never attaching, and that is true, but it still requests Openness access to enumerate
+Portal processes -- enough to raise the prompt for an unapproved caller. "Never attaches" has been
+read here as "inert"; it is not.
+
+### The approval dialog exposes no clickable controls to UI Automation (2026-08-10)
+
+Measured while trying to accept that dialog. It is a **WinForms** window
+(`WindowsForms10.Window.8.app.*`), and to UI Automation it publishes **four unnamed `Pane` elements
+and not one `Button`** -- so the watcher script matched its text and then found nothing to invoke.
+Win32 enumeration shows the truth: three `WindowsForms10.BUTTON.*` child windows, **all with empty
+captions**, at relative x=245/323/414 on a 502x298 dialog. The captions exist only as pixels; the
+dialog body names them "Yes", "Yes to all", "No" in that order, and the middle button is 86px against
+73px for the outer two.
+
+`PrintWindow` does **not** render those child controls, and `SetForegroundWindow` cannot raise the
+dialog from a background process, so a screenshot cannot label them either. **Any click-the-dialog
+automation must therefore aim by geometry, not by caption or accessibility name** -- which is a real
+argument for the registry route over the watcher, once the open question above is settled.
 
 **A live finding from that same run, worth repeating as a warning.** The main checkout's Debug binary
 was *already* unapproved: **86** entries named its exact path and **none** matched its current hash. A

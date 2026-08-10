@@ -71,7 +71,8 @@ param(
     [int]$TimeoutMinutes = 10,
     [int]$PollSeconds = 2,
     [switch]$Once,
-    [switch]$Deep
+    [switch]$Deep,
+    [switch]$Dump
 )
 
 $ErrorActionPreference = "Stop"
@@ -159,8 +160,26 @@ while ((Get-Date) -lt $deadline) {
                 try { $text = Get-VisibleText $candidate } catch { continue }
                 if (-not $text -or $text -notmatch $TextPattern) { continue }
 
-                $button = Select-Button $candidate
                 $stamp = (Get-Date).ToString("HH:mm:ss")
+
+                # -Dump exists because the first live encounter with the real dialog matched its text
+                # and then matched no button at all: the preference list was guesswork. Printing the
+                # whole subtree is how you replace a guess with the actual control names.
+                if ($Dump) {
+                    Write-Host "[$stamp] DUMP of: $($candidate.Current.Name)" -ForegroundColor Cyan
+                    $all = @()
+                    try { $all = @($candidate.FindAll($Scope::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) } catch { }
+                    Write-Host "         $($all.Count) descendant element(s)"
+                    foreach ($el in $all) {
+                        $type = "?"
+                        try { $type = $el.Current.ControlType.ProgrammaticName -replace '^ControlType\.', '' } catch { }
+                        Write-Host ("         {0,-14} name='{1}' id='{2}' enabled={3}" -f
+                            $type, $el.Current.Name, $el.Current.AutomationId, $el.Current.IsEnabled)
+                    }
+                    continue
+                }
+
+                $button = Select-Button $candidate
 
                 if (-not $button) {
                     Write-Host "[$stamp] dialog text matched but no button matched the preference list:" -ForegroundColor Yellow

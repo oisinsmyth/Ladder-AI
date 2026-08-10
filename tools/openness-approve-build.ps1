@@ -237,11 +237,21 @@ try {
                 $entryKey = $appKeyRead.OpenSubKey($entryName, $false)
                 if (-not $entryKey) { continue }
                 try {
+                    # Kinds as well as values: a hand-written entry that TIA ignores would most
+                    # plausibly differ in type (String vs ExpandString) or in the DateModified
+                    # format, and neither shows up if you only read the strings back.
+                    $kinds = @()
+                    foreach ($vn in $entryKey.GetValueNames()) {
+                        $kinds += "$vn=$($entryKey.GetValueKind($vn))"
+                    }
+
                     $entries += [PSCustomObject]@{
-                        Name       = $entryName
-                        Path       = [string]$entryKey.GetValue("Path")
-                        FileHash   = [string]$entryKey.GetValue("FileHash")
-                        ValueNames = @($entryKey.GetValueNames())
+                        Name         = $entryName
+                        Path         = [string]$entryKey.GetValue("Path")
+                        FileHash     = [string]$entryKey.GetValue("FileHash")
+                        DateModified = [string]$entryKey.GetValue("DateModified")
+                        ValueNames   = @($entryKey.GetValueNames())
+                        Kinds        = $kinds
                     }
                 }
                 finally { $entryKey.Dispose() }
@@ -272,7 +282,8 @@ try {
                 Write-Host "  $($e.Name.PadRight(12)) $mark"
                 Write-Host "        path   $($e.Path)"
                 Write-Host "        hash   $($e.FileHash)"
-                Write-Host "        values $($e.ValueNames -join ', ')"
+                Write-Host "        date   $($e.DateModified)"
+                Write-Host "        kinds  $($e.Kinds -join ', ')"
             }
         }
         Write-Host ""
