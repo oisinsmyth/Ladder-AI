@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using Converter.CandidateScan;
 using Converter.Claims;
 using Converter.CrossCheck;
@@ -115,9 +115,20 @@ internal static class Program
             return RunClaims(args[1..]);
         }
 
+        // FI-73. The convert path is its own method so its argument handling can be tested: an unknown
+        // --flag used to be treated as a FILENAME here, and the only way to prove the refusal works is to
+        // call it directly.
+        return RunConvert(args);
+    }
+
+    internal static int RunConvert(string[] args)
+    {
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
-            Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>]");
+            Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>] [--out <dir>]");
+            Console.Error.WriteLine("                   --out <dir>  writes the result there instead of BESIDE THE INPUT (FI-72). Default is beside the input, which is right in the ordinary");
+            Console.Error.WriteLine("                                export-and-read-back loop and destructive when the file beside it is hand-authored — an overwrite is now reported when it happens");
+            Console.Error.WriteLine("                   to-xml REFUSES to emit XML with unresolved member types (FI-71). Pass --project <ir-dir>; --allow-blind-types converts anyway");
             Console.Error.WriteLine("       converter to-xml   # derives the sidecar when the input has none (ADR-0005); uses a stored SIDECAR if present. --project supplies callee/tag types for derivation");
             Console.Error.WriteLine("       converter to-ir    # keeps the stored SIDECAR by default (safe); --no-sidecar omits it for a block already verified derivable (errors if unsynthesizable)");
             Console.Error.WriteLine("       converter to-xml <file> --synthesize   # force the derive path (errors if a SIDECAR is present)");
@@ -130,7 +141,8 @@ internal static class Program
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
-            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("                    --complete: the exports dir is the WHOLE picture (e.g. a fresh controller dump, FI-70), so a missing .xml OR a .xml with no .ir also fails");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
@@ -146,14 +158,16 @@ internal static class Program
         var rest = args[1..];
         var synthesize = rest.Contains("--synthesize");
         var noSidecar = rest.Contains("--no-sidecar");
+        var allowBlindTypes = rest.Contains("--allow-blind-types");
 
         // --project <ir-dir> (optional, --synthesize only): supplies callee interfaces for wired-CALL
         // synthesis beyond the blocks in the batch itself.
         string? projectDir = null;
+        string? outDir = null;
         var positional = new List<string>();
         for (var i = 0; i < rest.Length; i++)
         {
-            if (rest[i] == "--synthesize" || rest[i] == "--no-sidecar")
+            if (rest[i] == "--synthesize" || rest[i] == "--no-sidecar" || rest[i] == "--allow-blind-types")
             {
                 continue;
             }
@@ -168,6 +182,32 @@ internal static class Program
 
                 projectDir = rest[++i];
                 continue;
+            }
+
+            if (rest[i] == "--out")
+            {
+                if (i + 1 >= rest.Length)
+                {
+                    Console.Error.WriteLine("Flag '--out' requires a value.");
+                    return 1;
+                }
+
+                outDir = rest[++i];
+                continue;
+            }
+
+            // FI-73. An unrecognised --flag used to fall through to here and be treated as a FILENAME.
+            // Measured on a build that predated --out: `to-ir x.xml --out dir` converted x.xml BESIDE ITS
+            // INPUT (the destructive act this project had just fixed), then died with an unhandled
+            // FileNotFoundException on a file literally called "--out". Any flag typo does the same, and
+            // the damage is done before the crash. A leading "--" is never a path here, so refuse it.
+            if (rest[i].StartsWith("--", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(
+                    $"Unknown flag '{rest[i]}' for '{mode}'. Valid flags: --project <ir-dir>, --out <dir>, " +
+                    "--synthesize (to-xml), --no-sidecar (to-ir), --allow-blind-types (to-xml). " +
+                    "Refusing rather than treating it as a file name, which would convert the other inputs first.");
+                return 1;
             }
 
             positional.Add(rest[i]);
@@ -194,7 +234,25 @@ internal static class Program
         var callees = BuildCalleeRegistry(files, projectDir);
         var tagTypes = BuildTagTypeRegistry(files, projectDir);
 
-        WarnIfConvertingBlindToExternalTypes(mode, files, projectDir);
+        var blindRoots = WarnIfConvertingBlindToExternalTypes(mode, files, projectDir);
+
+        // FI-71. The warning above was FI-57's remedy and it did not remedy: the same mistake has now
+        // cost three separate import-and-compile cycles, the third on a file that was about to be
+        // imported. A warning on stderr competes with the tool's own success line and loses.
+        //
+        // So `to-xml` FAILS CLOSED, and only `to-xml`: it is the direction whose output gets imported
+        // into a controller, where a guessed member type is a defect waiting on a compile to find it.
+        // `to-ir` reads an export and can produce nothing a PLC will execute, so it stays advisory.
+        // Same family as FI-52/FI-62/FI-66 — except here the gate existed and merely asked nicely.
+        if (mode == "to-xml" && blindRoots.Count > 0 && !allowBlindTypes)
+        {
+            Console.Error.WriteLine(
+                "ERROR: refusing to emit XML with unresolved member types. This file is destined for import, " +
+                "and a comparison against an unsigned member typed from the literal is rejected by TIA at " +
+                "compile — after a full round trip. Re-run with --project <ir-dir>. If the referenced roots " +
+                "genuinely are not in this project, pass --allow-blind-types to convert anyway.");
+            return 1;
+        }
 
         foreach (var file in files)
         {
@@ -202,11 +260,11 @@ internal static class Program
             {
                 if (mode == "to-ir")
                 {
-                    ConvertToIr(file, noSidecar, callees, tagTypes);
+                    ConvertToIr(file, noSidecar, callees, tagTypes, outDir);
                 }
                 else
                 {
-                    ConvertToXml(file, synthesize, callees, tagTypes);
+                    ConvertToXml(file, synthesize, callees, tagTypes, outDir);
                 }
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException or UnsupportedSynthesisConstructException)
@@ -1432,6 +1490,7 @@ internal static class Program
         string? projectDir = null;
         string? exportsDir = null;
         var json = false;
+        var complete = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -1446,6 +1505,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--complete":
+                    complete = true;
+                    break;
                 default:
                     Console.Error.WriteLine($"Unexpected argument: {args[i]}");
                     return 1;
@@ -1454,7 +1516,7 @@ internal static class Program
 
         if (projectDir is null || exportsDir is null)
         {
-            Console.Error.WriteLine("Usage: converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--json]");
+            Console.Error.WriteLine("Usage: converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]");
             return 1;
         }
 
@@ -1470,7 +1532,7 @@ internal static class Program
             return 1;
         }
 
-        var report = DriftCheckRunner.Run(projectDir, exportsDir);
+        var report = DriftCheckRunner.Run(projectDir, exportsDir, complete);
         Console.WriteLine(json ? DriftCheckOutputFormatter.FormatJson(report) : DriftCheckOutputFormatter.FormatText(report));
 
         return report.HasDrift ? 1 : 0;
@@ -1507,8 +1569,37 @@ internal static class Program
         return args[i];
     }
 
+    // FI-72. `--out <dir>` and the overwrite report exist because both converters write BESIDE their
+    // input by default, so converting `X.xml` writes `X.ir` — which is right in the ordinary
+    // export-and-read-back loop and destructive when the `.ir` beside it is hand-authored. It has now
+    // silently overwritten hand-edited IR for two separate agents (one lost eight files, recovered
+    // only because ir-hash could prove the readable content identical; the other lost its own review
+    // snapshot mid-review).
+    //
+    // Not fixed by refusing to overwrite: overwriting is the normal case and the correct one, so a
+    // refusal would break every routine loop and be turned off within a day. Fixed by making the
+    // event VISIBLE at the moment it happens, and by giving the caller somewhere else to put the
+    // output — which is what both agents actually needed and neither had.
+    internal static string ResolveOutPath(string sourcePath, string extension, string? outDir)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(sourcePath) + extension;
+        if (outDir is null)
+        {
+            return Path.ChangeExtension(sourcePath, extension);
+        }
+
+        Directory.CreateDirectory(outDir);
+        return Path.Combine(outDir, fileName);
+    }
+
+    private static void ReportWrite(string sourcePath, string outPath, bool overwrote) =>
+        Console.WriteLine(overwrote
+            ? $"{sourcePath} -> {outPath}  (OVERWROTE an existing file; pass --out <dir> to write elsewhere)"
+            : $"{sourcePath} -> {outPath}");
+
     private static void ConvertToIr(
-        string sourcePath, bool noSidecar, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
+        string sourcePath, bool noSidecar, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes,
+        string? outDir = null)
     {
         var document = XDocument.Load(sourcePath);
 
@@ -1516,9 +1607,10 @@ internal static class Program
         {
             var db = DbSourceParser.Parse(document);
             var dbIrText = DbIrSerializer.Serialize(db);
-            var dbOutPath = Path.ChangeExtension(sourcePath, ".ir");
+            var dbOutPath = ResolveOutPath(sourcePath, ".ir", outDir);
+            var dbOutPathExisted = File.Exists(dbOutPath);
             File.WriteAllText(dbOutPath, dbIrText);
-            Console.WriteLine($"{sourcePath} -> {dbOutPath}");
+            ReportWrite(sourcePath, dbOutPath, dbOutPathExisted);
             return;
         }
 
@@ -1526,9 +1618,10 @@ internal static class Program
         {
             var type = PlcTypeSourceParser.Parse(document);
             var typeIrText = TypeIrSerializer.Serialize(type);
-            var typeOutPath = Path.ChangeExtension(sourcePath, ".ir");
+            var typeOutPath = ResolveOutPath(sourcePath, ".ir", outDir);
+            var typeOutPathExisted = File.Exists(typeOutPath);
             File.WriteAllText(typeOutPath, typeIrText);
-            Console.WriteLine($"{sourcePath} -> {typeOutPath}");
+            ReportWrite(sourcePath, typeOutPath, typeOutPathExisted);
             return;
         }
 
@@ -1536,9 +1629,10 @@ internal static class Program
         {
             var tagTable = PlcTagTableSourceParser.Parse(document);
             var tagTableIrText = TagTableIrSerializer.Serialize(tagTable);
-            var tagTableOutPath = Path.ChangeExtension(sourcePath, ".ir");
+            var tagTableOutPath = ResolveOutPath(sourcePath, ".ir", outDir);
+            var tagTableOutPathExisted = File.Exists(tagTableOutPath);
             File.WriteAllText(tagTableOutPath, tagTableIrText);
-            Console.WriteLine($"{sourcePath} -> {tagTableOutPath}");
+            ReportWrite(sourcePath, tagTableOutPath, tagTableOutPathExisted);
             return;
         }
 
@@ -1584,9 +1678,10 @@ internal static class Program
             irText = IrSerializer.SerializeBlock(irBlock, sidecars);
         }
 
-        var outPath = Path.ChangeExtension(sourcePath, ".ir");
+        var outPath = ResolveOutPath(sourcePath, ".ir", outDir);
+        var overwrote = File.Exists(outPath);
         File.WriteAllText(outPath, irText);
-        Console.WriteLine($"{sourcePath} -> {outPath}");
+        ReportWrite(sourcePath, outPath, overwrote);
     }
 
     // The verified `--no-sidecar` path (ADR-0005 follow-on, 2026-07-19). Produces the readable-only IR for a
@@ -1698,11 +1793,11 @@ internal static class Program
     // So: say so. Warn when a block references a root this run cannot see, naming the roots. The
     // warning is advisory and never changes an exit code — a block that genuinely references
     // nothing external is silent, and one that does gets told what it is guessing about.
-    private static void WarnIfConvertingBlindToExternalTypes(string mode, string[] files, string? projectDir)
+    internal static IReadOnlyCollection<string> WarnIfConvertingBlindToExternalTypes(string mode, string[] files, string? projectDir)
     {
         if (projectDir is not null)
         {
-            return;
+            return Array.Empty<string>();
         }
 
         var localRoots = new HashSet<string>(StringComparer.Ordinal);
@@ -1743,7 +1838,7 @@ internal static class Program
         referenced.ExceptWith(localRoots);
         if (referenced.Count == 0)
         {
-            return;
+            return Array.Empty<string>();
         }
 
         var names = string.Join(", ", referenced.OrderBy(r => r, StringComparer.Ordinal).Take(6));
@@ -1753,6 +1848,8 @@ internal static class Program
             $"WARNING: converted without --project, so member types in {names}{more} could not be " +
             "resolved. Comparisons against them fall back to a type inferred from the literal, which " +
             "TIA rejects when the real member is unsigned. Re-run with --project <ir-dir> to type them.");
+
+        return referenced;
     }
 
     // Builds the tag/member-type registry for typed box/compare synthesis from the batch's own .ir
@@ -1780,14 +1877,15 @@ internal static class Program
 
     private static void ConvertToXml(
         string sourcePath, bool synthesize = false,
-        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
+        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null, string? outDir = null)
     {
         var irText = File.ReadAllText(sourcePath);
         var xml = BuildXmlFromIrText(irText, synthesize, callees, tagTypes);
 
-        var outPath = Path.ChangeExtension(sourcePath, ".xml");
+        var outPath = ResolveOutPath(sourcePath, ".xml", outDir);
+        var overwrote = File.Exists(outPath);
         xml.Save(outPath);
-        Console.WriteLine($"{sourcePath} -> {outPath}");
+        ReportWrite(sourcePath, outPath, overwrote);
     }
 
     // The full `.ir` text -> SimaticML XDocument dispatch, in-memory (no disk write). One code path for

@@ -770,6 +770,69 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    // FI-70. The one thing this report must never do is let a partial dump read as a whole one — the
+    // directory is about to be handed to `converter drift-check --complete`, which treats a missing
+    // file as "this block is not in the controller". So what was NOT produced leads, and the summary
+    // states the conclusion in words rather than leaving it to be inferred from three counts.
+    public static string FormatExportAllTable(ExportAllResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("OUT: ").Append(result.OutDir).Append('\n');
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ExportAllOutcome.Failed))
+        {
+            sb.Append("FAILED:  ").Append(entry.Name).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ExportAllOutcome.Refused))
+        {
+            sb.Append("REFUSED: ").Append(entry.Name).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        sb.Append("SUMMARY: ").Append(result.ExportedCount).Append(" exported, ")
+            .Append(result.RefusedCount).Append(" refused, ")
+            .Append(result.FailedCount).Append(" failed\n");
+
+        if (result.IsComplete)
+        {
+            sb.Append("COMPLETE: every block and type in the project was exported. Safe to compare against with\n")
+                .Append("          converter drift-check --project <ir-dir> --exports ").Append(result.OutDir).Append(" --complete\n");
+        }
+        else
+        {
+            sb.Append("INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-check --complete\n")
+                .Append("            as-is — that reads a missing file as 'this block is not in the controller', so the\n")
+                .Append("            ").Append(result.RefusedCount + result.FailedCount)
+                .Append(" item(s) above would come back as findings about the controller that are really\n")
+                .Append("            findings about this dump.\n");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatExportAllJson(ExportAllResult result)
+    {
+        var payload = new
+        {
+            outDir = result.OutDir,
+            complete = result.IsComplete,
+            exported = result.ExportedCount,
+            refused = result.RefusedCount,
+            failed = result.FailedCount,
+            entries = result.Entries.Select(e => new
+            {
+                name = e.Name,
+                kind = e.Kind,
+                path = e.Path,
+                outPath = e.OutPath,
+                outcome = e.Outcome.ToString(),
+                detail = e.Detail,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatSanityCheckTable(SanityCheckResult result)
     {
         var sb = new StringBuilder();
@@ -788,6 +851,22 @@ public static class OutputFormatter
             {
                 sb.Append("  ").Append(block.Path).Append('/').Append(block.Name).Append(" (").Append(block.Language).Append(")\n");
             }
+
+            // FI-66 (2026-08-09). RE-READING IS NOT A FIXPOINT, AND THE OUTPUT USED TO IMPLY IT WAS.
+            //
+            // The working assumption on a live job was "run sanity-check again and the count drops to
+            // 0". That holds for a block the PREVIOUS pass compiled, and is false for one that nothing
+            // has compiled — measured: a block sat inconsistent across THREE consecutive reads while
+            // never appearing in any import list. An agent following the documented loop can re-read
+            // for ever and never reach INCONSISTENT: 0, with nothing saying why, and no prompt to
+            // compile it because it is not in the import list.
+            //
+            // The device compile below does NOT clear these — that is FI-52's whole finding. So the
+            // remedy has to be named here, next to the count, the way the types list already names
+            // its own. A check that reports a number the documented remedy cannot reduce is the same
+            // family as FI-52 and FI-62: output that implies an action which does not work.
+            sb.Append("  -> a device compile does NOT clear these, and re-running sanity-check will not either.\n");
+            sb.Append("     clear with: openness-cli compile <project> --block <name>   (per block, in dependency order)\n");
         }
 
         if (result.InconsistentTypes.Count > 0)

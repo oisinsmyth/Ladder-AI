@@ -3225,7 +3225,33 @@ public sealed class OpennessGateway : IOpennessGateway
 
         try
         {
+            // FI-63, part 1 — the hypothesis. The defect was deterministic on the FIRST creation after
+            // a project open and absent afterwards, and the workaround that unblocked the live job was
+            // to create a throwaway DB first and delete it. What a throwaway does, incidentally, is
+            // force the composition to be enumerated. So enumerate it deliberately: if the auto-numberer
+            // needs the existing numbers materialised before it can pick the next one, this is the whole
+            // fix and the throwaway was that fix by accident.
+            var takenBefore = group.Blocks.Select(b => b.Number).ToList();
+
             var db = group.Blocks.CreateInstanceDB(dbName, isAutoNumbered: true, 0, instanceOfName);
+
+            // FI-63, part 2 — do not trust it either way. Part 1 is a hypothesis about someone else's
+            // allocator and has not been verified against a live Portal; this half does not depend on it
+            // being right. Read the number back and repair it, because a whole-device compile reports
+            // Success over an invalid-numbered block (FI-52's family) and the defect would ship.
+            if (!BlockNumbering.IsValid(db.Number))
+            {
+                var repaired = BlockNumbering.LowestFree(takenBefore.Concat(group.Blocks.Select(b => b.Number)));
+                db.Number = repaired;
+
+                // Fail loudly rather than returning a block that will pass the device compile and fail
+                // the per-block one much later, which is exactly how this reached a live job.
+                if (!BlockNumbering.IsValid(db.Number))
+                {
+                    throw new InvalidBlockNumberException(dbName, db.Number, repaired);
+                }
+            }
+
             return ToBlockInfo(db, groupPath);
         }
         finally
@@ -3705,6 +3731,22 @@ public sealed class OpennessGateway : IOpennessGateway
     // PlcSoftware.TypeGroup/PlcTypeGroup.Types/.Groups instead of .BlockGroup/PlcBlockGroup.
     // Blocks/.Groups — confirmed real, 2026-07-14 (reflecting on the installed DLL): the same
     // recursive group shape, just for PLC data types (UDTs) instead of blocks.
+    // FI-70. Types were already walked in here (sanity-check has counted them since FI-62) but were
+    // never exposed, so no caller could ask what they are — and a bulk export that silently omitted
+    // every UDT would be exactly the kind of partial dump FI-70 exists to stop being read as a whole
+    // one. Same walk as everything else that resolves a type; `typeName: null` means "all".
+    public IReadOnlyList<PlcTypeInfo> EnumerateTypes()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(EnumerateTypes)}.");
+        }
+
+        return FindMatchingTypes(_project, typeName: null)
+            .Select(t => new PlcTypeInfo(t.Type.Name, t.Path))
+            .ToList();
+    }
+
     private static IEnumerable<(PlcType Type, string Path)> FindMatchingTypes(Project project, string? typeName)
     {
         foreach (Device device in project.Devices)

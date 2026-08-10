@@ -1307,6 +1307,27 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   machine owner to approve rather than done mid-delivery.
 - **Verdict.** Built, 152 openness-cli tests (+4). Not yet live-verified — it cannot be, until the
   rebuilt binary is approved.
+### FI-63 — the first instance DB created after a project open got number 0, and a green compile hid it
+
+- **Deterministic, measured three times on a live job.** `create-instance-db` gave the **first** DB
+  created after a project open the number **0**, which is not a valid block number; later creations in
+  the same session numbered correctly.
+- **FI-52's family again, which is what makes it serious rather than untidy.** A **whole-device compile
+  reports `Success` over an invalid-numbered block**; only the per-block compile says
+  `has an invalid number 0`. So the default gate passes and the defect ships. The workaround that
+  unblocked the job was to create a throwaway DB, then the real one, then delete the throwaway.
+- **Fixed in two independent halves, deliberately.** *Part 1, the hypothesis:* what a throwaway does
+  incidentally is force the block composition to be enumerated, so the composition is now enumerated
+  before the create — if the auto-numberer needs the existing numbers materialised first, that is the
+  whole fix and the throwaway was that fix by accident. *Part 2, which does not depend on part 1 being
+  right:* read the number back, repair it with the lowest free number, and throw if the repair does not
+  take. Part 1 is a guess about somebody else's allocator; part 2 holds either way.
+- **Lowest-free rather than highest-plus-one**, because this runs only to repair an invalid result and
+  should slot into a gap the project already has instead of growing the numbering space each time.
+- **Verdict.** Built, 244 openness-cli tests (+5) covering the number choice. **Not live-verified** —
+  the gateway half needs a Portal, and a rebuild revokes the binary's Openness approval until a person
+  re-approves it (FI-61). The hypothesis in part 1 is explicitly unconfirmed.
+
 ### FI-64 — a PLC data type carrying a named-type member could not be read back at all
 
 - **The same expansion FI-56 fixed, on the third parse path.** TIA expands a member whose type is a
@@ -1682,3 +1703,176 @@ per-call timing or a real run records agents actually contending for the canonic
   worse than leaving the caller to intersect the set with the declarations. Facts, not verdicts — the
   same contract as every other table here.
 - **Verdict.** Built. 868 converter tests (+3).
+
+### FI-66 — `sanity-check` reported a count its own documented remedy could not reduce
+
+- **Re-reading is not a fixpoint, and the output implied it was.** The working assumption on a live job
+  was *"run `sanity-check` again and the count drops to 0"*. That is true for a block the **previous
+  pass compiled**, and false for one that **nothing** has compiled. Measured: a block sat
+  `INCONSISTENT` across **three consecutive reads** while never appearing in any import list.
+- **Why an agent cannot escape it unaided.** The device compile does not clear these — that is FI-52's
+  whole finding — and the block is not in the import list, so nothing prompts a per-block compile.
+  Following the documented loop, you re-read for ever, with no indication of why.
+- **Fixed by naming the remedy where the count is**, exactly as the FI-62 types list already does:
+  the block list now states that a device compile will not clear them, that re-running will not
+  either, and gives the `--block` command that does.
+- **Same family as FI-52 and FI-62, and the fourth instance:** a gate whose output implies an action
+  that does not work. FI-52 was a compile reporting success over unverified blocks; FI-62 was a scope
+  silently excluding types; this is a remedy that does not remedy.
+- **Related, not fixed, recorded for whoever picks it up:** the *phantom* first-pass compile error —
+  `"Block could not be compiled"` with no reason, clean on an identical second pass with no file
+  changed — has now been seen **eight** times, always on a block whose dependency compiled in the same
+  round. One agent avoided it entirely by compiling the UDT **before** any block, so nothing compiled
+  against a still-flagged type; that ordering is worth testing as the general remedy.
+- **Verdict.** Built, 221 openness-cli tests (+1). Not yet live-verified — that needs another
+  owner-approved rebuild (FI-61).
+
+### FI-71 — `to-xml` guessed a member type and only warned about it, for the third time
+
+- **FI-57's remedy did not remedy.** Converting a block without `--project` cannot type a comparison
+  against another DB's member, so it falls back to a type inferred from the literal — which TIA rejects
+  when the real member is unsigned. FI-57 answered it with a warning on stderr and recorded that it had
+  "cost two separately". It has now cost a **third** import-and-compile cycle, and the third time **the
+  untyped file was the one about to be imported**. A warning competes with the tool's own success line
+  on the same stream, and loses.
+- **`to-xml` now fails closed, and only `to-xml`.** That is the direction whose output goes into a
+  controller, where a guessed member type is a defect waiting on a compile to find it. `to-ir` reads an
+  export and cannot produce anything a PLC will execute, so it stays advisory. `--allow-blind-types`
+  is the escape hatch for a block that genuinely references roots outside the project.
+- **Same family as FI-52/FI-62/FI-66**, with a twist worth naming: there the gate did not look. Here it
+  looked, saw the problem, and *asked nicely*. A check whose only consequence is a line of text is a
+  check that gets skimmed past.
+- **Verdict.** Built, 888 converter tests (+7), and verified end-to-end on a real 89-network block: the
+  refusal fires, **no `.xml` is written**, exit 1; with `--project` the same file converts clean.
+
+### FI-72 — both converters wrote beside their input, and silently overwrote hand-authored IR
+
+- **Two agents, independently, in one day.** `converter to-ir X.xml` writes `X.ir` beside its input.
+  One agent lost **eight hand-edited `.ir` files** that way (recovered only because `ir-hash` could
+  prove the readable content identical); another lost its own review snapshot *mid-review*, which is
+  the worse case — the file it was measuring against moved under it.
+- **Not fixed by refusing to overwrite.** Overwriting is the normal case and the correct one in the
+  export-and-read-back loop, so a refusal would break every routine run and be switched off within a
+  day. Fixed by giving the caller **somewhere else to put the output** (`--out <dir>` — what both
+  agents actually needed and neither had) and by making the overwrite **visible at the moment it
+  happens** rather than silent.
+- **Applied to all four write paths**, not just the block one: DB, UDT and tag-table conversions have
+  their own write sites, and fixing only the path that was reported would have been exactly the partial
+  fix this repo keeps re-learning about.
+- **Verdict.** Built, tests as above, verified end-to-end (`--out` redirects and creates the directory;
+  a second run reports the overwrite). Default behaviour is unchanged, with a test saying so.
+
+### FI-73 — an unknown `--flag` was treated as a FILENAME, and a stale Release build is how it surfaced
+
+- **Found by a fix wave, on the day `--out` was added.** `converter to-ir x.xml --out dir` against a
+  build that predated the flag **converted `x.xml` beside its input** — the exact destructive act FI-72
+  had just fixed — and only *then* died with an unhandled `FileNotFoundException` on a file literally
+  called `--out`. Reproduced before fixing. **The damage is done before the crash**, and *any* flag typo
+  does the same: `--projet` converts every other input blind first.
+- **Fixed generally:** a leading `--` is never a path here, so an unrecognised flag is refused with the
+  valid list, and the message says what the alternative was (*"rather than treating it as a file name,
+  which would convert the other inputs first"*) — otherwise the reader learns nothing from it. The
+  convert path moved into `Program.RunConvert` so its argument handling is testable at all.
+- **THE SECOND HALF IS THE MORE IMPORTANT ONE: BUILT IS NOT DEPLOYED.** The skills invoke
+  `src/converter/Converter/bin/Release/net8.0/converter.exe` (see their `allowed-tools` lines), and a
+  day of converter fixes had been built **Debug only** — so FI-69, FI-70, FI-71 and FI-72 were committed,
+  tested, documented, and *reaching no agent*. The wave that hit this was running the tool as it existed
+  before any of it. Nothing in the repo detects that gap.
+- **The rule that follows:** *after changing the converter, rebuild Release.* Unlike `openness-cli` this
+  is free — the converter has no TIA whitelist and never touches Portal, so `dotnet build -c Release` on
+  `converter.sln` is safe at any time, including while Portal work is in flight.
+- **Verdict.** Built, 890 converter tests (+2), and verified on the **Release** binary itself: the
+  unknown flag exits 1 with the list, `--out` redirects and writes nothing beside the input, and the
+  FI-71 refusal still fires on a real 89-network block.
+
+### FI-68 — a relative `--out` failed with an exception that named a different problem entirely
+
+- **The cost was the misdiagnosis, not the failure.** `openness-cli export --out <relative>` throws
+  `EngineeringTargetInvocationException`, whose "relative path" sentence is the last line under a
+  type-qualified Siemens exception name. It reads **exactly like** the "Inconsistent blocks and PLC
+  data types (UDT) cannot be exported" refusal — a real and frequent condition on the job where it was
+  hit. The only thing that stopped a long hunt for an inconsistent block was that the agent happened to
+  run `sanity-check` between attempts and got `HEALTHY` on both lines each time.
+- **The constraint was already written down, for a different argument.** `docs/notes/openness-quirks.md`
+  recorded it under "Project paths" for the cold-open path in July, and nobody connected it to the
+  export target. That is the general lesson this repo keeps re-learning: *an enumerated list is one the
+  next item is not on.*
+- **Fixed for the class at the argument boundary** (`Cli/PathArguments`): `export --out`,
+  `export-all --out`, `library --out`, the `import` file list and `--tia-install` are resolved by one
+  rule, so an argument added later inherits it rather than needing its own special case.
+- **The project identifier is deliberately excluded, and there is a test saying so.** It is documented
+  as "either a full `.apNN` path or a **bare project name**" — that is how an already-open Portal
+  session is matched — so resolving it would silently turn a name into a path that does not exist.
+- **Verdict.** Built, 239 openness-cli tests (+7). Live verification needs a Release rebuild (FI-61),
+  but the failure it removes was never subtle to reproduce.
+
+### FI-69 — a statement-order violation in the IR blamed the network header
+
+- **The rule is fine; the diagnostic named the wrong thing.** Within a network, statements are parsed
+  as a fixed sequence of per-kind sections (`ir/SPEC.md`, "Statement-kind ordering within one
+  network"). A statement written out of that order is consumed by no loop, so the parser concluded
+  the network had ended and went looking for the next header: `Expected 'NETWORK <n> "<title>"' at
+  line 47`. That names a header which is **perfectly well-formed**, at a line number pointing at the
+  first statement it could not place. Nothing in it named the rule, the kind, or the expected order.
+  **Cost two import passes on a live job** before the actual rule was recognised.
+- **Fixed with one table, not one special case.** `IrParser.StatementSections` drives both the check
+  and the message, so every one of the 19 kinds gets the same diagnostic rather than only the pair
+  that happened to be hit, and a section loop added without its row trips an arity guard instead of
+  silently losing the message. The same table covers the network `COMMENT`'s own position rule, which
+  failed the same misleading way — the standing preference here is one general fix over stacked
+  special cases.
+- **Fourth instance of the family**, alongside FI-61's `ConnectTimeout`, FI-66's non-converging count
+  and FI-68's relative-path export: a message that confidently names the wrong cause. Every one cost
+  an investigation.
+- **The stale claim was in the spec, not just the code.** `ir/SPEC.md` documented the old message as
+  expected behaviour and listed only 7 of the 19 kinds. Both corrected, with the old message recorded
+  so an older transcript still reads.
+- **Verdict.** Built (`a053467`), 878 converter tests (+10), including 102 real `.ir` files parsed
+  clean to confirm the guard has no false positives on a real corpus.
+
+### FI-70 — nothing compared the IR on disk against what is actually in the controller
+
+- **The blind spot.** `drift-check` compares `ir/<proj>/*.ir` against `simatic-ml/<proj>/*.xml`.
+  **Neither side is the controller.** A file edited on disk and never imported, or a block changed in
+  TIA and never exported, is invisible to every automated check this project has. Found when an
+  **unrecorded editing pass touched seven files**; two were caught only because a later wave happened
+  to import them, and the other five — including a library block used by every valve on that plant —
+  had never been imported by any recorded wave.
+- **Why it does real damage rather than being untidy.** A live job has twice imported a stale export
+  with every gate green, because old valid logic is still valid logic. The next wave then either
+  imports a stale version over good work, or exports a version nobody authored.
+- **Two directions, and only one of them was even representable.** The runner enumerates `.ir` files,
+  so a block existing **only in the controller** — added by hand in TIA, or left behind by a rename —
+  could not appear in the report under any status. That half was pure silence.
+- **Built (the comparison half).** `EXPORT-ONLY` is a new status, always reported. `--complete` is the
+  caller's declaration that the exports directory is the whole picture, which is what makes an
+  *absence* a finding rather than an ordinary state; it never changes what is compared. A `SCOPE:`
+  line now states which question was answered, so a clean `SUMMARY` cannot be read as "disk and
+  controller agree" when nothing established that. Same family as FI-52/FI-62/FI-66 — a gate whose
+  green result carried more than it earned.
+- **Built (the export half), in `openness-cli` where it belongs.** `export-all` dumps every block and
+  PLC data type to one directory. It lives there, not in the converter, because the converter is a
+  pure in-process file transformer that never touches the environment (FI-24, held on purpose), so
+  the smallest correct shape is a two-command recipe rather than a second comparison implementation.
+  Three properties, each for a reason the report has to survive: a **refusal is named, never a silent
+  omission** (the completeness check reads a missing file as "not in the controller", so quietly
+  skipping a safety block would turn a correct refusal into a false finding about the controller); a
+  **basename collision is refused rather than resolved** (a suffix would break the basename pairing
+  the recipe depends on, and silent overwriting makes the comparison run against the wrong object);
+  and **one failure does not abort the rest**, because a partial dump naming its own holes is worth
+  something and one that stops at the first problem is not. New exit code 12 `ExportIncomplete`,
+  deliberately the same shape as FI-52's 11 — nothing went wrong, the dump is simply not whole.
+  Types needed a new `EnumerateTypes()` on the gateway: they had been walked internally since FI-62
+  but were never on the interface, and a bulk export silently omitting every UDT would have been
+  exactly the partial-read-as-complete failure this whole item is about.
+- **Three caveats, all measured rather than anticipated.** Compare **normalised, never bytes**: two
+  files whose raw text differed by 776 and 282 lines were semantically identical, because a
+  `--no-sidecar` disk copy legitimately omits the sidecar TIA appends — a byte compare would have
+  called both drifted. Line endings vary per file within one corpus. And such a tool must **never
+  import or decide a side**: on the case that prompted this, "fixing" the divergence automatically
+  would have overwritten a convention-compliant disk copy with a non-compliant one, twice.
+- **Verdict.** Both halves built. 881 converter tests (+3) and 232 openness-cli tests (+11);
+  the comparison half verified against a real 102-file corpus, where the same directory exits 0
+  without `--complete` and 1 with it. **`export-all` is not live-verified** — that needs a Release
+  rebuild, which revokes the binary's Openness approval until a person re-approves it at the machine
+  (FI-61), so it waits for a moment when no Portal work is in flight.

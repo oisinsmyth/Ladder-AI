@@ -11,7 +11,10 @@ namespace Converter.DriftCheck;
 // golden-test layer, which excludes the answer-key blocks) — this just reports what diverges.
 public static class DriftCheckRunner
 {
-    public static DriftCheckReport Run(string projectDir, string exportsDir)
+    // complete: the caller declares exportsDir is the whole picture (FI-70 — a fresh controller dump
+    // rather than a possibly-lagging committed corpus), which is what makes an ABSENCE a finding
+    // rather than an ordinary state. It never changes what is compared.
+    public static DriftCheckReport Run(string projectDir, string exportsDir, bool complete = false)
     {
         // Registries resolve callee interfaces / operand types for synthesizing any readable-only block
         // in the project (a stored-sidecar block ignores them). Built once from the whole export.
@@ -60,6 +63,29 @@ public static class DriftCheckRunner
                 equivalent ? null : "semantic divergence between .ir and committed export"));
         }
 
-        return new DriftCheckReport(entries);
+        // The other direction, which nothing looked at before FI-70: an export with no .ir beside it.
+        // The loop above enumerates .ir files, so a block that exists only in the controller — added by
+        // hand in TIA, or renamed so the old name lingers — could not appear in the report under any
+        // status. Reported unconditionally; whether it FAILS is the caller's `complete` declaration.
+        var irNames = new HashSet<string>(
+            Directory.EnumerateFiles(projectDir, "*.ir", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileNameWithoutExtension)!,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (Directory.Exists(exportsDir))
+        {
+            var exportOnly = Directory.EnumerateFiles(exportsDir, "*.xml", SearchOption.TopDirectoryOnly)
+                .Where(p => !irNames.Contains(Path.GetFileNameWithoutExtension(p)))
+                .OrderBy(p => p, StringComparer.Ordinal);
+
+            foreach (var xmlPath in exportOnly)
+            {
+                entries.Add(new DriftEntry(
+                    Path.GetFileNameWithoutExtension(xmlPath), IrPath: null, xmlPath,
+                    DriftStatus.ExportOnly, "no paired .ir in project dir"));
+            }
+        }
+
+        return new DriftCheckReport(entries, complete);
     }
 }

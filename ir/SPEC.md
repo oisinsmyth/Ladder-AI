@@ -153,13 +153,32 @@ A network mixing multiple statement kinds (`TON`, `COIL`/`SCOIL`/`RCOIL`, `MOVE`
 order, one contiguous run per kind:
 
 ```
-TON/TONR/TOF  →  COIL/SCOIL/RCOIL  →  MOVE  →  WAND  →  CALL  →  MUL/ADD (index-paired with Convert)  →  CONVERT
+COMMENT  →  TON/TONR/TOF  →  COIL/SCOIL/RCOIL  →  MOVE  →  WAND  →  CALL  →
+MUL/ADD/SUB/DIV (index-paired with Convert)  →  CONVERT  →  SWAP  →  ABS  →  LIMIT  →
+T_SUB  →  T_CONV  →  CALC  →  MOVE_BLK_VARIANT  →  WAIT  →  FILLBLOCKI  →
+MODBUS_MASTER  →  MODBUS_COMM_LOAD
 ```
 
-A line out of place is a hard parse error (`Expected 'NETWORK <n> "<title>"' at line ...` — not a
-useful message, since the parser just concludes the network's content ended early and expected the
-next network header). Any kind entirely absent is fine; present kinds must stay in this relative
-order. Within one kind's own contiguous run, multiple statements execute in **listed (textual)
+The list above is a hand-maintained restatement and can go stale; the source of truth is
+`IrParser.StatementSections`, which is also what the diagnostic below is generated from — so the
+*message* always states the real order even if this paragraph has fallen behind it.
+
+A line out of place is a hard parse error naming the rule, the kind found and the kind it has to
+move above:
+
+```
+Network 12, line 47: a COIL/SCOIL/RCOIL cannot follow a MOVE — move it above the first MOVE in
+this network. Statements within one network are grouped by kind, one contiguous run each, in this
+order: COMMENT, TON/TONR/TOF, ... Got: '  COIL Status.Valid := RunPermit'
+```
+
+**Until FI-69 (2026-08-10) it reported `Expected 'NETWORK <n> "<title>"' at line ...` instead** —
+the parser concluded the network's content had ended early and went looking for the next header, so
+the message named a header that was perfectly well-formed and a line number that pointed at the
+first statement it could not place. If you are reading an older transcript or an older build's
+output, that is this rule, not a malformed header. Any kind entirely absent is fine; present kinds
+must stay in this relative order, one contiguous run each — a second run of a kind already closed
+is the same violation and gets the same message. Within one kind's own contiguous run, multiple statements execute in **listed (textual)
 order**, not an arbitrary order — confirmed by real working content that depends on it (e.g. a
 `MOVE` that resets a counter to 0 listed before the `ADD` that increments it, so a reset and a new
 count on the same scan nets to 1, not 0; two `COIL`s where the second reads the first's own

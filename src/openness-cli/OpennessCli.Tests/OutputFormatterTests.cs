@@ -183,6 +183,22 @@ public class OutputFormatterTests
         Assert.Contains("--type", text);
     }
 
+    // FI-66. Re-reading is not a fixpoint. A block that NOTHING has compiled stays inconsistent
+    // across every subsequent read — measured at three consecutive reads on a live job, while the
+    // block never appeared in any import list. The output used to imply the opposite by naming no
+    // remedy beside the block list, so an agent following the documented loop could re-read for ever.
+    // The device compile below does not clear them; that is FI-52's finding.
+    [Fact]
+    public void SanityCheckTable_SaysRereadingWillNotClearInconsistentBlocks()
+    {
+        var text = OutputFormatter.FormatSanityCheckTable(UnhealthyResult);
+
+        Assert.Contains("ControlMain", text);
+        // The two things a reader must not have to infer: that re-running is futile, and what does work.
+        Assert.Contains("does NOT clear these", text);
+        Assert.Contains("--block", text);
+    }
+
     [Fact]
     public void SanityCheckJson_CarriesTypeCounts()
     {

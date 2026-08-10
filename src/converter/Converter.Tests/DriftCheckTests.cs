@@ -77,9 +77,11 @@ public class DriftCheckTests : IDisposable
     }
 
     [Fact]
-    public void Run_AllInSync_HasDriftFalse()
+    public void Run_UnpairedIrDoesNotFail_WhenTheExportsDirIsNotDeclaredComplete()
     {
-        // A project whose only member is the matching pair: no drift.
+        // A project holding one .ir with no export, against an exports dir holding two .xml with no
+        // .ir. Nothing is COMPARED here at all — and without --complete none of it fails, because a
+        // committed corpus is allowed to lag the IR in both directions (FI-26's own use).
         var onlyMatchProject = Path.Combine(Path.GetTempPath(), $"drift-ir-clean-{Guid.NewGuid():N}");
         Directory.CreateDirectory(onlyMatchProject);
         try
@@ -89,12 +91,77 @@ public class DriftCheckTests : IDisposable
 
             var report = DriftCheckRunner.Run(onlyMatchProject, _exportsDir); // exportsDir has no DB_Solo.xml
             Assert.False(report.HasDrift);
-            Assert.Equal(DriftStatus.Skipped, report.Entries.Single().Status);
+            Assert.Equal(DriftStatus.Skipped, report.Entries.Single(e => e.Name == "DB_Solo").Status);
         }
         finally
         {
             Directory.Delete(onlyMatchProject, recursive: true);
         }
+    }
+
+    // FI-70. The runner enumerates .ir files, so an export with no .ir beside it could not appear in
+    // the report under ANY status — a block added by hand in TIA was invisible to the only tool that
+    // compares the two sides. It is now always reported.
+    [Fact]
+    public void Run_ReportsAnExportThatHasNoIrBesideIt()
+    {
+        var lonelyExportProject = Path.Combine(Path.GetTempPath(), $"drift-ir-none-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(lonelyExportProject);
+        try
+        {
+            var report = DriftCheckRunner.Run(lonelyExportProject, _exportsDir);
+
+            Assert.Equal(2, report.Entries.Count(e => e.Status == DriftStatus.ExportOnly));
+            var entry = report.Entries.Single(e => e.Name == "DB_Match");
+            Assert.Equal(DriftStatus.ExportOnly, entry.Status);
+            Assert.Null(entry.IrPath);
+            Assert.NotNull(entry.XmlPath);
+        }
+        finally
+        {
+            Directory.Delete(lonelyExportProject, recursive: true);
+        }
+    }
+
+    // The whole point of --complete: the same directory contents, the same comparison, a different
+    // verdict — because the caller has declared that an absence MEANS something.
+    [Fact]
+    public void Complete_TurnsBothKindsOfAbsenceIntoAFailure()
+    {
+        var noDriftProject = Path.Combine(Path.GetTempPath(), $"drift-ir-abs-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(noDriftProject);
+        try
+        {
+            // One matching pair (so nothing DRIFTS), one .ir with no export, and DB_Drift.xml left
+            // over in the exports dir with no .ir. Only the absences are in play.
+            var match = Db("DB_Match", new DbMember("A", "Bool", Retain: false, StartValue: null));
+            File.WriteAllText(Path.Combine(noDriftProject, "DB_Match.ir"), DbIrSerializer.Serialize(match));
+            File.WriteAllText(
+                Path.Combine(noDriftProject, "DB_Lonely.ir"),
+                DbIrSerializer.Serialize(Db("DB_Lonely", new DbMember("A", "Bool", Retain: false, StartValue: null))));
+
+            Assert.False(DriftCheckRunner.Run(noDriftProject, _exportsDir).HasDrift);
+            Assert.True(DriftCheckRunner.Run(noDriftProject, _exportsDir, complete: true).HasDrift);
+        }
+        finally
+        {
+            Directory.Delete(noDriftProject, recursive: true);
+        }
+    }
+
+    // A green run must not read as the stronger claim it did not make.
+    [Fact]
+    public void FormatText_SaysWhichQuestionItAnswered_WhenSomethingWasNotJudged()
+    {
+        var withoutComplete = DriftCheckOutputFormatter.FormatText(DriftCheckRunner.Run(_projectDir, _exportsDir));
+        Assert.Contains("SCOPE: comparison only.", withoutComplete);
+        Assert.Contains("were NOT judged", withoutComplete);
+        Assert.Contains("--complete", withoutComplete);
+
+        var withComplete = DriftCheckOutputFormatter.FormatText(
+            DriftCheckRunner.Run(_projectDir, _exportsDir, complete: true));
+        Assert.Contains("SCOPE: --complete", withComplete);
+        Assert.Contains("are findings, not ordinary states", withComplete);
     }
 
     [Fact]
@@ -106,7 +173,7 @@ public class DriftCheckTests : IDisposable
         Assert.Contains("DRIFTED: DB_Drift", text);
         Assert.Contains("SKIPPED: DB_Lonely", text);
         Assert.Contains("MATCH: DB_Match", text);
-        Assert.Contains("SUMMARY: 1 drifted, 1 match, 1 skipped, 0 error", text);
+        Assert.Contains("SUMMARY: 1 drifted, 1 match, 1 skipped, 0 export-only, 0 error", text);
 
         var json = DriftCheckOutputFormatter.FormatJson(report);
         using var doc = JsonDocument.Parse(json); // asserts valid JSON

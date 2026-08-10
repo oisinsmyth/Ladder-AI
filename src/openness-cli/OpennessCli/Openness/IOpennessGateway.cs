@@ -38,6 +38,15 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<TagTableInfo> EnumerateTagTables();
 
     /// <summary>
+    /// Enumerates every PLC data type (UDT) in the project. Added for FI-70's bulk export: types
+    /// were already walked internally (sanity-check has counted them since FI-62) but were never on
+    /// this interface, so no caller could ask what they are. A bulk export that silently omitted
+    /// every UDT would be precisely the kind of partial dump FI-70 exists to stop being mistaken for
+    /// a complete one.
+    /// </summary>
+    IReadOnlyList<PlcTypeInfo> EnumerateTypes();
+
+    /// <summary>
     /// Read-only walk of every HMI device in the project. Exists because the rest of this gateway
     /// is PLC-only by construction — every other walker filters
     /// <c>SoftwareContainer.Software is PlcSoftware</c>, so an HMI device was previously invisible
@@ -313,6 +322,23 @@ public sealed class SafetyContentRefusedException : Exception
 {
     public SafetyContentRefusedException(string blockName, string language)
         : base($"Refusing: '{blockName}' classifies as safety content (ProgrammingLanguage={language}). This pipeline never touches safety blocks (CLAUDE.md hard rule 2).")
+    {
+    }
+}
+
+/// <summary>
+/// FI-63. A newly created instance DB came back with an invalid number and the explicit repair did not
+/// take either. Thrown rather than returned, because the failure mode being prevented is precisely a
+/// block that looks fine: a whole-device compile reports Success over an invalid-numbered block, so
+/// only a per-block compile would ever have surfaced it, much later and far from the cause.
+/// </summary>
+public sealed class InvalidBlockNumberException : Exception
+{
+    public InvalidBlockNumberException(string blockName, int number, int attempted)
+        : base($"Instance DB '{blockName}' was created with invalid block number {number}, and setting it to " +
+               $"{attempted} did not take. A whole-device compile reports Success over this — only a per-block " +
+               "compile reports 'has an invalid number'. Delete the block and retry; if it recurs, create a " +
+               "throwaway instance DB first (the workaround this check replaces) and report it.")
     {
     }
 }
