@@ -130,4 +130,10 @@ Everything needed is present. Two notes that would otherwise be learned expensiv
    `go-online` / `go-offline`.
 
 Remember that adding any of this rebuilds `openness-cli`, which changes the binary hash
-and requires a fresh TIA Openness approval from a person at the machine.
+and so needs a fresh TIA Openness approval. Since FI-74 that approval no longer needs a
+person at the machine — `tools/openness-approve-build.ps1` writes the whitelist entry
+directly and every build self-approves through the `ApproveForOpenness` post-build
+target. **The setup is per-machine, not per-repo**, so confirm it has actually been run
+here before assuming a rebuild is free: `openness-approve-build.ps1 -Status` answers
+that read-only, and also says whether the binary you are about to use is approved right
+now.
