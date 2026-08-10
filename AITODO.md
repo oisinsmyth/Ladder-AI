@@ -239,6 +239,28 @@ under-debate items are listed here, so this list stays short:
 
 `docs/07-pattern-library-spec.md` no longer mentions a `tests/`/S9 hook — revisit if S9 ever opens.
 
+**FI-68 — unattended Openness approval (2026-08-10). SHIPPED, with three named gaps.** A rebuilt
+binary used to need a person at the machine to accept TIA's approval dialog, which is what made an
+unattended rebuild stall an agent (FI-61). Accepting that dialog only writes a registry entry, so
+`tools/openness-approve-build.ps1` writes it directly and `src/openness-cli` self-approves from its
+`ApproveForOpenness` post-build target. **Proven live:** entry hand-written, every other entry for that
+path deleted first, and a freshly launched Portal then connected and listed blocks with nobody present.
+Full record and the security trade: `docs/notes/openness-quirks.md`, *"Approving a rebuilt binary
+WITHOUT a human at the machine"*. Open:
+
+- **The click-the-dialog fallback (`openness-approve-watch-dialog.ps1`) has never pressed a real
+  button.** It is built on measured geometry and refuses rather than guess, but the click path itself is
+  unexercised. Test it the next time a dialog appears for real — observe mode first.
+- **Why the first hand-written entry was ignored is not isolated.** Two variables changed at once (a
+  local-time `DateModified`, since corrected to UTC, and a Portal an hour older than the entry). "A
+  running Portal caches the whitelist" is a hypothesis, not a finding. One run settles it: a
+  deliberately local-time entry against a fresh Portal.
+- **One dialog's cause is unexplained**, and the first explanation written for it was wrong and had to
+  be retracted. Do not replace it with a second guess without evidence.
+
+Also per-machine, not per-repo: `tools/openness-approve-setup.ps1` must be run once, elevated, on each
+machine, so FI-61's "never rebuild unattended" rule still applies in full anywhere it has not been.
+
 ## Open question carried over from S1 (still needs the project owner's input)
 
 - **`Modbus_Master`/`Modbus_Comm_Load` — built and unit-tested, live compile blocked by a
