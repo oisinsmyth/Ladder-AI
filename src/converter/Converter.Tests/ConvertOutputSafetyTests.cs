@@ -100,6 +100,64 @@ public class ConvertOutputSafetyTests : IDisposable
         Assert.Empty(Program.WarnIfConvertingBlindToExternalTypes("to-xml", new[] { file }, projectDir: _dir));
     }
 
+    // FI-73. An unrecognised --flag used to fall through and be treated as a FILENAME, so
+    // `to-ir x.xml --out dir` on a build that predated --out converted x.xml BESIDE ITS INPUT — the
+    // destructive act FI-72 had just fixed — and only then died on a file literally called "--out".
+    // The damage happens before the crash, and any flag typo does the same thing.
+    //
+    // Verified against the real stale build before fixing: it wrote the file, then threw
+    // FileNotFoundException on 'C:\...\--out'.
+    [Fact]
+    public void AnUnknownFlagIsRefusedRatherThanTreatedAsAFileName()
+    {
+        var refusal = RunConvertArgs(new[] { "to-ir", "x.xml", "--nosuchflag" });
+
+        Assert.Equal(1, refusal.ExitCode);
+        Assert.Contains("Unknown flag '--nosuchflag'", refusal.Stderr);
+        // The message must say what the alternative WAS, or the reader learns nothing from it.
+        Assert.Contains("treating it as a file name", refusal.Stderr);
+    }
+
+    [Fact]
+    public void TheKnownFlagsAreStillAccepted()
+    {
+        // A guard that refuses correct input is worse than the defect it replaces, so each real flag
+        // is named here — including the two added the same day, which is exactly how --out became a
+        // filename on a build that had not caught up.
+        foreach (var flag in new[] { "--project", "--out" })
+        {
+            var result = RunConvertArgs(new[] { "to-ir", "missing.xml", flag, "somewhere" });
+            Assert.DoesNotContain("Unknown flag", result.Stderr);
+        }
+
+        Assert.DoesNotContain("Unknown flag", RunConvertArgs(new[] { "to-ir", "missing.xml", "--no-sidecar" }).Stderr);
+        Assert.DoesNotContain("Unknown flag", RunConvertArgs(new[] { "to-xml", "missing.ir", "--synthesize" }).Stderr);
+        Assert.DoesNotContain("Unknown flag", RunConvertArgs(new[] { "to-xml", "missing.ir", "--allow-blind-types" }).Stderr);
+    }
+
+    // Only ARGUMENT HANDLING is under test here, so a throw from the conversion itself (these inputs
+    // name files that do not exist) counts as "the flag was accepted and parsing moved on" — which is
+    // exactly the property being asserted. Swallowing it keeps the test about the flag rather than
+    // requiring a valid export fixture per flag.
+    private static (int ExitCode, string Stderr) RunConvertArgs(string[] args)
+    {
+        var stderr = new StringWriter();
+        var previous = Console.Error;
+        Console.SetError(stderr);
+        try
+        {
+            return (Program.RunConvert(args), stderr.ToString());
+        }
+        catch (Exception)
+        {
+            return (-1, stderr.ToString());
+        }
+        finally
+        {
+            Console.SetError(previous);
+        }
+    }
+
     // A block referencing nothing external must not be caught by a check aimed at cross-DB typing —
     // a gate that fires on correct input gets disabled, and then it protects nothing.
     [Fact]

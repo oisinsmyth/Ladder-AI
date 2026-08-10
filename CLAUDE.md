@@ -79,6 +79,9 @@ converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <block-nu
 converter claims --project <ir-dir> --claims <dir> [--check] [--agent <id>] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--json]   # list / verify / release. `--check` gates on CONFLICTS only — a fulfilled allocation claim (the block got written, so the resource now exists) is the normal end state and never gates; what does gate is an exclusive claim on a vanished block and the cross-kind conflict the filesystem cannot see (A holds `block-edit FC_ControlMain`, B holds `block-network FC_ControlMain:8` — two different values, both acquisitions legitimately succeed). Stale claims are reported, never auto-released
 # `--claims <dir>` is REQUIRED (or $LADDER_CLAIMS_DIR) and has NO default on purpose: it must be shared by every agent on the project. Agents work in separate git worktrees, so a per-worktree claims dir is always empty, grants every claim, and turns the registry into a no-op that looks like success (FI-44, "empty is not clean")
 dotnet test                         # PC-side tests (openness-cli, converter, tests/golden); pytest tests/ once extract/ (S5) exists
+dotnet build -c Release src/converter/converter.sln   # AFTER ANY CONVERTER CHANGE (FI-73). The skills invoke bin/Release/net8.0/converter.exe, so a Debug-only build leaves every agent running the OLD tool
+                                    # — a full day of converter fixes was once committed, tested and documented while reaching no agent at all, and the wave that hit the bug was running the pre-fix binary.
+                                    # Unlike openness-cli this is FREE and safe at any time, including mid-Portal-work: the converter has no TIA whitelist and never touches Portal.
 ```
 
 (Exact flags/behavior: `src/openness-cli/README.md`, `src/converter/README.md`. Long operations: TIA project open is slow — be patient, don't kill and retry.)

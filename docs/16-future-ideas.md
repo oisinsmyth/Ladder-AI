@@ -1762,6 +1762,29 @@ per-call timing or a real run records agents actually contending for the canonic
 - **Verdict.** Built, tests as above, verified end-to-end (`--out` redirects and creates the directory;
   a second run reports the overwrite). Default behaviour is unchanged, with a test saying so.
 
+### FI-73 — an unknown `--flag` was treated as a FILENAME, and a stale Release build is how it surfaced
+
+- **Found by a fix wave, on the day `--out` was added.** `converter to-ir x.xml --out dir` against a
+  build that predated the flag **converted `x.xml` beside its input** — the exact destructive act FI-72
+  had just fixed — and only *then* died with an unhandled `FileNotFoundException` on a file literally
+  called `--out`. Reproduced before fixing. **The damage is done before the crash**, and *any* flag typo
+  does the same: `--projet` converts every other input blind first.
+- **Fixed generally:** a leading `--` is never a path here, so an unrecognised flag is refused with the
+  valid list, and the message says what the alternative was (*"rather than treating it as a file name,
+  which would convert the other inputs first"*) — otherwise the reader learns nothing from it. The
+  convert path moved into `Program.RunConvert` so its argument handling is testable at all.
+- **THE SECOND HALF IS THE MORE IMPORTANT ONE: BUILT IS NOT DEPLOYED.** The skills invoke
+  `src/converter/Converter/bin/Release/net8.0/converter.exe` (see their `allowed-tools` lines), and a
+  day of converter fixes had been built **Debug only** — so FI-69, FI-70, FI-71 and FI-72 were committed,
+  tested, documented, and *reaching no agent*. The wave that hit this was running the tool as it existed
+  before any of it. Nothing in the repo detects that gap.
+- **The rule that follows:** *after changing the converter, rebuild Release.* Unlike `openness-cli` this
+  is free — the converter has no TIA whitelist and never touches Portal, so `dotnet build -c Release` on
+  `converter.sln` is safe at any time, including while Portal work is in flight.
+- **Verdict.** Built, 890 converter tests (+2), and verified on the **Release** binary itself: the
+  unknown flag exits 1 with the list, `--out` redirects and writes nothing beside the input, and the
+  FI-71 refusal still fires on a real 89-network block.
+
 ### FI-68 — a relative `--out` failed with an exception that named a different problem entirely
 
 - **The cost was the misdiagnosis, not the failure.** `openness-cli export --out <relative>` throws

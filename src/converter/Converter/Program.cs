@@ -115,6 +115,14 @@ internal static class Program
             return RunClaims(args[1..]);
         }
 
+        // FI-73. The convert path is its own method so its argument handling can be tested: an unknown
+        // --flag used to be treated as a FILENAME here, and the only way to prove the refusal works is to
+        // call it directly.
+        return RunConvert(args);
+    }
+
+    internal static int RunConvert(string[] args)
+    {
         if (args.Length < 2 || args[0] is not ("to-ir" or "to-xml"))
         {
             Console.Error.WriteLine("Usage: converter to-ir|to-xml <file> [<file> ...] [--project <ir-dir>] [--out <dir>]");
@@ -186,6 +194,20 @@ internal static class Program
 
                 outDir = rest[++i];
                 continue;
+            }
+
+            // FI-73. An unrecognised --flag used to fall through to here and be treated as a FILENAME.
+            // Measured on a build that predated --out: `to-ir x.xml --out dir` converted x.xml BESIDE ITS
+            // INPUT (the destructive act this project had just fixed), then died with an unhandled
+            // FileNotFoundException on a file literally called "--out". Any flag typo does the same, and
+            // the damage is done before the crash. A leading "--" is never a path here, so refuse it.
+            if (rest[i].StartsWith("--", StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine(
+                    $"Unknown flag '{rest[i]}' for '{mode}'. Valid flags: --project <ir-dir>, --out <dir>, " +
+                    "--synthesize (to-xml), --no-sidecar (to-ir), --allow-blind-types (to-xml). " +
+                    "Refusing rather than treating it as a file name, which would convert the other inputs first.");
+                return 1;
             }
 
             positional.Add(rest[i]);
