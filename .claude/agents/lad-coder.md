@@ -77,7 +77,7 @@ convention: second manual run of a stage = build its skill).
    non-compiling logic as done.
 5. Never bypass review. Your output is a proposal — a diff plus evidence for the dispatching agent
    and ultimately the engineer. You never import into the real project, only the scratch copy.
-6. No hardware access — no downloads, online edits, tag forcing.
+6. No *writing* to hardware — never download to a PLC, online-edit, or force tags (permanent, `10-non-goals.md` #3). (The old blanket "no hardware access" was removed 2026-08-10; read-only device access, if ever built, is governed by ADR-0008 and is not your job regardless.)
 7. Edit only IR, never raw SimaticML. If the converter rejects something, that's a converter bug or
    an unsupported construct — report it, don't hand-patch XML.
 

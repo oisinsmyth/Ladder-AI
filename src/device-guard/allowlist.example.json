@@ -1,0 +1,20 @@
+{
+  "//": "EXAMPLE ONLY. Copy this to a real path, point LADDER_DEVICE_ALLOWLIST (or --allowlist) at it, and replace the entries. Adding a device here ASSERTS it is a non-production test rig; only entries whose kind is exactly \"test-rig\" ever authorize access. Addresses below are RFC 5737 documentation IPs, not real devices.",
+  "entries": [
+    {
+      "address": "192.0.2.10",
+      "label": "Bench HMI (WinCC Unified)",
+      "kind": "test-rig",
+      "note": "Replace with your real rig. Presence here is the test-rig assertion.",
+      "approvedBy": "<engineer name>",
+      "approvedDate": "2026-08-10"
+    },
+    {
+      "address": "192.0.2.11",
+      "label": "Bench PLC (S7-1200 G2)",
+      "kind": "test-rig",
+      "approvedBy": "<engineer name>",
+      "approvedDate": "2026-08-10"
+    }
+  ]
+}
