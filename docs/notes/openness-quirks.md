@@ -867,11 +867,41 @@ observe mode first, then tighten the pattern before enabling clicks.
 the DACL rather than assumed. The approve script then wrote `Entry (113)` for a worktree binary
 **unelevated**, and a re-run was a clean no-op.
 
-### But the entry did NOT suppress the dialog on an already-running Portal (2026-08-10) — OPEN
+### PROVEN 2026-08-10: a hand-written entry IS honoured by a freshly launched Portal
 
-Do not treat the approach above as proven. Minutes after `Entry (113)` was written, an
-`Openness access (0033:000666)` dialog appeared naming **that exact worktree binary**, requesting
-access to Portal **PID 29412**. The entry did not prevent the prompt.
+The controlled run, after the UTC fix below:
+
+1. `-Forget` deleted **every** entry naming the target binary, including the one TIA had written
+   itself, so no older approval could cover for the test.
+2. `openness-approve-build.ps1` wrote a single entry. `-Status` confirmed
+   `1 name this exact path; 1 match this file's hash`.
+3. `openness-cli list` was pointed at a project **no running Portal had open**, forcing a fresh Portal
+   instance that had never seen this binary (PID confirmed, started at 02:27).
+4. It **connected and listed the blocks with nobody at the machine, and no dialog was ever raised.**
+   `-Status` afterwards still showed exactly one entry -- TIA had not written one of its own, which is
+   what rules out "something else granted it".
+
+So the approach works, and the unattended case -- where `openness-cli` launches its own Portal -- is
+exactly the case it works in.
+
+**What this does NOT establish.** Two variables changed between the failing attempt and this one: the
+`DateModified` format was corrected from local to UTC, *and* the Portal was fresh rather than an hour
+older than the entry. Either could explain the earlier failure. Do not write up "a running Portal
+caches the whitelist" as fact -- isolating it needs one more run: a deliberately local-time entry
+against a fresh Portal.
+
+**Operational note, and it cost two apparently-failed tests.** Both runs produced their complete
+output and then **never exited**; the harness eventually killed the wrappers, so both looked like
+failures while the log on disk held a full, correct block listing. Suspected the same inherited-handle
+trap as the pipe rule below, in its `>` form -- Portal is a child that inherits the redirected stdout,
+so the parent can wait long after the command's own work is done. **Judge these runs by their output
+file, not by whether the command returned.**
+
+### The failing attempt, for the record (2026-08-10)
+
+Minutes after the first `Entry (113)` was written, an `Openness access (0033:000666)` dialog appeared
+naming **that exact worktree binary**, requesting access to Portal **PID 29412**. That entry did not
+prevent the prompt — it carried a local-time `DateModified`, and the Portal predated it by an hour.
 
 What is established:
 
@@ -882,14 +912,14 @@ What is established:
   only run of that binary that contacted Portal, and the dialog followed.
 - **The Portal in question had been running since 00:04:36**, roughly an hour before the entry existed.
 
-**Leading hypothesis, NOT yet evidence: a Portal process consults the whitelist it loaded at startup,
-so an entry written after that process started does not apply to it.** That would make the approach
-work fine for a Portal launched afterwards -- which is the normal unattended case, where `openness-cli`
-launches its own instance -- and fail exactly as seen against a long-running one. It is untested. Two
-experiments settle it, neither yet run: attach with an approved binary so a **fresh** Portal is
-launched and see whether it prompts; or accept the pending dialog with "Yes to all" and see whether
-TIA writes a **duplicate** entry for a (path, hash) that already has one, which would prove it never
-found the hand-written entry.
+**Both candidate causes are still live**, and the section above shows why: the corrected entry worked
+against a fresh Portal, but the local-time format and the Portal's age were fixed in the same step.
+The wrong-format explanation is now the more concrete of the two, since the mismatch was measured
+directly; "a running Portal caches the whitelist" remains a hypothesis nobody has tested.
+
+One thing the failing attempt did establish: accepting the dialog made TIA write a **duplicate** entry
+for a (path, hash) that already had one. TIA did not recognise the hand-written entry as covering that
+request — consistent with either cause.
 
 **A second finding, incidental but real: `portal-status` triggers the approval dialog.** It is
 documented as never attaching, and that is true, but it still requests Openness access to enumerate
