@@ -921,10 +921,16 @@ One thing the failing attempt did establish: accepting the dialog made TIA write
 for a (path, hash) that already had one. TIA did not recognise the hand-written entry as covering that
 request — consistent with either cause.
 
-**A second finding, incidental but real: `portal-status` triggers the approval dialog.** It is
-documented as never attaching, and that is true, but it still requests Openness access to enumerate
-Portal processes -- enough to raise the prompt for an unapproved caller. "Never attaches" has been
-read here as "inert"; it is not.
+**RETRACTED: "`portal-status` triggers the approval dialog."** That was written here on 2026-08-10 from
+sequence alone -- a `portal-status` run was the only thing that had touched Portal before the dialog
+appeared, so it got the blame. **Tested directly later the same day and it is false:** a *copy* of
+`openness-cli.exe` at a brand-new temp path, with no whitelist entry of any kind, ran `portal-status`
+against both long-running Portals, printed their project paths, and **raised no dialog and no
+warning**. Enumerating Portal processes evidently does not trip the approval check.
+
+**So what raised that dialog is unexplained.** It named the worktree binary and Portal PID 29412, and
+no other run of that binary had touched Portal. Leaving it recorded as unexplained rather than
+inventing a second guess -- the first one cost a wrong entry in this file.
 
 ### The approval dialog exposes no clickable controls to UI Automation (2026-08-10)
 
@@ -939,7 +945,23 @@ dialog body names them "Yes", "Yes to all", "No" in that order, and the middle b
 `PrintWindow` does **not** render those child controls, and `SetForegroundWindow` cannot raise the
 dialog from a background process, so a screenshot cannot label them either. **Any click-the-dialog
 automation must therefore aim by geometry, not by caption or accessibility name** -- which is a real
-argument for the registry route over the watcher, once the open question above is settled.
+argument for the registry route over the watcher.
+
+`openness-approve-watch-dialog.ps1` is built on those measurements: Win32 enumeration rather than UI
+Automation, buttons identified by left-to-right position cross-checked against "the middle one is the
+widest", and a real mouse click at the button's own `GetWindowRect` centre -- no scaling, so it is
+DPI-correct and survives the dialog moving. Two refusals are deliberate and both exit **5**: a layout
+that is not exactly three buttons with the middle widest, and a target pixel that `WindowFromPoint`
+says does not belong to the intended button (the dialog is covered and could not be raised). **A blind
+click at a stale coordinate would press whatever is on top, in another application** -- that check is
+the difference between automation and a hazard.
+
+**Its click path is UNTESTED against a live dialog.** Verified: it parses, runs, reports correctly
+when no dialog is present, and its geometry matches the real dialog measured above. Not verified: an
+actual click, because no dialog could be provoked afterwards -- the retraction above removed the cheap
+trigger, and a long-running Portal that has already authorised a binary does not ask again. Test it the
+next time a dialog appears for real: run it with no `-Click` first and confirm it names the middle
+button, then re-run with `-Click`.
 
 **A live finding from that same run, worth repeating as a warning.** The main checkout's Debug binary
 was *already* unapproved: **86** entries named its exact path and **none** matched its current hash. A
