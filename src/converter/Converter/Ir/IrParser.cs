@@ -842,6 +842,26 @@ public static partial class IrParser
             i++;
         }
 
+        // FI-69: a statement written out of kind-order is consumed by no loop above, so it used to fall
+        // through to the outer network loop and fail with "Expected 'NETWORK <n> \"<title>\"'" — a message
+        // naming a header that is perfectly well-formed. Cost two import passes on a live job before the
+        // rule was recognised. Checked here, once, against the same table for every kind: a new
+        // instruction added above inherits the diagnostic instead of needing its own special case.
+        if (i < lines.Length)
+        {
+            var strayKind = StatementSectionIndexOf(lines[i]);
+            if (strayKind >= 0)
+            {
+                throw OutOfOrderStatement(number, i, lines[i], strayKind, new[]
+                {
+                    comment is null ? 0 : 1, timers.Count, assignments.Count, moves.Count, wordAnds.Count,
+                    calls.Count, muls.Count, converts.Count, swaps.Count, absStatements.Count, limits.Count,
+                    tSubs.Count, tConvs.Count, calcs.Count, moveBlkVariants.Count, waits.Count,
+                    fillBlockIs.Count, modbusMasters.Count, modbusCommLoads.Count,
+                });
+            }
+        }
+
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
@@ -854,6 +874,88 @@ public static partial class IrParser
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
             moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
+    }
+
+    // The kind-order a network body is parsed in (ir/SPEC.md "Statement-kind ordering within one
+    // network"), in the same sequence as the section loops in ParseNetwork and as IrSerializer emits.
+    // This is the diagnostic's single source of truth: adding a section loop above without adding its
+    // row here trips the arity guard in OutOfOrderStatement rather than silently losing the message.
+    private static readonly (string Display, string[] Prefixes)[] StatementSections =
+    {
+        ("COMMENT", new[] { "  COMMENT \"" }),
+        ("TON/TONR/TOF", new[] { "  TON(", "  TONR(", "  TOF(" }),
+        ("COIL/SCOIL/RCOIL", new[] { "  COIL ", "  SCOIL ", "  RCOIL " }),
+        ("MOVE", new[] { "  MOVE(" }),
+        ("WAND", new[] { "  WAND(" }),
+        ("CALL", new[] { "  CALL " }),
+        ("MUL/ADD/SUB/DIV", new[] { "  MUL(", "  ADD(", "  SUB(", "  DIV(" }),
+        ("CONVERT", new[] { "  CONVERT(" }),
+        ("SWAP", new[] { "  SWAP(" }),
+        ("ABS", new[] { "  ABS(" }),
+        ("LIMIT", new[] { "  LIMIT(" }),
+        ("T_SUB", new[] { "  T_SUB(" }),
+        ("T_CONV", new[] { "  T_CONV(" }),
+        ("CALC", new[] { "  CALC(" }),
+        ("MOVE_BLK_VARIANT", new[] { "  MOVE_BLK_VARIANT(" }),
+        ("WAIT", new[] { "  WAIT(" }),
+        ("FILLBLOCKI", new[] { "  FILLBLOCKI(" }),
+        ("MODBUS_MASTER", new[] { "  MODBUS_MASTER(" }),
+        ("MODBUS_COMM_LOAD", new[] { "  MODBUS_COMM_LOAD(" }),
+    };
+
+    // The index into StatementSections of the kind this line opens, or -1 if the line is not a
+    // statement at all (a blank line, the next NETWORK header, SIDECAR — none of which are this
+    // check's business).
+    private static int StatementSectionIndexOf(string line)
+    {
+        for (var section = 0; section < StatementSections.Length; section++)
+        {
+            foreach (var prefix in StatementSections[section].Prefixes)
+            {
+                if (line.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    return section;
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    // Names the rule, the kind found, and the kind it has to move above — the three things the old
+    // message left the author to infer. presentCounts is parallel to StatementSections.
+    private static IrFormatException OutOfOrderStatement(
+        int number, int lineIndex, string line, int section, IReadOnlyList<int> presentCounts)
+    {
+        if (presentCounts.Count != StatementSections.Length)
+        {
+            throw new InvalidOperationException(
+                $"IrParser statement-order table is out of step with ParseNetwork: {StatementSections.Length} " +
+                $"sections, {presentCounts.Count} counts. Add the new section's row to StatementSections.");
+        }
+
+        // The section that already consumed lines and ranks after this one is what this statement has to
+        // move above. Sections are consumed in table order, so the first such is also the earliest in text.
+        var blocker = -1;
+        for (var s = section + 1; s < presentCounts.Count; s++)
+        {
+            if (presentCounts[s] > 0)
+            {
+                blocker = s;
+                break;
+            }
+        }
+
+        var found = StatementSections[section].Display;
+        var problem = blocker >= 0
+            ? $"a {found} cannot follow a {StatementSections[blocker].Display} — move it above the first " +
+              $"{StatementSections[blocker].Display} in this network"
+            : $"a {found} is out of order here";
+
+        return new IrFormatException(
+            $"Network {number}, line {lineIndex + 1}: {problem}. Statements within one network are grouped " +
+            $"by kind, one contiguous run each, in this order: {string.Join(", ", StatementSections.Select(s => s.Display))}. " +
+            $"Got: '{line}'");
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
