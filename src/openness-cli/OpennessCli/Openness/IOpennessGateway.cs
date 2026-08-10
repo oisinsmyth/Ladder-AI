@@ -326,6 +326,23 @@ public sealed class SafetyContentRefusedException : Exception
     }
 }
 
+/// <summary>
+/// FI-63. A newly created instance DB came back with an invalid number and the explicit repair did not
+/// take either. Thrown rather than returned, because the failure mode being prevented is precisely a
+/// block that looks fine: a whole-device compile reports Success over an invalid-numbered block, so
+/// only a per-block compile would ever have surfaced it, much later and far from the cause.
+/// </summary>
+public sealed class InvalidBlockNumberException : Exception
+{
+    public InvalidBlockNumberException(string blockName, int number, int attempted)
+        : base($"Instance DB '{blockName}' was created with invalid block number {number}, and setting it to " +
+               $"{attempted} did not take. A whole-device compile reports Success over this — only a per-block " +
+               "compile reports 'has an invalid number'. Delete the block and retry; if it recurs, create a " +
+               "throwaway instance DB first (the workaround this check replaces) and report it.")
+    {
+    }
+}
+
 public sealed class BlockNotFoundException : Exception
 {
     public BlockNotFoundException(string blockName)

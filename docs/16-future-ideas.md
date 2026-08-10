@@ -1307,6 +1307,27 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   machine owner to approve rather than done mid-delivery.
 - **Verdict.** Built, 152 openness-cli tests (+4). Not yet live-verified — it cannot be, until the
   rebuilt binary is approved.
+### FI-63 — the first instance DB created after a project open got number 0, and a green compile hid it
+
+- **Deterministic, measured three times on a live job.** `create-instance-db` gave the **first** DB
+  created after a project open the number **0**, which is not a valid block number; later creations in
+  the same session numbered correctly.
+- **FI-52's family again, which is what makes it serious rather than untidy.** A **whole-device compile
+  reports `Success` over an invalid-numbered block**; only the per-block compile says
+  `has an invalid number 0`. So the default gate passes and the defect ships. The workaround that
+  unblocked the job was to create a throwaway DB, then the real one, then delete the throwaway.
+- **Fixed in two independent halves, deliberately.** *Part 1, the hypothesis:* what a throwaway does
+  incidentally is force the block composition to be enumerated, so the composition is now enumerated
+  before the create — if the auto-numberer needs the existing numbers materialised first, that is the
+  whole fix and the throwaway was that fix by accident. *Part 2, which does not depend on part 1 being
+  right:* read the number back, repair it with the lowest free number, and throw if the repair does not
+  take. Part 1 is a guess about somebody else's allocator; part 2 holds either way.
+- **Lowest-free rather than highest-plus-one**, because this runs only to repair an invalid result and
+  should slot into a gap the project already has instead of growing the numbering space each time.
+- **Verdict.** Built, 244 openness-cli tests (+5) covering the number choice. **Not live-verified** —
+  the gateway half needs a Portal, and a rebuild revokes the binary's Openness approval until a person
+  re-approves it (FI-61). The hypothesis in part 1 is explicitly unconfirmed.
+
 ### FI-64 — a PLC data type carrying a named-type member could not be read back at all
 
 - **The same expansion FI-56 fixed, on the third parse path.** TIA expands a member whose type is a
