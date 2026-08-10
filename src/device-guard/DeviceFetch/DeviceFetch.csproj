@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DeviceFetch</RootNamespace>
+    <AssemblyName>device-fetch</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The fetch client is gated by the safeguard: it cannot touch a device the guard refuses. -->
+    <ProjectReference Include="..\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>
