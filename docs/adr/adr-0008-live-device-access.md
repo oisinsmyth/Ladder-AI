@@ -6,9 +6,10 @@
   **Still undecided and blocking any build:** the *fence* (question 2 — how "test rig" is enforced)
   and the *surface* (question 3). **Still true regardless:** the tooling has **no** path to a device
   at an IP yet — nothing has been built — so until it is, the working answer to "read the log off
-  10.10.10.15" remains "export it to disk yourself, then hand me the file". **Also still open:**
-  CLAUDE.md **hard rule 6** ("No hardware access…") has not yet been aligned with the narrowed item 3
-  and currently contradicts it; that alignment needs the owner's word on wording (see Consequences).
+  10.10.10.15" remains "export it to disk yourself, then hand me the file". **Hard rule 6 resolved:**
+  the owner chose to **remove** CLAUDE.md hard rule 6 outright (2026-08-10) rather than reword it — the
+  blanket "No hardware access" is gone; a tombstone holds slot 6 so references to hard rules 7–8 still
+  resolve. The permanent *write* ban now lives solely in `10-non-goals.md` #3.
 - **Date:** 2026-08-10
 - **Relates to:** CLAUDE.md **hard rule 6** (no hardware access; "you must not try to add support") ·
   CLAUDE.md **hard rule 2** (never touch safety) · `10-non-goals.md` Permanent #3 (download to
@@ -65,10 +66,11 @@ not excluded by it. **The remaining questions are open and each blocks a build:*
    broader read capability (online-state comparison, upload-for-inspection) as the "Not now" line on
    online-state comparison anticipated? *Recommendation: option 2, the minimal fetch, to serve the
    trace-log case first.* **Undecided.**
-4. **Aligning hard rule 6.** CLAUDE.md hard rule 6 still opens "No hardware access" and so contradicts
-   the narrowed item 3. It needs the same read carve-out to be coherent. Proposed wording is in
-   Consequences; **the edit to a governing hard rule awaits the owner's explicit OK, not taken
-   silently here.**
+4. **Hard rule 6 — decided: removed (2026-08-10).** Rather than reword it, the owner removed CLAUDE.md
+   hard rule 6 entirely. The blanket "No hardware access" no longer exists; a tombstone holds slot 6 so
+   the repo's many by-number references to hard rules 7 and 8 keep resolving (renumbering was rejected
+   as too wide a blast radius). The `lad-coder` sub-agent's local hard-rules recap was updated the same
+   way. The permanent write ban is unaffected — it lives in `10-non-goals.md` #3.
 
 ## The near-term use case, concretely
 
@@ -164,22 +166,22 @@ genuine category change:**
 **Deferring (option 4)** costs the same manual step once and defers the build decision to evidence —
 appropriate if it is genuinely unclear whether this recurs.
 
-**Hard rule 6 must be aligned before any build, and the wording matters.** With item 3 narrowed, the
-CLAUDE.md hard rule still says "No hardware access. Never attempt downloads, online edits, or tag
-forcing" — its opening now over-reaches. Proposed replacement, kept fail-closed and write-banning,
-for the owner to accept or amend:
+**Hard rule 6 was removed, and that shifts where the write ban is enforced.** The blanket rule is
+gone; the *only* remaining statement of the permanent write ban (no download / online-edit / tag
+force) is `10-non-goals.md` #3. That is deliberate and sufficient — #3 is a permanent exclusion — but
+it means the hard-rules list no longer restates it, so any future reader who treats the hard-rules
+list as the complete operational contract must be pointed at #3. The tombstone at slot 6 does that.
 
-> **6. No *writing* to hardware; read-only access only on approved test rigs.** Never download,
-> online-edit, or force tags — ever, on any device (permanent, `10-non-goals.md` #3). *Read-only*
-> access to a live device (fetching diagnostics, logs, or state — changing nothing) is permitted
-> **only** against a device on the test-rig allowlist, and only through read/fetch verbs that cannot
-> write. Off-allowlist targets are refused. Safety content (hard rule 2) is never read off a device,
-> exactly as it is never read from an export. The tooling does not yet implement any of this — until
-> it does, the answer to "read X off the device" is "export it to disk yourself."
+**A fence must still exist before any read is built** — removing hard rule 6 lifted the *prohibition*,
+it did not create the *safeguard*. Until the test-rig allowlist (or equivalent fence, question 2) and
+a read-only-by-construction client exist, there is nothing that stops a live read from being aimed at
+a production device, so no live read should be performed yet. The removal unblocks the build; it is
+not itself permission to connect to arbitrary hardware.
 
-Until that edit is made, the repo is internally contradictory and I operate to the *stricter* of the
-two (hard rule 6 as written) — i.e. still no live reads — which is why aligning it is on the critical
-path, not a tidy-up.
+**Dangling references to "hard rule 6" now exist in secondary docs** (e.g.
+`docs/notes/hmi-ai-design-options.md`, `docs/audit/README.md`) plus historical/evidence/changelog
+mentions that correctly record what was true when written. The historical ones are left as-is; the
+live design/audit references should be reconciled in a follow-up sweep, not silently.
 
 **Either way, one thing is already true and should be recorded:** the request has been made and the
 capability gap is real. Rejecting the *build* still requires saying so explicitly (and keeping the
