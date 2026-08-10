@@ -100,7 +100,11 @@ against 6). Gate on `State`; count from the message tree.
 | **No transaction** | A failed command keeps what it already did. Commands must be re-runnable |
 | Screens cannot be created into a group, or moved between groups | Grouping is programmatically unreachable |
 | Bitmask entries come only from `Create(BitDynamizationType)` | And **cannot be deleted** |
-| `TagParameterDynamization` refuses outside a faceplate | Faceplate-scoped. ⚠️ *"Likely unreachable in practice"* was **premature** — a faceplate **container's** interface entries are themselves dynamization hosts (`HmiFaceplateInterface` derives from `UIBase`, which carries `Dynamizations`), so binding one uses the mechanism already proven live. No probe has yet had a resolved faceplate to try it on |
+| `TagParameterDynamization` refuses **even INSIDE a resolved faceplate's parameter** | Tested 2026-08-09 on a container bound to a real type — the negative control P7 could never run. P7's conclusion survives its first genuine test, and **what the kind is FOR remains unknown**: the refusal names no reason |
+| **Faceplate parameter writes need an explicit `str:` tag** | A bare value fails with `FormatException: String was not recognized as a valid Boolean` — on a property whose own read-back reports `String`. Misleading enough to cost a round trip; worth a usability fix |
+| **An UNWIRED faceplate parameter compiles clean** | The compile catches *wrong*, never *missing*. A generated screen of correctly-typed but unconnected faceplates passes the gate looking finished. The PLC side's `undriven-scan` lesson repeating — that check is ours, and is now buildable because the read-back reports `(unset)` |
+| **A scripted `OpenFaceplateInPopup` is NOT statically checked at all** | Its type name, version and tag are strings inside JavaScript. Syntax is checked; identity is not. A wrong tag surfaces only on a live panel — the cost of the popup route's diffability |
+| **Faceplate TYPES cannot be authored** | Not because content is withheld: `LibraryTypeVersion.Export` emits a `ContentObject` for PLC types and **nothing** for any plain `LibraryType`, faceplates *and images* alike. The content is not in the library object — it lives in the project's binary `.rdf` store (`hmi-rdf-store.md`). **Openness ships no content serialiser for HMI-side library types** |
 | **Classic HMI: zero live contact** | No classic device exists locally, and adding one is its own non-goal |
 
 **What DOES round-trip on Unified:** tags, text lists and script modules all carry
@@ -128,28 +132,98 @@ stated in earlier notes — **is wrong**: the constructor is a document, not a `
 6. **Never pipe `openness-cli` output** — it launches Portal as a child inheriting stdout, so the
    pipe outlives the command and hangs forever. Redirect on the outer invocation.
 
+### Added 2026-08-09/10, each paid for in this programme
+
+7. **An empty ADVERTISEMENT is not a REFUSAL.** `GetSupportedExportFormats()` returning empty was
+   treated as a gate from P10 onward and **never once invoked** to see whether it actually refuses.
+   Rule 2's sharper form: before concluding a capability is absent, **call the thing and read the
+   throw** — a refusal that names a reason is data; an assumption never is.
+8. **The negative control must span KINDS, not just instances.** Faceplate export looked like "HMI
+   content is withheld" until the *same call* was run against a PLC type (content present) and an
+   **image** type (content absent). One comparison collapsed three suspected walls into one fact:
+   the CLR class has no content serialiser. **When a result looks type-specific, vary the type.**
+9. **Anonymisation that preserves structure can still destroy the category the next question turns
+   on.** P10's evidence rendered every library type as `HmiType_n`, erasing *faceplate vs image*. A
+   later agent read it, saw three `Consistent` types, and recommended probing a "Consistent
+   faceplate" — a set that does not exist. **Keep the KIND, erase the NAME.**
+10. **Attribute a failure to the item that failed, not the first one in the list.** A create of two
+    container items threw `'ContainedTypeValue' parameter is missing`; it was reported here as the
+    faceplate container's refusal. It was the **Custom Web Control** container's — the faceplate had
+    succeeded. One cheap read-back settled it. **With no transaction, always read what survived.**
+11. **A preview that shows nothing reads as "there is nothing".** The script preview took
+    `Split('\n')[0]` rather than the first non-blank line, so **274 of 274** handlers reported a
+    script and displayed empty. The walker described the skeleton and omitted the animal, silently,
+    in every read this project had ever done. **A field that is empty for 100% of real data is a
+    defect, not a finding.**
+12. **Read how the project was actually BUILT before recommending an architecture.** Faceplate
+    *containers* were probed for two days because that is what the API surfaces. The reference
+    project contains **zero** of them — it opens faceplates as popups from JavaScript. The human's
+    choice was better evidence than the API's shape.
+13. **Read a truncated log as truncated.** `git log --oneline -8` was misread as a complete history
+    and produced a false "master lost the work" alarm. `merge-base --is-ancestor` is the authority;
+    a log excerpt is not.
+
 ---
 
 ## 4. Coverage, honestly
 
 | Axis | Walked | Of |
 |---|---|---|
-| Distinct API members invoked | ~130 | 4549 (**~3%**) |
+| Distinct API members invoked | ~140 | 4549 (**~3%**) |
 | Creatable kinds created | 15 | 80 |
 | Screen-item types | **35 created / all 56 attempted** | 56 |
 | Dynamization kinds | **5 created / all 6 attempted** | 6 |
 | Deletions | ~20 across 9 kinds | 184 types |
 | Event values attached | **2** | 246 |
+| Library type kinds export-tested | **3 of 3** (PLC / faceplate / image) | 3 |
 
-The two "all attempted" rows are the useful ones: those refusal sets are **facts**, not gaps.
-Event breadth is the largest untouched axis — but the *mechanism* is proven, and the catalogue is
-regular, so it is breadth rather than risk.
+The "all attempted" rows are the useful ones: those refusal sets are **facts**, not gaps.
+
+> **Put the item-type coverage in proportion (2026-08-10).** A full sweep of the reference
+> project — **49 screens, 1,404 items** — uses **12 item types, and all 12 are creatable**:
+> Text 421, Circle 301, Rectangle 254, Button 147, Line 94, Polygon 84, GraphicView 41, IOField 38,
+> ScreenWindow 10, ToggleSwitch 8, SymbolicIOField 3, AlarmControl 3. **The 21 refusing types fall
+> entirely outside what a real plant HMI uses.** That limit had been reported as a headline
+> constraint; it is closer to a footnote.
+>
+> The same sweep found **274 event handlers and zero script modules** — so on a real Unified project
+> the behaviour is almost entirely in handler scripts, which is the axis that *does* matter and which
+> was unreadable until 2026-08-10.
 
 ---
 
 ## 5. Owed, and not claimed
 
+### The live leads, in priority order (2026-08-10)
+
+1. **`CreateFromDocuments` with a hand-authored `ContentObject` — UNTESTED, and the best remaining
+   route to faceplate type authoring.** Export and import are separate code paths; nothing requires
+   both to exist. Two real worked examples of the wrapper schema are now in hand, one with a
+   `ContentObject` (PLC) and one without (faceplate), from the same TIA version.
+2. **`library --probe-documents <T> --out <dir>` — BUILT, UNIT-TESTED, NEVER RUN.** It invokes every
+   `Export*` overload including `ExportAsDocuments` with an empty format list, and reports each
+   binding and outcome. Blocked only on an approved binary — see the FI-68 self-approve route, which
+   may remove that blocker entirely.
+3. **`HmiCustomWebControlContainer` placement — code written, never run.** It requires the
+   two-argument `Create<T>(name, containedType)` overload, which `openness-cli` now supports. Running
+   it turns the Custom Web Control route from documentation into measured capability.
+4. **`.rdf` hash idempotence under edit-and-revert.** Untouched-object stability is measured; whether
+   editing a screen and reverting restores identical bytes is not. Decides whether the invariance
+   claim is "provably identical" or the weaker "provably untouched".
+
+### Still owed
+
 - The nested `--set` fix is **unit-tested but never live-verified**.
+- **A FULLY wired faceplate compiling clean was never achieved.** One binding was accepted; the other
+  failed because the reference project's faceplate types are **stale against the current motor UDT**
+  — every faceplate reports `DefaultVersionInconsistent` while every PLC type reports `Consistent`,
+  which is the same fact the compile error states. A project-maintenance matter, not a tooling limit,
+  and **not touched** because it is restricted content.
+- **An "undriven faceplate parameter" check** — the compile will not catch it and nothing else does.
+- **Interface arity is known for two faceplate types only** (2 params and 1). An out-of-range index
+  reports arity for free, so the remaining seven are cheap.
+- **Alarm text still cannot be written** (`MultilingualTextItem.set_Text` throws) — unchanged, and
+  still the blocker for FI-35's alarm generation.
 - Mapping-table round-trip **losslessness** is untested.
 - The tag / text-list / script-module `Export`/`Import` pairs have **never been run**.
 - Why `set_Text` refuses, and whether `RaisedStateTagBitNumber` is merely contextual — **unknown**,
