@@ -174,12 +174,14 @@ force) is `10-non-goals.md` #3. That is deliberate and sufficient — #3 is a pe
 it means the hard-rules list no longer restates it, so any future reader who treats the hard-rules
 list as the complete operational contract must be pointed at #3. The tombstone at slot 6 does that.
 
-**The fence now exists (`src/device-guard/`, built 2026-08-10)** — removing hard rule 6 lifted the
-*prohibition*, and this is the *safeguard* that had to follow it. It is fail-closed, exact-match, with
-no default allowlist path. What is still missing is the **read-only-by-construction fetch client** that
-consults it; until that exists, there is still no tooling that reads from a device at all, so the
-working answer to "read X off the device" remains "export it to disk yourself." The guard gates
-*which* device; it does not itself connect to anything.
+**Both halves now exist and were exercised end-to-end (2026-08-10).** The fence is built
+(`src/device-guard/` — fail-closed, exact-match, no default allowlist path) and the
+**read-only-by-construction fetch client** (`src/device-guard/DeviceFetch/`) consults it before any
+network I/O. The full loop — guard-gated read-only fetch, a human executes the download, artifacts
+land on a shared drive the agent reads back — was then used as a real HMI debugging cycle. The
+**human-download boundary was not an impediment** (one operator action per iteration), which supports
+keeping it: the agent instruments and reads back; a human puts code on the device. Sanitized
+write-up of that session and its wider lessons: `docs/notes/hmi-runtime-live-debug-lessons.md`.
 
 **Dangling references to "hard rule 6" now exist in secondary docs** (e.g.
 `docs/notes/hmi-ai-design-options.md`, `docs/audit/README.md`) plus historical/evidence/changelog
