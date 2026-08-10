@@ -1706,6 +1706,27 @@ per-call timing or a real run records agents actually contending for the canonic
 - **Verdict.** Built, 221 openness-cli tests (+1). Not yet live-verified — that needs another
   owner-approved rebuild (FI-61).
 
+### FI-68 — a relative `--out` failed with an exception that named a different problem entirely
+
+- **The cost was the misdiagnosis, not the failure.** `openness-cli export --out <relative>` throws
+  `EngineeringTargetInvocationException`, whose "relative path" sentence is the last line under a
+  type-qualified Siemens exception name. It reads **exactly like** the "Inconsistent blocks and PLC
+  data types (UDT) cannot be exported" refusal — a real and frequent condition on the job where it was
+  hit. The only thing that stopped a long hunt for an inconsistent block was that the agent happened to
+  run `sanity-check` between attempts and got `HEALTHY` on both lines each time.
+- **The constraint was already written down, for a different argument.** `docs/notes/openness-quirks.md`
+  recorded it under "Project paths" for the cold-open path in July, and nobody connected it to the
+  export target. That is the general lesson this repo keeps re-learning: *an enumerated list is one the
+  next item is not on.*
+- **Fixed for the class at the argument boundary** (`Cli/PathArguments`): `export --out`,
+  `export-all --out`, `library --out`, the `import` file list and `--tia-install` are resolved by one
+  rule, so an argument added later inherits it rather than needing its own special case.
+- **The project identifier is deliberately excluded, and there is a test saying so.** It is documented
+  as "either a full `.apNN` path or a **bare project name**" — that is how an already-open Portal
+  session is matched — so resolving it would silently turn a name into a path that does not exist.
+- **Verdict.** Built, 239 openness-cli tests (+7). Live verification needs a Release rebuild (FI-61),
+  but the failure it removes was never subtle to reproduce.
+
 ### FI-69 — a statement-order violation in the IR blamed the network header
 
 - **The rule is fine; the diagnostic named the wrong thing.** Within a network, statements are parsed

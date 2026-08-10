@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpennessCli.Cli;
 
@@ -363,7 +364,17 @@ public static class ArgumentParser
     /// <c>ExitCodes</c> public on 2026-08-05 — a second dispatch on the same type is exactly where
     /// a new subcommand gets forgotten.
     /// </summary>
-    public static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) CommonOptions(ParseResult result) => result switch
+    // FI-68. --tia-install is resolved HERE rather than in each of the fifteen Parse* methods that
+    // accept it: this accessor is the single place every command's copy is read, so one wrapper covers
+    // all of them and a command added later inherits it. Openness rejects a relative path with an
+    // exception that names something else entirely; see PathArguments.
+    public static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) CommonOptions(ParseResult result)
+    {
+        var raw = RawCommonOptions(result);
+        return (PathArguments.ToAbsoluteOrNull(raw.TiaInstallOverride), raw.TimeoutConnectSeconds, raw.TimeoutOpenSeconds);
+    }
+
+    private static (string? TiaInstallOverride, int TimeoutConnectSeconds, int TimeoutOpenSeconds) RawCommonOptions(ParseResult result) => result switch
     {
         ParseResult.ListSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.ExportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -670,7 +681,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --out <path>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, device, outPath, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, device, PathArguments.ToAbsolute(outPath), tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseExportAll(string[] args)
@@ -750,7 +761,7 @@ public static class ArgumentParser
         }
 
         return new ParseResult.ExportAllSuccess(new ExportAllCommandOptions(
-            projectIdentifier, outDir, device, includeTagTables, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, PathArguments.ToAbsolute(outDir), device, includeTagTables, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseImport(string[] args)
@@ -841,7 +852,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"--type and --tagtable are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files, asType, asTagTable, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompile(string[] args)
@@ -1699,7 +1710,7 @@ public static class ArgumentParser
             timeoutOpen,
             exportTypeName,
             exportVersion,
-            outDirectory,
+            PathArguments.ToAbsoluteOrNull(outDirectory),
             probeDocumentsTypeName));
     }
 

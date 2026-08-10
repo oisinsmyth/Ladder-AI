@@ -584,6 +584,23 @@ relative `--out` fails **identically on every block**, which reads like a projec
 rather than a bad argument. Nothing was written and no state changed — the check happens before
 `Export()` does anything.
 
+**FIXED IN THE TOOL, 2026-08-10 (FI-68) — kept here because the constraint is still true of the API.**
+`openness-cli` now resolves every path argument that reaches Openness as a *file target* to an
+absolute path at the argument boundary (`Cli/PathArguments`), so a relative `--out` simply works.
+
+The reason it earned a fix rather than a docs line is what it cost the second time. Hit again on
+2026-08-10, the exception read **exactly like** the "Inconsistent blocks and PLC data types (UDT)
+cannot be exported" refusal — a real and frequent condition on that job. The only thing that stopped
+a long detour hunting an inconsistent block was that the agent happened to run `sanity-check` between
+attempts and got `HEALTHY` on both lines each time. A message that confidently names the wrong cause
+is this project's most expensive recurring defect class (FI-61, FI-66, FI-69 are the others).
+
+Fixed for the **class**, not the one argument: `export --out`, `export-all --out`, `library --out`,
+the `import` file list and `--tia-install` are all resolved by one rule, so an argument added later
+inherits it. **The project identifier is deliberately excluded** — it is documented as "either a full
+`.apNN` path or a bare project name", and resolving a bare name against the current directory would
+silently turn a name into a path that does not exist.
+
 *(Candidate `openness-cli` improvement: resolve `--out` against the working directory itself before
 calling `Export()`, so the caller doesn't have to. Not done — recorded here rather than fixed
 because it came up mid-job on unrelated work.)*
