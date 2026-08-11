@@ -979,10 +979,23 @@ public static class OutputFormatter
             .Append(result.StillInconsistentCount).Append(" still inconsistent, in ")
             .Append(result.Passes).Append(" pass(es)\n");
 
-        sb.Append(result.IsClean
-            ? "CLEAN: every item compiled without errors and nothing is left flagged inconsistent.\n"
-            : "NOT CLEAN: the items above were not cleared. An inconsistent block is one the gate did NOT examine,\n" +
-              "           which is the failure mode that looks like a pass (FI-52).\n");
+        // "Nothing was examined" must never render as "everything passed". An item that compiled with
+        // errors is still flagged CONSISTENT, so the run right after a failed one has an empty work
+        // set — the moment this report is most likely to be believed and least entitled to be.
+        if (result.CompiledCount == 0)
+        {
+            sb.Append("NOTHING EXAMINED: no type or block is flagged inconsistent, so this run compiled nothing and\n")
+                .Append("                 proves nothing about the project. Note that an item which compiled WITH ERRORS is\n")
+                .Append("                 still flagged consistent, and errors do not survive the process — so a failed run\n")
+                .Append("                 is followed by exactly this. Re-run with --force to compile every item.\n");
+        }
+        else
+        {
+            sb.Append(result.IsClean
+                ? "CLEAN: every item compiled without errors and nothing is left flagged inconsistent.\n"
+                : "NOT CLEAN: the items above were not cleared. An inconsistent block is one the gate did NOT examine,\n" +
+                  "           which is the failure mode that looks like a pass (FI-52).\n");
+        }
 
         return sb.ToString().TrimEnd('\n', '\r');
     }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -80,6 +80,7 @@ public sealed record CompileAllCommandOptions(
     string ProjectIdentifier,
     string? Device,
     bool Json,
+    bool Force,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -331,7 +332,7 @@ public static class ArgumentParser
         "    Bulk restore: classifies every file (tag table / PLC data type / block) from its own root element, imports tag tables then types then blocks, and RETRIES failures until a pass\n" +
         "    makes no progress - so a dependency order nobody can supply from filenames does not have to be supplied. --dry-run prints the plan and never contacts Portal. Exits 13 if any\n" +
         "    file did not go in, INCLUDING one that was never attempted (unreadable, unclassifiable, duplicate name) - a project missing a block looks exactly like a whole one.\n" +
-        "  openness-cli compile-all   <project> [--device <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli compile-all   <project> [--device <name>] [--json] [--force] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Compiles EVERY inconsistent type and block, types first, in one session - the bulk half of the gate. FI-52: a device compile does not clear the inconsistent flag an imported block\n" +
         "    carries, so only a per-item compile does, and after a restore that is ninety-odd of them. Exits 8 if any item compiled with errors, 11 if any remain inconsistent. Errors and\n" +
         "    inconsistency are counted separately: one means examined-and-wrong, the other means not examined at all.\n" +
@@ -901,6 +902,7 @@ public static class ArgumentParser
         string? projectIdentifier = null;
         string? device = null;
         var json = false;
+        var force = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -918,6 +920,9 @@ public static class ArgumentParser
                     break;
                 case "--json":
                     json = true;
+                    break;
+                case "--force":
+                    force = true;
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -962,7 +967,7 @@ public static class ArgumentParser
         }
 
         return new ParseResult.CompileAllSuccess(new CompileAllCommandOptions(
-            projectIdentifier, device, json, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, device, json, force, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseImportAll(string[] args)

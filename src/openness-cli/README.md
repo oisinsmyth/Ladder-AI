@@ -10,7 +10,7 @@ openness-cli export        <project> (--block <name> | --type <name> | --tagtabl
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
 openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--dry-run]   # bulk restore: classifies each file itself, imports tag tables → types → blocks, retries to a fixpoint
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
-openness-cli compile-all   <project> [--device <name>]                        # compiles every INCONSISTENT type and block in one session — the bulk half of the gate (FI-52)
+openness-cli compile-all   <project> [--device <name>] [--force]              # compiles every INCONSISTENT type and block (or every one, with --force) in one session — the bulk half of the gate (FI-52)
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
@@ -506,7 +506,7 @@ COMPLETE: every file supplied is now in the project. This is NOT a compile gate 
 
 ## `compile-all` — the gate's bulk half (2026-08-11)
 
-`openness-cli compile-all <project> [--device <name>] [--json]`
+`openness-cli compile-all <project> [--device <name>] [--json] [--force]`
 
 FI-52 established that a whole-device compile **does not clear** the `IsConsistent=false` flag a
 freshly-imported block carries. The consequence nobody had to face until a whole program was
@@ -525,8 +525,19 @@ gate did not examine is indistinguishable from one that passed.
 warnings returns a non-`Success` state on a perfectly clean block, so a state-based verdict would
 call every block on such a project a failure.
 
-Exit **8** if any item compiled with errors, **11** if any remain inconsistent, **0** only when
-neither is true.
+**An item that compiled WITH ERRORS is still flagged CONSISTENT.** Errors do not survive the
+process; consistency does. So the invocation immediately after a failed one finds an empty work set,
+compiles nothing, and — before this was fixed — reported *"every item compiled without errors"*. That
+is the moment the report is most likely to be believed and least entitled to be. It now says
+`NOTHING EXAMINED` and exits **14** (`NothingExamined`), on the same principle as the converter's
+"compared against nothing" exit (FI-44): **empty is not clean**.
+
+`--force` is the answer when you need the question actually asked: it compiles **every** type and
+block rather than only the inconsistent ones. That is the re-verification path after a restore,
+and the only way to re-examine an item whose errors have already been forgotten.
+
+Exit **8** if any item compiled with errors, **11** if any remain inconsistent, **14** if nothing was
+examined, **0** only when items were examined and none of the above is true.
 
 ## Exit codes
 
@@ -549,6 +560,7 @@ shell should branch on these rather than on stderr text.
 | 11 | `CompileIncomplete` | A **whole-device** `compile` returned `Success` with no errors, but blocks remain flagged `IsConsistent=false` — so it did not compile them and proved less than it appears to. The unverified blocks are listed on stderr. Distinct from `CompileFailed`: nothing reported an error, the gate simply did not examine everything (FI-52) |
 | 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
 | 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |
+| 14 | `NothingExamined` | The command ran, nothing went wrong, and it examined **nothing** — so its silence says nothing about the project. `compile-all` earns this when no item is flagged inconsistent. It is not a success because of how the gap arises: an item that compiled *with errors* is still flagged *consistent*, and errors do not survive the process, so the run right after a failed one is the one that examines nothing and looks cleanest. `--force` compiles everything |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 
