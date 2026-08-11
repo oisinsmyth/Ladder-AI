@@ -699,55 +699,74 @@ internal static class Program
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
 
-        var entries = new List<Model.CompileAllEntry>();
+        // Keyed by name so an item compiled on more than one pass reports its LAST outcome. A first
+        // pass that failed on "callee has not been compiled" and a second that succeeded are one
+        // item that is fine, not two lines of which one is alarming.
+        var entries = new Dictionary<string, Model.CompileAllEntry>(StringComparer.Ordinal);
         var passes = 0;
 
         try
         {
-            var previousRemaining = int.MaxValue;
+            var previousOutstanding = int.MaxValue;
 
             while (true)
             {
                 var sanity = gateway.RunSanityCheck();
-                var types = sanity.InconsistentTypes.Select(t => t.Name).ToList();
-                var blocks = sanity.InconsistentBlocks.Select(b => b.Name).ToList();
-                var remaining = types.Count + blocks.Count;
 
-                if (remaining == 0)
+                // Inconsistency is not the only thing a further pass can fix. `Block "X" that is
+                // accessed has not been compiled` is an ORDERING artefact — the caller was compiled
+                // before its callee — and it clears on a re-run now that the callee is done.
+                // Measured on the first live whole-program restore: 15 items reported errors of that
+                // shape while every one of them was already flagged consistent, so a loop that
+                // watched only consistency stopped one pass short of clean and reported 15 failures
+                // that were not failures. Errors are part of the work set for the same reason
+                // import-all retries: the dependency order is not worth deriving when a pass settles it.
+                var work = new List<(string Name, string Kind)>();
+                work.AddRange(sanity.InconsistentTypes.Select(t => (t.Name, "Type")));
+                work.AddRange(sanity.InconsistentBlocks.Select(b => (b.Name, "Block")));
+
+                var alreadyQueued = new HashSet<string>(work.Select(w => w.Name), StringComparer.Ordinal);
+                foreach (var errored in entries.Values.Where(e => e.ErrorCount > 0))
+                {
+                    if (alreadyQueued.Add(errored.Name))
+                    {
+                        work.Add((errored.Name, errored.Kind));
+                    }
+                }
+
+                if (work.Count == 0)
                 {
                     break;
                 }
 
                 // No progress since the last pass means another identical pass cannot help: what is
                 // left is blocked on something compiling cannot fix.
-                if (remaining >= previousRemaining)
+                if (work.Count >= previousOutstanding)
                 {
-                    foreach (var name in types)
+                    foreach (var (name, kind) in work)
                     {
-                        entries.Add(new Model.CompileAllEntry(name, "Type", Model.CompileState.Error, 0, 0, StillInconsistent: true,
-                            "still inconsistent after a pass that cleared nothing"));
-                    }
-
-                    foreach (var name in blocks)
-                    {
-                        entries.Add(new Model.CompileAllEntry(name, "Block", Model.CompileState.Error, 0, 0, StillInconsistent: true,
-                            "still inconsistent after a pass that cleared nothing"));
+                        if (!entries.ContainsKey(name))
+                        {
+                            entries[name] = new Model.CompileAllEntry(name, kind, Model.CompileState.Error, 0, 0,
+                                StillInconsistent: true, "still inconsistent after a pass that cleared nothing");
+                        }
                     }
 
                     break;
                 }
 
-                previousRemaining = remaining;
+                previousOutstanding = work.Count;
                 passes++;
 
-                foreach (var name in types)
+                // Types first, then data blocks, then everything else. A UDT is a dependency of the
+                // DBs shaped by it, and a DB is a dependency of the logic that accesses it, so this
+                // is callee-before-caller for the two cases that are knowable from what sanity-check
+                // reports. It only saves passes — the loop above is what makes the result correct.
+                foreach (var (name, kind) in work.OrderBy(w => w.Kind == "Type" ? 0 : IsDataBlock(sanity, w.Name) ? 1 : 2))
                 {
-                    entries.Add(CompileOne(() => gateway.CompileType(name, options.Device), name, "Type"));
-                }
-
-                foreach (var name in blocks)
-                {
-                    entries.Add(CompileOne(() => gateway.CompileBlock(name, options.Device), name, "Block"));
+                    entries[name] = kind == "Type"
+                        ? CompileOne(() => gateway.CompileType(name, options.Device), name, kind)
+                        : CompileOne(() => gateway.CompileBlock(name, options.Device), name, kind);
                 }
             }
 
@@ -758,9 +777,9 @@ internal static class Program
                 final.InconsistentTypes.Select(t => t.Name).Concat(final.InconsistentBlocks.Select(b => b.Name)),
                 StringComparer.Ordinal);
 
-            for (var i = 0; i < entries.Count; i++)
+            foreach (var name in entries.Keys.ToList())
             {
-                entries[i] = entries[i] with { StillInconsistent = stillOut.Contains(entries[i].Name) };
+                entries[name] = entries[name] with { StillInconsistent = stillOut.Contains(name) };
             }
         }
         finally
@@ -768,7 +787,7 @@ internal static class Program
             gateway.Save();
         }
 
-        var result = new Model.CompileAllResult(entries, passes);
+        var result = new Model.CompileAllResult(entries.Values.OrderBy(e => e.Name, StringComparer.Ordinal).ToList(), passes);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatCompileAllJson(result)
             : OutputFormatter.FormatCompileAllTable(result));
@@ -780,6 +799,14 @@ internal static class Program
 
         return result.StillInconsistentCount > 0 ? ExitCodes.CompileIncomplete : ExitCodes.Success;
     }
+
+    // sanity-check reports a block's LANGUAGE, and a data block's is the literal "DB" — the only
+    // handle available here for "this is a callee, compile it first". Ordering only; being wrong
+    // costs a pass.
+    private static bool IsDataBlock(Model.SanityCheckResult sanity, string name) =>
+        sanity.InconsistentBlocks.Any(b =>
+            string.Equals(b.Name, name, StringComparison.Ordinal) &&
+            string.Equals(b.Language, "DB", StringComparison.OrdinalIgnoreCase));
 
     private static Model.CompileAllEntry CompileOne(Func<Model.CompileResult> compile, string name, string kind)
     {
