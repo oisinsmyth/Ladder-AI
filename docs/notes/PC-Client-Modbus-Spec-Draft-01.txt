@@ -5,11 +5,15 @@ PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 01
 Status:  DRAFT FOR DEBATE. Supersedes PC-Client-Modbus-Spec-Draft-00.txt, which is
          kept for its reasoning history.
 
-*** THIS DRAFT DEPENDS ON PENDING RESEARCH. *** Section 11 lists what changes
-depending on the answer to `s7-1200-download-semantics.md` — specifically whether ANY
-class of code change can reach a classic S7-1200 without stopping the CPU and without
-destroying live data. Sections marked CONTINGENT should not be built against until
-that lands. Everything else stands either way.
+*** THE DOWNLOAD RESEARCH HAS LANDED AND IS NOT YET RULED ON. *** Findings are recorded
+verbatim in `download-semantics-findings-VERBATIM.md` (job scratch directory), with the
+full document alongside it. The short version: a large class of code change DOES reach a
+classic S7-1200 without stopping it, so §11's second branch is the live one — but the
+owner has explicitly not ruled on it yet, so THIS DRAFT STILL CARRIES ITS ORIGINAL
+PREMISE. Section 11 stands as written. Where the research would change how a decision is
+APPLIED, both versions are given rather than the pre-research one being quietly replaced.
+
+Sections 13 and 14 record the resolutions of O1/O2 and O7 from the previous round.
 
 Written: 2026-08-11.
 
@@ -105,6 +109,25 @@ D7. **THE MAP IS FROZEN FOR A WAVE SET AND RE-DERIVED AT EACH DOWNLOAD BOUNDARY.
 
 D8. **AGENTS SPEAK TAG NAMES. THEY NEVER SEE A REGISTER NUMBER.** The coordinator owns
     the map and the translation (§4).
+
+D9. **D1 IS UPGRADED: INDEPENDENT MEANS NON-OVERLAPPING *REACHABLE STATE*, NOT
+    NON-OVERLAPPING TAGS.** Computed from the call hierarchy and reference graph, not
+    declared (§13).
+
+D10. **ISOLATION IS STRUCTURAL: PER-TEST INSTANCE DBs.** State carryover is prevented by
+     construction rather than cleaned up afterwards (§13).
+
+D11. **EXECUTION IS CONCURRENT, NOT SERIAL.** The block → multi-block → plant progression
+     supplies the isolation that a serial default would have bought. The enable bitmask is
+     retained as a DIAGNOSTIC (bisect, reproduce in isolation), not as the execution model
+     (§13).
+
+D12. **MODELS MUST SUPPORT TIME COMPRESSION**, and vectors declare the factor they need
+     (§13).
+
+D13. **INSTRUMENTATION IS A PROPERTY OF THE COPY LAYER, NOT OF THE BLOCKS UNDER TEST.**
+     Blocks carry no instrumentation code. The copy layer is generic, map-parametrised,
+     designed once and reused across PLCs and projects (§14).
 
 --------------------------------------------------------------------------------
 4. THE MAP — VERSIONED, SYMBOLIC, RE-DERIVED
@@ -299,13 +322,11 @@ verified properly.
 12. OPEN — FOR THE NEXT ROUND
 --------------------------------------------------------------------------------
 
-O1. Does the coordinator serialise block execution by default (enable mask, one at a
-    time), or run everything concurrently and rely on §8 to survive? Concurrent is faster;
-    serial is more attributable and makes D1 far easier to guarantee.
+O1. RESOLVED — see §13. Concurrent, with structural isolation; the enable mask survives as
+    a diagnostic rather than as the execution model.
 
-O2. Reads are not automatically safe: agent A's writes change state agent B is observing.
-    Non-overlapping WRITE sets do not prevent observation interference. Does isolation
-    need to be structural — an instance and mirror region per agent — rather than a lease?
+O2. RESOLVED — see §13. Isolation is structural (per-test iDBs) AND computed
+    (non-overlapping reachable state from the reference graph), not a lease.
 
 O3. What restarts the CPU after a STOP, and may that ever be automated? Today it is a
     human, and §8's justification rests entirely on that.
@@ -317,9 +338,129 @@ O5. Who authors the models, given §6's caveat and §9's rule?
 O6. Wave failure policy: does one failing test abort the wave, or does the wave complete
     and report? Abort loses information; complete risks cascading from a bad state.
 
-O7. Does the standard scaffolding need latched transients and event scan-stamps from the
-    outset? Without them whole classes of assertion are unrunnable and the runner will
-    correctly refuse them; with them, every block carries instrumentation cost.
+O7. RESOLVED — see §14. Instrumentation lives in the copy layer, not the blocks. Scan
+    counter always; latches default-on for coil-shaped signals, cleared at test start;
+    stamps opt-in per signal in the map.
 
 O8. What is the minimum coverage threshold that admits a wave (§5), and who rules on a
     requirement declared untestable-on-a-rig?
+
+--------------------------------------------------------------------------------
+13. RESOLVED — EXECUTION AND ISOLATION (was O1 + O2)
+--------------------------------------------------------------------------------
+
+THE PROBLEM D1 DID NOT COVER. Two agents can write completely disjoint tags and still
+interfere. Worked example: agent A tests a valve block; its vector opens the valve, and
+the plant model responds by raising a vessel level. Agent B tests a level-alarm block; its
+vector asserts no high-level alarm below setpoint. A writes a valve command, B writes an
+alarm setpoint — disjoint, D1 satisfied — and B fails anyway, because A moved the level in
+the model they share. The coupling is through MODEL STATE, not through a register, so no
+amount of tag-overlap checking finds it. It is also timing-dependent, so B sees an
+intermittent failure and hunts a phantom in its own code.
+
+RESOLUTION, three parts:
+
+  (a) *** D1 IS UPGRADED TO NON-OVERLAPPING REACHABLE STATE. *** Not the tags a test
+      writes, but the transitive closure of what each block reads and writes through its
+      call tree. That is COMPUTED, not declared, so it is not something an agent can be
+      optimistic about — and the tooling substantially exists: `converter cross-check`
+      already builds a whole-project cross-block reference graph with multi-writer
+      detection, and `converter trace` does forward-pass reader/writer analysis. "Can
+      these two tests run concurrently?" becomes a derived answer from artifacts already
+      produced.
+
+  (b) *** PER-TEST INSTANCE DBs. *** An FB's state lives in its instance DB, so a per-test
+      iDB makes static carryover IMPOSSIBLE BY CONSTRUCTION rather than cleaned up after.
+      Strictly better than §7's reset-and-verify for that class of state, because there is
+      nothing to reset. It does NOT isolate shared state — global DBs, %M, and the plant
+      model remain common ground, which is what (a) is for.
+
+  (c) *** CONCURRENT EXECUTION, WITH THE ENABLE MASK DEMOTED TO A DIAGNOSTIC. *** A serial
+      default is unnecessary because testing progresses block level → multiple blocks
+      together → plant level. At block level, per-test iDBs plus computed disjointness give
+      real isolation; at plant level everything shares by definition and is serial anyway.
+      The progression supplies the isolation a serial policy would have bought. The enable
+      bitmask (§8) is kept for BISECTING a suspect set and REPRODUCING a failure in
+      isolation — both diagnostic uses, neither an execution model.
+
+TIME COMPRESSION IS A REQUIREMENT, NOT AN OPTIMISATION. Models must support a compression
+factor and vectors declare the factor they need. Without it, test duration is real plant
+duration and no execution model rescues the wall clock.
+
+BOTH VERSIONS — how the download research changes this:
+  PRE-RESEARCH  a serial default was attractive because waves were scarce (each download
+                stopped the CPU), so every wave had to be worth its cost, and per-test iDBs
+                looked expensive because a new DB meant a download meant a stop.
+  POST-RESEARCH a new DB is plain RUN — no stop, no data loss — so per-test iDBs are nearly
+                free, and cheap downloads allow more, smaller waves. That removes the
+                scarcity argument doing most of the work in the serial recommendation, and
+                strengthens the concurrent-plus-structural-isolation choice.
+                ONE NEW CONSTRAINT: `RUN (<21)`. More than 20 changed objects cannot
+                integrate in one scan, so spinning up many per-test iDBs at once forces a
+                STOP. They must be added in batches — a coordinator rule, not a design flaw.
+
+--------------------------------------------------------------------------------
+14. RESOLVED — INSTRUMENTATION (was O7)
+--------------------------------------------------------------------------------
+
+THE CHALLENGE RAISED: Modbus registers hold their value until changed, so is latching
+needed at all?
+
+HALF RIGHT, AND THE WRONG HALF FIRST. A register holds the last value WRITTEN TO IT — but
+the copy logic writes it every scan, so a one-scan pulse writes 1 on scan N and 0 on scan
+N+1. The register faithfully reproduces the coil INCLUDING ITS BREVITY. Polling at ~100 ms
+against a ~10 ms scan samples roughly every tenth scan, so the chance of catching it is
+about 10% — and it is INTERMITTENT, which is worse than never, because it presents as a
+flaky test rather than as a missing capability. "Sticking" describes the transport not
+forgetting; the problem is the SOURCE changing faster than we sample.
+
+THE RIGHT HALF, AND IT IS THE ARCHITECTURE. The register can BE the latch if the copy
+logic is written that way — `IF signal THEN register := 1` (set-dominant), rather than
+`register := signal` every scan. It sticks not because Modbus holds it, but because THE
+COPY LAYER MADE IT STICKY.
+
+  *** INSTRUMENTATION IS A PROPERTY OF THE COPY LAYER, NOT OF THE BLOCKS UNDER TEST. ***
+
+Blocks under test carry no instrumentation code at all. The copy layer is generic and
+map-parametrised, so adding a latch to a signal is a MAP change rather than a code change.
+Its PATTERN is designed once, tested once, and reused across PLCs and projects; its
+GENERATED INSTANCE changes with the map.
+
+THE TIERS:
+
+  SCAN COUNTER — always, unconditionally. One counter for the whole program, not per
+  block. Its absence silently degrades every `WaitScans` into a wall-clock guess on a
+  non-real-time host across an 80–108 ms link. Not worth debating.
+
+  LATCHED TRANSIENTS — default on for coil-shaped signals. A coil is exactly the thing
+  that pulses, the need is predictable from the vector set, and the cost is one bit plus
+  set logic.
+
+  EVENT SCAN-STAMPS — opt-in per signal in the map. A LATCH answers "did it happen?"; a
+  STAMP answers "when, relative to something else?". Two latches both true tells you both
+  events occurred — they could be fifty scans apart. For "the drain valve shall open and
+  the drain timer shall start in the same scan", only two stamps compared for equality can
+  express it, at any sampling rate. Cost is a DWORD — two registers, 32 bits — against a
+  latch's single bit, so roughly 32x, which is why it is opt-in.
+
+CLEARING SEMANTICS, and the two options differ more than they look:
+  - READ-THEN-CLEAR by the harness means a "read-only" test still needs the WRITE path,
+    which drags the entire write fence into an observation.
+  - CLEAR AT TEST START, as part of the inert state (§7), keeps observation genuinely
+    read-only and folds into a reset that is verified anyway.
+  *** TAKE THE SECOND. ***
+
+BOTH VERSIONS — how the download research changes this:
+  PRE-RESEARCH  build instrumentation in from the outset, because retrofitting meant
+                regenerating and re-downloading everything at an expensive boundary.
+  POST-RESEARCH a retrofit is an FB/FC code change, which is plain RUN — so on-demand is
+                cheap and the build-it-all-upfront argument weakens.
+                *** WITH ONE TRAP: if stamps live in a DB, adding one is a DB STRUCTURAL
+                CHANGE -> `RUN (Init)` -> that DB resets to start values, taking retentive
+                members with it. If they live in %MW there is no reinitialization concept
+                and it is a plain code change. *** This is the THIRD independent argument
+                for %MW, after the layout-revert bug and the MB_HOLD_REG rule — each
+                arrived at from a different direction.
+                Net effect: the "design once, never change" position gets STRONGER under
+                the research, provided the copy layer is generic and %MW-backed. What
+                changes cheaply is the map; what never changes is the pattern.
