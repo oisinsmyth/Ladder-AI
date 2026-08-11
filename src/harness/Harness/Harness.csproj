@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness</RootNamespace>
+    <AssemblyName>Harness</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    No package references, and no project references either — in particular NOT to DeviceGuard.
+    The runner must not know the write fence exists: a transport that talks to a real device
+    consults the guard itself, and the composition root wires the two together. Keeping them
+    independent means neither drags the other's dependencies around, and the runner stays testable
+    with no allowlist, no device and no fence.
+  -->
+
+</Project>

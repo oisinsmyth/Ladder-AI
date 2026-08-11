@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      Pure logic — no Siemens.Engineering, no network, no Portal. The runner talks to an ITransport
+      and nothing else, so the whole vector model and every refusal path is testable with no PLC in
+      the room. Keeping it net8.0 and dependency-free also means changing the harness NEVER triggers
+      the TIA Openness (Path,FileHash) re-approval cycle that a rebuild of openness-cli does.
+
+      Warnings-as-errors matches the other solutions (audit F-37): there is no CI, so the compiler is
+      the only thing that notices drift.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
