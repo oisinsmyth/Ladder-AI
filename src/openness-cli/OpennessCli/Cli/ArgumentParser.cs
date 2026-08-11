@@ -104,6 +104,32 @@ public sealed record DeleteCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Block memory layout — optimized vs standard block access. `Set` is null for the READ-ONLY form,
+// which is the default: reading is safe and writing is not, so the write is the thing you have to
+// ask for twice (--set AND --yes), never the thing you get by leaving a flag off.
+//
+// Confirm mirrors `delete`'s: it is the second irreversible-in-practice operation this CLI has.
+// Changing an existing block's layout destroys its retained data on the next download, and unlike a
+// deleted block there is nothing visibly missing afterwards to notice.
+//
+// Expect is the read path's ASSERTION: same read, but a mismatch exits non-zero instead of merely
+// printing. It exists because setting a layout is not known to be durable across a re-import of the
+// same block — the converter emits no MemoryLayout, so an import carries no opinion about it, and
+// `Normalizer` ignores the attribute, so `drift-check` is blind to a change in either direction.
+// Whether a re-import reverts the layout is UNVERIFIED. `--expect` is what lets the re-assertion be
+// a gate someone runs after an import rather than a value someone remembers to eyeball.
+public sealed record BlockLayoutCommandOptions(
+    string ProjectIdentifier,
+    string BlockName,
+    string? Device,
+    Model.MemoryLayoutKind? Set,
+    Model.MemoryLayoutKind? Expect,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // Grounding/scaffolding command (2026-07-14, `PlantAutoControl` round-trip plan Phase 0.2) — creates an
 // instance DB backing an already-existing FB, for FBs imported standalone with no calling context.
 // Not S6+ logic generation: invents no tag/address/DB number (DbName is engineer-supplied, the DB
@@ -245,6 +271,8 @@ public abstract record ParseResult
 
     public sealed record DeleteSuccess(DeleteCommandOptions Options) : ParseResult;
 
+    public sealed record BlockLayoutSuccess(BlockLayoutCommandOptions Options) : ParseResult;
+
     public sealed record CreateInstanceDbSuccess(CreateInstanceDbCommandOptions Options) : ParseResult;
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
@@ -338,6 +366,15 @@ public static class ArgumentParser
         "    inconsistency are counted separately: one means examined-and-wrong, the other means not examined at all.\n" +
         "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli block-layout  <project> --block <name> [--device <name>] [--expect Standard|Optimized] [--json]\n" +
+        "    READ-ONLY: reports the block's memory layout (optimized vs standard block access). Classic S7comm cannot see an OPTIMIZED block AT ALL - the block is not an error, it is\n" +
+        "    simply absent, and the read fails at the first DATA access rather than at connect. On an S7-1200 the TIA default is Optimized, and the IR path emits no MemoryLayout at all,\n" +
+        "    so a DB authored in IR and imported comes out Optimized silently. --expect makes the read a GATE: exit 15 if the layout is not the one named.\n" +
+        "  openness-cli block-layout  <project> --block <name> --set Standard|Optimized [--device <name>] [--json] --yes\n" +
+        "    DESTRUCTIVE. Changing an existing block's memory layout DESTROYS ITS RETAINED DATA on the next download. Sets, saves, then RE-RESOLVES the block and reads the layout back:\n" +
+        "    a read-back that does not match the request is exit 15, never a success with a note. --yes is required; without it the plan is printed and Portal is never contacted (exit 10).\n" +
+        "    UNVERIFIED: whether a later re-import of the same block reverts the layout. The converter emits no MemoryLayout and Normalizer ignores it, so drift-check cannot see either\n" +
+        "    direction. Re-assert with --expect after every import until that is settled.\n" +
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli library       <project> [--master-copies] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY walk of the project library: every type with its CLR class name, status, supported export formats and versions. Faceplates are library types, not device content.\n" +
@@ -420,6 +457,7 @@ public static class ArgumentParser
         ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileAllSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.BlockLayoutSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -451,6 +489,7 @@ public static class ArgumentParser
         ParseResult.CompileSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CompileAllSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.BlockLayoutSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
@@ -484,6 +523,7 @@ public static class ArgumentParser
             "compile" => ParseCompile(args),
             "compile-all" => ParseCompileAll(args),
             "delete" => ParseDelete(args),
+            "block-layout" => ParseBlockLayout(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
             "portal-status" => ParsePortalStatus(args),
@@ -504,7 +544,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1213,6 +1253,149 @@ public static class ArgumentParser
         }
 
         return new ParseResult.DeleteSuccess(new DeleteCommandOptions(projectIdentifier, block, device, confirm, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    /// <summary>
+    /// Parses a memory-layout value. Deliberately NOT <c>Enum.TryParse</c>: that accepts numeric
+    /// strings ("0", "1") and any casing of them, so a typo could resolve to a layout nobody named.
+    /// Two literal names, matched case-insensitively, and everything else is a hard error that says
+    /// what the two are.
+    /// </summary>
+    internal static bool TryParseMemoryLayout(string? raw, string flag, out Model.MemoryLayoutKind layout, out string error)
+    {
+        layout = default;
+        error = string.Empty;
+
+        if (string.Equals(raw, "Standard", StringComparison.OrdinalIgnoreCase))
+        {
+            layout = Model.MemoryLayoutKind.Standard;
+            return true;
+        }
+
+        if (string.Equals(raw, "Optimized", StringComparison.OrdinalIgnoreCase))
+        {
+            layout = Model.MemoryLayoutKind.Optimized;
+            return true;
+        }
+
+        error = $"Invalid value '{raw}' for {flag}. The only valid values are Standard and Optimized.{Environment.NewLine}{Usage}";
+        return false;
+    }
+
+    private static ParseResult ParseBlockLayout(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? block = null;
+        string? device = null;
+        Model.MemoryLayoutKind? set = null;
+        Model.MemoryLayoutKind? expect = null;
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--block":
+                    if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
+                    {
+                        return new ParseResult.Failure(blockErr);
+                    }
+
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--set":
+                    if (!TryTakeValue(args, ref i, "--set", out var setRaw, out var setErr))
+                    {
+                        return new ParseResult.Failure(setErr);
+                    }
+
+                    if (!TryParseMemoryLayout(setRaw, "--set", out var setLayout, out var setValueErr))
+                    {
+                        return new ParseResult.Failure(setValueErr);
+                    }
+
+                    set = setLayout;
+                    break;
+                case "--expect":
+                    if (!TryTakeValue(args, ref i, "--expect", out var expectRaw, out var expectErr))
+                    {
+                        return new ParseResult.Failure(expectErr);
+                    }
+
+                    if (!TryParseMemoryLayout(expectRaw, "--expect", out var expectLayout, out var expectValueErr))
+                    {
+                        return new ParseResult.Failure(expectValueErr);
+                    }
+
+                    expect = expectLayout;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (block is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --block <name>.{Environment.NewLine}{Usage}");
+        }
+
+        // A --set already verifies by reading back, so pairing it with --expect would mean two
+        // checks of the same value with no way to say which one a non-zero exit came from.
+        if (set is not null && expect is not null)
+        {
+            return new ParseResult.Failure(
+                $"--set and --expect are mutually exclusive: --set already verifies by reading the layout back after saving.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.BlockLayoutSuccess(new BlockLayoutCommandOptions(
+            projectIdentifier, block, device, set, expect, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCreateInstanceDb(string[] args)

@@ -60,6 +60,15 @@ internal static class Program
                 return RefuseUnconfirmedHmiEditScreen(unconfirmedEdit.Options);
             }
 
+            // Same seam, same reason: a `block-layout --set` without `--yes` is answered from the
+            // arguments alone. It is here rather than in RunBlockLayout so that the refusal cannot
+            // be reached AFTER a Portal session exists — the read path and the write path of this
+            // command share a subcommand name, and the write is destructive.
+            if (parseResult is ParseResult.BlockLayoutSuccess { Options: { Set: not null, Confirm: false } } unconfirmedLayout)
+            {
+                return RefuseUnconfirmedBlockLayout(unconfirmedLayout.Options);
+            }
+
             if (parseResult is ParseResult.HmiNewSuccess { Options.Confirm: false } unconfirmedNew)
             {
                 Console.Error.WriteLine(
@@ -136,6 +145,8 @@ internal static class Program
                     return RunCompileAll(gateway, compileAll.Options, timeoutOpenSeconds);
                 case ParseResult.DeleteSuccess delete:
                     return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
+                case ParseResult.BlockLayoutSuccess blockLayout:
+                    return RunBlockLayout(gateway, blockLayout.Options, timeoutOpenSeconds);
                 case ParseResult.CreateInstanceDbSuccess createInstanceDb:
                     return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
@@ -917,6 +928,71 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    internal static int RefuseUnconfirmedBlockLayout(BlockLayoutCommandOptions options)
+    {
+        Console.Error.WriteLine(
+            $"Would set the memory layout of block '{options.BlockName}' to {options.Set} in project " +
+            $"'{options.ProjectIdentifier}'.");
+        Console.Error.WriteLine(OutputFormatter.RetainedDataWarning);
+        Console.Error.WriteLine(OutputFormatter.ReimportHazardWarning);
+        Console.Error.WriteLine(
+            "Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    /// <summary>
+    /// `block-layout` — read, assert, or set a block's optimized/standard block access.
+    ///
+    /// <c>internal</c> rather than <c>private</c> so the read/set/verify decisions can be tested
+    /// against a fake gateway with no Portal session. That is not incidental: the single most
+    /// important property of this command is that a set whose read-back disagrees with the request
+    /// FAILS, and there is no other way to observe that without a controller.
+    ///
+    /// The verification compares the read-back against THIS INVOCATION'S OWN requested value, not
+    /// against the value the result reports having been asked for. The two are normally identical;
+    /// gating on the caller's own value is what makes the check fail closed if they ever are not.
+    /// </summary>
+    internal static int RunBlockLayout(IOpennessGateway gateway, BlockLayoutCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        if (options.Set is not { } requested)
+        {
+            var read = gateway.GetBlockMemoryLayout(options.BlockName, options.Device);
+            Console.WriteLine(options.Json
+                ? OutputFormatter.FormatBlockLayoutJson(read)
+                : OutputFormatter.FormatBlockLayoutTable(read));
+
+            // --expect turns the read into a gate. It exists because setting a layout is not known
+            // to survive a re-import of the same block, and no other check in this toolchain can
+            // see the attribute at all — the converter never emits it and Normalizer ignores it, so
+            // drift-check is structurally blind to a change in either direction.
+            if (options.Expect is { } expected && read.Layout != expected)
+            {
+                Console.Error.WriteLine(
+                    $"LAYOUT MISMATCH: expected {expected}, but '{read.Name}' is {read.Layout}.");
+                return ExitCodes.LayoutMismatch;
+            }
+
+            return ExitCodes.Success;
+        }
+
+        var result = gateway.SetBlockMemoryLayout(options.BlockName, options.Device, requested);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatBlockLayoutJson(result)
+            : OutputFormatter.FormatBlockLayoutTable(result));
+
+        if (result.Layout != requested)
+        {
+            Console.Error.WriteLine(
+                $"SET NOT APPLIED: asked for {requested}, but '{result.Name}' read back as {result.Layout} after saving. " +
+                "The block's layout is NOT what was requested.");
+            return ExitCodes.LayoutMismatch;
+        }
+
+        return ExitCodes.Success;
+    }
+
     private static int RunCreateInstanceDb(IOpennessGateway gateway, CreateInstanceDbCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -1016,6 +1092,20 @@ public static class ExitCodes
     public const int NothingExamined = 14;
 
     /// <summary>
+    /// `block-layout`: the block's memory layout is NOT the one asked for. Two ways to earn it, and
+    /// they are the same fact from either end — a `--set` whose read-back after saving disagrees
+    /// with the request, or a `--expect` assertion that does not hold.
+    ///
+    /// Its own code rather than <see cref="CommandError"/> because nothing was named wrongly: the
+    /// block resolved, the command ran, and the project's answer is not the one required. Re-running
+    /// with a different argument does not fix it. And it must never be
+    /// <see cref="Success"/>-with-a-note, because the failure it reports is invisible everywhere
+    /// else — an optimized block is not an error to a classic-S7comm reader, it is simply absent,
+    /// and no compile, drift-check or sanity-check in this toolchain can see the attribute at all.
+    /// </summary>
+    public const int LayoutMismatch = 15;
+
+    /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).
     ///
     /// CommandError (7) means "you named something that isn't there, or named it ambiguously" — the
@@ -1050,6 +1140,11 @@ public static class ExitCodes
         // Not a naming mistake, but it was already classified this way and the message is actionable
         // (it names the path and points at the quirks note).
         ExportProducedNoFileException => CommandError,
+
+        // Same family: the block resolved but does not expose an access mode, and the correction is
+        // to name a different block. Reporting it as an internal fault would be the audit-F-09
+        // defect again.
+        Model.BlockMemoryLayoutUnavailableException => CommandError,
 
         // The HMI family, added 2026-08-08. Every one of these was falling through to
         // UnexpectedError = 5 and printing a full inner-exception chain, even though each is a

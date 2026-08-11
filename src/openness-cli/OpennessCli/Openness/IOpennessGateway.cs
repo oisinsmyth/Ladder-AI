@@ -299,6 +299,37 @@ public interface IOpennessGateway : IDisposable
     /// directly, rather than discovering it as a side effect of some other command failing.
     /// </summary>
     SanityCheckResult RunSanityCheck();
+
+    /// <summary>
+    /// Reads the named block's memory layout — optimized vs standard block access. Resolves the
+    /// block exactly like <see cref="ExportBlock"/> (same <paramref name="deviceFilter"/>
+    /// disambiguation, same safety refusal).
+    ///
+    /// Strictly read-only: it reads one property and does not save. That matters more here than
+    /// elsewhere, because the writing half of this pair is destructive (see
+    /// <see cref="SetBlockMemoryLayout"/>) and the two must not be reachable by accident from one
+    /// another.
+    ///
+    /// This exists because nothing else in the toolchain can see the attribute at all. The IR
+    /// grammar has no <c>MemoryLayout</c>, the converter neither writes nor reads it, and the
+    /// Normalizer ignores it — so a DB authored in IR and imported comes out OPTIMIZED with no
+    /// error at import, no error at compile, and no drift-check finding.
+    /// </summary>
+    BlockLayoutResult GetBlockMemoryLayout(string blockName, string? deviceFilter);
+
+    /// <summary>
+    /// Sets the named block's memory layout, saves, and READS IT BACK from a freshly re-resolved
+    /// block. The returned <see cref="BlockLayoutResult.Layout"/> is always what the project holds
+    /// afterwards, never an echo of the request — a set that silently no-ops is precisely the
+    /// failure mode this command exists to prevent, and only a read-back can tell them apart.
+    ///
+    /// **Destructive.** Changing an existing block's memory layout DESTROYS ITS RETAINED DATA on
+    /// the next download. Callers gate it behind an explicit confirmation for that reason.
+    ///
+    /// Whether TIA honours a memory-layout element on <c>Import()</c> is untested, which is why
+    /// this is a post-import property set rather than something folded into the import path.
+    /// </summary>
+    BlockLayoutResult SetBlockMemoryLayout(string blockName, string? deviceFilter, MemoryLayoutKind requested);
 }
 
 public sealed class ConnectTimeoutException : Exception

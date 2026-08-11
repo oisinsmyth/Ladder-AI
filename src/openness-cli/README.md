@@ -12,6 +12,8 @@ openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> 
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
 openness-cli compile-all   <project> [--device <name>] [--force]              # compiles every INCONSISTENT type and block (or every one, with --force) in one session — the bulk half of the gate (FI-52)
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
+openness-cli block-layout  <project> --block <name> [--expect Standard|Optimized]   # READ-ONLY: optimized vs standard block access. Classic S7comm cannot see an OPTIMIZED block at all; the IR path yields Optimized silently — see below
+openness-cli block-layout  <project> --block <name> --set Standard|Optimized --yes  # DESTROYS THE BLOCK'S RETAINED DATA on the next download. Sets, saves, re-resolves and READS BACK; a mismatch is exit 15, never a pass
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
@@ -539,6 +541,88 @@ and the only way to re-examine an item whose errors have already been forgotten.
 Exit **8** if any item compiled with errors, **11** if any remain inconsistent, **14** if nothing was
 examined, **0** only when items were examined and none of the above is true.
 
+## `block-layout` — optimized vs standard block access (2026-08-11)
+
+```
+openness-cli block-layout <project> --block <name> [--device <name>] [--expect Standard|Optimized] [--json]
+openness-cli block-layout <project> --block <name> --set Standard|Optimized [--device <name>] [--json] --yes
+```
+
+**Why this exists.** A PC-side test harness reads a PLC over classic S7comm. **Classic S7comm cannot
+see an OPTIMIZED block at all** — the block is not reported as an error, it is simply absent, and the
+failure surfaces at the first *data* read rather than at connect. On an S7-1200 the TIA default is
+`Optimized`.
+
+Nothing else in this toolchain can see the attribute. `MemoryLayout` is absent from the IR grammar
+(`ir/SPEC.md`), is never written by the converter's `DbSourceWriter` and never read by its
+`DbSourceParser`, and `Normalizer` has it on its ignore list. So a DB authored in IR and imported
+comes out **optimized, silently**: no error at import, no error at compile, no `drift-check` finding.
+Measured 2026-08-11 — a genuine TIA export of a DB created that way reads
+`<MemoryLayout>Optimized</MemoryLayout>`.
+
+Backed by `Siemens.Engineering.SW.Blocks.PlcBlock.MemoryLayout`, a read/write property of enum type
+`Siemens.Engineering.SW.Blocks.MemoryLayout` with members `Standard` and `Optimized` — confirmed by
+reflecting on the installed V20 assembly (`CanRead=True CanWrite=True`) and in its own
+`Siemens.Engineering.xml` ("Determines if a block access is optimized or not"). This is the first
+thing in this CLI that writes a property on a `PlcBlock` at all; every other setter here is on the
+HMI path.
+
+**Read (the default) is read-only.** It reads one property and does not save. A block reported as
+`Optimized` also gets the S7comm note, because that is the consequence, not the value.
+
+**`--expect` makes the read a gate.** Same read, but a mismatch exits **15** instead of merely
+printing. It is there to be run after an import — see the durability hazard below.
+
+**`--set` is destructive, and says so.** Changing an existing block's memory layout **destroys its
+retained data on the next download**. There is no migration and no warning at download time, and
+unlike a deleted block there is nothing visibly missing afterwards — the loss shows up as a
+retentive value that did not survive a restart. The warning is printed in both the dry run and the
+confirmed run. `--yes` is required; without it the plan is printed and **Portal is never contacted**
+(exit **10**), decided from the arguments alone before `Connect`, exactly like `delete` and
+`hmi-create-screen`.
+
+**A set is verified by reading it back.** After setting the property the project is saved, the block
+is **re-resolved from the project** (not re-read off the same object, which a cached value could
+answer), and the layout read again. A read-back that does not match the request exits **15** and is
+reported as `NOT APPLIED` — never a success with a note, because a silent no-op is the exact failure
+this command exists to catch. The check compares against the *invocation's own* requested value
+rather than the value the result reports having been asked for, so it fails closed even if those ever
+disagree. **There is deliberately no flag that skips it.**
+
+Safety blocks are refused before the property is touched, like every other subcommand (exit 6).
+
+### UNVERIFIED: the layout is not known to be durable across a re-import
+
+**Whether re-importing the same block later reverts it to `Optimized` has not been measured in
+either direction.** It cannot currently be tested from the IR side, because there is no way to
+produce a standard-access block from that toolchain to test against. Treat this as open, not as
+either answer:
+
+- the converter emits no `MemoryLayout`, so an import carries **no opinion** about layout;
+- `Normalizer` ignores the attribute — under a comment reading *"Block-level configuration TIA
+  assigns sensible defaults for on Import() regardless of source content"* — so **`drift-check`
+  cannot detect a layout change in either direction**;
+- therefore, if re-import does revert it, the block goes silently back to being invisible to the
+  harness while every check in the pipeline stays green. It would bite on the *second* import, not
+  the first.
+
+Until that is settled, re-assert after every import of the block:
+
+```
+openness-cli block-layout <project> --block DB_Whatever --expect Standard
+```
+
+Do **not** "fix" this by un-ignoring `MemoryLayout` in `Normalizer`: converter output never emits the
+attribute, so un-ignoring it would make every real-export-vs-converter-output comparison differ and
+break the drift check wholesale. That change only becomes correct once the converter can *emit* the
+attribute, which is separate work.
+
+Related, and worth reading before reasoning about a block's layout from any file on disk:
+`docs/notes/block-memory-layout-and-the-export-trap.md`. Its headline is that **converter `to-xml`
+output is not a TIA export** — it renders five block-level attributes and `MemoryLayout` is not one of
+them, so grepping converter output for it finds nothing, and *nothing is evidence about the converter,
+not about the block*. An absent attribute is "unanswered", never "false".
+
 ## Exit codes
 
 Every code this CLI can return (`OpennessCli/Program.cs`, `ExitCodes`). Anything driving it from a
@@ -553,14 +637,15 @@ shell should branch on these rather than on stderr text.
 | 4 | `ProjectOpenTimeout` | The project-open step exceeded `--timeout-open` (default 1800s). A large project legitimately takes minutes; raise the timeout before assuming a hang |
 | 5 | `UnexpectedError` | Catch-all for any exception not classified below. Prints the full inner-exception chain. Treat as "a bug or an unmodelled Openness failure", not as user error — but see the caveat below |
 | 6 | `SafetyRefused` | `SafetyContentRefusedException` — the command touched safety-classified content and was refused (hard rule 2). Not retryable, by design |
-| 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException` |
+| 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException`, `BlockMemoryLayoutUnavailableException` (the block resolved but exposes no access mode — name a DB or an FB) |
 | 8 | `CompileFailed` | `compile` ran to completion but returned `State != Success`. The diagnostics are on stdout (`--json` for structured form); the exit code alone doesn't distinguish errors from warnings-only states |
 | 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block, or at least one device failing to compile. Both lists are printed |
-| 10 | `NotConfirmed` | `delete` resolved the block and printed what it *would* delete, but `--yes` was absent. **Nothing was deleted.** The only subcommand with a confirmation gate, because it's the only irreversible one |
+| 10 | `NotConfirmed` | A destructive command printed what it *would* do and `--yes` was absent, so **nothing was changed and Portal was never contacted** — the refusal is decided from the arguments alone, before `Connect`. Earned by `delete`, `block-layout --set`, and the HMI writers |
 | 11 | `CompileIncomplete` | A **whole-device** `compile` returned `Success` with no errors, but blocks remain flagged `IsConsistent=false` — so it did not compile them and proved less than it appears to. The unverified blocks are listed on stderr. Distinct from `CompileFailed`: nothing reported an error, the gate simply did not examine everything (FI-52) |
 | 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
 | 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |
 | 14 | `NothingExamined` | The command ran, nothing went wrong, and it examined **nothing** — so its silence says nothing about the project. `compile-all` earns this when no item is flagged inconsistent. It is not a success because of how the gap arises: an item that compiled *with errors* is still flagged *consistent*, and errors do not survive the process, so the run right after a failed one is the one that examines nothing and looks cleanest. `--force` compiles everything |
+| 15 | `LayoutMismatch` | `block-layout`: the block's memory layout is **not** the one asked for — either a `--set` whose read-back after saving disagrees with the request, or a `--expect` assertion that does not hold. Its own code because nothing was named wrongly and re-running with a different argument does not fix it; and never a success-with-a-note, because this failure is invisible everywhere else — an optimized block is not an error to a classic-S7comm reader, it is simply absent, and no compile, `drift-check` or `sanity-check` can see the attribute at all |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

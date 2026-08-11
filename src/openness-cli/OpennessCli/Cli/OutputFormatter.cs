@@ -718,6 +718,92 @@ public static class OutputFormatter
         (result.Messages.Count(m => m.State == Model.CompileState.Error),
          result.Messages.Count(m => m.State == Model.CompileState.Warning));
 
+    /// <summary>
+    /// The sentence a `--set` must print in both its dry run and its confirmed run. It is the one
+    /// consequence of this command that cannot be undone by running it again, and it is invisible
+    /// afterwards — unlike a deleted block, a block whose retained data was wiped looks entirely
+    /// normal until someone reads a value that should have survived a restart.
+    /// </summary>
+    public const string RetainedDataWarning =
+        "DESTRUCTIVE: changing a block's memory layout DESTROYS ITS RETAINED DATA on the next download.\n" +
+        "  Every retentive value in this block is lost — there is no migration and no warning at download time.\n" +
+        "  This is correct only for a NEW, purpose-built block. For a block in service, it is not.";
+
+    /// <summary>
+    /// The hazard that outlives the command. Printed on every `--set`, because the moment it bites
+    /// is a LATER import, by which point nobody is looking at this output any more.
+    /// </summary>
+    public const string ReimportHazardWarning =
+        "UNVERIFIED — NOT KNOWN TO BE DURABLE: whether re-importing this block later reverts the layout has not\n" +
+        "  been measured either way. The converter emits no MemoryLayout, so an import carries no opinion about it,\n" +
+        "  and Normalizer ignores the attribute, so `converter drift-check` cannot detect a change in EITHER\n" +
+        "  direction. Re-assert after every import of this block:\n" +
+        "    openness-cli block-layout <project> --block <name> --expect Standard";
+
+    /// <summary>
+    /// A block-layout read or set. Deliberately spells out BEFORE / REQUESTED / AFTER as three
+    /// separate lines on a set: the value that was asked for and the value the project actually
+    /// holds afterwards are different facts, and a report that collapsed them would be unable to
+    /// show the exact failure this command exists to catch.
+    /// </summary>
+    public static string FormatBlockLayoutTable(BlockLayoutResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("BLOCK: ").Append(result.Name).Append("  (").Append(result.Path).Append(")\n");
+        sb.Append("TYPE: ").Append(result.Type).Append('\n');
+
+        if (!result.IsSet)
+        {
+            sb.Append("LAYOUT: ").Append(result.Layout).Append('\n');
+            if (result.Layout == MemoryLayoutKind.Optimized)
+            {
+                sb.Append("NOTE: an OPTIMIZED block is invisible to classic S7comm — a PC-side reader sees no such block\n")
+                  .Append("  at all, and fails at the first data read rather than at connect.\n");
+            }
+
+            return sb.ToString().TrimEnd('\n', '\r');
+        }
+
+        sb.Append("BEFORE: ").Append(result.PreviousLayout).Append('\n');
+        sb.Append("REQUESTED: ").Append(result.RequestedLayout).Append('\n');
+        sb.Append("AFTER: ").Append(result.Layout).Append('\n');
+
+        if (result.Verified)
+        {
+            sb.Append(result.Changed
+                ? "VERIFIED: saved, the block re-resolved from the project, and the layout read back matches the request.\n"
+                : "VERIFIED: the layout read back matches the request. It was already that value — nothing changed.\n");
+            sb.Append(RetainedDataWarning).Append('\n');
+            sb.Append(ReimportHazardWarning).Append('\n');
+        }
+        else
+        {
+            sb.Append("NOT APPLIED: the set did not take. Requested ").Append(result.RequestedLayout)
+              .Append(", but the block re-read ").Append(result.Layout).Append(" after saving.\n")
+              .Append("  Nothing here reports this as a success: a silent no-op is the exact failure this command exists to catch.\n");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatBlockLayoutJson(BlockLayoutResult result)
+    {
+        var payload = new
+        {
+            name = result.Name,
+            path = result.Path,
+            type = result.Type.ToString(),
+            layout = result.Layout.ToString(),
+            previousLayout = result.PreviousLayout?.ToString(),
+            requestedLayout = result.RequestedLayout?.ToString(),
+            isSet = result.IsSet,
+            changed = result.Changed,
+            verified = result.Verified,
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatCompileTable(CompileResult result)
     {
         var sb = new StringBuilder();

@@ -3645,6 +3645,115 @@ public sealed class OpennessGateway : IOpennessGateway
         return info;
     }
 
+    public BlockLayoutResult GetBlockMemoryLayout(string blockName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(GetBlockMemoryLayout)}.");
+        }
+
+        var (block, path) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        return new BlockLayoutResult(
+            block.Name, path, ClassifyBlockType(block), ReadMemoryLayout(block, blockName),
+            PreviousLayout: null, RequestedLayout: null);
+    }
+
+    // The read-back is the whole mechanism, so it is done the paranoid way: the block is RESOLVED
+    // AGAIN from the project after the save, and the property read off that fresh object. Reading
+    // the same instance back would let a cached value answer the question the command exists to ask.
+    public BlockLayoutResult SetBlockMemoryLayout(string blockName, string? deviceFilter, MemoryLayoutKind requested)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(SetBlockMemoryLayout)}.");
+        }
+
+        var (block, _) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var before = ReadMemoryLayout(block, blockName);
+
+        try
+        {
+            block.MemoryLayout = ToSiemensMemoryLayout(requested);
+        }
+        catch (Exception ex)
+        {
+            throw new BlockMemoryLayoutUnavailableException(blockName, "set", ex);
+        }
+
+        SaveProject();
+
+        var (reread, rereadPath) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        return new BlockLayoutResult(
+            reread.Name, rereadPath, ClassifyBlockType(reread), ReadMemoryLayout(reread, blockName),
+            before, requested);
+    }
+
+    // The resolve-then-refuse-safety preamble that ExportBlock/DeleteBlock/CompileBlock each spell
+    // out inline. New code goes through here rather than adding a fourth copy; the three older sites
+    // are left as they are, since changing their resolution path is not something this branch can
+    // verify against a live Portal.
+    private (PlcBlock Block, string Path) ResolveOneNonSafetyBlock(string blockName, string? deviceFilter)
+    {
+        var matches = FindMatchingBlocks(_project!, blockName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            throw new BlockNotFoundException(blockName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousBlockException(blockName, matches.Select(m => m.Path));
+        }
+
+        var (block, path) = matches[0];
+        var language = block.ProgrammingLanguage.ToString();
+        if (SafetyClassifier.IsSafety(language))
+        {
+            throw new SafetyContentRefusedException(blockName, language);
+        }
+
+        return (block, path);
+    }
+
+    private static MemoryLayoutKind ReadMemoryLayout(PlcBlock block, string blockName)
+    {
+        MemoryLayout raw;
+        try
+        {
+            raw = block.MemoryLayout;
+        }
+        catch (Exception ex)
+        {
+            throw new BlockMemoryLayoutUnavailableException(blockName, "read", ex);
+        }
+
+        return raw switch
+        {
+            MemoryLayout.Standard => MemoryLayoutKind.Standard,
+            MemoryLayout.Optimized => MemoryLayoutKind.Optimized,
+
+            // Standard and Optimized are the only two members the installed V20 enum declares. An
+            // unrecognized third would mean this build is reading an API it was not written
+            // against, and guessing which of the two it resembles is exactly the silent
+            // misclassification design philosophy #10 forbids.
+            _ => throw new InvalidOperationException(
+                $"Unrecognized Siemens.Engineering.SW.Blocks.MemoryLayout value '{raw}' on block '{blockName}'. " +
+                "Refusing to classify it as either Standard or Optimized."),
+        };
+    }
+
+    private static MemoryLayout ToSiemensMemoryLayout(MemoryLayoutKind kind) => kind switch
+    {
+        MemoryLayoutKind.Standard => MemoryLayout.Standard,
+        MemoryLayoutKind.Optimized => MemoryLayout.Optimized,
+        _ => throw new InvalidOperationException($"Unrecognized {nameof(MemoryLayoutKind)} value '{kind}'."),
+    };
+
     private static CompileResult RunCompile(ICompilable compilable)
     {
         var result = compilable.Compile();
