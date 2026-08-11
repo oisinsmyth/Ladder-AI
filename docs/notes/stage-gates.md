@@ -4,6 +4,16 @@
 
 Claude Code: do not perform capabilities from stages that haven't passed their gate.
 
+**S9 IS WAIVED FOR LIVE PROJECTS (owner decision, 2026-08-11).** Test and simulation generation —
+stage S9 — may be performed on work in `Live Runs/` without waiting for the S9 gate, and therefore
+without waiting for S6 to exit or S7 to open. The waiver is **scoped to live projects only**: for the
+pipeline/reference project the gate stands as written. Rationale: S9's stated entry condition was
+"PLCSIM story resolved", and it now is — resolved *negatively*, in that the simulator cannot serve a
+classic S7-1200 (ADR-0009 §Context). The stage's original premise no longer describes the work, so
+gating live delivery on it would hold up real jobs waiting for a condition that has already been
+answered. The gate is waived, **not** the hard rules: 1, 2, 4, 5 and 8 apply to S9 work exactly as to
+any other.
+
 | Stage | Status | Gate review date | Notes |
 |-------|--------|------------------|-------|
 | S0 — Foundation | **ACTIVE — exit criteria met, gate review pending** | — | Entry criteria met: TIA V20 + Openness installed. Done: repo skeleton; openness-cli `list` with safety filter (built + live-verified, incl. cold-open); Windows "Siemens TIA Openness" group membership confirmed manually via cmd by project owner (2026-07-10); A-01 and A-02 verified (2026-07-10, see `docs/evidence/stage-S0.md`). Project in use: **JOB9002 - Tom White Waste (scratch copy)**, replacing JOB9003 - K150 (no longer in use) — private engineering project, Amber-tier, explicit per-project approval recorded in `docs/13-data-boundary.md`; incomplete against `06-lad-conventions.md` but sufficient for verification. TODO: formal gate review sign-off before flipping to done/starting S1 |

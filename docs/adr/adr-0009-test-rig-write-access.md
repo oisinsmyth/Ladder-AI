@@ -21,7 +21,9 @@ engineer makes the change in TIA Portal and the tooling assists around them (§L
 - **Relates to:** `10-non-goals.md` **#3** (the exclusion this re-scopes) · **ADR-0008** (read-only
   live-device access — this is the "separate and heavier question" it deferred) · CLAUDE.md **hard
   rule 2** (safety — untouched, tightened here) · **hard rule 4** (compile gate) · **hard rule 5**
-  (never bypass review — untouched) · `src/device-guard/` (the read fence, extended here) ·
+  (the real project is human-gated — amended 2026-08-11, see below) · `10-non-goals.md` **#4**
+  (promotion review + restore points — re-scoped 2026-08-11) · `src/device-guard/` (the read fence,
+  extended here) ·
   `13-data-boundary.md`.
 
 ## Context
@@ -85,7 +87,10 @@ it is not. **A fence you can check is worth more than a fence you have to reason
 device, rig included. The client must refuse and *name* it, never silently skip — the same fail-closed
 posture the export path takes. A rig being isolated does not make its safety content writable.
 
-**Hard rule 5 (never bypass review) stands.** A rig is not the project. Nothing here creates a route
+**Hard rule 5 stands, in its amended form** *(2026-08-11: "the real project is human-gated; everything
+before it is yours" — iteration against scratch and a rig no longer needs per-step sign-off, and
+`10-non-goals.md` #4 now requires a verified restore point before any device write).* A rig is not the
+project. Nothing here creates a route
 for AI output to enter a real TIA project without human review, and applying a change to a *project*
 remains a human act. Note also that a coder deploying its own block to a rig and observing it pass is
 **a build step, not a review** — it is evidence about behaviour, not a second opinion, and it does not
