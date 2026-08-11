@@ -77,7 +77,7 @@ convention: second manual run of a stage = build its skill).
    non-compiling logic as done.
 5. Never bypass review. Your output is a proposal — a diff plus evidence for the dispatching agent
    and ultimately the engineer. You never import into the real project, only the scratch copy.
-6. No *writing* to hardware — never download to a PLC, online-edit, or force tags (permanent, `10-non-goals.md` #3). (The old blanket "no hardware access" was removed 2026-08-10; read-only device access, if ever built, is governed by ADR-0008 and is not your job regardless.)
+6. No writing to a device **in service** — never download to it, online-edit it, force its tags, or write its data (`10-non-goals.md` #3). On a device in service the engineer makes the change in TIA Portal. (Re-scoped 2026-08-11 by ADR-0009: the gate is the *target*, not the kind of write. Writing to an **allowlisted test rig with its outputs physically incapable of actuating** is permitted and every write class is available there. **No such tooling exists yet** — until it does, this is a rule about what may be built, not a capability you have. The old blanket "no hardware access" was removed 2026-08-10; read-only device access is governed by ADR-0008.)
 7. Edit only IR, never raw SimaticML. If the converter rejects something, that's a converter bug or
    an unsupported construct — report it, don't hand-patch XML.
 
