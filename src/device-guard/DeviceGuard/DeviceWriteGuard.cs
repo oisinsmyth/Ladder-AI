@@ -1,5 +1,3 @@
-using System.Net;
-
 namespace DeviceGuard;
 
 /// <summary>
@@ -126,7 +124,7 @@ public sealed class DeviceWriteGuard
         }
 
         // 7. Reversibility, per 10-non-goals.md #4(b).
-        if (!_restorePoints.HasVerifiedRestorePoint(Normalize(target)))
+        if (!_restorePoints.HasVerifiedRestorePoint(DeviceAddress.Normalize(target)))
             return WriteDecision.Refuse(WriteRefusal.NoRestorePoint,
                 $"no verified restore point exists for '{target}'. Capture and verify one before writing; " +
                 "if it cannot be captured, the write does not happen. Note that a restore point covering " +
@@ -136,10 +134,4 @@ public sealed class DeviceWriteGuard
         return WriteDecision.Allow(entry, area, scope);
     }
 
-    /// <summary>Same canonicalization the read guard uses, so both agree on what "same target" means.</summary>
-    private static string Normalize(string address)
-    {
-        var trimmed = address.Trim();
-        return IPAddress.TryParse(trimmed, out var ip) ? ip.ToString() : trimmed.ToLowerInvariant();
-    }
 }
