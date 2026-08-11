@@ -60,7 +60,32 @@ public sealed record AllowlistEntry(
     /// cap" — the run's own declared scope stands alone. It does NOT mean "everything": a run must
     /// always declare what it will touch (see <see cref="WriteScope"/>).
     /// </summary>
-    IReadOnlyList<string>? WritableAreas = null)
+    IReadOnlyList<string>? WritableAreas = null,
+
+    // ---- Where a unit-level identifier can be READ FROM ----
+    //
+    // Declaring an expected identifier (above) and being able to READ one are different things, and
+    // conflating them is how an entry ends up permanently unsatisfiable. The fields above say WHAT we
+    // expect; the two below say HOW it can be obtained. An entry that declares a serial number but
+    // configures no way to read one can never pass — see IdentitySourcePlan, which reports that as the
+    // configuration error it is rather than letting it surface as a device mismatch.
+
+    /// <summary>
+    /// Where this device's program publishes a unique identifier, when the CPU itself will not report
+    /// one. Null means no marker is available — which is a refusal for any entry declaring a serial
+    /// number, not a licence to skip the check.
+    /// </summary>
+    MarkerLocation? Marker = null,
+
+    /// <summary>
+    /// Opt in to reading the serial from the CPU's own SZL 0x001C record.
+    ///
+    /// <para>Defaults to FALSE deliberately. It would be a better identifier than a marker DB — nothing
+    /// in the user program can change it — but the CPU measured on 2026-08-11 REFUSED that request at
+    /// every index, and enabling a source that always throws turns every connection into a failure.
+    /// Turn it on to try it on a CPU that might answer; if it works, it may retire the marker DB.</para>
+    /// </summary>
+    bool UseCpuInfoSerial = false)
 {
     /// <summary>The one kind value that authorizes access. Anything else is refused.</summary>
     public const string TestRigKind = "test-rig";

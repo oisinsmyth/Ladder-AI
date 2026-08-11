@@ -99,4 +99,74 @@ public class AllowlistFileTests : IDisposable
         Assert.True(r.Loaded);
         Assert.Single(r.Entries);
     }
+
+    /// <summary>
+    /// The marker is a NESTED object, which is the one shape in this file that could bind to null
+    /// without any parse error at all. A silently-unbound marker would leave the entry looking
+    /// configured while the serial went unread — and the refusal would then blame the device.
+    /// </summary>
+    [Fact]
+    public void A_nested_marker_block_binds()
+    {
+        var path = WriteTemp(
+            """
+            {
+              "entries": [
+                {
+                  "address": "10.10.10.10",
+                  "kind": "test-rig",
+                  "serialNumber": "RIG-BENCH-01",
+                  "marker": { "dbNumber": 100, "byteOffset": 2, "length": 32, "encoding": "S7String" }
+                }
+              ]
+            }
+            """);
+
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded);
+        var marker = Assert.Single(r.Entries).Marker;
+        Assert.NotNull(marker);
+        Assert.Equal(100, marker!.DbNumber);
+        Assert.Equal(2, marker.ByteOffset);
+        Assert.Equal(32, marker.Length);
+        Assert.Equal(MarkerLocation.S7String, marker.EffectiveEncoding);
+        Assert.True(marker.IsUsable);
+    }
+
+    [Fact]
+    public void An_entry_with_no_marker_block_leaves_it_null_rather_than_empty()
+    {
+        // Null means "no marker available", which is a refusal for any entry declaring a serial. An
+        // empty-but-present marker would instead be reported as a malformed marker — a different fix.
+        var path = WriteTemp("""{ "entries": [ { "address": "10.10.10.10", "kind": "test-rig" } ] }""");
+
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded);
+        Assert.Null(Assert.Single(r.Entries).Marker);
+    }
+
+    [Fact]
+    public void A_half_filled_marker_binds_and_is_reported_as_malformed()
+    {
+        // Binding must not "helpfully" default the missing fields — a reader pointed at the wrong
+        // bytes could produce a plausible identifier out of unrelated data and match the allowlist.
+        var path = WriteTemp(
+            """
+            {
+              "entries": [
+                { "address": "10.10.10.10", "kind": "test-rig", "marker": { "dbNumber": 100 } }
+              ]
+            }
+            """);
+
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded);
+        var marker = Assert.Single(r.Entries).Marker;
+        Assert.NotNull(marker);
+        Assert.False(marker!.IsUsable);
+        Assert.Contains("no byteOffset", marker.Problem());
+    }
 }
