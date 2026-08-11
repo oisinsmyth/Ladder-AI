@@ -9,6 +9,12 @@
   to be false, not because the appetite changed.** If the owner holds the line, option 3 records
   exactly what that costs and the answer is coherent.
 - **Date:** 2026-08-10
+- **Amended 2026-08-11 — question 4 decided by the owner:** **both sensor and command DBs.** Write
+  access is **not isolated to any one type of data; it is as broad as testing requires.** The
+  sensor/command split is therefore *not* a gate. That was the sharpest question in the document and
+  it has been answered in the widening direction, which **moves the entire safety load onto the target
+  fence** — see §The fence item 3, now load-bearing rather than merely strongest, and the consequence
+  recorded at the end of §The distinction.
 - **Relates to:** `10-non-goals.md` **Permanent #3** (the exclusion this asks to narrow) ·
   **ADR-0008** (read-only live-device access — this is the "separate and heavier question" it
   deferred) · CLAUDE.md **hard rule 2** (safety — untouched, and tightened here) · **hard rule 5**
@@ -93,6 +99,16 @@ outputs disconnected nothing moves; on a plant, things move. So **the fence cann
 class alone — it has to rest on the target.** Any version of this decision that gates only on "is it
 process data" is unsafe and should be rejected.
 
+**Resolved 2026-08-11, in the widening direction.** The owner decided both sensor and command DBs are
+in scope: write access is not isolated to any data class and is as broad as testing requires. That is
+a defensible call — a harness that can feed an instrument but not press a button cannot exercise a
+sequence end to end, so half a scope would have bought a half-useful harness — **but it removes the
+data class as a gate entirely, and with it the softer of the two fences.** What remains between a
+mis-targeted write and real equipment moving is the target fence and nothing else. Everything in
+§The fence that was "recommended" is now structural, and item 3 in particular stops being the
+strongest available protection and becomes the *only* protection whose failure mode is not a config
+file. This ADR should not be accepted with item 3 left advisory.
+
 ## The fence — what a write fence needs that the read fence does not
 
 `src/device-guard/` is built, fail-closed, exact-match, no default path, 30 tests. It is a good read
@@ -114,8 +130,19 @@ What a write path needs on top:
    disconnected, or interposing relays unpowered. Recorded in the allowlist entry as an assertion by a
    named human, the way ADR-0008 made "this is a rig" durable. Every software fence here is a config
    file; this one is not.
-4. **A bounded write surface, declared per device.** Named areas only — never "any address". A client
-   that can write anywhere on the rig is a device shell, which is the thing #3 exists to prevent.
+   **Load-bearing as of 2026-08-11.** When the scope was still arguably sensor-only, a mis-targeted
+   write mostly corrupted a reading. With command DBs in scope it can issue an operator command, so
+   this precondition is what stands between a wrong address and a contactor pulling in. It should be
+   **mandatory, verified at listing time, and re-verified whenever a rig is re-purposed** — which is
+   exactly the moment it will otherwise be forgotten.
+4. **A declared write surface, per device — bounded by *target*, not by data class.** Reconciled with
+   the 2026-08-11 decision: the surface may name **anything the test campaign requires**, sensor and
+   command alike, up to and including every writable area on that rig. What it may not do is default
+   to "any address on any listed device". The declaration is the difference between *broad* and
+   *unbounded*: it is written down per rig, reviewable, and anything outside it is refused — the same
+   "empty grants nothing" posture as the allowlist itself. A client that writes anywhere on any rig by
+   default is a device shell; a client that writes everywhere on *one declared rig* because the tests
+   need it is a test harness.
 5. **No program/config linkage at all**, structurally: no `DownloadProvider`, no force verbs, nothing
    that could reach hardware configuration. (Note that Openness itself cannot write live values at
    all — verified across all 2,182 exported types — so this path cannot be built on Openness even by
@@ -130,11 +157,14 @@ job is to make the routine case impossible to get wrong and to leave a trail whe
 
 ## Options considered
 
-1. **Accept, narrow — process-data writes only, to allowlisted *and* physically-isolated test rigs, a
-   declared bounded surface per device, never program/config.** Unblocks the conformance harness on
-   the only environment where it can run faithfully. Costs: reopens a permanent exclusion; makes the
-   allowlist safety-adjacent; commits to building and maintaining a write client and its credential
-   story. *Recommended if the harness is to be built at all — see the conflict-of-interest note below.*
+1. **Accept — process-data writes, any data class, to allowlisted *and* physically-isolated test rigs,
+   against a declared per-rig surface, never program/config.** *(Widened 2026-08-11: originally drafted
+   as "sensor DBs only, command DBs an open question"; the owner scoped it to whatever testing
+   requires.)* Unblocks the conformance harness on the only environment where it can run faithfully.
+   Costs: reopens a permanent exclusion; makes the allowlist safety-adjacent; commits to building and
+   maintaining a write client and its credential story; and — after the widening — leaves the physical
+   isolation of the rig as the sole non-configuration safeguard. *Recommended if the harness is to be
+   built at all — see the conflict-of-interest note below.*
 2. **Accept, broad — general write access to rigs, any area, forcing included.** Rejected. That is a
    device shell; it discards the only distinction that makes option 1 arguable, and it is exactly what
    #3 was written to prevent.
@@ -159,6 +189,11 @@ That is an **accountability** property: for every change to a device, a person d
 writes stimulus removes the human from that loop for the class of writes it makes. On a rig with
 disconnected outputs the physical stakes are near zero — but the property being given up should be
 named as what it is, not smuggled through as a safety argument that the physical fence answers.
+**And after 2026-08-11 it is the whole property, not a slice of it.** With command DBs in scope the
+automated writes include operator commands, so what is being automated is not "feeding an instrument"
+but *operating the plant*. On an isolated rig that is precisely the point — you cannot test a sequence
+without driving it — and it is still the entire human-in-the-loop property for device writes, given up
+at once rather than incrementally.
 
 **"Permanent" loses some of its force, and that cost is real and not local.** A project that reopens
 a permanent exclusion on good evidence has, from then on, permanent exclusions that a reader must
@@ -200,12 +235,16 @@ from a reader who has no stake in the harness being built.
 2. If yes — **is the program/config half restated as permanent** in the same `10-non-goals.md` edit?
    *(Recommended: yes, explicitly.)*
 3. **Is physical output isolation mandatory or advisory** for a write-listed device? *(Recommended:
-   mandatory — it is the only fence that is not a config file.)*
-4. **Does the bounded surface include command DBs, or only sensor/interface DBs?** These are not
-   equivalent: writing a weighing interface DB impersonates an instrument, while writing a command DB
-   issues operator commands. A harness needs both to test a sequence end to end, and the second is
-   materially more dangerous if ever pointed at a live device. *No recommendation — this is the
-   sharpest question in the document.*
+   mandatory — it is the only fence that is not a config file. **This recommendation hardened on
+   2026-08-11:** question 4 was answered in the widening direction, which removed the data-class gate
+   and left this as the only safeguard between a mis-targeted write and equipment moving. Answering
+   "advisory" here would leave the whole scheme resting on an allowlist file.)* **Still open.**
+4. **~~Does the bounded surface include command DBs, or only sensor/interface DBs?~~ DECIDED
+   2026-08-11 — both.** Write access is not isolated to any one type of data; it is as broad as
+   testing requires. The reasoning accepted: a harness that can feed an instrument but not press a
+   button cannot exercise a sequence end to end, so a sensor-only scope would have bought a
+   half-useful harness. The cost is recorded rather than discounted — the more dangerous of the two
+   was the one admitted, and it is admitted on the strength of the target fence alone.
 
 ## Revisit triggers
 
