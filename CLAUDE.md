@@ -40,6 +40,10 @@ openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> 
                                     # argument. Unreadable/unclassifiable/duplicate-basename files are REJECTIONS WITH REASONS, never skips. Saves ONCE at the end (Save() per file × retries would
                                     # dominate). `--dry-run` prints the plan without contacting Portal. Exit 13 = ImportIncomplete: the project does NOT contain everything supplied — including a file
                                     # never attempted. NOT a compile gate and doesn't pretend to be: everything imported is flagged inconsistent, so `sanity-check` still follows (hard rule 4)
+openness-cli compile-all   <project> [--device <name>] [--json]   # THE GATE'S BULK HALF (2026-08-11). FI-52 says only a per-block/per-type compile clears the inconsistent flag an imported block carries —
+                                    # so after a bulk restore that is ninety-odd compiles, which as separate invocations is ninety-odd Portal attaches. This does them in ONE session, types first, retrying while
+                                    # progress is made. Reports ERRORS and STILL-INCONSISTENT as SEPARATE counts (compiled-and-wrong vs never-examined; the second is the one that looks like a pass) and keys its
+                                    # verdict on ErrorCount, NEVER on State — a project with pre-existing hardware warnings returns non-Success on a clean block. Exit 8 = errors, 11 = something left inconsistent
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json]   # non-zero exit on error (8 = CompileFailed; 11 = CompileIncomplete, the device compiled clean but left blocks unverified — FI-52; full table in src/openness-cli/README.md). A bare whole-device run is NOT the gate: see hard rule 4, use sanity-check or per-block
 openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB

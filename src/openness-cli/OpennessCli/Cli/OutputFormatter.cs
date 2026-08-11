@@ -951,6 +951,66 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    // Errors and inconsistency get their own lines because they are different failures: compiled and
+    // wrong, versus never examined. A single "failed" count would let the second hide in the first —
+    // and the second is the one that looks like success (FI-52).
+    public static string FormatCompileAllTable(CompileAllResult result)
+    {
+        var sb = new StringBuilder();
+
+        foreach (var entry in result.Entries.Where(e => e.ErrorCount > 0))
+        {
+            sb.Append("ERRORS:   ").Append(entry.Name).Append("  (").Append(entry.ErrorCount).Append(" error(s)");
+            if (!string.IsNullOrWhiteSpace(entry.Detail))
+            {
+                sb.Append(": ").Append(entry.Detail);
+            }
+
+            sb.Append(")\n");
+        }
+
+        foreach (var entry in result.Entries.Where(e => e.StillInconsistent && e.ErrorCount == 0))
+        {
+            sb.Append("UNCLEARED: ").Append(entry.Name).Append("  (compiled, still flagged inconsistent)\n");
+        }
+
+        sb.Append("SUMMARY: ").Append(result.CompiledCount).Append(" compiled, ")
+            .Append(result.WithErrorsCount).Append(" with errors, ")
+            .Append(result.StillInconsistentCount).Append(" still inconsistent, in ")
+            .Append(result.Passes).Append(" pass(es)\n");
+
+        sb.Append(result.IsClean
+            ? "CLEAN: every item compiled without errors and nothing is left flagged inconsistent.\n"
+            : "NOT CLEAN: the items above were not cleared. An inconsistent block is one the gate did NOT examine,\n" +
+              "           which is the failure mode that looks like a pass (FI-52).\n");
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatCompileAllJson(CompileAllResult result)
+    {
+        var payload = new
+        {
+            clean = result.IsClean,
+            compiled = result.CompiledCount,
+            withErrors = result.WithErrorsCount,
+            stillInconsistent = result.StillInconsistentCount,
+            passes = result.Passes,
+            entries = result.Entries.Select(e => new
+            {
+                name = e.Name,
+                kind = e.Kind,
+                state = e.State.ToString(),
+                errorCount = e.ErrorCount,
+                warningCount = e.WarningCount,
+                stillInconsistent = e.StillInconsistent,
+                detail = e.Detail,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatSanityCheckTable(SanityCheckResult result)
     {
         var sb = new StringBuilder();

@@ -239,6 +239,52 @@ public class ImportAllTests : IDisposable
         Assert.Equal(2, root.GetProperty("entries").GetArrayLength());
     }
 
+    // Compiled-and-wrong and never-examined are different failures, and the second is the one that
+    // looks like success (FI-52). A single "failed" count would let it hide in the first.
+    [Fact]
+    public void CompileAll_CountsErrorsAndInconsistencySeparately()
+    {
+        var result = new CompileAllResult(new[]
+        {
+            new CompileAllEntry("A", "Block", CompileState.Warning, 0, 4, StillInconsistent: false, null),
+            new CompileAllEntry("B", "Block", CompileState.Success, 0, 0, StillInconsistent: true, null),
+        }, Passes: 1);
+
+        Assert.Equal(0, result.WithErrorsCount);
+        Assert.Equal(1, result.StillInconsistentCount);
+        Assert.False(result.IsClean);
+
+        var text = OutputFormatter.FormatCompileAllTable(result);
+        Assert.Contains("UNCLEARED: B", text);
+        Assert.Contains("NOT CLEAN", text);
+    }
+
+    // A project with pre-existing hardware warnings returns a non-Success state on a perfectly clean
+    // block, so the verdict keys on ErrorCount and never on State.
+    [Fact]
+    public void CompileAll_IsClean_WhenTheOnlyNonSuccessStateIsWarnings()
+    {
+        var result = new CompileAllResult(new[]
+        {
+            new CompileAllEntry("A", "Type", CompileState.Warning, 0, 4, StillInconsistent: false, null),
+        }, Passes: 1);
+
+        Assert.True(result.IsClean);
+        Assert.Contains("CLEAN", OutputFormatter.FormatCompileAllTable(result));
+    }
+
+    [Fact]
+    public void CompileAll_Parse_TakesDeviceAndJson_AndRefusesAStrayArgument()
+    {
+        var ok = Assert.IsType<ParseResult.CompileAllSuccess>(
+            ArgumentParser.Parse(new[] { "compile-all", @"C:\p.ap20", "--device", "PLC_1", "--json" }));
+        Assert.Equal("PLC_1", ok.Options.Device);
+        Assert.True(ok.Options.Json);
+
+        Assert.IsType<ParseResult.Failure>(
+            ArgumentParser.Parse(new[] { "compile-all", @"C:\p.ap20", "extra" }));
+    }
+
     [Fact]
     public void Parse_RequiresGroupAndAtLeastOnePath()
     {
