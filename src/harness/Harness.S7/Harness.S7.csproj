@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.S7</RootNamespace>
+    <AssemblyName>Harness.S7</AssemblyName>
+
+    <!--
+      Where Sharp7 lives. THIS IS AN OPEN DECISION, not a settled one (2026-08-11).
+
+      Sharp7 is a single-file, pure-C#, no-native-dependency S7 client (v1.1.82, built for net48;
+      it references cleanly from net8.0 with no warnings, verified). The working copy on this machine
+      came from a PRONETA download and arrived zone-blocked; the unblocked copy sits outside the repo
+      at %USERPROFILE%\.ladder\lib\Sharp7.dll.
+
+      It is NOT committed to the repository, because committing a third-party binary is a decision
+      somebody other than a build script should make. The three options, none of them free:
+
+        - vendor the DLL under lib/ — reproducible and offline, but a binary blob in git that nobody
+          can diff or audit, and the repo has no precedent for one;
+        - a NuGet PackageReference (Sharp7 is on nuget.org) — auditable and versioned, and it would
+          slot into the existing central package management, but it makes a build need the network;
+        - vendor the SOURCE — Sharp7 is a single .cs file under MIT, so it can simply be a file in
+          this project, diffable and steppable, at the cost of owning a fork.
+
+      Until that is decided, the path is an overridable property defaulting to the machine-local copy,
+      and everything that does not touch Sharp7 builds without it (see the conditional below).
+    -->
+    <Sharp7Path Condition="'$(Sharp7Path)' == ''">$(USERPROFILE)\.ladder\lib\Sharp7.dll</Sharp7Path>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      The composition root, and the only project that references both halves. Harness knows nothing
+      of DeviceGuard and DeviceGuard knows nothing of Harness — that separation is deliberate and is
+      what makes both testable alone, so this is the single place the two are allowed to meet.
+    -->
+    <ProjectReference Include="..\Harness\Harness.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(Sharp7Path)')">
+    <Reference Include="Sharp7">
+      <HintPath>$(Sharp7Path)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Without Sharp7 present, the adapter is excluded and everything else still compiles and tests.
+    That is not a convenience: it keeps the machine-local path from becoming a hard build dependency
+    while the vendoring question above is open, and it means the tests — which use a fake client and
+    never touch Sharp7 — can run anywhere.
+  -->
+  <ItemGroup Condition="!Exists('$(Sharp7Path)')">
+    <Compile Remove="Sharp7Client.cs" />
+  </ItemGroup>
+
+  <Target Name="WarnMissingSharp7" BeforeTargets="Build" Condition="!Exists('$(Sharp7Path)')">
+    <Message Importance="high"
+             Text="Harness.S7: Sharp7 not found at '$(Sharp7Path)' — Sharp7Client is excluded from this build. The transport, the fence wiring and all tests still build; only the real device adapter is absent. Override with -p:Sharp7Path=&lt;path&gt;." />
+  </Target>
+
+</Project>

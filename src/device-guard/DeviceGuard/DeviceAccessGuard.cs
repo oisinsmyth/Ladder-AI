@@ -1,5 +1,3 @@
-using System.Net;
-
 namespace DeviceGuard;
 
 /// <summary>
@@ -34,17 +32,17 @@ public sealed class DeviceAccessGuard
             return GuardDecision.Refuse(_allowlist.FailureReason,
                 _allowlist.Message ?? "allowlist unavailable.");
 
-        var normalizedTarget = Normalize(target);
+        var normalizedTarget = DeviceAddress.Normalize(target);
 
         var addressed = _allowlist.Entries.Where(e => e.HasAddress).ToList();
 
         // 1. An explicit test-rig match is the only thing that allows.
-        var rigMatch = addressed.FirstOrDefault(e => e.IsTestRig && Normalize(e.Address!) == normalizedTarget);
+        var rigMatch = addressed.FirstOrDefault(e => e.IsTestRig && DeviceAddress.Normalize(e.Address!) == normalizedTarget);
         if (rigMatch is not null)
             return GuardDecision.Allow(rigMatch);
 
         // 2. Listed, but not as a test rig — a clearer refusal than "not listed".
-        var nonRigMatch = addressed.FirstOrDefault(e => !e.IsTestRig && Normalize(e.Address!) == normalizedTarget);
+        var nonRigMatch = addressed.FirstOrDefault(e => !e.IsTestRig && DeviceAddress.Normalize(e.Address!) == normalizedTarget);
         if (nonRigMatch is not null)
         {
             return GuardDecision.Refuse(GuardReason.EntryNotTestRig,
@@ -63,15 +61,4 @@ public sealed class DeviceAccessGuard
             $"'{target}' is not on the test-rig allowlist.");
     }
 
-    /// <summary>
-    /// Canonicalize for comparison: parse IPs so trivially different spellings compare equal, and
-    /// lower-case hostnames. Whitespace is always trimmed. Never widens a match — same-or-tighter.
-    /// </summary>
-    private static string Normalize(string address)
-    {
-        var trimmed = address.Trim();
-        return IPAddress.TryParse(trimmed, out var ip)
-            ? ip.ToString()
-            : trimmed.ToLowerInvariant();
-    }
 }

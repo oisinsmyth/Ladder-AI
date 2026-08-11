@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.S7.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    No reference to Sharp7, and none needed: every test drives a FakeS7Client. That is the whole
+    return on the IS7Client abstraction — the fence wiring, the identity re-read on reconnect, the
+    capability reporting and every refusal path are exercised with no PLC, no network and no rig.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+  </ItemGroup>
+
+</Project>
