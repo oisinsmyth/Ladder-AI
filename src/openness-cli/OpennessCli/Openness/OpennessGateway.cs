@@ -4153,6 +4153,259 @@ public sealed class OpennessGateway : IOpennessGateway
         return group;
     }
 
+    // ---- download planning ------------------------------------------------------------------
+    //
+    // Everything below reads. Nothing below writes, connects, or transfers. The one method in this
+    // file that would download is PerformDownload, whose entire body is a throw — and the token
+    // `DownloadProvider.Download` appears nowhere in this assembly, in any form, including commented
+    // out. That is the property a reviewer is meant to be able to confirm in one read.
+
+    /// <inheritdoc />
+    public DownloadPlanResult BuildDownloadPlan(string? deviceFilter, DownloadOptionKind options)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(BuildDownloadPlan)}.");
+        }
+
+        // Same resolution as Compile/CompileAll — one PLC device item, or a refusal. Deliberately
+        // reused rather than reimplemented: a download that resolved its target differently from the
+        // compile that gated it would be gating one device and writing another.
+        var candidates = FindPlcDeviceItems(_project).ToList();
+        if (deviceFilter is not null)
+        {
+            candidates = candidates.Where(c => c.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (candidates.Count != 1)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        var (deviceItem, devicePath) = (candidates[0].Item, candidates[0].Path);
+        var software = (PlcSoftware)deviceItem.GetService<SoftwareContainer>()!.Software;
+
+        var blocks = new List<BlockInfo>();
+        WalkBlockGroup(software.BlockGroup, devicePath, blocks);
+
+        // Hard rule 2, enforced HERE rather than left to the caller, and for a reason specific to
+        // this command. Download granularity is device-level: there is no overload, option or flag
+        // that transfers the standard program while leaving the safety program alone. So on an
+        // F-capable PLC, planning a download IS planning to write safety content, and the refusal
+        // has to happen while it is still a plan.
+        var safety = blocks.Where(b => b.IsSafety).ToList();
+        if (safety.Count > 0)
+        {
+            throw SafetyContentRefusedException.ForWholeDeviceDownload(
+                devicePath, safety.Count, safety[0].Name, safety[0].Language);
+        }
+
+        var resolution = FindDownloadProvider(deviceItem, devicePath);
+
+        return new DownloadPlanResult(
+            devicePath,
+            deviceItem.Name,
+            options,
+            resolution.Source,
+            resolution.Provider is null ? null : ReadConnectionPlan(resolution.Provider),
+            blocks.Count,
+            FindTypesInGroup(software.TypeGroup, devicePath, typeName: null).Count(),
+            blocks.Where(b => !b.IsConsistent).Select(b => b.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
+    }
+
+    /// <summary>
+    /// Finds the <c>DownloadProvider</c> by asking the device tree outward from the item that carries
+    /// the PLC software, and REPORTS every object it asked.
+    ///
+    /// The acquisition path is forced by the type system and nothing else:
+    /// <c>DownloadProvider</c>'s only constructor is <c>internal</c> and it implements
+    /// <c>IEngineeringService</c>, while <c>IEngineeringServiceProvider.GetService&lt;T&gt;()</c> is
+    /// constrained <c>where T : class, IEngineeringService</c>. So <c>GetService</c> is the only
+    /// door. What the API does not say is which object is behind it, and the shape here is copied
+    /// deliberately from <c>CompileHmiTarget</c>: that one exists because the analogous assumption
+    /// for <c>ICompilable</c> — "it will be on the software-bearing item" — was measured wrong and
+    /// returned null. Guessing once and reporting the guess as fact is the failure being avoided.
+    ///
+    /// <c>GetServiceInfos()</c> is recorded at each level whether or not it answered, because that is
+    /// Openness describing its own service menu, and it is what makes a negative result diagnosable
+    /// rather than merely disappointing.
+    /// </summary>
+    private static DownloadProviderResolution FindDownloadProvider(DeviceItem softwareItem, string devicePath)
+    {
+        var attempts = new List<DownloadProviderAttempt>();
+        var depth = 0;
+
+        for (IEngineeringObject? current = softwareItem; current is not null;
+             current = TryReadObject(() => current.Parent) as IEngineeringObject, depth++)
+        {
+            var clrType = current.GetType().Name;
+            var label = depth == 0
+                ? devicePath
+                : $"{devicePath} <parent^{depth.ToString(System.Globalization.CultureInfo.InvariantCulture)}>" +
+                  (current is DeviceItem di ? $" '{TryRead(() => di.Name)}'" : string.Empty);
+
+            if (current is not IEngineeringServiceProvider serviceProvider)
+            {
+                attempts.Add(new DownloadProviderAttempt(label, clrType, "not-a-service-provider", null));
+                continue;
+            }
+
+            var advertised = DescribeServiceInfos(serviceProvider);
+
+            Siemens.Engineering.Download.DownloadProvider? found;
+            try
+            {
+                found = serviceProvider.GetService<Siemens.Engineering.Download.DownloadProvider>();
+            }
+            catch (Exception ex)
+            {
+                attempts.Add(new DownloadProviderAttempt(label, clrType, "threw", $"{ex.GetType().Name}: {ex.Message}"));
+                continue;
+            }
+
+            if (found is null)
+            {
+                attempts.Add(new DownloadProviderAttempt(label, clrType, "no-provider", advertised));
+                continue;
+            }
+
+            attempts.Add(new DownloadProviderAttempt(label, clrType, "provider", advertised));
+            return new DownloadProviderResolution(
+                found,
+                new DownloadProviderSource(
+                    Found: true,
+                    SourcePath: label,
+                    SourceClrType: clrType,
+                    ProviderParentClrType: (TryReadObject(() => found.Parent) as IEngineeringObject)?.GetType().Name,
+                    Attempts: attempts));
+        }
+
+        // Not an exception. "No download provider anywhere in this device's tree" is a legitimate
+        // answer to the question this command asks, and the list of what was tried is the finding.
+        return new DownloadProviderResolution(
+            null,
+            new DownloadProviderSource(false, null, null, null, attempts));
+    }
+
+    /// <summary>
+    /// The service menu an object advertises, as class names.
+    ///
+    /// <c>EngineeringServiceInfo</c> exposes exactly one property, <c>Type</c> — the CLR type of the
+    /// service — so this list is directly comparable with <c>DownloadProvider</c> itself. That makes
+    /// a "no-provider" line self-explaining: it shows what the object DOES offer, so the reader can
+    /// see whether download is absent from its menu or merely refused.
+    /// </summary>
+    private static string? DescribeServiceInfos(IEngineeringServiceProvider serviceProvider)
+    {
+        try
+        {
+            var infos = serviceProvider.GetServiceInfos();
+            return infos is null || infos.Count == 0
+                ? "(advertises no services)"
+                : string.Join(", ", infos
+                    .Select(i => (TryReadObject(() => i.Type) as Type)?.Name ?? "?")
+                    .OrderBy(n => n, StringComparer.Ordinal));
+        }
+        catch (Exception ex)
+        {
+            return $"GetServiceInfos threw {ex.GetType().Name}";
+        }
+    }
+
+    /// <summary>
+    /// Walks <c>DownloadProvider.Configuration</c> — Modes -> PcInterfaces -> Subnets/Addresses and
+    /// TargetInterfaces -> Addresses — with plain property reads.
+    ///
+    /// This answers "can the connection be inspected without connecting" with yes, and it is worth
+    /// being precise about why: <c>ConnectionConfiguration</c> is a project-model object describing
+    /// the online path the PROJECT has configured. Reading it says nothing about whether anything is
+    /// at the far end. The member that WOULD find that out —
+    /// <c>ConfigurationPcInterface.GetAccessibleDevices()</c>, "Delivers a list of accessible
+    /// devices" — is a live scan and is deliberately not called anywhere in this file.
+    /// <c>ConnectionConfiguration.ApplyConfiguration(...)</c> is likewise never called: it mutates
+    /// the project's connection configuration, and a plan does not get to change what it is planning.
+    ///
+    /// Every level is read defensively. A partially configured connection is normal — the whole
+    /// point of <c>IsConfigured</c> — and a plan that threw on one would be least available exactly
+    /// when it is most wanted.
+    /// </summary>
+    private static DownloadConnectionPlan ReadConnectionPlan(Siemens.Engineering.Download.DownloadProvider provider)
+    {
+        var configuration = TryReadObject(() => provider.Configuration) as Siemens.Engineering.Connection.ConnectionConfiguration;
+        if (configuration is null)
+        {
+            return new DownloadConnectionPlan(false, false, Array.Empty<DownloadConnectionMode>());
+        }
+
+        var modes = new List<DownloadConnectionMode>();
+        foreach (var mode in ReadComposition<Siemens.Engineering.Connection.ConfigurationMode>(() => configuration.Modes))
+        {
+            var pcInterfaces = new List<DownloadPcInterface>();
+            foreach (var pc in ReadComposition<Siemens.Engineering.Connection.ConfigurationPcInterface>(() => mode.PcInterfaces))
+            {
+                var targets = new List<DownloadTargetInterface>();
+                foreach (var target in ReadComposition<Siemens.Engineering.Connection.ConfigurationTargetInterface>(() => pc.TargetInterfaces))
+                {
+                    targets.Add(new DownloadTargetInterface(
+                        TryRead(() => target.Name) ?? "?",
+                        ReadAddresses(() => target.Addresses)));
+                }
+
+                pcInterfaces.Add(new DownloadPcInterface(
+                    TryRead(() => pc.Name) ?? "?",
+                    TryReadObject(() => pc.Number) is int number ? number : 0,
+                    ReadAddresses(() => pc.Addresses),
+                    ReadComposition<Siemens.Engineering.Connection.ConfigurationSubnet>(() => pc.Subnets)
+                        .Select(s => TryRead(() => s.Name) ?? "?").ToList(),
+                    targets));
+            }
+
+            modes.Add(new DownloadConnectionMode(TryRead(() => mode.Name) ?? "?", pcInterfaces));
+        }
+
+        return new DownloadConnectionPlan(
+            TryReadObject(() => configuration.IsConfigured) is true,
+            TryReadObject(() => configuration.EnableLegacyCommunication) is true,
+            modes);
+    }
+
+    private static IReadOnlyList<DownloadConnectionAddress> ReadAddresses(
+        Func<Siemens.Engineering.Connection.ConfigurationAddressComposition> read) =>
+        ReadComposition<Siemens.Engineering.Connection.ConfigurationAddress>(() => read())
+            .Select(a => new DownloadConnectionAddress(TryRead(() => a.Name) ?? "?", TryRead(() => a.Address) ?? "?"))
+            .ToList();
+
+    // Enumerating an Openness composition is a COM round trip that can fail on a partially
+    // configured object; materialising it here means one guarded call site instead of a try/catch
+    // around every foreach above.
+    private static List<T> ReadComposition<T>(Func<System.Collections.Generic.IEnumerable<T>?> read)
+    {
+        try
+        {
+            return read()?.ToList() ?? new List<T>();
+        }
+        catch (Exception)
+        {
+            return new List<T>();
+        }
+    }
+
+    /// <summary>
+    /// The download that never happens. See <see cref="IOpennessGateway.PerformDownload"/>.
+    /// </summary>
+    /// <exception cref="DownloadNotEnabledException">Always. This method has no other behaviour.</exception>
+    public void PerformDownload(string? deviceFilter, DownloadOptionKind options) =>
+        throw new DownloadNotEnabledException();
+
+    /// <summary>
+    /// The live <c>DownloadProvider</c> paired with the Siemens-free report about where it came from.
+    /// The provider itself never leaves this file — <see cref="IOpennessGateway"/> is Siemens-free by
+    /// construction, so only the report crosses the seam.
+    /// </summary>
+    private sealed record DownloadProviderResolution(
+        Siemens.Engineering.Download.DownloadProvider? Provider,
+        DownloadProviderSource Source);
+
     private static void RunWithTimeout(Action action, TimeSpan timeout, Func<Exception> timeoutException)
     {
         var task = Task.Run(action);

@@ -330,6 +330,53 @@ public interface IOpennessGateway : IDisposable
     /// this is a post-import property set rather than something folded into the import path.
     /// </summary>
     BlockLayoutResult SetBlockMemoryLayout(string blockName, string? deviceFilter, MemoryLayoutKind requested);
+
+    /// <summary>
+    /// READ-ONLY. Works out what a download of one PLC device would comprise, and reports it. Opens
+    /// no socket, transfers nothing, and changes nothing in the project.
+    ///
+    /// Three things it establishes, none of which was documented anywhere before:
+    ///
+    /// 1. WHERE THE DOWNLOAD PROVIDER COMES FROM. <c>Siemens.Engineering.Download.DownloadProvider</c>
+    ///    has one constructor and it is internal, and the type implements <c>IEngineeringService</c>.
+    ///    <c>IEngineeringServiceProvider.GetService&lt;T&gt;()</c> is constrained
+    ///    <c>where T : class, IEngineeringService</c> — so that call is the only way a client can ever
+    ///    hold one. Which object answers is not stated by the API, so this asks the device tree
+    ///    outward from the PLC-software-bearing item and REPORTS what answered, the same shape
+    ///    <c>CompileHmiTarget</c> uses for <c>ICompilable</c> after that assumption was measured wrong.
+    ///
+    /// 2. THAT GRANULARITY IS DEVICE-LEVEL. <c>Download</c>'s three overloads take a connection, two
+    ///    configuration callbacks and a <c>DownloadOptions</c>. None takes a block, a group or a
+    ///    selection. There is no per-block download; the smallest real unit is the whole PLC software.
+    ///
+    /// 3. THAT THE CONNECTION IS READABLE WITHOUT CONNECTING. <c>DownloadProvider.Configuration</c> is
+    ///    a <c>ConnectionConfiguration</c> — an ordinary project-model object (Modes -> PcInterfaces
+    ///    -> TargetInterfaces -> Addresses), walked with property reads. The one member on that tree
+    ///    that WOULD touch the network, <c>ConfigurationPcInterface.GetAccessibleDevices()</c>, is
+    ///    never called here.
+    ///
+    /// Refuses (throws <see cref="SafetyContentRefusedException"/>) if the resolved device carries any
+    /// safety block. That is not ceremony imported from the export path: because granularity is
+    /// device-level, a download of an F-capable PLC necessarily carries its safety program, and there
+    /// is no option, flag or overload that excludes it. Planning one is planning to write safety
+    /// content (hard rule 2).
+    /// </summary>
+    DownloadPlanResult BuildDownloadPlan(string? deviceFilter, DownloadOptionKind options);
+
+    /// <summary>
+    /// The method that would perform a device download. It never does.
+    ///
+    /// It exists on this interface, rather than being simply absent, so that "no download was
+    /// performed" is a TESTABLE assertion instead of an argument from the absence of code: a fake
+    /// gateway can count calls to it, and the tests assert the count stays zero across every path
+    /// <c>download-plan</c> takes. The real implementation's entire body is a throw — it contains no
+    /// call to <c>DownloadProvider.Download</c>, and neither does any other method in this assembly.
+    ///
+    /// Always throws <see cref="DownloadNotEnabledException"/>. There is no flag, argument, or
+    /// environment variable that changes that.
+    /// </summary>
+    /// <exception cref="DownloadNotEnabledException">Always.</exception>
+    void PerformDownload(string? deviceFilter, DownloadOptionKind options);
 }
 
 public sealed class ConnectTimeoutException : Exception
@@ -372,6 +419,29 @@ public sealed class SafetyContentRefusedException : Exception
         : base($"Refusing: '{blockName}' classifies as safety content (ProgrammingLanguage={language}). This pipeline never touches safety blocks (CLAUDE.md hard rule 2).")
     {
     }
+
+    private SafetyContentRefusedException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>
+    /// The download-planning refusal, which is a different shape from every other one here: nobody
+    /// named a safety block, and the plan is refused anyway.
+    ///
+    /// It has to be, because download granularity is device-level. <c>DownloadProvider.Download</c>
+    /// takes a connection, two callbacks and a <c>DownloadOptions</c> — there is no block, no group,
+    /// no selection and no exclusion. So on an F-capable PLC there is no such thing as downloading
+    /// only the standard program: planning a download is planning to write the safety program with
+    /// it. Refusing at the plan is the only place the refusal still costs nothing.
+    /// </summary>
+    public static SafetyContentRefusedException ForWholeDeviceDownload(
+        string devicePath, int safetyBlockCount, string firstSafetyBlockName, string language) =>
+        new($"Refusing to plan a download of '{devicePath}': its program contains {safetyBlockCount} safety " +
+            $"block(s) (first: '{firstSafetyBlockName}', ProgrammingLanguage={language}). " +
+            "Download granularity in Openness is DEVICE-LEVEL — Download() takes no block, group or " +
+            "selection of any kind — so there is no download of this PLC that excludes its safety " +
+            "program. This pipeline never touches safety content (CLAUDE.md hard rule 2).");
 }
 
 /// <summary>

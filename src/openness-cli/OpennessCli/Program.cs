@@ -147,6 +147,8 @@ internal static class Program
                     return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
                 case ParseResult.BlockLayoutSuccess blockLayout:
                     return RunBlockLayout(gateway, blockLayout.Options, timeoutOpenSeconds);
+                case ParseResult.DownloadPlanSuccess downloadPlan:
+                    return RunDownloadPlan(gateway, downloadPlan.Options, timeoutOpenSeconds);
                 case ParseResult.CreateInstanceDbSuccess createInstanceDb:
                     return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
@@ -993,6 +995,43 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    /// <summary>
+    /// `download-plan` — report what a download WOULD comprise. It cannot download.
+    ///
+    /// <c>internal</c> for the same reason <see cref="RunBlockLayout"/> is: the property that matters
+    /// most here can only be observed against a fake gateway. That property is that NO PATH THROUGH
+    /// THIS METHOD INVOKES A DOWNLOAD — the tests assert it by counting calls on the fake, across
+    /// every option value, every output mode and every failure mode.
+    ///
+    /// Note what this method does NOT contain: any branch, flag or condition under which it would
+    /// call <see cref="IOpennessGateway.PerformDownload"/>. That method exists only so the fake has
+    /// something to count, and both implementations of it throw.
+    /// </summary>
+    internal static int RunDownloadPlan(IOpennessGateway gateway, DownloadPlanCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        var plan = gateway.BuildDownloadPlan(options.Device, options.Options);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatDownloadPlanJson(plan)
+            : OutputFormatter.FormatDownloadPlanTable(plan));
+
+        // Empty is not clean (FI-44). A plan that could not obtain a DownloadProvider has answered
+        // none of the questions it was asked — where a download would come from, what it would use,
+        // whether it is even possible on this device — and exiting 0 would present that silence as a
+        // clean bill of health. The report already says so on stdout; this is the half a script reads.
+        if (!plan.Provider.Found)
+        {
+            Console.Error.WriteLine(
+                "DOWNLOAD PLAN INCOMPLETE: no DownloadProvider could be obtained from any object in this " +
+                "device's tree, so nothing in this report describes what a download would actually do. " +
+                "The objects asked, and the services each advertises, are listed above.");
+            return ExitCodes.DownloadPlanIncomplete;
+        }
+
+        return ExitCodes.Success;
+    }
+
     private static int RunCreateInstanceDb(IOpennessGateway gateway, CreateInstanceDbCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -1106,6 +1145,22 @@ public static class ExitCodes
     public const int LayoutMismatch = 15;
 
     /// <summary>
+    /// `download-plan` ran, nothing went wrong, and it could not obtain a <c>DownloadProvider</c> from
+    /// any object in the device's tree — so the report answers none of the questions the command
+    /// exists to answer, and its calm appearance is not evidence about anything.
+    ///
+    /// Same family as <see cref="CompileIncomplete"/>/<see cref="ExportIncomplete"/>/
+    /// <see cref="ImportIncomplete"/>/<see cref="NothingExamined"/>, and its own code for the same
+    /// reason: it is not a failure (nothing threw, no argument was wrong, re-running changes nothing)
+    /// and it is emphatically not a success. A caller must be able to tell "here is what a download
+    /// would do" from "this tool could not find out" without parsing the report.
+    ///
+    /// It says nothing whatsoever about whether a download would be permitted — that is the write
+    /// fence's question, and this command never asks it.
+    /// </summary>
+    public const int DownloadPlanIncomplete = 16;
+
+    /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).
     ///
     /// CommandError (7) means "you named something that isn't there, or named it ambiguously" — the
@@ -1140,6 +1195,13 @@ public static class ExitCodes
         // Not a naming mistake, but it was already classified this way and the message is actionable
         // (it names the path and points at the quirks note).
         ExportProducedNoFileException => CommandError,
+
+        // Deliberately an internal fault, not a user error. `PerformDownload` is unreachable by
+        // design — no argument reaches it and `download-plan` never calls it — so if this ever
+        // escapes, something in this program called a method that exists only to be uncallable.
+        // That is a bug in the tool, and it should print the full chain and say so, not be dressed
+        // up as something the caller mistyped.
+        Model.DownloadNotEnabledException => UnexpectedError,
 
         // Same family: the block resolved but does not expose an access mode, and the correction is
         // to name a different block. Reporting it as an internal fault would be the audit-F-09

@@ -130,6 +130,20 @@ public sealed record BlockLayoutCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// `download-plan`. READ-ONLY AND DRY-RUN ONLY: it reports what a download WOULD comprise and cannot
+// perform one. Note what this record does NOT have — there is no Confirm, because there is no
+// confirmed form. `--yes` is not a flag on this command at all: a gate implies a door behind it, and
+// this command has no door. The one method that would download throws unconditionally
+// (`IOpennessGateway.PerformDownload`).
+public sealed record DownloadPlanCommandOptions(
+    string ProjectIdentifier,
+    string? Device,
+    Model.DownloadOptionKind Options,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // Grounding/scaffolding command (2026-07-14, `PlantAutoControl` round-trip plan Phase 0.2) — creates an
 // instance DB backing an already-existing FB, for FBs imported standalone with no calling context.
 // Not S6+ logic generation: invents no tag/address/DB number (DbName is engineer-supplied, the DB
@@ -273,6 +287,8 @@ public abstract record ParseResult
 
     public sealed record BlockLayoutSuccess(BlockLayoutCommandOptions Options) : ParseResult;
 
+    public sealed record DownloadPlanSuccess(DownloadPlanCommandOptions Options) : ParseResult;
+
     public sealed record CreateInstanceDbSuccess(CreateInstanceDbCommandOptions Options) : ParseResult;
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
@@ -375,6 +391,13 @@ public static class ArgumentParser
         "    a read-back that does not match the request is exit 15, never a success with a note. --yes is required; without it the plan is printed and Portal is never contacted (exit 10).\n" +
         "    UNVERIFIED: whether a later re-import of the same block reverts the layout. The converter emits no MemoryLayout and Normalizer ignores it, so drift-check cannot see either\n" +
         "    direction. Re-assert with --expect after every import until that is settled.\n" +
+        "  openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]\n" +
+        "    READ-ONLY AND DRY-RUN ONLY. Reports what a download WOULD comprise and CANNOT PERFORM ONE - there is no --yes, no --force and no confirmed form; nothing in this binary reaches\n" +
+        "    DownloadProvider.Download. GRANULARITY IS DEVICE-LEVEL: Download() takes a connection, two callbacks and a DownloadOptions - no block, no group, no selection - so the smallest real\n" +
+        "    unit is THE WHOLE PLC SOFTWARE. There is no per-block download, and 'SoftwareOnlyChanges' means the parts TIA finds different, NOT the blocks you edited. Reports where the\n" +
+        "    DownloadProvider was obtained (GetService<DownloadProvider>, every object asked), and the connection the project has CONFIGURED - read from the project model, never by connecting;\n" +
+        "    GetAccessibleDevices() (a live scan) is never called. Refuses (exit 6) if the device carries safety content: device-level granularity means no download of it excludes the safety\n" +
+        "    program. Exit 16 if no DownloadProvider could be obtained - the plan ran but says nothing about what a download would do.\n" +
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli library       <project> [--master-copies] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY walk of the project library: every type with its CLR class name, status, supported export formats and versions. Faceplates are library types, not device content.\n" +
@@ -458,6 +481,7 @@ public static class ArgumentParser
         ParseResult.CompileAllSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.BlockLayoutSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.DownloadPlanSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -490,6 +514,7 @@ public static class ArgumentParser
         ParseResult.CompileAllSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.BlockLayoutSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.DownloadPlanSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
@@ -524,6 +549,7 @@ public static class ArgumentParser
             "compile-all" => ParseCompileAll(args),
             "delete" => ParseDelete(args),
             "block-layout" => ParseBlockLayout(args),
+            "download-plan" => ParseDownloadPlan(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
             "portal-status" => ParsePortalStatus(args),
@@ -544,7 +570,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1396,6 +1422,145 @@ public static class ArgumentParser
 
         return new ParseResult.BlockLayoutSuccess(new BlockLayoutCommandOptions(
             projectIdentifier, block, device, set, expect, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    /// <summary>
+    /// Parses <c>--options</c>. An unrecognised value is a hard error NAMING THE VALID ONES, never a
+    /// silent default — the same rule <c>--set Standard|Optimized</c> follows, and for a stronger
+    /// reason here: the three values differ in how much a download would transfer, and quietly
+    /// resolving a typo to one of them would misdescribe the very thing the report exists to state.
+    ///
+    /// <c>Enum.TryParse</c> is deliberately not used. It accepts numeric strings, so
+    /// <c>--options 1</c> would resolve to a member nobody named; it is also case-insensitively
+    /// permissive about members this command does not offer — including Siemens's own <c>None</c>,
+    /// which selects neither hardware nor software and would print a plan for a transfer of nothing.
+    /// </summary>
+    internal static bool TryParseDownloadOption(string? raw, out Model.DownloadOptionKind option, out string error)
+    {
+        option = default;
+        error = string.Empty;
+
+        if (string.Equals(raw, "Software", StringComparison.OrdinalIgnoreCase))
+        {
+            option = Model.DownloadOptionKind.Software;
+            return true;
+        }
+
+        if (string.Equals(raw, "SoftwareOnlyChanges", StringComparison.OrdinalIgnoreCase))
+        {
+            option = Model.DownloadOptionKind.SoftwareOnlyChanges;
+            return true;
+        }
+
+        if (string.Equals(raw, "Hardware", StringComparison.OrdinalIgnoreCase))
+        {
+            option = Model.DownloadOptionKind.Hardware;
+            return true;
+        }
+
+        error = $"Invalid value '{raw}' for --options. The only valid values are Software, " +
+                $"SoftwareOnlyChanges and Hardware.{Environment.NewLine}" +
+                "  None of them is a per-block selector: the Openness download API is device-level, and " +
+                "SoftwareOnlyChanges means \"the parts TIA finds different\", not \"the blocks you edited\"." +
+                $"{Environment.NewLine}  Siemens's DownloadOptions also has 'None', which transfers nothing; this command does not accept it." +
+                $"{Environment.NewLine}{Usage}";
+        return false;
+    }
+
+    private static ParseResult ParseDownloadPlan(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? device = null;
+
+        // Software, not SoftwareOnlyChanges. The default has to be the value that cannot be
+        // misread: "only changes" is the one a reader is most likely to hear as "only my new block",
+        // which is exactly the wrong idea about an API with no per-block granularity. Defaulting to
+        // the unambiguous whole-software value means the misconception has to be typed in, not
+        // inherited.
+        var options = Model.DownloadOptionKind.Software;
+
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--options":
+                    if (!TryTakeValue(args, ref i, "--options", out var optionsRaw, out var optionsErr))
+                    {
+                        return new ParseResult.Failure(optionsErr);
+                    }
+
+                    if (!TryParseDownloadOption(optionsRaw, out var parsedOption, out var optionsValueErr))
+                    {
+                        return new ParseResult.Failure(optionsValueErr);
+                    }
+
+                    options = parsedOption;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+
+                // Not a typo and not an oversight. `--yes` is refused BY NAME because someone who
+                // types it has concluded this command can be talked into downloading, and the most
+                // useful thing to do with that belief is contradict it immediately rather than
+                // silently ignore an unknown flag.
+                case "--yes":
+                case "--force":
+                    return new ParseResult.Failure(
+                        $"'{args[i]}' is not a flag on download-plan, and there is no confirmed form of this " +
+                        "command to unlock. It plans only: no argument, environment variable or build " +
+                        "configuration in this binary reaches DownloadProvider.Download." +
+                        $"{Environment.NewLine}{Usage}");
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.DownloadPlanSuccess(new DownloadPlanCommandOptions(
+            projectIdentifier, device, options, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCreateInstanceDb(string[] args)

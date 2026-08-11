@@ -113,11 +113,37 @@ on an even byte) but it is arithmetic, not a reading, and should be labelled as 
   casual fix; it may be reopening a closed engineering ruling.
 - The safe shape is a **separate, purpose-built standard-access block** carrying only the data an
   external reader needs, leaving existing blocks untouched.
-- **Whether setting the layout survives a re-import of the same block is UNVERIFIED.** The converter
-  carries no opinion about layout and `drift-check` is blind to it, so if a re-import does revert it,
-  everything stays green while the block goes silently unreadable — and it would bite on the *second*
-  import, not the first. Treat re-asserting the layout after an import as required until someone
-  measures otherwise.
+- **A RE-IMPORT REVERTS THE LAYOUT TO `Optimized`. Measured 2026-08-11 — see below.**
+
+## The layout does not survive a re-import — measured
+
+Setting the layout is durable in the project until the block is imported again. **Re-importing the
+same `.xml` reverts it to `Optimized`**, confirmed by genuine TIA exports either side of one import:
+
+```
+before the re-import:  <MemoryLayout>Standard</MemoryLayout>
+after  the re-import:  <MemoryLayout>Optimized</MemoryLayout>
+```
+
+**The revert happens at IMPORT, not at compile** — observed by reading the layout after the import
+and before any compile ran. Compile is not implicated.
+
+The mechanism follows from the trap above: the exported `.xml` **contains no `MemoryLayout` element
+at all**, so the import states no opinion and TIA applies the S7-1200 default, which is `Optimized`.
+The `Normalizer` ignore-list comment — *"TIA assigns sensible defaults for on Import() regardless of
+source content"* — is therefore exactly right about the mechanism and exactly wrong about the
+consequence: the default it assigns is the one that makes the block unreadable.
+
+Nothing catches it. `drift-check` is structurally blind in both directions, the project compiles
+clean, `sanity-check` reports healthy, and the only symptom is a block that has gone absent from the
+wire. As predicted, it bites on the **second** import, not the first.
+
+> **Re-asserting the layout after every import is REQUIRED, not precautionary.** `--expect` is the
+> gate and tells you it broke; `--set Standard --yes` is what repairs it.
+
+The durable fix is for the converter to **emit** `MemoryLayout`, at which point the attribute can
+also come off the `Normalizer` ignore-list and drift becomes detectable. Until then this is a
+standing manual obligation on any block an external reader depends on.
 
 ## See also
 

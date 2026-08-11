@@ -734,10 +734,13 @@ public static class OutputFormatter
     /// is a LATER import, by which point nobody is looking at this output any more.
     /// </summary>
     public const string ReimportHazardWarning =
-        "UNVERIFIED — NOT KNOWN TO BE DURABLE: whether re-importing this block later reverts the layout has not\n" +
-        "  been measured either way. The converter emits no MemoryLayout, so an import carries no opinion about it,\n" +
-        "  and Normalizer ignores the attribute, so `converter drift-check` cannot detect a change in EITHER\n" +
-        "  direction. Re-assert after every import of this block:\n" +
+        "NOT DURABLE — MEASURED: RE-IMPORTING THIS BLOCK REVERTS THE LAYOUT TO Optimized. Confirmed against a real\n" +
+        "  project by TIA export, and the revert happens AT IMPORT, before any compile. The exported .xml carries no\n" +
+        "  MemoryLayout element at all, so the import states no opinion and TIA applies the S7-1200 default.\n" +
+        "  Nothing downstream notices: Normalizer ignores the attribute, so `converter drift-check` cannot detect the\n" +
+        "  change in EITHER direction, and a block read over classic S7comm simply goes absent from the wire.\n" +
+        "  RE-ASSERT AFTER EVERY IMPORT OF THIS BLOCK — this is required, not precautionary:\n" +
+        "    openness-cli block-layout <project> --block <name> --set Standard --yes\n" +
         "    openness-cli block-layout <project> --block <name> --expect Standard";
 
     /// <summary>
@@ -802,6 +805,256 @@ public static class OutputFormatter
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// The sentence this whole command exists to make unmissable. Printed on EVERY <c>download-plan</c>
+    /// run, in table and JSON alike, whatever the options — because the misconception it corrects
+    /// ("I'll download my one new DB") is not triggered by any particular flag, it is what a reader
+    /// arrives already believing.
+    /// </summary>
+    public const string DownloadGranularityWarning =
+        "GRANULARITY: THE WHOLE PLC SOFTWARE. There is NO per-block download.\n" +
+        "  DownloadProvider.Download takes a connection, two configuration callbacks and a DownloadOptions —\n" +
+        "  no block, no group, no selection, no exclusion. The smallest real unit is the whole program.\n" +
+        "  'SoftwareOnlyChanges' does NOT mean \"the blocks you edited\": it means the parts TIA finds\n" +
+        "  different from the controller, decided by TIA at download time, and neither chosen by nor\n" +
+        "  visible to this tool beforehand.";
+
+    /// <summary>
+    /// Printed on every run too, and separately from the granularity note. They are different facts —
+    /// one is about what a download would carry, the other about whether this binary can do it — and
+    /// a reader who took in only one of them should still be left with the right conclusion.
+    /// </summary>
+    public const string DownloadDisabledNotice =
+        "THIS COMMAND CANNOT DOWNLOAD. It plans, and stops. There is no --yes, no --force and no\n" +
+        "  confirmed form; no argument, environment variable or build configuration in this binary\n" +
+        "  reaches DownloadProvider.Download. Performing one would be new code, governed by the write\n" +
+        "  fence (ADR-0009).";
+
+    /// <summary>
+    /// A <c>download-plan</c> report.
+    ///
+    /// Leads with the two constant notices rather than with the device, deliberately. The device and
+    /// the options are what was asked; the granularity and the refusal are what the reader most needs
+    /// and least expects, and a report that buried them under a tidy summary would be read as
+    /// confirmation that the download is ready to go.
+    /// </summary>
+    public static string FormatDownloadPlanTable(DownloadPlanResult plan)
+    {
+        var sb = new StringBuilder();
+        sb.Append("DOWNLOAD PLAN — NOTHING WAS DOWNLOADED, AND NOTHING CAN BE.\n");
+        sb.Append(DownloadDisabledNotice).Append('\n');
+        sb.Append(DownloadGranularityWarning).Append('\n');
+        sb.Append('\n');
+
+        sb.Append("DEVICE: ").Append(plan.DeviceName).Append("  (").Append(plan.DevicePath).Append(")\n");
+        sb.Append("OPTIONS: ").Append(plan.Options).Append('\n');
+        sb.Append("WOULD CARRY: ").Append(plan.BlockCount.ToString(CultureInfo.InvariantCulture))
+          .Append(" block(s) + ").Append(plan.TypeCount.ToString(CultureInfo.InvariantCulture))
+          .Append(" PLC data type(s) — the device's whole program, not a selection.\n");
+
+        if (plan.HasUnverifiedContent)
+        {
+            // Not a gate — this command gates nothing, it reports. But a plan that omitted this would
+            // be describing the transfer of content no compile has ever examined (hard rule 4, FI-52).
+            sb.Append("UNVERIFIED CONTENT: ").Append(plan.InconsistentBlocks.Count.ToString(CultureInfo.InvariantCulture))
+              .Append(" block(s) are flagged inconsistent — never compiled, and a download would carry them anyway.\n");
+            foreach (var name in plan.InconsistentBlocks.Take(10))
+            {
+                sb.Append("  ").Append(name).Append('\n');
+            }
+
+            if (plan.InconsistentBlocks.Count > 10)
+            {
+                sb.Append("  ... and ").Append((plan.InconsistentBlocks.Count - 10).ToString(CultureInfo.InvariantCulture))
+                  .Append(" more.\n");
+            }
+
+            // The remediation prints whenever there IS unverified content, not only when the list is
+            // long enough to be truncated. Tying advice to a truncation threshold means the person
+            // with two unverified blocks — the one most likely to shrug and carry on — is the only
+            // one who never sees it.
+            sb.Append("  Run `openness-cli compile-all <project>` before treating this program as verified (hard rule 4).\n");
+        }
+
+        sb.Append('\n');
+        sb.Append(FormatDownloadProviderSource(plan.Provider));
+        sb.Append('\n');
+        sb.Append(FormatDownloadConnection(plan.Connection));
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    private static string FormatDownloadProviderSource(DownloadProviderSource provider)
+    {
+        var sb = new StringBuilder();
+        sb.Append("DOWNLOAD PROVIDER\n");
+
+        if (provider.Found)
+        {
+            sb.Append("  obtained from: ").Append(provider.SourcePath)
+              .Append("  [").Append(provider.SourceClrType).Append("]\n");
+            sb.Append("  via: IEngineeringServiceProvider.GetService<DownloadProvider>() — the only route there is\n")
+              .Append("    (DownloadProvider's sole constructor is internal, and it implements IEngineeringService)\n");
+            if (provider.ProviderParentClrType is { } parent)
+            {
+                sb.Append("  provider.Parent: ").Append(parent).Append('\n');
+            }
+        }
+        else
+        {
+            // Reported as a finding, not as a shrug. "No provider" is an answer about this project
+            // that a reader needs to be able to act on, and the list of what was asked is what makes
+            // it actionable rather than merely disappointing.
+            sb.Append("  NOT OBTAINABLE from any object in this device's tree. Nothing below describes what a\n")
+              .Append("    download would do, because there is no provider to describe it with.\n");
+        }
+
+        sb.Append("  asked, outward from the software-bearing item:\n");
+        foreach (var attempt in provider.Attempts)
+        {
+            sb.Append("    ").Append(attempt.Outcome.PadRight(24)).Append(attempt.ClrType)
+              .Append("  ").Append(attempt.ObjectPath).Append('\n');
+            if (!string.IsNullOrEmpty(attempt.Detail))
+            {
+                sb.Append("      services: ").Append(attempt.Detail).Append('\n');
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string FormatDownloadConnection(DownloadConnectionPlan? connection)
+    {
+        var sb = new StringBuilder();
+        sb.Append("CONNECTION THE DOWNLOAD WOULD USE\n");
+
+        if (connection is null)
+        {
+            sb.Append("  (not read — no DownloadProvider was obtained)\n");
+            return sb.ToString();
+        }
+
+        // Stated before the addresses, not after. Everything below is what the PROJECT declares; a
+        // reader who takes an address here as evidence that something answers at it has drawn the
+        // one wrong conclusion this section can produce.
+        sb.Append("  READ FROM THE PROJECT, NOT FROM THE NETWORK. These are configured addresses, not\n")
+          .Append("    observed ones — nothing here says a device answers at any of them.\n")
+          .Append("    ConfigurationPcInterface.GetAccessibleDevices() (a live scan) is never called.\n");
+        sb.Append("  IsConfigured: ").Append(connection.IsConfigured).Append('\n');
+        sb.Append("  EnableLegacyCommunication: ").Append(connection.EnableLegacyCommunication).Append('\n');
+
+        if (!connection.IsConfigured)
+        {
+            sb.Append("  NOTE: the project has no online connection configured, so a download would have no\n")
+              .Append("    route to take. Configure it in TIA Portal before a download would be possible.\n");
+        }
+
+        if (connection.Modes.Count == 0)
+        {
+            sb.Append("  (no connection modes)\n");
+            return sb.ToString();
+        }
+
+        foreach (var mode in connection.Modes)
+        {
+            sb.Append("  mode: ").Append(mode.Name).Append('\n');
+            foreach (var pc in mode.PcInterfaces)
+            {
+                sb.Append("    pc-interface: ").Append(pc.Name)
+                  .Append(" #").Append(pc.Number.ToString(CultureInfo.InvariantCulture)).Append('\n');
+                foreach (var address in pc.Addresses)
+                {
+                    sb.Append("      pc address: ").Append(address.Address).Append("  (").Append(address.Name).Append(")\n");
+                }
+
+                foreach (var subnet in pc.Subnets)
+                {
+                    sb.Append("      subnet: ").Append(subnet).Append('\n');
+                }
+
+                foreach (var target in pc.TargetInterfaces)
+                {
+                    sb.Append("      target: ").Append(target.Name).Append('\n');
+                    foreach (var address in target.Addresses)
+                    {
+                        sb.Append("        TARGET ADDRESS: ").Append(address.Address)
+                          .Append("  (").Append(address.Name).Append(")\n");
+                    }
+                }
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    public static string FormatDownloadPlanJson(DownloadPlanResult plan)
+    {
+        var payload = new
+        {
+            // First two fields on purpose: a consumer reading the head of the document learns the
+            // two things it must not get wrong before it learns anything else.
+            canDownload = plan.CanDownload,
+            granularity = plan.Granularity,
+            cannotDownloadReason = plan.CannotDownloadReason,
+            devicePath = plan.DevicePath,
+            deviceName = plan.DeviceName,
+            options = plan.Options.ToString(),
+            blockCount = plan.BlockCount,
+            typeCount = plan.TypeCount,
+            hasUnverifiedContent = plan.HasUnverifiedContent,
+            inconsistentBlocks = plan.InconsistentBlocks,
+            provider = new
+            {
+                found = plan.Provider.Found,
+                sourcePath = plan.Provider.SourcePath,
+                sourceClrType = plan.Provider.SourceClrType,
+                providerParentClrType = plan.Provider.ProviderParentClrType,
+                acquisition = "IEngineeringServiceProvider.GetService<DownloadProvider>()",
+                attempts = plan.Provider.Attempts.Select(a => new
+                {
+                    objectPath = a.ObjectPath,
+                    clrType = a.ClrType,
+                    outcome = a.Outcome,
+                    detail = a.Detail,
+                }),
+            },
+            connection = plan.Connection is null ? null : new
+            {
+                probedWithoutConnecting = plan.Connection.ProbedWithoutConnecting,
+                isConfigured = plan.Connection.IsConfigured,
+                enableLegacyCommunication = plan.Connection.EnableLegacyCommunication,
+                allTargetAddresses = plan.Connection.AllTargetAddresses,
+                modes = plan.Connection.Modes.Select(m => new
+                {
+                    name = m.Name,
+                    pcInterfaces = m.PcInterfaces.Select(p => new
+                    {
+                        name = p.Name,
+                        number = p.Number,
+                        addresses = p.Addresses.Select(a => new { name = a.Name, address = a.Address }),
+                        subnets = p.Subnets,
+                        targetInterfaces = p.TargetInterfaces.Select(t => new
+                        {
+                            name = t.Name,
+                            addresses = t.Addresses.Select(a => new { name = a.Name, address = a.Address }),
+                        }),
+                    }),
+                }),
+            },
+        };
+
+        // The relaxed encoder, uniquely in this file. The default one escapes `<` and `>` as
+        // </>, which would render this payload's single most important field —
+        // `GetService<DownloadProvider>()`, the acquisition path this whole command exists to
+        // establish — as unreadable mojibake. Still valid JSON, and this output is a report read by
+        // people and scripts, never embedded in HTML, so the escaping bought nothing here.
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        });
     }
 
     public static string FormatCompileTable(CompileResult result)

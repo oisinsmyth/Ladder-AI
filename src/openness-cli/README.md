@@ -14,6 +14,7 @@ openness-cli compile-all   <project> [--device <name>] [--force]              # 
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli block-layout  <project> --block <name> [--expect Standard|Optimized]   # READ-ONLY: optimized vs standard block access. Classic S7comm cannot see an OPTIMIZED block at all; the IR path yields Optimized silently — see below
 openness-cli block-layout  <project> --block <name> --set Standard|Optimized --yes  # DESTROYS THE BLOCK'S RETAINED DATA on the next download. Sets, saves, re-resolves and READS BACK; a mismatch is exit 15, never a pass
+openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware]   # READ-ONLY, DRY-RUN ONLY: what a download WOULD comprise. CANNOT DOWNLOAD — no --yes, no --force, no confirmed form. Granularity is WHOLE-PLC; there is no per-block download — see below
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
@@ -591,26 +592,33 @@ disagree. **There is deliberately no flag that skips it.**
 
 Safety blocks are refused before the property is touched, like every other subcommand (exit 6).
 
-### UNVERIFIED: the layout is not known to be durable across a re-import
+### MEASURED: a re-import REVERTS the layout to `Optimized`
 
-**Whether re-importing the same block later reverts it to `Optimized` has not been measured in
-either direction.** It cannot currently be tested from the IR side, because there is no way to
-produce a standard-access block from that toolchain to test against. Treat this as open, not as
-either answer:
+**Re-importing the same block reverts it to `Optimized`.** Measured against a real project on
+2026-08-11, confirmed by genuine TIA exports either side of one import, and **the revert happens at
+IMPORT — observed before any compile ran.** Compile is not implicated.
+
+The mechanism is plain once seen: the exported `.xml` contains **no `MemoryLayout` element at all**,
+so the import states no opinion and TIA applies the S7-1200 default, which is `Optimized`.
+
+Nothing downstream notices:
 
 - the converter emits no `MemoryLayout`, so an import carries **no opinion** about layout;
 - `Normalizer` ignores the attribute — under a comment reading *"Block-level configuration TIA
   assigns sensible defaults for on Import() regardless of source content"* — so **`drift-check`
   cannot detect a layout change in either direction**;
-- therefore, if re-import does revert it, the block goes silently back to being invisible to the
-  harness while every check in the pipeline stays green. It would bite on the *second* import, not
-  the first.
+- so the block goes silently back to being invisible to any classic-S7comm reader while every check
+  in the pipeline stays green. As predicted, it bites on the *second* import, not the first.
 
-Until that is settled, re-assert after every import of the block:
+**Re-assert after every import of the block. This is required, not precautionary:**
 
 ```
+openness-cli block-layout <project> --block DB_Whatever --set Standard --yes
 openness-cli block-layout <project> --block DB_Whatever --expect Standard
 ```
+
+The `--expect` call is the gate; the `--set` is what actually repairs it. Running only `--expect`
+tells you the block is broken without fixing it.
 
 Do **not** "fix" this by un-ignoring `MemoryLayout` in `Normalizer`: converter output never emits the
 attribute, so un-ignoring it would make every real-export-vs-converter-output comparison differ and
@@ -622,6 +630,125 @@ Related, and worth reading before reasoning about a block's layout from any file
 output is not a TIA export** — it renders five block-level attributes and `MemoryLayout` is not one of
 them, so grepping converter output for it finds nothing, and *nothing is evidence about the converter,
 not about the block*. An absent attribute is "unanswered", never "false".
+
+## `download-plan` — what a download would comprise, and why it cannot perform one (2026-08-11)
+
+```
+openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]
+```
+
+**This command plans and cannot download.** There is no `--yes`, no `--force` and no confirmed form;
+`--yes` and `--force` are *refused by name* rather than ignored, because someone who types one has
+concluded this command can be talked into it. No argument, environment variable or build
+configuration in this binary reaches `DownloadProvider.Download` — the one method that would,
+`IOpennessGateway.PerformDownload`, has a body consisting entirely of a `throw`, and a unit test
+walks the compiled IL of **every method in the shipped assembly** asserting that no call to a
+`Download` member on a `Siemens.Engineering.Download` type exists anywhere in it. That test was
+negative-tested by temporarily retargeting it at `ICompilable.Compile` and confirming it *fails*,
+naming `OpennessGateway.RunCompile` — a scanner that has never been shown to detect anything is not
+a check.
+
+### Granularity is DEVICE-LEVEL. There is no per-block download.
+
+The single most important thing this command exists to say. `DownloadProvider.Download` has three
+overloads and every one of them takes a connection, a pair of configuration callbacks and a
+`DownloadOptions` value. **None takes a block, a group, a selection or an exclusion.** So "download
+my one new DB" is not something this API does — the smallest real unit is the whole PLC software.
+
+`SoftwareOnlyChanges` does **not** mean "the blocks you edited". It means the parts TIA finds
+different from what is in the controller, decided by TIA at download time, neither chosen by nor
+visible to this tool beforehand. Because that value is the one most easily misread as a per-block
+selector, the **default is `Software`** — the unambiguous whole-software value. The misconception has
+to be typed in; it is not inherited by leaving a flag off. Siemens's own enum also has `None`, which
+transfers nothing; this command refuses it, since a confident plan for a transfer of nothing is the
+most dangerous output it could produce — it reads as reassurance.
+
+The granularity statement prints on **every** run, in table and JSON alike, for every option value.
+It is not conditional, because the belief it corrects is what a reader arrives with rather than
+something a particular flag triggers. In JSON it is a *field* (`granularity`, alongside
+`canDownload: false`), not only prose: a consumer keying on a missing property could not tell "this
+build refuses" from "this build predates the flag".
+
+### Where the `DownloadProvider` comes from
+
+`Siemens.Engineering.Download.DownloadProvider` has exactly one constructor and it is `internal`, and
+the type implements `IEngineeringService`. `IEngineeringServiceProvider.GetService<T>()` is
+constrained `where T : class, IEngineeringService`. Those two facts together mean
+**`GetService<DownloadProvider>()` is the only way a client can ever hold one** — it is not returned
+by any method, and it cannot be constructed. (Confirmed by reflecting on the installed V20 assembly;
+`RHDownloadProvider`, for redundant systems, is the same shape.)
+
+What the API does *not* state is which object answers. So this walks **outward from the device item
+carrying the `PlcSoftware`**, asking each ancestor, and reports every object it asked with what each
+one advertises via `GetServiceInfos()` — the same shape `CompileHmiTarget` uses, which exists
+precisely because the analogous assumption for `ICompilable` ("it will be on the software-bearing
+item") was measured wrong and returned null. The objects that *refused* are reported too: "the CPU
+answered and the station did not" is the finding, and a report showing only the winner would have to
+be re-derived by hand next time.
+
+If no provider is obtainable anywhere in the tree, the command exits **16**, not 0. The report then
+answers none of the questions it was asked, and a green exit would present that silence as a clean
+bill of health (FI-44 — empty is not clean).
+
+### The connection is readable WITHOUT connecting
+
+`DownloadProvider.Configuration` is a `Siemens.Engineering.Connection.ConnectionConfiguration` — an
+ordinary project-model object, walked with plain property reads:
+
+```
+ConnectionConfiguration  (IsConfigured, EnableLegacyCommunication)
+  └── Modes            ConfigurationMode          (Name)
+       └── PcInterfaces   ConfigurationPcInterface  (Name, Number, Addresses, Subnets)
+            └── TargetInterfaces  ConfigurationTargetInterface  (Name, Addresses)
+                 └── Addresses    ConfigurationAddress  (Name, Address)   ← the device-side address
+```
+
+**No socket is opened to produce any of it.** The one member on that tree that *would* touch the
+network — `ConfigurationPcInterface.GetAccessibleDevices()`, "Delivers a list of accessible devices",
+a live scan — is never called anywhere in this codebase. Neither is
+`ConnectionConfiguration.ApplyConfiguration(...)`, which mutates the project's connection
+configuration: a plan does not get to change what it is planning.
+
+So the report describes **the route the project has configured, and says nothing about whether
+anything is at the far end of it.** A configured address that answers and one that does not look
+identical here, and mistaking the first for the second is the only wrong conclusion this section can
+produce — which is why it leads with `READ FROM THE PROJECT, NOT FROM THE NETWORK` rather than
+closing with it.
+
+### Safety content is refused at the plan (exit 6)
+
+Not the export path's refusal copied across. Nobody names a safety block here, and the plan is
+refused anyway — because granularity is device-level, so on an F-capable PLC **there is no download
+that excludes the safety program**. There is no option, overload or flag for it. Planning a download
+of such a device *is* planning to write safety content (hard rule 2), and the refusal has to happen
+while it is still a plan.
+
+### What it also reports
+
+Blocks the project flags `IsConsistent=false` are listed as **unverified content a download would
+carry**, with a pointer to `compile-all`. This command gates nothing — it is a plan, not a gate — but
+a report that omitted them would be describing the transfer of content no compile has ever examined
+(hard rule 4, FI-52).
+
+### What it deliberately does NOT do
+
+- It does **not** ask whether a download would be *permitted*. That is the write fence's question
+  (`src/device-guard/`, ADR-0009) and this command never asks it — see the note below.
+- It does **not** answer the download's configuration callbacks. `docs/notes/openness-api-survey-plc-online.md` §4
+  records the rule for whenever a real `download` is built: an unanswered configuration that would
+  prevent the download throws `EngineeringTargetInvocationException`, `DataBlockReinitialization` is
+  the destructive one, and the command must **fail closed** — refuse a download that raised a
+  configuration it was not explicitly told how to answer, rather than choosing a default.
+
+### The fence is not wired in, and cannot be as things stand
+
+`DeviceWriteGuard` (ADR-0009) is the seven-gate write fence, and it lives in `src/device-guard/`,
+which targets **net8.0**. `openness-cli` must target **net48** — `Siemens.Engineering.dll` calls a
+.NET-Framework-only `Assembly.Load` overload and fails at runtime on modern .NET. So openness-cli
+**cannot reference `DeviceGuard` as it stands**, and no version of this command could have called it.
+That is a reason this command plans rather than gates, not an omission from it: a plan needs no
+authorization, and adding a fence call that could not compile would have been the worst of the
+options. Resolving it is design work recorded with the branch, not something this command decides.
 
 ## Exit codes
 
@@ -646,6 +773,7 @@ shell should branch on these rather than on stderr text.
 | 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |
 | 14 | `NothingExamined` | The command ran, nothing went wrong, and it examined **nothing** — so its silence says nothing about the project. `compile-all` earns this when no item is flagged inconsistent. It is not a success because of how the gap arises: an item that compiled *with errors* is still flagged *consistent*, and errors do not survive the process, so the run right after a failed one is the one that examines nothing and looks cleanest. `--force` compiles everything |
 | 15 | `LayoutMismatch` | `block-layout`: the block's memory layout is **not** the one asked for — either a `--set` whose read-back after saving disagrees with the request, or a `--expect` assertion that does not hold. Its own code because nothing was named wrongly and re-running with a different argument does not fix it; and never a success-with-a-note, because this failure is invisible everywhere else — an optimized block is not an error to a classic-S7comm reader, it is simply absent, and no compile, `drift-check` or `sanity-check` can see the attribute at all |
+| 16 | `DownloadPlanIncomplete` | `download-plan` ran, nothing went wrong, and it could **not obtain a `DownloadProvider`** from any object in the device's tree — so the report answers none of the questions the command exists to answer, and its calm appearance is not evidence about anything. Same family as 11–14: not a failure (nothing threw, no argument was wrong, re-running changes nothing) and emphatically not a success. Says nothing about whether a download would be *permitted* — that is the write fence's question, which this command never asks |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

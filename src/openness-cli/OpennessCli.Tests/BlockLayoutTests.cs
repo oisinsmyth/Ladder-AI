@@ -147,7 +147,10 @@ public class BlockLayoutTests
         Assert.Contains("DESTROYS ITS RETAINED DATA", stderr);
         Assert.Contains("--yes", stderr);
         Assert.Contains("Portal was not contacted", stderr);
-        Assert.Contains("UNVERIFIED", stderr);
+        // The re-import hazard is MEASURED, not speculative: a re-import reverts the layout. The dry
+        // run has to say so, because the moment it bites is a later import when nobody reads output.
+        Assert.Contains("RE-IMPORTING THIS BLOCK REVERTS THE LAYOUT", stderr);
+        Assert.Contains("RE-ASSERT AFTER EVERY IMPORT", stderr);
     }
 
     // ---- read path -------------------------------------------------------------------------
@@ -227,7 +230,10 @@ public class BlockLayoutTests
         Assert.Contains("AFTER: Standard", stdout);
         Assert.Contains("VERIFIED", stdout);
         Assert.Contains("DESTROYS ITS RETAINED DATA", stdout);
-        Assert.Contains("UNVERIFIED", stdout);
+        // Printed on EVERY successful set. The layout does not survive a re-import (measured), so the
+        // one place guaranteed to be read by whoever set it must carry the standing obligation.
+        Assert.Contains("RE-IMPORTING THIS BLOCK REVERTS THE LAYOUT", stdout);
+        Assert.Contains("RE-ASSERT AFTER EVERY IMPORT", stdout);
     }
 
     /// <summary>
@@ -462,6 +468,56 @@ internal sealed class FakeGateway : IOpennessGateway
         return new BlockLayoutResult(
             blockName, "PLC_1/Program blocks", BlockType.DB, Current, before,
             OverrideReportedRequest ?? requested);
+    }
+
+    // ---- download-plan ----------------------------------------------------------------------
+    //
+    // The counter below is the point of this whole section. Every download-plan test asserts it is
+    // still zero afterwards, so "no download was performed" is a measured property of each code
+    // path rather than an argument from reading the source.
+
+    /// <summary>
+    /// How many times <see cref="PerformDownload"/> was called. Must be zero after every test in
+    /// this assembly. Nothing in the CLI calls it; this exists so that fact can be ASSERTED.
+    /// </summary>
+    public int PerformDownloadCalls { get; private set; }
+
+    public int BuildDownloadPlanCalls { get; private set; }
+
+    /// <summary>The plan to hand back. Null means "no plan configured" and is a test-authoring error.</summary>
+    public DownloadPlanResult? Plan { get; set; }
+
+    /// <summary>Models a device that could not be resolved, or was ambiguous.</summary>
+    public Exception? ThrowOnBuildDownloadPlan { get; set; }
+
+    /// <summary>The options the CLI actually asked for — so a test can check they were passed through.</summary>
+    public DownloadOptionKind? LastRequestedOptions { get; private set; }
+
+    public string? LastDeviceFilter { get; private set; }
+
+    public DownloadPlanResult BuildDownloadPlan(string? deviceFilter, DownloadOptionKind options)
+    {
+        BuildDownloadPlanCalls++;
+        LastRequestedOptions = options;
+        LastDeviceFilter = deviceFilter;
+
+        if (ThrowOnBuildDownloadPlan is { } ex)
+        {
+            throw ex;
+        }
+
+        return Plan ?? throw new InvalidOperationException("Test did not configure a plan.");
+    }
+
+    /// <summary>
+    /// Counts the call and then throws, exactly as the real gateway does. It counts FIRST so that a
+    /// caller which swallowed the exception would still be caught by the assertion — a test that
+    /// only checked for the throw could be satisfied by a download that happened and then failed.
+    /// </summary>
+    public void PerformDownload(string? deviceFilter, DownloadOptionKind options)
+    {
+        PerformDownloadCalls++;
+        throw new DownloadNotEnabledException();
     }
 
     public void OpenProject(string projectIdentifier, TimeSpan timeout) => OpenProjectCalls++;
