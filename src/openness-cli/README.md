@@ -10,6 +10,7 @@ openness-cli export        <project> (--block <name> | --type <name> | --tagtabl
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
 openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--dry-run]   # bulk restore: classifies each file itself, imports tag tables → types → blocks, retries to a fixpoint
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
+openness-cli compile-all   <project> [--device <name>]                        # compiles every INCONSISTENT type and block in one session — the bulk half of the gate (FI-52)
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
@@ -502,6 +503,30 @@ COMPLETE: every file supplied is now in the project. This is NOT a compile gate 
           imported block is flagged inconsistent until compiled. Run:
           openness-cli sanity-check <project>
 ```
+
+## `compile-all` — the gate's bulk half (2026-08-11)
+
+`openness-cli compile-all <project> [--device <name>] [--json]`
+
+FI-52 established that a whole-device compile **does not clear** the `IsConsistent=false` flag a
+freshly-imported block carries. The consequence nobody had to face until a whole program was
+restored at once: the only thing that clears it is a per-block or per-type compile, and after a bulk
+import that is ninety-odd of them — which, one CLI invocation each, is ninety-odd Portal attaches.
+This does them in one session, types first, retrying while progress is being made (compiling one
+item can clear another; the order that happens in is not worth deriving when a second pass settles
+it).
+
+**Errors and inconsistency are counted separately, and both are reported.** They are different
+failures — *compiled and wrong* versus *never examined* — and collapsing them into one count would
+let the second hide inside the first. The second is the one that matters most, because a block the
+gate did not examine is indistinguishable from one that passed.
+
+**The verdict keys on `ErrorCount`, never on `State`.** A project carrying pre-existing hardware
+warnings returns a non-`Success` state on a perfectly clean block, so a state-based verdict would
+call every block on such a project a failure.
+
+Exit **8** if any item compiled with errors, **11** if any remain inconsistent, **0** only when
+neither is true.
 
 ## Exit codes
 

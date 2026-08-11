@@ -132,6 +132,8 @@ internal static class Program
                     return RunImportAll(gateway, importAll.Options, timeoutOpenSeconds);
                 case ParseResult.CompileSuccess compile:
                     return RunCompile(gateway, compile.Options, timeoutOpenSeconds);
+                case ParseResult.CompileAllSuccess compileAll:
+                    return RunCompileAll(gateway, compileAll.Options, timeoutOpenSeconds);
                 case ParseResult.DeleteSuccess delete:
                     return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
                 case ParseResult.CreateInstanceDbSuccess createInstanceDb:
@@ -594,9 +596,18 @@ internal static class Program
                 var remaining = plan.Files.Where(f => f.Phase == phase).ToList();
                 var lastError = new Dictionary<string, string>(StringComparer.Ordinal);
 
+                // Counted WITHIN the phase, not across the run. A global counter made every type
+                // report "imported on pass 2" and every block "pass 3" purely because they were in
+                // the second and third phases — 98 files claiming to have been retried when not one
+                // of them had failed even once. A retry is worth reporting precisely because it is
+                // unusual; a label that fires for almost everything reports nothing, and would hide
+                // the real retry it exists to show. Measured on a live 101-file restore.
+                var phasePass = 0;
+
                 while (remaining.Count > 0)
                 {
                     passes++;
+                    phasePass++;
                     var importedThisPass = new List<ImportAllPlanner.PlannedFile>();
 
                     foreach (var file in remaining)
@@ -619,7 +630,7 @@ internal static class Program
                             importedThisPass.Add(file);
                             entries.Add(new Model.ImportAllEntry(
                                 file.Path, file.Name, file.Kind.ToString(),
-                                Model.ImportAllOutcome.Imported, passes, Detail: null));
+                                Model.ImportAllOutcome.Imported, phasePass, Detail: null));
                         }
                         catch (SafetyContentRefusedException)
                         {
@@ -642,7 +653,7 @@ internal static class Program
                         {
                             entries.Add(new Model.ImportAllEntry(
                                 file.Path, file.Name, file.Kind.ToString(),
-                                Model.ImportAllOutcome.Failed, passes,
+                                Model.ImportAllOutcome.Failed, phasePass,
                                 lastError.TryGetValue(file.Path, out var err) ? err : "failed with no error recorded"));
                         }
 
@@ -670,6 +681,123 @@ internal static class Program
         // in through Import() is flagged inconsistent, and clearing that is `sanity-check`'s job
         // (hard rule 4, FI-52). This exit code answers one question — did every file land.
         return result.IsComplete ? ExitCodes.Success : ExitCodes.ImportIncomplete;
+    }
+
+    /// <summary>
+    /// Compiles every item the project reports as inconsistent, types first, in one session.
+    ///
+    /// This exists because of FI-52's other half. A whole-device compile does not clear the
+    /// inconsistent flag a freshly-imported block carries, so the only thing that clears it is a
+    /// per-block or per-type compile — and after a bulk restore that is ninety-odd of them. Run as
+    /// separate CLI invocations that is ninety-odd Portal attaches; run here it is one.
+    ///
+    /// Types before blocks, then a re-read and a retry while progress is being made — the same
+    /// fixpoint argument as `import-all`, for the same reason: compiling one item can clear another,
+    /// and the order in which that happens is not worth deriving when a second pass settles it.
+    /// </summary>
+    private static int RunCompileAll(IOpennessGateway gateway, CompileAllCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        var entries = new List<Model.CompileAllEntry>();
+        var passes = 0;
+
+        try
+        {
+            var previousRemaining = int.MaxValue;
+
+            while (true)
+            {
+                var sanity = gateway.RunSanityCheck();
+                var types = sanity.InconsistentTypes.Select(t => t.Name).ToList();
+                var blocks = sanity.InconsistentBlocks.Select(b => b.Name).ToList();
+                var remaining = types.Count + blocks.Count;
+
+                if (remaining == 0)
+                {
+                    break;
+                }
+
+                // No progress since the last pass means another identical pass cannot help: what is
+                // left is blocked on something compiling cannot fix.
+                if (remaining >= previousRemaining)
+                {
+                    foreach (var name in types)
+                    {
+                        entries.Add(new Model.CompileAllEntry(name, "Type", Model.CompileState.Error, 0, 0, StillInconsistent: true,
+                            "still inconsistent after a pass that cleared nothing"));
+                    }
+
+                    foreach (var name in blocks)
+                    {
+                        entries.Add(new Model.CompileAllEntry(name, "Block", Model.CompileState.Error, 0, 0, StillInconsistent: true,
+                            "still inconsistent after a pass that cleared nothing"));
+                    }
+
+                    break;
+                }
+
+                previousRemaining = remaining;
+                passes++;
+
+                foreach (var name in types)
+                {
+                    entries.Add(CompileOne(() => gateway.CompileType(name, options.Device), name, "Type"));
+                }
+
+                foreach (var name in blocks)
+                {
+                    entries.Add(CompileOne(() => gateway.CompileBlock(name, options.Device), name, "Block"));
+                }
+            }
+
+            // Re-read once at the end so StillInconsistent reflects the final state rather than the
+            // state at the moment each item was compiled.
+            var final = gateway.RunSanityCheck();
+            var stillOut = new HashSet<string>(
+                final.InconsistentTypes.Select(t => t.Name).Concat(final.InconsistentBlocks.Select(b => b.Name)),
+                StringComparer.Ordinal);
+
+            for (var i = 0; i < entries.Count; i++)
+            {
+                entries[i] = entries[i] with { StillInconsistent = stillOut.Contains(entries[i].Name) };
+            }
+        }
+        finally
+        {
+            gateway.Save();
+        }
+
+        var result = new Model.CompileAllResult(entries, passes);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatCompileAllJson(result)
+            : OutputFormatter.FormatCompileAllTable(result));
+
+        if (result.WithErrorsCount > 0)
+        {
+            return ExitCodes.CompileFailed;
+        }
+
+        return result.StillInconsistentCount > 0 ? ExitCodes.CompileIncomplete : ExitCodes.Success;
+    }
+
+    private static Model.CompileAllEntry CompileOne(Func<Model.CompileResult> compile, string name, string kind)
+    {
+        try
+        {
+            var r = compile();
+            return new Model.CompileAllEntry(name, kind, r.State, r.ErrorCount, r.WarningCount, StillInconsistent: false,
+                r.ErrorCount > 0
+                    ? string.Join("; ", r.Messages.Where(m => !string.IsNullOrWhiteSpace(m.Description)).Select(m => m.Description).Take(3))
+                    : null);
+        }
+        catch (Exception ex)
+        {
+            // Recorded and carried on, like export-all: "which of ninety items threw, and why" is
+            // the whole value of the report, and one throw must not end the run.
+            return new Model.CompileAllEntry(name, kind, Model.CompileState.Error, 1, 0, StillInconsistent: true,
+                $"{ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
