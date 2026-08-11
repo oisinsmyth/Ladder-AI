@@ -833,6 +833,124 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    // Mirrors FormatExportAllTable, and for the same reason: the failure mode of a restore is a
+    // project that comes back looking whole. So what did NOT go in leads, and the multi-pass detail
+    // is summarised rather than replayed — which pass a file landed on is only interesting for the
+    // ones that needed more than the first.
+    public static string FormatImportAllTable(ImportAllResult result)
+    {
+        var sb = new StringBuilder();
+        sb.Append("GROUP: ").Append(result.GroupPath).Append('\n');
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ImportAllOutcome.Rejected))
+        {
+            sb.Append("REJECTED: ").Append(entry.Path).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        foreach (var entry in result.Entries.Where(e => e.Outcome == ImportAllOutcome.Failed))
+        {
+            sb.Append("FAILED:   ").Append(entry.Name).Append("  (").Append(entry.Detail).Append(")\n");
+        }
+
+        var late = result.Entries.Where(e => e.Outcome == ImportAllOutcome.Imported && e.Pass > 1).ToList();
+        foreach (var entry in late)
+        {
+            sb.Append("RETRIED:  ").Append(entry.Name).Append("  (imported on pass ").Append(entry.Pass).Append(")\n");
+        }
+
+        sb.Append("SUMMARY: ").Append(result.ImportedCount).Append(" imported, ")
+            .Append(result.FailedCount).Append(" failed, ")
+            .Append(result.RejectedCount).Append(" rejected, in ")
+            .Append(result.Passes).Append(" pass(es)\n");
+
+        if (result.IsComplete)
+        {
+            sb.Append("COMPLETE: every file supplied is now in the project. This is NOT a compile gate — every\n")
+                .Append("          imported block is flagged inconsistent until compiled. Run:\n")
+                .Append("          openness-cli sanity-check <project>\n");
+        }
+        else
+        {
+            sb.Append("INCOMPLETE: the project does NOT contain everything that was supplied. A project missing a\n")
+                .Append("            block opens, lists and can even pass a device compile, so this will not\n")
+                .Append("            announce itself later — resolve the ")
+                .Append(result.FailedCount + result.RejectedCount).Append(" item(s) above first.\n");
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatImportAllJson(ImportAllResult result)
+    {
+        var payload = new
+        {
+            groupPath = result.GroupPath,
+            complete = result.IsComplete,
+            imported = result.ImportedCount,
+            failed = result.FailedCount,
+            rejected = result.RejectedCount,
+            passes = result.Passes,
+            entries = result.Entries.Select(e => new
+            {
+                name = e.Name,
+                kind = e.Kind,
+                path = e.Path,
+                outcome = e.Outcome.ToString(),
+                pass = e.Pass,
+                detail = e.Detail,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    public static string FormatImportAllPlanTable(ImportAllPlanner.Plan plan, string groupPath)
+    {
+        var sb = new StringBuilder();
+        sb.Append("GROUP: ").Append(groupPath).Append('\n');
+        sb.Append("PLAN (import order):\n");
+
+        var order = 0;
+        foreach (var file in plan.Files)
+        {
+            order++;
+            sb.Append("  ").Append(order.ToString().PadLeft(3)).Append("  ")
+                .Append(file.Kind.ToString().PadRight(10))
+                .Append(file.RootElement.PadRight(24))
+                .Append(file.Name).Append('\n');
+        }
+
+        foreach (var rejection in plan.Rejections)
+        {
+            sb.Append("REJECTED: ").Append(rejection.Path).Append("  (").Append(rejection.Reason).Append(")\n");
+        }
+
+        sb.Append("SUMMARY: ").Append(plan.Files.Count).Append(" file(s) would be imported, ")
+            .Append(plan.Rejections.Count).Append(" rejected\n");
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatImportAllPlanJson(ImportAllPlanner.Plan plan, string groupPath)
+    {
+        var payload = new
+        {
+            groupPath,
+            usable = plan.IsUsable,
+            files = plan.Files.Select(f => new
+            {
+                path = f.Path,
+                name = f.Name,
+                kind = f.Kind.ToString(),
+                rootElement = f.RootElement,
+                phase = f.Phase,
+            }),
+            rejections = plan.Rejections.Select(r => new { path = r.Path, reason = r.Reason }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatSanityCheckTable(SanityCheckResult result)
     {
         var sb = new StringBuilder();

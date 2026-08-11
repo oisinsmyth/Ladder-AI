@@ -32,6 +32,14 @@ openness-cli export-all    <project> --out <dir> [--device <name>] [--tagtables]
                                     # the IR ON DISK against WHAT IS ACTUALLY IN THE CONTROLLER — the comparison neither drift-check nor a re-export proof could make. Safety content is REFUSED AND NAMED, never silently
                                     # omitted (an absent file reads downstream as "not in the controller"); a basename collision is refused too. Exit 12 = ExportIncomplete: everything attempted worked, the dump is not whole
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>
+openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run]   # BULK RESTORE, the other half of export-all. `import` takes files as ONE kind, in the
+                                    # order given, and stops at the first failure — right for the 2-3 files a change touches, useless for putting a whole program back. A program is a MIXED set in a
+                                    # DEPENDENCY ORDER NOT DERIVABLE FROM FILENAMES, and getting it wrong yields `Data type "X" is unknown` on a file that was fine and would have imported ten seconds
+                                    # later. So: kind is READ FROM each file's SimaticML root element (no --type/--tagtable, no three invocations); order is tag tables → types → blocks (iDBs last);
+                                    # then it RETRIES failures until a pass imports nothing new — any workable order converges, so the sort is an optimisation and the fixpoint is the correctness
+                                    # argument. Unreadable/unclassifiable/duplicate-basename files are REJECTIONS WITH REASONS, never skips. Saves ONCE at the end (Save() per file × retries would
+                                    # dominate). `--dry-run` prints the plan without contacting Portal. Exit 13 = ImportIncomplete: the project does NOT contain everything supplied — including a file
+                                    # never attempted. NOT a compile gate and doesn't pretend to be: everything imported is flagged inconsistent, so `sanity-check` still follows (hard rule 4)
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json]   # non-zero exit on error (8 = CompileFailed; 11 = CompileIncomplete, the device compiled clean but left blocks unverified — FI-52; full table in src/openness-cli/README.md). A bare whole-device run is NOT the gate: see hard rule 4, use sanity-check or per-block
 openness-cli delete        <project> --block <name> [--device <name>] --yes               # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
