@@ -8,6 +8,7 @@ C# CLI — the only component that talks to TIA Portal (via Openness). Built in 
 openness-cli list          <project> [--tagtables]                            # enumerate blocks (or tag tables, with --tagtables); F-/safety blocks flagged, never opened
 openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>   # block/UDT/tag table → SimaticML (refuses safety blocks)
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
+openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--dry-run]   # bulk restore: classifies each file itself, imports tag tables → types → blocks, retries to a fixpoint
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
@@ -18,7 +19,7 @@ openness-cli xref          <project>                                           #
 ```
 
 Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell. The
-eleven codes and what each means: "Exit codes" at the end of this file.
+codes and what each means: "Exit codes" at the end of this file.
 `export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-10 —
 see `docs/notes/stage-gates.md` S1.
 
@@ -451,6 +452,57 @@ INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-che
             findings about this dump.
 ```
 
+## `import-all` — putting a whole program back (2026-08-11)
+
+`openness-cli import-all <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run]`
+
+`import` is built for the two or three files a change touches: it takes them as **one** kind
+(blocks, or `--type`, or `--tagtable`), in the order given, and stops at the first failure. A whole
+program is none of those things. It is a mixed set — tag tables, UDTs that contain other UDTs, FBs,
+the instance DBs of those FBs — in a **dependency order that is not derivable from the filenames**,
+and getting that order wrong does not produce a diagnosable error. It produces `Data type "X" is
+unknown` on a file that was perfectly good and would have imported ten seconds later.
+
+So this command decides what it can from the files themselves and brute-forces the rest:
+
+- **Classification is read from the file, not declared on the command line.** The SimaticML root
+  element (`SW.Blocks.*` / `SW.Types.*` / `SW.Tags.*`) says which composition a file belongs to, so
+  one invocation handles a mixed directory instead of three invocations in an order you had to know.
+- **Ordering is an optimisation; the fixpoint is the correctness argument.** Tag tables, then types,
+  then blocks (a block may use a UDT; a UDT never uses a block), and instance DBs last within the
+  block phase. Then it retries every failure until a pass imports nothing new. **Any order that can
+  work converges**, because a pass that imports at least one file unblocks strictly more than the
+  last — which is why no dependency graph is computed here, and why being wrong about the sort costs
+  a pass rather than a restore.
+- **Nothing goes missing quietly.** A file that cannot be read, cannot be classified, or shares a
+  basename with another file in the same run is a **rejection with a reason**, never a skip. The
+  failure mode of a restore is a project that comes back *looking* whole: it opens, it lists, and a
+  device compile can pass on it (FI-52).
+- **Safety content stops the command.** A `SafetyContentRefusedException` is never retried and never
+  demoted to a line at the bottom of a mostly-successful summary (hard rule 2).
+- **One save, at the end, in a `finally`.** `Project.Save()` is seconds on a real project; saving per
+  file — times the retry count — would dominate the run. The `finally` keeps the property the
+  per-call save had: a mid-run abort still keeps whatever went in.
+
+`--dry-run` prints the classification and the order it would use and **never contacts Portal** —
+same reasoning as the unconfirmed HMI writes: answering from the arguments alone must not pay for,
+or fail on, a connect.
+
+**This is not a compile gate and does not pretend to be one.** Every block that goes in through
+`Import()` is flagged inconsistent; clearing that is `sanity-check`'s job (hard rule 4). Exit **0**
+only when every supplied file is in the project, **13** (`ImportIncomplete`) otherwise — including
+when the shortfall is a file that was never *attempted*.
+
+```
+$ openness-cli import-all "C:\proj\P.ap20" --group "S7-1200 station_1/PLC_1" C:\ir
+GROUP: S7-1200 station_1/PLC_1
+RETRIED:  MotorIOSet  (imported on pass 2)
+SUMMARY: 101 imported, 0 failed, 0 rejected, in 4 pass(es)
+COMPLETE: every file supplied is now in the project. This is NOT a compile gate — every
+          imported block is flagged inconsistent until compiled. Run:
+          openness-cli sanity-check <project>
+```
+
 ## Exit codes
 
 Every code this CLI can return (`OpennessCli/Program.cs`, `ExitCodes`). Anything driving it from a
@@ -471,6 +523,7 @@ shell should branch on these rather than on stderr text.
 | 10 | `NotConfirmed` | `delete` resolved the block and printed what it *would* delete, but `--yes` was absent. **Nothing was deleted.** The only subcommand with a confirmation gate, because it's the only irreversible one |
 | 11 | `CompileIncomplete` | A **whole-device** `compile` returned `Success` with no errors, but blocks remain flagged `IsConsistent=false` — so it did not compile them and proved less than it appears to. The unverified blocks are listed on stderr. Distinct from `CompileFailed`: nothing reported an error, the gate simply did not examine everything (FI-52) |
 | 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
+| 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

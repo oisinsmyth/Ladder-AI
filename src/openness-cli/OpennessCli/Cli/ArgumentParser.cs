@@ -61,6 +61,19 @@ public sealed record ImportCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// The bulk half of import. Takes directories as well as files, works out what each file IS rather
+// than being told (--type/--tagtable are per-invocation on `import`, so a mixed set needs three
+// separate runs in an order the operator has to know), and retries to a fixpoint.
+public sealed record ImportAllCommandOptions(
+    string ProjectIdentifier,
+    string GroupPath,
+    IReadOnlyList<string> Paths,
+    bool Json,
+    bool DryRun,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public sealed record CompileCommandOptions(
     string ProjectIdentifier,
     string? Device,
@@ -213,6 +226,8 @@ public abstract record ParseResult
 
     public sealed record ImportSuccess(ImportCommandOptions Options) : ParseResult;
 
+    public sealed record ImportAllSuccess(ImportAllCommandOptions Options) : ParseResult;
+
     public sealed record CompileSuccess(CompileCommandOptions Options) : ParseResult;
 
     public sealed record DeleteSuccess(DeleteCommandOptions Options) : ParseResult;
@@ -300,6 +315,10 @@ public static class ArgumentParser
         "    actually in the controller (FI-70). Safety blocks are REFUSED and NAMED, never silently omitted - a dump missing a file is read as 'not in the controller' by the completeness\n" +
         "    check, which would turn a correct refusal into a false finding. Exits 7 if any export failed or was refused; --tagtables is opt-in (a tag table has no .ir counterpart to pair with).\n" +
         "  openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    Bulk restore: classifies every file (tag table / PLC data type / block) from its own root element, imports tag tables then types then blocks, and RETRIES failures until a pass\n" +
+        "    makes no progress - so a dependency order nobody can supply from filenames does not have to be supplied. --dry-run prints the plan and never contacts Portal. Exits 13 if any\n" +
+        "    file did not go in, INCLUDING one that was never attempted (unreadable, unclassifiable, duplicate name) - a project missing a block looks exactly like a whole one.\n" +
         "  openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli delete        <project> --block <name> [--device <name>] --yes [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
@@ -380,6 +399,7 @@ public static class ArgumentParser
         ParseResult.ExportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.ExportAllSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.ImportSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.ImportAllSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -409,6 +429,7 @@ public static class ArgumentParser
         ParseResult.ExportSuccess s => s.Options.ProjectIdentifier,
         ParseResult.ExportAllSuccess s => s.Options.ProjectIdentifier,
         ParseResult.ImportSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.ImportAllSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CompileSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
@@ -440,6 +461,7 @@ public static class ArgumentParser
             "export" => ParseExport(args),
             "export-all" => ParseExportAll(args),
             "import" => ParseImport(args),
+            "import-all" => ParseImportAll(args),
             "compile" => ParseCompile(args),
             "delete" => ParseDelete(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
@@ -853,6 +875,93 @@ public static class ArgumentParser
         }
 
         return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseImportAll(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? group = null;
+        var paths = new List<string>();
+        var json = false;
+        var dryRun = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--group":
+                    if (!TryTakeValue(args, ref i, "--group", out group, out var groupErr))
+                    {
+                        return new ParseResult.Failure(groupErr);
+                    }
+
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--dry-run":
+                    dryRun = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (args[i].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        return new ParseResult.Failure($"Unknown flag '{args[i]}'.{Environment.NewLine}{Usage}");
+                    }
+
+                    if (projectIdentifier is null)
+                    {
+                        projectIdentifier = args[i];
+                    }
+                    else
+                    {
+                        paths.Add(args[i]);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (group is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --group <device>/<path>.{Environment.NewLine}{Usage}");
+        }
+
+        if (paths.Count == 0)
+        {
+            return new ParseResult.Failure($"Missing required argument: at least one <dir-or-file>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.ImportAllSuccess(new ImportAllCommandOptions(
+            projectIdentifier, group, paths.Select(PathArguments.ToAbsolute).ToList(), json, dryRun, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompile(string[] args)

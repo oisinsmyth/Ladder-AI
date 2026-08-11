@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OpennessCli.Cli;
 using OpennessCli.Openness;
 using Siemens.Engineering;
@@ -76,6 +77,14 @@ internal static class Program
                 return ExitCodes.NotConfirmed;
             }
 
+            // A dry run of import-all is decided entirely from the files on disk — what each one is
+            // and what order they would go in. Same reasoning as the unconfirmed writes above:
+            // answering from the arguments alone must not pay for, or fail on, a Portal connect.
+            if (parseResult is ParseResult.ImportAllSuccess { Options.DryRun: true } dryRunImport)
+            {
+                return RunImportAllDryRun(dryRunImport.Options);
+            }
+
             if (parseResult is ParseResult.HmiCreateTagSuccess { Options.Confirm: false } unconfirmedTag)
             {
                 Console.Error.WriteLine(
@@ -119,6 +128,8 @@ internal static class Program
                     return RunExportAll(gateway, exportAll.Options, timeoutOpenSeconds);
                 case ParseResult.ImportSuccess import:
                     return RunImport(gateway, import.Options, timeoutOpenSeconds);
+                case ParseResult.ImportAllSuccess importAll:
+                    return RunImportAll(gateway, importAll.Options, timeoutOpenSeconds);
                 case ParseResult.CompileSuccess compile:
                     return RunCompile(gateway, compile.Options, timeoutOpenSeconds);
                 case ParseResult.DeleteSuccess delete:
@@ -537,6 +548,130 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    private static int RunImportAllDryRun(ImportAllCommandOptions options)
+    {
+        var plan = ImportAllPlanner.Build(options.Paths);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatImportAllPlanJson(plan, options.GroupPath)
+            : OutputFormatter.FormatImportAllPlanTable(plan, options.GroupPath));
+        Console.Error.WriteLine("Nothing was imported, and Portal was not contacted. Re-run without --dry-run to proceed.");
+        return plan.IsUsable ? ExitCodes.NotConfirmed : ExitCodes.ImportIncomplete;
+    }
+
+    /// <summary>
+    /// Bulk import with fixpoint retry. The order a whole program has to go in is a dependency
+    /// order — a DB needs its UDT, an instance DB needs its FB, a UDT can need another UDT — and it
+    /// is not derivable from the filenames. Rather than compute that graph (and be wrong at the
+    /// edges), this attempts everything, keeps the failures, and goes round again: any order that
+    /// CAN work converges, because every pass that imports at least one file unblocks strictly more
+    /// than the last. It stops when a pass imports nothing, at which point the remaining failures
+    /// are real ones and their last error is the honest one to report.
+    /// </summary>
+    private static int RunImportAll(IOpennessGateway gateway, ImportAllCommandOptions options, int timeoutOpenSeconds)
+    {
+        var plan = ImportAllPlanner.Build(options.Paths);
+        var entries = new List<Model.ImportAllEntry>();
+
+        foreach (var rejection in plan.Rejections)
+        {
+            entries.Add(new Model.ImportAllEntry(
+                rejection.Path, System.IO.Path.GetFileNameWithoutExtension(rejection.Path), "?",
+                Model.ImportAllOutcome.Rejected, Pass: 0, rejection.Reason));
+        }
+
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        var passes = 0;
+        try
+        {
+            // Phases are separated rather than thrown into one pool because the dependency across
+            // them is one-directional and known (a block may use a UDT; a UDT never uses a block).
+            // Retrying a block against a type that has not been imported yet would still converge,
+            // but it would spend a pass over the whole corpus to learn what the ordering already
+            // knows.
+            foreach (var phase in plan.Files.Select(f => f.Phase).Distinct().OrderBy(p => p))
+            {
+                var remaining = plan.Files.Where(f => f.Phase == phase).ToList();
+                var lastError = new Dictionary<string, string>(StringComparer.Ordinal);
+
+                while (remaining.Count > 0)
+                {
+                    passes++;
+                    var importedThisPass = new List<ImportAllPlanner.PlannedFile>();
+
+                    foreach (var file in remaining)
+                    {
+                        try
+                        {
+                            switch (file.Kind)
+                            {
+                                case ImportAllPlanner.ItemKind.TagTable:
+                                    gateway.ImportTagTableFile(options.GroupPath, file.Path);
+                                    break;
+                                case ImportAllPlanner.ItemKind.Type:
+                                    gateway.ImportTypeFile(options.GroupPath, file.Path);
+                                    break;
+                                default:
+                                    gateway.ImportBlockFile(options.GroupPath, file.Path);
+                                    break;
+                            }
+
+                            importedThisPass.Add(file);
+                            entries.Add(new Model.ImportAllEntry(
+                                file.Path, file.Name, file.Kind.ToString(),
+                                Model.ImportAllOutcome.Imported, passes, Detail: null));
+                        }
+                        catch (SafetyContentRefusedException)
+                        {
+                            // Never retried, never downgraded to a per-file failure line: safety
+                            // content must stop the command (hard rule 2), not be reported at the
+                            // bottom of a mostly-successful summary.
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            lastError[file.Path] = $"{ex.GetType().Name}: {ex.Message}";
+                        }
+                    }
+
+                    if (importedThisPass.Count == 0)
+                    {
+                        // A pass that imported nothing cannot be improved on by another identical
+                        // pass — whatever is left is blocked on something that is not in this set.
+                        foreach (var file in remaining)
+                        {
+                            entries.Add(new Model.ImportAllEntry(
+                                file.Path, file.Name, file.Kind.ToString(),
+                                Model.ImportAllOutcome.Failed, passes,
+                                lastError.TryGetValue(file.Path, out var err) ? err : "failed with no error recorded"));
+                        }
+
+                        break;
+                    }
+
+                    remaining = remaining.Where(f => !importedThisPass.Contains(f)).ToList();
+                }
+            }
+        }
+        finally
+        {
+            // One save for the whole run — the reason the per-file gateway calls do not save. In a
+            // finally so a mid-run abort still keeps what went in, which is what the per-call save
+            // it replaces was there to guarantee.
+            gateway.Save();
+        }
+
+        var result = new Model.ImportAllResult(options.GroupPath, entries, passes);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatImportAllJson(result)
+            : OutputFormatter.FormatImportAllTable(result));
+
+        // Deliberately NOT a compile gate, and it does not pretend to be one: every block that goes
+        // in through Import() is flagged inconsistent, and clearing that is `sanity-check`'s job
+        // (hard rule 4, FI-52). This exit code answers one question — did every file land.
+        return result.IsComplete ? ExitCodes.Success : ExitCodes.ImportIncomplete;
+    }
+
     private static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -675,6 +810,19 @@ public static class ExitCodes
     /// caller has to be able to tell the two apart without parsing the report.
     /// </summary>
     public const int ExportIncomplete = 12;
+
+    /// <summary>
+    /// Same shape as <see cref="ExportIncomplete"/>, one step earlier in the loop: `import-all` ran,
+    /// but the project does not now contain everything that was handed to it. Distinct from
+    /// <see cref="CommandError"/> because the usual cause is not an error at all — a file that never
+    /// resolved its dependencies, or one that was never attempted because it could not be classified.
+    ///
+    /// It has its own code because of what a restore is FOR. A project that is missing a block looks
+    /// exactly like a project that is not: it opens, it lists, and a device compile can even pass on
+    /// it. The caller has to be able to tell "everything went in" from "most of it did" without
+    /// reading the report.
+    /// </summary>
+    public const int ImportIncomplete = 13;
 
     /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).

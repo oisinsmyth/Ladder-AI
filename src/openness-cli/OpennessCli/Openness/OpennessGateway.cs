@@ -3159,37 +3159,13 @@ public sealed class OpennessGateway : IOpennessGateway
 
     public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files)
     {
-        if (_project is null)
-        {
-            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportBlocks)}.");
-        }
-
-        var group = FindGroup(_project, groupPath);
         var imported = new List<BlockInfo>();
 
         try
         {
             foreach (var file in files)
             {
-                var results = group.Blocks.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
-                foreach (var item in results)
-                {
-                    if (item is not PlcBlock block)
-                    {
-                        throw new InvalidOperationException(
-                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
-                    }
-
-                    var language = block.ProgrammingLanguage.ToString();
-                    if (SafetyClassifier.IsSafety(language))
-                    {
-                        // Defense in depth: nothing upstream of this pipeline should ever produce
-                        // safety-language IR, but verify rather than assume (belt-and-braces).
-                        throw new SafetyContentRefusedException(block.Name, language);
-                    }
-
-                    imported.Add(ToBlockInfo(block, groupPath));
-                }
+                imported.AddRange(ImportBlockFile(groupPath, file));
             }
         }
         finally
@@ -3200,6 +3176,45 @@ public sealed class OpennessGateway : IOpennessGateway
             // Killing that process (or the machine restarting) silently discarded it, no error.
             // try/finally so whatever succeeded before a later file's failure still persists.
             SaveProject();
+        }
+
+        return imported;
+    }
+
+    // The single-file halves exist because a bulk restore cannot save per file: Project.Save() on a
+    // real project is seconds, and `import-all` retries a failing file on every pass, so saving
+    // inside the loop would multiply the slowest operation here by the file count and again by the
+    // pass count. The caller saves once, in its own finally — so a mid-run abort still keeps
+    // whatever went in, which is the property the try/finally above was protecting in the first
+    // place.
+    public IReadOnlyList<BlockInfo> ImportBlockFile(string groupPath, string file)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportBlockFile)}.");
+        }
+
+        var group = FindGroup(_project, groupPath);
+        var imported = new List<BlockInfo>();
+
+        var results = group.Blocks.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+        foreach (var item in results)
+        {
+            if (item is not PlcBlock block)
+            {
+                throw new InvalidOperationException(
+                    $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+            }
+
+            var language = block.ProgrammingLanguage.ToString();
+            if (SafetyClassifier.IsSafety(language))
+            {
+                // Defense in depth: nothing upstream of this pipeline should ever produce
+                // safety-language IR, but verify rather than assume (belt-and-braces).
+                throw new SafetyContentRefusedException(block.Name, language);
+            }
+
+            imported.Add(ToBlockInfo(block, groupPath));
         }
 
         return imported;
@@ -3265,29 +3280,13 @@ public sealed class OpennessGateway : IOpennessGateway
     // rather than retrofitting BlockInfo with fields that would be meaningless for a UDT.
     public IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files)
     {
-        if (_project is null)
-        {
-            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTypes)}.");
-        }
-
-        var group = FindTypeGroup(_project, groupPath);
         var imported = new List<string>();
 
         try
         {
             foreach (var file in files)
             {
-                var results = group.Types.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
-                foreach (var item in results)
-                {
-                    if (item is not PlcType type)
-                    {
-                        throw new InvalidOperationException(
-                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
-                    }
-
-                    imported.Add(type.Name);
-                }
+                imported.AddRange(ImportTypeFile(groupPath, file));
             }
         }
         finally
@@ -3298,33 +3297,42 @@ public sealed class OpennessGateway : IOpennessGateway
         return imported;
     }
 
+    public IReadOnlyList<string> ImportTypeFile(string groupPath, string file)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTypeFile)}.");
+        }
+
+        var group = FindTypeGroup(_project, groupPath);
+        var imported = new List<string>();
+
+        var results = group.Types.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+        foreach (var item in results)
+        {
+            if (item is not PlcType type)
+            {
+                throw new InvalidOperationException(
+                    $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+            }
+
+            imported.Add(type.Name);
+        }
+
+        return imported;
+    }
+
     // Returns imported tag-table names, not BlockInfo — same reasoning as ImportTypes: a
     // PlcTagTable has no Number/ProgrammingLanguage either.
     public IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files)
     {
-        if (_project is null)
-        {
-            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTagTables)}.");
-        }
-
-        var group = FindTagTableGroup(_project, groupPath);
         var imported = new List<string>();
 
         try
         {
             foreach (var file in files)
             {
-                var results = group.TagTables.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
-                foreach (var item in results)
-                {
-                    if (item is not PlcTagTable tagTable)
-                    {
-                        throw new InvalidOperationException(
-                            $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
-                    }
-
-                    imported.Add(tagTable.Name);
-                }
+                imported.AddRange(ImportTagTableFile(groupPath, file));
             }
         }
         finally
@@ -3333,6 +3341,45 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         return imported;
+    }
+
+    public IReadOnlyList<string> ImportTagTableFile(string groupPath, string file)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportTagTableFile)}.");
+        }
+
+        var group = FindTagTableGroup(_project, groupPath);
+        var imported = new List<string>();
+
+        var results = group.TagTables.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+        foreach (var item in results)
+        {
+            if (item is not PlcTagTable tagTable)
+            {
+                throw new InvalidOperationException(
+                    $"Import() of '{file}' returned an unexpected object type: {item?.GetType().FullName ?? "null"}.");
+            }
+
+            imported.Add(tagTable.Name);
+        }
+
+        return imported;
+    }
+
+    /// <summary>
+    /// Persists the in-memory project. Public because <c>import-all</c> owns its own save point: it
+    /// imports many files and saves once, rather than once per file.
+    /// </summary>
+    public void Save()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(Save)}.");
+        }
+
+        SaveProject();
     }
 
     public CompileResult Compile(string? deviceFilter)

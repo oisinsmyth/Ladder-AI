@@ -243,6 +243,23 @@ public interface IOpennessGateway : IDisposable
     /// </summary>
     IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files);
 
+    /// <summary>
+    /// Imports ONE file and does not save. The bulk-restore path (<c>import-all</c>) needs per-file
+    /// error isolation — a whole program is a dependency order nobody can supply from filenames, so
+    /// failures are expected and retried — and it cannot afford a Save() per attempt. Saving is the
+    /// caller's, via <see cref="Save"/>.
+    /// </summary>
+    IReadOnlyList<BlockInfo> ImportBlockFile(string groupPath, string file);
+
+    /// <summary>One file, no save — see <see cref="ImportBlockFile"/>. Targets the Types composition.</summary>
+    IReadOnlyList<string> ImportTypeFile(string groupPath, string file);
+
+    /// <summary>One file, no save — see <see cref="ImportBlockFile"/>. Targets the TagTables composition.</summary>
+    IReadOnlyList<string> ImportTagTableFile(string groupPath, string file);
+
+    /// <summary>Persists the in-memory project (<c>Project.Save()</c>).</summary>
+    void Save();
+
     /// <summary>Compiles the PLC software under <paramref name="deviceFilter"/> (or the project's only PLC device, if unambiguous).</summary>
     CompileResult Compile(string? deviceFilter);
 
