@@ -27,6 +27,19 @@ public sealed class Sharp7Client : IS7Client, IDisposable
 
     public bool Connected => _client.Connected;
 
+    /// <summary>
+    /// The PDU size the CPU agreed to during connect, in bytes — 0 if nothing was negotiated.
+    ///
+    /// <para>Read-only, and not on <see cref="IS7Client"/>: it describes the SESSION rather than the
+    /// device, so nothing above the transport should branch on it. It is exposed because it is the one
+    /// fact that tells a device-side refusal apart from Sharp7 computing a chunk size from a PDU it
+    /// never got — both of which surface as a failed read on a connection that reported success.</para>
+    /// </summary>
+    public int PduSizeNegotiated => _client.PduSizeNegotiated;
+
+    /// <summary>The PDU size asked for, for comparison with what was granted.</summary>
+    public int PduSizeRequested => _client.PduSizeRequested;
+
     public S7Status Connect(string address, int rack, int slot, int connectTimeoutMs)
     {
         _client.ConnTimeout = connectTimeoutMs;

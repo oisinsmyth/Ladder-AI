@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.RigRead</RootNamespace>
+    <AssemblyName>rig-read</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THIS BUILD READS AND NOTHING ELSE.
+
+    It is a SEPARATE executable from rig-write on purpose. rig-write plans a governed write and owns
+    no socket at all (a property its tests assert); this one owns a socket and owns no write. Neither
+    project can quietly acquire the other's half, because the halves are not in the same assembly.
+
+    What it may reach: Sharp7Client (the real IS7Client) for ConnectTo/DBRead/GetOrderCode, and Sharp7
+    directly for the ONE fallback diagnostic — a few bytes of M memory, read only when the DB read has
+    already failed, to tell a CPU-wide refusal apart from a block-specific one. Nothing here calls
+    DBWrite, WriteArea, WriteBit, PlcStop, Download or Delete; the last four are not even on IS7Client.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+
+    <!--
+      For MarkerDbLayout, and only that. The layout of the marker DB is ONE fact and both the write
+      planner and this reader must address it identically — a second copy of those four offsets is
+      exactly the drift that makes a read "confirm" numbers a write never used. Referencing the
+      write-planner assembly grants nothing, because it owns no socket and no Sharp7 reference; the
+      dependency runs reader -> planner, never planner -> reader.
+    -->
+    <ProjectReference Include="..\Harness.RigWrite\Harness.RigWrite.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Same machine-local copy Harness.S7 uses; see that project file for the open vendoring question. -->
+    <Sharp7Path Condition="'$(Sharp7Path)' == ''">$(USERPROFILE)\.ladder\lib\Sharp7.dll</Sharp7Path>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(Sharp7Path)')">
+    <Reference Include="Sharp7">
+      <HintPath>$(Sharp7Path)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Unlike Harness.S7, this project cannot degrade gracefully without Sharp7: a client that cannot open
+    a socket is not a reduced version of this tool, it is nothing. Fail the build with the reason rather
+    than with a list of unresolved type names.
+  -->
+  <Target Name="ErrorMissingSharp7" BeforeTargets="Build" Condition="!Exists('$(Sharp7Path)')">
+    <Error Text="Harness.RigRead needs Sharp7 at '$(Sharp7Path)' — this project IS the device client and has nothing to build without it. Override with -p:Sharp7Path=&lt;path&gt;." />
+  </Target>
+
+</Project>
