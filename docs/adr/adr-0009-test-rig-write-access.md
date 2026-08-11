@@ -15,6 +15,14 @@
   it has been answered in the widening direction, which **moves the entire safety load onto the target
   fence** — see §The fence item 3, now load-bearing rather than merely strongest, and the consequence
   recorded at the end of §The distinction.
+- **Amended 2026-08-11 — questions 3 decided and the fence extended by the owner:**
+  **(a) physical output isolation is MANDATORY**, not advisory — question 3 closed.
+  **(b) Item 4 confirmed** as written: the declared surface is bounded by target, not data class.
+  **(c) New requirement — the I/O mapping layer must be inhibited while testing** (fence item 8): the
+  functions that copy between raw physical addresses and the DB/interface layer are gated off, in both
+  directions, for the duration of a write test. This is the owner's addition and it does two jobs at
+  once — it is what makes injected stimulus *survive* the scan, and it is a second, software-layer
+  isolation beneath the physical one.
 - **Relates to:** `10-non-goals.md` **Permanent #3** (the exclusion this asks to narrow) ·
   **ADR-0008** (read-only live-device access — this is the "separate and heavier question" it
   deferred) · CLAUDE.md **hard rule 2** (safety — untouched, and tightened here) · **hard rule 5**
@@ -132,9 +140,10 @@ What a write path needs on top:
    file; this one is not.
    **Load-bearing as of 2026-08-11.** When the scope was still arguably sensor-only, a mis-targeted
    write mostly corrupted a reading. With command DBs in scope it can issue an operator command, so
-   this precondition is what stands between a wrong address and a contactor pulling in. It should be
-   **mandatory, verified at listing time, and re-verified whenever a rig is re-purposed** — which is
-   exactly the moment it will otherwise be forgotten.
+   this precondition is what stands between a wrong address and a contactor pulling in.
+   **DECIDED 2026-08-11 by the owner: MANDATORY.** Verified at listing time and **re-verified whenever
+   a rig is re-purposed** — which is exactly the moment it will otherwise be forgotten. A device that
+   cannot be asserted physically isolated is not write-listable, full stop.
 4. **A declared write surface, per device — bounded by *target*, not by data class.** Reconciled with
    the 2026-08-11 decision: the surface may name **anything the test campaign requires**, sensor and
    command alike, up to and including every writable area on that rig. What it may not do is default
@@ -151,6 +160,32 @@ What a write path needs on top:
    test harness generates thousands of writes; the log is what makes "what did it do to the rig"
    answerable afterwards.
 7. **Empty grants nothing**, inherited from device-guard and from FI-44's "empty is not clean".
+8. **The I/O mapping layer is inhibited for the duration of a write test** *(owner requirement,
+   2026-08-11)*. The functions that copy raw physical addresses into the interface/DB layer, and the
+   interface layer back out to physical outputs, are gated off in **both** directions while testing.
+   Two independent reasons, and it is worth separating them because they fail differently:
+   - **Validity.** If input mapping keeps running, it overwrites every value the harness injects on
+     the very next scan. Without this, injection does not merely leak — *it does not work at all*, and
+     the failure is silent: the test drives nothing and the program simply carries on reading the
+     field. A suite built on that would pass or fail for reasons unrelated to the stimulus.
+   - **Isolation.** With output mapping gated, nothing the program commands reaches a terminal. This
+     is a **software** isolation layer sitting beneath the **physical** one in item 3 — deliberately
+     redundant, because item 3 is a human assertion recorded in a file and this one is a property of
+     the running program. Neither replaces the other: item 3 survives a software bug, item 8 survives
+     a rig someone quietly re-wired.
+
+   **This must be verified, never assumed.** The harness reads back a positive confirmation that the
+   inhibit is engaged and **refuses to issue any write without it** — the standing "a warning is not a
+   gate" rule, applied to the one precondition that makes the whole scheme safe *and* meaningful. An
+   inhibit that is merely requested is not an inhibit. It should also be re-checked during a run, not
+   only at the start, since the flag lives in memory this capability is permitted to write.
+
+   **Note what this places a requirement on: the program under test, not the tooling.** The inhibit
+   lives in the PLC program's I/O layer. A program with no separable I/O mapping — logic that reads
+   `%I` and writes `%Q` directly in the middle of the sequence — **cannot be write-tested under this
+   ADR at all.** That is a real limit on availability, and also a design pressure worth accepting: it
+   pushes generated code toward the I/O-layer indirection that a per-vessel simulation mode needs
+   anyway.
 
 None of this is safety-grade, and a rig is chosen precisely so a mistake is survivable. The fence's
 job is to make the routine case impossible to get wrong and to leave a trail when overridden.
@@ -211,6 +246,19 @@ be re-checked when a rig is re-purposed — which is exactly when it will be for
 "never committed" rule apply as they do for reads. Anything read back from a rig mirroring a real job
 falls under `Live Runs/` retention: use freely, commit nothing.
 
+**Fence item 8 buys validity and isolation at the cost of a permanent, structural coverage hole, and
+it should be written on the tin.** With the I/O mapping layer gated off, everything this capability
+can test sits *above* that layer — and **the mapping functions themselves are, by construction, the
+one part of the program write-testing can never exercise.** Nor can they be covered by relaxing the
+gate on a rig, because item 3 makes physical isolation mandatory: there are no live terminals to map
+to. So address decoding, scaling, polarity, channel-to-symbol assignment and the mapping's own
+failure modes remain outside every automated gate this project has — they are provable only by
+inspection, by cross-reference against the I/O schedule, or by a human at a real machine. This is the
+same class of gap as any simulation's "cannot test" list: the boundary between the model and the
+world is the thing the model cannot check. It is an acceptable trade — the layer is thin, mechanical
+and reviewable, while the sequence logic above it is neither — but a suite that is green on
+everything *except* the layer nobody can test should never be reported as if it covered the program.
+
 **Rejecting (option 3) costs the conformance harness on hardware** and leaves only a GUI-paced loop on
 a simulator that, for this CPU, is documented as timing-unrepresentative, silently OK-ing unsupported
 instructions, and unable to simulate counting at all. The regression half survives; the correctness
@@ -234,11 +282,11 @@ from a reader who has no stake in the harness being built.
    answers.
 2. If yes — **is the program/config half restated as permanent** in the same `10-non-goals.md` edit?
    *(Recommended: yes, explicitly.)*
-3. **Is physical output isolation mandatory or advisory** for a write-listed device? *(Recommended:
-   mandatory — it is the only fence that is not a config file. **This recommendation hardened on
-   2026-08-11:** question 4 was answered in the widening direction, which removed the data-class gate
-   and left this as the only safeguard between a mis-targeted write and equipment moving. Answering
-   "advisory" here would leave the whole scheme resting on an allowlist file.)* **Still open.**
+3. **~~Is physical output isolation mandatory or advisory~~ DECIDED 2026-08-11 — MANDATORY.** A device
+   that cannot be asserted physically isolated is not write-listable. Taken together with the fence
+   item 8 added the same day, the scheme now has **two independent isolation layers** — one physical
+   and human-asserted, one in the running program — which is the right shape given that question 4
+   removed the data-class gate.
 4. **~~Does the bounded surface include command DBs, or only sensor/interface DBs?~~ DECIDED
    2026-08-11 — both.** Write access is not isolated to any one type of data; it is as broad as
    testing requires. The reasoning accepted: a harness that can feed an instrument but not press a
