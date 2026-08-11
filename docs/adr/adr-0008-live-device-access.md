@@ -10,6 +10,16 @@
   the owner chose to **remove** CLAUDE.md hard rule 6 outright (2026-08-10) rather than reword it — the
   blanket "No hardware access" is gone; a tombstone holds slot 6 so references to hard rules 7–8 still
   resolve. The permanent *write* ban now lives solely in `10-non-goals.md` #3.
+- 🔴 **SUPERSEDED IN PART BY ADR-0009 (2026-08-11) — read that before acting on anything below about
+  writes.** This document states repeatedly that the write ban is *permanent*, that reopening it is
+  something "this project has said it does not do", and that write appetite is explicitly **not** a
+  revisit trigger. **All of that was overtaken the next day.** `10-non-goals.md` #3 has been re-scoped:
+  the gate is now the **target**, not the kind of write — on an allowlisted test rig whose outputs are
+  physically incapable of actuating, *every* write class is permitted (download, online edit, force,
+  configuration, process data); on a device **in service**, none is. The reasoning below is left
+  unedited because it is the record of what was decided on 2026-08-10 and why, and the argument that
+  changed it (the simulator cannot substitute for a classic S7-1200) is set out in ADR-0009 §Context.
+  **Everything here about *read-only* access still stands unchanged.**
 - **Date:** 2026-08-10
 - **Relates to:** CLAUDE.md **hard rule 6** (no hardware access; "you must not try to add support") ·
   CLAUDE.md **hard rule 2** (never touch safety) · `10-non-goals.md` Permanent #3 (download to

@@ -136,8 +136,12 @@ touches ladder.
 Explicitly **excluded** from 2026-07-14 by owner choice; listed here so it is a deliberate pick, never a
 default assumption.
 - **Hard-rule compliance** — evidence that the 8 hard rules in `CLAUDE.md` held (LAD-only; safety untouched;
-  no invented tags/addresses; compile gate before "done"; review not bypassed; no hardware access; IR-not-XML
-  edits; all LAD/IR work dispatched to `lad-coder`). This is checked from process artefacts — telemetry,
+  no invented tags/addresses; compile gate before "done"; review not bypassed; IR-not-XML
+  edits; all LAD/IR work dispatched to `lad-coder`). Note that slot 6 is a **tombstone** since
+  2026-08-10 — the old "no hardware access" rule no longer exists, so there are 7 live rules in 8
+  numbered slots; device-write governance lives in `10-non-goals.md` #3 (re-scoped 2026-08-11 by
+  ADR-0009: permitted on an isolated allowlisted rig, never on a device in service) and is audited
+  there, not here. This is checked from process artefacts — telemetry,
   git history, dispatch records — not by reading the ladder that resulted.
 - **Data-boundary compliance** — Amber-tier usage stayed inside a recorded per-project approval in
   `docs/13-data-boundary.md`; no identifying data outside an approval. Note that 2026-07-14 #5

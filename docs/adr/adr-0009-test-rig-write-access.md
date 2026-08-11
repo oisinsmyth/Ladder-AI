@@ -1,9 +1,10 @@
 # ADR-0009 — Write access to test-rig devices
 
-- **Status:** **Accepted in principle — 2026-08-11.** All four decision questions answered by the
-  owner (see §Decisions taken). **The enacting edit is outstanding:** `10-non-goals.md` #3 still reads
-  as a blanket permanent write ban and must be re-scoped before this is more than a proposal —
-  proposed replacement text is in §The enacting edit. Build scope beyond that is open.
+- **Status:** **ACCEPTED — 2026-08-11.** All decision questions answered by the owner (§What was
+  decided), and **the enacting edit has been applied**: `10-non-goals.md` #3 is re-scoped, and the
+  dependent statements in `CLAUDE.md` (the slot-6 tombstone), `.claude/agents/lad-coder.md` and
+  `docs/audit/README.md` were reconciled the same day. ADR-0008 carries a superseded-in-part notice.
+  **No write tooling exists yet** — this governs what may be built, and nothing has been.
 - **Date:** drafted 2026-08-10; decided 2026-08-11.
 
 ## The decision in one table
@@ -11,7 +12,7 @@
 | Target | Program & configuration writes<br>(download, online edit, force, HW config) | Process-data writes<br>(values the running program reads from outside) |
 |---|---|---|
 | **Test rig** — allowlisted **and** physically isolated | **Permitted** | **Permitted** |
-| **Live plant / system in service** | **Not permitted** | **Not permitted** *(see the one open item)* |
+| **Live plant / system in service** | **Not permitted** | **Not permitted** |
 
 **The gate is the TARGET, not the class of write.** On a qualifying rig the tooling may do anything an
 engineer at a bench may do. On a device in service it writes nothing at all, of any kind — the
@@ -240,10 +241,13 @@ correlated-check pattern the `PlantAutoControl-bench` autopsy exists to name. Th
 owner rather than adopted from that recommendation, which reduces but does not remove the concern. The
 evidence in §Context is independently verifiable; the judgement is the owner's.
 
-## The enacting edit
+## The enacting edit — APPLIED 2026-08-11
 
-`10-non-goals.md` #3 currently reads as a blanket permanent ban and now contradicts this ADR. Proposed
-replacement, for approval — **not yet applied**:
+`10-non-goals.md` #3 has been re-scoped to the text below. Reconciled at the same time, because each
+carried the old blanket ban and would otherwise have contradicted it: the **`CLAUDE.md` slot-6
+tombstone**, the **`lad-coder` hard-rules recap** (rule 6), the **`docs/audit/README.md`** hard-rule
+compliance checklist (which still listed "no hardware access" as a live rule), and **ADR-0008**, which
+now carries a superseded-in-part notice pointing here.
 
 > **3. Writing to hardware in service.** No tool in this repo writes to a device that is in service —
 > no download, no online edit, no tag force, no configuration write, and no process-data write.
@@ -254,19 +258,22 @@ replacement, for approval — **not yet applied**:
 > kind of write. The pipeline still ends at "imported and compiled in the TIA project" for anything it
 > *produces*.
 
-## What must be decided
+## What was decided
 
-Questions 1–4 are closed: the exclusion is re-scoped (1); the gate is the target, not the class, with
-program/config permitted on rigs and nothing permitted on plant (2); physical isolation is mandatory
-(3); no data-class restriction applies (4). **One item remains:**
+All five questions are closed, by the owner, on 2026-08-11:
 
-- **Are process-data writes to a device in service permitted, or not?** The instruction — *"all
-  program and config writes available when in a test rig but not on a live plant; process data writes
-  are ok too"* — reads most naturally as "process data is also permitted **on the rig**", and the
-  table and the proposed replacement text above are written that way, which is the conservative
-  reading. If instead process-data writes were meant to be permitted **on a plant in service** — an
-  engineer-supervised setpoint or command write — say so and both need changing. Recording it as a
-  question rather than guessing, because it is the single line separating the two halves of the table.
+1. **Is the exclusion reopened?** Yes — re-scoped rather than repealed. The ban survives in full for
+   devices in service; the rig is carved out.
+2. **Is the program/configuration half restated as permanently banned everywhere?** **No.** On a
+   qualifying rig it is permitted, because the development loop needs a download to run an isolated
+   block test. The gate moved to the target instead.
+3. **Is physical output isolation mandatory?** **Mandatory.** A device that cannot be asserted
+   physically isolated is not write-listable.
+4. **Does the write surface distinguish sensor from command data?** **No** — it is as broad as testing
+   requires.
+5. **Are process-data writes permitted on a device in service?** **No** — confirmed 2026-08-11.
+   Nothing is written to a device in service, of any class. This was the last ambiguity and it
+   resolved to the conservative reading already in the table.
 
 ## Revisit triggers
 
