@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.RigWrite</RootNamespace>
+    <AssemblyName>rig-write</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THIS BUILD CANNOT WRITE TO A DEVICE, and the project file is the first place that is visible.
+
+    There is no reference to Sharp7 here and no reference to any project that reaches a socket on its
+    own behalf: Harness.S7 is referenced for its TYPES — the identity sources, the restore-point store,
+    the S7 String codec — and the one class in it that owns a socket (Sharp7Client) is never
+    constructed by anything in this assembly. See Arming.cs for the single statement of that property
+    and RigWriteCli's arming-flag handling for what happens when somebody asks for it anyway.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+  </ItemGroup>
+
+</Project>

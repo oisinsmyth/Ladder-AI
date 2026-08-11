@@ -104,6 +104,34 @@ public sealed class FileRestorePointStore : IRestorePointStore
     public string PathFor(string normalizedTarget) =>
         Path.Combine(_directory, SafeFileName(normalizedTarget) + FileSuffix);
 
+    /// <summary>
+    /// Read the manifest for a target, if one is on disk and parses. Reports NOTHING about whether it
+    /// is acceptable — that is <see cref="HasVerifiedRestorePoint"/>'s job and this must never be
+    /// mistaken for it. It exists so a caller can ask the byte-level question the fence cannot
+    /// (<see cref="RestorePointManifest.Covers"/>), and so a person can be shown what is actually held
+    /// rather than only that something is.
+    /// </summary>
+    public bool TryLoad(string normalizedTarget, out RestorePointManifest? manifest)
+    {
+        manifest = null;
+
+        if (string.IsNullOrWhiteSpace(normalizedTarget)) return false;
+
+        var path = PathFor(normalizedTarget);
+        if (!File.Exists(path)) return false;
+
+        try
+        {
+            manifest = JsonSerializer.Deserialize<RestorePointManifest>(File.ReadAllText(path), ReadOptions);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        return manifest is not null;
+    }
+
     // ---------------------------------------------------------------- the fence's question
 
     public bool HasVerifiedRestorePoint(string normalizedTarget)

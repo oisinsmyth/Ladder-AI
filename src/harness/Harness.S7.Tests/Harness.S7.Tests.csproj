@@ -25,6 +25,14 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+
+    <!--
+      rig-write's planner and CLI are tested here rather than in a suite of their own: they are the
+      composition of the pieces this project already fakes, and the tests that matter most for them
+      (the dry run touching no client, the fence refusing at the right gate) need FakeS7Client and the
+      guard types that are already wired up in this one place.
+    -->
+    <ProjectReference Include="..\Harness.RigWrite\Harness.RigWrite.csproj" />
   </ItemGroup>
 
 </Project>

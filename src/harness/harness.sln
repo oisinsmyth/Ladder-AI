@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.S7", "Harness.S7\Ha
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.S7.Tests", "Harness.S7.Tests\Harness.S7.Tests.csproj", "{110DBFB4-1EAE-4429-ACBE-6D3D82587E2C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.RigWrite", "Harness.RigWrite\Harness.RigWrite.csproj", "{195ACD8A-A30E-4FB1-AD26-93F8A1194175}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{110DBFB4-1EAE-4429-ACBE-6D3D82587E2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{110DBFB4-1EAE-4429-ACBE-6D3D82587E2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{110DBFB4-1EAE-4429-ACBE-6D3D82587E2C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{195ACD8A-A30E-4FB1-AD26-93F8A1194175}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{195ACD8A-A30E-4FB1-AD26-93F8A1194175}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{195ACD8A-A30E-4FB1-AD26-93F8A1194175}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{195ACD8A-A30E-4FB1-AD26-93F8A1194175}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -107,7 +107,7 @@ public sealed class MarkerDbIdentitySource : IDeviceIdentitySource
 
     public DeviceIdentity Read(IS7Client client)
     {
-        var headerBytes = _encoding == MarkerEncoding.S7String ? 2 : 0;
+        var headerBytes = _encoding == MarkerEncoding.S7String ? S7StringCodec.HeaderBytes : 0;
         var buffer = new byte[headerBytes + _maxLength];
 
         var status = client.ReadDataBlock(_dbNumber, _byteOffset, buffer);
@@ -118,7 +118,7 @@ public sealed class MarkerDbIdentitySource : IDeviceIdentitySource
                 "communication is permitted in the CPU's protection settings.");
 
         var text = _encoding == MarkerEncoding.S7String
-            ? ReadS7String(buffer)
+            ? S7StringCodec.Decode(buffer, _maxLength, $"DB{_dbNumber}.DBB{_byteOffset}")
             : Encoding.ASCII.GetString(buffer).TrimEnd('\0', ' ');
 
         if (string.IsNullOrWhiteSpace(text))
@@ -128,25 +128,6 @@ public sealed class MarkerDbIdentitySource : IDeviceIdentitySource
                 "identity check pass on a blank.");
 
         return new DeviceIdentity(SerialNumber: text.Trim());
-    }
-
-    private string ReadS7String(byte[] buffer)
-    {
-        // Byte 0 is the DECLARED maximum and byte 1 the current length. A current length larger than
-        // either the declared maximum or what we actually read means the bytes are not a String at
-        // all — almost always a wrong offset. Reading on would produce a plausible-looking identifier
-        // out of unrelated process data, which would then be compared against the allowlist, so this
-        // has to be a hard failure.
-        int declaredMax = buffer[0];
-        int current = buffer[1];
-
-        if (current > declaredMax || current > _maxLength)
-            throw new S7TransportException(
-                $"the bytes at DB{_dbNumber}.DBB{_byteOffset} are not an S7 String: the length header " +
-                $"reads max={declaredMax}, current={current} against a {_maxLength}-character read. " +
-                "Check the marker's offset and declared length.");
-
-        return Encoding.ASCII.GetString(buffer, 2, current);
     }
 }
 

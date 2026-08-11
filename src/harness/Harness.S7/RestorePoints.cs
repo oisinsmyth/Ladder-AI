@@ -105,6 +105,28 @@ public sealed record RestorePointManifest(
 
     public IEnumerable<string> Areas =>
         Regions.Select(r => r.Area).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Does this restore point hold the exact bytes a write is about to change?
+    ///
+    /// <para><b>Why the area check is not enough.</b> <see cref="FileRestorePointStore"/> answers the
+    /// fence's question — "is there a verified restore point?" — by comparing AREA NAMES, because an
+    /// area is the vocabulary the fence is scoped on and the store cannot know what a run will write
+    /// within one. That leaves a real hole: a two-byte capture labelled <c>DB_RigMarker</c> satisfies
+    /// the fence for a thirty-four-byte write into the same area, and the restore would then put back
+    /// two of the thirty-four bytes and report success. This is the byte-level question the fence
+    /// cannot ask, offered to callers that know their own write extent.</para>
+    ///
+    /// <para><b>Regions are not stitched.</b> One region must cover the whole range on its own. Two
+    /// abutting captures might genuinely be contiguous, but proving that is exactly where an
+    /// off-by-one puts an unrecorded gap in the middle of a "covered" range, so a range spanning two
+    /// regions is reported as not covered.</para>
+    /// </summary>
+    public bool Covers(int dbNumber, int startByte, int size) =>
+        size > 0
+        && Regions.Any(r => r.DbNumber == dbNumber
+                            && r.StartByte <= startByte
+                            && r.StartByte + r.Size >= startByte + size);
 }
 
 /// <summary>The outcome of putting a restore point back. Never assumed — always re-read.</summary>
