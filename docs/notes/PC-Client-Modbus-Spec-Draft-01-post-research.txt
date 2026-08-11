@@ -1,0 +1,329 @@
+================================================================================
+PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE
+DRAFT 01, POST-RESEARCH
+================================================================================
+
+Status:  DRAFT FOR DEBATE. Sits alongside PC-Client-Modbus-Spec-Draft-01.txt, which is
+         NOT deleted — parts of it are now wrong and §6 below says which.
+
+*** GRADUATION CRITERION: this becomes draft 02 when the SEVEN GAPS in §4 are
+    fleshed out. Not before. ***
+
+Written: 2026-08-12, after the S7-1200 download-semantics research landed. Findings are
+recorded verbatim in `download-semantics-findings-VERBATIM.md` with the full document
+alongside it (job scratch directory — NOT durable, copy it out).
+
+Companion documents:
+  docs/notes/modbus-tcp-client-spec.md      the PC-side client (buildable now)
+  docs/notes/modbus-plc-side-contract.md    the PLC-side contract (deferred to the IR work)
+  docs/notes/PC-Client-Modbus-Spec-Draft-00.txt / -01.txt   reasoning history
+
+--------------------------------------------------------------------------------
+0. THE REVERSAL
+--------------------------------------------------------------------------------
+
+The premise both earlier drafts were built on is not merely wrong, it is BACKWARDS.
+
+We designed against "downloading stops the CPU, therefore batch". Siemens' actual posture,
+verbatim: ***"STEP 7 always tries to download in RUN first. If you do not want this to
+happen, you must put the CPU into STOP."***
+
+On an S7-1200 V4, a new FB/FC/DB/UDT, a deleted one, an FB/FC code change, an OB code
+change and even an FB/FC interface change are ALL downloadable in RUN — no stop, and for
+a pure code change nothing disturbed.
+
+*** THEREFORE THE RISK IS NOT THAT DOWNLOADS HALT THE WAVE. IT IS THAT THEY DO NOT, AND
+    SILENTLY REINITIALISE STATE. BUILD A CHANGE CLASSIFIER, NOT A BATCH LOCK. ***
+
+One further fact reshapes everything below: **the download option you pass does not decide
+STOP/RUN.** "Software (all)" and "Software (only changes)" are not rows in Siemens' table
+at all — the Engineering System computes the verdict from the change classes inside the
+delta, plus a size limit. You cannot choose a safe download option. You can only control
+what is IN the delta.
+
+--------------------------------------------------------------------------------
+1. THE DESIGN BLOCKS
+--------------------------------------------------------------------------------
+
+Six were proposed. They collapse into about four real components: DB-1 and DB-2 are one
+graph problem, DB-3 and DB-4 are one scheduler, DB-5 is structural, DB-6 is a client
+invariant.
+
+................................................................................
+DB-1 — PROJECT CHANGE TRACKER
+................................................................................
+
+PURPOSE: know what changed since the last download.
+
+*** "HAS IT CHANGED" IS NOT ENOUGH. *** The change CLASS decides the outcome, and the
+classes differ enormously:
+
+    FB/FC code change ................................. RUN, nothing disturbed
+    New / deleted FB, FC, DB, UDT ..................... RUN
+    New / deleted OB, or OB property change ........... STOP
+    DB interface change (no memory reserve) ........... RUN (Init) — DB resets,
+                                                        retentive members included
+    Modified UDT ...................................... RUN (Init) on EVERY DB built on it
+    Modified retentivity settings ..................... STOP
+    New / revised text lists .......................... STOP
+    Hardware configuration ............................ STOP
+    Block / network comments, new PLC tags ............ RUN
+
+THREE OUTPUTS REQUIRED:
+  (a) WHICH objects changed          — for the 20-object budget (DB-4)
+  (b) WHAT CLASS each change is      — for STOP / RUN (Init) prediction
+  (c) BLAST RADIUS                   — a UDT change is not one object; it is one plus
+                                       every DB built on it, all reinitialising
+
+MOST OF THIS ALREADY EXISTS:
+  - `converter ir-hash` is the cheap has-it-changed primitive, and is already immune to
+    SIDECAR/UId churn — without that you would get a false positive on every export.
+  - `converter diff` gives changed networks with proof the rest is identical.
+  - `converter cross-check` supplies the reference graph for blast radius, computed only
+    over the CHANGED set, so cost is proportional to the change and not to the project.
+
+*** GAP — A LOCAL LEDGER DESYNCHRONISES FROM THE DEVICE. *** Hashing IR tells you the IR
+changed. It says nothing about what is actually on the CPU. One partially-applied download
+or one human edit in TIA and every downstream decision is wrong while looking healthy.
+DB-1 must be RECONCILABLE AGAINST THE DEVICE — `openness-cli export-all` plus
+`converter drift-check --complete` is exactly that comparison. Make reconciliation a
+periodic obligation, not a recovery step.
+
+NOTE: DB-1 needs change IDENTITY and CLASS. It does NOT need the semantics of the change
+itself. That is sufficient for every decision in this document.
+
+................................................................................
+DB-2 — TEST ↔ BLOCK DEPENDENCY
+................................................................................
+
+PURPOSE: know which tests a change invalidates.
+
+Same graph as DB-1, different query. Two gaps:
+
+*** A TEST CAN BE INVALIDATED BY A BLOCK IT DOES NOT TARGET. *** If agent B's block writes
+a global that agent A's block reads, B's change invalidates A's PASSING RESULT — and A
+changed nothing. Dependency must be transitive over the reference graph, not "which block
+does this test point at". This is the same upgrade §13 of draft 01 made to D1: reachable
+state, not tags.
+
+*** RESULTS NEED A VALIDITY STAMP. *** A result is valid only for a given (program version,
+map version) pair. Without stamping, the system will report a green obtained BEFORE the
+change that invalidated it. Small data-model decision, large consequence.
+
+................................................................................
+DB-3 — DOWNLOAD TRACKING AND DURATION
+................................................................................
+
+PURPOSE: know when a download starts and finishes, and hold tests off across it.
+
+The observation that downloads are not near-instantaneous is correct and had been missing
+from every earlier draft.
+
+THREE ADDITIONS:
+
+  1. *** "AFFECTED TESTS" MEANS ALL TESTS. *** Openness cannot download a selection, so
+     every download is whole-software. That simplifies the block — pause everything — but
+     it means download FREQUENCY directly costs wave throughput, which loops into DB-4.
+
+  2. *** THERE IS A SETTLING WINDOW AFTER "FINISHED". *** `RUN (<21)` integrates changes
+     across several scan cycles, during which the program runs as a MIXTURE OF OLD AND NEW
+     BLOCKS. Results obtained in that window are meaningless and must be discarded.
+
+  3. *** FAILURE HANDLING IS MISSING FROM THE PROPOSAL. *** If a download aborts —
+     including our own fail-closed delegate refusing one — the device is in an UNKNOWN
+     state. Research gap G4 records that nobody has established whether an abort leaves the
+     CPU untouched or half-loaded. NEVER RESUME TESTS ON THE ASSUMPTION IT WORKED. Verify,
+     then resume.
+
+INERT-STATE-BEFORE-DOWNLOAD is right, and for a stronger reason than was given: if a DB
+reinitialises during the download, there is no state to corrupt if you went inert first.
+
+................................................................................
+DB-4 — THE 20-OBJECT LIMIT AND INTERMEDIATE DOWNLOADS
+................................................................................
+
+PURPOSE: keep each download inside `RUN (<21)` so it does not force a STOP.
+
+THE NUMBER: more than 20 changed objects cannot be integrated consistently in one program
+cycle. **One agent changing one FB with a UDT and an instance DB is already 3 objects** —
+so roughly SIX AGENTS' CHANGES PER DOWNLOAD.
+
+*** THIS INVERTS DRAFT 01's SIZING RULE. *** That draft said wave sets should be as large
+as coordination allows, to amortise an expensive stop. Now the opposite: wave sets should
+be as SMALL as the object budget requires, because size is what forces the stop.
+
+THE COMPLICATION: *** YOU CANNOT SLICE ARBITRARILY INTO GROUPS OF 20. *** An FB, its
+instance DB and its UDT must land together or the program is inconsistent between
+downloads. So this is bin-packing into ≤20-object batches that are DEPENDENCY-CLOSED. Small
+algorithm; DB-1's graph supplies the edges.
+
+THE COMPILE-GATE CONSEQUENCE, correctly spotted: a download is not block-specific, so
+*** THE WHOLE PROJECT MUST COMPILE BEFORE ANY DOWNLOAD *** — and therefore one agent's
+broken block blocks every agent. The fix is ADMISSION CONTROL, which is DB-5 doing real
+work: a block enters the test project only after passing preflight and compiling clean on
+its own. A failing agent is simply not in the next download.
+
+COST CURVE: wave period ≈ (changes ÷ 20) × download time. That constant sizes the entire
+architecture and NOBODY HAS MEASURED IT (see gap 5).
+
+................................................................................
+DB-5 — TWO PROJECTS: IR DEV, AND TEST ENVIRONMENT
+................................................................................
+
+PURPOSE: separate the ordinary IR development cycle from the test cycle.
+
+This is the strongest structural move proposed, and it buys more than was claimed:
+
+  - The coordinator OWNS the test project, so the `SoftwareOnlyChanges`-carries-other-
+    agents'-work problem DISAPPEARS. That option means "the objects that differ online and
+    offline", decided by TIA at download time — not your edit list. With a coordinator-owned
+    project, it can only carry what the coordinator put there.
+  - The whole-folder-download-deletes-online-only-blocks footgun is contained, because the
+    coordinator knows exactly what is in the project.
+  - Concurrent Openness sessions on DIFFERENT projects are supported and already verified
+    on this machine, so this does not fight the tooling.
+  - *** HARNESS SCAFFOLDING NEVER CONTAMINATES THE DELIVERABLE. *** MB_SERVER, the models,
+    the latches, the mirror — all exist only in the test project. That answers the
+    what-ships-versus-what-is-tested question STRUCTURALLY rather than by discipline.
+
+THE MIRROR-IMAGE COST, which must be named: *** WHAT IS TESTED IS THEN NOT WHAT SHIPS. ***
+Extra code, extra scan time, different timing. A timing-sensitive behaviour could pass in
+the test project and fail in the deliverable.
+
+................................................................................
+DB-6 — ISOLATION, IMPOSSIBLE BY CONSTRUCTION
+................................................................................
+
+PURPOSE: make cross-agent data corruption unreachable rather than checked for.
+
+*** FIRST, A PRECISION THAT MOVES WHERE THE FIX GOES. *** The research hazards are DATA
+LOSS, not leakage: silent reinitialisation, the UDT cascade, block deletion by folder
+download, the wrong code arriving via `SoftwareOnlyChanges`.
+
+The one genuine LEAK is PC-SIDE: if the mirror's layout changes and the PC's map does not,
+agent A's write lands in agent B's registers. So the protection belongs in the client, and
+there it CAN be by construction:
+
+  1. *** LAYOUT VERSION REGISTER CHECKED BEFORE EVERY TRANSACTION BATCH *** — not only at
+     connect, because a download can land mid-session.
+  2. The map artifact carries a hash; the version register carries the same value. A
+     mismatch refuses the whole mirror.
+  3. *** THE CLIENT INSTANCE HOLDS ONLY ITS OWN REGION'S BOUNDS. *** A write outside it is
+     not rejected by a check that could be skipped — it is UNADDRESSABLE. That is the real
+     by-construction answer to cross-agent leakage.
+
+--------------------------------------------------------------------------------
+2. DESIGN RULES THAT FALL OUT
+--------------------------------------------------------------------------------
+
+R1. *** ALLOCATE THE WHOLE OB SET ONCE AT RIG SETUP, AND FORBID AGENTS FROM CREATING OBs.
+    *** New or deleted OB is the commonest STOP-forcer on this CPU (and the S7-1200's
+    biggest divergence from the S7-1500, which takes all three in RUN). Pre-allocating
+    converts it into a non-event. Enforce as a preflight REFUSAL.
+
+R2. *** SHARED UDTs ARE FROZEN DURING A CAMPAIGN *** — or a revision is a full re-baseline
+    that invalidates everyone's results. A modified UDT is `RUN (Init)` for every DB built
+    on it: the widest blast radius available, and the house style of a single shared STATIC
+    UDT maximises it.
+
+R3. RETENTIVITY-SETTING CHANGES AND TEXT-LIST CHANGES ARE STOP. Both belong in the
+    classifier as preflight refusals.
+
+R4. *** NEVER WRITE A DOWNLOAD DELEGATE THAT ACCEPTS EVERYTHING. *** The research states it
+    plainly: a delegate written to say yes to everything so the download goes through is
+    precisely how a harness wipes a rig. `DataBlockReinitialization = StopPlcAndReinitialize`
+    initialises ALL data values including retain data. Answer `NoAction` and let the
+    download abort.
+
+R5. NEVER USE FOLDER-SCOPE DOWNLOADS. Blocks that exist only online are DELETED by them.
+
+R6. ADMISSION CONTROL: a block enters the test project only after passing preflight and
+    compiling clean in isolation.
+
+--------------------------------------------------------------------------------
+3. WHAT %MW BECOMES
+--------------------------------------------------------------------------------
+
+`%MW` for the mirror is no longer a preference. It is now the only safe option, and this
+is the FOURTH independent argument for it, each arrived at from a different direction:
+
+  1. it cannot suffer the silent layout-revert measured on 2026-08-11;
+  2. `MB_HOLD_REG` requires standard access or a memory area, and M memory qualifies;
+  3. adding a scan-stamp to a DB is a structural change; in `%MW` it is a code change;
+  4. *** NEW AND STRONGEST: standard access can never carry a memory reserve (verified five
+     ways), so a standard-access DB can never be downloaded without reinitialization. Its
+     layout is FROZEN FOR THE LIFE OF THE RUNNING PROGRAM — change one member and the whole
+     DB resets to start values, in RUN, with no dialog and no error. ***
+
+Draft 01 §4 has the coordinator RE-DERIVING THE MAP at every download boundary. On a DB
+mirror, every re-derivation is a silent wipe. That design is only safe on `%MW`.
+
+--------------------------------------------------------------------------------
+4. THE SEVEN GAPS — GRADUATION CRITERIA
+--------------------------------------------------------------------------------
+
+This document becomes draft 02 when these are fleshed out. They are OPEN.
+
+G-1. POST-DOWNLOAD VERIFICATION. Nothing in DB-1..DB-6 confirms the device now holds what
+     we believe. This is a prerequisite for everything else, not a refinement.
+
+G-2. OB SET PRE-ALLOCATION. How many, of what types, decided when — and what a preflight
+     refusal looks like when an agent's IR would create one.
+
+G-3. SHARED-UDT POLICY. Freeze for a campaign, or treat a revision as a re-baseline?
+     Who decides, and what invalidates.
+
+G-4. THE STOP-CLASS PREFLIGHT REFUSALS. Retentivity settings, text lists, hardware config.
+     Where the refusal lives and what it tells the agent.
+
+G-5. DOWNLOAD DURATION — MEASURE IT. One number. It decides whether this is a five-minute
+     or a fifty-minute loop, and the whole cost curve in DB-4 rests on it.
+
+G-6. PROTOCOL COEXISTENCE. The harness's Modbus session and the coordinator's Openness
+     session address the same device. The harness must disconnect or tolerate disruption,
+     not merely be paused logically.
+
+G-7. *** G8 IS A PREREQUISITE FOR DB-6. *** You cannot design against silent
+     reinitialisation until you know whether `DataBlockReinitialization` even fires for a
+     standard-access DB — its message is scoped to "different memory reserves in the online
+     block and offline block", and a standard-access DB has no reserve in EITHER copy, so
+     there may be nothing to refuse. If it does not fire, ALL protection must live in our
+     own classifier refusing BEFORE the download — a different and larger piece of work.
+
+--------------------------------------------------------------------------------
+5. EXTERNAL UNKNOWNS — the research's own gaps
+--------------------------------------------------------------------------------
+
+Distinct from §4: these are holes in Siemens' documentation, not in our design.
+
+  G1  The help says "MOST CPUs of the S7-1200 V4 and higher" support download without
+      reinitialization. No page enumerates which do not.
+  G3  Whether a hardware download wipes retentive data — two Siemens editions contradict
+      each other.
+  G4  Whether an aborted download leaves the CPU untouched or half-loaded. Undocumented,
+      untested. Feeds §4 G-1.
+  G7  Whether a start-values-only edit is RUN or RUN (Init). No row exists in Siemens'
+      table, checked in both language renderings.
+  G8  Whether `DataBlockReinitialization` fires for a standard-access DB. Named by the
+      research as the single most valuable experiment available. Feeds §4 G-7.
+
+--------------------------------------------------------------------------------
+6. WHAT IS NOW WRONG IN DRAFT 01
+--------------------------------------------------------------------------------
+
+Do not build from these:
+
+  - §1 and §11's PREMISE — "downloading stops the CPU, so batching converts N downloads
+    into one" — is FALSE for the most common case (block add, block edit).
+  - §11's SIZING RULE — "wave sets should be as large as coordination allows" — is
+    INVERTED. The budget is ≤20 objects, roughly six agents' changes.
+  - §4's RE-DERIVE-THE-MAP-AT-EVERY-BOUNDARY is SAFE ONLY ON `%MW`. On a DB mirror each
+    re-derivation silently reinitialises it.
+  - D7's REASONING is superseded. The map is not frozen because a download would stop the
+    CPU; it is bounded by the object budget and by the mirror's storage choice.
+
+STILL CORRECT AND CARRIED FORWARD UNCHANGED: D1–D6, D8–D13, the §13 execution-and-isolation
+resolution (reachable state, per-test iDBs, concurrent execution, enable mask as diagnostic,
+time compression), the §14 instrumentation resolution (copy layer, scan counter always,
+latches default-on, stamps opt-in, clear at test start), §5's coverage trap and its gate,
+and §9's vector-provenance rule.
