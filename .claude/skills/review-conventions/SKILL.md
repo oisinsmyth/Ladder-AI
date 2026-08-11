@@ -1,6 +1,6 @@
 ---
 name: review-conventions
-description: Conventions review of Siemens LAD blocks (IR form) against doc 06's convention sections — Naming, Structure, Commenting, Data, Instructions, Alarms (C-0xx–C-5xx). Wraps the mechanical `converter review` tool (output embedded verbatim) plus an AI pass over the single-file, cross-block, and judgment rules the tool doesn't check. Use whenever asked for convention compliance, "run the conventions check", "does this follow the site rules?", rule-ID findings against doc 06, or before presenting any generated logic (the docs/15 check stage — pipeline skill #11). NOT the simplicity reviewer — readability findings (C-101/C-126/C-203/C-601–C-607, the one-reading test) belong to /review-simplicity. Ladder-AI project.
+description: 'Conventions review of Siemens LAD blocks (IR form) against doc 06''s convention sections — Naming, Structure, Commenting, Data, Instructions, Alarms (C-0xx–C-5xx). Wraps the mechanical `converter review` tool (output embedded verbatim) plus an AI pass over the single-file, cross-block, and judgment rules the tool doesn''t check. Use whenever asked for convention compliance, "run the conventions check", "does this follow the site rules?", rule-ID findings against doc 06, or before presenting any generated logic (the docs/15 check stage — pipeline skill #11). NOT the simplicity reviewer — readability findings (C-101/C-126/C-203/C-601–C-607, the one-reading test) belong to /review-simplicity. Ladder-AI project.'
 user-invocable: true
 allowed-tools:
   - Read

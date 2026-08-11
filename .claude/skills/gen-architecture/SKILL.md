@@ -1,6 +1,6 @@
 ---
 name: gen-architecture
-description: The Design-stage skill (docs/15 pipeline skill #5) that turns analysis artifacts into gen/<project>/architecture.md — the block manifest the engineer signs off BEFORE any block is coded (docs/15 hard gate 1). Use when asked to architect or structure a generation project, break a request down into blocks, design UDT interfaces or the DB landscape, plan OB1 call order, or whenever ANY generation request needs its manifest or mini-manifest — every request that creates new blocks or interfaces does, before the Build coding stage (gen-block-new / the modify pair) may start. Ladder-AI project.
+description: 'The Design-stage skill (docs/15 pipeline skill #5) that turns analysis artifacts into gen/<project>/architecture.md — the block manifest the engineer signs off BEFORE any block is coded (docs/15 hard gate 1). Use when asked to architect or structure a generation project, break a request down into blocks, design UDT interfaces or the DB landscape, plan OB1 call order, or whenever ANY generation request needs its manifest or mini-manifest — every request that creates new blocks or interfaces does, before the Build coding stage (gen-block-new / the modify pair) may start. Ladder-AI project.'
 user-invocable: true
 allowed-tools:
   - Read
