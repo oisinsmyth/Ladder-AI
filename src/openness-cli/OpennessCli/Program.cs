@@ -722,8 +722,20 @@ internal static class Program
                 // that were not failures. Errors are part of the work set for the same reason
                 // import-all retries: the dependency order is not worth deriving when a pass settles it.
                 var work = new List<(string Name, string Kind)>();
-                work.AddRange(sanity.InconsistentTypes.Select(t => (t.Name, "Type")));
-                work.AddRange(sanity.InconsistentBlocks.Select(b => (b.Name, "Block")));
+                if (options.Force && passes == 0)
+                {
+                    // --force exists because the default work set cannot see the one thing a restore
+                    // most needs re-checked. An item that compiled WITH ERRORS is still flagged
+                    // CONSISTENT, so on the next invocation it is invisible: the run examines
+                    // nothing and reports clean. Errors do not survive the process; consistency does.
+                    work.AddRange(gateway.EnumerateTypes().Select(t => (t.Name, "Type")));
+                    work.AddRange(gateway.EnumerateBlocks().Where(b => !b.IsSafety).Select(b => (b.Name, "Block")));
+                }
+                else
+                {
+                    work.AddRange(sanity.InconsistentTypes.Select(t => (t.Name, "Type")));
+                    work.AddRange(sanity.InconsistentBlocks.Select(b => (b.Name, "Block")));
+                }
 
                 var alreadyQueued = new HashSet<string>(work.Select(w => w.Name), StringComparer.Ordinal);
                 foreach (var errored in entries.Values.Where(e => e.ErrorCount > 0))
@@ -797,7 +809,17 @@ internal static class Program
             return ExitCodes.CompileFailed;
         }
 
-        return result.StillInconsistentCount > 0 ? ExitCodes.CompileIncomplete : ExitCodes.Success;
+        if (result.StillInconsistentCount > 0)
+        {
+            return ExitCodes.CompileIncomplete;
+        }
+
+        // Examining nothing is not passing. Without this the command prints "every item compiled
+        // without errors" after compiling zero items — measured, on a project where the previous run
+        // had left 15 items compiling with errors and every one of them flagged consistent. Nothing
+        // was wrong with the project state it read; the report simply described a pass it had not
+        // earned. `--force` is the answer when you need the question actually asked.
+        return result.CompiledCount == 0 ? ExitCodes.NothingExamined : ExitCodes.Success;
     }
 
     // sanity-check reports a block's LANGUAGE, and a data block's is the literal "DB" — the only
@@ -978,6 +1000,20 @@ public static class ExitCodes
     /// reading the report.
     /// </summary>
     public const int ImportIncomplete = 13;
+
+    /// <summary>
+    /// The command ran, nothing went wrong, and it examined NOTHING — so its silence is not
+    /// evidence about the project. `compile-all` earns this when no type or block is flagged
+    /// inconsistent: there is nothing in its default work set, and a report saying "every item
+    /// compiled without errors" after compiling zero items describes a pass it did not earn.
+    ///
+    /// It is its own code rather than a success because of how the gap arises. An item that compiled
+    /// WITH ERRORS is still flagged CONSISTENT, and errors do not survive the process while
+    /// consistency does — so the run immediately after a failed one is exactly the run that examines
+    /// nothing and looks cleanest. Same reasoning as the converter's own "exit 2 = a check was
+    /// compared against nothing" (FI-44): empty is not clean.
+    /// </summary>
+    public const int NothingExamined = 14;
 
     /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).

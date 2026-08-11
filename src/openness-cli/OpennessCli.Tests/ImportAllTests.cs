@@ -273,6 +273,30 @@ public class ImportAllTests : IDisposable
         Assert.Contains("CLEAN", OutputFormatter.FormatCompileAllTable(result));
     }
 
+    // An item that compiled WITH ERRORS is still flagged consistent, and errors do not survive the
+    // process — so the run right after a failed one has an empty work set. That is the moment this
+    // report is most likely to be believed and least entitled to be.
+    [Fact]
+    public void CompileAll_ReportsNothingExamined_RatherThanClaimingAPass()
+    {
+        var result = new CompileAllResult(new CompileAllEntry[0], Passes: 0);
+
+        var text = OutputFormatter.FormatCompileAllTable(result);
+
+        Assert.Contains("NOTHING EXAMINED", text);
+        Assert.DoesNotContain("CLEAN:", text);
+        Assert.Contains("--force", text);
+    }
+
+    [Fact]
+    public void CompileAll_Parse_TakesForce()
+    {
+        var ok = Assert.IsType<ParseResult.CompileAllSuccess>(
+            ArgumentParser.Parse(new[] { "compile-all", @"C:\p.ap20", "--force" }));
+
+        Assert.True(ok.Options.Force);
+    }
+
     [Fact]
     public void CompileAll_Parse_TakesDeviceAndJson_AndRefusesAStrayArgument()
     {
