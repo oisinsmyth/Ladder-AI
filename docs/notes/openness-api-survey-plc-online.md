@@ -20,9 +20,12 @@ The question was whether Openness could carry a **live data stream** for a test 
 
 - **Download / online / upload: fully present.** `DownloadProvider.Download(...)` with
   `DownloadOptions = None | Hardware | Software | SoftwareOnlyChanges`;
-  `OnlineProvider.GoOnline()/GoOffline()/State`; `StationUploadProvider.StationUpload()`;
-  `ConnectionConfiguration` with `GetAccessibleDevices()` for network browse; and **70**
-  `Download.Configurations` types answering every dialog TIA would otherwise raise.
+  `OnlineProvider.GoOnline()/GoOffline()/State`; `StationUploadProvider.StationUpload()`
+  (returns an `UploadResult`, which *carries* an `UploadedStation` — it does not return a
+  `Device` directly); **`ConfigurationPcInterface.GetAccessibleDevices()`** for network
+  browse (*corrected 2026-08-11 — this note first attributed it to
+  `ConnectionConfiguration`*); and **70** `Download.Configurations` types answering the
+  dialogs TIA would otherwise raise.
 - **Live values: absent.** Verified by exhaustive search across all 2,182 types — there
   is no method anywhere that reads or writes a running PLC value.
   `PlcWatchTableEntry` exposes `Address`, `DisplayFormat`, `ModifyIntention`,
@@ -36,7 +39,7 @@ The question was whether Openness could carry a **live data stream** for a test 
   `StartModules` / `StopModules` — answers to a download dialog, not standalone commands.
   Operating mode changes only as a side effect of a download.
 - **No standalone memory reset** (`InitializeMemory` exists only as a download answer),
-  and no general trace access.
+  and **no trace access at all in V20** — see §3.
 
 So any live-data path must come from outside Openness: S7 protocol (snap7/Sharp7),
 OPC UA, the CPU web server, or the PLCSIM Simulation Runtime API.
@@ -93,9 +96,15 @@ licensed, or applies to an S7-1200.
 - **`Siemens.Engineering.Safety` (15) and `Safety.Download.Configurations` (2).**
   Hard rule 2: the safety program is never read, written, converted, explained or
   referenced. Recorded only so that its existence is not mistaken for permission.
-  Note also that the only trace-related hook found anywhere in the Openness API sits
-  under the safety validation assistant — which puts trace automation out of reach on
-  those grounds alone, independently of whether it would otherwise work.
+  *(Corrected 2026-08-11.* This note first said the only trace hook in Openness sits under
+  the safety validation assistant, and reasoned that hard rule 2 therefore put trace
+  automation out of reach. **That describes V21, not V20.** In **V20** there is no trace
+  item in Openness at all: reflection over the V20 assembly returns one "Trace" match, an
+  unrelated `HW.TraceTriggerEdge` attribute enum, and the V20 Openness help package
+  contains zero occurrences of "trace". The safety-validation trace page appears only in
+  the V21 documentation. The *conclusion* — no general Openness API for starting or
+  uploading a trace — holds for both versions, but on V20 it holds by plain absence, and
+  hard rule 2 is not what forecloses it.)*
 - **`Siemens.Engineering.SW.ExternalSources` (9).** External source import — the route
   by which SCL/STL enters a project. Hard rule 1 is LAD only. Recorded explicitly so it
   is not later "discovered" as a shortcut for something awkward in LAD.
@@ -106,14 +115,28 @@ licensed, or applies to an S7-1200.
 
 Everything needed is present. Two notes that would otherwise be learned expensively:
 
-1. **The delegate pattern means an unanswered configuration blocks or throws.** A
-   download raises whichever of the 70 `Download.Configurations` apply, and the caller
-   must answer each one.
-2. **Several answers are destructive**, two of them badly:
-   - `InitializeMemory` — wipes retentive data.
-   - `DataBlockReinitialization` — resets DB actual values to start values. On an
-     S7-1200, load memory holds start values, so this silently discards tuned
-     parameters and retentive state.
+1. **An unanswered configuration that *would prevent the download* throws** —
+   `EngineeringTargetInvocationException`, scoped by the manual to *"Unhandled
+   configuration that can prevent the download"*. *(Corrected 2026-08-11: the original
+   "an unanswered configuration blocks or throws … the caller must answer each one" was
+   too strong.)* The manual says outright: *"Certain configurations will only contain an
+   information, therefore your action will not be required. Also, you can skip the
+   configurations that do not prevent the download."* A second type,
+   `EngineeringDelegateInvocationException`, covers your own delegate throwing.
+2. **One answer is genuinely destructive, and it is not the one whose name suggests it.**
+   *(Corrected 2026-08-11: this note previously attributed a retentive-data wipe to
+   `InitializeMemory`, which is unsubstantiated.)*
+   - **`DataBlockReinitialization`** is the dangerous one, and worse than first recorded.
+     Its `StopPlcAndReInitialize` option: *"All data values, **including retain data**,
+     will be initialized with their defined start values during loading. **Set the PLC to
+     STOP before loading.**"* It takes retentive data with it *and* stops the CPU. Note it
+     is a question the download *raises*, not something the type does on its own.
+   - **`InitializeMemory`** — the manual's complete description is *"This datatype is used
+     to initialize memory."* That is the entirety of it, identical in V16 and V19. No
+     mention of retentive data, wiping or reset. Treat anything stronger as unsourced.
+   - Beware a **typo in the manual's DataType column**: it prints
+     `DataBlockReinitilization` (missing an `a`) while the enum is
+     `DataBlockReinitializationSelections`. Match against the assembly, not the table.
 
    Others in the same class: `OverwriteSystemData`, `ResetModule`, `StopModules`,
    `DowngradeTargetDevice` / `UpgradeTargetDevice`,
@@ -125,7 +148,7 @@ Everything needed is present. Two notes that would otherwise be learned expensiv
    which only warns gets skimmed.
 
 3. Useful companions to build at the same time: `accessible-devices`
-   (`ConnectionConfiguration.GetAccessibleDevices()` returns Name / Address /
+   (`ConfigurationPcInterface.GetAccessibleDevices()` returns Name / Address /
    MACAddress / DeviceSeries — finds a CPU's real address without guessing) and
    `go-online` / `go-offline`.
 

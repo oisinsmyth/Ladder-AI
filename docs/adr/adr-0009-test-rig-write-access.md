@@ -49,20 +49,40 @@ The obvious objection — do all of this in PLCSIM — does not hold for the CPU
 targets. Measured and sourced 2026-08-10:
 
 - A **classic S7-1200 can only be a PLCSIM *Standard* instance**, and Standard instances are confined
-  to **Softbus**: no routable IP is bound, so **no external client can reach a simulated classic 1200
-  at all** — not S7 protocol, not OPC UA, not the web server.
-- **PLCSIM Advanced — the API-driven product — does not simulate S7-1200 in any version**, including
-  V8.0 (11/2025). S7-1200 **G2** gained support only at V8.0 / TIA V21.
+  to **Softbus** — *"If you set the mode to TCP/IP mode, you can only power on S7-PLCSIM Advanced
+  instances."* Under Softbus the **OPC UA server and the web server are documented as unavailable**.
+  *(Corrected 2026-08-11: this bullet first said "no routable IP is bound, so no external client can
+  reach it at all". An IP does exist — Softbus instances "all have the same default IP address",
+  shared and unexposed rather than absent — and **S7 protocol / snap7 under Softbus is UNCONFIRMED,
+  not documented-blocked**. Siemens makes no per-protocol statement about third-party S7 clients.)*
+- **PLCSIM Advanced — the API-driven product — does not simulate S7-1200 in any version.** Verbatim,
+  §2.3 *"Unsupported CPUs"*: *"S7-PLCSIM Advanced does not simulate S7-1200 or S7-1200 G2 CPUs. To
+  simulate CPUs of the S7-1200 … product family, use the latest edition of S7-PLCSIM."* The exclusion
+  is quoted across seven manual editions; V8.0 adds S7-1200 **G2** support but still excludes the
+  classic family. **Name trap:** V8.0's supported-CPU table contains a "CPU 1214C" — in the **G2**
+  row, because G2 reuses classic type names. `6ES7214-1AG40-0XB0` is family "SIMATIC S7-1200",
+  firmware V4.7 — classic, and excluded even at V8.0.
 - **Virtual time scaling is unavailable for Standard instances**, so hours-long process phases cannot
   be compressed.
-- **Counting/HSC, PID and motion are not simulated** for classic S7-1200 (they *are* for G2 — the two
-  products differ exactly here).
+- **Counting/measurement/position detection and PID Control are not simulated** for classic S7-1200
+  (they *are* for G2 — the two products differ exactly here). *(Corrected 2026-08-11: motion control
+  was listed here too and should not be. The manual **contradicts itself** — one topic says motion
+  control is not simulated for the S7-1200, while two others say it is "supported … in a limited
+  capacity" and that Standard instances allow 5,120 motion-control resources. Read motion as
+  **limited**, not absent. Counting and PID are solid.)*
 - Siemens' own documentation states **scan cycle time and the timing of actions are not
   representative** of firmware, with no bound given.
 - **Unsupported instructions silently return OK** — the worst possible failure for a test oracle,
   because assertions pass while nothing happened.
-- Scan Control (pause, run N scans) *does* exist for Standard instances and is fully deterministic,
-  but it is **GUI-only** — no API, script or CLI, so it cannot drive an automated suite.
+- Scan Control (pause, run N scans) *does* exist and is fully deterministic. **For this CPU it is
+  reachable only through the GUI**, so it cannot drive an automated suite. *(Corrected 2026-08-11 on
+  two counts. The Standard/Advanced split was stated backwards: Pause/Scan/Play apply to **both**
+  instance types — only the *parameterisation* is Standard-only, where a scan count of 0–9999 or a
+  duration can be set, against Advanced's single scan per click. And "no API" is wrong as a general
+  statement — the PLCSIM Advanced API has a full scan-control surface, `SROM_SINGLE_STEP_*` modes and
+  `RunToNextSyncPoint()`. It is GUI-only **for us** because that API cannot address an S7-1200 at all,
+  which is a different reason and one that no Siemens sentence states outright — it follows from the
+  CPU exclusion plus silence.)*
 
 So the only environment where this program can be executed faithfully and automatically is real
 hardware. A rig is real hardware.
