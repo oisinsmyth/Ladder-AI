@@ -1,0 +1,260 @@
+================================================================================
+PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 00
+================================================================================
+
+Status:  DRAFT FOR DEBATE. Nothing here is built. Some points are decided, some are
+         proposals, some are open — each is labelled, because a draft that blurs the
+         three is worse than no draft.
+Written: 2026-08-11, out of a design conversation with the owner.
+
+Companion documents, which this does not repeat:
+  docs/notes/modbus-tcp-client-spec.md      the PC-side client (buildable now)
+  docs/notes/modbus-plc-side-contract.md    the PLC-side contract (deferred to the IR work)
+
+This document covers the layer above both: how MANY agents share ONE rig.
+
+--------------------------------------------------------------------------------
+1. THE ARCHITECTURE, AS THE OWNER DESCRIBED IT
+--------------------------------------------------------------------------------
+
+  1. Multiple lad-coder agents each author a block in IR, independently.
+  2. When all (or most) have IR, each submits a set of TEST VECTORS for its block:
+     the input tags and values to apply, and the output tags and values expected.
+  3. From the submitted vectors, the Modbus register map is derived.
+  4. The PLC-side read interface is generated programmatically, to one standard shape.
+  5. A test WAVE runs: independent tests execute until every submitted test is done.
+  6. Results are returned to each agent.
+
+WHY THIS IS THE RIGHT SHAPE. Downloading stops the CPU. Per-agent downloads therefore
+serialise everything and the rig's throughput collapses to one agent at a time. Batching
+converts that from N downloads to ONE per wave. That is the structural win, and every
+other decision here is downstream of protecting it.
+
+--------------------------------------------------------------------------------
+2. DECIDED
+--------------------------------------------------------------------------------
+
+D1. INDEPENDENT MEANS NON-OVERLAPPING TAGS. Two tests are independent when the sets of
+    tags they write do not intersect. (Necessary, not sufficient — see D5 and O2.)
+
+D2. THE REGISTER MAP IS AUTHORED PC-SIDE AND IS AUTHORITATIVE. The PLC works off it.
+    One source of truth, on the side that can change without a download.
+
+D3. IDENTITY COMES FROM THE PLC. Authenticating over S7 while carrying data over Modbus
+    is dropped — that route cannot be depended on. Identity is program-published, and
+    the weakening is recorded rather than assumed away.
+
+D4. A TEST VECTOR MAY MODEL PLANT, NOT JUST VALUES. A lad-coder may build a MODEL on the
+    PLC — a weigher, a valve with travel time, a vessel — and the vector PARAMETRISES it
+    (setpoint, rate of change, a start signal) rather than driving raw values. See §4.
+
+D5. TESTS MUST BE RETURNED TO A KNOWN INERT STATE BETWEEN THEM. Non-overlapping tags is
+    not enough on its own; FB statics survive. See §5.
+
+D6. THE BLOCK AUTHOR SHOULD NOT AUTHOR ITS OWN TEST VECTORS. Already part of the owner's
+    design. Recorded here because it is the single highest-value rule in the document —
+    see §7.
+
+--------------------------------------------------------------------------------
+3. REGISTER ALLOCATION — PROPOSAL: FIXED-SIZE CLAIMED REGIONS
+--------------------------------------------------------------------------------
+
+The problem: if the map is derived fresh from whatever vectors arrive, then one agent
+adding a tag in wave 2 shifts every other agent's addresses and rots their expectations.
+
+Two candidate strategies were considered.
+
+  (a) LOCK THE MAP AT WAVE 1, release when the campaign ends.
+      + total stability, no machinery, no mid-campaign re-download
+      - no agent may add a tag until the campaign ends
+      - "campaign ends" is a fuzzy condition; real development is continuous, so the
+        lock either never releases or its release forces a global re-plan
+      - one late change forces a restart for everyone
+
+  (b) PER-AGENT REGIONS, APPEND-ONLY WITHIN A REGION.
+      + an agent grows its own region without disturbing anyone
+      + matches `converter claim`, which already does atomic allocation with refusal on
+        conflict, from a registry shared across worktrees
+      + fits continuous development
+      - regions must be sized up front; fragmentation as agents come and go
+
+PROPOSAL — the hybrid, which is strictly better than either:
+
+  FIXED-SIZE REGIONS, ALLOCATED BY CLAIM, GENEROUSLY SIZED.
+
+  Inside its region an agent appends freely with zero global effect. The global map
+  changes only when a NEW AGENT JOINS or a REGION OVERFLOWS — both rare, both explicit.
+
+  The arithmetic makes this cheap: 8 KB of %M is 4096 registers. Sixteen agents at 256
+  registers each is far more than a test interface needs, so over-provision and stop
+  thinking about it.
+
+  Reuse `converter claim` for the region bases rather than inventing a second registry.
+  It was built for exactly this class of collision (block numbers, alarm bits, DB
+  members) and it already refuses rather than races.
+
+--------------------------------------------------------------------------------
+4. MODELS AND PARAMETRISATION — THE STRONGEST IDEA IN THE DESIGN
+--------------------------------------------------------------------------------
+
+Driving raw values over the wire cannot express time. Round trips over the tunnel are
+79–108 ms (MEASURED 2026-08-11) against a scan of roughly 10 ms, so anything that has to
+happen at scan rate cannot be driven from the PC. A PID loop cannot be closed over a VPN
+at all.
+
+Parametrising a PLC-side model removes the problem rather than working around it: the PC
+sets a setpoint and a rate, and the DYNAMICS ARE GENERATED AT SCAN RATE inside the
+controller. The link carries parameters and results, not moment-to-moment values.
+
+This is not novel to this project — the live program already carries `FC_SimPlant`,
+`FB_SimSilo` and `FB_SimDrum`, a closed-loop plant simulation mandated by its control
+spec. The proposal generalises an approach already proven in this codebase.
+
+Three caveats that must not be lost:
+
+  - WHO VERIFIES THE MODEL? If one agent writes both the block and the model it is tested
+    against, that is correlated again (§7). Less severe than a self-authored vector — a
+    wrong plant model tends to be visibly wrong in a way wrong control logic is not — but
+    it is not nothing.
+  - FIDELITY DECIDES WHAT A GREEN MEANS. A weigher model with no noise, lag or overshoot
+    will pass logic that a real weigher would break. Either build the imperfection in, or
+    record the model's limits so nobody reads more into a pass than it earns.
+  - MODELS COST SCAN TIME, which feeds directly into §6.
+
+--------------------------------------------------------------------------------
+5. THE INERT STATE
+--------------------------------------------------------------------------------
+
+FB statics and instance data survive between tests. Test A leaves a sequence mid-cycle;
+test B inherits it. So results depend on wave ORDER — tests may pass in sequence and fail
+alone, or the reverse.
+
+PROPOSAL:
+
+  - A GENERATED reset routine, derived from the same map, triggered by a command register
+    between tests.
+  - Retentive members need explicit writes: they survive everything short of an
+    initialise.
+  - *** THE RESET MUST BE READ BACK AND CONFIRMED. *** An unverified reset is precisely
+    the "a warning is not a gate" shape — it looks like isolation and silently is not.
+    Reset, then verify, then run.
+
+OPEN: whether "inert" means every block idle, or every block idle AND every model at a
+declared start condition. The second is more useful and more work.
+
+--------------------------------------------------------------------------------
+6. FAILURE HANDLING — PROPOSAL: SURVIVE THE OVERRUN, DO NOT PRE-SCREEN FOR IT
+--------------------------------------------------------------------------------
+
+THE RISK. Every loaded block runs every scan. One agent's cycle-time bomb trips the
+watchdog, the CPU STOPs, the whole wave dies, and nobody knows whose block did it.
+
+Two options were considered and BOTH are rejected:
+
+  - A SMOKE PASS before every wave (each block alone for a few scans) — rejected by the
+    owner: it adds time to block checks that need to be as quick as possible, on every
+    wave, to guard against something rare.
+  - ACCEPT THE RISK and fall back to sequential calls after a blow-up — rejected here:
+    the expensive part is not re-running, it is ATTRIBUTION. Without knowing who blew it
+    you end up running sequentially to find out, which is the cost you were avoiding.
+
+PROPOSAL — make the failure survivable and self-attributing instead:
+
+  1. GENERATE AN OB80 (time error interrupt) into the standard scaffolding. A cycle
+     overrun on an S7-1200 only STOPs the CPU when there is no OB80 to take it. With one
+     present, an overrun becomes a LOGGED EVENT rather than a dead wave.
+  2. WRITE A "BLOCK CURRENTLY EXECUTING" REGISTER before each block runs. OB80 reads it,
+     so attribution is free — no bisection, no smoke pass, no second run.
+  3. MAKE THE BLOCK-ENABLE SET A BITMASK IN THE MIRROR — runtime data, not generated
+     code. Then switching to sequential execution, or bisecting a suspect set, is a
+     REGISTER WRITE rather than a regeneration and a download. This makes the owner's
+     fallback strategy nearly free, and is worth doing on its own merits.
+
+THE ASYMMETRY THAT DECIDES IT. After a STOP, someone must put the CPU back into RUN.
+`IS7Client` deliberately exposes no mode change, so that is a human. Attended, that is a
+shrug. UNATTENDED, ONE BAD BLOCK CONVERTS A 30-MINUTE WAVE INTO A DEAD NIGHT. That cost
+asymmetry — not the probability — is what justifies spending anything here at all.
+
+HONEST LIMIT: OB80 does not save you from a true infinite loop; it re-triggers and the
+CPU stops anyway. It fixes the common "this block is just slow" case, which is most of
+them.
+
+--------------------------------------------------------------------------------
+7. TEST VECTOR PROVENANCE — THE HIGHEST-VALUE RULE HERE
+--------------------------------------------------------------------------------
+
+If the agent that authors a block also authors its test vectors, the vectors encode that
+agent's reading of the specification — INCLUDING ITS MISREADING. The tests pass. The
+wave returns green. Nothing has been verified except self-consistency.
+
+This is the failure this project was built around. The PlantAutoControl autopsy records an AI
+reviewer and an AI coder reading the same requirements register, both misreading the same
+ambiguous `/`, and failing together. Two checks that share an assumption are one check.
+
+The harness already carries the guard: `TestVector.Basis` is REQUIRED, and its own
+documentation says a suite whose expectations were read off the implementation "is a
+change detector, not a correctness check".
+
+REQUIREMENTS:
+  - every vector cites the specification clause it derives from;
+  - vectors are authored by an agent OTHER than the block's author wherever possible;
+  - a vector whose basis cannot be cited is not admissible into a wave.
+
+--------------------------------------------------------------------------------
+8. BYTE AND WORD ORDER — SETTLED, WITH ONE RESIDUAL
+--------------------------------------------------------------------------------
+
+Because we author BOTH ends, the convention is ours and a round-trip test proves the two
+halves agree — which is the actual requirement. The correlated-check concern that applies
+to a self-written fake server largely dissolves here.
+
+ONE RESIDUAL: we control both ENDPOINTS OF OUR CODE, not the middle. `MB_SERVER` is a
+Siemens instruction, and how it presents MB_HOLD_REG bytes as registers is Siemens'
+behaviour, not ours. No fake we write can validate that.
+
+PROPOSAL: build BYTE AND WORD SWAP as a configurable transform on the PC side (owner's
+suggestion — also what makes talking to a third party's server possible later). Then
+calibrate rather than assume: place a KNOWN bit pattern in the mirror (a Format word, a
+known Real), try the combinations, and DERIVE the convention. One measurement, once, and
+it never bites again.
+
+--------------------------------------------------------------------------------
+9. WHAT THE WAVE IS FOR
+--------------------------------------------------------------------------------
+
+The wave is BATCHED, which is a throughput property rather than a defect — with a runtime
+enable mask and no per-agent download, the period can be short.
+
+The point worth keeping: agents should not depend on the wave for defects that cost
+nothing to catch earlier. `converter preflight` and the compile gate find parse, tag,
+call, instance and convention faults with no device involved at all. The wave exists to
+confirm BEHAVIOUR — which is currently impossible by any other route, and is the whole
+reason the rig is worth having.
+
+--------------------------------------------------------------------------------
+10. OPEN — FOR THE NEXT ROUND
+--------------------------------------------------------------------------------
+
+O1. Does the wave coordinator serialise block execution by default (enable mask, one at a
+    time), or run everything concurrently and rely on §6 to survive? Concurrent is faster;
+    serial is more attributable and makes D1 much easier to guarantee.
+
+O2. Reads are not automatically safe either: agent A's writes change state agent B is
+    observing. Non-overlapping WRITE sets do not prevent observation interference. Does
+    isolation need to be structural — an instance and a mirror region per agent — rather
+    than only a lease?
+
+O3. What restarts the CPU after a STOP, and may that ever be automated? Today it is a
+    human, and §6's cost asymmetry rests entirely on that.
+
+O4. How are model fidelity limits recorded, so a green result is not over-read?
+
+O5. Who authors the models, given §4's caveat and §7's rule?
+
+O6. What is the wave's failure policy — does one failing test abort the wave, or does the
+    wave complete and report? (Abort loses information; complete risks cascading from a
+    bad state.)
+
+O7. Does the standard scaffolding need latched transients and event scan-stamps from the
+    outset? Without them, whole classes of assertion are unrunnable and the runner will
+    correctly refuse them; with them, every block carries instrumentation cost.
