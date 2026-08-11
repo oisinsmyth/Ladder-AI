@@ -1,0 +1,325 @@
+================================================================================
+PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 01
+================================================================================
+
+Status:  DRAFT FOR DEBATE. Supersedes PC-Client-Modbus-Spec-Draft-00.txt, which is
+         kept for its reasoning history.
+
+*** THIS DRAFT DEPENDS ON PENDING RESEARCH. *** Section 11 lists what changes
+depending on the answer to `s7-1200-download-semantics.md` — specifically whether ANY
+class of code change can reach a classic S7-1200 without stopping the CPU and without
+destroying live data. Sections marked CONTINGENT should not be built against until
+that lands. Everything else stands either way.
+
+Written: 2026-08-11.
+
+Companion documents, not repeated here:
+  docs/notes/modbus-tcp-client-spec.md      the PC-side client (buildable now)
+  docs/notes/modbus-plc-side-contract.md    the PLC-side contract (deferred to the IR work)
+
+--------------------------------------------------------------------------------
+0. WHAT CHANGED FROM DRAFT 00, AND WHY
+--------------------------------------------------------------------------------
+
+C1. THE REGISTER-ALLOCATION MACHINERY IS WITHDRAWN. Draft 00 proposed fixed-size
+    per-agent regions allocated by claim, to stop one agent's new tag shifting
+    everyone's addresses.
+
+    That was solving a problem that does not exist. **The map cannot change without a
+    download**, because a new tag has to appear in the PLC-side mirror, and nothing puts
+    it there but a download. So the map is frozen between downloads BY PHYSICS, not by
+    policy — and at a download boundary the whole program is republished at once, so
+    every agent receives the new map simultaneously.
+
+    Address stability across map versions is therefore worthless, and the regions,
+    sizing, claims and fragmentation handling all go with it. See §4.
+
+C2. THE LOOP SHAPE IS NOW EXPLICIT (§2), and it is what makes the "how often do the
+    review skills run?" question answerable: they run in a leg that costs no device time,
+    so the answer is "whenever anything changes".
+
+C3. WHAT THE TEST ENVIRONMENT REPLACES IS NOW SCOPED (§5), together with the trap in
+    replacing it — a coverage gap that would otherwise be invisible.
+
+--------------------------------------------------------------------------------
+1. THE ARCHITECTURE
+--------------------------------------------------------------------------------
+
+  1. Multiple lad-coder agents each author a block in IR, independently.
+  2. Each submits a set of TEST VECTORS for its block: input tags and values to apply,
+     output tags and values expected. A vector may instead PARAMETRISE a model (§6).
+  3. The coordinator derives the Modbus register map from the submitted vectors.
+  4. The PLC-side read interface is generated programmatically, to one standard shape.
+  5. A test WAVE runs every submitted test.
+  6. Results are returned to each agent.
+
+WHY BATCHING IS THE RIGHT SHAPE. Downloading is assumed to stop the CPU, so per-agent
+downloads serialise everything and rig throughput collapses to one agent at a time.
+Batching converts N downloads into one per wave set. Every other decision here protects
+that win — and §11 records how much of it survives if the assumption turns out to be
+softer than stated.
+
+--------------------------------------------------------------------------------
+2. THE LOOP
+--------------------------------------------------------------------------------
+
+    PREFLIGHT           conventions review, simplicity review, converter preflight,
+                        compile gate                          — continuous, NO DEVICE
+          |
+          v
+    WAVE SET            every submitted vector runs; the map is FROZEN
+                        — rig time, no downloads
+          |
+          v
+    DOWNLOAD BOUNDARY   re-derive the map, regenerate the PLC side, gate the whole
+                        program, download                     — the expensive act
+          |
+          +---> back to PREFLIGHT
+
+CONSEQUENCE, and it answers the question that prompted this draft: **the review skills
+live in the preflight leg and cost no rig time, so they run as often as an agent changes
+anything.** There is no scheduling problem to solve. What is scarce is the wave and the
+download, not the reviews.
+
+--------------------------------------------------------------------------------
+3. DECISIONS
+--------------------------------------------------------------------------------
+
+D1. INDEPENDENT MEANS NON-OVERLAPPING TAGS. Necessary, not sufficient — see D5 and O2.
+
+D2. THE REGISTER MAP IS AUTHORED PC-SIDE AND IS AUTHORITATIVE. The PLC works off it.
+
+D3. IDENTITY COMES FROM THE PLC. Authenticating over S7 while carrying data over Modbus
+    is dropped; that route cannot be depended on. The weakening is recorded, not assumed
+    away.
+
+D4. A TEST VECTOR MAY PARAMETRISE A PLC-SIDE MODEL rather than drive raw values (§6).
+
+D5. TESTS ARE RETURNED TO A KNOWN INERT STATE BETWEEN THEM, and the reset is VERIFIED
+    (§7).
+
+D6. THE BLOCK AUTHOR DOES NOT AUTHOR ITS OWN TEST VECTORS (§9).
+
+D7. **THE MAP IS FROZEN FOR A WAVE SET AND RE-DERIVED AT EACH DOWNLOAD BOUNDARY.**
+    Forced by C1, not chosen.
+
+D8. **AGENTS SPEAK TAG NAMES. THEY NEVER SEE A REGISTER NUMBER.** The coordinator owns
+    the map and the translation (§4).
+
+--------------------------------------------------------------------------------
+4. THE MAP — VERSIONED, SYMBOLIC, RE-DERIVED
+--------------------------------------------------------------------------------
+
+Because the map cannot change mid-wave-set (C1), and because every agent gets a new map
+simultaneously at each download, the map needs no stability guarantees at all. What it
+needs is a VERSION and a symbolic interface.
+
+  - Agents submit vectors in TAG NAMES. They never bind to registers, so a re-derivation
+    cannot invalidate anything they hold.
+  - The coordinator derives the map fresh at each download boundary, laid out for
+    efficient block reads (§ the client spec requires batching).
+  - The map carries a LAYOUT VERSION, published into the mirror as the first register.
+    The client reads it before anything else and REFUSES the whole mirror on a mismatch —
+    every other offset is justified only by that number.
+  - The map is an artifact: written down, versioned alongside the generated PLC side, and
+    the thing an eventual conformance check compares the PLC's IR against.
+
+WHAT THIS REPLACES: draft 00's claimed regions, fixed sizes, append-only discipline and
+overflow handling. None of it is needed. This is strictly less machinery.
+
+--------------------------------------------------------------------------------
+5. WHAT THE TEST ENVIRONMENT REPLACES — AND THE TRAP IN REPLACING IT
+--------------------------------------------------------------------------------
+
+IT REPLACES THE FUNCTIONAL REVIEW, where a rig is available. Observing behaviour against
+a spec-derived vector is stronger evidence than an AI reading code against a requirements
+register.
+
+IT DOES NOT REPLACE THE OTHER REVIEWS. Conventions and simplicity say nothing about
+behaviour and behaviour says nothing about them. They stay in the preflight leg, where
+they are free relative to a wave.
+
+*** THE TRAP: COVERAGE. *** A functional reviewer reads EVERY requirement and returns a
+verdict on each. A test suite covers only what somebody wrote a vector for. So this trades
+a COMPLETE BUT FALLIBLE check for a NARROW BUT SOLID one — a good trade only if the
+narrowing is measured.
+
+Without a coverage gate, a wave report saying "all tests passed" is indistinguishable from
+"all requirements verified", and the requirements nobody wrote a vector for look exactly
+like the ones that passed.
+
+REQUIREMENTS:
+  - REQ-to-vector coverage is a GATE on admitting a wave, not a statistic reported after.
+  - Uncovered requirements are reported as EXPLICITLY UNVERIFIED, named individually.
+  - The machinery exists: `converter signal-sweep` computes exact residual coverage
+    against a real denominator, and `converter trace` does per-REQ forward tracing. Use
+    them rather than a self-reported percentage.
+
+AND THE INDEPENDENCE MUST SURVIVE THE SWAP. Part of what a functional reviewer provided
+was a SECOND READING of the specification, independent of the coder's. A vector authored
+by a different agent preserves that. A vector authored by the block's own author does not
+— it moves the failure rather than removing it (§9).
+
+--------------------------------------------------------------------------------
+6. MODELS AND PARAMETRISATION
+--------------------------------------------------------------------------------
+
+Driving raw values over the wire cannot express time. Round trips over the tunnel are
+79–108 ms (MEASURED 2026-08-11) against a scan of roughly 10 ms, so anything happening at
+scan rate cannot be driven from the PC, and a PID loop cannot be closed over a VPN at all.
+
+Parametrising a PLC-side model removes the problem instead of working around it: the PC
+sets a setpoint and a rate of change, and the DYNAMICS ARE GENERATED AT SCAN RATE inside
+the controller. The link carries parameters and results, not moment-to-moment values.
+
+Already proven in this codebase — the live program carries a closed-loop plant simulation
+mandated by its own control spec. This generalises an approach that works.
+
+CAVEATS THAT MUST NOT BE LOST:
+  - WHO VERIFIES THE MODEL? One agent writing both the block and the model it is tested
+    against is correlated again (§9). Less severe — a wrong plant model tends to be
+    visibly wrong in a way wrong control logic is not — but not nothing.
+  - FIDELITY DECIDES WHAT A GREEN MEANS. A weigher model with no noise, lag or overshoot
+    passes logic a real weigher would break. Build the imperfection in, or record the
+    model's limits so nobody over-reads a pass.
+  - MODELS COST SCAN TIME, feeding into §8.
+
+--------------------------------------------------------------------------------
+7. THE INERT STATE
+--------------------------------------------------------------------------------
+
+FB statics and instance data survive between tests, so results depend on wave ORDER —
+tests may pass in sequence and fail alone, or the reverse.
+
+  - A GENERATED reset routine, derived from the same map, triggered by a command register.
+  - Retentive members need explicit writes; they survive everything short of an
+    initialise.
+  - *** THE RESET IS READ BACK AND CONFIRMED. *** An unverified reset is the "a warning is
+    not a gate" shape: it looks like isolation and silently is not.
+
+OPEN: whether inert means every block idle, or every block idle AND every model at a
+declared start condition. The second is more useful and more work.
+
+--------------------------------------------------------------------------------
+8. FAILURE HANDLING — SURVIVE THE OVERRUN, DO NOT PRE-SCREEN FOR IT
+--------------------------------------------------------------------------------
+
+RISK: every loaded block runs every scan. One cycle-time bomb trips the watchdog, the CPU
+STOPs, the wave dies, and nobody knows whose block did it.
+
+Both obvious options are rejected. A PRE-WAVE SMOKE PASS costs time on every wave to guard
+something rare. ACCEPT-THE-RISK-THEN-SERIALISE mistakes the cost: the expensive part is
+ATTRIBUTION, and without it you run sequentially anyway to find the culprit.
+
+PROPOSAL:
+  1. GENERATE AN OB80 (time error interrupt). An overrun only STOPs the CPU when there is
+     no OB80 to take it; with one, it becomes a logged event rather than a dead wave.
+  2. WRITE A "BLOCK CURRENTLY EXECUTING" REGISTER before each block runs, so OB80
+     attributes the overrun for free — no bisection, no second run.
+  3. MAKE THE BLOCK-ENABLE SET A BITMASK IN THE MIRROR — runtime data, not generated code.
+     Bisecting or going sequential becomes a register write rather than a regeneration and
+     a download.
+
+WHAT JUSTIFIES SPENDING ANYTHING HERE is cost asymmetry, not probability: after a STOP a
+human must restore RUN, so unattended, one bad block turns a wave into a dead night.
+
+HONEST LIMIT: OB80 does not save you from a true infinite loop — it re-triggers and the
+CPU stops anyway. It fixes the common "this block is just slow" case.
+
+--------------------------------------------------------------------------------
+9. TEST VECTOR PROVENANCE
+--------------------------------------------------------------------------------
+
+If the agent that authors a block also authors its vectors, the vectors encode that
+agent's reading of the specification INCLUDING ITS MISREADING. The tests pass, the wave
+returns green, and nothing has been verified but self-consistency.
+
+This is the failure this project was built around: the PlantAutoControl autopsy records an AI
+reviewer and an AI coder reading the same requirements register, both misreading the same
+ambiguous `/`, failing together. Two checks that share an assumption are one check.
+
+The harness already carries the guard — `TestVector.Basis` is REQUIRED, and its own
+documentation says a suite whose expectations were read off the implementation "is a
+change detector, not a correctness check".
+
+  - every vector cites the specification clause it derives from;
+  - vectors are authored by an agent OTHER than the block's author wherever possible;
+  - a vector whose basis cannot be cited is not admissible into a wave.
+
+--------------------------------------------------------------------------------
+10. BYTE AND WORD ORDER
+--------------------------------------------------------------------------------
+
+Because we author both ends, the convention is ours and a round-trip proves the halves
+agree — which is the actual requirement. The correlated-check concern about a self-written
+fake server largely dissolves here.
+
+ONE RESIDUAL: we control both ENDPOINTS OF OUR CODE, not the middle. `MB_SERVER` is a
+Siemens instruction and how it presents MB_HOLD_REG bytes as registers is Siemens'
+behaviour. No fake we write can validate it.
+
+Build BYTE AND WORD SWAP as a configurable transform PC-side — which also makes talking to
+a third party's server possible later — then CALIBRATE rather than assume: place a known
+bit pattern in the mirror, try the combinations, derive the convention. One measurement,
+once.
+
+--------------------------------------------------------------------------------
+11. CONTINGENT ON THE DOWNLOAD-SEMANTICS RESEARCH
+--------------------------------------------------------------------------------
+
+Pending: `C:\Users\User\.claude\jobs\f24f6b1a\tmp\s7-1200-download-semantics.md`.
+
+THE QUESTION: can any useful class of code change reach a classic S7-1200 without stopping
+the CPU and without destroying live data?
+
+IF THE ANSWER IS NO (the working assumption):
+  - everything above stands as written;
+  - the download boundary is genuinely expensive and batching is not merely reasonable but
+    necessary;
+  - wave sets should be as large as coordination allows, because each boundary costs a
+    full stop-and-restore.
+
+IF SOME CHANGE CLASS CAN LAND WITHOUT A STOP:
+  - D7 and §4 weaken — the map might change WITHIN a wave set, and re-derivation could
+    become incremental rather than wholesale;
+  - the loop in §2 could become near-continuous, with waves pausing rather than ending;
+  - §8's cost asymmetry shrinks, because fewer boundaries mean fewer chances to STOP;
+  - the batching argument in §1 weakens, and per-agent turnaround improves sharply.
+
+A SPECIFIC SUB-QUESTION THAT MAY DECIDE IT. Download without reinitialization generally
+requires memory reserve configured in advance. MEASURED on this project: genuine TIA
+exports of one DB either side of a memory-layout change show the OPTIMIZED form carrying
+`<MemoryReserve>100</MemoryReserve>` and the STANDARD form lacking that element entirely.
+If standard access does not support memory reserve, then a `MB_HOLD_REG` mirror — which
+MUST be standard access — may be permanently ineligible for download without
+reinitialization. That is currently INFERENCE FROM AN ABSENT XML ELEMENT and is being
+verified properly.
+
+--------------------------------------------------------------------------------
+12. OPEN — FOR THE NEXT ROUND
+--------------------------------------------------------------------------------
+
+O1. Does the coordinator serialise block execution by default (enable mask, one at a
+    time), or run everything concurrently and rely on §8 to survive? Concurrent is faster;
+    serial is more attributable and makes D1 far easier to guarantee.
+
+O2. Reads are not automatically safe: agent A's writes change state agent B is observing.
+    Non-overlapping WRITE sets do not prevent observation interference. Does isolation
+    need to be structural — an instance and mirror region per agent — rather than a lease?
+
+O3. What restarts the CPU after a STOP, and may that ever be automated? Today it is a
+    human, and §8's justification rests entirely on that.
+
+O4. How are model fidelity limits recorded, so a green is not over-read?
+
+O5. Who authors the models, given §6's caveat and §9's rule?
+
+O6. Wave failure policy: does one failing test abort the wave, or does the wave complete
+    and report? Abort loses information; complete risks cascading from a bad state.
+
+O7. Does the standard scaffolding need latched transients and event scan-stamps from the
+    outset? Without them whole classes of assertion are unrunnable and the runner will
+    correctly refuse them; with them, every block carries instrumentation cost.
+
+O8. What is the minimum coverage threshold that admits a wave (§5), and who rules on a
+    requirement declared untestable-on-a-rig?
