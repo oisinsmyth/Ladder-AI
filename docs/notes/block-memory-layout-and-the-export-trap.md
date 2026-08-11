@@ -81,6 +81,30 @@ none of them.
   `Siemens.Engineering.xml`.
 - **Cheapest, no Portal at all:** any genuine export already on disk.
 
+## Setting it works — measured, 2026-08-11
+
+The assignment takes, `Save()` persists it, and a re-resolved block reports the new value. Measured
+on a real project against a new global DB: `Optimized` → `Standard`, exit 0, read-back matching.
+
+The change is **surgical**. Genuine TIA exports either side of the switch differ in three places
+and nothing else — no member moved, no type or start value changed:
+
+```
+- <IsRetainMemResEnabled>false</IsRetainMemResEnabled>
+- <MemoryLayout>Optimized</MemoryLayout>
+- <MemoryReserve>100</MemoryReserve>
++ <MemoryLayout>Standard</MemoryLayout>
+```
+
+`MemoryReserve` and `IsRetainMemResEnabled` dropping out is coherent: both are optimized-only
+concepts. A compile and `sanity-check` either side of the switch returned identical results, so
+the change costs nothing at the gate.
+
+**The export states no byte offsets.** They are not in the SimaticML at any point, before or after,
+so a standard-access block's absolute offsets still have to be read from the TIA editor or derived
+by hand — deriving them is well-defined (an `Int` takes 2 bytes; a `String[n]` takes n+2 and starts
+on an even byte) but it is arithmetic, not a reading, and should be labelled as such.
+
 ## Consequences worth remembering
 
 - **Switching an existing block's layout destroys its retained data on the next download.** On a plant
