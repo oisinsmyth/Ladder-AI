@@ -1,0 +1,29 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!--
+      TargetFramework is set PER PROJECT here, unlike src/harness, and the split is the whole point
+      of this solution existing separately:
+
+        DownloadFeedback        -> netstandard2.0, so `openness-cli` (net48, pinned there by
+                                   Siemens.Engineering) can reference it AND a net8.0 caller can too.
+                                   A net8.0 library would be unreferenceable from the one tool that
+                                   most needs it.
+        DownloadFeedback.Tests  -> net8.0, because nothing in the test path is framework-sensitive.
+
+      The library references NOTHING — no Siemens.Engineering, no network, no Portal. A DownloadResult
+      is adapted into a plain DTO tree by the caller (see DownloadResultAdapter), which is what lets
+      fifteen recorded logs stand in for a device, and what keeps a change here from ever triggering
+      the TIA Openness (Path,FileHash) re-approval cycle that a rebuild of openness-cli does.
+
+      Warnings-as-errors matches the other solutions (audit F-37): there is no CI, so the compiler is
+      the only thing that notices drift.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

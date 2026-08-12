@@ -1,0 +1,11 @@
+==== DOWNLOAD RESULT ===========================================================
+state         : Success
+errors        : 0
+warnings      : 0
+              (NONE of those three says whether anything was TRANSFERRED — see below.)
+
+messages (recursive, verbatim):
+  - state=Success errors=0 warnings=0 at=2026-08-12T07:36:32.1965955Z
+    text : PLC_1
+    - state=Success errors=0 warnings=0 at=2026-08-12T07:36:49.3449522Z
+      text : 'DB_Data01' was loaded successfully.

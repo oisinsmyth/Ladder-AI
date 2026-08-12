@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <!--
+      Namespace is Ladder.Download, not Ladder.DownloadFeedback, so that the report type can be
+      called DownloadFeedback without a type sharing its enclosing namespace's name — a construct
+      that compiles but makes cref resolution and `using` ambiguity a lottery.
+    -->
+    <RootNamespace>Ladder.Download</RootNamespace>
+    <AssemblyName>Ladder.Download</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Ladder.Download.Tests</RootNamespace>
+    <AssemblyName>Ladder.Download.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DownloadFeedback\DownloadFeedback.csproj" />
+  </ItemGroup>
+
+  <!--
+    The fixtures are excerpts of REAL probe logs, copied in rather than read from wherever the run
+    happened to leave them. The originals live in a disposable job directory; a test that reaches
+    into one is a test that stops existing when somebody tidies up. Object names are invented (data
+    boundary) and the message SHAPE is verbatim, because the shape is the thing under test.
+  -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

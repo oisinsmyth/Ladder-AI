@@ -1,0 +1,21 @@
+==== DOWNLOAD RESULT ===========================================================
+state         : Success
+errors        : 0
+warnings      : 0
+              (NONE of those three says whether anything was TRANSFERRED — see below.)
+
+messages (recursive, verbatim):
+  - state=Success errors=0 warnings=0 at=2026-08-12T07:59:00.7503182Z
+    text : PLC_1
+    - state=Success errors=0 warnings=0 at=2026-08-12T07:59:14.6058128Z
+      text : Hardware configuration
+      - state=Success errors=0 warnings=0 at=2026-08-12T07:59:18.9895395Z
+        text : PLC_1 stopped.
+      - state=Success errors=0 warnings=0 at=2026-08-12T07:59:26.4621579Z
+        text : Hardware configuration was loaded successfully.
+      - state=Success errors=0 warnings=0 at=2026-08-12T07:59:26.7482610Z
+        text : Connection configuration was downloaded successfully.
+      - state=Success errors=0 warnings=0 at=2026-08-12T07:59:26.7482610Z
+        text : Routing configuration was loaded successfully.
+      - state=Success errors=0 warnings=0 at=2026-08-12T07:59:27.9114717Z
+        text : PLC_1 started.

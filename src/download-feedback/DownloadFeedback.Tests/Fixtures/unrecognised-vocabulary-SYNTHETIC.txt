@@ -1,0 +1,21 @@
+SYNTHETIC FIXTURE — NOT A RECORDED RUN. Everything above the messages block is copied from a
+real log; the two message lines marked below are INVENTED, and that is the point of this file.
+Four distinct message vocabularies appeared in the first six recorded runs and each new download
+option produced one nobody predicted, so the regression this guards is the parser going quietly
+blind on the seventh. Read it as "a shape we have not seen", not as "a shape TIA emits".
+
+==== DOWNLOAD RESULT ===========================================================
+state         : Success
+errors        : 0
+warnings      : 0
+              (NONE of those three says whether anything was TRANSFERRED — see below.)
+
+messages (recursive, verbatim):
+  - state=Success errors=0 warnings=0 at=2026-08-12T07:36:32.1965955Z
+    text : PLC_1
+    - state=Success errors=0 warnings=0 at=2026-08-12T07:36:49.3449522Z
+      text : 'DB_Data01' was loaded successfully.
+    - state=Warning errors=0 warnings=1 at=2026-08-12T07:36:49.4000000Z
+      text : The user program was rearranged in the work memory.
+    - state=Success errors=0 warnings=0 at=2026-08-12T07:36:49.5000000Z
+      text : Alarm text libraries were transferred to the module.

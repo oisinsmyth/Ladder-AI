@@ -1,0 +1,12 @@
+==== DOWNLOAD ABORTED - THE TOOL FAILED TO ANSWER A CONFIGURATION ==============
+the abort, with every inner exception:
+  [1] Siemens.Engineering.EngineeringTargetInvocationException
+      message : Error when calling method 'Download' of type 'Siemens.Engineering.Download.DownloadProvider'.
+              |
+              | Download configuration 'Siemens.Engineering.Download.Configurations.OverwriteSystemData' was unhandled.
+      hresult : 0x80131500
+      source  : Siemens.Engineering
+      site    : Siemens.Engineering.Private.Session.Siemens.Engineering.Private.IInstanceSession.InvokeFunc
+
+==== VERDICT ===================================================================
+TOOL FAILURE: 1 selection(s) could not be applied (OverwriteSystemData='NoAction'). The run's result means nothing.  WAS ANYTHING TRANSFERRED? *** UNDETERMINED — NO DOWNLOAD RESULT EXISTS. ***

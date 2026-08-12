@@ -1,0 +1,11 @@
+==== DOWNLOAD RESULT ===========================================================
+state         : Success
+errors        : 0
+warnings      : 0
+
+messages (recursive, verbatim):
+  - state=Information errors=0 warnings=0 at=2026-08-12T01:04:55.6624106Z
+    text : PLC_1
+    - state=Information errors=0 warnings=0 at=2026-08-12T01:05:01.7714559Z
+      text : The software has not been loaded, because it is up-to-date.
+      (none)
