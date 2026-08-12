@@ -472,6 +472,54 @@ grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
 OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
 merely ignored. ***
 
+### ✅ D32's CLASSIFIER AND X-C's WAVE MARKER — built 2026-08-12, `src/wave-control/`
+
+Standalone solution, library references **nothing** — no Openness, no package, no network. Not
+wired into `openness-cli`. **58 tests**, and the negative tests were run *** BY MUTATING THE REAL
+PRODUCTION CODE, not a fake ***: making the classifier's fallthrough return Class A turned 5 red;
+making an unreadable marker read as clean turned 10 red, including one that walks **every prefix
+length** of a serialised marker.
+
+**Two design moves worth keeping:**
+
+  - *** THE MARKER IS WRITTEN IN PLACE, DELIBERATELY *NOT* WRITE-TO-TEMP-AND-RENAME. *** Rename is
+    the usual atomicity trick and is **the wrong shape here**: a crash mid-write would leave no
+    file, and no file reads as *"no wave in progress"* — the dangerous answer. In place means that
+    the instant `BeginWave` touches disk, a crash reads as **a wave WAS in progress**. Every
+    default follows the same rule: `NoWaveInProgress` is deliberately *not* the enum's zero value,
+    and `Read()` avoids `File.Exists` because it swallows every error and returns false.
+  - *** THE FORBIDDEN ACT CANNOT BE RECORDED. *** `EscalationRecord.AfterDisruptiveDownload`
+    **throws** for a non-Class-A verdict — so a caller has no route to log the thing D32 forbids,
+    rather than merely being told not to. Class A entries likewise cannot be constructed without
+    naming the download option, stating the entailment, and citing `[M]`/`[R]` evidence.
+
+**Pinned on the way:** `StopAll` is **Class A and not on the deny list** — three spec passages
+cited a deny list containing it, and putting it there would make R8 impossible and D25
+unimplementable.
+
+#### 🔴 A DEFECT IN D32 IT FOUND, NOW RECORDED IN THE SPEC
+
+*** `StartModules` IS CLASS A BUT ITS RUNG IS WRONG. *** It is raised in the **POST** delegate —
+after the download has already stopped the modules — so refusing it does not call for a *new*
+disruptive download, it calls for answering it **within the current one, or the CPU is left
+stopped**. "Go to step 6" is circular for this entry alone. **The ladder needs a per-entry rung,
+not one rung per class.** Implemented as written and flagged rather than silently deviated from.
+
+#### Four more it flagged, carried rather than closed
+
+  - **Class A's payoff still rests on G4**, which the audit reopened — step 6 is only reachable
+    through the throw-from-delegate abort, and that has **one** observation, not six. *** CLASS A
+    IS THE ONLY CLASS THAT SPENDS ANYTHING, AND ITS RUNG IS THE UNMEASURED ONE. ***
+  - X-C says results are discarded **by slot**, but *** THE CRASH THAT PRODUCES AN UNREADABLE
+    MARKER IS EXACTLY THE ONE WHERE THE SLOTS ARE UNKNOWN *** — X-C does not say what to do then.
+    Ruled the whole rig state invalid; **that is the agent's ruling, not the spec's**, and needs an
+    owner decision if discard-by-slot ever becomes the real mechanism.
+  - **The marker only helps a coordinator that RESTARTS.** X-C's stated fear is a rig left running,
+    and nothing here touches that — the PLC-side watchdog is still held for later.
+  - One durability gap `WriteThrough` does not close, recorded in a code note: flush covers the
+    file's *content*, not the *directory entry* of a newly created file, and .NET has no portable
+    directory fsync on Windows. **Does not apply to process death** — the case X-C actually names.
+
 ### ✅ `MB_SERVER` IS EXPRESSIBLE IN IR — 2026-08-12. SEVEN GAPS, THREE OF THEM SILENT.
 
 `compare` against the byte-exact original: **DIFFERS, 2 differences**, and *** BOTH ARE

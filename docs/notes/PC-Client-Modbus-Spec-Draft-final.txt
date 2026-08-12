@@ -513,6 +513,16 @@ D32. *** EVERY UNHANDLED CONFIGURATION ABORTS THE DOWNLOAD, AND WE ABORT IT — 
      unwanted configuration go away. What it can do is let us ANSWER one we were only refusing
      because we were in non-disruptive mode. So the class decides the rung:
 
+       *** 🔴 A DEFECT IN THIS LADDER, FOUND 2026-08-12 WHILE BUILDING THE CLASSIFIER —
+       `StartModules` IS CLASS A BUT ITS RUNG IS WRONG. *** O3's nuance is that `StartModules` is
+       raised in the **POST** delegate, i.e. AFTER the download has already stopped the modules.
+       So refusing it does NOT call for a *new* disruptive download — one has just happened. It
+       calls for answering it *** WITHIN THE CURRENT ONE, OR THE CPU IS LEFT STOPPED. *** The
+       CLASS is right ("a consequence the option already entails"); *** "GO TO STEP 6" IS
+       CIRCULAR FOR THIS ENTRY ALONE *** and would send us to fetch a disruptive download we are
+       already inside. Implemented as written and flagged rather than silently deviated from;
+       the ladder needs a per-entry rung, not one rung per class.
+
        CLASS A — REFUSED ONLY BECAUSE THE MODE IS NON-DISRUPTIVE.
                  `StopModules`, `DataBlockReinitialization`, `StartModules` — the
                  --disruptive allowance list. Each is a consequence the chosen download option
