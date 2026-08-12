@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <!--
+      Namespace is Ladder.Wave, not Ladder.WaveControl, so the marker payload type can be called
+      WaveMarker and the classifier's tables can sit beside it without a type ever sharing its
+      enclosing namespace's name — a construct that compiles but makes cref resolution and `using`
+      ambiguity a lottery (the same call src/download-feedback made).
+    -->
+    <RootNamespace>Ladder.Wave</RootNamespace>
+    <AssemblyName>Ladder.Wave</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
