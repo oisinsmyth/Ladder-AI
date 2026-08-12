@@ -285,10 +285,15 @@ contradicts that directly.
 item".** The hard error remains correct *behaviour* — failing loud beats failing silent — but it
 is no longer an acceptable resting place for anything that appears in deliverable logic.
 
-  ➜ **Consequence for `SupportedCallParameterSections`:** it gains `InOut`, and the capability
-    gets built. Modbus TCP is now in deliverable scope, so `MB_SERVER` calls will appear in real
-    blocks, and a block the AI cannot touch is exactly what this decision forbids.
-  ➜ **The gate is the confirm loop above**, not a judgement call. Widening the whitelist without
+  ➜ ⚠️ **THE ORIGINAL CONSEQUENCE DRAWN HERE WAS WRONG, AND IT IS INSTRUCTIVE.** It read:
+    *"`SupportedCallParameterSections` gains `InOut` … `MB_SERVER` calls will appear in real
+    blocks."* *** `MB_SERVER` IS A `<Part>`, NOT A `<Call>` — MEASURED — so that whitelist has
+    nothing to do with it. *** The ruling stands untouched; only the thing it was pointed at was
+    misidentified. **What it actually requires** is the four gaps in "`MB_SERVER` MEASURED":
+    `Array of Struct`, doubly-nested structured members, the Part template, and the silent
+    `Version` loss. The InOut whitelist remains worth doing on its own merits and is **not** on
+    this critical path.
+  ➜ **The gate is the confirm loop above**, not a judgement call. Widening any capability without
     proving the round trip would replace a loud correct error with silent infidelity — the same
     failure class as the `MemoryLayout` hole. The loop is what makes widening safe rather than
     reckless, and it is the owner's own principle doing the work.
@@ -397,7 +402,12 @@ compare), so this is very likely an import/compile rejection reached by a differ
 as the wrong-spelling Modbus names: a capability that looked covered because nothing had exercised
 it.
 
-  ➜ **Worked around, not fixed:** every register is declared `Int`, which the converter's
+  ✅ **FIXED 2026-08-12 in commit `4090b6f`** — `BuildCompareStep` now resolves `SrcType` first and
+    passes it to both operands, general over `UInt`/`Word`/`USInt`/`SInt`/`UDInt`/`LInt`. *** THE
+    `Int` WORKAROUND BELOW SHOULD NOW BE UNNECESSARY — confirm at the next import rather than
+    assuming. ***
+
+  ➜ ~~Worked around, not fixed:~~ every register is declared `Int`, which the converter's
     magnitude inference agrees with. Bit patterns on the wire are unchanged and the client reads
     `ushort`, so it is invisible to the PC side. *** THE WORKAROUND IS NOT A DESIGN CHOICE *** —
     the fix belongs in `SidecarSynthesizer.BuildCompareStep`, and `Word`-typed comparisons will
@@ -418,8 +428,9 @@ from the register contract. `to-xml` on the block **fails closed without the tag
 so the two must travel together. **The engineer creates or imports the tag table; nothing here is
 grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
 
-**Deliberately not authored:** the `MB_SERVER` call (hand-authored in TIA, per the phase-1
-decision), OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
+**Deliberately not authored:** the `MB_SERVER` call (*** THE HAND-AUTHORING DECISION IS WITHDRAWN
+— the owner has ruled the converter must express it; four gaps in "`MB_SERVER` MEASURED" ***),
+OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
 merely ignored. ***
 
 ### 🔴 OPEN DECISION — `Normalizer` MAY BE BLIND TO A WIRE-DIRECTION FLIP
@@ -446,9 +457,10 @@ order *** cannot distinguish an input from an InOut either. ***
 
   ➜ **Likely fix, and it is narrow:** sort only the DESTINATION endpoints and pin the FIRST one.
     That keeps the 2026-07-14 fan-out stability the sort was added for, and restores direction.
-  ➜ *** NOT DONE — it needs a decision and the file was mid-edit by another agent. *** Whoever
-    takes it must re-read the 2026-07-14 measurement first; the sort was added on evidence and
-    the fix must not discard what that evidence was protecting.
+  ✅ *** RULED 2026-08-12: FIX IT. *** `compare` is the confirm loop's judgement, and a blind
+    comparator is worse than none. Whoever takes it *** MUST RE-READ THE 2026-07-14 MEASUREMENT
+    FIRST *** — the sort was added on evidence, and the fix must not discard what that evidence
+    was protecting. Not yet started.
 
 ### ⚠️ POWERSHELL 5.1 WILL MISREAD AN EM DASH IN A `.ps1`, AND THE ERROR POINTS SOMEWHERE ELSE
 
@@ -498,19 +510,25 @@ exactly the DB shape the register contract needs**.
   ➜ ***BETTER: USE THE `%MW` MIRROR AND NOT A DB-BACKED ONE FOR PHASE 1.*** It sidesteps the hole
     entirely rather than policing it — and `%MW` costs no work memory either (§16.1).
 
-**3. ⛔ `MB_SERVER` will not convert to IR, and the reason is not its name.** It is a library FB,
-so it appears as `<Call BlockType="FB">` and the Call path stores the callee name verbatim with
-no whitelist. *** THE OBSTACLE IS THE PARAMETER SECTION: `SupportedCallParameterSections =
-{Input, Output}`, and `MB_HOLD_REG` (and `CONNECT`) are InOut/VARIANT. *** The parser throws
-`UnsupportedConstructException` on `Section="InOut"` **at `to-ir` parse time**, not merely on the
-synthesize path. A correct hard error, not a bug. **Predicted, not yet confirmed** — confirming
-it needs the FC exported, which is blocked below.
+**3. 🔴 REFUTED BY MEASUREMENT — DO NOT ACT ON THE PARAGRAPH BELOW.** It was written from a source
+read before any Modbus block had been exported, and *** BOTH ITS PREMISE AND ITS CONCLUSION ARE
+WRONG. *** `MB_SERVER` is a **`<Part>`**, not a `<Call>` — zero `<Call>` elements in the entire
+export — so `SupportedCallParameterSections` is **irrelevant to it**, and the owner has since
+**withdrawn** the hand-authoring answer ("we make it possible then"). *** THE AUTHORITATIVE
+SECTION IS "`MB_SERVER` MEASURED" ABOVE. *** Kept only as the record of what was believed:
 
-  ➜ **Open decision:** (a) author the `MB_SERVER` call once by hand in TIA and never round-trip
-    that block, keeping IR-authored content to the checker logic only; or (b) extend
-    `SupportedCallParameterSections` to accept `InOut` — a converter change made on evidence,
-    once the export confirms the prediction. **(a) is the phase-1 answer**; the spike is
-    disposable and a converter change is not.
+> ~~`MB_SERVER` will not convert to IR, and the reason is not its name. It is a library FB, so it
+> appears as `<Call BlockType="FB">`… THE OBSTACLE IS THE PARAMETER SECTION:
+> `SupportedCallParameterSections = {Input, Output}`, and `MB_HOLD_REG` (and `CONNECT`) are
+> InOut/VARIANT… **Predicted, not yet confirmed.**~~
+>
+> ~~**Open decision:** (a) author the `MB_SERVER` call by hand in TIA…; or (b) extend
+> `SupportedCallParameterSections`. **(a) is the phase-1 answer.**~~
+
+*** THE LESSON, WHICH IS THE REASON THIS IS KEPT RATHER THAN DELETED: the prediction was
+code-grounded, specific, confidently worded, and wrong — because it reasoned about what the
+converter refuses without ever looking at what TIA emits. *** Two rounds of planning were scoped
+around a whitelist that was never the obstacle.
 
 ### ⚙️ TWO `openness-cli` DEFECTS FOUND IN PASSING, 2026-08-12 — both affect any caller
 
@@ -530,7 +548,7 @@ LEAVES `IsConsistent = false` *** because a referenced block is absent. `sanity-
 the compile's own output did not. So "compiled clean" is not a sufficient precondition for export —
 consistency must be checked separately.
 
-### ⛔ BLOCKED — the FC cannot be exported, and it is not a permission problem
+### ✅ RESOLVED — the FC export blocker (kept for the diagnosis, which recurs)
 
 The permission rule landed and the compiles ran. **The FC still cannot be exported**, for a
 different reason: it compiles with `errors: 0` but stays `IsConsistent = false` because
