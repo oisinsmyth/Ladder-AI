@@ -4168,10 +4168,41 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(BuildDownloadPlan)}.");
         }
 
-        // Same resolution as Compile/CompileAll — one PLC device item, or a refusal. Deliberately
-        // reused rather than reimplemented: a download that resolved its target differently from the
-        // compile that gated it would be gating one device and writing another.
-        var candidates = FindPlcDeviceItems(_project).ToList();
+        var (deviceItem, devicePath, blocks) = ResolveDownloadDeviceOrRefuse(deviceFilter);
+        var software = (PlcSoftware)deviceItem.GetService<SoftwareContainer>()!.Software;
+
+        var resolution = FindDownloadProvider(deviceItem, devicePath);
+
+        return new DownloadPlanResult(
+            devicePath,
+            deviceItem.Name,
+            options,
+            resolution.Source,
+            resolution.Provider is null ? null : ReadConnectionPlan(resolution.Provider),
+            blocks.Count,
+            FindTypesInGroup(software.TypeGroup, devicePath, typeName: null).Count(),
+            blocks.Where(b => !b.IsConsistent).Select(b => b.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
+    }
+
+    /// <summary>
+    /// The one PLC device a download would target, its path, and its blocks — or a refusal.
+    ///
+    /// Extracted from <see cref="BuildDownloadPlan"/> so that
+    /// <see cref="ResolveDownloadProviderForExternalProbe"/> resolves the device by EXACTLY the same
+    /// rules. A probe that downloaded to a device chosen differently from the one `download-plan`
+    /// describes would be reporting on one target and writing to another.
+    ///
+    /// Same resolution as Compile/CompileAll — one PLC device item, or a refusal.
+    ///
+    /// Hard rule 2 is enforced HERE rather than left to the caller, for a reason specific to
+    /// download. Download granularity is device-level: there is no overload, option or flag that
+    /// transfers the standard program while leaving the safety program alone. So on an F-capable
+    /// PLC, planning a download IS planning to write safety content, and the refusal has to happen
+    /// while it is still a plan.
+    /// </summary>
+    private (DeviceItem Item, string Path, List<BlockInfo> Blocks) ResolveDownloadDeviceOrRefuse(string? deviceFilter)
+    {
+        var candidates = FindPlcDeviceItems(_project!).ToList();
         if (deviceFilter is not null)
         {
             candidates = candidates.Where(c => c.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
@@ -4188,11 +4219,6 @@ public sealed class OpennessGateway : IOpennessGateway
         var blocks = new List<BlockInfo>();
         WalkBlockGroup(software.BlockGroup, devicePath, blocks);
 
-        // Hard rule 2, enforced HERE rather than left to the caller, and for a reason specific to
-        // this command. Download granularity is device-level: there is no overload, option or flag
-        // that transfers the standard program while leaving the safety program alone. So on an
-        // F-capable PLC, planning a download IS planning to write safety content, and the refusal
-        // has to happen while it is still a plan.
         var safety = blocks.Where(b => b.IsSafety).ToList();
         if (safety.Count > 0)
         {
@@ -4200,18 +4226,48 @@ public sealed class OpennessGateway : IOpennessGateway
                 devicePath, safety.Count, safety[0].Name, safety[0].Language);
         }
 
-        var resolution = FindDownloadProvider(deviceItem, devicePath);
-
-        return new DownloadPlanResult(
-            devicePath,
-            deviceItem.Name,
-            options,
-            resolution.Source,
-            resolution.Provider is null ? null : ReadConnectionPlan(resolution.Provider),
-            blocks.Count,
-            FindTypesInGroup(software.TypeGroup, devicePath, typeName: null).Count(),
-            blocks.Where(b => !b.IsConsistent).Select(b => b.Name).OrderBy(n => n, StringComparer.Ordinal).ToList());
+        return (deviceItem, devicePath, blocks);
     }
+
+    /// <summary>
+    /// Hands the LIVE <c>DownloadProvider</c> to the separate <c>download-probe</c> binary, together
+    /// with the same provenance report <c>download-plan</c> prints.
+    ///
+    /// **This assembly still cannot download and the invariant is unchanged.** Obtaining the
+    /// provider is a <c>GetService</c> call — a read. Invoking <c>Download</c> on it is the write,
+    /// and no method in this assembly does that; <c>DownloadPlanTests</c> walks the compiled IL of
+    /// every method here and asserts it. What this method does is refuse to let the probe fork the
+    /// resolution: it goes through <see cref="ResolveDownloadDeviceOrRefuse"/> (one PLC device or a
+    /// refusal, safety content refused) and <see cref="FindDownloadProvider"/> (the outward
+    /// <c>GetService</c> walk with every object it asked recorded), so the probe writes to the device
+    /// this tool would have described and gated, not to one picked by a second set of rules.
+    ///
+    /// <c>internal</c>, not public: the grant is a named <c>InternalsVisibleTo</c> for
+    /// <c>download-probe</c> (see AssemblyInfo.cs), so widening it is an edit to a file whose whole
+    /// content is that decision.
+    /// </summary>
+    internal ExternalProbeDownloadTarget ResolveDownloadProviderForExternalProbe(string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(OpenProject)} must be called before {nameof(ResolveDownloadProviderForExternalProbe)}.");
+        }
+
+        var (deviceItem, devicePath, _) = ResolveDownloadDeviceOrRefuse(deviceFilter);
+        var resolution = FindDownloadProvider(deviceItem, devicePath);
+        return new ExternalProbeDownloadTarget(resolution.Provider, resolution.Source, devicePath, deviceItem.Name);
+    }
+
+    /// <summary>
+    /// What <see cref="ResolveDownloadProviderForExternalProbe"/> hands over. Internal, and the only
+    /// type in this assembly that carries a live Siemens <c>DownloadProvider</c> across a seam.
+    /// </summary>
+    internal sealed record ExternalProbeDownloadTarget(
+        Siemens.Engineering.Download.DownloadProvider? Provider,
+        DownloadProviderSource Source,
+        string DevicePath,
+        string DeviceName);
 
     /// <summary>
     /// Finds the <c>DownloadProvider</c> by asking the device tree outward from the item that carries

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DownloadProbe</RootNamespace>
+    <AssemblyName>download-probe</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Siemens.Engineering">
+      <HintPath>$(TiaOpennessDir)\Siemens.Engineering.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <!--
+    Borrows `openness-cli`'s Portal session handling, PLC device resolution, safety refusal and
+    DownloadProvider walk through a named InternalsVisibleTo grant (OpennessCli/AssemblyInfo.cs).
+    A second copy of device resolution would mean this tool writes to a device chosen by different
+    rules from the one `download-plan` describes and `compile` gates.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\OpennessCli\OpennessCli.csproj" />
+  </ItemGroup>
+
+  <!--
+    DELIBERATELY NO `ApproveForOpenness` POST-BUILD TARGET, unlike OpennessCli.csproj.
+
+    That target writes the TIA Openness whitelist entry a human would otherwise approve at a dialog
+    (FI-74). It is the right trade for a read-mostly CLI that gets rebuilt constantly. It is the
+    wrong one here: this is the only binary in the repo that can transfer a program to a controller,
+    and self-approving it would mean a `dotnet build` silently grants Portal access to a
+    download-capable executable nobody looked at.
+
+    Approving this binary is therefore a deliberate act, taken when execution is authorised:
+        tools\openness-approve-build.ps1 -Exe <path to download-probe.exe>
+        tools\openness-approve-build.ps1 -Status        # read-only: is it approved right now?
+    Until then the first attach hangs until the connect timeout expires, or throws
+    EngineeringSecurityException — both mean "needs approval", not "Portal is wedged".
+  -->
+
+</Project>

@@ -17,8 +17,30 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!--
+    DownloadProbeTests reads Siemens' OWN metadata rather than transcribing it: it enumerates every
+    download configuration in the installed V20 assembly and runs the selection policy over each, so
+    a configuration Siemens adds is seen by the test rather than missed by a hand-written list. That
+    is a reflection read of a DLL on disk — it loads no Portal, opens no project and contacts nothing.
+  -->
+  <ItemGroup>
+    <Reference Include="Siemens.Engineering">
+      <HintPath>$(TiaOpennessDir)\Siemens.Engineering.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\OpennessCli\OpennessCli.csproj" />
+
+    <!--
+      `download-probe` is a separate binary (it is the one thing here that calls
+      DownloadProvider.Download; openness-cli must stay provably unable to). Its tests live in THIS
+      suite rather than a second one so they inherit AssemblyTestBehavior.cs's
+      DisableTestParallelization — a correctness requirement for anything that captures Console,
+      which the probe's tests do.
+    -->
+    <ProjectReference Include="..\DownloadProbe\DownloadProbe.csproj" />
   </ItemGroup>
 
 </Project>

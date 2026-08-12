@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpennessCli", "OpennessCli\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpennessCli.Tests", "OpennessCli.Tests\OpennessCli.Tests.csproj", "{2DD8CDF9-FE1A-48A9-9714-1F55EEE9BCE8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DownloadProbe", "DownloadProbe\DownloadProbe.csproj", "{7B1C4A2E-90D3-4F17-A6C5-0E2B8D5F3A41}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{2DD8CDF9-FE1A-48A9-9714-1F55EEE9BCE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2DD8CDF9-FE1A-48A9-9714-1F55EEE9BCE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2DD8CDF9-FE1A-48A9-9714-1F55EEE9BCE8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B1C4A2E-90D3-4F17-A6C5-0E2B8D5F3A41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B1C4A2E-90D3-4F17-A6C5-0E2B8D5F3A41}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B1C4A2E-90D3-4F17-A6C5-0E2B8D5F3A41}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B1C4A2E-90D3-4F17-A6C5-0E2B8D5F3A41}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

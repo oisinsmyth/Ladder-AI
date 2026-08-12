@@ -5,8 +5,8 @@ PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 02
 Status:  CURRENT. Supersedes drafts 00, 01 and 01-post-research, which are kept as
          reasoning history and should not be built from.
 
-*** ONE GAP REMAINS OPEN: G-7. *** Its experiment is designed in §11 and has not been
-run. Everything else from the previous round is closed and folded in.
+*** ALL SEVEN GAPS ARE NOW CLOSED. G-7 WAS MEASURED AGAINST THE LIVE RIG ON 2026-08-12
+    — see §11 for the result, which REFUTED the expectation and CORRECTED RULE R4. ***
 
 Written: 2026-08-12.
 
@@ -206,10 +206,37 @@ R3. STOP-CLASS REFUSALS ARE TWO-STAGE (D17):
         when a batch is assembled.
     Static as early as possible; baseline-relative as late as possible.
 
-R4. *** NEVER WRITE A DOWNLOAD DELEGATE THAT ACCEPTS EVERYTHING. *** The research states
-    it plainly: a delegate written to say yes to everything so the download goes through is
-    precisely how a harness wipes a rig. `DataBlockReinitialization = StopPlcAndReinitialize`
-    initialises ALL data values INCLUDING RETAIN DATA. Answer `NoAction` and let it abort.
+R4. *** NEVER WRITE A DOWNLOAD DELEGATE THAT ACCEPTS EVERYTHING. *** A delegate written to
+    say yes to everything so the download goes through is precisely how a harness wipes a
+    rig. `DataBlockReinitialization = StopPlcAndReinitialize` initialises ALL data values
+    INCLUDING RETAIN DATA.
+
+    *** CORRECTED 2026-08-12 BY MEASUREMENT — THE MECHANISM IS NOT WHAT THIS RULE SAID. ***
+    The original wording was "answer `NoAction` and let it abort". Measured against the live
+    rig: **`NoAction` CANNOT BE APPLIED.** Setting it returns
+    `EngineeringTargetInvocationException: The configuration provided is invalid` — on
+    `StopModules` and on `DataBlockReinitialization` alike, through the property setter AND
+    through the underlying `SetAttribute`, even though `GetAttributeInfos()` reports
+    `CurrentSelection : access=ReadWrite`.
+
+    So THE GUARD IS NOT "ANSWER NoAction". THE GUARD IS "REFUSE TO ANSWER AT ALL", which
+    makes Openness abort the download with
+    `Download configuration '<type>' was unhandled`. Still fail-closed — via a different
+    door than anyone had assumed.
+
+    Two readings remain, and they are NOT separable without applying a destructive selection,
+    which is not worth doing: either `NoAction` is invalid FOR THAT INSTANCE because the stop
+    or the reinitialisation is genuinely mandatory, or the apply mechanism is broken for every
+    value. *** OPERATIONALLY IT DOES NOT MATTER *** — both give the same rule, and the same
+    protection.
+
+R4a. *** NEVER INFER SAFETY FROM THE CURRENT SELECTION. *** The enums' ZERO VALUES DIFFER IN
+    DIRECTION, measured:
+        StopModulesSelections.NoAction                       = 0   (safe)
+        DataBlockReinitializationSelections.StopPlcAndReinitialize = 0   (DESTRUCTIVE)
+    So an unanswered configuration reads as SAFE on one and as DESTRUCTIVE on the other, and
+    "the current selection is already what we want" is not evidence of anything. A check
+    written against one configuration and reused for another inverts silently.
 
 R5. NEVER USE FOLDER-SCOPE DOWNLOADS — blocks existing only online are DELETED by them.
 
@@ -240,8 +267,10 @@ every re-derivation is a silent wipe.
 6. THROUGHPUT — WHERE THE COST ACTUALLY IS
 --------------------------------------------------------------------------------
 
-MEASURED BY THE OWNER, from experience: a download takes 20–60 seconds typically, longer
-over VPN. Worked through the <=20 budget:
+MEASURED BY THE OWNER, from experience, and REFINED 2026-08-12: *** download time scales
+with the NUMBER OF OBJECTS, not with the act of downloading. *** A small delta is around
+20 seconds; a full program of ~100 objects around 2 minutes. So the earlier "20–60 s" figure
+was really two different numbers. Worked through the <=20 budget:
 
     6 agents  x (FB + UDT + iDB) = 18 objects = 1 download  ~= 1–2 min over VPN
    20 agents                     = 60 objects = 3 downloads ~= 3–6 min over VPN
@@ -374,8 +403,69 @@ Siemens' behaviour, which no fake we write can validate. Build swap as a configu
 transform and CALIBRATE with a known bit pattern — one measurement, once.
 
 --------------------------------------------------------------------------------
-11. THE ONE OPEN GAP — G-7, AND ITS EXPERIMENT
+11. G-7 — MEASURED 2026-08-12. THE EXPECTATION WAS REFUTED.
 --------------------------------------------------------------------------------
+
+*** ANSWER: YES. `DataBlockReinitialization` IS RAISED when a download restructures a
+    STANDARD-access DB. *** The worry that it might never fire — because its documented
+    message is scoped to "different memory reserves" and a standard-access DB has no reserve
+    in either copy — is WRONG.
+
+THE DELTA, which is the whole experiment. One variable changed; one configuration appeared:
+
+                          PHASE A (clean project)      PHASE B (restructured std-access DB)
+  SoftwareOnlyChanges     Success, 0 configurations    *** DataBlockReinitialization RAISED ***
+  Software                StopModules -> abort         StopModules -> abort
+  Hardware                StopModules -> abort         StopModules -> abort
+
+Phase A's `SoftwareOnlyChanges` returned "The software has not been loaded, because it is
+up-to-date" — TIA confirming the baseline really was clean, which is what made the delta
+readable. `Software` and `Hardware` hit `StopModules` FIRST and never reached the question;
+configurations arrive ONE AT A TIME and the first unanswered one ends the download.
+
+WHY THE DOCUMENTATION MISLED US. The API doc text and the LIVE message differ:
+    doc  : "Different memory reserves in the online block and offline block are preventing
+            'Download without reinitialization'."
+    live : "The data blocks will be re-initialized with their start values."
+The doc text is what made it look reserve-scoped. The runtime message is generic, and it
+fires for exactly the case that needed guarding.
+
+*** THE GUARD IS NOT THE ONE WE DESIGNED — SEE R4. *** `NoAction` cannot be applied at all:
+`The configuration provided is invalid`, on both configurations, through both the property
+setter and the underlying `SetAttribute`, while `GetAttributeInfos()` reports ReadWrite. The
+protection is REFUSING TO ANSWER, which aborts the download. Fail-closed through a different
+door than assumed.
+
+WHAT `Software` AND `Hardware` TAUGHT, which was not the question asked: both raise
+`StopModules`, and `NoAction` is rejected there too. Read plainly, *** THE API DOES NOT OFFER
+"DO NOT STOP THE MODULES" AS A LEGAL ANSWER FOR THOSE OPTIONS *** — the stop is a
+PRECONDITION, not a prompt you may decline. That independently confirms R7 and the research's
+`Hardware -> STOP` row, and makes refusing `StopAll` stronger than intended: it does not
+merely decline a risky option, it makes those two download classes IMPOSSIBLE.
+
+SIX REAL DOWNLOAD ATTEMPTS, EVERY ONE ABORTED CLEANLY. The CPU kept running throughout and
+nothing was written. That is evidence toward external gap G4 (whether an aborted download
+leaves the CPU half-loaded) without settling it.
+
+ALSO MEASURED ALONG THE WAY, and none of it was in the research:
+  - `DownloadProvider` is obtained from the DEVICE ITEM via
+    `IEngineeringServiceProvider.GetService<DownloadProvider>()`. Reflection could not settle
+    which object answers; now it is measured.
+  - `ConfigurationTargetInterface` IMPLEMENTS `IConfiguration`, so a download can be targeted
+    by passing that node to the four-argument overload — NO `ConfigurationAddress` required,
+    and no `ApplyConfiguration()` call. `ConfigurationPcInterface` does NOT implement it, so
+    the walk must descend one level past the named adapter.
+  - *** THE PROJECT'S ConnectionConfiguration CARRIES NO ADDRESSES. *** Modes, PC interfaces
+    and target interfaces all exist; every address list is empty. The TIA GUI's "Extended
+    download" dialog scans and lets a human pick, and THAT CHOICE DOES NOT PERSIST where the
+    API reads it. An automated download is therefore not merely "call Download()".
+  - *** AN OPENNESS DOWNLOAD IS REFUSED WHILE THE PROJECT IS ONLINE *** ("The operation is
+    not permitted in online mode"). So the coordinator's automated downloads and a human
+    working ONLINE in the same project are MUTUALLY EXCLUSIVE — a real constraint on any
+    design where someone watches the plant while a wave runs.
+  - A re-import reverted the block's memory layout to Optimized for the THIRD measured time.
+
+--- THE EXPERIMENT AS DESIGNED, KEPT FOR THE RECORD --------------------------------
 
 THE QUESTION: *** does `DataBlockReinitialization` fire when a download restructures a
 STANDARD-access DB? ***
@@ -450,7 +540,12 @@ MINIMUM EXPERIMENT, TWO PHASES:
       mechanism.
   G7  Whether a start-values-only edit is RUN or RUN (Init). No row exists in Siemens'
       table, checked in both language renderings.
-  G8  Whether `DataBlockReinitialization` fires for a standard-access DB — §11.
+  G8  *** CLOSED 2026-08-12: IT DOES FIRE. *** Measured — see §11. The documented message
+      scoping it to memory reserves is misleading; the live message is generic.
+
+  G4 UPDATE: six real download attempts aborted cleanly on 2026-08-12, CPU running
+      throughout, nothing written. Evidence, not proof — no partially-loaded state was
+      observed, but none was deliberately provoked either.
 
 --------------------------------------------------------------------------------
 13. STILL OPEN, LOWER PRIORITY
