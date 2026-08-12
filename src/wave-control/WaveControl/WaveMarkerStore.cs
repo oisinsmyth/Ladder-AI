@@ -41,6 +41,15 @@ namespace Ladder.Wave
     /// clean, and clearing it is the last thing a completed wave does.
     /// </para>
     /// <para>
+    /// ONE HONEST RESIDUAL ON DURABILITY. <see cref="FileOptions.WriteThrough"/> and
+    /// <c>Flush(flushToDisk: true)</c> make the file's CONTENT durable; they say nothing about the
+    /// DIRECTORY ENTRY of a newly created file, and .NET offers no portable way to flush a directory
+    /// on Windows. So a power cut in the microseconds around <c>BeginWave</c> could in principle
+    /// leave no file at all. That gap does NOT apply to the case X-C actually names — a coordinator
+    /// process that dies while the machine keeps running, where the entry is already visible to
+    /// every other process on the system the instant the handle is created.
+    /// </para>
+    /// <para>
     /// CLEARING IS A DELETE, and a crash before the delete commits leaves the marker in place — which
     /// reads as "a wave was in progress" for a wave that had actually finished. That is a false
     /// positive, it costs one discarded wave's results, and it is the direction the whole design
