@@ -8,6 +8,21 @@ Status:  CURRENT. Supersedes drafts 00, 01, 01-post-research and 02, which are k
 All seven design gaps are closed. G-7 was MEASURED against the live rig on 2026-08-12 and
 refuted its own expectation — §13.
 
+*** READ THIS BEFORE ANYTHING ELSE: NOTHING HAS EVER BEEN DOWNLOADED TO THE DEVICE BY THIS
+    TOOLING. *** Six real download attempts were made on 2026-08-12. Five aborted. The one
+    that returned `Success` reported "The software has not been loaded, because it is
+    up-to-date" — it transferred NOTHING. So what is proven is the CALL PATH (provider
+    acquisition, target selection, the four-argument overload, delegates firing,
+    configurations raised and logged, result parsing) and that THE GUARDS REFUSE CORRECTLY
+    against a real device. What is NOT proven is that this tooling can DELIVER a program to a
+    CPU. Every download that had anything to carry was refused by our own deny list.
+
+    This matters because most of this document sits downstream of "a download happens", and
+    R8's disruptive-mode download — the one that MUST transfer — is the least exercised path
+    in the design. The owner's TIA GUI downloads do work, so the device is downloadable; our
+    tooling has never demonstrated it. Treat every throughput figure, loop cadence and queue
+    behaviour below as resting on a capability that is refusable but not yet performable.
+
 Written: 2026-08-12.
 
 Companion documents:
