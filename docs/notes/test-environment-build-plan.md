@@ -84,22 +84,38 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 | 0.1a | Measure the per-slot object cost empirically | — | **Downgraded to informational by ruling:** only **retain** is gated; work/load/block-count are governed by "keep the PLC footprint minimal" instead. Still worth knowing, no longer a gate input |
 | 0.1b | **Assert every harness object is non-retentive** | **A9** | **The one hard memory restriction.** Checkable from the IR before any device is involved. Watch the trap: retain is per-tag on optimized blocks but **all-or-nothing on standard-access ones**, and the harness deliberately creates standard-access blocks |
 | 0.2 | ~~`PlcGetStatus` in RUN over Sharp7~~ | A7 (half) | ✅ **DONE 2026-08-12.** Returned Run from the rig at 79–94 ms. PUT/GET was **not** a blocker |
-| 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it. **Now more urgent, see below** |
+| 0.3 | ~~Establish what the 79–108 ms round-trip actually measured~~ | A2 | ⏸ **DEFERRED BY RULING 2026-08-12.** The design is committed and the owner knows the rough update times; the exact figure is not a decision input. Phase 1.2 measures it anyway as a by-product, so nothing is lost by not chasing it separately |
 | 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
 | 0.5 | ~~Confirm Sharp7 presence, version and connection path~~ | — | ✅ **DONE.** Sharp7 1.1.82.0; rack 0 / slot 1; address from the device allowlist |
 | 0.6 | ~~Add read-only run-state read to `IS7Client` + `Sharp7Client`~~ | A7 | ✅ **DONE 2026-08-12**, commit `93835e8`. `ReadRunState`; no `Stopped` member; 221 tests pass; verified against the stopped rig |
 | 0.7 | ~~Paired `DBRead` re-read in RUN~~ | — | ✅ **DONE 2026-08-12. It is NOT the STOP state.** `DBRead` and `MBRead` fail `0x00040000` in RUN too while SZL works — S7 variable access is refused **CPU-wide**, consistent with PUT/GET being off. **Moot by ruling:** all data reads go over Modbus TCP, so no Sharp7 read path is needed and PUT/GET need not be enabled |
 
-> ### ⚠ 0.3 got more interesting, not less
+> ### ⏸ 0.3 — deferred, but the doubt is recorded rather than dismissed
 >
-> The S7 status call measured **79–94 ms**, and the spec's assumed Modbus round trip is
-> **79–108 ms**. Those overlap almost exactly — which raises the possibility that the original
-> figure was measured over **S7comm or ICMP rather than Modbus**, and is being used as a Modbus
-> number. If so, the real Modbus round trip is unknown, and with it the poll budget, the tensor
-> width and O11.
+> The S7 status call measured **79–94 ms** and the spec's assumed Modbus round trip is
+> **79–108 ms** — an overlap close enough to suspect the original figure was measured over
+> **S7comm or ICMP rather than Modbus** and has been carried as a Modbus number since.
 >
-> **This does not change the plan's order — it raises 0.3's priority within phase 0**, and phase
-> 1.2 measures the real figure regardless.
+> **Deferred by ruling:** the design is committed and the update times are roughly known, so this
+> is not a decision input. **Phase 1.2 measures the real figure as a by-product**, so the doubt
+> resolves itself without a separate task.
+>
+> **What to do when 1.2 lands:** if the true Modbus figure differs materially, O11 and the
+> tensor-width arithmetic need re-deriving — not the design. Recorded so a surprising number is
+> recognised rather than absorbed.
+
+> ### 📌 IR AUTHORING FOR THE SPIKE — hard rule 8 explicitly overruled, scope-limited
+>
+> The project's hard rule 8 sends **all** LAD/IR work through the `lad-coder` sub-agent. **The
+> owner has overruled that for the phase-1 spike IR** (Modbus TCP blocks): a general agent with
+> `lad-coder`'s *resources* — the conventions, the skills, the docs — is judged the better fit,
+> because this is new IR territory rather than the pattern-composition work `lad-coder` is tuned
+> for.
+>
+> **Scope, so this does not quietly become general practice:** it covers **the phase-1 spike IR
+> only**. That work is disposable by construction (phase 1's rule), which is what bounds the
+> risk. Everything else — the reference project, deliverable logic, `review-*` reads, `patterns/`
+> — stays under hard rule 8. The 0.4 sweep in this same phase went to `lad-coder` accordingly.
 
 **Deliberately NOT in phase 0:** the G2 bench test. It needs a download, so it rides with phase 1.
 
