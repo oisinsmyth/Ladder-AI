@@ -24,8 +24,8 @@ them (A3) in our favour by a factor of two, and one whole class of work deleted 
 
 | | Assumption | Why it still matters |
 |---|---|---|
-| **A1** | `MB_SERVER` single-scan atomicity | **The critical path.** The whole X-A model, the map, the copy layer and the client write path rest on it |
-| **A2** | Modbus round-trip rate | Poll budget, slot width, O11 — and see 0.3, the assumed figure may not be a Modbus figure at all |
+| ~~**A1**~~ | ~~`MB_SERVER` single-scan atomicity~~ | ✅ **ANSWERED 2026-08-12 ON THE RIG — `NO TEAR OBSERVED` in 3,340 writes of 16 registers, VARIANT 1**, with `CHANGE_COUNT` matching the write count exactly. *Absence of evidence at that count/rate/call position, never "atomic"* — see "A1 IS ANSWERED" below for the limits and what to re-run |
+| ~~**A2**~~ | ~~Modbus round-trip rate~~ | ✅ **MEASURED (1.2, which also settles 0.3): median 71–78 ms, p99 136–173 ms, and the marginal cost per register is ~zero.** The assumed 79–108 ms understates the tail by ~60% — re-derive O11 and the poll budget on the p99, not the median |
 | **A4** | Block driveable by its own command signal | D37, inert, the start-bool mechanism |
 | **A5** | Two slots do not interfere | Everything multi-agent |
 | **A6** | Delegate throw leaves the CPU untouched (G4) | D32's guard model. A **safety** item |
@@ -61,8 +61,8 @@ Ranked by *how much code dies if it is wrong*, not by how likely it is to be wro
 
 | # | Assumption | Status | What dies if wrong |
 |---|---|---|---|
-| A1 | `MB_SERVER` applies one request's registers within a single scan | **UNMEASURED** | The whole X-A atomicity model → map design, copy layer, client write path |
-| A2 | Modbus TCP performs on this rig at roughly the assumed rate | partly measured | Poll budget, slot width, O11/D29 arithmetic |
+| A1 | ~~`MB_SERVER` applies one request's registers within a single scan~~ | ✅ **NO TEAR OBSERVED — 3,340 writes × 16 registers, VARIANT 1, `TEAR_LATCH` 0 throughout.** Not "atomic": untested above 16 registers, above ~14 writes/s, and on VARIANT 2 | *(was: the whole X-A atomicity model → map design, copy layer, client write path — now clear to build, within those limits)* |
+| A2 | ~~Modbus TCP performs on this rig at roughly the assumed rate~~ | ✅ **MEASURED: median 71–78 ms, p90 89–115, p99 136–173, one 2,216 ms outlier in 2,000. Per-register cost ≈ 0** | *(was: poll budget, slot width, O11/D29 arithmetic — the arithmetic needs re-deriving on the p99, the design does not)* |
 | A3 | ~~`%MW` has ~2048 words on a 1214C~~ | ✅ **VERIFIED — it is 4096 words / 8192 bytes**, double the assumption, and **separate from work memory** | *(was: slot sizing, slot count, map layout — the ceiling doubled and the mirror costs no work memory)* |
 | A4 | A block can be driven by its own existing command signal | untested | D37, inert, the entire start-bool mechanism |
 | A5 | Two slots genuinely do not interfere | untested | Everything multi-agent |
@@ -73,6 +73,10 @@ Ranked by *how much code dies if it is wrong*, not by how likely it is to be wro
 **A1 and A3 are the two that must fall first.** They are cheap to test and expensive to be wrong
 about. A6 is scheduled early for a different reason: it is the one whose failure mode is a
 damaged rig rather than a wasted week.
+
+*** BOTH HAVE NOW FALLEN, AND SO HAS A2. *** A1 was answered on the rig on 2026-08-12 — the entry
+is at the end of phase 1. **A6 is the one that is still unmeasured and is now the widest-blast-radius
+unknown left**, and it is still the one that must be done attended.
 
 ---
 
@@ -994,6 +998,72 @@ either is written — which is the entire point of this phase.
 **And the verdict wording is deliberate: "no tear observed in N writes", never "atomic".** A green
 run is absence of evidence at *that* register count, *that* rate and *that* call position. The
 client says so, and says what to re-run before the map and copy layer are built on it.
+
+### ✅ A1 IS ANSWERED — 2026-08-12, ON THE RIG. *** NO TEAR OBSERVED IN 3,340 WRITES. ***
+
+*** VERDICT WORD: `NO TEAR OBSERVED`, NEVER `ATOMIC`. *** Three armed runs, VARIANT **1**
+(`MB_SERVER` first in scan), **16 registers per FC16, one request never split**: 1,000 + 2,000 +
+340 writes, `TEAR_LATCH` **0** at the end of every one, `TEAR_INDEX`/`TEAR_VALUE_A`/`TEAR_VALUE_B`
+all 0. **The map, the copy layer and the client write path may be built on the X-A model** — at
+this register count, this rate and this call position, and no further.
+
+*** AND THE LIVENESS IS EXACT, WHICH IS THE PART THAT MAKES THE GREEN READABLE: *** `CHANGE_COUNT`
+advanced by **precisely the number of writes issued** on every run (1000/1000, 2000/2000,
+340/340 — the last confirmed by a follow-up probe reading 2000 → 2340). Not merely "it moved":
+**every request landed, in its own scan, and none was lost or coalesced.** No run returned
+`Stale`.
+
+*** THE HONEST LIMIT, AND IT IS THE ONE TO RE-TEST BEFORE PHASE 2 WIDENS ANYTHING: *** the round
+trip is ~70 ms and the scan is ~23 ms, so the client could never issue more than one FC16 per
+**~3 scans**. The experiment therefore samples the *phase* of a write against the scan boundary
+3,340 times — which is what makes it meaningful — but it has **never put two writes inside one
+scan**. Re-run at the widest slot the design actually uses, and against VARIANT 2.
+
+**1.2 — A2, and it settles the deferred 0.3.** Median **71–78 ms** across the whole sweep;
+p90 **89–115 ms**; p99 **136–173 ms**; one **2,216 ms** outlier in 2,000 samples. *** THE
+ASSUMED 79–108 ms IS NOT WRONG BUT IT IS THE WRONG SHAPE: it sits between this median and this
+p90, and it understates the tail by ~60%. *** Poll budgets keyed on it will hold typically and
+miss at the p99. **And the marginal cost per register is indistinguishable from zero** — 1, 4, 8
+and 16 registers all cost the same within noise, so *** SLOT WIDTH IS FREE UP TO THE FC03/FC16
+LIMITS AND WHAT COSTS IS THE NUMBER OF ROUND TRIPS. *** (Measured over the tunnel, not on a LAN.)
+
+**1.3 — the observability floor is real and small.** Scan **22.64 ms** median idle (n=101, spread
+22.20–23.02), **23.33 ms** median under 20 full-block writes per poll (n=16, spread 23.16–23.39).
+*** `MB_SERVER` UNDER TRAFFIC COSTS ABOUT +0.7 ms, ~3%. *** The 16-register unrolled checker is
+inside that figure.
+
+**1.4 — A NON-RESULT, CORRECTLY REPORTED AS ONE.** Exit 4, `INVALID — the generation never changed`:
+385 reads, 0 torn, **1 distinct generation**. *** THAT IS THE STIMULUS CHECK FIRING, NOT A PASS ***
+— 1.4 needs the generator build (checker OFF), which does not exist, exactly as 1.5 needs the
+VARIANT 2 build. **Zero torn reads against a frozen block is evidence of nothing**, and the client
+refused to say otherwise. Both remain open.
+
+#### 🔴 A TRAP FOUND BY WALKING INTO IT: `timing` WITH A SWEEP POINT BELOW `--pattern-count` TRIPS THE LATCH
+
+`timing --sweep 1,4,8,16` against `--pattern-count 16` writes **sub-ranges** of the pattern block,
+so registers outside the sweep point keep the previous run's generation — and the checker, which
+compares all 16, correctly latches. *** IT PRESENTS EXACTLY AS "MB_SERVER TEARS". *** The client
+refuses a sweep point **larger** than the window and says why; it accepts a **smaller** one
+silently.
+
+  ➜ **It is diagnosable, and the diagnosis is the useful part:** the latch read
+    `TEAR_VALUE_A = 1`, `TEAR_VALUE_B = 1000` at `TEAR_INDEX = 1` — the *first* generation of the
+    timing run beside the *last* generation of the write run. *** A GENUINE TEAR PUTS TWO ADJACENT
+    GENERATIONS SIDE BY SIDE (g, g−1). 1 AGAINST 1000 CANNOT COME FROM ONE IN-FLIGHT REQUEST. ***
+    That is what `TEAR_VALUE_A/B` are for, and without them this run would have been a false
+    "A1 fails" — the most expensive wrong answer available here.
+  ➜ **Cleared and re-proved rather than argued away:** the next `tear-write` reset the latch, it
+    read back 0, and 2,000 further writes left it there. *** THAT ALSO PROVES THE LATCH IS NOT
+    STUCK-ON, which a run that never latched could not have shown. ***
+  ➜ Either refuse a short sweep point in the client, or have `timing` pad to the full window. The
+    register contract's *"the two counts are one number"* has a second edge nobody had named.
+
+**The download that carried it** (`download-probe --options SoftwareOnlyChanges --disruptive`,
+exit 0): *** VERIFIED FROM THE LOAD MANIFEST, NOT FROM `state=Success`. *** **19** objects reported
+`'X' was loaded successfully` — the checker FC, the wrapper FB, its iDB, OB1, `MB_SERVER` and its
+nine `TCP_MB_*` helpers. `StopModules→StopAll` and `StartModules→StartModule` were both answered by
+the disruptive allowance; `DataBlockReinitialization` was **never raised**. Run state read back
+independently afterwards: *** `Running (8)` *** — keyed on 8, not on the decoder's catch-all.
 
 ---
 
