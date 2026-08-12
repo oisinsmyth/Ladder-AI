@@ -1725,6 +1725,30 @@ CALIBRATE with a known bit pattern — one measurement, once.
 12. THE OBSERVABILITY FLOOR
 --------------------------------------------------------------------------------
 
+*** 🔴 MEASURED ON THE RIG 2026-08-12 — THE TWO NUMBERS THIS SECTION IS BUILT ON ARE BOTH WRONG,
+AND THEY MOVE IN OPPOSITE DIRECTIONS. ***
+
+    scan period    assumed ~10 ms   ->   MEASURED 22.64 ms idle, 23.33 ms under load
+                                         (`MB_SERVER` under traffic costs ~+0.7 ms, ~3%)
+    round trip     assumed 79-108   ->   MEASURED median 71-78, p90 89-115, p99 136-173 ms,
+                                         with one 2,216 ms outlier in 2,000 samples
+
+*** THE ASSUMED ROUND TRIP IS THE WRONG SHAPE RATHER THAN THE WRONG SIZE: *** it sits between the
+median and the p90 and *** UNDERSTATES THE TAIL BY ROUGHLY 60%. *** O11 and the poll budget must be
+re-derived on the **p99**, not on a single figure — a budget built on a median is a budget that
+misses one poll in a hundred.
+
+*** AND THE FLOOR IS SHALLOWER THAN THIS SECTION CLAIMS: a ~100 ms poll against a ~23 ms scan is
+about 4x, not 10x. *** The conclusion survives — a one-scan event is still below the sampling floor
+and no polling rate recovers it — but the margin is less than half what was argued, so anything
+that leaned on "ten times" as slack should be re-checked rather than assumed still safe.
+
+*** THE FINDING THAT CHANGES THE DESIGN'S ARITHMETIC: MARGINAL COST PER REGISTER IS
+INDISTINGUISHABLE FROM ZERO. *** 1, 4, 8 and 16 registers all cost the same within noise. **Slot
+width is not the scarce resource — ROUND TRIPS ARE.** D29 bounds tensor width by poll bandwidth on
+the assumption that registers cost; they do not, up to the FC03/FC16 limits. Re-derive.
+(Measured over the tunnel, not a LAN.)
+
 Polling observes at roughly 100 ms against a scan of ~10 ms, so a one-scan event is about ten
 times below anything a sampler can see. NO POLLING RATE RECOVERS IT, and no protocol choice
 changes it.
@@ -2006,6 +2030,10 @@ all are worth recognising on sight rather than rediscovering:
       vector's author, both of whom have an incentive to reach for it under pressure.
 
   O11. *** THE THROUGHPUT CEILING — RE-SCOPED IN DRAFT 04, AND STILL OPEN. *** How many
+      *** RE-DERIVE ON THE MEASURED FIGURES (§12, 2026-08-12): p99 136-173 ms, NOT the 79-108
+      assumed below — and MARGINAL COST PER REGISTER IS ZERO, so this question is about ROUND
+      TRIPS, NOT WIDTH. *** A slot may be as wide as FC03/FC16 allow at no extra cost; what the
+      budget buys is the NUMBER of exchanges per cycle. That inverts the shape of the answer.
       concurrent tests can ONE coordinator connection service, given 79-108 ms round trips and
       block-read batching? Flagged by the spec-chain audit as load-bearing for anything called
       multi-agent, and never entered on any list until draft 03.
