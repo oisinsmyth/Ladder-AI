@@ -121,6 +121,128 @@ public class NamedTypeExpansionReadBackTests
         Assert.Equal("\"UDT_DrumIO\"", parsed.Datatype);
     }
 
+    // ------------------------------------------------- FI-75: the collapse discarded start values
+
+    /// <summary>
+    /// TIA's expansion, with a per-use-site <c>StartValue</c> on one of the expanded members — the
+    /// shape that carries the data the collapse was throwing away.
+    /// </summary>
+    private static XElement ExpansionWithStartValue(string memberName, string datatype, string startValue) =>
+        new(
+            XName.Get("Sections", Ns),
+            new XElement(
+                XName.Get("Section", Ns),
+                new XAttribute("Name", "None"),
+                new XElement(
+                    XName.Get("Member", Ns),
+                    new XAttribute("Name", memberName),
+                    new XAttribute("Datatype", datatype),
+                    new XElement(XName.Get("StartValue", Ns), startValue))));
+
+    /// <summary>
+    /// *** THE DEFECT. *** A named type's expansion is NOT purely redundant: the values inside it
+    /// are the USE SITE's own, not the type's defaults. Measured on the committed corpus —
+    /// `MotorFwdRevIOSet` declares no start value for `FTTime`/`ReverseDelay`/`ReverseIgnoreFT`,
+    /// while `iDB_MotorFwdRevSystem_Shredder` sets them to 10.0 / 8.0 / 12.0. Those are commissioning
+    /// setpoints, and collapsing the expansion discards them with an exit 0 — the same silent-loss
+    /// class as the 182 dropped <c>&lt;Subelement&gt;</c> values.
+    ///
+    /// The top-level <see cref="DbInterfaceMembers.ParseMember"/> path always kept them, which is why
+    /// the committed corpus never lost one. The collapse fires only at the NESTED positions, so the
+    /// two paths disagreed about the identical construct.
+    /// </summary>
+    [Fact]
+    public void BareMember_NamedTypeExpansion_KeepsPerUseSiteStartValues()
+    {
+        var bare = new XElement(
+            XName.Get("Member", Ns),
+            new XAttribute("Name", "Drive"),
+            new XAttribute("Datatype", "\"UDT_DriveIO\""),
+            ExpansionWithStartValue("FailToRunTime", "Real", "10.0"));
+
+        var parsed = DbInterfaceMembers.ParseBareMember(bare, "DB_Line", "Section1");
+
+        Assert.Equal("\"UDT_DriveIO\"", parsed.Datatype);
+        var nested = Assert.Single(parsed.NestedMembers!);
+        Assert.Equal("FailToRunTime", nested.Name);
+        Assert.Equal("10.0", nested.StartValue);
+    }
+
+    [Fact]
+    public void TypeMember_NamedTypeExpansion_KeepsPerUseSiteStartValues()
+    {
+        var member = Member("Drive", "\"UDT_DriveIO\"", ExpansionWithStartValue("FailToRunTime", "Real", "10.0"));
+
+        var parsed = DbInterfaceMembers.ParseTypeMember(member, "UDT_Line");
+
+        Assert.Equal("\"UDT_DriveIO\"", parsed.Datatype);
+        var nested = Assert.Single(parsed.NestedMembers!);
+        Assert.Equal("10.0", nested.StartValue);
+    }
+
+    /// <summary>
+    /// Round trip, both nested positions: what is read must come back out in TIA's own shape — a
+    /// <c>&lt;Sections&gt;&lt;Section Name="None"&gt;</c> wrapper, NOT the direct-<c>&lt;Member&gt;</c>
+    /// children an anonymous Struct uses. Keeping a value on the read side and writing it in the
+    /// wrong shape would replace one silent loss with a silent corruption.
+    /// </summary>
+    [Fact]
+    public void BareMember_NamedTypeExpansion_RoundTripsInTiasOwnShape()
+    {
+        var original = new XElement(
+            XName.Get("Member", Ns),
+            new XAttribute("Name", "Drive"),
+            new XAttribute("Datatype", "\"UDT_DriveIO\""),
+            ExpansionWithStartValue("FailToRunTime", "Real", "10.0"));
+
+        var written = DbInterfaceMembers.WriteBareMember(
+            DbInterfaceMembers.ParseBareMember(original, "DB_Line", "Section1"));
+
+        Assert.True(XNode.DeepEquals(original, written),
+            $"expected TIA's own shape back.\noriginal: {original}\nwritten : {written}");
+    }
+
+    [Fact]
+    public void TypeMember_NamedTypeExpansion_RoundTripsInTiasOwnShape()
+    {
+        var original = Member("Drive", "\"UDT_DriveIO\"", ExpansionWithStartValue("FailToRunTime", "Real", "10.0"));
+
+        var written = DbInterfaceMembers.WriteTypeMember(
+            DbInterfaceMembers.ParseTypeMember(original, "UDT_Line"));
+
+        Assert.True(XNode.DeepEquals(original, written),
+            $"expected TIA's own shape back.\noriginal: {original}\nwritten : {written}");
+    }
+
+    /// <summary>
+    /// An ANONYMOUS Struct's nested members still write as DIRECT <c>&lt;Member&gt;</c> children on
+    /// the type path — the shape must be chosen by the datatype, and the named-type change must not
+    /// leak into the anonymous one.
+    /// </summary>
+    [Fact]
+    public void TypeMember_AnonymousStruct_StillWritesDirectMemberChildren()
+    {
+        var anonymous = Member(
+            "Anon",
+            "Struct",
+            new XElement(
+                XName.Get("Member", Ns),
+                new XAttribute("Name", "A"),
+                new XAttribute("Datatype", "Bool"),
+                new XElement(
+                    XName.Get("AttributeList", Ns),
+                    BoolAttr("ExternalAccessible", true),
+                    BoolAttr("ExternalVisible", true),
+                    BoolAttr("ExternalWritable", true),
+                    BoolAttr("SetPoint", false))));
+
+        var written = DbInterfaceMembers.WriteTypeMember(
+            DbInterfaceMembers.ParseTypeMember(anonymous, "UDT_Thing"));
+
+        Assert.Contains(written.Elements(), e => e.Name.LocalName == "Member");
+        Assert.DoesNotContain(written.Elements(), e => e.Name.LocalName == "Sections");
+    }
+
     // The sibling path FI-56 fixed must keep behaving identically — one rule, two call sites.
     [Fact]
     public void BareMemberPath_AgreesWithTypeMemberPath_OnTheSameShape()

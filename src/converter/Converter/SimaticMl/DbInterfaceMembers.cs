@@ -390,49 +390,51 @@ internal static class DbInterfaceMembers
                 $"[{string.Join(", ", unexpectedAttributes)}] — only Name/Datatype/StartValue have been observed on this shape.");
         }
 
-        // FI-56 (2026-08-08). TIA EXPANDS A MEMBER WHOSE TYPE IS A NAMED UDT — including an ARRAY
-        // OF ONE — into a nested <Sections> on re-export, and this refused it outright.
+        // TIA EXPANDS A MEMBER WHOSE TYPE IS A NAMED UDT — including an ARRAY OF ONE — into a nested
+        // <Sections> on re-export. FI-56 (2026-08-08) taught this path to accept that expansion
+        // instead of hard-erroring on it, which is what had made a re-export unreadable: `to-ir`
+        // rejected any block or DB carrying an array-of-UDT interface member, `drift-check` reported
+        // DRIFTED for files that were themselves the to-ir output of the exports it compared them
+        // against, and two separate agents fell back to grepping raw XML to prove a round trip.
         //
-        // The IR names such a member BY TYPE REFERENCE (`Claim : Array[1..8] of "UDT_ResourceClaim"`),
-        // so the expansion is TIA rendering a type we already name and carries nothing the IR needs.
-        // Collapsing it back to the reference is the faithful read; rejecting it made the whole
-        // re-export unreadable.
+        // 🔴 FI-75 (2026-08-12). FI-56 accepted it by COLLAPSING it — discarding the whole expansion
+        // on the reasoning that the IR already names the type, so TIA's rendering of that type is
+        // redundant. *** THE VALUES INSIDE AN EXPANSION ARE THE USE SITE'S OWN, NOT THE TYPE'S. ***
+        // Measured on the committed corpus: `MotorFwdRevIOSet` declares NO start value for `FTTime`,
+        // `ReverseDelay` or `ReverseIgnoreFT`, while `iDB_MotorFwdRevSystem_Shredder` sets them to
+        // 10.0 / 8.0 / 12.0 — commissioning setpoints, present only at the use site. A collapse
+        // discards them at exit 0: the same silent-loss class as the 182 dropped <Subelement> values.
         //
-        // What it cost before the fix: `to-ir` hard-errored on any block or DB carrying an
-        // array-of-UDT interface member, so a re-export could not be verified at all and
-        // `drift-check` reported DRIFTED for files that were themselves the to-ir output of the very
-        // exports it was comparing them against. Two separate agents hit it and had to fall back to
-        // grepping raw XML to prove a round trip.
+        // That corpus never lost one only because the TOP-LEVEL ParseMember path always KEPT the
+        // expansion, and every quoted-UDT member in it sits at the top level (measured: 6 of 6, all
+        // at nesting depth 0). So the two paths disagreed about the identical construct, and the
+        // collapse was an asymmetry rather than a principle. It is also no longer needed: the
+        // recurse-and-keep machinery this requires was built for the doubly-nested case below, and
+        // WriteBareMember already re-emits TIA's own <Sections><Section Name="None"> shape.
         //
-        // Same family as the multi-instance expansion handled above, and the same reasoning: an
-        // expansion of a NAMED type is redundant. The distinction that matters is `Struct` — an
-        // ANONYMOUS structured member's <Sections> carries its only definition and must still be
-        // refused here, because collapsing it would silently discard real members.
-        var isNamedTypeReference = IsNamedTypeReference(datatypeAttribute);
-
-        // DOUBLY-NESTED STRUCTURED MEMBERS (2026-08-12). A `<Sections>` at the bare position now has
-        // THREE dispositions, not two — the third is new and is on the critical path for `MB_SERVER`,
-        // whose `CONNECT` port must point at a `TCON_IP_v4` static that nests an `IP_V4` that nests an
-        // `Array[1..4] of Byte`:
+        // A `<Sections>` at the bare position therefore has TWO dispositions, not three:
         //
-        //   1. QUOTED named-type reference (`"UDT_X"`) -> COLLAPSE, unchanged (FI-56). The IR names
-        //      the type, so TIA's expansion of it is redundant.
-        //   2. `Struct` -> STILL A HARD ERROR, unchanged. An ANONYMOUS structured member's <Sections>
-        //      carries its ONLY definition; collapsing it would silently discard real members.
-        //   3. anything else — an UNQUOTED SYSTEM structured type (`IP_V4`, `TCON_IP_v4`, `DTL`,
-        //      `TON_TIME`) -> RECURSE AND KEEP.
+        //   1. bare `Struct` -> STILL A HARD ERROR, unchanged, and this is the distinction the whole
+        //      rule turns on. An ANONYMOUS structured member's <Sections> carries its ONLY
+        //      definition, and there is no type name to write it back out under.
+        //   2. anything else — a QUOTED named-type reference (`"UDT_X"`, FI-75) or an UNQUOTED
+        //      SYSTEM structured type (`IP_V4`, `TCON_IP_v4`, `DTL`, `TON_TIME`) -> RECURSE AND KEEP.
         //
-        // KEEP rather than collapse, deliberately: `IP_V4`'s expansion holds `ADDR`'s four
-        // <Subelement> start values — the remote IP address. Collapsing would trade one silent loss
-        // for another, and it is also exactly what the TOP-LEVEL ParseMember already does for the same
-        // class of type (`T_Modbus_Comms : TON_TIME` keeps its PT/ET/IN/Q). Purely additive: this
-        // shape hard-errored before, so no existing .ir can have come from one.
-        var isRecursableStructuredType = !isNamedTypeReference && datatypeAttribute != "Struct";
+        // The system-type half was the 2026-08-12 doubly-nested fix, on the critical path for
+        // `MB_SERVER`, whose `CONNECT` port must point at a `TCON_IP_v4` static that nests an `IP_V4`
+        // that nests an `Array[1..4] of Byte`: `IP_V4`'s expansion holds `ADDR`'s four <Subelement>
+        // start values — the remote IP address. Both halves are now the same rule, and it is the one
+        // the top-level ParseMember has always followed (`T_Modbus_Comms : TON_TIME` keeps PT/ET/IN/Q).
+        //
+        // The test is the literal `Struct` rather than IsAnonymousStructDatatype deliberately:
+        // `Array[…] of Struct` has recursed and kept here since the doubly-nested fix, and narrowing
+        // it now would turn a shape that round-trips into a new hard error for no gain.
+        var isRecursableStructuredType = datatypeAttribute != "Struct";
 
         var unexpectedChildren = member.Elements()
             .Select(e => e.Name.LocalName)
             .Where(n => n != "StartValue" && n != SubelementElementName)
-            .Where(n => !(n == "Sections" && (isNamedTypeReference || isRecursableStructuredType)))
+            .Where(n => !(n == "Sections" && isRecursableStructuredType))
             .ToList();
         if (unexpectedChildren.Count > 0)
         {
@@ -554,10 +556,13 @@ internal static class DbInterfaceMembers
         // that check entirely and degrades to reading raw XML by hand, which is what an agent had to
         // do here.
         //
-        // The rule is the same one FI-56 established, applied rather than re-derived: an expansion of
-        // a NAMED type is redundant, because the IR names the type. THE DISTINCTION THAT MUST HOLD is
-        // an ANONYMOUS structured member — its <Sections> carries its only definition, and collapsing
-        // it would silently discard real members. Anonymous nesting on this path arrives as direct
+        // 🔴 FI-75 (2026-08-12). FI-56's rule was applied here too — and its COLLAPSE came with it.
+        // The expansion is NOT redundant: its values are the USE SITE's, not the type's (see
+        // ParseBareMember's own note for the corpus measurement — three commissioning setpoints that
+        // exist nowhere but the use site). So a named-type expansion is now RECURSED INTO AND KEPT
+        // here as well, matching ParseBareMember and the top-level ParseMember. THE DISTINCTION THAT
+        // MUST HOLD is unchanged: an ANONYMOUS structured member's <Sections> carries its only
+        // definition and is still refused outright. Anonymous nesting on this path arrives as direct
         // <Member> children with Datatype "Struct" (handled below), so refusing <Sections> for
         // anything that is not a named-type reference keeps that case exactly as it was.
         var hasNestedSections = member.Elements().Any(e => e.Name.LocalName == "Sections");
@@ -597,18 +602,31 @@ internal static class DbInterfaceMembers
         var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
         var startValue = startValueElement?.Value;
 
+        // FI-75. A named type's expansion arrives in the bare shape inside <Sections><Section
+        // Name="None">, exactly as it does at the other two positions, so it is read with the same
+        // parser — one shape, one reader. Only a named-type reference can reach here with a
+        // <Sections>: anything else threw above.
+        var expandedSections = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections");
+        var expandedMembers = expandedSections is not null
+            ? ParseNestedMembers(expandedSections, context, name)
+            : null;
+
         return new DbMember(
             name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue,
             Version: (string?)member.Attribute("Version"), SetPoint: booleanAttributes.SetPoint,
+            NestedMembers: expandedMembers,
             ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
             Comment: comment, Subelements: subelements);
     }
 
     /// <summary>
     /// Inverse of <see cref="ParseTypeMember"/> — no Remanence/Accessibility attribute, same four
-    /// BooleanAttributes as WriteMember's own AttributeList. Recursive: a member with
-    /// <see cref="DbMember.NestedMembers"/> populated writes them as direct children (no
-    /// `&lt;Sections&gt;` wrapper), arbitrarily deep, mirroring <see cref="ParseTypeMember"/>.
+    /// BooleanAttributes as WriteMember's own AttributeList. Recursive, with the SAME two nesting
+    /// shapes <see cref="WriteMember"/> chooses between, on the same test: an ANONYMOUS structured
+    /// member writes its nested members as direct children, and a NAMED type's expansion writes as a
+    /// <c>&lt;Sections&gt;&lt;Section Name="None"&gt;</c> wrapper of bare members (FI-75). Writing a
+    /// named type's expansion as direct children would have replaced a silent loss with a silent
+    /// corruption, so the shape is chosen by the datatype rather than by which parser produced it.
     /// A member's own <see cref="DbMember.Comment"/> is written in the same position as
     /// <see cref="WriteMember"/>'s — see the shape note inside.
     /// </summary>
@@ -642,12 +660,26 @@ internal static class DbInterfaceMembers
         AddCommentElement(memberElement, member);
         AddSubelements(memberElement, member);
 
-        if (member.NestedMembers is not null)
+        if (member.NestedMembers is not null && IsAnonymousStructDatatype(member.Datatype))
         {
+            // Anonymous struct: nested members are direct children, each with its own full
+            // AttributeList. Unchanged, and the same disposition WriteMember makes on the same test.
             foreach (var nested in member.NestedMembers)
             {
                 memberElement.Add(WriteTypeMember(nested));
             }
+        }
+        else if (member.NestedMembers is not null)
+        {
+            // FI-75: a NAMED type's expansion, back in TIA's own shape — the bare members it was
+            // read from, inside <Sections><Section Name="None">.
+            var noneSection = new XElement(Ns + "Section", new XAttribute("Name", "None"));
+            foreach (var nested in member.NestedMembers)
+            {
+                noneSection.Add(WriteBareMember(nested));
+            }
+
+            memberElement.Add(new XElement(Ns + "Sections", noneSection));
         }
         else if (member.StartValue is not null)
         {

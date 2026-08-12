@@ -2559,6 +2559,94 @@ reports the identical 6 pre-existing drifts before and after — no corpus regre
 declares one"* beside a value one document plainly declared. The skip was right, the stated reason
 was false. It now names which side is silent.
 
+## FI-75 — the quoted-UDT collapse was discarding per-use-site start values (2026-08-12)
+
+🔴 **The fourth silent loss found on 2026-08-12, and the one that had been *seen* and left alone.**
+Flagged during the `MB_SERVER` gap work and deliberately not touched then, on the belief that the
+collapse was load-bearing for the committed corpus's fixed point. **It was not** — see the blast
+radius below, which is zero.
+
+**The collapse.** FI-56 (2026-08-08) taught the parser to accept TIA's expansion of a member whose
+type is a named UDT — TIA renders `Claim : Array[1..8] of "UDT_ResourceClaim"` as a nested
+`<Sections>` on re-export, and refusing it had made whole blocks unreadable. It accepted the
+expansion by **discarding** it, reasoning that *the IR already names the type, so TIA's rendering of
+that type is redundant*. FI-64 (2026-08-09) applied the same rule to the third parse path.
+
+**Why that reasoning is wrong.** *** THE VALUES INSIDE AN EXPANSION BELONG TO THE USE SITE, NOT TO
+THE TYPE. *** A UDT declares the members; the referencing DB or FB declares what they *start at*.
+Measured in the committed corpus:
+
+| | `FTTime` | `ReverseDelay` | `ReverseIgnoreFT` |
+|---|---|---|---|
+| `MotorFwdRevIOSet` (the type) | *none* | *none* | *none* |
+| `iDB_MotorFwdRevSystem_Shredder` (the use site) | **10.0** | **8.0** | **12.0** |
+
+Three commissioning setpoints — a fail-to-run time and two reversal timings — that exist **nowhere
+but the use site**. A collapse discards them and returns **exit 0**. Same class as the 182 dropped
+`<Subelement>` values, and as `MemoryLayout`: *converted without error* is not *converted correctly*.
+
+**What exactly was discarded, and in which shapes.** The collapse fired at the two NESTED positions
+only — `ParseBareMember` (a quoted named type inside another member's expansion, i.e. doubly nested)
+and `ParseTypeMember` (a quoted named-type member of a PLC data type). The **top-level**
+`ParseMember` has always *kept* the expansion. So the codebase held two different dispositions for
+the identical construct, and the collapse was an **asymmetry, not a principle**. Everything under
+the collapsed `<Sections>` went: every nested member, every per-use-site `StartValue`, and every
+`<Subelement>`.
+
+**Blast radius: zero blocks, measured three ways.**
+
+1. **Static scan of the corpus** — every quoted-UDT member carrying an expansion, with its nesting
+   depth: 6 of 6 sit at **depth 0** (`FB_MotorFwdRevSystem`, `FB_PusherControl`, `FB_ShredderSequencer`
+   and their three instance DBs, all the member named `IO`). **Zero** at a nested position, in either
+   corpus, and none inside a `SW.Types` document. The collapse never fired on committed content —
+   which is exactly why the corpus never lost a start value, and why the fixed point could not have
+   depended on it.
+2. **`drift-check` before and after** — identical at both baselines, same six names: **6 drifted /
+   17 match / 3 skipped** on `test-project001`, **0 drifted / 15 match** on `reference`. (The three
+   instance DBs drift for an unrelated pre-existing reason: the IR emits no `InOut` section, so
+   `Section[3]` is `InOut` in TIA's export and `Static` in ours.)
+3. **Whole-corpus IR re-derivation** — `to-ir` over all 38 committed exports, before and after:
+   **0 files changed**, byte for byte.
+
+**The fix.** Recurse and keep, at both nested positions — which is what the top-level path already
+does, and what the doubly-nested `MB_SERVER` work built the machinery for. The disposition table at
+the bare position drops from three entries to two: a bare `Struct` is **still a hard error** (an
+anonymous structured member's `<Sections>` is its only definition, and there is no type name to write
+it back out under), and *everything else* — quoted named type or unquoted system type — recurses.
+`Array[…] of Struct` is deliberately left on the recursing side, where it has been since the
+doubly-nested fix; narrowing it now would turn a shape that round-trips into a new hard error for no
+gain.
+
+**The write side needed a matching change, and skipping it would have been worse than the bug.**
+`WriteTypeMember` emitted `NestedMembers` as **direct `<Member>` children** — the anonymous-Struct
+shape. Keeping a named type's expansion on the read side while writing it in that shape would have
+replaced a silent loss with a **silent corruption**. It now chooses the shape from the datatype, on
+the same `IsAnonymousStructDatatype` test `WriteMember` has always used: anonymous → direct children,
+named type → `<Sections><Section Name="None">` of bare members.
+
+**Measured before and after at CLI level**, on a doubly-nested named type carrying a use-site start
+value:
+
+```
+# BEFORE — to-ir exits 0
+DB RealDbName
+  MEMBERS
+    Outer : "OuterType" SETPOINT
+      Inner : "InnerType"                          <- Leaf : Real = 10.0 is GONE
+# round trip: DIFFERS - 1 difference(s), the whole <Sections> ELEMENT-MISSING
+
+# AFTER
+    Outer : "OuterType" SETPOINT
+      Inner : "InnerType"
+        Leaf : Real = 10.0
+# round trip: EQUIVALENT
+```
+
+11 tests on the read-back path (4 of them written to fail first, and they did), plus the
+`DbConverterTests` doubly-nested case **inverted a second time** — it asserted the error before
+FI-56, asserted the collapse after it, and now asserts the expansion is kept. 1010 converter tests
+green (up from 996), golden harness green at 46.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

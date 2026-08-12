@@ -318,19 +318,24 @@ public class DbConverterTests
         Assert.Contains("InstanceOfType", ex.Message);
     }
 
-    // FI-56 (2026-08-08). A doubly-nested member whose type is NAMED now COLLAPSES to the type
-    // reference instead of hard-erroring. This test previously asserted the error and is inverted
-    // deliberately.
+    // FI-56 (2026-08-08). A doubly-nested member whose type is NAMED is ACCEPTED rather than
+    // hard-erroring — TIA expands a member whose type is a named UDT (including an ARRAY of one)
+    // into a nested <Sections> on re-export, and refusing it made the whole re-export unreadable:
+    // `to-ir` hard-errored on any block or DB with an array-of-UDT interface member, so a re-export
+    // could not be verified and `drift-check` reported DRIFTED for files that were themselves the
+    // to-ir output of the exports it compared them against. Two agents hit it and fell back to
+    // grepping raw XML.
     //
-    // Why the behaviour changed: TIA expands a member whose type is a named UDT — including an
-    // ARRAY of one — into a nested <Sections> on re-export. The IR names such a member by type
-    // reference, so the expansion is TIA rendering a type we already name, and it carries nothing
-    // the IR needs. Refusing it made the whole re-export unreadable: `to-ir` hard-errored on any
-    // block or DB with an array-of-UDT interface member, so a re-export could not be verified and
-    // `drift-check` reported DRIFTED for files that were themselves the to-ir output of the exports
-    // it compared them against. Two agents hit it and fell back to grepping raw XML.
+    // 🔴 FI-75 (2026-08-12). FI-56 accepted it by COLLAPSING it, and this test asserted the
+    // collapse. *** IT IS NOW INVERTED A SECOND TIME: the expansion is RECURSED INTO AND KEPT. ***
+    // The collapse's premise — "the IR already names the type, so the expansion carries nothing the
+    // IR needs" — is false for the VALUES inside it, which belong to the USE SITE, not the type.
+    // Measured on the committed corpus: `MotorFwdRevIOSet` declares no start value for `FTTime`,
+    // `ReverseDelay` or `ReverseIgnoreFT`; `iDB_MotorFwdRevSystem_Shredder` sets them to 10.0 / 8.0
+    // / 12.0. Under the collapse those three commissioning setpoints would have been discarded at
+    // exit 0 — the same silent-loss class as the 182 dropped <Subelement> values.
     [Fact]
-    public void Parse_DoublyNestedNamedTypeMember_CollapsesToTheTypeReference()
+    public void Parse_DoublyNestedNamedTypeMember_KeepsTheExpansion()
     {
         var db = DbSourceParser.Parse(LoadFixture("GlobalDbWithDoublyNestedMember.xml"));
 
@@ -339,8 +344,12 @@ public class DbConverterTests
 
         Assert.Equal("Inner", inner.Name);
         Assert.Contains("InnerType", inner.Datatype);
-        // The expansion is dropped, not flattened in — the type reference is where it lives.
-        Assert.True(inner.NestedMembers is null or { Count: 0 });
+
+        // The type reference survives AND the expansion is kept — the reference alone cannot carry
+        // a per-use-site start value, which is the whole reason the collapse had to go.
+        var leaf = Assert.Single(inner.NestedMembers!);
+        Assert.Equal("Leaf", leaf.Name);
+        Assert.Equal("Bool", leaf.Datatype);
     }
 
     // FI-58 (2026-08-08). A nested member whose type is a SYSTEM STRUCTURED TYPE carries a
