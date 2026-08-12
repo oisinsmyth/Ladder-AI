@@ -2524,7 +2524,8 @@ other protocols this project already speaks.
      [The rig's actual PUT/GET state remains UNKNOWN — the handover records it as unknown too —
       so today's success is consistent with either hypothesis. It no longer matters for X-K.]
 
-     TWO THINGS STILL TO DO, both small:
+     TWO THINGS STILL TO DO, both small (and see §16.13 — the same session turned up a memory
+     constraint the design did not have):
        - `IS7Client` (`src/harness/Harness.S7/IS7Client.cs`) is a deliberate REDUCTION of
          Sharp7's surface and carries no status member, so the harness cannot call this yet.
          Add a read-only `ReadCpuStatus` to the interface and its Sharp7 implementation,
@@ -2575,3 +2576,60 @@ remains right regardless of which closer lands.
     higher than three and that figure is optimistic in proportion.
   - *** EVERY REMOVAL PATH MUST RELEASE ITS CLAIM. *** Noted in DB-11 for a deleted block; it
     applies to DB-7's cleanup generally, or numbers leak until the range is exhausted.
+
+................................................................................
+16.13 X-L  *** CPU MEMORY IS A HARDER BUDGET THAN THE 20-OBJECT LIMIT, AND THE DESIGN HAD NO
+           ACCOUNT OF IT AT ALL *** — measured 2026-08-12
+................................................................................
+
+Read from TIA Portal's online view against the bench rig (S7-1200 classic 1214C) [M]:
+
+      area            free        in use      total        used
+      Load memory     1,625,344   2,568,960   4,194,304     61%
+      Work memory        46,630     106,970     153,600     70%
+      Retain memory       3,864      10,472      14,336     73%
+
+*** THE DESIGN HAS BEEN COUNTING OBJECTS AND NEVER BYTES. *** DB-4 budgets against the <=20
+changed-objects-per-download limit [R], and §16.1 caps concurrent slots by the `%MW` mirror
+size. Neither is the binding constraint if work memory runs out first — and on this program the
+harness has roughly *** 46 KB OF WORK MEMORY AND 3.8 KB OF RETAIN *** to add itself into.
+
+WHAT THE HARNESS ADDS, all of which lands somewhere in that budget: a per-slot instance DB
+(D10), a model plus its instance DB per slot (D28, and D26b multiplies this by K slots per
+agent), the copy layer with its latches and scan-stamps, and the `%MW` mirror. *** SO THE
+PER-SLOT COST IS NOW A BYTE FIGURE, NOT AN OBJECT COUNT, AND NOBODY HAS MEASURED IT. ***
+
+    WORKED, and it is the reason this is filed as a gap rather than a note: if a model plus its
+    instance DB comes to ~2 KB, 46 KB of headroom is ~20 slots and the `%MW` ceiling (~20 slots
+    at a 100-register slot, §16.1) binds at about the same place — comfortable. If it comes to
+    ~8 KB, it is ~5 slots and *** WORK MEMORY BECOMES THE BINDING CONSTRAINT ON CONCURRENCY,
+    ahead of conflict-freedom (D29), poll bandwidth (O11) and the mirror size. *** That would
+    be a fourth bound, and the tightest one.
+
+RETAIN IS THE SHARPER EDGE. 3,864 bytes free, and *** IT INTERACTS WITH SOMETHING ALREADY
+DECIDED: *** R4 records that `DataBlockReinitialization` resets ALL data INCLUDING RETAIN [R],
+and external gap G2 is precisely the unresolved question of what a structural DB change does to
+retentives. A harness that consumes most of the remaining retain makes G2's answer matter far
+more than it does today.
+
+*** AND THE REQUIREMENT THE OWNER STATED, WHICH IS THE DURABLE HALF: THE TOOLING MUST NOT
+HARD-CODE ONE CPU's FIGURES. *** These numbers are properties of a 1214C running one particular
+program. The family varies (1211C/1212C/1214C/1215C/1217C, and the G2 line is a different
+article number with different capabilities — CLAUDE.md's environment note already warns against
+conflating them). So:
+
+    - *** THE BUDGET IS READ, NEVER ASSUMED *** — per project and per CPU, at admission time.
+    - A hard-coded 150 KB, 4 MB or 14 KB anywhere in the tooling is a DEFECT, not a shortcut.
+    - The check belongs at ADMISSION (loop 2), where a slot can still be refused cheaply,
+      rather than at download, where refusing costs a boundary.
+    - *** IF THE FIGURES CANNOT BE READ, REFUSE RATHER THAN ASSUME A CEILING *** — "empty is
+      not clean" (FI-44), and a guessed ceiling that is too generous fails at download time
+      with the wave already committed.
+
+OPEN, AND UNDER RESEARCH AS OF 2026-08-12: the precise semantics of the three areas, what a new
+block costs in each, whether `%M` is separate from work memory (§6 and §16.1 both assume it is),
+what counts against retain, whether exhaustion surfaces at compile or at download — which
+decides where the gate goes — and above all *** HOW TO READ THESE FIGURES PROGRAMMATICALLY ***,
+since that decides whether the tooling queries or hard-codes. Openness is not assumed to expose
+them; SZL over Sharp7 is the most promising lead, since `ReadSZL` is already reachable from the
+toolchain that just answered X-K.
