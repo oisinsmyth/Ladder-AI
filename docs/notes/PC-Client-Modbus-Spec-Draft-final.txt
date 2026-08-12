@@ -2611,7 +2611,22 @@ other protocols this project already speaks.
        - *** HONEST LIMIT, DECLARED RATHER THAN PAPERED OVER: THE TRUE DEVICE BYTE IS NOT
          RECOVERABLE THROUGH THIS API. *** `PlcGetStatus` collapses it to {0,4,8} BEFORE the
          adapter sees it, so an unfamiliar byte arrives as 4 and is indistinguishable from a
-         genuine 4. Surfacing it would need a raw request bypassing `PlcGetStatus`; not built.
+         genuine 4. Surfacing it would need a raw request bypassing `PlcGetStatus`.
+
+         *** CONSIDERED AND DELIBERATELY NOT BUILT (owner, 2026-08-12) — this is a DECISION,
+         not an omission. *** The question raised was whether an unrecognised byte should decode
+         to `Unknown` rather than `NotRunning`. It cannot: Sharp7 collapses it before we see it,
+         so the case is unidentifiable at our layer — and folding it into `Unknown` would make
+         that member ambiguous between "the link is dead" and "the CPU answered", destroying the
+         distinction the read exists to provide. `NotRunning` is also not an overclaim, because
+         `Running` is exact: 8 is the only value reaching it, so anything else genuinely is not
+         RUN.
+         THE ONE REAL RESIDUAL: if a future CPU or firmware used a DIFFERENT byte for RUN, it
+         would collapse to 4 and the harness would report `NotRunning` against a healthy running
+         CPU — permanently wave-fatal, and undiagnosable from this API. *** ACCEPTED, BECAUSE IT
+         FAILS SAFE AND ESCALATES TO A PERSON, WHO CAN DIAGNOSE IT IN TIA PORTAL FAR BETTER THAN
+         A RAW BYTE READ COULD. *** Build the raw path only if that failure is ever actually
+         seen.
        - CALLER TRAP, recorded for whoever does build that raw path: `S7Client.ReadSZL` throws
          `ArgumentNullException` unless the caller PRE-ALLOCATES `S7SZL.Data`. `PlcGetStatus`
          has no such requirement.
