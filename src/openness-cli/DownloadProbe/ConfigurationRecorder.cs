@@ -138,13 +138,20 @@ internal sealed class ConfigurationRecorder
 {
     private readonly ProbeLog _log;
     private readonly string _phase;
+    private readonly SelectionPolicyMode _mode;
     private readonly List<RecordedConfiguration> _recorded = new();
     private int _ordinal;
 
-    internal ConfigurationRecorder(ProbeLog log, string phase)
+    /// <summary>
+    /// <paramref name="mode"/> defaults to <see cref="SelectionPolicyMode.Normal"/> so that the
+    /// disruptive policy is never acquired by omission — a recorder built without stating a mode gets
+    /// the one that refuses.
+    /// </summary>
+    internal ConfigurationRecorder(ProbeLog log, string phase, SelectionPolicyMode mode = SelectionPolicyMode.Normal)
     {
         _log = log;
         _phase = phase;
+        _mode = mode;
     }
 
     internal IReadOnlyList<RecordedConfiguration> Recorded => _recorded;
@@ -196,11 +203,18 @@ internal sealed class ConfigurationRecorder
             _log.Line($"  selections available ({selection.AvailableSelections.Count}):");
             foreach (var name in selection.AvailableSelections)
             {
-                var denied = NoActionFirstPolicy.IsDenied(simpleTypeName, name) ? "   <== ON THE DENY LIST, NEVER CHOSEN" : string.Empty;
+                // Three annotations that must never merge into one: denied under the mode in force,
+                // permitted ONLY because --disruptive was given, and the enum's zero value.
+                var denied = NoActionFirstPolicy.IsDenied(simpleTypeName, name, _mode)
+                    ? "   <== ON THE DENY LIST, NEVER CHOSEN"
+                    : string.Empty;
+                var allowance = NoActionFirstPolicy.IsDisruptiveAllowance(simpleTypeName, name, _mode)
+                    ? "   <== PERMITTED ONLY BY --disruptive; DENIED BY THE NORMAL POLICY"
+                    : string.Empty;
                 var isDefault = string.Equals(name, selection.DefaultValuedSelection, StringComparison.Ordinal)
                     ? "   (= 0, the value an unset field reads as)"
                     : string.Empty;
-                _log.Line($"      - {name}{denied}{isDefault}");
+                _log.Line($"      - {name}{denied}{allowance}{isDefault}");
             }
 
             _log.Line("                 (these are the names the ENUM DECLARES. Openness exposes no way to ask");
@@ -227,7 +241,7 @@ internal sealed class ConfigurationRecorder
 
         LogAttributeInfos(view);
 
-        var decision = NoActionFirstPolicy.Decide(simpleTypeName, view.Selection is null ? null : available);
+        var decision = NoActionFirstPolicy.Decide(simpleTypeName, view.Selection is null ? null : available, _mode);
         var record = Apply(view, decision, simpleTypeName, available, currentBefore);
         _recorded.Add(record);
         return record;
@@ -290,14 +304,22 @@ internal sealed class ConfigurationRecorder
 
         if (result.Succeeded)
         {
-            if (decision.IsLoud)
+            // Three distinct sentences for three distinct reasons an answer was given. The disruptive
+            // allowance gets its own, because "no choice was available" is exactly what it is NOT:
+            // NoAction was available on every configuration this arm answers, and was passed over.
+            if (decision.Kind == ConfigurationDecisionKind.AnsweredByDisruptiveAllowance)
+            {
+                _log.Line($"  ANSWER       : *** '{decision.Selection}' — BY THE DISRUPTIVE ALLOWANCE, NOT BY THE NORMAL POLICY ***");
+                _log.Line($"                 {decision.Reason}");
+            }
+            else if (decision.IsLoud)
             {
                 _log.Line($"  ANSWER       : *** '{decision.Selection}' — NO CHOICE WAS AVAILABLE ***");
                 _log.Line($"                 {decision.Reason}");
             }
             else
             {
-                _log.Line($"  ANSWER       : '{decision.Selection}' — {decision.Reason}");
+                _log.Line($"  ANSWER       : '{decision.Selection}' — by the NORMAL policy. {decision.Reason}");
             }
 
             var successful = result.SuccessfulAttempt!;

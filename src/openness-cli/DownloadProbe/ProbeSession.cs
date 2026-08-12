@@ -63,6 +63,19 @@ internal sealed class ProbeOutcome
     internal int ResultWarningCount { get; set; }
 
     internal string? ExceptionText { get; set; }
+
+    /// <summary>
+    /// *** WAS ANYTHING ACTUALLY TRANSFERRED? *** Never null on a run that reached a download: an
+    /// abort or a throw sets <see cref="TransferVerdicts.NoResult"/> rather than leaving this blank,
+    /// because a missing answer and a negative answer must not look alike.
+    /// </summary>
+    internal TransferVerdict? Transfer { get; set; }
+
+    /// <summary>
+    /// The last thing printed, after the verdict. Carries the CPU-run-state advisory — the sentence
+    /// someone has to read before walking away from a rig whose CPU may be stopped.
+    /// </summary>
+    internal IReadOnlyList<string> ClosingLines { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -176,8 +189,17 @@ internal static class ProbeSession
 
         var candidates = ReadConnectionTargets(target.Provider, log);
 
-        var pre = new ConfigurationRecorder(log, "PRE");
-        var post = new ConfigurationRecorder(log, "POST");
+        if (arguments.Disruptive)
+        {
+            // Printed only on the path that can stop the CPU, because it is the answer to the
+            // question that path raises: is there any route back to RUN other than StartModules?
+            log.Blank();
+            log.Rule("ONLINE-MODE SURVEY (reflection only — nothing acquired, nothing invoked)");
+            log.Block(OnlineModeSurvey.Describe(typeof(DownloadProvider).Assembly));
+        }
+
+        var pre = new ConfigurationRecorder(log, "PRE", arguments.PolicyMode);
+        var post = new ConfigurationRecorder(log, "POST", arguments.PolicyMode);
         var downloadRan = false;
 
         var outcome = DownloadDispatch.Dispatch(
@@ -194,8 +216,18 @@ internal static class ProbeSession
                 log.Line($"device        : {target.DevicePath}");
                 log.Line($"target        : {chosen.Label}");
                 log.Line($"options       : {arguments.Options} (Siemens DownloadOptions.{SiemensDownloadOptions.ToSiemens(arguments.Options)})");
-                log.Line("policy        : NoAction wherever it exists; otherwise the sole permitted selection;");
-                log.Line("                never a denied selection, even if it is the only one offered.");
+                log.Line($"policy        : {arguments.PolicyMode}");
+                if (arguments.Disruptive)
+                {
+                    log.Line("                the disruptive allowance FIRST (" + NoActionFirstPolicy.DisruptiveAllowanceSummary + ");");
+                    log.Line("                then NoAction wherever it exists; then the sole permitted selection;");
+                    log.Line("                and NEVER " + NoActionFirstPolicy.DisruptiveDenySummary + ".");
+                }
+                else
+                {
+                    log.Line("                NoAction wherever it exists; otherwise the sole permitted selection;");
+                    log.Line("                never a denied selection, even if it is the only one offered.");
+                }
 
                 var result = Invoke(target.Provider, chosen.Node, pre, post, arguments.Options, log);
                 result.DownloadTarget = chosen.Label;
@@ -224,6 +256,19 @@ internal static class ProbeSession
 
         LogConfigurationSummary(pre, post, log);
 
+        // A download that aborted or threw produced no DownloadResult, so the transfer question has
+        // no answer rather than a negative one. Named explicitly here so that every run which reached
+        // a download carries a verdict, and "we never found out" is never rendered as "nothing moved".
+        outcome.Transfer ??= TransferVerdicts.NoResult(
+            "The download did not return a DownloadResult — it aborted or threw; see the section above.");
+
+        // The advisory closes the run whatever else happened, including after a failure: a tool
+        // failure that occurred AFTER StopModules -> StopAll was answered still leaves a stopped CPU.
+        outcome.ClosingLines = RunStateAdvisory.Describe(
+            arguments.PolicyMode, pre.Recorded.Concat(post.Recorded).ToList());
+        log.Blank();
+        log.Block(outcome.ClosingLines);
+
         // Precedence, and the reason this is checked HERE rather than only on the abort path: a
         // failed apply invalidates every other reading of the run, including a download that went on
         // to complete. Whatever the exit code was about to be, it becomes this one.
@@ -243,11 +288,14 @@ internal static class ProbeSession
             log.Line("not, so the list of configurations above is a list of what was raised BEFORE the tool");
             log.Line("broke — a configuration raised later could not appear even if it would have been.");
 
+            // The transfer headline rides along even here. "The run proves nothing" is a statement
+            // about the EXPERIMENT; whether a program reached the controller is a fact about the
+            // DEVICE, and someone standing at a rig needs it whether or not the run was valid.
             return outcome.Reclassify(
                 ProbeExitCodes.SelectionApplyFailed,
                 $"TOOL FAILURE: {failedToApply.Count} selection(s) could not be applied " +
                 $"({string.Join(", ", failedToApply.Select(r => $"{r.TypeName}='{r.AttemptedSelection}'"))}). " +
-                "The run's result means nothing.");
+                $"The run's result means nothing.  {outcome.Transfer?.Headline}");
         }
 
         return outcome;
@@ -415,6 +463,15 @@ internal static class ProbeSession
         }
     }
 
+    /// <summary>
+    /// The result, and then THE QUESTION: was anything actually transferred?
+    ///
+    /// <c>State</c> and the counts do not answer it and are not allowed to look as though they do —
+    /// the one live run that returned <c>Success</c> with <c>ErrorCount</c> 0 had loaded nothing, and
+    /// said so only in a message. So the message tree is read into a form
+    /// <see cref="TransferVerdicts"/> can classify, and the verdict goes into the run's own verdict
+    /// line rather than into a footnote below a green result.
+    /// </summary>
     private static ProbeOutcome ReportResult(DownloadResult result, ProbeLog log)
     {
         log.Blank();
@@ -422,36 +479,105 @@ internal static class ProbeSession
         log.Line($"state         : {result.State}");
         log.Line($"errors        : {result.ErrorCount}");
         log.Line($"warnings      : {result.WarningCount}");
+        log.Line("              (NONE of those three says whether anything was TRANSFERRED — see below.)");
         log.Blank();
         log.Line("messages (recursive, verbatim):");
-        LogMessages(result.Messages, log, depth: 1);
+
+        var messages = ReadMessages(result.Messages);
+        LogMessages(messages, log, depth: 1);
+
+        var resultState = Safe(() => result.State.ToString());
+        var transfer = TransferVerdicts.Classify(resultState, result.ErrorCount, messages);
+
+        log.Blank();
+        log.Rule("WAS ANYTHING ACTUALLY TRANSFERRED?");
+        log.Line(transfer.Headline);
+        log.Block(transfer.Evidence);
+        log.Blank();
+        log.Block(TransferVerdicts.DescribeRunState(messages));
 
         var exitCode = result.ErrorCount > 0 ? ProbeExitCodes.CompletedWithErrors : ProbeExitCodes.Completed;
         return new ProbeOutcome(
             exitCode,
-            $"Download completed: state={result.State}, errors={result.ErrorCount}, warnings={result.WarningCount}.")
+            $"Download completed: state={result.State}, errors={result.ErrorCount}, " +
+            $"warnings={result.WarningCount}.  {transfer.Headline}")
         {
-            ResultState = result.State.ToString(),
+            ResultState = resultState,
             ResultErrorCount = result.ErrorCount,
             ResultWarningCount = result.WarningCount,
+            Transfer = transfer,
         };
     }
 
-    private static void LogMessages(DownloadResultMessageComposition? messages, ProbeLog log, int depth)
+    /// <summary>
+    /// Reads the whole message TREE off the Siemens objects, recursively, into a form a test can
+    /// build — which is what lets the transfer classifier be exercised without a controller.
+    ///
+    /// Recursive because <c>DownloadResultMessage.Messages</c> nests, and the sentence that decides
+    /// whether anything was transferred is not guaranteed to sit at the top level. Every read is
+    /// guarded and a failure is RECORDED AS A NODE rather than dropped: a dropped message reads
+    /// downstream as "nothing said that", which is the one conclusion it must not produce.
+    /// </summary>
+    private static IReadOnlyList<DownloadMessageNode> ReadMessages(DownloadResultMessageComposition? messages)
     {
-        if (messages is null || messages.Count == 0)
+        var nodes = new List<DownloadMessageNode>();
+        if (messages is null)
+        {
+            return nodes;
+        }
+
+        try
+        {
+            foreach (DownloadResultMessage message in messages)
+            {
+                nodes.Add(new DownloadMessageNode(
+                    Safe(() => message.State.ToString()),
+                    SafeInt(() => message.ErrorCount),
+                    SafeInt(() => message.WarningCount),
+                    Safe(() => message.Message),
+                    ReadMessages(SafeObject(() => message.Messages)),
+                    Safe(() => message.DateTime.ToString("O"))));
+            }
+        }
+        catch (Exception ex)
+        {
+            nodes.Add(new DownloadMessageNode(
+                "(unreadable)", 0, 0, $"<<ENUMERATING MESSAGES FAILED: {ExceptionReport.Summarise(ex)}>>"));
+        }
+
+        return nodes;
+    }
+
+    private static void LogMessages(IReadOnlyList<DownloadMessageNode> messages, ProbeLog log, int depth)
+    {
+        if (messages.Count == 0)
         {
             log.Line(new string(' ', depth * 2) + "(none)");
             return;
         }
 
         var indent = new string(' ', depth * 2);
-        foreach (DownloadResultMessage message in messages)
+        foreach (var message in messages)
         {
-            log.Line($"{indent}- state={Safe(() => message.State.ToString())} errors={Safe(() => message.ErrorCount.ToString())} " +
-                     $"warnings={Safe(() => message.WarningCount.ToString())} at={Safe(() => message.DateTime.ToString("O"))}");
-            log.Verbatim($"{indent}  text : ", Safe(() => message.Message));
-            LogMessages(SafeObject(() => message.Messages), log, depth + 1);
+            log.Line($"{indent}- state={message.State} errors={message.ErrorCount} " +
+                     $"warnings={message.WarningCount} at={message.Timestamp ?? "(none)"}");
+            log.Verbatim($"{indent}  text : ", message.Text);
+            if (message.Children.Count > 0)
+            {
+                LogMessages(message.Children, log, depth + 1);
+            }
+        }
+    }
+
+    private static int SafeInt(Func<int> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception)
+        {
+            return 0;
         }
     }
 

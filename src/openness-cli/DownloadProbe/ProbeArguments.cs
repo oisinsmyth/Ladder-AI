@@ -16,7 +16,8 @@ internal sealed class ProbeArguments
         string? target,
         string logDirectory,
         int connectTimeoutSeconds,
-        int openTimeoutSeconds)
+        int openTimeoutSeconds,
+        bool disruptive = false)
     {
         ProjectPath = projectPath;
         Options = options;
@@ -27,6 +28,7 @@ internal sealed class ProbeArguments
         LogDirectory = logDirectory;
         ConnectTimeoutSeconds = connectTimeoutSeconds;
         OpenTimeoutSeconds = openTimeoutSeconds;
+        Disruptive = disruptive;
     }
 
     internal string ProjectPath { get; }
@@ -63,6 +65,21 @@ internal sealed class ProbeArguments
     internal int ConnectTimeoutSeconds { get; }
 
     internal int OpenTimeoutSeconds { get; }
+
+    /// <summary>
+    /// R8's SANCTIONED EXCEPTION, and the only thing in this program that can widen what gets
+    /// answered. False unless <c>--disruptive</c> was spelled exactly; there is no environment
+    /// variable, no default, no fallback and no retry path that can arrive here.
+    ///
+    /// What it changes is stated in one place only — <see cref="SelectionPolicyMode.Disruptive"/> in
+    /// <see cref="NoActionFirstPolicy"/> — and it changes NOTHING ELSE: the scratch-path guard, the
+    /// required <c>--options</c> literal, the exact-name interface matching and the verbatim logging
+    /// are the same code on both paths.
+    /// </summary>
+    internal bool Disruptive { get; }
+
+    internal SelectionPolicyMode PolicyMode =>
+        Disruptive ? SelectionPolicyMode.Disruptive : SelectionPolicyMode.Normal;
 }
 
 internal abstract class ProbeParseResult
@@ -84,11 +101,14 @@ internal abstract class ProbeParseResult
 
 internal static class ProbeArgumentParser
 {
-    internal const string Usage =
+    // `static readonly`, not `const`: the disruptive allowance and deny lists are rendered from
+    // NoActionFirstPolicy's own data rather than retyped here, so the usage text cannot drift from
+    // the lists the policy actually applies.
+    internal static readonly string Usage =
         "download-probe <project.ap20> --options Software|SoftwareOnlyChanges|Hardware [--json]\n" +
         "               [--device <name>] --pc-interface \"<exact adapter name>\"\n" +
         "               [--target <exact target-interface name>] [--log-dir <dir>]\n" +
-        "               [--timeout-connect <seconds>] [--timeout-open <seconds>]\n" +
+        "               [--timeout-connect <seconds>] [--timeout-open <seconds>] [--disruptive]\n" +
         "\n" +
         "  <project.ap20>  MUST be the scratch project: a file name ending '" + ScratchProjectGuard.RequiredSuffix + "'.\n" +
         "  --options       REQUIRED, no default. Exactly one of the three literals above.\n" +
@@ -100,7 +120,15 @@ internal static class ProbeArgumentParser
         "  --log-dir       where the verbatim configuration log is written. Defaults to\n" +
         "                  %LADDER_PROBE_LOG_DIR% if set, otherwise %TEMP%\\download-probe.\n" +
         "  --json          a machine-readable report on stdout; the verbatim log then goes to the\n" +
-        "                  file and to stderr, so stdout stays parseable.";
+        "                  file and to stderr, so stdout stays parseable.\n" +
+        "  --disruptive    *** LETS THE DOWNLOAD ACTUALLY COMPLETE, BY STOPPING THE CPU. *** R8's\n" +
+        "                  sanctioned exception, and the only flag that widens what this tool will\n" +
+        "                  answer. Without it every selection policy is byte-for-byte as before.\n" +
+        "                  Permits EXACTLY the selections the chosen --options already entails:\n" +
+        "                      " + NoActionFirstPolicy.DisruptiveAllowanceSummary + "\n" +
+        "                  and NOTHING else. These stay denied even here:\n" +
+        "                      " + NoActionFirstPolicy.DisruptiveDenySummary + "\n" +
+        "                  Expect the CPU to be left STOPPED. Be at the machine.";
 
     /// <summary>Environment override for the log directory, so no job-specific path lives in the repo.</summary>
     internal const string LogDirectoryEnvVar = "LADDER_PROBE_LOG_DIR";
@@ -125,6 +153,7 @@ internal static class ProbeArgumentParser
         var connectTimeout = 900;
         var openTimeout = 900;
         var optionsSeen = false;
+        var disruptive = false;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -149,6 +178,14 @@ internal static class ProbeArgumentParser
 
                 case "--json":
                     json = true;
+                    break;
+
+                // The ONLY place in this program that can set the disruptive mode. Bare literal,
+                // matched by the same ordinal `switch` as every other flag, so `--disruptive=true`,
+                // `--Disruptive` and `--disrupt` all fall through to the unknown-option arm below and
+                // are USAGE ERRORS — never a silent enable and never a silent ignore.
+                case "--disruptive":
+                    disruptive = true;
                     break;
 
                 case "--device":
@@ -250,7 +287,8 @@ internal static class ProbeArgumentParser
             ?? Path.Combine(tempPath, "download-probe");
 
         return new ProbeParseResult.Success(new ProbeArguments(
-            projectPath, options, json, device, pcInterface, target, resolvedLogDir!, connectTimeout, openTimeout));
+            projectPath, options, json, device, pcInterface, target, resolvedLogDir!, connectTimeout, openTimeout,
+            disruptive));
     }
 
     private static bool TryTakeValue(IReadOnlyList<string> args, ref int index, out string? value)

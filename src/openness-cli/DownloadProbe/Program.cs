@@ -31,6 +31,16 @@ namespace DownloadProbe;
 ///   2. <see cref="NoActionFirstPolicy"/> is the only thing that can decide a selection, and
 ///      <see cref="NoActionFirstPolicy.DeniedSelections"/> is a readable list of what it will never
 ///      choose. There is no flag, argument or environment variable that empties that list.
+///   3. <c>--disruptive</c> SHRINKS that list to <see cref="NoActionFirstPolicy.DisruptiveDeniedSelections"/>
+///      — two entries, named — and adds exactly <see cref="NoActionFirstPolicy.DisruptiveAllowances"/>
+///      — three entries, named. Both lists are data, printed in the banner before Portal is
+///      contacted. The flag is a bare literal in one <c>switch</c> arm: there is no default, no
+///      fallback, no environment variable and no retry path that can reach it.
+///
+/// AND ONE THING THE OUTPUT MUST ANSWER, because a green result did not: WAS ANYTHING ACTUALLY
+/// TRANSFERRED? <c>DownloadResult.State</c> was <c>Success</c> on a live run that carried nothing,
+/// so <see cref="TransferVerdicts"/> classifies the message tree and the answer goes in the verdict
+/// line itself.
 /// </summary>
 internal static class Program
 {
@@ -131,31 +141,98 @@ internal static class Program
         log.Line($"pc interface   : {arguments.PcInterface ?? "(none given — REQUIRED unless the project declares exactly one)"}");
         log.Line($"target filter  : {arguments.Target ?? "(none given — required only if the PC interface has several)"}");
         log.Line($"log file       : {logPath}");
+        log.Line($"policy mode    : {arguments.PolicyMode}{(arguments.Disruptive ? "   *** --disruptive WAS GIVEN ***" : " (--disruptive was NOT given)")}");
         log.Blank();
         log.Line("THIS TOOL PERFORMS A REAL DEVICE DOWNLOAD. It is not a dry run and has no dry-run mode.");
         log.Blank();
 
+        if (arguments.Disruptive)
+        {
+            log.Block(DisruptiveBanner);
+            log.Blank();
+        }
+
         log.Block(DownloadOptionChoices.ConsequenceWarning(arguments.Options));
         log.Blank();
-        log.Block(DownloadOptionChoices.AbortPrediction(arguments.Options));
+        log.Block(DownloadOptionChoices.AbortPrediction(arguments.Options, arguments.PolicyMode));
         log.Blank();
 
         log.Line("SELECTION POLICY (applied to every configuration the API raises):");
+        if (arguments.Disruptive)
+        {
+            log.Line("  0. *** DISRUPTIVE ONLY *** If the (configuration, selection) pair is on the allowance");
+            log.Line("     list below, choose it — AHEAD of NoAction, which is the whole point.");
+        }
+
         log.Line("  1. If a 'NoAction' selection exists, choose it. Always.");
         log.Line("  2. Otherwise, if exactly one permitted selection is offered, take it AND SAY SO LOUDLY.");
         log.Line("  3. Otherwise leave the configuration unhandled and let the download abort.");
+
+        if (arguments.Disruptive)
+        {
+            log.Line("  PERMITTED ONLY BECAUSE --disruptive WAS GIVEN (the normal policy denies every one):");
+            foreach (var (configurationType, selection) in NoActionFirstPolicy.DisruptiveAllowances)
+            {
+                log.Line($"      {configurationType} -> {selection}");
+            }
+        }
+
         log.Line("  Never chosen, whatever else is on offer:");
-        foreach (var (configurationType, selection) in NoActionFirstPolicy.DeniedSelections)
+        foreach (var (configurationType, selection) in NoActionFirstPolicy.DeniedSelectionsFor(arguments.PolicyMode))
         {
             log.Line($"      {configurationType} -> {selection}");
         }
+
+        if (arguments.Disruptive)
+        {
+            log.Line("      ^^ SHRUNK, NOT EMPTIED. These two destroy BEYOND what the chosen download option");
+            log.Line("         entails, so they stay denied here and the download aborts if either is raised.");
+        }
     }
+
+    /// <summary>
+    /// The banner. Printed before Portal is contacted, and it states the three things a reader has to
+    /// know before this run happens: that the CPU will be stopped, exactly what is permitted that
+    /// normally is not, and exactly what is still refused.
+    /// </summary>
+    private static readonly IReadOnlyList<string> DisruptiveBanner = new[]
+    {
+        "################################################################################",
+        "###  *** --disruptive: THIS RUN IS ALLOWED TO STOP THE CPU. ***              ###",
+        "###                                                                          ###",
+        "###  Every previous run of this tool succeeded BY REFUSING. This one can only ###",
+        "###  succeed by NOT refusing. It answers the selections that stop the modules ###",
+        "###  and reinitialise data blocks, so the download can actually complete.     ###",
+        "###                                                                          ###",
+        "###  PERMITTED HERE, AND DENIED BY THE NORMAL POLICY:                         ###",
+        "###      " + NoActionFirstPolicy.DisruptiveAllowanceSummary,
+        "###      (each is a consequence the chosen --options value ALREADY entails)   ###",
+        "###                                                                          ###",
+        "###  *** STILL DENIED, EVEN HERE — THE HALF THAT MATTERS: ***                 ###",
+        "###      " + NoActionFirstPolicy.DisruptiveDenySummary,
+        "###      (these destroy BEYOND what the option entails. If either is raised   ###",
+        "###       it is left unhandled and the download aborts, exactly as before.)   ###",
+        "###                                                                          ###",
+        "###  EXPECT THE CPU TO END UP STOPPED. There may be no automated way back.    ###",
+        "###  BE AT THE MACHINE.                                                       ###",
+        "################################################################################",
+    };
 
     private static void WriteFooter(ProbeLog log, ProbeOutcome outcome, string logPath)
     {
         log.Blank();
         log.Rule("VERDICT");
         log.Line(outcome.Verdict);
+
+        // Repeated at the very end even though the session already logged them. This is the last
+        // thing on the screen, and "the CPU may be stopped" is not a fact to leave scrolled off.
+        if (outcome.ClosingLines.Count > 0)
+        {
+            log.Blank();
+            log.Block(outcome.ClosingLines);
+            log.Blank();
+        }
+
         log.Line($"exit code      : {outcome.ExitCode}{DescribeExitCode(outcome.ExitCode)}");
         log.Line($"finished (UTC) : {DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)}");
         log.Line($"log file       : {logPath}");
@@ -181,6 +258,23 @@ internal static class Program
             ["tool"] = "download-probe",
             ["project"] = arguments.ProjectPath,
             ["options"] = arguments.Options.ToString(),
+            ["disruptive"] = arguments.Disruptive,
+            ["policyMode"] = arguments.PolicyMode.ToString(),
+            ["disruptiveAllowances"] = arguments.Disruptive
+                ? NoActionFirstPolicy.DisruptiveAllowances.Select(a => $"{a.ConfigurationType} -> {a.Selection}").ToList()
+                : new List<string>(),
+            ["deniedSelections"] = NoActionFirstPolicy.DeniedSelectionsFor(arguments.PolicyMode)
+                .Select(d => $"{d.ConfigurationType} -> {d.Selection}").ToList(),
+
+            // The experiment's actual answer, as three separate keys so a consumer cannot read
+            // "undetermined" as "nothing transferred": softwareLoaded is TRI-STATE and null means
+            // exactly that nobody knows.
+            ["transferVerdict"] = outcome.Transfer?.Kind.ToString(),
+            ["softwareLoaded"] = outcome.Transfer?.SoftwareLoaded,
+            ["transferHeadline"] = outcome.Transfer?.Headline,
+            ["transferEvidence"] = outcome.Transfer?.Evidence,
+            ["upToDatePhraseMatched"] = outcome.Transfer?.MatchedPhrase,
+            ["cpuRunStateAdvisory"] = outcome.ClosingLines,
             ["pcInterface"] = arguments.PcInterface,
             ["targetInterface"] = arguments.Target,
             ["devicePath"] = outcome.DevicePath,

@@ -639,6 +639,37 @@ ALSO MEASURED, none of it in the research:
   - A re-import reverted a block's memory layout to Optimized for the THIRD measured time.
 
 --------------------------------------------------------------------------------
+13a. THE NEXT EXPERIMENT — AND WHY IT IS A DIFFERENT KIND OF STEP
+--------------------------------------------------------------------------------
+
+*** EVERY TEST SO FAR SUCCEEDED BY REFUSING. *** The guards were exercised against a real
+device and held; six downloads aborted; nothing was written. Refusal WAS the success
+condition, which is why the risk was low throughout.
+
+*** THE NEXT ONE SUCCEEDS ONLY BY NOT REFUSING. *** Proving that this tooling can DELIVER a
+program requires answering `StopAll` — a selection R4's deny list exists to forbid — stopping
+the CPU, and then restarting it. That is a materially different act from anything attempted
+so far, and it should be framed as its own decision rather than rolled into a working
+session.
+
+WHAT IT NEEDS, and each is a place it can go wrong:
+  - R8's disruptive mode, explicitly declared, never a flag on the wave-boundary path;
+  - permission to answer ONLY what the chosen download option already entails — `StopAll`,
+    and `StopPlcAndReinitialize` if raised, since `Software` (all) resets values including
+    retentive ones anyway. *** `ResetModule -> DeleteAll` AND `InitializeMemory -> AcceptAll`
+    MUST STAY DENIED EVEN HERE *** — they destroy beyond what the option entails;
+  - a way back to RUN. O3 is unresolved: `IS7Client` exposes no mode change, and whether the
+    post-download `StartModules` configuration can restart the CPU is [R], NOT MEASURED.
+
+RECOMMENDED SHAPE, the same one that made G-7 safe: a phase that proves the INSTRUMENTATION
+on something harmless, then a phase that proves the CAPABILITY. Do not combine them — if the
+capability phase fails, you need to already know whether your observation of it is
+trustworthy.
+
+AND THE HONEST PRECONDITION: the CPU may end up STOPPED with no automated way back. Anyone
+running this should expect to be at the machine.
+
+--------------------------------------------------------------------------------
 14. EXTERNAL UNKNOWNS — the research's own gaps, not ours
 --------------------------------------------------------------------------------
 

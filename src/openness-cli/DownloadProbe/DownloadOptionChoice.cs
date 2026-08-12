@@ -108,8 +108,46 @@ internal static class DownloadOptionChoices
     /// tool answers <c>NoAction</c> to everything destructive, an option that cannot proceed without
     /// a destructive answer is expected to abort — and that abort is the finding.
     /// </summary>
-    internal static IReadOnlyList<string> AbortPrediction(DownloadOptionChoice choice) =>
-        PredictionFor(choice).Concat(AbortIsOnlyAResultWhenTheToolWorked).ToList();
+    internal static IReadOnlyList<string> AbortPrediction(
+        DownloadOptionChoice choice, SelectionPolicyMode mode = SelectionPolicyMode.Normal) =>
+        (mode == SelectionPolicyMode.Disruptive ? DisruptivePredictionFor(choice) : PredictionFor(choice))
+            .Concat(AbortIsOnlyAResultWhenTheToolWorked)
+            .ToList();
+
+    /// <summary>
+    /// The prediction is REVERSED under <c>--disruptive</c>, and saying so is not decoration: the
+    /// normal text tells the reader an abort is the expected, successful outcome. Printed unchanged
+    /// on a disruptive run it would prepare them to read the failure of the experiment as its success
+    /// — the one misreading this whole tool is built to prevent.
+    /// </summary>
+    private static IReadOnlyList<string> DisruptivePredictionFor(DownloadOptionChoice choice) => choice switch
+    {
+        DownloadOptionChoice.Hardware => new[]
+        {
+            "PREDICTION (--disruptive): this run is EXPECTED TO PROCEED, not to abort. StopModules is",
+            "answered with StopAll, so the CPU is stopped and the download goes ahead.",
+            $"*** HERE AN ABORT IS A FAILURE OF THE EXPERIMENT, NOT ITS RESULT *** — exit {ProbeExitCodes.AbortedByUnhandledConfiguration} now means",
+            "something OTHER than StopModules/DataBlockReinitialization stood in the way; the log names it.",
+        },
+        DownloadOptionChoice.Software => new[]
+        {
+            "PREDICTION (--disruptive): this run is EXPECTED TO PROCEED, not to abort. StopModules ->",
+            "StopAll and DataBlockReinitialization -> StopPlcAndReinitialize are both answered, so",
+            "neither can stop it any more.",
+            $"*** HERE AN ABORT IS A FAILURE OF THE EXPERIMENT, NOT ITS RESULT *** — exit {ProbeExitCodes.AbortedByUnhandledConfiguration} now means",
+            "something else was raised: ResetModule or InitializeMemory (still denied, deliberately), or",
+            "a configuration nobody has seen yet. The log names it either way.",
+        },
+        DownloadOptionChoice.SoftwareOnlyChanges => new[]
+        {
+            "PREDICTION (--disruptive): a differential download raises DataBlockReinitialization only when",
+            "a DB has been RESTRUCTURED, and that is now answered with StopPlcAndReinitialize rather than",
+            "refused — so it is expected to proceed.",
+            "AND THE QUESTION THAT MATTERS HERE: a differential with nothing to carry returns Success and",
+            "transfers NOTHING. Read the TRANSFER VERDICT, never the state.",
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(choice), choice, "Unhandled download option."),
+    };
 
     /// <summary>
     /// Printed under every prediction, because the two ways a download can fail to proceed look
