@@ -296,6 +296,68 @@ is no longer an acceptable resting place for anything that appears in deliverabl
     CLAUDE.md line — since it governs converter scope permanently and well beyond the harness.
     Flagged for the owner rather than done unilaterally. ***
 
+### ✅ THE SPIKE CHECKER IR IS AUTHORED (2026-08-12) — and it surfaced two more defects
+
+In the job scratch dir, not the repo. **16 registers, not 100** — one FC16, 15 comparisons instead
+of 122, and *** STATUS BASE STAYS AT 200 SO SCALING UP LATER MOVES NO ADDRESS. *** Verified:
+`to-xml`/`to-ir` round-trip **byte-identical**, `--no-sidecar` derivability byte-identical,
+`review` 18/18 with **0 findings**, `preflight` clean. Not compiled or imported — hard rule 4's
+gate is unmet by design.
+
+**The neat part, worth keeping:** "first disagreeing index" without a loop is obtained by emitting
+the MOVEs in **descending** index order, so the lowest disagreeing index is written **last** and
+survives. That avoids the O(n²) prefix-agreement terms the naive form needs. Confirmed present in
+the generated XML, not just the IR.
+
+**Readability cost, stated rather than discovered at review:** the capture network is 32
+statements and fails C-101/C-602 on size. It passes on *subject* — one network, one thing — and
+acceptable for a disposable spike. *** At 100 registers it becomes 200 MOVEs and is NOT a shape to
+carry into phase 2. ***
+
+*** ONE CONSTRAINT THAT MUST HOLD ON THE RIG: KEEP `MB_SERVER` IN OB1. *** The check spans two
+networks of one call — atomic against OB1, but **not against an interrupt OB**. If anything ever
+calls `MB_SERVER` outside OB1, the checker can be interrupted mid-check and *** MANUFACTURE the
+tear it exists to detect. ***
+
+#### 🔴 CONVERTER DEFECT — a comparison's literal is typed by MAGNITUDE, not by the compare's own type
+
+Measured. With registers declared `UInt` — the honest type for a Modbus holding register — the
+converter emitted **nine comparison literals as `Int`/`DInt` against `SrcType="UInt"` compare
+boxes**. `BuildCompareStep` calls `ResolveOperand` with no `constantTypeOverride`, so *** FI-55
+FIXED THE SrcType HALF OF THIS AND LEFT THE LITERAL HALF. *** Real TIA types them consistently
+(`FB_MotorFwdRevSystem.xml` carries `<ConstantType>UDInt</ConstantType>` against a `UDInt`
+compare), so this is very likely an import/compile rejection reached by a different door —
+"data type Int of the actual parameter does not match the data type UInt of the formal parameter".
+
+*** THE CORPUS HAS ZERO `UInt`/`Word` COMPARISONS, WHICH IS WHY NOTHING HAD HIT IT. *** Same shape
+as the wrong-spelling Modbus names: a capability that looked covered because nothing had exercised
+it.
+
+  ➜ **Worked around, not fixed:** every register is declared `Int`, which the converter's
+    magnitude inference agrees with. Bit patterns on the wire are unchanged and the client reads
+    `ushort`, so it is invisible to the PC side. *** THE WORKAROUND IS NOT A DESIGN CHOICE *** —
+    the fix belongs in `SidecarSynthesizer.BuildCompareStep`, and `Word`-typed comparisons will
+    hit it again.
+
+#### ❓ AN UNKNOWN WORTH ONE RIG MEASUREMENT: DOES S7-1200 `ADD` WRAP OR SATURATE ON OVERFLOW?
+
+Not established, so the counters wrap by an **explicit rung** rather than relying on overflow.
+*** IF `ADD` SATURATES RATHER THAN WRAPPING, `SCAN_COUNTER` STALLS AT MAX AFTER ~5.5 MINUTES AT A
+10 ms SCAN — INSIDE AN EXPERIMENT RUN, AND IT WOULD READ AS A STOPPED PLC. *** Cost of the
+explicit wrap: exactly one value skipped per 65536 scans. **If the rig shows `ADD` wraps cleanly,
+delete the two MOVEs.**
+
+#### Hard rule 3 — flagged, not laundered
+
+There is no `ir/<project>/` export for the spike, so *** ALL 26 TAGS ARE PROPOSED *** — invented
+from the register contract. `to-xml` on the block **fails closed without the tag table** (FI-71),
+so the two must travel together. **The engineer creates or imports the tag table; nothing here is
+grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
+
+**Deliberately not authored:** the `MB_SERVER` call (hand-authored in TIA, per the phase-1
+decision), OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
+merely ignored. ***
+
 ### 🔴 OPEN DECISION — `Normalizer` MAY BE BLIND TO A WIRE-DIRECTION FLIP
 
 Found 2026-08-12 while building `compare`, and it is the `MemoryLayout` class of defect one level
