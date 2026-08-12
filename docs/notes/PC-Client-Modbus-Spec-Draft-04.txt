@@ -332,6 +332,107 @@ D31. *** SUBMISSION IS ATOMIC AND PRECEDES PACKING (DB-9). *** Two independent l
      graph well — trickled submissions yield a worse colouring, hence more tensors, hence a
      longer wave for the same tests.
 
+--- ruled by the owner 2026-08-12, closing O6, O9, O12, O13 ---
+
+D32. *** EVERY UNHANDLED CONFIGURATION ABORTS THE DOWNLOAD, AND WE ABORT IT — NOT TIA
+     (O9 RULED). *** The escalation ladder, in order:
+
+       1. ABORT FROM THE DELEGATE (a throw). Ours, so it is distinguishable from one TIA
+          caused — the same separation as FailedToApply versus RefusedByPolicy.
+       2. LOG: the configuration, every selection it offered, and that we refused it.
+       3. *** PAUSE TESTING. *** Not optional even though an abort means the program was not
+          changed: an aborted download leaves a state Siemens does not document (G4), so
+          resumption goes through the version register (§9) first, never on assumption.
+       4. ATTRIBUTE — ask DB-1 which submitted change entails the configuration raised.
+       5. IF ATTRIBUTABLE: *** EXCISE THAT IR BLOCK FROM THE WAVE SET, ROUTE IT TO THE
+          DEFERRED QUEUE (D23), AND RE-DOWNLOAD WITHOUT IT. *** An ordinary boundary; no
+          disruption is spent.
+       6. IF NOT ATTRIBUTABLE: a disruptive download — which by D25 is a FULL one, never a
+          differential.
+
+     *** CAVEAT 1 — ATTRIBUTION IS STRUCTURALLY IMPOSSIBLE FOR SOME CONFIGURATIONS, AND THAT
+     IS NOT A LOCATOR BUG. *** `DataBlockReinitialization` and `StopModules` ARE attributable:
+     DB-1's change classes already map onto them. `UserManagementDownload` and
+     `OverwriteSystemData` are PROJECT-LEVEL — no block entails them, so there is nothing to
+     excise and step 6 is the only rung that exists. THE LOG MUST DISTINGUISH "no block is
+     responsible" FROM "the locator failed to find one": they take the same branch but call
+     for opposite fixes, and a log that conflates them will send a fix wave after a locator
+     that was working correctly.
+
+     *** CAVEAT 2 — THE LADDER AS RULED HAS NO TERMINAL RUNG AND CAN LOOP. *** If the step-6
+     disruptive download ALSO raises an unhandled configuration, step 1 fires again against an
+     unchanged situation and the ladder restarts. Unattended that is an abort loop that
+     consumes the night. TERMINAL RULE, ADDED HERE: *** an unhandled configuration during the
+     step-6 download is a HARD STOP. *** Testing stays paused, the wave is abandoned, and it
+     is recorded as its own outcome class — it is the case that generates a fix wave, and it
+     is the one thing in this ladder a person must see. NEVER RETRY A DISRUPTIVE DOWNLOAD THAT
+     ABORTED ON A CONFIGURATION.
+
+D33. *** INERT IS THE START STATE OF THE NEXT TEST, WITH DYNAMICS NOT TRIGGERED AND RESETS
+     HELD (O12 RULED). *** Not "everything idle". Precisely:
+
+       - the NEXT test's START CONDITIONS are established;
+       - NO DYNAMICS ARE TRIGGERED — models sit AT the start condition, not running toward it;
+       - *** RESETS ARE HELD ASSERTED for the whole inert period — a LEVEL, not an edge or a
+         pulse *** — and released at test start;
+       - LATCHES ARE RELEASED, and the release must COMPLETE before the first scan of the test;
+       - *** OUTPUTS ARE NOT RECORDED DURING INERT. *** Establishing a start state moves
+         outputs; recording that would put spurious activity in front of every single test.
+
+     CONSEQUENCE 1: *** INERT IS PARAMETRISED BY WHAT COMES NEXT *** — it is not a canned
+     routine but is computed per boundary from tensor[k+1]'s vectors.
+
+     CONSEQUENCE 2, AND IT STRENGTHENS D27: one inert phase must establish the start state for
+     EVERY test in the next tensor at once, and that is only WELL-DEFINED because the tests in
+     a tensor are conflict-free — non-overlapping reachable state (D9) means their start
+     conditions CANNOT CONTRADICT. *** So conflict-freedom is not only about interference
+     during a test; it is what makes a shared inert phase constructible at all. *** Two tests
+     needing contradictory start states are, by that fact alone, in different tensors.
+
+     CONSEQUENCE 3: D5's "the reset is VERIFIED" now has TWO distinct checks — start
+     conditions established, AND dynamics quiescent. A model sitting at the right value while
+     still integrating toward another is not inert, and only the second check catches it.
+
+D34. *** THE WAVE ALTERNATES INERT / TEST UNCONDITIONALLY, PASS OR FAIL (O6 RULED). *** A
+     failing test does not abort the wave and does not change what follows it. This RESOLVES
+     O6 by REMOVING THE NEED FOR A FAILURE POLICY rather than by choosing one: the inert phase
+     (D33) is what contains a bad state, so the wave never has to reason about whether the
+     previous test left one. Abort-loses-information and complete-risks-cascading were the two
+     horns; establishing the next start state unconditionally takes neither.
+
+     WHAT IS STILL OWED, AND IT IS SMALL: the case where *** INERT ITSELF CANNOT BE
+     ESTABLISHED *** — a block latched in a fault that will not reset. That is NOT a test
+     failure, it is a WAVE-BLOCKING condition, and the natural treatment is D32's: excise the
+     offending block to the deferred queue and continue the wave without it. Recorded as O6's
+     residual rather than quietly assumed.
+
+D35. *** COVERAGE IS COUNTED PER ASSERTION, NOT PER CLAUSE, AND EVERY VECTOR DECLARES THE
+     ASSERTION IT TARGETS (O13 RULED). *** Many vectors per clause is the expected shape and
+     is entirely fine — *** but only if the denominator is assertions. *** Against §7's
+     `clause x instance` denominator, five vectors on a two-assertion clause all tick the same
+     box, and the second assertion reads as covered while nothing ever tested it. That is this
+     project's own correlated-check failure wearing coverage clothing.
+
+     WHY THIS FORM RATHER THAN "MAKE CLAUSES ATOMIC": it is correct WHETHER OR NOT clauses
+     turn out to be atomic. If rung B/C already emits atomic clauses, the declaration is
+     trivially the clause itself and costs nothing; if it does not, the declaration is exactly
+     what makes the gap visible. *** So the original O13 question — are clauses already
+     atomic? — stops being load-bearing, which is why it can be closed without answering it. ***
+
+D36. *** THE POLL-WIDTH CAP (O11) AND CONFLICT DENSITY (O14) ARE PARAMETERS TO BE MEASURED
+     ONCE THE DESIGN BLOCKS EXIST — NEVER CONSTANTS ASSUMED NOW. *** Both deferred
+     deliberately, so that the design blocks can be adapted to what is measured rather than
+     the measurement being predicted. THE OBLIGATION THE DEFERRAL CARRIES: DB-13's colouring
+     takes MAX TENSOR WIDTH as an explicit input with no default that could be mistaken for a
+     measurement, and nothing anywhere assumes unlimited width or a particular packing.
+
+     *** ONE THING MUST NOT BE DEFERRED ALONGSIDE THEM: AUTHOR MODELS INSTANCED PER TEST FROM
+     THE START (D28). *** Deferring the MEASUREMENT is right; defaulting to SHARED models
+     while it is deferred is not. Instancing is nearly free while the models are being
+     written and is a rewrite of every model afterwards — and if O14 comes back "packs 1-2
+     wide", shared models are precisely the cause it will name. BE WRONG IN THE CHEAP
+     DIRECTION.
+
 --------------------------------------------------------------------------------
 4. THE DESIGN BLOCKS
 --------------------------------------------------------------------------------
@@ -1240,14 +1341,17 @@ running this should expect to be at the machine.
   O4. *** CLOSED — the fidelity declaration, M3/M4 in §11. ***
   O5. *** CLOSED — an independent lad-coder, from an EQUIPMENT-grounded physical analysis;
       M1/M2 in §11. ***
-  O6. Wave failure policy — does one failing test abort the wave, or does it complete and
-      report? Abort loses information; complete risks cascading from a bad state.
-  O8. *** CLOSED — §7. *** Denominator = requirement clause x instance; four buckets; the
-      gate is UNCLASSIFIED = 0 rather than a percentage; and it stops the CLAIM, not the RUN.
-      Residual: who rules a clause OUT-OF-SCOPE or UNTESTABLE-ON-RIG. Recommended: whoever
-      signs off the architecture at gate 1 — it is a judgement about the ENVIRONMENT, not the
-      code — and never the block's or the vector's author, both of whom have an incentive to
-      reach for it under pressure.
+  O6. *** CLOSED 2026-08-12 — D34. *** The wave alternates inert / test UNCONDITIONALLY, pass
+      or fail. Neither horn was taken: the inert phase contains the bad state, so no failure
+      policy is needed. RESIDUAL, carried into D34: inert itself failing to establish is a
+      wave-blocking condition, not a test failure, and takes D32's excise-to-deferred path.
+  O8. *** CLOSED — §7, AND ITS RESIDUAL CLOSED TOO 2026-08-12. *** Denominator = requirement
+      clause x instance *** (SUPERSEDED BY D35 — the denominator is now ASSERTION x instance) ***;
+      four buckets; the gate is UNCLASSIFIED = 0 rather than a percentage; and it stops the
+      CLAIM, not the RUN. The residual — who rules a clause OUT-OF-SCOPE or UNTESTABLE-ON-RIG —
+      is ruled AS RECOMMENDED: whoever signs off the architecture at gate 1, because it is a
+      judgement about the ENVIRONMENT rather than the code, and NEVER the block's or the
+      vector's author, both of whom have an incentive to reach for it under pressure.
 
   O11. *** THE THROUGHPUT CEILING — RE-SCOPED IN DRAFT 04, AND STILL OPEN. *** How many
       concurrent tests can ONE coordinator connection service, given 79-108 ms round trips and
@@ -1262,6 +1366,10 @@ running this should expect to be at the machine.
       tensors, shorter wave), poll bandwidth pushes them NARROWER. If the poll cap lands below
       the conflict-free width, the poll cap is the binding constraint and §8's packed figures
       do not hold — that is the specific way this question is still load-bearing.
+      *** DEFERRED 2026-08-12 BY RULING, WITH A CONDITION — D36. *** Measure it once the
+      design blocks exist and adapt them, rather than predicting it now. The condition: DB-13
+      takes max tensor width as an EXPLICIT input with no default that could be mistaken for a
+      measurement, and nothing assumes unlimited width.
 
   O14. *** NEW IN DRAFT 04, AND THE HIGHEST-VALUE MEASUREMENT AVAILABLE: WHAT IS THE CONFLICT
       DENSITY OF A REAL SUBMISSION SET? *** Everything in §8's corrected arithmetic rests on
@@ -1274,17 +1382,40 @@ running this should expect to be at the machine.
       design. ***
       *** ANSWERABLE NOW, WITHOUT THE RIG AND BEFORE BUILDING ANY OF IT: *** it needs a real
       submission set and the reference graph (`converter cross-check`), both of which exist as
-      soon as the first test set is authored. Do this before committing to DB-10/DB-11.
+      soon as the first test set is authored.
+      *** DEFERRED 2026-08-12 BY RULING, DELIBERATELY AND AGAINST THE ABOVE — D36. *** Build
+      the design blocks first and adapt them to what is then measured. The reasoning is sound:
+      a measurement taken before the thing being measured exists is a prediction.
+      *** THE ONE THING THE DEFERRAL MUST NOT CARRY WITH IT: DO NOT DEFAULT TO SHARED MODELS
+      WHILE WAITING. *** Author them instanced per test (D28). Instancing is nearly free at
+      authoring time and is a rewrite of every model afterwards, and shared models are the
+      exact cause this measurement would finger. Deferring the measurement is cheap; deferring
+      the structural choice is not.
 
-  O12. WHAT "INERT" MEANS PRECISELY: every block idle, or every block idle AND every model at
-      a declared start condition? The second is more useful and more work — and it decides
-      what the NEXT test in a wave starts from after a failure (see O6).
+  O12. *** CLOSED 2026-08-12 — D33. *** Neither of the two options offered: inert is the NEXT
+      TEST'S START STATE with dynamics NOT triggered, resets HELD as a level throughout,
+      latches released, and outputs NOT recorded. It is therefore computed per boundary rather
+      than being a fixed state at all — which neither option had considered.
 
-  O13. CLAUSE ATOMICITY: do the rung-B/C artifacts already produce atomic behaviours? If a
-      cited clause carries two assertions, covering one marks both (§7).
+  O13. *** CLOSED 2026-08-12 — D35, AND CLOSED WITHOUT ANSWERING IT. *** The owner expects
+      MANY VECTORS PER CLAUSE, which is fine — provided coverage is counted PER ASSERTION and
+      each vector declares the assertion it targets. That form is correct whether or not
+      clauses are atomic, so "are the rung-B/C artifacts already atomic?" stops being
+      load-bearing and needs no investigation.
 
-  O9. *** NEW, AND THE LARGEST SAFETY QUESTION OPEN: WHICH UNHANDLED CONFIGURATIONS ACTUALLY
-      ABORT? *** Measured 2026-08-12: unhandled ABORTED for `StopModules`,
+  O9. *** RULED 2026-08-12 — SEE D32 FOR THE POLICY. WHAT REMAINS IS BUILD AND VERIFY, NOT
+      DECISION. *** All unhandled configurations abort (we throw), log, pause testing, then
+      attribute: excise the offending IR block to the deferred queue if it can be located, and
+      spend a disruptive full download only if it cannot. Two things D32 adds that the ruling
+      did not state, both load-bearing: attribution is STRUCTURALLY IMPOSSIBLE for
+      project-level configurations (nothing to excise — the log must not report that as a
+      locator failure), and *** the ladder as ruled can LOOP, so an unhandled configuration
+      during the fallback download is a HARD STOP, never a retry. ***
+      STILL TO VERIFY BEFORE RELYING ON ANY OF IT: that a throw inside the delegate propagates
+      and leaves the CPU untouched rather than half-loaded — external gap G4, on the critical
+      path. The ORIGINAL question below is retained because it is what the ruling answers.
+
+      THE ORIGINAL QUESTION: *** WHICH UNHANDLED CONFIGURATIONS ACTUALLY ABORT? *** Measured 2026-08-12: unhandled ABORTED for `StopModules`,
       `DataBlockReinitialization` and `OverwriteSystemData`, and DID NOT abort for
       `UserManagementDownload` — that download completed with TIA applying a default we
       neither chose nor can see. The whole protection model in R4/R8 rests on "refuse to
@@ -1313,7 +1444,13 @@ running this should expect to be at the machine.
       unhandled on purpose"; the download reports Success; and the load manifest may never
       mention what was removed. A silent destructive path wearing the shape of a refusal.
 
-  O10. Which selection did TIA apply for `UserManagementDownload`? One of
-      `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword`,
-      `DownloadAllUserManagementDataResetToProject` was applied on our behalf and the result
-      messages do not say which.
+  O10. *** CLOSED 2026-08-12 — AND STRUCTURALLY, NOT BY DEPRIORITISATION. *** The owner ruled
+      it unimportant and said it would surface as we run. It is stronger than that: *** D32
+      makes the question UNABLE TO RECUR. *** We could not see which selection TIA applied
+      only because we LET TIA CHOOSE by leaving the configuration unhandled. Under D32 nothing
+      is ever left unhandled — an unanswered configuration aborts — so TIA never again applies
+      a selection on our behalf, and there is never again a selection we cannot see.
+      WHAT REMAINS IS PURELY HISTORICAL: one download on 2026-08-12 had one of
+      `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword` or
+      `DownloadAllUserManagementDataResetToProject` applied to a scratch project on a bench
+      rig, and the result messages do not say which. Nothing downstream depends on knowing.
