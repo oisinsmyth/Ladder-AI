@@ -2043,17 +2043,19 @@ conversation.
                               new machinery; one new ordering constraint; one residual that
                               does not go away
     X-J  unclaimed numbers    a reserved range for harness-generated objects
-    X-K  CPU stop vs link     CLOSEABLE, not external. *** RUN HALF MEASURED 2026-08-12 [M]: ***
-                              `PlcGetStatus` returned Run from the rig, and PUT/GET turned out
-                              NOT to be a blocker, so the closer costs a function call rather
-                              than a hardware-config change. STOP half rides the next
-                              authorised download, which also supplies R8's confirmation.
-                              KEY ON `Status == 8` (Run) — Stop is the decoder's catch-all
+    X-K  CPU stop vs link     *** CLOSED ON MEASUREMENT 2026-08-12 [M], BOTH HALVES, WITHOUT A
+                              DOWNLOAD. *** Connect, SZL and the mode read all work in STOP, so
+                              "CPU stopped" and "link dropped" are now distinguishable. PUT/GET
+                              was not a blocker in either state. KEY ON `== 8` (Run): this CPU
+                              returns 0x03 for STOP, so Sharp7's catch-all is load-bearing and
+                              must NOT be tightened. Also mechanises R8's outstanding
+                              device-side confirmation
 
 *** WHAT REMAINS IS VERIFICATION AND BUILD, NOT DESIGN. *** Four things must be MEASURED before
 the parts resting on them are trusted: `MB_SERVER`'s single-scan atomicity (X-A), the `%MW`
-ceiling (X-A), a delegate throw leaving the CPU untouched (G4, D32), and `PlcGetStatus` reading
-STOP (X-K, whose RUN half is now measured). Two of those fold into one experiment.
+ceiling (X-A), and a delegate throw leaving the CPU untouched (G4, D32). *** X-K IS NO LONGER
+AMONG THEM — measured in full 2026-08-12. *** Its closer also mechanises R8's device-side
+confirmation, so that is no longer a reason to have a person present.
 
 *** NUMBERED X- RATHER THAN G- DELIBERATELY (2026-08-12). *** `G` was already carrying two
 unrelated series — the SEVEN DESIGN GAPS G-1..G-7 (all closed; §13's title refers to G-7) and
@@ -2524,14 +2526,68 @@ other protocols this project already speaks.
      [The rig's actual PUT/GET state remains UNKNOWN — the handover records it as unknown too —
       so today's success is consistent with either hypothesis. It no longer matters for X-K.]
 
-     TWO THINGS STILL TO DO, both small (and see §16.13 — the same session turned up a memory
-     constraint the design did not have):
+     *** STOP HALF MEASURED 2026-08-12 [M] — X-K IS CLOSED, BOTH HALVES, AND WITHOUT A
+     DOWNLOAD. *** The owner stopped the CPU at the machine, which is a cleaner signal than a
+     stop occurring as a side effect of a transfer:
+
+        connect   : ok, 440 ms, PDU requested 480 / negotiated 240 — IDENTICAL to RUN. *** THE
+                    MECHANISM SURVIVES A STOPPED CPU; it is not merely reporting on a running
+                    one. ***
+        SZL 0x0011: `GetOrderCode` STILL ANSWERS in STOP, 79 ms, same order code. *** THIS IS
+                    THE LOAD-BEARING CONFIRMATION — the userdata/SZL REQUEST CLASS AS A WHOLE
+                    is served in STOP, which is the actual basis of the claim rather than
+                    `PlcGetStatus` specifically. *** A raw `ReadSZL(0x0424)` — the identical
+                    wire request — also succeeded, cross-confirming from a second code path.
+        timing    : 69-95 ms in STOP against 79-94 ms in RUN. Materially unchanged; no timeout
+                    re-tuning needed.
+
+     *** AND THE FINDING THAT ONLY APPEARED BECAUSE THE RAW BYTE WAS DEMANDED: THIS CPU RETURNS
+     0x03 FOR STOP, NOT 4. *** The out-param read `4` — but Sharp7 yields `4` from BOTH the
+     pass-through arm and the default arm, so the out-param is AMBIGUOUS BY CONSTRUCTION and
+     could never have shown this. The byte the decoder's switch actually consumed was `0x03`,
+     read from the client's own reply buffer.
+
+        THIS DEVICE ENCODES  :  RUN = 0x08,  STOP = 0x03
+        `S7CpuStatusStop = 4`:  *** NEVER ACTUALLY RETURNED BY THIS CPU. ***
+
+     `0x03` is a known S7 STOP encoding, and it is exactly what Sharp7's catch-all exists to
+     absorb — so the ANSWER IS STILL CORRECT. But the route to it is the default arm, not a
+     recognised constant.
+
+     *** THREE RULES FOLLOW, AND THE SECOND IS A PROHIBITION THAT WOULD OTHERWISE HAVE SHIPPED
+     SILENTLY: ***
+
+       1. *** KEY ON `== S7CpuStatusRun (8)` VIA SHARP7's MAPPED OUT-PARAM. *** `Run` is
+          reachable ONLY through the pass-through arm, so a Run verdict is exact. Everything
+          else is "not running". This was recorded as a precaution; it is now the only
+          empirically safe rule.
+       2. *** DO NOT "TIGHTEN" THE DECODER, AND DO NOT HAND-ROLL ONE THAT MAPS ONLY {0,4,8}
+          AND REJECTS THE REST. *** On this rig STOP is `3`, so a decoder testing the raw byte
+          for `== 4`, or rejecting unknowns as invalid, WOULD REPORT "NOT STOPPED" FOR A
+          STOPPED CPU — precisely the failure X-K exists to prevent. Sharp7's default-to-Stop
+          arm is LOAD-BEARING. Carry this measurement as a comment beside the code so nobody
+          later "fixes" it.
+       3. A `Stop` verdict is high-confidence as *** "NOT RUNNING" *** and carries NO
+          information about WHICH non-running state — it cannot separate STOP from
+          STARTUP/HOLD/unrecognised, all of which land in the same arm.
+
+     *** AND IT CLOSES R8's RESIDUAL BY A BETTER ROUTE THAN THE ONE R8 ASKED FOR. *** R8
+     currently requires a person to confirm RUN by eye once, because TIA's `PLC_1 started.` is
+     a REQUEST rather than a READING. That confirmation is now MECHANISABLE: read
+     `PlcGetStatus` after a disruptive download and test `== 8`. Repeatable, automatic, and
+     strictly better evidence than an eyeball. *** ONCE `ReadCpuStatus` EXISTS, R8's
+     "confirm at the device once" REQUIREMENT IS SATISFIED BY THE HARNESS ITSELF *** and the
+     first unattended disruptive boundary needs no person.
+
+     ONE BUILD ITEM REMAINS (and see §16.13 — the same session turned up a memory constraint
+     the design did not have):
        - `IS7Client` (`src/harness/Harness.S7/IS7Client.cs`) is a deliberate REDUCTION of
          Sharp7's surface and carries no status member, so the harness cannot call this yet.
          Add a read-only `ReadCpuStatus` to the interface and its Sharp7 implementation,
-         mapping to a small enum — the reduction property is worth keeping, since it is what
-         holds `PlcStop()` and its neighbours out of reach.
-       - The STOP-mode read itself, below.
+         mapping to a small enum and keyed on `== 8` — the reduction property is worth keeping,
+         since it is what holds `PlcStop()` and its neighbours out of reach.
+       - CALLER TRAP FOR WHOEVER BUILDS IT: `S7Client.ReadSZL` throws `ArgumentNullException`
+         unless the caller PRE-ALLOCATES `S7SZL.Data`. `PlcGetStatus` has no such requirement.
 
      UNTESTED AND WORTH KNOWING: connection-resource contention between this S7 session (TCP
      102) and the Modbus session (TCP 502) on a 1214C. Reserved PG/HMI resources make it

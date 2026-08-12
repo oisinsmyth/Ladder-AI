@@ -103,7 +103,7 @@ The smallest program that can answer the wire questions:
 
 | # | Experiment | Answers |
 |---|---|---|
-| 1.6 | `PlcStatus()` before / during / after a CPU stop | **A7**, and supplies R8's outstanding confirmation |
+| ~~1.6~~ | ~~`PlcGetStatus` across a CPU stop~~ | ✅ **DONE 2026-08-12 — A7 CLOSED, and it never needed the download.** The owner stopped the CPU manually. Also mechanises R8's confirmation |
 | 1.7 | Throw from the download delegate; inspect what the device is left in | **A6 / G4** — do this attended |
 | 1.8 | Structural DB change, observe what reinitialises | **A8 / G2** — the ten bench minutes the research asked for |
 
