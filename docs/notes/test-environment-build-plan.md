@@ -358,8 +358,47 @@ populated InOut Variant sections. It parses without complaint.
 corrected.
 
 **Also confirmed supported, having been suspected:** `<Access Scope="TypedConstant">` with no
-`<ConstantType>`, `<TemplateValue>` on a `TON`, two `<NameCon>` sinks off one power rail, and
-`<Subelement>` array-element start values.
+`<ConstantType>`, `<TemplateValue>` on a `TON`, and two `<NameCon>` sinks off one power rail.
+
+#### 🔴 GAP 5 — I RECORDED `<Subelement>` AS SUPPORTED AND THAT WAS WRONG. IT IS SILENTLY DROPPED.
+
+*** THE STRING `Subelement` APPEARS ZERO TIMES IN ALL OF `src/converter` *** — code, tests and
+docs. The export carries **200+ of them**, holding the entire per-node configuration table: IP
+addresses, node numbers, register addresses, lengths, and the remote IP inside
+`RemoteAddress.ADDR`. No parse path reads them; no write path emits them.
+
+*** SO THE "BLOCK CONVERTS EXIT 0 ONCE THE THREE HARD ERRORS ARE REMOVED" RESULT WAS REACHED WITH
+THE CONFIGURATION TABLE ZEROED. ***
+
+**The mistake was mine, and it is the same mistake three times today.** I recorded "converts
+fine" from a run that produced no error. *** AN ABSENCE OF ERRORS IS NOT A POSITIVE RESULT. ***
+`MemoryLayout` was lost while `drift-check` said MATCH; the instance `Version` is dropped while
+nothing warns; and now the whole subelement table vanishes at exit 0. **Three silent-loss defects,
+all found by looking at content rather than at exit codes**, and each one was sitting behind a
+green check.
+
+  ➜ Fixed as gap 5. New IR line form `[1] = 16#0A` / `[7,3] = 16#00` at the member's child indent,
+    discriminated by the leading `[` — a SIMATIC member name can never start with one.
+  ➜ *** AND THE ACCEPTANCE TEST IS SHARPER FOR IT: a round trip that loses the subelement table
+    MUST FAIL `compare`. If it passes while the table is empty, the comparison is not seeing
+    something it must see — and THAT is the finding. ***
+
+#### GAP 6 — parameter-section members are re-emitted bare
+
+FI-59 forces `bareShape` on every Input/Output/InOut member, but this FB's `reset : Bool` genuinely
+carries `Remanence` **and** a 3-attribute `AttributeList`. *** FI-59's PROVEN constraint was only
+that TIA rejects `Remanence` — the `AttributeList` was collateral. *** Measure with `compare`
+first, then decide; do not widen FI-59 on a hunch.
+
+#### One consequence of gap 2 worth keeping
+
+The fix is **recurse-and-keep**, *not* FI-56's collapse — because the doubly-nested subtree holds
+`ADDR`'s subelement start values, so *** COLLAPSING WOULD TRADE ONE SILENT LOSS FOR ANOTHER. ***
+FI-56's quoted-UDT collapse and the anonymous-`Struct` refusal are untouched.
+
+And gap 3 needs `Program.BuildBlockXml`'s `multiInstanceStatics` extended beyond `Calls` to
+fixed-shape instances — without it, hand-authored IR emits `Remanence` and is **rejected at
+import**, which would present as a mystery import failure rather than a known consequence.
 
 ⚠ **The FC has gone BACK to inconsistent** since its export — it is being edited in TIA. The
 `12-fc-export-ORIGINAL.xml` baseline remains valid *as a baseline* but no longer matches the
