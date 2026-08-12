@@ -2020,9 +2020,25 @@ is a real gap in what is written above, not a restatement of a known unknown. Or
 badly they bite; each carries a recommended treatment so none of them reopens the design
 conversation.
 
-*** STATUS: THESE TREATMENTS ARE PROPOSALS, NOT RULINGS. *** None carries a D-number, and §15
-is the disposition of the O-questions only. X-A, X-C and X-E block the build and need a
-decision before it proceeds; the rest can be ruled alongside.
+*** STATUS AS OF 2026-08-12 — FOUR RULED, SIX OPEN, ONE EXTERNAL. ***
+
+    RULED   X-A  vector atomicity      the START BOOLS are the commit; read-side partition
+            X-C  coordinator death     scoped: everything in flight is invalid
+            X-D  time compression      comp_min formula; take the minimum, never the ceiling
+            X-E  excision              transitive closure + threshold + bounded attempts
+
+    OPEN    X-B  per-test timeout      treatment proposed, not ruled
+            X-F  first-scan tests      treatment proposed and folded into §7; not ruled
+            X-G  masked multi-writer   treatment proposed, not ruled
+            X-H  physically shared models
+            X-I  models are untested code
+            X-J  coordinator blocks never claim their numbers
+
+    EXTERNAL X-K  stopped CPU vs dropped link — partial treatment only, and the API cannot
+                  close it (§16.11). Not ours.
+
+The three that BLOCKED the build (X-A, X-C, X-E) are ruled. The six open ones are real but
+none of them stops work starting.
 
 *** NUMBERED X- RATHER THAN G- DELIBERATELY (2026-08-12). *** `G` was already carrying two
 unrelated series — the SEVEN DESIGN GAPS G-1..G-7 (all closed; §13's title refers to G-7) and
@@ -2202,24 +2218,99 @@ ONLY A CORRECTNESS ONE *** — a latch captures a one-scan event, where a sample
 still be present when the poll arrives.
 
 ................................................................................
-16.5  X-E  *** D32's EXCISION INVALIDATES DB-13's PACKING — A SEQUENCING HOLE ***
+16.5  X-E  *** EXCISION IS TRANSITIVE, AND IT CAN COST MORE THAN THE BOUNDARY IT AVOIDS ***
+           RESOLVED 2026-08-12
 ................................................................................
 
-DB-13 colours the conflict graph AT ADMISSION, before the download. D32 excises a block AT
-DOWNLOAD TIME, once an unhandled configuration is attributed to it. So the packing that was
-computed no longer describes the test set that exists — and DB-9 says a submission is atomic,
-admitted or refused WHOLE, which the excision has just violated from the other side.
+*** RESTATED UNDER THE CORRECTED WAVE MODEL (D26a/D26b). *** This was first written when
+packing was believed to decide tensor membership; under the correct model it is LESS severe in
+two ways, WORSE in one, and it carries three consequences that were not visible before.
 
-Three things go inconsistent at once: the tensor assignment, the atomicity of the submission
-the excised block belonged to, and any co-running-log expectation derived from the original
-packing.
+WORKED EXAMPLE. Wave set W1 admits five slots. `FB_Pump` CALLS `FB_Level` — that call is the
+detail everything turns on:
 
-TREATMENT — excision forces a RE-PACK, never a hole in the existing one. The excised block's
-tests are withdrawn and returned to their submitter as WITHDRAWN-NOT-FAILED (a distinct
-outcome, since nothing about them was tested); the remainder is re-coloured, which may
-legitimately yield FEWER tensors; and the affected submission is reported as PARTIALLY
-WITHDRAWN rather than silently shrunk. DB-9's atomicity rule governs ADMISSION, not survival of
-a download fault, and should say so explicitly.
+    slot  agent  block                              tensor            length
+    S1    A      FB_ValveCtrl                       {v0,v1,v2}          3
+    S2    A      FB_ValveCtrl (2nd methodology)     {w0,w1}             2
+    S3    B      FB_Level                           {x0,x1,x2,x3}       4
+    S4    C      FB_Pump  -> CALLS FB_Level         {y0,y1}             2
+    S5    D      FB_Flow                            {z0,z1,z2}          3
+
+Wave length = max tensor length = 4 indices. At i=2, S2 and S4 are NULL (start bools low, held
+inert). At i=3 only S3 runs. The download then raises an unhandled configuration, attributed
+to `FB_Level` — agent B changed its DB interface.
+
+*** WHAT BREAKS ***
+
+  1. *** THE EXCISION IS TRANSITIVE, AND THAT IS THE FINDING. *** `FB_Level` cannot be excised
+     alone: `FB_Pump` calls it, so the project stops compiling, and loop 2 requires the WHOLE
+     project to compile before ANYBODY's download. The excision set is the TRANSITIVE CLOSURE
+     OF DEPENDENTS over `converter cross-check`'s reference graph. *** S3 AND S4 BOTH DIE, AND
+     AGENT C IS COLLATERAL — its block is fine and it did nothing wrong. ***
+  2. Wave length changes: S3 held the longest tensor, so the wave now runs 3 indices, and the
+     schedule every agent was quoted is stale.
+  3. *** THE CO-RUNNING LOG BECOMES FALSE EVIDENCE. *** Generated from the PLANNED slot set,
+     S1's results read "ran alongside S3 and S4" — naming slots that never executed. §7a's
+     cause-4 attribution then points at a phantom, which is worse than having no log.
+  4. *** THE VERSION REGISTER GOES STALE, AND THIS ONE HAS TEETH. *** The build hash is
+     computed from the IR set ACTUALLY DOWNLOADED, and excision changes that set. So the
+     constant must be recomputed and THE COPY LAYER REGENERATED. Excision is a REGENERATION
+     STEP, not "drop a file from the download list". Computed at planning time, every
+     post-download check fails against a stale expected value and looks like a failed download.
+
+*** WHAT DOES NOT BREAK — two downgrades from the first statement of this gap ***
+
+  5. *** THE MAP NEEDS NO RE-DERIVATION, AND MUST NOT GET ONE. *** Slots are fixed-size and
+     independent, so an excised slot is simply ALLOCATED AND NULL AT EVERY INDEX — its start
+     bool never rises and D33's inert holds. D26a's null mechanism already covers this exactly.
+     Leaving the hole is not merely convenient, it is correct: *** IT KEEPS THE MAP HASH
+     STABLE ***, which is precisely what DB-6's client-side protection keys on. Re-deriving
+     would churn the hash, invalidate every client mirror, and buy nothing.
+  6. *** DB-9's ATOMICITY SURVIVES, BECAUSE THE UNIT IS THE SLOT. *** The apparent contradiction
+     — "submissions are atomic, yet excision shrinks one" — dissolves once a submission is ONE
+     SLOT'S TENSOR rather than an agent's whole set. Excision withdraws WHOLE SLOTS; nothing is
+     partially withdrawn. Under D26b agent A holds S1 and S2 independently, so losing one would
+     not touch the other.
+  7. RE-COLOURING IS AN OPTIMISATION, NOT A CORRECTNESS REQUIREMENT. Excision removes conflict
+     edges, so slots deferred to W2 BECAUSE they conflicted with S3 or S4 could now join W1.
+     Worth doing if cheap; entirely safe to skip.
+
+*** THREE HOLES IN D32's LADDER THIS EXPOSES ***
+
+  8. *** REPEATED EXCISION IS UNBOUNDED. *** After excising and re-downloading, another
+     configuration can be raised, attributed and excised — dismantling the wave one block at a
+     time, each step locally reasonable. BOUND IT AT TWO ATTEMPTS, then escalate.
+  9. *** INFRASTRUCTURE CANNOT BE EXCISED. *** If the configuration is attributable to the copy
+     layer, the mirror or a model, there is nothing to withdraw — removing it removes the test
+     environment. Straight to the disruptive boundary or the human.
+ 10. *** EXCISION CAN COST MORE THAN THE THING IT AVOIDS. *** The closure here was 2 slots of 5.
+     Had `FB_Level` been a shared UDT or a common utility FC, the closure could be 5 of 5 —
+     excision achieves nothing and a re-download was spent learning that.
+
+*** RESOLUTION — D32's LADDER GAINS A COMPARISON, NOT JUST AN ORDERING ***
+
+    4. attribute
+    5. attributable -> *** COMPUTE THE EXCISION CLOSURE *** (cross-check, transitive dependents)
+           closure SMALL    -> excise WHOLE SLOTS; regenerate copy layer + version register;
+                               re-download. THE MAP IS UNTOUCHED, excised slots go null.
+           closure LARGE    -> prefer the disruptive boundary; excision buys nothing
+           INFRASTRUCTURE   -> not excisable at all
+    6. not attributable -> disruptive boundary (Class A only, D32 caveat 3)
+    7. otherwise, OR more than TWO excision attempts -> TOTAL TEST ABORT, human
+
+  THRESHOLD: start at *** MORE THAN HALF THE WAVE SET'S SLOTS *** and tune. Both numbers —
+  closure size and wave-set size — are known at that moment, so this is a cheap comparison and
+  never a runtime judgement call.
+
+  *** PUBLISH THE CO-RUNNING LOG FROM EXECUTED START BOOLS, NEVER FROM THE PLAN. *** The bools
+  are already registers; have the copy layer publish back WHICH WERE RAISED at each index. That
+  makes the log MEASURED rather than DERIVED, kills failure 3 permanently, and costs one
+  register.
+
+  *** TELL THE WITHDRAWN AGENT, IN THESE TERMS: YOUR BLOCK WAS NEVER DOWNLOADED AND NOTHING
+  ABOUT YOUR LOGIC WAS TESTED. *** WITHDRAWN-NOT-FAILED is a distinct outcome. An agent reading
+  a withdrawal as a signal about its code will start editing correct logic — the exact failure
+  §7a exists to prevent, and the one most likely to hit agent C, who never had a fault at all.
 
 ................................................................................
 16.6  X-F  *** FIRST-SCAN AND POWER-UP REQUIREMENTS ARE UNTESTABLE IN A WAVE — AND THE
