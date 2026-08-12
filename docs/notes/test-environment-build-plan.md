@@ -906,6 +906,57 @@ readability conventions (C-601–C-607, the one-reading test). **Decide that del
 than discovering it at review**, and note it makes the contract's "the two counts are one number"
 a code-*generation* invariant rather than a hand-authoring one.
 
+### ✅ THE SPIKE IS ASSEMBLED AND COMPILING — `MB_SERVER` AUTHORED IN IR, 2026-08-12
+
+*** THE FIRST `MB_SERVER` EVER AUTHORED IN IR IS IN THE CONTROLLER. *** Import ✅, compile ✅,
+`sanity-check` **PASS** — 73 blocks, `inconsistentBlocks` = the pre-existing sample FC only.
+
+    --port 503        <- NOT 502
+    --pattern-count 16
+
+**The four values, grounded not guessed:**
+
+| | value | how |
+|---|---|---|
+| `InterfaceId` | **64** | Read from the project's **own** `TCON_IP_v4`, via a fresh `export-all`. ⚠️ *That FB has no instance DB and is called from nowhere, so its 64 was never validated by a connection that actually came up — and a wrong `InterfaceId` fails at RUNTIME, not compile.* |
+| Connection `ID` | **16#0010** | Enumerated across all 108 exports; the one existing `CONN_OUC` uses `16#0001`. **Residual: connections in the Devices & Networks table are invisible to Openness**, so that space cannot be proven empty. |
+| TCP port | **503** | *** 502 WAS NOT TAKEN — the brief's expectation was wrong. *** The existing connection is OUTBOUND (`LocalPort 2000` / `RemotePort 502`, `ActiveEstablished TRUE`). 503 chosen anyway: a collision fails at runtime only, the connection table is invisible, and it costs nothing. Checked against the CPU's reserved passive-TCP list. |
+| `MB_HOLD_REG` | `P#M1000.0 WORD 209` | **Span verified before use:** 209 words from MB1000 = MW1000…MW1416, so offsets 0–15 are the pattern and 200–208 the status. **Exact fit, no slack.** |
+
+**The instance decision — a wrapper FB, not a bare `MB_SERVER` instance DB.** `CONNECT` needs a
+`TCON_IP_v4` somewhere, and a single-instance DB has no room for it — which would have forced a new
+**global DB**, *** EXACTLY WHERE THE STILL-OPEN `MemoryLayout` HOLE BITES *** (an IR-authored DB
+imports `Optimized` silently with every check green). The wrapper is also the shape the converter
+was just proven against. **Deviating from the proven shape on a first-ever authoring buys nothing.**
+
+**`compare` through the controller:** `Main` **EQUIVALENT**; FB DIFFERS by 1 — TIA *adding* the
+`MB_SERVER` type definition (`0→n`, an addition); iDB DIFFERS by 2, both TIA rebuilding the
+interface from the FB. *** NO LOSSES ON ANY OF THE THREE, AND `--allow-silent-layout` WAS NEVER
+NEEDED *** — the FB's IR declares `MEMORYLAYOUT Optimized`, so the guard was **satisfied rather
+than escaped**. `converter diff` through TIA on OB1: `0 changed, 2 added, 0 removed, 7 identical —
+INVARIANCE OK`.
+
+#### 🔴 THREE FINDINGS, ONE OF THEM A DESTRUCTIVE TOOL DEFECT
+
+  1. *** `openness-cli create-instance-db` IS BROKEN ON THIS PROJECT AND FAILS DESTRUCTIVELY. ***
+     `set_Number` throws under automatic numbering; FI-63's repair path then fires, and the
+     `finally { SaveProject(); }` *** COMMITS THE BROKEN `DB0` ***, which can neither compile nor
+     export. Three delete-and-retry cycles; FI-63's documented workaround did not help.
+     **A repair turned a recoverable state into a hard one** — deserves its own FI.
+  2. **An iDB whose FB holds a system-FB instance cannot be authored in IR with its members** —
+     `DbSourceWriter` always emits `Remanence`, which TIA refuses there, and `MEMORYLAYOUT` on an
+     iDB yields *"Missing XML attribute 'ReadOnly'"* (a real iDB export carries no `MemoryLayout`).
+     *** THE WORKAROUND IS ARGUABLY THE BETTER PATTERN: an iDB with an EMPTY member list and no
+     `MEMORYLAYOUT`, so TIA rebuilds the interface from the FB and it CANNOT DRIFT BY
+     CONSTRUCTION. *** Consequence flagged, not laundered: DB 100 was chosen by us, not assigned.
+  3. `to-xml` needed no `--allow-blind-types` — so **CLAUDE.md's note calling `MB_SERVER`
+     "characterised but deliberately not registered" is now stale.**
+
+  ⚠️ **Accepted, not fixed:** `review` reports C-001 (`MB_Server` not PascalCase). The name is
+  verbatim from the byte-exact template this spike is measured against, and *identity with that
+  template is what makes the byte-identical round-trip result mean anything* on a block that exists
+  to be deleted. **The only finding of any kind; `Main` is clean.**
+
 ### 🧾 THE A1 RUN-SHEET — client verified 2026-08-12, parameters pinned
 
 Client **builds, 52 tests pass**, and the wire format was reviewed offline (`frames`): one FC16 per
