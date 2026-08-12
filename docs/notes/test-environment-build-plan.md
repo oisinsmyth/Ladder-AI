@@ -214,6 +214,80 @@ incrementing generation into every register once per scan, checker **off**.
 > independently from the other end. **Corroboration worth having:** the same trap is waiting in
 > the real result package, and it is invisible precisely when it fires.
 
+### 🔬 IR discovery run, 2026-08-12 — three findings, one of them a live hazard
+
+The owner imported blocks and deliberately left them **uncompiled** so they could be identified
+by `IsConsistent = false`. Captured before anything could compile — and captured with
+`list --json` rather than `sanity-check`, because **`sanity-check` runs device compiles and would
+have destroyed the marker it was being used to read**. Three blocks: a sample Modbus TCP FC, a
+standard-access global DB, and a hardware-interrupt OB. **`TYPES: INCONSISTENT: 0` — no new UDT.**
+
+**FI-52 reproduced live, again:** the device compile reported `Success, 0 errors, 0 warnings`
+with all three blocks sitting inconsistent behind it.
+
+**1. ✅ The DB round-trips completely.** `export → to-ir → to-xml → drift-check --complete` gives
+`0 drifted, 1 match, 0 export-only, 0 error`, and `to-ir --no-sidecar` succeeded (ADR-0005
+derivability) producing byte-identical IR. Shape: one member, `Array[0..67] of Byte` — 68 bytes,
+34 holding registers.
+
+**2. 🔴 AND THE ROUND TRIP IS EQUAL AND STILL WRONG — `MemoryLayout` IS LOST.**
+
+```
+original export       : <MemoryLayout>Standard</MemoryLayout>
+regenerated xml       : NO MemoryLayout element at all
+drift-check           : MATCH        (Normalizer ignores the attribute)
+block-layout --expect : Standard, exit 0
+```
+
+Re-importing IR-derived XML states **no opinion** on layout, so TIA applies the S7-1200 default —
+**Optimized** — and `MB_HOLD_REG` then rejects the DB with `16#818C`. *** EVERY CHECK IN THE
+PIPELINE STAYS GREEN: drift-check is structurally blind to it, import does not error, compile
+does not error. *** This is the hazard CLAUDE.md records for `block-layout`, now **measured on
+exactly the DB shape the register contract needs**.
+
+  ➜ **Mitigation is required, not precautionary:** re-assert `block-layout --set Standard --yes`
+    after **every** import of that DB, then gate with `--expect Standard`.
+  ➜ ***BETTER: USE THE `%MW` MIRROR AND NOT A DB-BACKED ONE FOR PHASE 1.*** It sidesteps the hole
+    entirely rather than policing it — and `%MW` costs no work memory either (§16.1).
+
+**3. ⛔ `MB_SERVER` will not convert to IR, and the reason is not its name.** It is a library FB,
+so it appears as `<Call BlockType="FB">` and the Call path stores the callee name verbatim with
+no whitelist. *** THE OBSTACLE IS THE PARAMETER SECTION: `SupportedCallParameterSections =
+{Input, Output}`, and `MB_HOLD_REG` (and `CONNECT`) are InOut/VARIANT. *** The parser throws
+`UnsupportedConstructException` on `Section="InOut"` **at `to-ir` parse time**, not merely on the
+synthesize path. A correct hard error, not a bug. **Predicted, not yet confirmed** — confirming
+it needs the FC exported, which is blocked below.
+
+  ➜ **Open decision:** (a) author the `MB_SERVER` call once by hand in TIA and never round-trip
+    that block, keeping IR-authored content to the checker logic only; or (b) extend
+    `SupportedCallParameterSections` to accept `InOut` — a converter change made on evidence,
+    once the export confirms the prediction. **(a) is the phase-1 answer**; the spike is
+    disposable and a converter change is not.
+
+### ⛔ BLOCKED — and it needs one permission rule
+
+TIA **refuses to export an inconsistent block** (verified live, exit 5: *"Inconsistent blocks and
+PLC data types (UDT) cannot be exported"*). So each marker block must be compiled before it can be
+exported — and `openness-cli compile <project> --block <name> --json` was **refused by the
+permission classifier on four attempts** across both binaries and both shells, while the *same
+command shape* for the DB was allowed once. Not worked around, per instruction.
+
+**With that rule added, the remaining two blocks are ~10 minutes of work.**
+
+### 📐 Is the register contract expressible? Yes, with one expensive consequence
+
+Expressible from the supported part list: `SCAN_COUNTER` (`Add`), `CHANGE_COUNT` (`Ne`+`Add`+a
+static), the `CONTROL` handshake (`Eq`+`Move`), `TEAR_LATCH` (`SCoil`/`RCoil`), and the rest via
+`Move`. `%MW` operands are fine — tag-table IR carries an opaque logical address with no area
+whitelist (`%M` specifically not yet exercised end-to-end).
+
+*** THE EXPENSIVE PART: THERE IS NO LOOP AND NO BLOCK-COMPARE IN THE WHITELIST. *** "Compare
+every `pattern[i]` against `pattern[0]` in one scan" for 100–123 registers must be **fully
+unrolled** — ~100–123 `Ne` compares OR-ed into one latch. Legal, and it runs straight into the
+readability conventions (C-601–C-607, the one-reading test). **Decide that deliberately rather
+than discovering it at review**, and note it makes the contract's "the two counts are one number"
+a code-*generation* invariant rather than a hand-authoring one.
+
 **Exit criterion:** A1 answered yes or no. If **no**, the map and copy-layer design change *before*
 either is written — which is the entire point of this phase.
 

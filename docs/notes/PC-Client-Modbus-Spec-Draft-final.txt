@@ -1110,6 +1110,24 @@ R8. *** THE ENTAILMENT OF D25, AND THE ONE PLACE THE GUARD IS DELIBERATELY OPENE
 6. %MW IS STRUCTURAL, NOT PREFERENTIAL
 --------------------------------------------------------------------------------
 
+*** A SIXTH ARGUMENT, AND IT IS THE FIRST ONE MEASURED ON THE EXACT DB SHAPE THIS DESIGN NEEDS
+(2026-08-12). *** A standard-access DB was round-tripped `export -> to-ir -> to-xml` and
+`drift-check --complete` returned `0 drifted, 1 match`. It is equal and it is still wrong:
+
+    original export : <MemoryLayout>Standard</MemoryLayout>
+    regenerated xml : NO MemoryLayout ELEMENT AT ALL
+    drift-check     : MATCH — the Normalizer ignores the attribute
+
+So re-importing IR-derived XML states NO OPINION on layout, TIA applies the S7-1200 default
+(Optimized), and `MB_HOLD_REG` then refuses the DB with `16#818C`. *** EVERY CHECK IN THE
+PIPELINE STAYS GREEN THROUGHOUT: drift-check is structurally blind, import does not error,
+compile does not error. *** The first symptom is a Modbus status code at runtime.
+
+*** THEREFORE THE MIRROR IS `%MW` AND NOT A DB, FOR A REASON THAT IS NOW MEASURED RATHER THAN
+ARGUED: A DB-BACKED MIRROR IS ONE RE-IMPORT AWAY FROM BEING INVISIBLE ON THE WIRE, WITH NOTHING
+IN THE TOOLCHAIN ABLE TO SEE IT HAPPEN. *** A DB can still serve as a STORE (§16.4's
+compression parameters, DB-12) — it simply must never be the thing Modbus reads.
+
 Four independent arguments, each arrived at from a different direction:
 
   1. it cannot suffer the silent layout-revert measured on 2026-08-11 [M, three times];
