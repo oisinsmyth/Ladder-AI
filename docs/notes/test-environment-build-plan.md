@@ -652,7 +652,54 @@ since the second document plainly declares one. Substance right, message wrong.
 `compare` runs through the Normalizer, so a **port-direction flip stays invisible** until the
 pending fix lands.
 
-### 🔴 OPEN DECISION — `Normalizer` MAY BE BLIND TO A WIRE-DIRECTION FLIP
+### ✅ CLOSED 2026-08-12 (`1edf376`) — AND IT WAS TWO BUGS HIDING EACH OTHER
+
+*** THE CONVERTER WAS EMITTING WIRE ENDPOINTS IN THE WRONG ORDER, AND THE NORMALIZER WAS BLIND TO
+IT IN EXACTLY THE SAME WAY, SO EVERY CHECK PASSED. *** Regenerating `FC_Inputs.ir` inverted
+**100% of its 132 Contact/Coil operand wires** against the real export — and nothing caught it.
+*** THE TWO BLINDNESSES CANCELLED EXACTLY. ***
+
+That is the sharpest instance yet of the pattern that has run through this whole day: **a check
+that shares its subject's blind spot is not a check.** `drift-check`, `compare` and the
+`--no-sidecar` derivability check all ran green against output that did not match TIA.
+
+**There were TWO 2026-07-14 measurements, not one** — my brief named only the first:
+  1. **The Normalizer's** (`docs/evidence/stage-S1.md`): a converter-only round trip reporting a
+     false mismatch that was 100% endpoint order within individual `<Wire>` elements.
+  2. **`FlgNetBuilder`'s own** — *** A LIVE TIA IMPORT REJECTION ***: *"the connections in the
+     power rail … with more than two I/Os must be located in the same sequence"*. Fixed by sorting
+     endpoints **by UId** — and that is the sort that inverted direction, because *** UId ORDER
+     DECIDES PRODUCER-VS-CONSUMER BY NUMBERING: TIA numbers an Access BELOW the Part reading it,
+     the synthesizer numbers the Contact BELOW its Access. ***
+
+**So pin-the-first/sort-the-tail was right and could not land alone.** Applied to the Normalizer
+by itself it turned **17 MATCH into 17 DRIFTED**. Both sides had to be fixed together: the builder
+now emits **producer-first** (21 output-wire sites, *** INCLUDING THE CALL OUTPUT PARAMETER — the
+case that matters most, since a callee's parameter names are author-chosen and carry no direction
+convention ***) and sorts only the consumer tail, preserving the import constraint.
+
+**Grounded across all 34 real TIA exports: 106 `(part, port)` pairs, ZERO appearing in both slots.**
+`out`/`OUT`/`DEST`/`Ret_Val`/`eno`/`Q`/`ET` only ever at index 0; `operand`/`in`/`en`/`PT`/`R` only
+ever in the tail.
+
+**996 converter + 46 golden green, `drift-check` at its exact baselines** — *** AND THAT RESULT IS
+NOW DIRECTION-SENSITIVE, so it proves the regenerated XML reproduces TIA's endpoint order rather
+than merely surviving a sort that hid the difference. *** `compare` on a flipped CALL-output wire:
+**before EQUIVALENT exit 0, after DIFFERS exit 1.**
+
+  ⚠ **`compare`'s message is not direction-aware.** Because `<Wires>` children are content-sorted,
+    one flip surfaces as **four** `ATTR-DIFFERS` lines that read like *rewiring* rather than
+    "this port's direction reversed". Actionable — it names the right network and ports — but a
+    direction-aware finding would be a genuine improvement. Left as a separate concern.
+  ✅ **The stale caveat elsewhere in this file** — "a port-direction flip stays invisible until the
+    pending fix lands" — **is now closed by this entry.**
+
+**One discipline point worth keeping:** the frozen answer keys were snapshots of our own *pre-fix*
+output and the only surviving record of those blocks' stored wiring. They were rewritten
+**order-only, in place** (98/98, endpoint sets asserted unchanged) rather than regenerated from
+synthesis — *** which would have made the test compare synthesis against itself. ***
+
+### ~~🔴 OPEN DECISION~~ — the original entry, kept for its reasoning
 
 Found 2026-08-12 while building `compare`, and it is the `MemoryLayout` class of defect one level
 down. Two facts, each measured independently, that had not been put together:
