@@ -862,7 +862,18 @@ internal static class Program
         }
     }
 
-    private static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
+    /// <summary>
+    /// The number of errors a compile result is judged on. Fail-closed: the compiler's own
+    /// <c>ErrorCount</c> OR the count of Error messages in its message tree, whichever is larger.
+    ///
+    /// Two counts exist because they can disagree — <see cref="OutputFormatter.FormatCompileTable"/>
+    /// already prints a NOTE when they do, calling the aggregates unreliable. A verdict that trusted
+    /// only one of them would be talked out of failing by the other.
+    /// </summary>
+    internal static int EffectiveErrorCount(Model.CompileResult result) =>
+        Math.Max(result.ErrorCount, result.Messages.Count(m => m.State == Model.CompileState.Error));
+
+    internal static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         var result = (options.Block, options.Type) switch
@@ -874,9 +885,67 @@ internal static class Program
         };
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
 
-        if (result.State != Model.CompileState.Success)
+        // THE VERDICT KEYS ON ERRORS, NEVER ON State (2026-08-12) — the same rule `compile-all` has
+        // had since it was written, arrived at here the expensive way. Measured live: EVERY per-block
+        // compile against the scratch project exited 8 with `errors: 0`, because the project carries a
+        // permanent hardware warning ("Inputs or outputs are used that do not exist in the configured
+        // hardware") and Compile() returns a non-Success STATE for it — on every block, regardless of
+        // the block. A caller branching on the exit code reads every clean compile as a failure, and
+        // would reasonably stop.
+        //
+        // State is still REPORTED, and so is the warning count: "compiled with warnings" and "compiled
+        // clean" are different facts and the output must keep saying which. What changed is only which
+        // of them decides the exit code.
+        var errorCount = EffectiveErrorCount(result);
+        if (errorCount > 0)
         {
             return ExitCodes.CompileFailed;
+        }
+
+        if (result.State != Model.CompileState.Success)
+        {
+            Console.WriteLine();
+            Console.WriteLine(
+                $"PASSED WITH WARNINGS: 0 errors, so this is a pass. State is {result.State}, which is reported " +
+                "and not decisive — a pre-existing hardware warning anywhere in the project returns a " +
+                "non-Success state on a perfectly clean block. Read the messages above before treating the " +
+                "warnings as noise.");
+        }
+
+        // The CONVERSE of FI-52 (measured 2026-08-12). A PER-BLOCK compile can report "Block was
+        // successfully compiled" with errors: 0 and leave ITS OWN block flagged IsConsistent=false —
+        // seen when a block it referenced did not exist. TIA then refuses to export it, and until now
+        // only `sanity-check` could tell you why. So a per-item compile re-resolves the item and reads
+        // the flag back (OpennessGateway.CompileBlock/CompileType), and this gates on it: a block that
+        // cannot be exported must never leave a clean-looking exit behind.
+        if (options.Block is not null || options.Type is not null)
+        {
+            var what = options.Block is not null ? $"Block '{options.Block}'" : $"Type '{options.Type}'";
+            if (result.ConsistentAfterCompile == false)
+            {
+                Console.Error.WriteLine();
+                Console.Error.WriteLine(
+                    $"COMPILE INCOMPLETE: {what} compiled without errors and is STILL flagged " +
+                    "IsConsistent=false. TIA will REFUSE to export it (\"Inconsistent blocks and PLC data " +
+                    "types (UDT) cannot be exported\"), so this compile is not the gate it looks like.");
+                Console.Error.WriteLine(
+                    "The usual cause is a block or type it references that does not exist yet, or has not " +
+                    "itself been compiled — compile the callees first, then this. `openness-cli sanity-check` " +
+                    "lists everything in that state; `compile-all` compiles them in one session.");
+                return ExitCodes.CompileIncomplete;
+            }
+
+            if (result.ConsistentAfterCompile is null)
+            {
+                // Empty is not clean (FI-44). The compile ran, and the one question that would have
+                // made it a gate went unanswered — that is not a pass.
+                Console.Error.WriteLine();
+                Console.Error.WriteLine(
+                    $"COMPILE INCOMPLETE: {what} compiled without errors, but its consistency flag could not " +
+                    "be read back afterwards (the item did not re-resolve to exactly one match). Nothing here " +
+                    "proves it is exportable. Run `openness-cli sanity-check` before treating this as a pass.");
+                return ExitCodes.CompileIncomplete;
+            }
         }
 
         // FI-52 (2026-08-07). A WHOLE-DEVICE compile is not a whole-PROGRAM gate, and used to say
@@ -1083,10 +1152,20 @@ public static class ExitCodes
     public const int NotConfirmed = 10;
 
     /// <summary>
-    /// FI-52. The device compiled cleanly but did not cover every block: blocks remain flagged
-    /// inconsistent, so the run proved less than it appears to. Distinct from
-    /// <see cref="CompileFailed"/> — nothing reported an error; the gate simply did not examine
-    /// everything, which is the failure mode that matters most because it looks like a pass.
+    /// A compile reported no errors and something it should have verified is still unverified. Two
+    /// ways to earn it, and they are the same fact from either end:
+    ///
+    /// 1. FI-52 — a WHOLE-DEVICE compile cleared no block's flag: other blocks remain inconsistent.
+    /// 2. 2026-08-12, the converse — a PER-BLOCK/PER-TYPE compile left ITS OWN item inconsistent.
+    ///    Measured: "Block was successfully compiled", errors 0, and the block still
+    ///    <c>IsConsistent=false</c> because a block it referenced did not exist; TIA then refused to
+    ///    export it. Also earned when the post-compile consistency read-back could not be performed at
+    ///    all — an unanswered question is not a pass (FI-44, empty is not clean).
+    ///
+    /// Distinct from <see cref="CompileFailed"/> — nothing reported an error; the gate simply did not
+    /// prove what it appears to have proved, which is the failure mode that matters most because it
+    /// looks like a pass. One code rather than two because the caller's response is identical: do not
+    /// treat this as the hard-rule-4 gate, and go and look at what was left unverified.
     /// </summary>
     public const int CompileIncomplete = 11;
 

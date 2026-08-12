@@ -418,9 +418,11 @@ public class BlockLayoutTests
 }
 
 /// <summary>
-/// A gateway that never touches Portal. Only the block-layout pair and <c>OpenProject</c> do
-/// anything; every other member throws, so a test that accidentally reaches one fails loudly rather
-/// than silently exercising a stub.
+/// A gateway that never touches Portal. Only the members a test has explicitly configured do
+/// anything — the block-layout pair, <c>OpenProject</c>, the download-plan pair and the compile
+/// family; every other member throws, so a test that accidentally reaches one fails loudly rather
+/// than silently exercising a stub. A compile member that has NOT been given a result throws for the
+/// same reason: a stub returning a default clean result would make a verdict test pass vacuously.
 /// </summary>
 internal sealed class FakeGateway : IOpennessGateway
 {
@@ -520,6 +522,22 @@ internal sealed class FakeGateway : IOpennessGateway
         throw new DownloadNotEnabledException();
     }
 
+    // ---- compile ------------------------------------------------------------------------------
+
+    /// <summary>What a whole-device / per-block / per-type compile hands back. Null = not configured.</summary>
+    public CompileResult? DeviceCompileResult { get; set; }
+
+    public CompileResult? BlockCompileResult { get; set; }
+
+    public CompileResult? TypeCompileResult { get; set; }
+
+    /// <summary>What <see cref="EnumerateBlocks"/> reports — the FI-52 device-level backstop reads it.</summary>
+    public IReadOnlyList<BlockInfo>? BlocksForEnumeration { get; set; }
+
+    public string? LastCompiledBlock { get; private set; }
+
+    public string? LastCompiledType { get; private set; }
+
     public void OpenProject(string projectIdentifier, TimeSpan timeout) => OpenProjectCalls++;
 
     public void Save() => SaveCalls++;
@@ -533,7 +551,8 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses() => throw new NotSupportedException();
 
-    public IReadOnlyList<BlockInfo> EnumerateBlocks() => throw new NotSupportedException();
+    public IReadOnlyList<BlockInfo> EnumerateBlocks() =>
+        BlocksForEnumeration ?? throw new NotSupportedException();
 
     public IReadOnlyList<TagTableInfo> EnumerateTagTables() => throw new NotSupportedException();
 
@@ -600,13 +619,22 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> ImportTagTableFile(string groupPath, string file) => throw new NotSupportedException();
 
-    public CompileResult Compile(string? deviceFilter) => throw new NotSupportedException();
+    public CompileResult Compile(string? deviceFilter) =>
+        DeviceCompileResult ?? throw new NotSupportedException();
 
     public BlockInfo DeleteBlock(string blockName, string? deviceFilter, bool confirm) => throw new NotSupportedException();
 
-    public CompileResult CompileBlock(string blockName, string? deviceFilter) => throw new NotSupportedException();
+    public CompileResult CompileBlock(string blockName, string? deviceFilter)
+    {
+        LastCompiledBlock = blockName;
+        return BlockCompileResult ?? throw new NotSupportedException();
+    }
 
-    public CompileResult CompileType(string typeName, string? deviceFilter) => throw new NotSupportedException();
+    public CompileResult CompileType(string typeName, string? deviceFilter)
+    {
+        LastCompiledType = typeName;
+        return TypeCompileResult ?? throw new NotSupportedException();
+    }
 
     public SanityCheckResult RunSanityCheck() => throw new NotSupportedException();
 }

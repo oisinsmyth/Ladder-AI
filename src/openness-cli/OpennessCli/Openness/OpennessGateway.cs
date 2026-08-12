@@ -3557,7 +3557,55 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var result = RunCompile(compilable);
         SaveProject();
-        return result;
+
+        // A CLEAN PER-BLOCK COMPILE DOES NOT IMPLY THE BLOCK IS EXPORTABLE (measured 2026-08-12).
+        // The compile reported "Block was successfully compiled" with ErrorCount=0 and the block was
+        // STILL flagged IsConsistent=false, because a block it referenced did not exist — after which
+        // TIA refused to export it. So the flag is READ BACK from a freshly re-resolved block, the
+        // same shape SetBlockMemoryLayout uses and for the same reason: an operation that reports
+        // success and did not take is indistinguishable from one that did, unless you look afterwards.
+        return result with { ConsistentAfterCompile = ReadBlockConsistency(blockName, deviceFilter) };
+    }
+
+    /// <summary>
+    /// Re-resolves the block FROM THE PROJECT (not from the instance already in hand, which a cached
+    /// value could answer) and reads its consistency flag. Returns null when the re-resolve does not
+    /// land on exactly one block — the caller treats that as "not verified", never as "fine".
+    ///
+    /// Safety is not a concern here: every caller has already refused safety content before compiling,
+    /// so this never reads the flag of a safety block (hard rule 2).
+    /// </summary>
+    private bool? ReadBlockConsistency(string blockName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            return null;
+        }
+
+        var matches = FindMatchingBlocks(_project, blockName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        return matches.Count == 1 ? matches[0].Block.IsConsistent : null;
+    }
+
+    /// <summary>The <see cref="ReadBlockConsistency"/> pair for PLC data types (FI-62: a UDT is not a block).</summary>
+    private bool? ReadTypeConsistency(string typeName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            return null;
+        }
+
+        var matches = FindMatchingTypes(_project, typeName).ToList();
+        if (deviceFilter is not null)
+        {
+            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        return matches.Count == 1 ? matches[0].Type.IsConsistent : null;
     }
 
     // Mirrors CompileBlock exactly, minus the safety check (no ProgrammingLanguage on PlcType —
@@ -3594,7 +3642,11 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var result = RunCompile(compilable);
         SaveProject();
-        return result;
+
+        // Same read-back as CompileBlock. It matters at least as much here: FI-62's own evidence is a
+        // UDT that sat inconsistent behind a completely green gate and was only found when TIA refused
+        // to export it — an uninstantiated type has nothing to make a compile fail.
+        return result with { ConsistentAfterCompile = ReadTypeConsistency(typeName, deviceFilter) };
     }
 
     // Confirmed real via Siemens's own Siemens.Engineering.xml doc comments (2026-07-13):

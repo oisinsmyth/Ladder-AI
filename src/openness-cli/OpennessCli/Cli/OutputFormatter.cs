@@ -1073,6 +1073,21 @@ public static class OutputFormatter
               .Append(" — these disagree with the messages above and are not reliable; counts shown are from the message tree.\n");
         }
 
+        // The consistency read-back (2026-08-12). Printed for a per-item compile whether it passed or
+        // failed, because "compiled clean" and "consistent" are different facts and the gap between
+        // them is invisible: TIA refuses to EXPORT an inconsistent block, long after and far from the
+        // compile that said it was fine. Absent for a whole-device/HMI compile, where there is no one
+        // item to ask about.
+        if (result.ConsistentAfterCompile is { } consistent)
+        {
+            sb.Append("CONSISTENT: ").Append(consistent ? "yes" : "NO").Append(
+                consistent
+                    ? "  (re-read after the compile; TIA will export this item)\n"
+                    : "  — this item is STILL flagged inconsistent after compiling clean. TIA will REFUSE to\n" +
+                      "  export it (\"Inconsistent blocks and PLC data types (UDT) cannot be exported\"). The usual\n" +
+                      "  cause is something it references that does not exist yet; compile that first, then this.\n");
+        }
+
         if (result.Messages.Count > 0)
         {
             sb.Append('\n');
@@ -1098,6 +1113,11 @@ public static class OutputFormatter
             state = result.State.ToString(),
             errors = result.ErrorCount,
             warnings = result.WarningCount,
+
+            // Always emitted, null included: a consumer keying on a missing property could not tell
+            // "this build does not read consistency back" from "this compile had no single item to
+            // ask about". Same reasoning as download-plan's `granularity` field.
+            consistentAfterCompile = result.ConsistentAfterCompile,
             messages = result.Messages.Select(m => new
             {
                 state = m.State.ToString(),
