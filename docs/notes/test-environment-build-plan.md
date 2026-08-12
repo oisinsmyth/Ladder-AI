@@ -4,7 +4,35 @@ Source of truth for the design: `PC-Client-Modbus-Spec-Draft-final.txt`. This do
 restate it. It answers one question: **in what order do we build this so that no significant
 body of code is written on an assumption that later turns out to be wrong?**
 
-Written 2026-08-12.
+Written 2026-08-12. **Status updated 2026-08-12 (later the same day).**
+
+---
+
+## WHERE WE ARE
+
+**Phase 0 is nearly done, and it went better than planned** — three assumptions retired, one of
+them (A3) in our favour by a factor of two, and one whole class of work deleted by ruling.
+
+| | Retired | How |
+|---|---|---|
+| **A3** `%MW` capacity | ✅ | **8192 B / 4096 words**, double the assumption, **and separate from work memory** — so the mirror costs zero work budget |
+| **A7** run-state read | ✅ | Measured in **both** CPU states; `ReadRunState` built and tested (`93835e8`). Also **mechanises R8's device-side confirmation**, so the first unattended disruptive boundary needs no person |
+| **A9** memory budget | ✅ | Scoped by ruling to **retain only**; work/load/block-count governed by "keep the PLC footprint minimal" instead |
+| — S7 variable access | ✅ | Refused **CPU-wide** in both states (PUT/GET, not the STOP). **Moot** — all data reads go over Modbus |
+
+**Still open, and unchanged in priority:**
+
+| | Assumption | Why it still matters |
+|---|---|---|
+| **A1** | `MB_SERVER` single-scan atomicity | **The critical path.** The whole X-A model, the map, the copy layer and the client write path rest on it |
+| **A2** | Modbus round-trip rate | Poll budget, slot width, O11 — and see 0.3, the assumed figure may not be a Modbus figure at all |
+| **A4** | Block driveable by its own command signal | D37, inert, the start-bool mechanism |
+| **A5** | Two slots do not interfere | Everything multi-agent |
+| **A6** | Delegate throw leaves the CPU untouched (G4) | D32's guard model. A **safety** item |
+| **A8** | Structural DB change vs retentives (G2) | DB-1's change-class table, therefore routing |
+
+**Phase 0 remaining:** 0.3 (desk), 0.4 (desk), 0.1b (a rule to implement, not an experiment).
+Nothing left in phase 0 needs the rig.
 
 ---
 
@@ -223,6 +251,42 @@ phases 0–1**, at a cost of a couple of days and code that was always going to 
 Building the coordinator first because it is the interesting part, then discovering in week four
 that `MB_SERVER` tears a multi-register write — and having to change the map, the copy layer and
 the client write path, all of which had by then grown tests, callers and documentation.
+
+---
+
+## WHAT CAN RUN IN PARALLEL
+
+The plan is a dependency order, not a schedule. Three tracks are genuinely independent, and only
+one of them needs the rig — so the rig is the scarce resource and everything else should be off
+its critical path.
+
+**TRACK A — THE RIG (serial, and the only track that is)**
+Authoring the spike IR → convert/preflight/compile → download → run experiments 1.1–1.5.
+*One download serves three purposes*: it carries the spike, and 1.7 (delegate throw) and 1.8
+(G2) ride along with it. **1.7 must be attended** — its failure mode is a half-loaded CPU.
+
+**TRACK B — PC-SIDE FOR THE SPIKE (parallel with A, and must be ready when A lands)**
+The throwaway Modbus client that hammers multi-register writes and reads the violation latch.
+Writing it while the IR is being authored costs nothing and removes it from the rig's critical
+path. Disposable, per phase 1's rule.
+
+**TRACK C — PC-SIDE THAT NEEDS NO RIG AND NO UNVERIFIED ASSUMPTION**
+This is the track worth noticing, because it is currently filed in phase 4 and *does not need to
+be*. It rests on data we already hold:
+
+- **4.1 the feedback parser** — fully specified in §9c, and **testable right now against the
+  fifteen existing probe logs**. Four message vocabularies already observed. Both known defects
+  are identified (the verdict must key on the load manifest; it must stop reading
+  `state=Success` as evidence of transfer). No device, no design decision, no unverified
+  assumption underneath it.
+- **4.2's Class A/B/C classifier** — a lookup table plus an explicit unknown branch. Unit-testable
+  with no device.
+- **4.5 the wave-in-progress marker** — a file. Small, and X-C says it is not optional.
+- **0.1b the non-retentive assertion** — checkable from IR before any device is involved.
+
+**WHAT MUST NOT BE PARALLELISED:** anything in phase 2. The walking skeleton starts *after* A1 is
+answered, because A1 is exactly what would invalidate it. Building phase 2 alongside the spike is
+the failure this plan exists to prevent, wearing the costume of good use of time.
 
 ### Where it could still go wrong
 
