@@ -347,8 +347,10 @@ D32. *** EVERY UNHANDLED CONFIGURATION ABORTS THE DOWNLOAD, AND WE ABORT IT — 
        5. IF ATTRIBUTABLE: *** EXCISE THAT IR BLOCK FROM THE WAVE SET, ROUTE IT TO THE
           DEFERRED QUEUE (D23), AND RE-DOWNLOAD WITHOUT IT. *** An ordinary boundary; no
           disruption is spent.
-       6. IF NOT ATTRIBUTABLE: a disruptive download — which by D25 is a FULL one, never a
-          differential.
+       6. IF NOT ATTRIBUTABLE: a disruptive FULL download (D25, never a differential) —
+          *** BUT ONLY FOR CLASS A BELOW. For classes B and C step 6 is futile and step 7
+          is immediate. ***
+       7. TERMINAL: *** TOTAL TEST ABORT — NOT JUST THE WAVE — AND WAIT FOR A HUMAN. ***
 
      *** CAVEAT 1 — ATTRIBUTION IS STRUCTURALLY IMPOSSIBLE FOR SOME CONFIGURATIONS, AND THAT
      IS NOT A LOCATOR BUG. *** `DataBlockReinitialization` and `StopModules` ARE attributable:
@@ -359,14 +361,45 @@ D32. *** EVERY UNHANDLED CONFIGURATION ABORTS THE DOWNLOAD, AND WE ABORT IT — 
      for opposite fixes, and a log that conflates them will send a fix wave after a locator
      that was working correctly.
 
-     *** CAVEAT 2 — THE LADDER AS RULED HAS NO TERMINAL RUNG AND CAN LOOP. *** If the step-6
-     disruptive download ALSO raises an unhandled configuration, step 1 fires again against an
-     unchanged situation and the ladder restarts. Unattended that is an abort loop that
-     consumes the night. TERMINAL RULE, ADDED HERE: *** an unhandled configuration during the
-     step-6 download is a HARD STOP. *** Testing stays paused, the wave is abandoned, and it
-     is recorded as its own outcome class — it is the case that generates a fix wave, and it
-     is the one thing in this ladder a person must see. NEVER RETRY A DISRUPTIVE DOWNLOAD THAT
-     ABORTED ON A CONFIGURATION.
+     *** CAVEAT 2 — THE LADDER HAS NO TERMINAL RUNG AND CAN LOOP; RULED 2026-08-12. *** If the
+     step-6 disruptive download ALSO raises an unhandled configuration, step 1 fires again
+     against an unchanged situation and the ladder restarts. Unattended that is an abort loop
+     that consumes the night. *** RULED: THAT IS A TOTAL TEST ABORT — the whole test session,
+     not merely the wave — AND IT WAITS FOR HUMAN INTERVENTION. *** Recorded as its own
+     outcome class, because it is the case that generates a fix wave and the one thing in this
+     ladder a person must see. NEVER RETRY A DISRUPTIVE DOWNLOAD THAT ABORTED ON A
+     CONFIGURATION.
+
+     *** CAVEAT 3 — AND IT DECIDES WHETHER STEP 6 IS PROGRESS OR A WASTED BOUNDARY. *** "If we
+     cannot attribute it we have no choice but a full download" is right for ONE class of
+     configuration and FUTILE for two others, because a full download has a LARGER delta than
+     a differential and therefore raises MORE configurations, never fewer. It cannot make an
+     unwanted configuration go away. What it can do is let us ANSWER one we were only refusing
+     because we were in non-disruptive mode. So the class decides the rung:
+
+       CLASS A — REFUSED ONLY BECAUSE THE MODE IS NON-DISRUPTIVE.
+                 `StopModules`, `DataBlockReinitialization`, `StartModules` — the
+                 --disruptive allowance list. Each is a consequence the chosen download option
+                 ALREADY entails. *** STEP 6 GENUINELY RESOLVES THESE: the disruptive download
+                 ANSWERS them rather than hoping they do not appear. This is the only class
+                 for which spending a disruptive boundary buys anything. ***
+       CLASS B — NEVER PERMITTED IN ANY MODE.
+                 `ResetModule -> DeleteAll`, `InitializeMemory -> AcceptAll` — the deny list.
+                 These destroy BEYOND what the option entails, so a disruptive download refuses
+                 them exactly as a normal one does and aborts identically. *** GO STRAIGHT TO
+                 STEP 7. Spending a full download here buys nothing and costs a stop. ***
+       CLASS C — UNKNOWN, OR NO `NoAction` AND NOT ON EITHER LIST.
+                 The `SelectiveDeleteDownload` shape (`AcceptAll | DeleteSelected`), and every
+                 configuration nobody has seen yet — which, given that each of the last three
+                 runs produced one, is the case that matters. We cannot know what it entails,
+                 and guessing is the thing this whole policy exists to forbid.
+                 *** GO STRAIGHT TO STEP 7. ***
+
+     SO THE HONEST SHAPE OF THE LADDER: excise-and-continue is the only rung that makes
+     progress cheaply, the disruptive download is a narrow second rung serving Class A alone,
+     and everything else is a human. THE CLASSIFICATION MUST BE EXPLICIT IN THE LOG — "went
+     to step 7 without attempting a download, because Class B" is a materially different
+     record from "attempted the full download and it aborted too".
 
 D33. *** INERT IS THE START STATE OF THE NEXT TEST, WITH DYNAMICS NOT TRIGGERED AND RESETS
      HELD (O12 RULED). *** Not "everything idle". Precisely:
@@ -432,6 +465,51 @@ D36. *** THE POLL-WIDTH CAP (O11) AND CONFLICT DENSITY (O14) ARE PARAMETERS TO B
      written and is a rewrite of every model afterwards — and if O14 comes back "packs 1-2
      wide", shared models are precisely the cause it will name. BE WRONG IN THE CHEAP
      DIRECTION.
+
+D37. *** EACH VECTOR CARRIES A START BOOL, AND IT GATES THE BLOCK'S START CONDITION — NOT THE
+     BLOCK'S EXECUTION. *** This is the MECHANISM for D33's "dynamics not triggered", which
+     until now described a state with no stated means of reaching it.
+
+     *** THE BLOCK IS CALLED EVERY SCAN, INCLUDING THROUGHOUT INERT. *** The tempting reading —
+     gate the CALL, so the block does not run during inert — is WRONG, and D33 is what rules it
+     out: resets are HELD ASSERTED during inert, and a reset is processed BY THE BLOCK. A block
+     that is not called never processes its reset, so gating the call produces a block that is
+     neither running nor reset, holding whatever its statics happened to contain. That is the
+     opposite of inert.
+
+     WHAT THE BOOL BINDS TO — AND THE CONSTRAINT THAT MATTERS:
+
+       *** IT BINDS TO THE BLOCK'S EXISTING START CONDITION, DISCOVERED, NEVER TO A TEST-ONLY
+       INPUT ADDED FOR THE PURPOSE. *** A test-only input is scaffolding inside the block under
+       test, which is exactly what DB-5 forbids: what ships would then not be what was tested.
+       The discovery tool already exists — `converter candidate-scan --direction command`
+       computes command-versus-status FROM THE USAGE GRAPH rather than from the interface
+       section, which is the right question here.
+
+       *** NOT EVERY BLOCK HAS ONE, AND THE ABSENCE IS MEANINGFUL RATHER THAN A DEFAULT. *** A
+       purely reactive block — a comparator, a level alarm, anything that is always processing —
+       has no start gate, and for those inert is established BY THE INPUT VALUES ALONE (put the
+       level below the threshold). So the field is OPTIONAL PER VECTOR, and a vector that omits
+       it is asserting "this block has no start gate", which is a claim the harness can check
+       rather than a blank it fills in.
+
+     ORDERING, AND IT IS A RACE IF LEFT UNSTATED: release the latches, VERIFY quiescent (D33's
+     second check), and only THEN raise the start bool — ON A LATER SCAN, never the same one.
+     Releasing a reset and starting in one scan makes the outcome depend on rung order inside
+     the block, which is not something a test should be sensitive to.
+
+     PER TEST, NOT GLOBAL. Tests in a tensor hold independent start bools. Simultaneous start
+     is the normal case; independence is what permits a staggered one without redesign.
+
+     *** AND IT SUPPLIES SOMETHING THE DESIGN WAS MISSING: A DEFINED T=0. *** The rising edge
+     of the start bool IS the test's time origin. §12 offers EVENT SCAN-STAMPS to answer "when,
+     relative to what" — and until now there was no stated "what". Stamps become differences
+     from the start edge, in scans, which is exactly the unit the observability floor argues in.
+
+     DESIGN-FOR-TESTABILITY CONSEQUENCE, for the skill the owner has flagged as needed: a block
+     with NO discoverable start condition and no way to be held inert by its inputs is HARD TO
+     TEST — and that is a finding ABOUT THE BLOCK, reportable as such, not a gap in the harness
+     to be worked around by adding a test input to it.
 
 --------------------------------------------------------------------------------
 4. THE DESIGN BLOCKS
@@ -1325,6 +1403,24 @@ running this should expect to be at the machine.
 --------------------------------------------------------------------------------
 15. STILL OPEN
 --------------------------------------------------------------------------------
+
+*** STATUS AS OF 2026-08-12: NO INTERNAL DESIGN QUESTION IS UNANSWERED OR UNDEFERRED. ***
+
+    CLOSED  : O3 O4 O5 O6 O8 O10 O12 O13   (O8 including its residual)
+    RULED   : O9 — the policy is decided (D32); what remains is BUILD and VERIFY, not a
+                   decision. Its verification depends on external G4.
+    DEFERRED: O11 O14 — both by explicit ruling, each with a condition recorded in D36 that
+                   must hold WHILE they are deferred.
+    EXTERNAL: G1 G3 G4 G7 (§14) — not ours to answer. G4 is on O9's critical path.
+
+    SO WHAT IS LEFT IS NOT QUESTIONS. It is (a) build-and-verify work, (b) two measurements
+    scheduled for after the design blocks exist, and (c) four vendor unknowns.
+
+    THREE RESIDUALS carry a recorded treatment rather than a full answer, and are the places
+    a new question is most likely to appear: inert failing to establish (D34, treated by
+    D32's excise path); the Class B/C configurations that reach a human immediately (D32
+    caveat 3); and blocks with no discoverable start condition (D37), which is the thread
+    that runs into the design-for-testability skill.
 
   O3. *** CLOSED 2026-08-12 — MEASURED. *** A download that stops the CPU CAN restart it
       within the same operation. On the FULL download, `StartModules` was raised in the POST
