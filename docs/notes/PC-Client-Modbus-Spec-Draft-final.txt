@@ -2116,13 +2116,29 @@ TWO THINGS THAT FALL OUT AND MUST BE BUILT FOR:
      see the old values and blocks after it see the new — a torn read ACROSS BLOCKS despite a
      perfectly atomic write. *** `MB_SERVER` IS CALLED FIRST IN THE SCAN, BEFORE ANY COPY-LAYER
      READ. *** That is a checkable rule, not a convention.
-  2. *** THERE IS A HARD MEMORY CEILING ON THE MIRROR, AND IT BOUNDS CONCURRENT SLOTS
-     DIRECTLY. *** The 1214C's bit memory is 4096 bytes ~ 2048 words TOTAL — the whole `%MW`
-     space, including the version register (§9, two words) and the scan counter. At a
-     100-register slot that is about twenty slots for everything. [I — order of magnitude
-     confident, exact figure NOT verified against the CPU datasheet. Verify before designing
-     to it.] This is a THIRD bound on concurrency, alongside D29's conflict-freedom and poll
-     bandwidth, and it is the only one that is hard.
+  2. *** THERE IS A HARD MEMORY CEILING ON THE MIRROR — VERIFIED 2026-08-12, AND IT IS TWICE
+     WHAT THIS SAID. *** The 1214C's bit memory is *** 8192 BYTES = 4096 WORDS *** [R, System
+     Manual V4.4 Table A-48], not the 4096 bytes / 2048 words previously carried here with an
+     `[I]` tag asking to be verified before use. It is verified, and the ceiling doubled: at a
+     100-register slot that is roughly FORTY slots' worth of address space, not twenty.
+     (1211C and 1212C have 4096 bytes; 1214C/1215C/1217C and all G2 models have 8192.)
+
+     *** AND THE MORE IMPORTANT HALF: `%M` IS SEPARATE FROM WORK MEMORY [R]. *** Siemens
+     classifies bit memory under SYSTEM memory, a different area from work memory, and every
+     datasheet carries "Flag — size, max" as its own row. *** SO THE MIRROR COSTS ZERO WORK
+     MEMORY *** and does not compete with the harness's DBs and code for the scarce budget
+     (§16.13). That is a FIFTH independent argument for §6's "`%MW` is structural, not
+     preferential" — and the only one about CAPACITY rather than correctness.
+
+     *** ONE PLACEMENT RULE, AND IT IS FREE: PUT THE MIRROR ABOVE THE PROGRAM'S RETENTIVE `M`
+     RANGE. *** Retentive bit memory ALWAYS starts at MB0 and runs contiguously upward [R], and
+     retentive `M` DOES count against retain memory — which §16.13 shows is the tightest budget
+     on the rig by a factor of twelve. Placing the mirror low risks it landing inside a
+     retentive window and silently consuming the scarcest resource there is; placing it high
+     removes that path entirely.
+
+     *** THIS IS THEREFORE NO LONGER THE BINDING CONSTRAINT ON CONCURRENCY. WORK MEMORY IS ***
+     — see §16.13. The mirror bound roughly doubled while the work-memory bound did not move.
 
 *** ONE ASSUMPTION UNDERNEATH ALL OF THIS THAT IS NOT MEASURED [I]: that `MB_SERVER` applies
 one request's registers within a SINGLE SCAN. *** It is how the instruction is documented to
@@ -2714,10 +2730,83 @@ conflating them). So:
       not clean" (FI-44), and a guessed ceiling that is too generous fails at download time
       with the wave already committed.
 
-OPEN, AND UNDER RESEARCH AS OF 2026-08-12: the precise semantics of the three areas, what a new
-block costs in each, whether `%M` is separate from work memory (§6 and §16.1 both assume it is),
-what counts against retain, whether exhaustion surfaces at compile or at download — which
-decides where the gate goes — and above all *** HOW TO READ THESE FIGURES PROGRAMMATICALLY ***,
-since that decides whether the tooling queries or hard-codes. Openness is not assumed to expose
-them; SZL over Sharp7 is the most promising lead, since `ReadSZL` is already reachable from the
-toolchain that just answered X-K.
+*** RESEARCHED AND ANSWERED 2026-08-12. THE CONSTRAINT ORDER IS NOT WHAT THIS SECTION ASSUMED. ***
+
+    area      free on rig   binds     verdict
+    Retain        3,864 B   FIRST     *** 12x tighter than work memory, and nothing in the
+                                      pipeline currently looks at it ***
+    Work         46,630 B   SECOND    the one that will actually stop the build
+    Load      1,625,344 B   NOT AT    35x the work headroom. Not a constraint
+                            ALL
+    `%M`      8,192 B tot.  separate  its own budget, TWICE the assumed size, ZERO work memory
+    blocks    1024 total    silent    a SECOND ceiling nobody had counted
+
+WHAT LIVES WHERE [R, System Manual V4.4 §5.1.5 + Table 1-2]: load memory is non-volatile and
+holds the program, data and configuration; work memory is VOLATILE and holds the executing
+subset, restored from load at power-up; retentive memory is non-volatile storage for a limited
+quantity of WORK MEMORY VALUES. *** A DOWNLOAD DOES NOT CLEAR RETENTIVE MEMORY *** [R] — a
+MEMORY RESET does.
+
+WHAT A NEW OBJECT COSTS [R, Table 1-2 fn.1]: FB/FC/OB code, instance DBs and normal global DBs
+are stored in work memory *** AND *** load memory, both. IEC timers cost 16 bytes each in a DB;
+counters 3-12 bytes by type.
+
+*** THE ONE THAT IS ACTIONABLE AND FREE — `Only store in load memory` [R]: AN UNLINKED DB TAKES
+ZERO WORK MEMORY *** and may be up to 256 KB. That moves any harness data the PROGRAM does not
+read with bit logic — expected-value tables, result archives, per-run captures — onto the 1.6 MB
+nobody is using. Cost: `READ_DBL`/`WRIT_DBL` access only, no bit addressing, and it is almost
+certainly invisible to Sharp7 as well [I], so it can be a STORE but never a MIRROR.
+
+*** RETAIN IS THE SHARP EDGE AND THE DESIGN HAS NO ACCOUNT OF IT. *** What counts against it
+[R]: retentive tags in global DBs and in FBs/instance DBs, retentive `M`, AND IEC timers and
+counters explicitly. Per-tag on OPTIMIZED blocks; *** ALL-OR-NOTHING ON STANDARD-ACCESS ONES,
+so ONE retentive tag makes the WHOLE DB retentive *** — and the harness deliberately creates
+standard-access blocks for S7comm visibility (§6), which is exactly where that trap lives.
+    ➜ *** MAKE EVERY HARNESS-ADDED OBJECT EXPLICITLY NON-RETENTIVE, AND CHECK IT. ***
+    The limit is 10,240 bytes below firmware V4.5 and 14,336 from V4.5 [R], matching the
+    measurement — and it varies by FIRMWARE, not by model. G2 is 20 KB.
+
+WHERE EXHAUSTION SURFACES, WHICH DECIDES WHERE THE GATE GOES: *** COMPILE REPORTS, DOWNLOAD
+ENFORCES. *** No compile-time hard gate on total work memory could be sourced. TIA shows usage
+per block under Resources after compile [R]; the download refuses with "There is not enough
+memory space on the CPU for this amount of data" [F] — reported failing at *** 98% *** usage,
+because the OS itself consumes work memory for process images, diagnostics and communication.
+    ➜ THE GATE BELONGS AT DOWNLOAD-PLAN TIME, and it must FAIL CLOSED WELL SHORT OF FULL.
+      Recommended: 85% of work memory, and ANY retain increase at all.
+
+*** HOW TO READ THE FIGURES — AND THE ANSWER SAVES A WASTED SPIKE. ***
+  - *** OPENNESS CANNOT [M, verified by grep of the installed `Siemens.Engineering.xml` V20]. ***
+    No `LoadMemory`, `WorkMemory` or `MemoryReserve` member exists. The only memory-adjacent
+    public member is `PlcBlock.MemoryLayout`. Same shape as the measured "Openness exposes no
+    CPU operating mode" result — the online-diagnostics surface is simply not in the public API.
+  - *** SZL/`RDSYSST` CANNOT, AND THIS WAS THE LEAD THIS SECTION RECOMMENDED. *** `RDSYSST` does
+    not exist in the S7-1200 instruction set [R]; the S7-300/400 memory SSL `W#16#0013` is not
+    served; Snap7/Sharp7's `GetCpuInfo` is refused by 1200/1500 CPUs [F]. *** SO `ReadSZL` — the
+    toolchain path that just answered X-K — WILL NOT ANSWER THIS. Do not build on it. ***
+  - The CPU WEB SERVER's Diagnostics page carries total AND in-use for all three areas [R] — but
+    it is HTML with no JSON API on a classic S7-1200 (the Web API is S7-1500 and G2 only), so it
+    is scraping; and this engineering PC fakes all TCP 80/443 connects, so not from here.
+  - ➜ *** THEREFORE: A HARD-CODED TABLE PLUS A MEASURED BASELINE, AND BUDGET ARITHMETIC AGAINST
+    IT. *** The owner's "allow for different PLC models" requirement stands and is now sharper:
+    *** KEY THE TABLE ON (ARTICLE NUMBER x FIRMWARE), NEVER ON ARTICLE NUMBER ALONE. *** A 1214C
+    is 100 KB or 150 KB of work and 10 KB or 14 KB of retain depending ONLY on firmware — and
+    the datasheet for this exact article number that is retrievable on the web is a V4.1 print
+    reading 100/4M/10K, while the rig reads 150/4M/14K. Both are correct. *** IF THE HARNESS
+    EVER MEETS A SECOND RIG, THIS IS THE FAILURE THAT WILL LOOK LIKE "THE CODE GOT BIGGER". ***
+    Firmware IS readable — `GetOrderCode`/SZL 0x0011 is one of the few things a 1200 does answer.
+
+FAMILY FIGURES (work memory ≥V4.6 / load / retain ≥V4.5 / bit memory) [R]:
+    1211C  75 KB / 1 MB / 14 KB / 4096 B      1215C  200 KB / 4 MB / 14 KB / 8192 B
+    1212C 100 KB / 2 MB / 14 KB / 4096 B      1217C  250 KB / 4 MB / 14 KB / 8192 B
+    1214C 150 KB / 4 MB / 14 KB / 8192 B   <- the rig, and the measurement matches exactly
+    *** G2 IS A DIFFERENT MEMORY MODEL, NOT A BIGGER ONE: it SPLITS work memory into SEPARATE
+    PROGRAM AND DATA BUDGETS *** (1214C G2: 250 KB program + 750 KB data), 8 MB load, 20 KB
+    retain — so on G2 "work memory" is not one number, and a harness adding CODE hits a
+    different ceiling from one adding DBs. G2 exists only as 1212C/1214C (+FC) today.
+
+STILL UNSOURCED, and flagged rather than guessed: whether an OPTIMIZED block's 100-byte memory
+reserve is actually ALLOCATED in the CPU [I]. If it is, every IR-authored per-slot iDB — which
+imports Optimized, measured — costs ~100 B more than a standard one; at 20 slots that is ~2 KB,
+about 4% of the work headroom. *** MEASURE THE PER-OBJECT COST ONCE EMPIRICALLY RATHER THAN
+DERIVING IT *** (add one slot's objects, compile, read the delta from TIA's Resources view) —
+the reserve question is unsourced and the OS's own overhead is not attributed to your blocks.

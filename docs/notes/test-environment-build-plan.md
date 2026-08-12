@@ -52,7 +52,8 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 
 | # | Task | Retires | Why it cannot wait |
 |---|---|---|---|
-| 0.1 | `%MW` capacity on the 1214C, from the datasheet | A3 | Slot size and slot count are derived from it. Guessing means re-laying-out the map later |
+| 0.1 | ~~`%MW` capacity on the 1214C~~ | A3 | ✅ **DONE 2026-08-12.** **8192 bytes / 4096 words** — double the assumed figure — and **separate from work memory**, so the mirror costs zero work memory. Place it **above** the retentive `M` range (retentive `M` is contiguous from MB0 and counts against retain) |
+| 0.1a | Measure the per-slot object cost empirically | **A9 (new)** | **Retain binds first (3,864 B free, 12× tighter than work); work binds second; load is not a constraint.** No compile-time gate exists — compile reports, download enforces, and a reported failure occurred at 98%. Add one slot's objects, compile, read the delta from TIA's Resources view. Do **not** derive it: the optimized 100-byte reserve question is unsourced |
 | 0.2 | ~~`PlcGetStatus` in RUN over Sharp7~~ | A7 (half) | ✅ **DONE 2026-08-12.** Returned Run from the rig at 79–94 ms. PUT/GET was **not** a blocker |
 | 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it. **Now more urgent, see below** |
 | 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
