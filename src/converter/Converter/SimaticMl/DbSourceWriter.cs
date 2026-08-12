@@ -54,6 +54,12 @@ public static class DbSourceWriter
         }
 
         attributeListChildren.Add(new XElement("Interface", sectionsElement));
+
+        // MemoryLayout goes immediately before Name, matching every real export's own element
+        // order (TIA writes this AttributeList alphabetically). Emitted ONLY when the IR carries
+        // one — absent means "no opinion", never a default; see BlockMemoryLayout.
+        BlockMemoryLayout.AppendIfPresent(attributeListChildren, db.MemoryLayout);
+
         attributeListChildren.Add(new XElement("Name", db.Name));
         attributeListChildren.Add(new XElement("Namespace"));
         attributeListChildren.Add(new XElement("Number", db.Number));

@@ -58,7 +58,6 @@ public static class Normalizer
         "HeaderFamily",
         "HeaderName",
         "IsIECCheckEnabled",
-        "MemoryLayout",
         "SetENOAutomatically",
         "UDABlockProperties",
         "UDAEnableTagReadback",
@@ -117,6 +116,25 @@ public static class Normalizer
         ["SW.Blocks.CompileUnit"] = "ID",
     };
 
+    /// <summary>
+    /// MemoryLayout is compared as an OPTIONAL ASSERTION (2026-08-12): a difference between two
+    /// documents that BOTH declare one is real and is reported; a document that declares none is
+    /// stating no opinion and is not held to the other's value.
+    ///
+    /// It sat in <see cref="VolatileElementNames"/> until 2026-08-12 under the comment "block-level
+    /// configuration TIA assigns sensible defaults for on Import()" — which made a layout change
+    /// undetectable in either direction, so a real Standard DB could round-trip into an Optimized
+    /// one with `drift-check` reporting *** MATCH ***. Un-ignoring it only became correct once the
+    /// converter could EMIT the attribute (`BlockMemoryLayout`, same commit): before that, every
+    /// real-export-vs-converter-output comparison in the project would have differed at once.
+    ///
+    /// Why "both must declare" rather than a plain strict compare: every `.ir` in the committed
+    /// corpus predates the emit side, so it carries no layout while its paired export carries one.
+    /// A strict compare would report ~30 blocks as drifted for the benign reason that the IR simply
+    /// does not state a layout — the same wholesale-red outcome, just reached one step later.
+    /// The comparison sharpens by itself as blocks are re-derived from their exports: an `.ir` that
+    /// CAME FROM an export declares a layout, and from then on it is held to it.
+    /// </summary>
     public static bool AreSemanticallyEquivalent(XDocument original, XDocument reExported)
     {
         if (original.Root is null || reExported.Root is null)
@@ -124,10 +142,25 @@ public static class Normalizer
             throw new InvalidOperationException("Cannot compare a document with no root element.");
         }
 
-        return XNode.DeepEquals(Strip(original.Root), Strip(reExported.Root));
+        var compareMemoryLayout = DeclaresMemoryLayout(original.Root) && DeclaresMemoryLayout(reExported.Root);
+        return XNode.DeepEquals(
+            Strip(original.Root, compareMemoryLayout),
+            Strip(reExported.Root, compareMemoryLayout));
     }
 
-    public static XElement Strip(XElement element) => Strip(element, BuildAccessContentKeyMap(element), new Dictionary<string, string>());
+    private static bool DeclaresMemoryLayout(XElement root) =>
+        root.DescendantsAndSelf().Any(e => e.Name.LocalName == BlockMemoryLayout.ElementName);
+
+    /// <summary>
+    /// Single-document canonicalization (hashing, diffing, dumping a normalized form beside a
+    /// failing comparison). Drops MemoryLayout, since with only one document in hand there is no
+    /// other side to have declared one — <see cref="AreSemanticallyEquivalent"/> is the caller that
+    /// knows whether the attribute is being compared and opts in.
+    /// </summary>
+    public static XElement Strip(XElement element) => Strip(element, compareMemoryLayout: false);
+
+    public static XElement Strip(XElement element, bool compareMemoryLayout) =>
+        Strip(element, BuildAccessContentKeyMap(element), new Dictionary<string, string>(), compareMemoryLayout);
 
     // An Access element's own UId is volatile too — confirmed real, 2026-07-11 (TON grounding,
     // FC TimerSample): TIA reassigns Access UIds on its own Import()/Compile()/Export() cycle,
@@ -304,7 +337,11 @@ public static class Normalizer
         return clone;
     }
 
-    private static XElement Strip(XElement element, Dictionary<string, string> accessContentKeyByUId, Dictionary<string, string> partContentKeyByUId)
+    private static XElement Strip(
+        XElement element,
+        Dictionary<string, string> accessContentKeyByUId,
+        Dictionary<string, string> partContentKeyByUId,
+        bool compareMemoryLayout)
     {
         // UId numbering restarts at the beginning of every network (each <FlgNet> is its own
         // numbering scope) — the content-key map must be rebuilt per network too, not flattened
@@ -341,7 +378,10 @@ public static class Normalizer
         }
 
         var clone = new XElement(element.Name, attributes);
-        var children = element.Elements().Where(c => !IsVolatile(c)).Select(c => Strip(c, accessContentKeyByUId, partContentKeyByUId)).ToList();
+        var children = element.Elements()
+            .Where(c => !IsVolatile(c, compareMemoryLayout))
+            .Select(c => Strip(c, accessContentKeyByUId, partContentKeyByUId, compareMemoryLayout))
+            .ToList();
 
         // <Wire> order within <Wires>, <Access>/<Part> order within <Parts>, and an individual
         // <Wire>'s own endpoint order (<IdentCon>/<NameCon>/<Powerrail>/<OpenCon>) are all not
@@ -376,11 +416,19 @@ public static class Normalizer
         return clone;
     }
 
-    private static bool IsVolatile(XElement child)
+    private static bool IsVolatile(XElement child, bool compareMemoryLayout)
     {
         if (VolatileElementNames.Contains(child.Name.LocalName))
         {
             return true;
+        }
+
+        // MemoryLayout is kept — and therefore compared — only when both documents declare one;
+        // see AreSemanticallyEquivalent for why. It is NOT in VolatileElementNames any more: a
+        // layout difference between two documents that each state a layout is a real difference.
+        if (child.Name.LocalName == BlockMemoryLayout.ElementName)
+        {
+            return !compareMemoryLayout;
         }
 
         // "Title" isn't its own element name — it's a MultilingualText distinguished only by its

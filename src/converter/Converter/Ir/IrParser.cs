@@ -99,6 +99,23 @@ public static partial class IrParser
             i++;
         }
 
+        // MemoryLayout (2026-08-12) — optimized vs standard block access, parsed between
+        // SECONDARYTYPE and TITLE to match IrSerializer's own emission order. Optional: absence
+        // is the pre-2026-08-12 shape and means "no opinion", not a default.
+        string? memoryLayout = null;
+        if (i < lines.Length && lines[i].StartsWith("MEMORYLAYOUT ", StringComparison.Ordinal))
+        {
+            memoryLayout = lines[i]["MEMORYLAYOUT ".Length..];
+            if (!BlockMemoryLayout.IsKnownValue(memoryLayout))
+            {
+                throw new IrFormatException(
+                    $"MEMORYLAYOUT '{memoryLayout}' is not a known memory layout — expected " +
+                    $"'{BlockMemoryLayout.Standard}' or '{BlockMemoryLayout.Optimized}'.");
+            }
+
+            i++;
+        }
+
         // Block-level Title (S1 item 17, 2026-07-12) — mirrors Comment's own optional-line
         // handling, parsed first to match IrSerializer's own TITLE-then-COMMENT ordering.
         string? title = null;
@@ -131,7 +148,7 @@ public static partial class IrParser
 
         return new IrBlock(
             rootUId, kind, name, number, language, comment, networks, staticMembers, tempMembers, title,
-            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType);
+            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType, memoryLayout);
     }
 
     // Optional — only present when the source had real Interface content (Static/Temp since S1

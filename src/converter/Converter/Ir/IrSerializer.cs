@@ -43,6 +43,13 @@ public static class IrSerializer
             sb.Append("SECONDARYTYPE ").Append(block.SecondaryType).Append('\n');
         }
 
+        // MEMORYLAYOUT (2026-08-12) — written only when the model carries one, so a block whose
+        // IR predates this stays byte-identical and keeps emitting no <MemoryLayout> element.
+        if (block.MemoryLayout is not null)
+        {
+            sb.Append("MEMORYLAYOUT ").Append(block.MemoryLayout).Append('\n');
+        }
+
         if (!string.IsNullOrEmpty(block.Title))
         {
             sb.Append("TITLE \"").Append(EscapeString(block.Title)).Append("\"\n");

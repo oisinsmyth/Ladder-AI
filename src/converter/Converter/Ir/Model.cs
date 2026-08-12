@@ -504,7 +504,11 @@ public sealed record IrBlock(
     IReadOnlyList<DbMember>? OutputMembers = null,
     IReadOnlyList<DbMember>? InOutMembers = null,
     IReadOnlyList<DbMember>? ConstantMembers = null,
-    string? SecondaryType = null)
+    string? SecondaryType = null,
+    // MemoryLayout: optimized vs standard block access — see SimaticMl.BlockMemoryLayout. Its own
+    // optional `MEMORYLAYOUT <value>` line in the readable form; absent means "no opinion", which
+    // is what every `.ir` predating 2026-08-12 says and must keep saying.
+    string? MemoryLayout = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 

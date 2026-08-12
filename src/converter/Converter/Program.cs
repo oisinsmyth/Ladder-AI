@@ -1655,7 +1655,8 @@ internal static class Program
 
         var irBlock = new IrBlock(
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, networks, block.StaticMembers, block.TempMembers, block.Title,
-            block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType);
+            block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType,
+            block.MemoryLayout);
 
         // Derive-always (ADR-0005), corrected 2026-07-19: to-ir KEEPS the stored SIDECAR by default. A
         // real export can synthesise-but-diverge (e.g. array-index locals, Gap D — found in the
@@ -1965,7 +1966,7 @@ internal static class Program
         var blockSource = new BlockSource(
             block.RootUId, block.Kind, block.Name, block.Number, block.Language, block.Comment, Array.Empty<CompileUnitSource>(), block.StaticMembers, block.TempMembers, block.Title,
             block.InputMembers, block.OutputMembers, block.InOutMembers, block.ConstantMembers, block.SecondaryType,
-            multiInstanceStatics.ToList());
+            multiInstanceStatics.ToList(), block.MemoryLayout);
         return BlockSourceWriter.Write(blockSource, flgNetworks, compileUnitUIds, networkTitles, networkComments);
     }
 }

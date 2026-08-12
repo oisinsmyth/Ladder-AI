@@ -15,6 +15,7 @@ namespace Converter.Ir;
 ///   ROOTID &lt;id&gt;
 ///   NUMBER &lt;n&gt;
 ///   INSTANCEOF &lt;FBName&gt;              # only present for Instance DBs
+///   MEMORYLAYOUT Standard|Optimized          # only present when the source declares one
 ///   COMMENT "&lt;text&gt;"                       # omitted if empty
 ///   INPUT                                    # only present when the source has one (2026-07-13)
 ///     &lt;member&gt; : &lt;Datatype&gt;
@@ -62,6 +63,13 @@ public static class DbIrSerializer
         if (db.InstanceOfName is not null)
         {
             sb.Append("  INSTANCEOF ").Append(db.InstanceOfName).Append('\n');
+        }
+
+        // MEMORYLAYOUT (2026-08-12) — written only when the model carries one, so every `.ir`
+        // predating this stays byte-identical and keeps emitting no <MemoryLayout> element.
+        if (db.MemoryLayout is not null)
+        {
+            sb.Append("  MEMORYLAYOUT ").Append(db.MemoryLayout).Append('\n');
         }
 
         if (!string.IsNullOrEmpty(db.Comment))
@@ -144,6 +152,22 @@ public static class DbIrParser
             i++;
         }
 
+        // Parsed between INSTANCEOF and COMMENT, matching DbIrSerializer's own emission order.
+        // Optional: absence is the pre-2026-08-12 shape and means "no opinion", not a default.
+        string? memoryLayout = null;
+        if (i < lines.Length && lines[i].StartsWith("  MEMORYLAYOUT ", StringComparison.Ordinal))
+        {
+            memoryLayout = lines[i]["  MEMORYLAYOUT ".Length..];
+            if (!BlockMemoryLayout.IsKnownValue(memoryLayout))
+            {
+                throw new IrFormatException(
+                    $"MEMORYLAYOUT '{memoryLayout}' is not a known memory layout — expected " +
+                    $"'{BlockMemoryLayout.Standard}' or '{BlockMemoryLayout.Optimized}'.");
+            }
+
+            i++;
+        }
+
         string? comment = null;
         if (i < lines.Length && lines[i].StartsWith("  COMMENT \"", StringComparison.Ordinal))
         {
@@ -168,7 +192,7 @@ public static class DbIrParser
             members.Add(DbMemberLineFormat.ParseMemberRecursive(lines, ref i, "    "));
         }
 
-        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers, memoryLayout);
     }
 
     // Shared flat member-section parser for Input/Output/InOut — mirrors IrParser's own private

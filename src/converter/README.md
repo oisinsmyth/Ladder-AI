@@ -2246,6 +2246,68 @@ agent: 1 is a real answer ("someone has it, pick another"), 2 means nothing was 
 **Boundary:** claims prevent only the kinds someone enumerated. The six cover every collision source
 this repo has evidence for; a resource class outside them is still an undetected collision.
 
+## `MemoryLayout` — optimized vs standard block access, carried through the round trip (2026-08-12)
+
+**The measured defect.** A real standard-access global DB was round-tripped
+`export → to-ir → to-xml`:
+
+```
+original export : <MemoryLayout>Standard</MemoryLayout>
+regenerated xml : NO MemoryLayout element at all
+drift-check     : *** MATCH ***
+```
+
+Re-importing that regenerated XML states **no opinion** about layout, so TIA applies the S7-1200
+default — `Optimized` — and the DB becomes **invisible to classic S7comm** (not an error: the block
+is simply absent, and it fails at the first *data* read). **Every check in the pipeline stayed
+green**: `drift-check` was structurally blind because `Normalizer` had `MemoryLayout` on its
+volatile-element list, import did not error, compile did not error. The first symptom was a runtime
+Modbus status code. Background on the Openness side, including the re-import revert this pairs with:
+`src/openness-cli/README.md`, `block-layout`.
+
+**What it is.** The `<MemoryLayout>` element inside a block's own `<AttributeList>`, immediately
+before `<Name>` in every real export. **Not DB-only** — it is backed by `PlcBlock.MemoryLayout` and
+is present on every FC, FB and OB in the committed `simatic-ml/` corpus, so both `DbSourceParser`/
+`DbSourceWriter` and `BlockSourceParser`/`BlockSourceWriter` carry it. The value set is closed and
+confirmed (`Standard`, `Optimized` — the whole of `Siemens.Engineering.SW.Blocks.MemoryLayout`);
+anything else is a hard error on both the XML and the IR side rather than a value passed blindly to
+TIA. IR grammar: a `MEMORYLAYOUT <value>` line — `ir/SPEC.md`, `BLOCK` and `DB` file shapes.
+
+**Absent in IR emits nothing, and that rule is not optional.** Every `.ir` in the repo predates this
+and carries no layout; emitting a default for those would silently restate the layout of every DB in
+the corpus — a broader silent corruption than the one being fixed. So: present in the IR, emit it;
+absent, emit nothing, exactly as before. The defect closes because an `.ir` that *came from* an
+export now carries the attribute.
+
+**Order of the change: emit first, un-ignore second — landed in one commit.** `Normalizer` no longer
+ignores the attribute, so a layout **difference** is now reported instead of silently matched. It
+compares as an *optional assertion*: a difference between two documents that **both** declare a
+layout is real; a document declaring none is stating no opinion and is not held to the other's
+value. That second half is what keeps the change from turning the corpus red for a benign reason —
+**measured**: comparing strictly instead reports 30 committed blocks as drifted (19 in
+`test-project001`, 11 in `reference`) against a known-drift baseline of 6, because their `.ir`
+predates the emit side while their exports carry `Optimized`. The comparison sharpens by itself as
+blocks are re-derived from their exports.
+
+**It cannot be derived — checked, not assumed.** The alternative considered was *computing* a
+standard layout from member order and types (bools packing within a byte, a partly-used byte not
+reused) rather than storing a flag. The evidence removes the question: **SimaticML carries no
+per-member byte/bit offsets at all.** A real `WithDefaults` export of a standard-access DB has zero
+occurrences of an offset or address, and across the 900 `<Member>` elements in the committed corpus
+the only attributes that exist are `Name`, `Datatype`, `Remanence`, `Accessibility`, `Version`,
+`Informative`. So there is no offset channel for TIA to infer a layout from on import, and none for
+a derivation to be verified against — the CPU memory layout is computed by TIA and never serialized.
+This element is the only carrier the file format has. A derivation would still be worth building for
+a PC-side S7comm harness, which needs real absolute addresses; that belongs to the harness, needs
+the even-byte alignment rule for `WORD` and larger, and must be grounded against offsets TIA
+actually displays.
+
+18 converter tests (`Converter.Tests/MemoryLayoutTests.cs`), fixture
+`Fixtures/GlobalDbStandardMemoryLayout.xml` — the grounding export's exact XML shape with invented
+DB/member names. Headline test: take the real `Standard` export, `to-ir`, `to-xml`, assert the
+regenerated XML still says `Standard`. All 908 converter tests pass (up from 890); the offline
+golden-harness suites (39, including `ExportDriftDetectorTests`) stay green.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

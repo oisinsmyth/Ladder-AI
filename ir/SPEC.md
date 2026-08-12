@@ -27,6 +27,9 @@ BLOCK <FB|FC|OB> <Name>
   LANGUAGE <LAD>                    # LAD only ever appears here — converter refuses anything else (CLAUDE.md hard rule 1)
   SECONDARYTYPE <value>             # OB only — confirmed real 2026-07-14 (OB1 Main, "ProgramCycle"); omitted for FC/FB,
                                      # which never carry it. Required by Openness's own Create() for an OB specifically.
+  MEMORYLAYOUT Standard|Optimized   # optimized vs standard block access — NOT DB-only, see the DB section's own note.
+                                     # Present ONLY when the source declares one; absence means "no opinion", never a
+                                     # default (2026-08-12). Real on every FC/FB/OB export in `simatic-ml/`.
   TITLE "<block title>"             # omitted entirely if empty — confirmed real, 2026-07-12 (S1 item 17)
   COMMENT "<block header comment>"  # omitted entirely if empty
 
@@ -966,6 +969,9 @@ DB <Name>
   ROOTID <id>
   NUMBER <n>
   INSTANCEOF <FBName>                     # only present for Instance DBs — see below
+  MEMORYLAYOUT Standard|Optimized         # optimized vs standard block access — see below.
+                                           # Present ONLY when the source declares one; absence
+                                           # means "no opinion", never a default (2026-08-12)
   COMMENT "<text>"                        # omitted if empty, same rule as BLOCK
   MEMBERS
     <member> : <Type>
@@ -1035,6 +1041,53 @@ top-level construct (its own exportable/importable `SW.Types.PlcStruct` file), g
 from — and does not yet replace — the inline structured-member representation a DB/FB's own
 `Static` section still uses (below); see that section's own note on why reference-by-name was
 deferred, now unblocked by this capability but not yet acted on.
+
+**`MEMORYLAYOUT` — optimized vs standard block access (2026-08-12).** The SimaticML
+`<MemoryLayout>` element inside a block's own `<AttributeList>`, immediately before `<Name>`.
+Confirmed real in both directions: `Standard` on the grounding export this was built from,
+`Optimized` on every block in the committed `simatic-ml/` corpus. The value set is closed —
+`Siemens.Engineering.SW.Blocks.MemoryLayout` is an enum with exactly `Standard` and `Optimized`
+(`src/openness-cli/README.md`, `block-layout`) — so anything else is a hard error rather than a
+value passed blindly to TIA.
+
+**Not DB-only.** It is backed by `PlcBlock.MemoryLayout` and appears on every FC, FB and OB export
+too, hence the `MEMORYLAYOUT` line in the `BLOCK` grammar above as well. An FB's own access mode
+governs the layout of every instance DB made from it.
+
+**Why it is here at all.** Classic S7comm cannot see an *optimized* block: the block is not
+reported as an error, it is simply **absent**, and the failure surfaces at the first data read. The
+S7-1200 default is `Optimized`. Until this line existed the attribute was invisible to the whole
+converter — absent from this spec, never written by `DbSourceWriter`, never read by
+`DbSourceParser`, and on `Normalizer`'s ignore list — so a real standard-access DB round-tripped
+`export → to-ir → to-xml` came back with **no `MemoryLayout` element at all**. The re-import then
+stated no opinion, TIA applied its default, and the DB went silently optimized while `drift-check`
+reported *** MATCH ***, import did not error and compile did not error. Measured on a real export,
+2026-08-12; the first symptom was a runtime Modbus status code.
+
+**Absence means "no opinion", never a default — this is load-bearing.** Every `.ir` written before
+2026-08-12 carries no layout. Emitting a default for those would restate the layout of every DB in
+the corpus, replacing one silent corruption with a broader one. So: present in the IR, emit the
+element; absent, emit nothing, exactly as before. The defect closes because an `.ir` that *came
+from* an export now carries the attribute, so the information survives the trip it previously did
+not. `Normalizer` compares it on the same terms — a difference between two documents that **both**
+declare a layout is real and is reported; a document declaring none is not held to the other's
+value (which is what keeps the whole pre-2026-08-12 corpus from reporting as drifted for a benign
+reason: measured, a strict compare turns 30 committed blocks red against a known baseline of 6).
+
+**It cannot be derived, and this was checked rather than assumed.** The question was whether a
+standard-access layout could be *computed* from member declaration order and types instead of
+stored — bools packing consecutively within a byte, a partly-used byte not reused by the next
+member, and so on. It cannot, for a reason that removes the question rather than answering it:
+**SimaticML carries no per-member byte/bit offsets at all.** A real `WithDefaults` export of a
+standard-access DB has zero occurrences of an offset or an address, and across the 900 `<Member>`
+elements in the committed corpus the only attributes that exist are `Name`, `Datatype`,
+`Remanence`, `Accessibility`, `Version` and `Informative`. So there is no offset channel for TIA to
+infer a layout from on import, and none for a derivation to be checked against — the CPU memory
+layout is computed by TIA and never serialized. `<MemoryLayout>` is the only carrier the file
+format has. (A derivation would still earn its place in a PC-side S7comm harness, which genuinely
+needs absolute addresses like `DB48.DBX4.2` — but that lives in the harness, needs the even-byte
+alignment rule for `WORD` and larger that the packing rule above does not cover, and must be
+grounded against offsets TIA actually displays.)
 
 Two corrections from the original sketch, both wrong until checked against a real export:
 

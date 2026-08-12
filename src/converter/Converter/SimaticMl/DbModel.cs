@@ -21,6 +21,11 @@ namespace Converter.SimaticMl;
 // has the identical Input/Output/InOut/Static section shape an FB's does, just without
 // Temp/Constant/Return (never seen non-empty on a DB). InOut confirmed present-but-always-empty
 // on every DB seen (matching BlockSource's own InOut), hence non-nullable empty-default.
+//
+// MemoryLayout: optimized vs standard block access — see BlockMemoryLayout for the whole story
+// (why it is carried, why absent means "no opinion" rather than a default, and why it cannot be
+// derived from anything else in the document). Nullable because absence is a real, must-preserve
+// state: every `.ir` written before 2026-08-12 has none, and those must keep emitting no element.
 public sealed record DbSource(
     string RootUId,
     string Name,
@@ -30,7 +35,8 @@ public sealed record DbSource(
     IReadOnlyList<DbMember> Members,
     IReadOnlyList<DbMember>? InputMembers = null,
     IReadOnlyList<DbMember>? OutputMembers = null,
-    IReadOnlyList<DbMember>? InOutMembers = null)
+    IReadOnlyList<DbMember>? InOutMembers = null,
+    string? MemoryLayout = null)
 {
     public IReadOnlyList<DbMember> InOutMembers { get; init; } = InOutMembers ?? Array.Empty<DbMember>();
 }

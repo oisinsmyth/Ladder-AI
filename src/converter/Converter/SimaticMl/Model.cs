@@ -301,6 +301,11 @@ public sealed record CompileUnitSource(string UId, string? Comment, string? Titl
 // writer's own AttributeList omitted it entirely, so re-importing a rebuilt OB failed outright —
 // caught by the full export/convert/import/compile/re-export cycle run against every block
 // already in the scratch project, not by an isolated unit test.
+// MemoryLayout: NOT DB-only — confirmed real on code blocks 2026-08-12, present on every FC, FB
+// and OB in the committed `simatic-ml/` corpus (all Optimized there). It is one property,
+// `PlcBlock.MemoryLayout`, and an FB's own access mode governs the layout of every instance DB
+// made from it, so the same silent-corruption path exists here as on a global DB. Same
+// absent-means-no-opinion rule; see BlockMemoryLayout for the full story.
 public sealed record BlockSource(
     string RootUId,
     string Kind,
@@ -317,7 +322,8 @@ public sealed record BlockSource(
     IReadOnlyList<DbMember>? InOutMembers = null,
     IReadOnlyList<DbMember>? ConstantMembers = null,
     string? SecondaryType = null,
-    IReadOnlyList<string>? MultiInstanceStatics = null)
+    IReadOnlyList<string>? MultiInstanceStatics = null,
+    string? MemoryLayout = null)
 {
     public IReadOnlyList<DbMember> TempMembers { get; init; } = TempMembers ?? Array.Empty<DbMember>();
 

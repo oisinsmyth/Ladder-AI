@@ -65,6 +65,10 @@ public static class DbSourceParser
             throw new SimaticMlFormatException($"DB '{name}' has unexpected ProgrammingLanguage '{language}' (expected 'DB').");
         }
 
+        // MemoryLayout (2026-08-12) — optional, since only a genuine TIA export carries it; a
+        // converter-written document from before this existed has none, and null preserves that.
+        var memoryLayout = BlockMemoryLayout.ReadOptional(attributeList, $"DB '{name}'");
+
         var (members, inputMembers, outputMembers, inOutMembers) = ParseMembers(attributeList, name);
 
         var objectList = dbElement.Element("ObjectList")
@@ -73,7 +77,7 @@ public static class DbSourceParser
         var comment = MultilingualTextHelper.ReadMultilingualText(objectList, "Comment");
         MultilingualTextHelper.RequireEmptyTitle(objectList, $"DB '{name}'");
 
-        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers);
+        return new DbSource(rootUId, name, number, instanceOfName, comment, members, inputMembers, outputMembers, inOutMembers, memoryLayout);
     }
 
     // Input/Output/InOut: confirmed real 2026-07-13, `TomraControlInst1` (an Instance DB of

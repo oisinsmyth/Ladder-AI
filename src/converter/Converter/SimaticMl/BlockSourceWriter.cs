@@ -41,6 +41,11 @@ public static class BlockSourceWriter
             attributeListChildren.Add(interfaceElement);
         }
 
+        // MemoryLayout goes immediately before Name, matching every real export's own element
+        // order. Emitted ONLY when the IR carries one — absent means "no opinion", never a
+        // default; see BlockMemoryLayout.
+        BlockMemoryLayout.AppendIfPresent(attributeListChildren, block.MemoryLayout);
+
         attributeListChildren.Add(new XElement("Name", block.Name));
         attributeListChildren.Add(new XElement("Namespace"));
         attributeListChildren.Add(new XElement("Number", block.Number));

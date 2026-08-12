@@ -46,6 +46,10 @@ public static class BlockSourceParser
 
         var secondaryType = attributeList.Element("SecondaryType")?.Value;
 
+        // MemoryLayout (2026-08-12) — optional, and present on every real FC/FB/OB export. Absent
+        // on a converter-written document from before this existed; null preserves that.
+        var memoryLayout = BlockMemoryLayout.ReadOptional(attributeList, $"Block '{name}'");
+
         var blockComment = ReadComment(objectList);
         // Title (S1 item 17, 2026-07-12) — confirmed real at block level after all (two of
         // PlantAutoControl's own dependency FBs, `MotorVSDSystem`/`AirStar`, both titled "VSD Motor"), read
@@ -65,7 +69,8 @@ public static class BlockSourceParser
 
         return new BlockSource(
             rootUId, kind, name, number, language, blockComment, compileUnits, staticMembers, tempMembers, blockTitle,
-            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType);
+            inputMembers, outputMembers, inOutMembers, constantMembers, secondaryType, MultiInstanceStatics: null,
+            MemoryLayout: memoryLayout);
     }
 
     private static CompileUnitSource ParseCompileUnit(XElement compileUnit)
