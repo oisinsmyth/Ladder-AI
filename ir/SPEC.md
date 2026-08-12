@@ -109,8 +109,16 @@ parallel type. `Constant` is a genuinely distinct third shape — `Name`/`Dataty
 `Accessibility="Public"` plus a required `StartValue`, **no `AttributeList` at all, no
 `Remanence`** — neither `ParseMember` (requires `AttributeList`) nor the bare/`Temp` shape
 (`ParseBareMember`, which rejects `Accessibility` as unexpected) fits, hence a new
-`ParseConstantMember`/`WriteConstantMember`. `InOut` is confirmed real as an always-present,
-always-empty section in every grounded instance — no populated example has ever been seen. A
+`ParseConstantMember`/`WriteConstantMember`. `InOut` is confirmed real as an always-present
+section. **It was recorded here as always-EMPTY, with "no populated example has ever been seen" —
+that is out of date as of 2026-08-12.** A real export of an `MB_SERVER` V5.3 block carries a
+**populated** `<Section Name="InOut">` — `MB_HOLD_REG : Variant` and `CONNECT : Variant` — and
+three levels down its own `TCON`/`TSEND`/`TRCV` V4.0 sub-instances each carry populated InOut
+Variant sections of their own. **The interface parser already accepts all of it without
+complaint**, so this is a correction to the spec's claim rather than to the code. Note the
+asymmetry it exposes: an InOut is populated in the *declaration*, while at the *call site* nothing
+marks a port as InOut at all — direction there is carried only by wire order, which cannot
+distinguish an input from an InOut. A
 related, adjacent finding fixed at the same time: `RETURN`'s standard boilerplate was previously
 written unconditionally for every block; grounding confirmed it's **absent entirely (not even an
 empty `Section` element) on every real FB** — `BlockSourceWriter` now only emits it for non-FB
