@@ -158,8 +158,68 @@ The smallest program that can answer the wire questions:
 | 1.7 | Throw from the download delegate; inspect what the device is left in | **A6 / G4** — do this attended |
 | 1.8 | Structural DB change, observe what reinitialises | **A8 / G2** — the ten bench minutes the research asked for |
 
+### ✅ The PC side is built (2026-08-12)
+
+`C:\Users\User\.claude\jobs\f24f6b1a\tmp\modbus-spike\` — outside the repo, in no solution, not
+committed, every file headed `WRITTEN TO BE DELETED`. 52 tests pass, nothing was contacted.
+Raw sockets rather than NModbus, deliberately and for this experiment only: **a library that
+silently retries or splits a request would tear for reasons that have nothing to do with
+`MB_SERVER`, and we would blame the PLC.** Phase 2 still uses NModbus.
+
+Nothing is armed without `--arm`; without it, it prints the frames it would send and exits 10.
+
+### 📋 THE REGISTER CONTRACT — what the spike IR must implement
+
+`modbus-spike contract` prints this in full. The essentials:
+
+**Pattern block** — `--pattern-base` (default 0), `--pattern-count` (default 100, hard limit
+123), contiguous, inside `MB_HOLD_REG`. **The checker must inspect *exactly* `--pattern-count`
+registers — the two counts are one number.** More, and the surplus hold stale values forever and
+the latch trips permanently, which reads as "`MB_SERVER` tears". Fewer, and a tail tear is
+invisible.
+
+**Status block** — `--status-base` (default 200), 9 contiguous registers, PLC-written, one FC03:
+
+| off | name | purpose |
+|---|---|---|
+| +0 | `VERSION` | constant 1; client refuses the mirror on any other value |
+| +1 | `VARIANT` | 1 = `MB_SERVER` first in scan, 2 = last. **Published by the program**, not typed on the command line, so every run is stamped with the build that produced it |
+| +2 | `SCAN_COUNTER` | free-running, +1 per scan, wraps, never reset (1.3) |
+| +3 | `TEAR_LATCH` | sticky — a one-scan tear is ~10× below what a poll can see |
+| +4 | `TEAR_INDEX` | first register disagreeing with `pattern[0]` |
+| +5/+6 | `TEAR_VALUE_A/B` | turns "it tore" into "it tore between generations A and B at index N" — i.e. **how much of the request landed** |
+| +7 | `CHANGE_COUNT` | +1 per scan where `pattern[0]` changed. **Liveness** |
+| +8 | `CONTROL` | PC writes 1 to clear; **the PLC writes it back to 0**, so the reset is confirmed rather than assumed |
+
+**Checker order, every scan:** bump `SCAN_COUNTER` → handle `CONTROL` **before** the check, so a
+reset cannot swallow a same-scan violation → update `CHANGE_COUNT` → if not latched, compare
+every `pattern[i]` against `pattern[0]`.
+
+**Four non-optional requirements:** the whole pattern scan happens **in one PLC scan** (an
+incremental checker tears on its own and manufactures the finding); it reads `%MW` **directly**,
+not a copy or process image; **nothing retentive**, mirror above the retentive `M` range; and
+`MB_HOLD_REG` points at `%MW` or a standard-access DB (optimized → status `16#818C`).
+
+**Two builds for 1.5**, identical but for OB1 call order. **For 1.4**, a generator writing an
+incrementing generation into every register once per scan, checker **off**.
+
+> ### 🎯 The spike independently rediscovered DB-8's stimulus check
+>
+> "Every register agrees" is **also** what a mirror no write ever reached looks like — so a
+> checker with only pass/fail returns green from an experiment that never ran. The client
+> therefore has **four** verdicts (`Intact` / `IntactPreviousGeneration` / **`Stale`** / `Torn`)
+> and exits 4 rather than reporting a clean latch when `CHANGE_COUNT` did not advance.
+>
+> That is DB-8's stimulus check — *evidence the input arrived and the block ran* — arrived at
+> independently from the other end. **Corroboration worth having:** the same trap is waiting in
+> the real result package, and it is invisible precisely when it fires.
+
 **Exit criterion:** A1 answered yes or no. If **no**, the map and copy-layer design change *before*
 either is written — which is the entire point of this phase.
+
+**And the verdict wording is deliberate: "no tear observed in N writes", never "atomic".** A green
+run is absence of evidence at *that* register count, *that* rate and *that* call position. The
+client says so, and says what to re-run before the map and copy layer are built on it.
 
 ---
 
