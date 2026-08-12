@@ -2020,25 +2020,37 @@ is a real gap in what is written above, not a restatement of a known unknown. Or
 badly they bite; each carries a recommended treatment so none of them reopens the design
 conversation.
 
-*** STATUS AS OF 2026-08-12 — FOUR RULED, SIX OPEN, ONE EXTERNAL. ***
+*** STATUS AS OF 2026-08-12 — ALL ELEVEN RULED. NONE OPEN. ***
 
-    RULED   X-A  vector atomicity      the START BOOLS are the commit; read-side partition
-            X-C  coordinator death     scoped: everything in flight is invalid
-            X-D  time compression      comp_min formula; take the minimum, never the ceiling
-            X-E  excision              transitive closure + threshold + bounded attempts
+    X-A  vector atomicity     the START BOOLS are the commit; read-side partition per slot
+    X-B  per-test timeout     every vector declares a max duration in SCANS; TIMED-OUT is a
+                              distinct outcome from FAILED. Free — DB-13 already needs the
+                              declaration to compute wave length
+    X-C  coordinator death    scoped: everything in flight is invalid. Safe BECAUSE of the rig
+                              fence; revisit if outputs can ever actuate
+    X-D  time compression     comp_min formula; take the minimum, never the ceiling
+    X-E  excision             transitive closure + threshold + bounded attempts
+    X-F  first-scan tests     a STARTUP TEST class scheduled at the disruptive boundary, which
+                              already restarts the CPU. Evidence must be LATCHED — the harness
+                              is disconnected across that download (D18)
+    X-G  masked multi-writer  conflict edges carry PROVENANCE; multi-writer edges on a
+                              deliverable signal are reported as FINDINGS, not silently used
+                              for scheduling
+    X-H  shared models        WITHDRAWN — the gap conflated the model representing shared
+                              equipment with the test depending on the sharing. D28 stands
+                              unconditionally; replaced by a test-design rule
+    X-I  untested models      models go through their own test wave like any other block. No
+                              new machinery; one new ordering constraint; one residual that
+                              does not go away
+    X-J  unclaimed numbers    a reserved range for harness-generated objects
+    X-K  CPU stop vs link     CLOSEABLE, not external — Sharp7's `PlcStatus()` answers in STOP.
+                              Verify it inside the next disruptive download, which also
+                              supplies R8's outstanding confirmation
 
-    OPEN    X-B  per-test timeout      treatment proposed, not ruled
-            X-F  first-scan tests      treatment proposed and folded into §7; not ruled
-            X-G  masked multi-writer   treatment proposed, not ruled
-            X-H  physically shared models
-            X-I  models are untested code
-            X-J  coordinator blocks never claim their numbers
-
-    EXTERNAL X-K  stopped CPU vs dropped link — partial treatment only, and the API cannot
-                  close it (§16.11). Not ours.
-
-The three that BLOCKED the build (X-A, X-C, X-E) are ruled. The six open ones are real but
-none of them stops work starting.
+*** WHAT REMAINS IS VERIFICATION AND BUILD, NOT DESIGN. *** Four things must be MEASURED before
+the parts resting on them are trusted: `MB_SERVER`'s single-scan atomicity (X-A), the `%MW`
+ceiling (X-A), a delegate throw leaving the CPU untouched (G4, D32), and `PlcStatus()` in STOP
+(X-K). Two of those fold into one experiment.
 
 *** NUMBERED X- RATHER THAN G- DELIBERATELY (2026-08-12). *** `G` was already carrying two
 unrelated series — the SEVEN DESIGN GAPS G-1..G-7 (all closed; §13's title refers to G-7) and
@@ -2357,14 +2369,43 @@ sharing is an artefact of authoring — WRONG when the plant itself shares the t
 tank feeding two units, one common supply, one shared conveyor. Instancing produces two
 independent tanks where reality has one, and both tests pass against a plant that cannot exist.
 
-*** SHAREDNESS HAS TWO KINDS AND ONLY ONE IS REMOVABLE. *** Accidental sharing should be
-instanced away; PHYSICAL sharing is a real conflict edge that must survive into the packing and
-force those tests apart.
+*** WITHDRAWN AND REPLACED 2026-08-12 — THE GAP AS STATED CONFLATED TWO DIFFERENT THINGS, AND
+THE OWNER CAUGHT IT. *** It claimed that where the plant physically shares a thing, per-slot
+model instancing is wrong. That confuses *** THE MODEL REPRESENTING SHARED EQUIPMENT *** with
+*** THE TEST DEPENDING ON THE SHARING ***, and only the second matters. Worked through:
 
-TREATMENT — the model declares which it is, and per M1/M2 that declaration comes from the
-EQUIPMENT-GROUNDED PHYSICAL ANALYSIS the model was authored from, which is the only place the
-distinction is knowable. A model that does not declare it is REFUSED rather than defaulted,
-because both defaults are wrong in one direction.
+  CASE 1 — TESTING THE SHARED EQUIPMENT'S OWN BLOCK. Two slots both test `FB_HeaderTank`. Each
+    gets its own iDB and its own tank model. *** ENTIRELY CORRECT AND THE COMMON CASE *** —
+    they exercise the same code with different values and never interact. Instancing is right
+    and D28 is right. Nothing to fix.
+
+  CASE 2 — TESTING A CONSUMER OF THE SHARED EQUIPMENT. Slot A tests `FB_UnitA`, slot B tests
+    `FB_UnitB`, and both consume the header tank's level. *** STILL NO SHARING NEEDED. *** The
+    tank is not under test here, it is ENVIRONMENT: the test drives the level as an input. "Does
+    UnitA close its valve below level X" needs the level PARAMETRISED, not a tank shared with
+    another slot. Per-slot instancing remains correct.
+
+  CASE 3 — TESTING THE INTERACTION ITSELF. "When A and B both draw, the tank depletes faster and
+    the low-level interlock trips." *** THIS IS NOT TWO TESTS. IT IS ONE TEST OF THE COUPLED
+    SYSTEM, AND ITS SUBJECT IS THE SHARED LOGIC. *** So it belongs in ONE SLOT, with the units'
+    demands as vector inputs and one tank model inside that slot. Nothing is shared ACROSS
+    slots, because the coupling is inside a single slot's subject.
+
+*** THE RULE, WHICH IS TEST-DESIGN GUIDANCE AND NOT A DEFECT IN D28: AN INTERACTION BETWEEN TWO
+PIECES OF EQUIPMENT IS TESTED BY MAKING THE COUPLING THE SUBJECT OF ONE SLOT — NEVER BY SHARING
+A MODEL ACROSS SLOTS. *** D28's per-slot instancing therefore stands UNCONDITIONALLY, with no
+"physical sharing" exception and no declaration to make. That is a simplification, not a
+loosening: there was never a case where cross-slot model sharing was the right answer.
+
+RESIDUAL RISK, AND IT IS A TEST-DESIGN ERROR RATHER THAN A MECHANISM GAP: a designer writes
+case 3 as two case-2 slots without realising the coupling is what matters. Both slots then pass
+against two independent tanks, and the coupled behaviour was never exercised.
+
+  TREATMENT — a WARNING, never a block, because case 1 is legitimate and common: when two slots
+  in a wave set model THE SAME PHYSICAL EQUIPMENT INSTANCE, report it and ask whether the
+  coupling is what is under test — if it is, it belongs in one slot. Equipment identity is
+  available: per M1/M2 models are authored from the equipment-grounded physical analysis
+  (rung A), so the P&ID item is already named.
 
 ................................................................................
 16.9  X-I  *** MODELS ARE UNTESTED CODE THAT EVERY RESULT DEPENDS ON ***
@@ -2377,11 +2418,43 @@ model does not produce one wrong test: it produces a consistent, plausible and w
 picture of a piece of equipment. §7a's own worked example — the pre-act offset engineered out
 because the model had no in-flight mass — IS this failure, already written down.
 
-TREATMENT, proportionate rather than a second test pyramid: a model carries a small set of
-ANALYTIC SELF-CHECKS — known inputs with hand-computable outputs, closed-form where the physics
-allows — run when the model is ADMITTED, not per wave. This does not prove fidelity; it catches
-the sign error, the unit error and the transposed coefficient, which is the class that actually
-occurs. The fidelity declaration remains the honest statement of what was not verified.
+*** RESOLVED 2026-08-12, AND WITH NO NEW MACHINERY AT ALL — THE OWNER'S ANSWER IS THE RIGHT
+ONE: A MODEL GOES THROUGH ITS OWN TEST WAVE, LIKE ANY OTHER BLOCK. *** The proposed "analytic
+self-checks at admission" was inventing a second, weaker test mechanism alongside the one that
+already exists. A model is IR with inputs (its parameters) and outputs (its simulated values),
+which is exactly what a slot tests. The self-checks simply BECOME TEST VECTORS: known inputs,
+hand-computable expected outputs.
+
+    A MODEL-TESTING SLOT IS SIMPLER THAN A BLOCK-TESTING ONE, not harder — it needs no model
+    instance of its own, because its inputs ARE the vector.
+
+FOUR RULES, and each is an existing rule applied rather than a new one:
+
+  1. *** THE MODEL'S AUTHOR DOES NOT WRITE THE MODEL'S VECTORS *** — D6, unchanged. The
+     correlated-check argument does not care whether the artifact is plant logic or a model.
+  2. *** A MODEL MUST PASS BEFORE ANY SLOT THAT USES IT IS ADMITTED. *** This is a new
+     ORDERING CONSTRAINT ON WAVE SETS and the one genuinely new thing here: model slots run in
+     an EARLIER wave set than the slots depending on them. Run concurrently, a red result is
+     ambiguous between the block and the model (§7a cause 1 versus cause 2) — which is the
+     exact ambiguity §7a exists to remove. Enforced at admission (R6).
+  3. *** COVERAGE APPLIES, WITH THE PHYSICAL ANALYSIS AS THE SPECIFICATION. *** §7's machinery
+     transfers unchanged: assertions are enumerated from rung A's equipment-grounded analysis
+     the way block assertions are enumerated from requirement clauses (D35). Same denominator
+     rules, different spec document.
+  4. Everything else — inert, start bools, the result package — is identical, because a model
+     under test IS a block under test.
+
+*** THE RESIDUAL, AND IT IS THE IMPORTANT PART: PASSING ITS OWN TESTS MAKES A MODEL FAITHFUL TO
+ITS SPECIFICATION, NOT TO THE PLANT. *** §7a's worked example survives this entirely intact —
+the fill model with no in-flight mass CORRECTLY IMPLEMENTS a specification that omits in-flight
+mass, so it passes every test anyone would write from that specification, and it still engineers
+a correct pre-act offset out of the block under test.
+
+    *** SO MODEL TESTING CATCHES IMPLEMENTATION ERRORS AND CANNOT CATCH SPECIFICATION
+    OMISSIONS. *** The sign error, the unit error, the transposed coefficient — caught. The
+    physics nobody thought to include — not caught, not catchable this way, and still the
+    thing most likely to produce a confident wrong answer. M3/M4's FIDELITY DECLARATION remains
+    the only defence against it, and §7a cause 2 stays live.
 
 ................................................................................
 16.10 X-J  *** COORDINATOR-GENERATED BLOCKS ARE NOT IN THE CLAIMS REGISTRY ***
@@ -2407,12 +2480,43 @@ not record it] that `OnlineProvider` exposes NO CPU operating mode,
 and that the download-configuration callback is the ONLY place a stop or start is expressible
 in the public API. *** SO THE TOOLING CANNOT ASK WHETHER THE CPU IS RUNNING. ***
 
-TREATMENT, partial and honest: the cases ARE partially separable BELOW Modbus, because a
-stopped S7-1200 keeps its Ethernet interface up. A TCP connect to 502 REFUSED, against a host
-still answering at IP level, is a live device not serving Modbus — the CPU-stopped shape. No
-route at all is the network shape. Report the distinction as EVIDENCE, never as a verdict, and
-treat either as wave-fatal. *** DO NOT BUILD A RECOVERY PATH THAT ASSUMES IT CAN TELL. *** This
-gap is external, not ours to close.
+*** IT IS CLOSEABLE, AND THE CLOSER IS ALREADY IN THE TOOLCHAIN — CORRECTED 2026-08-12. *** The
+claim that this gap is "external, not ours to close" was drawn from the Openness survey and
+over-generalised from it: OPENNESS cannot report operating mode, which says nothing about the
+other protocols this project already speaks.
+
+  *** 1. SHARP7's `PlcStatus()` OVER CLASSIC S7comm — THE CLEAN ANSWER. *** It returns
+     `S7CpuStatusRun` / `S7CpuStatusStop` directly. Classic S7comm is served by the CPU's
+     communication firmware, NOT by the user program, so *** IT ANSWERS WHILE THE CPU IS IN
+     STOP *** — which is also why TIA can go online to a stopped CPU. Sharp7 is already in this
+     project's toolchain for standard-access DB reads, so this is a call, not a component.
+     The optimized-block invisibility that constrains Sharp7 elsewhere does not apply: this is
+     a system function, not a DB read.
+     [I — high confidence in the mechanism, NOT yet exercised against this rig. Verify.]
+
+  *** AND THE VERIFICATION IS FREE: FOLD IT INTO THE NEXT DISRUPTIVE DOWNLOAD. *** That
+  download already stops and restarts the CPU (§9b). Read `PlcStatus()` before, during and
+  after, and the result simultaneously closes this gap AND supplies the independent
+  confirmation R8 requires before the first unattended disruptive boundary — the one thing R8
+  currently needs a person for. One experiment, two answers.
+
+  2. THE INTEGRATED WEB SERVER reports operating mode from firmware and also survives a STOP —
+     but it is a poor fit HERE for two reasons: enabling it is a hardware-configuration change
+     (STOP-class, deferred queue), and *** THIS ENGINEERING PC FAKES ALL TCP 80/443 CONNECTS,
+     SO PROBES ON THOSE PORTS PROVE NOTHING *** (recorded environment fact). Viable from a
+     different host; not from this one.
+
+  3. ICMP is the crude discriminator and still worth having: a stopped S7-1200 keeps its
+     Ethernet interface up, so PING ANSWERS + MODBUS DEAD is the CPU-stopped shape, while NO
+     ROUTE is the network shape. Cheap, no configuration, and it is a genuine narrowing even
+     though it cannot distinguish "CPU stopped" from "MB_SERVER broken while the CPU runs".
+
+  4. A TCP connect to 502 REFUSED against a host answering at IP level says the same thing as
+     (3) with slightly more precision.
+
+UNTIL (1) IS VERIFIED, treat any of these as EVIDENCE rather than a verdict, and treat either
+shape as wave-fatal. *** DO NOT BUILD A RECOVERY PATH THAT ASSUMES IT CAN TELL *** — that
+remains right regardless of which closer lands.
 
 ................................................................................
 16.12 SMALLER, RECORDED SO THEY ARE NOT REDISCOVERED
