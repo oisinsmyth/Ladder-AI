@@ -296,6 +296,70 @@ is no longer an acceptable resting place for anything that appears in deliverabl
     CLAUDE.md line — since it governs converter scope permanently and well beyond the harness.
     Flagged for the owner rather than done unilaterally. ***
 
+### 🎯 `MB_SERVER` MEASURED, 2026-08-12 — the architecture fork is CLOSED
+
+*** `MB_SERVER` IS A `<Part>`, VERSION 5.3. *** Zero `<Call>` elements and zero
+`<Parameter Section=…>` elements in the whole 55,783-byte export, counted mechanically. **So the
+`<Call>`/`Section="InOut"` whitelist is IRRELEVANT to it** — this is the fixed-shape-Part template,
+as the serial pair also turned out to be. The InOut ports are wired as **ordinary symbolic
+`<Access>` operands in normal input wire order**: `MB_HOLD_REG` points at a Static
+`Array[1..90] of Int` with no pointer syntax whatsoever.
+
+Ports: `en`, `DISCONNECT` (in), `MB_HOLD_REG` (**InOut**), `CONNECT` (**InOut**), `NDR`, `DR`,
+`ERROR`, `STATUS`. This is the `CONNECT`-**structure** branch — no `CONNECT_ID`/`IP_PORT` on 5.3.
+
+*** A THIRD SPELLING, AND THE WHITELIST MATCHES NONE OF THE REAL ONES: ***
+
+    whitelist carries : Modbus_Master     Modbus_Comm_Load     (from hand-authored fixtures)
+    the FC emits      : MB_MASTER  2.2    MB_COMM_LOAD  2.1
+    the FB emits      : MB_SERVER  5.3
+
+Version is clearly not incidental — 5.3 against 2.1/2.2 — so a template keyed on name alone would
+silently accept a port list that does not match.
+
+**`<OpenCon>` NARROWED, usefully:** all four in the FB are on **OUTPUTS and convert clean**. The
+FC's failure was `REQ`, an **input**. *** THE GAP IS AN UNCONNECTED INPUT PORT — a port with no
+`IdentCon` SOURCE — not `<OpenCon>` in general. ***
+
+**`MEMORYLAYOUT` round-trips correctly on this block** (`Optimized` in, `Optimized` out) — the fix
+is confirmed working on real content.
+
+#### FOUR GAPS, IN THE ORDER THE FB NEEDS THEM
+
+  1. **`Array[1..10] of Struct`** with inline nested members in an interface.
+  2. **Doubly-nested structured members** — *** ON THE CRITICAL PATH: `CONNECT` MUST point at a
+     `TCON_IP_v4`, so no IR can express `MB_SERVER` on this branch without it. ***
+  3. The **`MB_SERVER` Part template** — name, version 5.3, 8 ports.
+  4. 🔴 *** THE SILENT ONE: THE BARE-INSTANCE-MEMBER WRITER DROPS `Version`. *** The multi-instance
+     member converts **without error** but lossily — IR carries `VERSION 5.3`, and `to-xml` emits
+     `<Member Name="…" Datatype="MB_SERVER" Accessibility="Public" />` with **no `Version` and no
+     `<AttributeList>`**. The `TON_TIME` member beside it keeps its `Version="1.0"`, so this is
+     specific to that writer path. An import would declare a **versionless** `MB_SERVER` instance.
+     *** NOTHING WARNS. *** By the "no IR the AI cannot change" ruling this is the same class as
+     the ANY-pointer defect: a block that converts and cannot be safely written back.
+
+With all three hard errors removed the block converts **exit 0** — nothing else is hiding behind
+them.
+
+#### A POSITIVE RESULT THAT DATES A SPEC LINE
+
+*** THE INTERFACE PARSER ALREADY ACCEPTS `MB_SERVER` V5.3's MULTI-INSTANCE DECLARATION *** —
+including a populated `<Section Name="InOut">` carrying `MB_HOLD_REG : Variant` / `CONNECT :
+Variant`, and three levels down its own `TCON`/`TSEND`/`TRCV` V4.0 sub-instances with their own
+populated InOut Variant sections. It parses without complaint.
+
+*** THIS IS THE FIRST POPULATED `<Section Name="InOut">` EVER SEEN IN A REAL EXPORT HERE, SO
+`ir/SPEC.md:44` — "never seen populated in any real block" — IS NOW OUT OF DATE *** and should be
+corrected.
+
+**Also confirmed supported, having been suspected:** `<Access Scope="TypedConstant">` with no
+`<ConstantType>`, `<TemplateValue>` on a `TON`, two `<NameCon>` sinks off one power rail, and
+`<Subelement>` array-element start values.
+
+⚠ **The FC has gone BACK to inconsistent** since its export — it is being edited in TIA. The
+`12-fc-export-ORIGINAL.xml` baseline remains valid *as a baseline* but no longer matches the
+project.
+
 ### ✅ THE SPIKE CHECKER IR IS AUTHORED (2026-08-12) — and it surfaced two more defects
 
 In the job scratch dir, not the repo. **16 registers, not 100** — one FC16, 15 comparisons instead
