@@ -122,18 +122,39 @@ public static class FixedShapeInstructions
         new InstructionPort("STATUS", PortDirection.Output),
     });
 
-    // `MB_SERVER` 5.3 is DELIBERATELY ABSENT (2026-08-12). Its Part shape and port list are
-    // characterised (`en`, `DISCONNECT` in, `MB_HOLD_REG`/`CONNECT` InOut-wired-as-input,
-    // `NDR`/`DR`/`ERROR`/`STATUS` out — the CONNECT-structure branch, no CONNECT_ID/IP_PORT), and
-    // it is a `<Part>` like these two, so it belongs here. But the block carrying it also needs an
-    // `Array[…] of Struct` interface member and a doubly-nested `TCON_IP_v4` member, neither of
-    // which this converter models yet — so a template added now could not be exercised end to end,
-    // and an unexercised port list is exactly the kind of unverified claim this table exists to
-    // prevent. It goes in when the block it lives in can round-trip.
+    // MB_SERVER 5.3 — ADDED 2026-08-12, on the condition the previous note set for it: "it goes in
+    // when the block it lives in can round-trip." That block needed an `Array[1..10] of Struct`
+    // interface member, a doubly-nested `TCON_IP_v4` member and `<Subelement>` array start values;
+    // all three are now modelled, so the port list below is EXERCISED END TO END against the real
+    // export rather than asserted.
+    //
+    // Ports and order read directly off that export's own <Wires>: `en` from the power rail, then
+    // DISCONNECT / MB_HOLD_REG / CONNECT each with their <IdentCon> BEFORE the <NameCon> (a read),
+    // then NDR / DR / ERROR to <OpenCon> and STATUS to an <IdentCon>, each with the <NameCon> FIRST
+    // (a write). This is the CONNECT-**structure** branch of the instruction — there is no
+    // CONNECT_ID / IP_PORT pair on 5.3.
+    //
+    // MB_HOLD_REG and CONNECT are genuinely InOut on the instruction and are `Input` here, which is
+    // correct rather than a compromise — see PortDirection's own doc comment. Measured: they are
+    // wired as ordinary symbolic <Access> operands in normal input order, with no pointer syntax,
+    // and the whole 55,783-byte export contains ZERO <Parameter Section=…> elements. MB_HOLD_REG
+    // points at a Static `Array[1..90] of Int`; CONNECT at a Static `TCON_IP_v4`.
+    private static readonly InstructionTemplate MbServer53 = new("MB_SERVER", "5.3", new[]
+    {
+        new InstructionPort("DISCONNECT", PortDirection.Input),
+        new InstructionPort("MB_HOLD_REG", PortDirection.Input),
+        new InstructionPort("CONNECT", PortDirection.Input),
+        new InstructionPort("NDR", PortDirection.Output),
+        new InstructionPort("DR", PortDirection.Output),
+        new InstructionPort("ERROR", PortDirection.Output),
+        new InstructionPort("STATUS", PortDirection.Output),
+    });
+
     private static readonly IReadOnlyList<InstructionTemplate> Templates = new[]
     {
         MbCommLoad21,
         MbMaster22,
+        MbServer53,
     };
 
     /// <summary>Every Part Name this registry knows, at any version.</summary>

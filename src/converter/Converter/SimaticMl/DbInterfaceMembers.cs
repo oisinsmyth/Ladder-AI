@@ -41,6 +41,104 @@ internal static class DbInterfaceMembers
     // full-member shape for exactly this reason. Accepting it here makes the two shapes agree.
     private static readonly IReadOnlyCollection<string> AllowedBareMemberAttributes = new HashSet<string>(StringComparer.Ordinal) { "Name", "Datatype", "Version" };
 
+    // Every child element name any member shape here has ever been observed to carry. The guard
+    // built from it (RequireKnownChildren) exists because of what its absence cost: `<Subelement>`
+    // — an ARRAY member's per-element start values — was read by no parse path and written by no
+    // write path, and since nothing checked for unknown children it was DROPPED IN SILENCE. A real
+    // block converted `exit 0` with 200+ of them gone, taking its whole per-node configuration
+    // table (addresses, node numbers, lengths) with it. An unrecognised child is now a named
+    // refusal, in the same fail-closed spirit as FlgNetParser.SupportedPartNames.
+    private static readonly IReadOnlyCollection<string> AllowedMemberChildren = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "AttributeList", "Comment", "Member", "Sections", "StartValue", "Subelement",
+    };
+
+    private const string SubelementElementName = "Subelement";
+
+    // An ANONYMOUS struct element type. `Array[1..10] of Struct` nests its members exactly the way
+    // a bare `Struct` does — direct <Member> children, each carrying its own full <AttributeList> —
+    // because it IS the same anonymous struct, dimensioned. Confirmed real 2026-08-12 against a
+    // genuine TIA V20 export of an S7-1200 Modbus TCP FB, whose `Array[1..10] of Struct` per-node
+    // configuration table hard-errored here. Deliberately narrow: any OTHER datatype carrying
+    // direct nested members is still refused rather than guessed at.
+    private static bool IsAnonymousStructDatatype(string datatype) =>
+        datatype == "Struct"
+        || (datatype.StartsWith("Array[", StringComparison.Ordinal)
+            && datatype.EndsWith(" of Struct", StringComparison.Ordinal));
+
+    private static void RequireKnownChildren(XElement member, string context, string memberName)
+    {
+        var unexpected = member.Elements()
+            .Select(e => e.Name.LocalName)
+            .Where(n => !AllowedMemberChildren.Contains(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (unexpected.Count > 0)
+        {
+            throw new UnsupportedConstructException(
+                $"{context} member '{memberName}' carries unrecognised child element(s) [{string.Join(", ", unexpected)}]. " +
+                "Refused rather than ignored: an unread child is data that crosses to-ir and vanishes, which is exactly " +
+                "how <Subelement> array start values were lost. Ground the shape against a real export and add it here.");
+        }
+    }
+
+    /// <summary>
+    /// Reads a member's `&lt;Subelement Path="…"&gt;&lt;StartValue&gt;…&lt;/StartValue&gt;&lt;/Subelement&gt;`
+    /// children — an ARRAY member's per-element start values, and the only place an array's initial
+    /// data lives (an array has no scalar `&lt;StartValue&gt;` of its own). See
+    /// <see cref="DbSubelement"/> for the provenance. Empty when there are none.
+    /// </summary>
+    private static IReadOnlyList<DbSubelement>? ParseSubelements(XElement member, string context, string memberName)
+    {
+        var elements = member.Elements().Where(e => e.Name.LocalName == SubelementElementName).ToList();
+        if (elements.Count == 0)
+        {
+            return null;
+        }
+
+        var subelements = new List<DbSubelement>(elements.Count);
+        foreach (var element in elements)
+        {
+            var path = (string?)element.Attribute("Path")
+                ?? throw new SimaticMlFormatException(
+                    $"{context} member '{memberName}' has a <Subelement> with no Path attribute.");
+
+            var unexpectedChildren = element.Elements().Select(e => e.Name.LocalName).Where(n => n != "StartValue").ToList();
+            if (unexpectedChildren.Count > 0)
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{memberName}' <Subelement Path=\"{path}\"> carries unexpected content " +
+                    $"[{string.Join(", ", unexpectedChildren)}] — only a single <StartValue> has been observed.");
+            }
+
+            var startValues = element.Elements().Where(e => e.Name.LocalName == "StartValue").ToList();
+            if (startValues.Count != 1)
+            {
+                throw new UnsupportedConstructException(
+                    $"{context} member '{memberName}' <Subelement Path=\"{path}\"> has {startValues.Count} <StartValue> " +
+                    "children — exactly one has been observed. Refused rather than dropped: a subelement carries an " +
+                    "array's only initial data.");
+            }
+
+            subelements.Add(new DbSubelement(path, startValues[0].Value));
+        }
+
+        return subelements;
+    }
+
+    // Written in the position TIA itself uses: after </AttributeList> (and after a member <Comment>,
+    // which shares that slot), where a scalar member's own <StartValue> would go.
+    private static void AddSubelements(XElement memberElement, DbMember member)
+    {
+        foreach (var subelement in member.Subelements)
+        {
+            memberElement.Add(new XElement(
+                Ns + SubelementElementName,
+                new XAttribute("Path", subelement.Path),
+                new XElement(Ns + "StartValue", subelement.StartValue)));
+        }
+    }
+
     /// <summary>
     /// Parses a full member (Static-section shape): Name/Datatype/Remanence/Version, BooleanAttributes, and either a StartValue or nested structured content.
     /// <paramref name="requireSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, which are missing the
@@ -52,6 +150,9 @@ internal static class DbInterfaceMembers
         var name = RequireAttribute(member, "Name");
         var datatype = RequireAttribute(member, "Datatype");
         var version = (string?)member.Attribute("Version");
+
+        RequireKnownChildren(member, context, name);
+        var subelements = ParseSubelements(member, context, name);
 
         var nestedSections = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections");
         var isStructured = nestedSections is not null;
@@ -95,12 +196,35 @@ internal static class DbInterfaceMembers
         // duplicate that declaration into the caller and make the two free to disagree. Name and
         // datatype are the whole of what the caller declares, which is exactly what the bare shape
         // writes back out — so this round-trips as a fixed point.
+        //
+        // READ AS AN ORDINARY MEMBER SINCE 2026-08-12, not as a bare parameter — the correction to a
+        // SILENT LOSS. The bare read discarded `Version` AND the whole `<AttributeList>`, because the
+        // bare shape (`FC Scale`'s genuinely attribute-less parameters) has neither to write back. So
+        // a multi-instance round-tripped as
+        //     <Member Name="MB_Server" Datatype="MB_SERVER" Accessibility="Public" />
+        // — a VERSIONLESS instance declaration, from a source that said `Version="5.3"`. It converted
+        // without error and nothing warned. Measured on a real Modbus TCP FB; the `TON_TIME` member
+        // beside it kept its `Version="1.0"` because it carries `Remanence` and never took this path.
+        //
+        // A multi-instance is not a bare parameter: it is an ordinary Static member that happens
+        // never to carry `Remanence`. Retention belongs to the CALLED block's members, so there is
+        // nothing to state here — and that ONE difference is now expressed on the WRITE side
+        // (`WriteMember`'s `omitRemanence`, supplied by the block's own CALL/fixed-shape instance
+        // names) rather than by flattening the member to a shape that cannot hold its own data.
         var hasExpandedInterface = member.Elements().Any(e => e.Name.LocalName == "Sections");
         if (member.Attribute("Remanence") is null && hasExpandedInterface)
         {
+            // requireSetPoint: false — a multi-instance's AttributeList carries SetPoint in the real
+            // MB_SERVER export but is not assumed to, so its absence is tolerated rather than fatal.
+            var instanceAttributes = RequireDefaultBooleanAttributes(member, context, name, requireSetPoint: false);
             return new DbMember(
-                name, datatype, Retain: false, StartValue: null, Version: version, SetPoint: false,
-                NestedMembers: null, IsBareParameter: true);
+                name, datatype, Retain: false, StartValue: null, Version: version, SetPoint: instanceAttributes.SetPoint,
+                NestedMembers: null, IsBareParameter: false,
+                ExternalAccessible: instanceAttributes.ExternalAccessible,
+                ExternalVisible: instanceAttributes.ExternalVisible,
+                ExternalWritable: instanceAttributes.ExternalWritable,
+                Comment: ParseOptionalComment(member),
+                Subelements: subelements);
         }
 
         if (member.Attribute("Remanence") is null && !hasAttributeList)
@@ -122,7 +246,8 @@ internal static class DbInterfaceMembers
 
             return new DbMember(
                 name, datatype, Retain: false, string.IsNullOrEmpty(bareStartValue) ? null : bareStartValue, Version: version, SetPoint: false,
-                NestedMembers: null, IsBareParameter: true, Informative: isInformative, InformativeComment: informativeComment);
+                NestedMembers: null, IsBareParameter: true, Informative: isInformative, InformativeComment: informativeComment,
+                Subelements: subelements);
         }
 
         var remanence = (string?)member.Attribute("Remanence");
@@ -130,6 +255,20 @@ internal static class DbInterfaceMembers
         {
             "NonRetain" => false,
             "Retain" => true,
+
+            // ABSENT entirely, on a member that HAS an <AttributeList> and no expanded interface —
+            // a PARAMETER (Input/Output/InOut). Retention is meaningless on one: it has no storage of
+            // its own, which is why TIA refuses `Remanence` there at import (FI-59) and why this
+            // writer omits it. Absence therefore means "not applicable", not "unknown", and reads as
+            // NonRetain.
+            //
+            // This branch is the READ HALF of that write rule, and it was missing — the same
+            // write-fixed/read-missed shape as FI-56 and FI-58, caught here by the `to-ir -> to-xml
+            // -> to-ir` self-stability check rather than by a test: the converter could not read back
+            // its own parameter-section output, which takes the re-export leg of the gate contract,
+            // drift-check and the round-trip harness out for every block with a parameter.
+            null => false,
+
             _ => throw new SimaticMlFormatException($"{context} member '{name}' has unrecognized Remanence '{remanence}'."),
         };
 
@@ -151,10 +290,10 @@ internal static class DbInterfaceMembers
                     $"{context} member '{name}' has both direct nested <Member> children and a <Sections> wrapper — this combination hasn't been observed.");
             }
 
-            if (datatype != "Struct")
+            if (!IsAnonymousStructDatatype(datatype))
             {
                 throw new UnsupportedConstructException(
-                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' — only 'Struct' has been observed with this shape.");
+                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' or 'Array[…] of Struct' — only those have been observed with this shape.");
             }
 
             if (startValueElement is not null)
@@ -167,7 +306,7 @@ internal static class DbInterfaceMembers
             return new DbMember(
                 name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: anonymousNestedMembers,
                 ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
-                Comment: comment);
+                Comment: comment, Subelements: subelements);
         }
 
         if (isStructured)
@@ -182,14 +321,14 @@ internal static class DbInterfaceMembers
             return new DbMember(
                 name, datatype, retain, StartValue: null, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
                 ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
-                Comment: comment);
+                Comment: comment, Subelements: subelements);
         }
 
         var startValue = startValueElement?.Value;
         return new DbMember(
             name, datatype, retain, string.IsNullOrEmpty(startValue) ? null : startValue, Version: version, SetPoint: booleanAttributes.SetPoint, NestedMembers: null,
             ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
-            Comment: comment);
+            Comment: comment, Subelements: subelements);
     }
 
     // Shared with the Informative/bare-parameter path's own Comment reading below, minus the
@@ -271,24 +410,51 @@ internal static class DbInterfaceMembers
         // refused here, because collapsing it would silently discard real members.
         var isNamedTypeReference = IsNamedTypeReference(datatypeAttribute);
 
+        // DOUBLY-NESTED STRUCTURED MEMBERS (2026-08-12). A `<Sections>` at the bare position now has
+        // THREE dispositions, not two — the third is new and is on the critical path for `MB_SERVER`,
+        // whose `CONNECT` port must point at a `TCON_IP_v4` static that nests an `IP_V4` that nests an
+        // `Array[1..4] of Byte`:
+        //
+        //   1. QUOTED named-type reference (`"UDT_X"`) -> COLLAPSE, unchanged (FI-56). The IR names
+        //      the type, so TIA's expansion of it is redundant.
+        //   2. `Struct` -> STILL A HARD ERROR, unchanged. An ANONYMOUS structured member's <Sections>
+        //      carries its ONLY definition; collapsing it would silently discard real members.
+        //   3. anything else — an UNQUOTED SYSTEM structured type (`IP_V4`, `TCON_IP_v4`, `DTL`,
+        //      `TON_TIME`) -> RECURSE AND KEEP.
+        //
+        // KEEP rather than collapse, deliberately: `IP_V4`'s expansion holds `ADDR`'s four
+        // <Subelement> start values — the remote IP address. Collapsing would trade one silent loss
+        // for another, and it is also exactly what the TOP-LEVEL ParseMember already does for the same
+        // class of type (`T_Modbus_Comms : TON_TIME` keeps its PT/ET/IN/Q). Purely additive: this
+        // shape hard-errored before, so no existing .ir can have come from one.
+        var isRecursableStructuredType = !isNamedTypeReference && datatypeAttribute != "Struct";
+
         var unexpectedChildren = member.Elements()
             .Select(e => e.Name.LocalName)
-            .Where(n => n != "StartValue")
-            .Where(n => !(n == "Sections" && isNamedTypeReference))
+            .Where(n => n != "StartValue" && n != SubelementElementName)
+            .Where(n => !(n == "Sections" && (isNamedTypeReference || isRecursableStructuredType)))
             .ToList();
         if (unexpectedChildren.Count > 0)
         {
             throw new UnsupportedConstructException(
                 $"{context} member '{ownerMemberName}' has a nested/bare member '{bareName}' with unexpected content " +
-                $"[{string.Join(", ", unexpectedChildren)}] — a doubly-nested structured member or any shape beyond a bare " +
-                "Name/Datatype/StartValue member is outside this slice.");
+                $"[{string.Join(", ", unexpectedChildren)}] — an anonymous 'Struct' whose <Sections> carries its only " +
+                "definition, or any shape beyond a bare Name/Datatype/StartValue/Subelement member, is outside this slice.");
         }
 
         var name = RequireAttribute(member, "Name");
         var datatype = RequireAttribute(member, "Datatype");
         var startValue = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue")?.Value;
+        var subelements = ParseSubelements(member, context, name);
 
-        return new DbMember(name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue);
+        var bareSections = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections");
+        var nestedMembers = bareSections is not null && isRecursableStructuredType
+            ? ParseNestedMembers(bareSections, context, name)
+            : null;
+
+        return new DbMember(
+            name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue,
+            Version: (string?)member.Attribute("Version"), NestedMembers: nestedMembers, Subelements: subelements);
     }
 
     // Only Name/Datatype/StartValue are ever real on this shape — Accessibility is validated
@@ -369,6 +535,9 @@ internal static class DbInterfaceMembers
         var name = RequireAttribute(member, "Name");
         var datatype = RequireAttribute(member, "Datatype");
 
+        RequireKnownChildren(member, context, name);
+        var subelements = ParseSubelements(member, context, name);
+
         // FI-64 (2026-08-09). THE SAME NAMED-TYPE EXPANSION FI-56 FIXED, ON THE THIRD PARSE PATH.
         //
         // TIA expands a member whose type is a NAMED UDT — including an array of one — into a
@@ -411,26 +580,28 @@ internal static class DbInterfaceMembers
         var directNestedMembers = member.Elements().Where(e => e.Name.LocalName == "Member").ToList();
         if (directNestedMembers.Count > 0)
         {
-            if (datatype != "Struct")
+            if (!IsAnonymousStructDatatype(datatype))
             {
                 throw new UnsupportedConstructException(
-                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' — only 'Struct' has been observed with this shape.");
+                    $"{context} member '{name}' has direct nested <Member> children but Datatype is '{datatype}', not 'Struct' or 'Array[…] of Struct' — only those have been observed with this shape.");
             }
 
             var nestedMembers = directNestedMembers.Select(m => ParseTypeMember(m, $"{context} member '{name}'")).ToList();
             return new DbMember(
-                name, datatype, Retain: false, StartValue: null, SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
+                name, datatype, Retain: false, StartValue: null, Version: (string?)member.Attribute("Version"),
+                SetPoint: booleanAttributes.SetPoint, NestedMembers: nestedMembers,
                 ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
-                Comment: comment);
+                Comment: comment, Subelements: subelements);
         }
 
         var startValueElement = member.Elements().FirstOrDefault(e => e.Name.LocalName == "StartValue");
         var startValue = startValueElement?.Value;
 
         return new DbMember(
-            name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue, SetPoint: booleanAttributes.SetPoint,
+            name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue,
+            Version: (string?)member.Attribute("Version"), SetPoint: booleanAttributes.SetPoint,
             ExternalAccessible: booleanAttributes.ExternalAccessible, ExternalVisible: booleanAttributes.ExternalVisible, ExternalWritable: booleanAttributes.ExternalWritable,
-            Comment: comment);
+            Comment: comment, Subelements: subelements);
     }
 
     /// <summary>
@@ -453,8 +624,14 @@ internal static class DbInterfaceMembers
         var memberElement = new XElement(
             Ns + "Member",
             new XAttribute("Name", member.Name),
-            new XAttribute("Datatype", member.Datatype),
-            attributeList);
+            new XAttribute("Datatype", member.Datatype));
+
+        if (member.Version is not null)
+        {
+            memberElement.Add(new XAttribute("Version", member.Version));
+        }
+
+        memberElement.Add(attributeList);
 
         // Comment position (after </AttributeList>, before nested Members/<StartValue>) is
         // mirrored from the proven WriteMember shape (FB_PusherControl/FB_ShredderSequencer,
@@ -463,6 +640,7 @@ internal static class DbInterfaceMembers
         // re-exported from SampleProject and round-tripped to-ir byte-identically, comments
         // intact (stage-gates, "UDT member comments live-verified").
         AddCommentElement(memberElement, member);
+        AddSubelements(memberElement, member);
 
         if (member.NestedMembers is not null)
         {
@@ -563,27 +741,46 @@ internal static class DbInterfaceMembers
     /// <paramref name="includeSetPoint"/> defaults to true (Static's own confirmed shape); pass false for Input/Output members, whose
     /// AttributeList never carries a SetPoint BooleanAttribute at all — confirmed real, 2026-07-12, S1 item 20.
     /// </summary>
-    /// <param name="bareShape">
-    /// Forces the minimal member shape (no <c>Remanence</c>, no <c>AttributeList</c>) for a member whose
-    /// datatype is another FB — a MULTI-INSTANCE static. TIA rejects the full shape on one outright:
-    /// <c>"The attribute 'Remanence' cannot be set."</c> Retentivity of a multi-instance is a property of
-    /// the CALLED block's own members, not of the calling member, so there is nothing for TIA to set here.
-    /// Caller-supplied rather than read off the member because the datatype alone cannot distinguish an
-    /// FB-typed static from a UDT-typed one — both are quoted names, and a UDT-typed static (the C-132
-    /// interface member) genuinely does carry Remanence. <see cref="BlockSourceWriter"/> derives it from
-    /// the block's own CALL statements, which is a fact the file already contains rather than a token an
-    /// author has to remember. Timers are unaffected: they arrive as TimerBindings, not CallStatements,
-    /// and their full shape (VERSION/SETPOINT) is confirmed real.
+    /// <param name="omitRemanence">
+    /// Emits the FULL member shape but WITHOUT <c>Remanence</c> — the MULTI-INSTANCE static shape, and
+    /// the PARAMETER-section shape (2026-08-12). Deliberately narrower than the minimal shape
+    /// <see cref="DbMember.IsBareParameter"/> selects, which drops the <c>AttributeList</c> and
+    /// <c>Version</c> too: TIA's own export carries both on a multi-instance and on an FB parameter, and
+    /// flattening them away is what silently produced a VERSIONLESS instance declaration (see
+    /// <see cref="ParseMember"/>'s multi-instance branch).
+    ///
+    /// <para>The one thing TIA actually refuses in either position is <c>Remanence</c> — "The attribute
+    /// 'Remanence' cannot be set" — because retention belongs to the CALLED block's members for a
+    /// multi-instance, and a parameter has no storage of its own at all. Supplied by
+    /// <see cref="BlockSourceWriter"/> from the SECTION and from the block's own CALL and fixed-shape
+    /// instance names — facts the file already contains, rather than a token an author must remember.
+    /// It cannot be read off the datatype: a UDT-typed static (the C-132 interface member) is also a
+    /// quoted name and genuinely DOES carry Remanence. Timers are unaffected — they arrive as
+    /// TimerBindings, not Calls, and their full shape is confirmed real.</para>
     /// </param>
-    public static XElement WriteMember(DbMember member, bool includeSetPoint = true, bool bareShape = false)
+    public static XElement WriteMember(DbMember member, bool includeSetPoint = true, bool omitRemanence = false)
     {
-        if (member.IsBareParameter || bareShape)
+        // The GENUINELY minimal shape — `FC Scale`'s attribute-less parameters and OB system
+        // parameters. Selected by the member's own captured shape, never forced by a caller: a
+        // `bareShape` flag existed for that until 2026-08-12 and was left with no production caller
+        // once multi-instances and parameter sections both moved to `omitRemanence`. Removed rather
+        // than kept as a vestige — an unused forcing flag is exactly the thing a later change reaches
+        // for by mistake.
+        if (member.IsBareParameter)
         {
             var bareElement = new XElement(
                 Ns + "Member",
                 new XAttribute("Name", member.Name),
                 new XAttribute("Datatype", member.Datatype),
                 new XAttribute("Accessibility", "Public"));
+
+            // Version on the minimal shape too: it is stated by the source, printed by the IR line
+            // (`VERSION 5.3`), and was the only thing standing between a correct instance declaration
+            // and a versionless one.
+            if (member.Version is not null)
+            {
+                bareElement.Add(new XAttribute("Version", member.Version));
+            }
 
             if (member.Informative)
             {
@@ -592,6 +789,8 @@ internal static class DbInterfaceMembers
                     Ns + "Comment",
                     new XElement(Ns + "MultiLanguageText", new XAttribute("Lang", "en-US"), member.InformativeComment)));
             }
+
+            AddSubelements(bareElement, member);
 
             if (member.StartValue is not null)
             {
@@ -634,14 +833,19 @@ internal static class DbInterfaceMembers
             memberElement.Add(new XAttribute("Version", member.Version));
         }
 
+        if (!omitRemanence)
+        {
+            memberElement.Add(new XAttribute("Remanence", member.Retain ? "Retain" : "NonRetain"));
+        }
+
         memberElement.Add(
-            new XAttribute("Remanence", member.Retain ? "Retain" : "NonRetain"),
             new XAttribute("Accessibility", "Public"),
             attributeList);
 
         AddCommentElement(memberElement, member);
+        AddSubelements(memberElement, member);
 
-        if (isStructured && member.Datatype == "Struct")
+        if (isStructured && IsAnonymousStructDatatype(member.Datatype))
         {
             // Anonymous struct (`FB EquipmentControlSystem`'s own `Inputs`/`Outputs`, confirmed real
             // 2026-07-14): nested members are direct children, each with its own full
@@ -691,7 +895,29 @@ internal static class DbInterfaceMembers
             new XAttribute("Name", bare.Name),
             new XAttribute("Datatype", bare.Datatype));
 
-        if (bare.StartValue is not null)
+        // Version is now CARRIED at this position rather than accepted-and-discarded (FI-58's
+        // disposition, correct while the expansion was always collapsed). Once a doubly-nested
+        // structured member's own <Sections> is kept and re-emitted, dropping its Version produces a
+        // versionless system type where the source stated one — the same silent-loss shape as the
+        // multi-instance Version drop, one level deeper.
+        if (bare.Version is not null)
+        {
+            element.Add(new XAttribute("Version", bare.Version));
+        }
+
+        AddSubelements(element, bare);
+
+        if (bare.NestedMembers is not null)
+        {
+            var noneSection = new XElement(Ns + "Section", new XAttribute("Name", "None"));
+            foreach (var nested in bare.NestedMembers)
+            {
+                noneSection.Add(WriteBareMember(nested));
+            }
+
+            element.Add(new XElement(Ns + "Sections", noneSection));
+        }
+        else if (bare.StartValue is not null)
         {
             element.Add(new XElement(Ns + "StartValue", bare.StartValue));
         }

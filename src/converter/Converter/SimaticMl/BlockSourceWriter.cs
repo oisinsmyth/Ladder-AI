@@ -166,17 +166,22 @@ public static class BlockSourceWriter
 
         if (staticMembers is not null)
         {
-            // MULTI-INSTANCE statics take the minimal member shape — see WriteMember's `bareShape`.
-            // Derived from the block's own CALL statements rather than from an IR token, because the
-            // datatype cannot tell an FB-typed static from a UDT-typed one (both are quoted names, and
-            // the UDT-typed C-132 interface member genuinely does carry Remanence). A member that is
-            // called as an instance in this block IS an FB instance; nothing else can be.
+            // MULTI-INSTANCE statics take the full member shape MINUS `Remanence` — see WriteMember's
+            // `omitRemanence`. Derived from the block's own CALL and fixed-shape instruction instances
+            // rather than from an IR token, because the datatype cannot tell an FB-typed static from a
+            // UDT-typed one (both are quoted names, and the UDT-typed C-132 interface member genuinely
+            // does carry Remanence). A member named as an instance in this block IS an instance;
+            // nothing else can be.
+            //
+            // Was `bareShape` until 2026-08-12, which ALSO dropped `Version` and the whole
+            // `<AttributeList>` — so an `MB_SERVER` 5.3 multi-instance re-emitted as a VERSIONLESS
+            // declaration with nothing warning. Only `Remanence` was ever the thing TIA refuses here.
             var multiInstanceNames = new HashSet<string>(block.MultiInstanceStatics, StringComparer.Ordinal);
 
             var staticSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Static"));
             foreach (var member in staticMembers)
             {
-                staticSection.Add(DbInterfaceMembers.WriteMember(member, bareShape: multiInstanceNames.Contains(member.Name)));
+                staticSection.Add(DbInterfaceMembers.WriteMember(member, omitRemanence: multiInstanceNames.Contains(member.Name)));
             }
 
             sectionsChildren.Add(staticSection);
@@ -234,6 +239,23 @@ public static class BlockSourceWriter
     // knows these are parameters, which is a fact the file contains rather than something an author
     // must not forget. Same reasoning as deriving multi-instance shape from the block's own CALL
     // statements instead of a marker.
+    //
+    // NARROWED 2026-08-12 from `bareShape` to `omitRemanence` — FI-59's remedy was WIDER THAN ITS
+    // EVIDENCE. The rejection it fixed named `Remanence` and only `Remanence`; the bare shape ALSO
+    // drops the member's whole `<AttributeList>` (and its `Version`), which nothing had ever asked
+    // for. Four points say that was collateral, three of them from real exports:
+    //   1. A genuine TIA V20 export of an S7-1200 FB carries `Remanence="NonRetain"` AND a
+    //      3-BooleanAttribute `<AttributeList>` on its Input parameter. TIA PRODUCES this shape, and
+    //      what TIA exports is what TIA reads back — that is the premise the whole round trip rests on.
+    //   2. `FB TomraControlSystem` (S1 item 20, 2026-07-12) — a second, independent real export with the
+    //      identical Input/Output shape: Remanence + AttributeList, minus SetPoint.
+    //   3. Pre-FI-59 the converter emitted BOTH on every parameter, and the AttributeList was never
+    //      implicated in any rejection.
+    //   4. Measured here: re-emitting the bare shape made a whole-block `compare` against the source
+    //      export report the missing `Remanence` and the missing `<AttributeList>` as two differences.
+    // So the SHAPE now comes from the member's own `IsBareParameter` (`FC Scale`'s genuinely
+    // attribute-less parameters stay minimal), while `Remanence` is suppressed BY SECTION — which is
+    // FI-59's actual fix, and still protects hand-authored IR that never learned `BAREPARAM`.
     private static readonly HashSet<string> ParameterSectionNames =
         new(StringComparer.Ordinal) { "Input", "Output", "InOut" };
 
@@ -245,7 +267,7 @@ public static class BlockSourceWriter
         foreach (var member in members ?? Array.Empty<DbMember>())
         {
             section.Add(DbInterfaceMembers.WriteMember(
-                member, includeSetPoint: false, bareShape: isParameterSection));
+                member, includeSetPoint: false, omitRemanence: isParameterSection));
         }
 
         return section;

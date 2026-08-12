@@ -44,8 +44,12 @@ BLOCK <FB|FC|OB> <Name>
                                                         # informative")
     OUTPUT
       <name> : <Type>[ RETAIN]
-    INOUT                           # always shown when non-empty; never seen absent or populated in any real block
-      <name> : <Type>[ RETAIN]
+    INOUT                           # always shown when non-empty. CORRECTED 2026-08-12: this line read "never seen
+      <name> : <Type>[ RETAIN]      # absent or populated in any real block", which is now out of date — a real TIA V20
+                                     # export of an S7-1200 Modbus TCP FB carries a POPULATED InOut section (on the
+                                     # MB_SERVER 5.3 multi-instance's own expanded interface: `MB_HOLD_REG : Variant`,
+                                     # `CONNECT : Variant`), and three levels down its TCON/TSEND/TRCV V4.0
+                                     # sub-instances carry their own. The parser accepted them without complaint.
     STATIC                          # FB only — absent entirely for an FC, not just empty (S1 item 7 Phase B)
       <name> : <Type>[ VERSION <v>][ RETAIN][ SETPOINT][ EXTERNALACCESSIBLE=FALSE][ EXTERNALVISIBLE=FALSE][ EXTERNALWRITABLE=FALSE][ = <start value>][ COMMENT "<text>"]
                                      # the three EXTERNAL* markers default true, shown only when false — confirmed
@@ -54,7 +58,12 @@ BLOCK <FB|FC|OB> <Name>
                                      # TIA import + compile + re-export) is always the LAST token — peeled off before
                                      # the " = " start-value search runs, so '='-containing prose can't corrupt
                                      # StartValue parsing
-        <nested member>             # one level deeper — UDT-typed or SFB-instance-typed members only
+        [<index path>] = <value>    # ARRAY ELEMENT START VALUE (2026-08-12) — see "Array element start values" below.
+                                     # A child line beginning '[' is a subelement, never a nested member; the two are
+                                     # told apart by that leading bracket, which a SIMATIC member name can never carry
+        <nested member>             # one level deeper per level of nesting — ARBITRARILY DEEP as of 2026-08-12
+                                     # (was "UDT-typed or SFB-instance-typed members only", one level). See
+                                     # "Structured members" below for which parent types may nest
     TEMP                            # always shown when non-empty
       <name> : <Type>
     CONSTANT                        # confirmed real 2026-07-12 (S1 item 20) — genuinely distinct shape, StartValue required
@@ -1263,13 +1272,81 @@ real to recurse arbitrarily deep:
   any real example seen.
 
 Nested members in both cases above are structurally minimal — confirmed real: only `Name`/
-`Datatype` attributes and an optional `<StartValue>` child, no `Remanence`, no `Accessibility`, no
-`AttributeList`. The parser hard-errors on any other attribute or child on a nested member
-(catches an unconfirmed `Remanence`, a doubly-nested structured member, or a nested `Section`
-named anything but `"None"` — all real-but-unconfirmed, refused rather than guessed at, same
-mechanism handling all three since none has ever been seen).
+`Datatype`[/`Version`] attributes and an optional `<StartValue>` child, no `Remanence`, no
+`Accessibility`, no `AttributeList`. The parser hard-errors on any other attribute or child on a
+nested member (catches an unconfirmed `Remanence`, or a nested `Section` named anything but
+`"None"` — refused rather than guessed at).
 
-- **Anonymous struct** (`Datatype` is literally `Struct`, no type name at all) — a third confirmed
+**Doubly-nested structured members are REAL, and supported since 2026-08-12.** The paragraph above
+used to name one as a refused shape; a genuine TIA V20 export of an S7-1200 Modbus TCP FB settles
+that it is ordinary, and it sits on the critical path for `MB_SERVER` — whose `CONNECT` port must
+point at a `TCON_IP_v4` static, which nests an `IP_V4`, which nests an `Array[1..4] of Byte`
+holding the remote IP. A `<Sections>` at the nested position now has **three** dispositions:
+
+1. **Quoted named-type reference** (`"UDT_X"`, or `Array[…] of "UDT_X"`) — the expansion is
+   **collapsed**, unchanged (FI-56). The IR names the type, so TIA's rendering of it is redundant.
+2. **`Struct`** — still a **hard error**. An *anonymous* structured member's `<Sections>` carries
+   its only definition; collapsing it would silently discard real members.
+3. **Anything else** — an **unquoted system structured type** (`IP_V4`, `TCON_IP_v4`, `DTL`,
+   `TON_TIME`) — is **recursed into and kept**.
+
+Case 3 keeps rather than collapses on purpose: `IP_V4`'s expansion holds `ADDR`'s four array start
+values, so collapsing would trade one silent loss for another. It is also exactly what a *top-level*
+member of the same type already does (`T_Modbus_Comms : TON_TIME` keeps its `PT`/`ET`/`IN`/`Q`).
+In IR this is simply one more indent level, with no new syntax:
+
+```
+    Link : TCON_IP_v4 VERSION 1.0 RETAIN SETPOINT
+      InterfaceId : HW_ANY = 64
+      RemoteAddress : IP_V4 VERSION 1.0
+        ADDR : Array[1..4] of Byte
+          [1] = 16#C0
+```
+
+`VERSION` is now **carried** at the nested position rather than accepted-and-discarded (FI-58's
+disposition, which was correct only while the expansion was always collapsed): once the `<Sections>`
+is re-emitted, dropping the version would write a versionless system type where the source stated
+one.
+
+### Array element start values (`[<index path>] = <value>`, 2026-08-12)
+
+An array member has no scalar `<StartValue>` of its own — its initial data lives in
+`<Subelement Path="…"><StartValue>…</StartValue></Subelement>` children, one per initialised
+element. `Path` is a comma-separated index tuple walking the enclosing array dimensions
+outermost-first, and the IR carries it **verbatim** inside square brackets on a child line:
+
+```
+    HoldReg : Array[1..90] of Int
+      [1] = 11
+      [90] = -101
+
+    NodeTable : Array[1..10] of Struct RETAIN
+      NodeAddr : Array[1..4] of Byte
+        [1,1] = 16#C0            # row 1, byte 1
+        [7,3] = 16#01            # row 7, byte 3
+```
+
+A child line beginning `[` is a subelement, never a nested member — a SIMATIC member name cannot
+begin with a bracket, so the discrimination is total. Subelement lines are written before nested
+member lines (mirroring the XML) but are accepted in either order. Legal on **all three** member
+shapes: an ordinary Static/DB member, an `Array[…] of Struct`'s inline members, and a structured
+member's own nested fields.
+
+**Why this has its own section.** `<Subelement>` was read by no parse path and written by no write
+path — the element name appeared **nowhere** in the converter, in code, tests or docs. It was not
+refused; it was *ignored*, so a real block converted **`exit 0`** with **182 subelement start values
+dropped**, taking its entire per-node configuration table (IP addresses, node numbers, register
+addresses, lengths) with it. That is the same silent-loss class as the dropped array index and the
+dropped `MemoryLayout`. Two consequences are now permanent: a `<Subelement>` carrying anything other
+than exactly one `<StartValue>` is a hard error, and **any unrecognised child element of a member is
+a named refusal** rather than a silent drop — the absence of that check is why this went unnoticed.
+
+- **Anonymous struct** (`Datatype` is literally `Struct` — **or `Array[<range>] of Struct`**, added
+  2026-08-12: an array of an anonymous struct nests its members exactly the same way, because it IS
+  the same anonymous struct, dimensioned. Confirmed real on a TIA V20 S7-1200 export whose
+  `Array[1..10] of Struct` per-node configuration table hard-errored with *"Datatype is
+  'Array[1..10] of Struct', not 'Struct'"*. Deliberately narrow — any **other** datatype carrying
+  direct nested `<Member>` children is still refused) — a third confirmed
   shape, found 2026-07-14 (`FB EquipmentControlSystem`'s own `Inputs`/`Outputs : Struct` members, grounding
   Phase 1 of the `PlantAutoControl` round-trip plan). Genuinely different from both cases above: nested
   `<Member>` elements are **direct children of the owning member**, not wrapped in a `<Sections>
@@ -1304,6 +1381,30 @@ mechanism handling all three since none has ever been seen).
   convention-review capability (S4) is where that gets flagged, not the IR format itself.
 - Both use the same source shape (`MultilingualText`/`Culture`/`Text`) — only `en-US` is expected
   per site convention (C-006, English only); other cultures are a hard error if encountered
+
+### Quoted-string escapes (2026-08-12)
+
+Every quoted value in this format — block/network `TITLE` and `COMMENT`, a member's own
+`COMMENT`/`INFORMATIVE`, a tag comment, a `CALC` equation — uses one escape:
+
+| in the text | written as |
+|---|---|
+| `\`  | `\\` |
+| `"`  | `\"` |
+| newline | `\n` |
+| carriage return | `\r` |
+
+An escape sequence the table does not define is passed through verbatim (backslash plus the
+character), so existing `.ir` prose containing a stray `\t` keeps reading exactly as before.
+
+**`\n`/`\r` were added because their absence was a permanent refusal, not a guard.** A raw newline
+genuinely would corrupt the format — the whole document is split on `\n` before any quoted-string
+parsing runs — so the serializer hard-errored on one. But no escape existed, so a **real** multi-line
+network comment (three lines of engineer's notes on a TIA V20 S7-1200 export) made `to-ir` reject the
+**entire block**, permanently, over its documentation. Under the standing *no IR the AI cannot
+change* ruling, that makes the block unmodifiable for a reason that is presentation rather than
+logic. The invariant the old refusal protected is unchanged: a quoted value still occupies exactly
+one physical line.
   (design philosophy #10 — don't silently drop a language TIA actually has data for), not
   silently multiplexed into some IR multi-language construct that doesn't otherwise exist yet.
 

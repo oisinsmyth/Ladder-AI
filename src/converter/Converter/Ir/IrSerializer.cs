@@ -1096,21 +1096,13 @@ public static class IrSerializer
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 
-    // Fail loudly and early (docs/04-design-philosophy.md) rather than silently emit something
-    // that corrupts the line-based .ir format: the whole document is split on '\n' before any
-    // quoted-string parsing runs (IrParser.cs), so a raw newline inside e.g. an AI-generated
-    // Title/Comment would desync reparsing instead of round-tripping. No escape sequence for
-    // \n/\r is defined in this format — reject it here, at the one point that actually
-    // constructs every quoted string this serializer writes (Title, Comment, Calc equations,
-    // etc.), rather than at each call site.
-    private static string EscapeString(string value)
-    {
-        if (value.Contains('\n') || value.Contains('\r'))
-        {
-            throw new IrFormatException(
-                $"Quoted IR string cannot contain a newline: '{value}'. Use a single-line value.");
-        }
-
-        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-    }
+    // A newline in a quoted value USED TO BE A HARD ERROR here, on correct reasoning — the whole
+    // `.ir` document is split on '\n' before any quoted-string parsing runs (IrParser.cs), so a raw
+    // newline would desync reparsing rather than round-trip. What was missing was the other half:
+    // the format defined no escape sequence, so the guard was a permanent refusal instead of a
+    // guard. A real TIA V20 export settles that a multi-line comment is real (an S7-1200 Modbus TCP
+    // FB with a three-line network comment), and refusing the whole block over its documentation
+    // makes that block unmodifiable — the very thing the "no IR the AI cannot change" ruling
+    // forbids. IrStringEscape now defines \n/\r and the parser reverses them; see its doc comment.
+    private static string EscapeString(string value) => IrStringEscape.Escape(value);
 }

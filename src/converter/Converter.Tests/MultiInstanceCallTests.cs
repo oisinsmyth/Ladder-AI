@@ -58,17 +58,59 @@ public class MultiInstanceCallTests
         Assert.Equal("GlobalVariable", call.InstanceScope);
     }
 
+    // REVISED 2026-08-12. A multi-instance now takes `omitRemanence` (the full member shape MINUS
+    // Remanence) rather than `bareShape` (which ALSO drops Version and the whole AttributeList).
+    // `Remanence` is the only thing TIA ever refused here; dropping the rest silently produced a
+    // VERSIONLESS instance declaration from a source that stated `Version="5.3"` — see
+    // WriteMember_MultiInstance_KeepsVersionAndAttributeList below.
     [Fact]
-    public void WriteMember_BareShape_OmitsRemanenceAndAttributeList()
+    public void WriteMember_MultiInstance_OmitsRemanence()
     {
         var member = new DbMember("ValveWater", "\"FB_Valve\"", Retain: false, StartValue: null);
 
-        var element = DbInterfaceMembers.WriteMember(member, bareShape: true);
+        var element = DbInterfaceMembers.WriteMember(member, omitRemanence: true);
+
+        Assert.Null(element.Attribute("Remanence"));
+        Assert.Equal("ValveWater", element.Attribute("Name")!.Value);
+        Assert.Equal("\"FB_Valve\"", element.Attribute("Datatype")!.Value);
+    }
+
+    // The GENUINELY minimal shape still exists — `FC Scale`'s own attribute-less parameters — and is
+    // now selected by the member's own captured `IsBareParameter` rather than forced by a caller.
+    // Keeping it distinct from `omitRemanence` is the whole point of the split.
+    [Fact]
+    public void WriteMember_GenuinelyBareParameter_StillOmitsRemanenceAndAttributeList()
+    {
+        var member = new DbMember("Input", "Real", Retain: false, StartValue: null, IsBareParameter: true);
+
+        var element = DbInterfaceMembers.WriteMember(member);
 
         Assert.Null(element.Attribute("Remanence"));
         Assert.Empty(element.Elements().Where(e => e.Name.LocalName == "AttributeList"));
-        Assert.Equal("ValveWater", element.Attribute("Name")!.Value);
-        Assert.Equal("\"FB_Valve\"", element.Attribute("Datatype")!.Value);
+    }
+
+    /// <summary>
+    /// GAP 4, THE SILENT ONE (2026-08-12). Measured on a real TIA V20 export: a multi-instance
+    /// `MB_Server : MB_SERVER Version="5.3"` converted WITHOUT ERROR and came back as
+    /// <c>&lt;Member Name="MB_Server" Datatype="MB_SERVER" Accessibility="Public" /&gt;</c> — no
+    /// Version, no AttributeList. An import would then declare a VERSIONLESS instance and NOTHING
+    /// WARNED. The `TON_TIME` member beside it kept its `Version="1.0"` only because it carries
+    /// `Remanence` and never took this path.
+    /// </summary>
+    [Fact]
+    public void WriteMember_MultiInstance_KeepsVersionAndAttributeList()
+    {
+        var member = new DbMember(
+            "MB_Server", "MB_SERVER", Retain: false, StartValue: null, Version: "5.3", SetPoint: false);
+
+        var element = DbInterfaceMembers.WriteMember(member, omitRemanence: true);
+
+        Assert.Equal("5.3", element.Attribute("Version")!.Value);
+        Assert.Null(element.Attribute("Remanence"));
+        var attributeList = Assert.Single(element.Elements().Where(e => e.Name.LocalName == "AttributeList"));
+        Assert.Equal(
+            new[] { "ExternalAccessible", "ExternalVisible", "ExternalWritable", "SetPoint" },
+            attributeList.Elements().Select(e => (string)e.Attribute("Name")!));
     }
 
     [Fact]
@@ -85,8 +127,13 @@ public class MultiInstanceCallTests
         Assert.Equal("Retain", element.Attribute("Remanence")!.Value);
     }
 
+    // INVERTED 2026-08-12. This asserted `IsBareParameter` — the read that CAUSED gap 4. The bare
+    // shape has nowhere to put a Version or an AttributeList, so reading a multi-instance as one
+    // discarded both on the way back out. A multi-instance is not a bare parameter: it is an
+    // ordinary Static member that never carries `Remanence` (retention belongs to the CALLED
+    // block's members), and that one difference now lives on the WRITE side instead.
     [Fact]
-    public void ParseMember_MultiInstanceFromTia_ReadsBackAsBareShape()
+    public void ParseMember_MultiInstanceFromTia_ReadsBackAsAnOrdinaryMemberKeepingItsAttributes()
     {
         // The READ half, missed when the write half was fixed. TIA re-exports a multi-instance with
         // NO Remanence but WITH an AttributeList and a <Sections> child holding the callee's whole
@@ -114,8 +161,13 @@ public class MultiInstanceCallTests
 
         Assert.Equal("ProbeValve", member.Name);
         Assert.Equal("\"FB_Valve\"", member.Datatype);
-        Assert.True(member.IsBareParameter);
+        Assert.False(member.IsBareParameter);
         Assert.False(member.Retain);
+
+        // The AttributeList is CAPTURED, not discarded — the half that was missing.
+        Assert.True(member.ExternalAccessible);
+        Assert.True(member.ExternalVisible);
+        Assert.True(member.ExternalWritable);
 
         // The callee's expanded interface is DISCARDED, not adopted. It is the called block's own
         // declaration; duplicating it into the caller would make the two free to disagree.

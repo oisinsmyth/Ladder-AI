@@ -2364,7 +2364,7 @@ public static partial class IrParser
         return UnescapeString(raw[1..^1]);
     }
 
-    private static string UnescapeString(string value) => value.Replace("\\\"", "\"").Replace("\\\\", "\\");
+    private static string UnescapeString(string value) => IrStringEscape.Unescape(value);
 
     [GeneratedRegex(@"^BLOCK (?<kind>\S+) (?<name>\S+)$")]
     private static partial Regex BlockLineRegex();

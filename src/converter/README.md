@@ -33,9 +33,9 @@ boolean inverter), `And` (bitwise word AND — "WAND"); the full IEC comparison 
 `FillBlockI`, `Modbus_Master`, `Modbus_Comm_Load`.
 
 Plus the **fixed-shape registry** names (`FixedShapeInstructions`, 2026-08-12), which
-`SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1 and `MB_MASTER` 2.2 —
-keyed on **(name, version)**, so an unknown version of a known name is refused rather than
-templated with the wrong port list. See the dated section below.
+`SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1, `MB_MASTER` 2.2 and
+`MB_SERVER` 5.3 — keyed on **(name, version)**, so an unknown version of a known name is refused
+rather than templated with the wrong port list. See the dated section below.
 
 Supported alongside that set, not part of it: FB/FC **`CALL`** (a `<Call>` sibling of `<Part>` in
 the source XML, normalized internally to `PartNode(Name: "Call")`); negated operands; network- and
@@ -2432,12 +2432,82 @@ comparisons**, which is why nothing had hit it; the guards are parameterised ove
 `MB_SERVER` 5.3 is deliberately **not** in the registry yet: its port list is characterised, but the
 block carrying it also needs `Array[…] of Struct` and doubly-nested structured interface members
 that this converter does not model, so a template added now could not be exercised end to end.
+*(Closed out the same day — see the next section.)*
 
 **Confirm loop, offline half**: `to-ir → to-xml → converter compare` against the original export —
 `EQUIVALENT` for each of the three networks individually and for the whole block; the IR text is
 byte-identical across a second round trip. 968 converter tests pass (up from 929); the golden
 harness stays green at 39. No Portal, no import, no compile, no download — that half is the
 owner's, with a person present.
+
+## MB_SERVER made expressible — and the silent losses found on the way (2026-08-12)
+
+Owner ruling: **no IR the AI cannot change.** A block the converter cannot express is a block the AI
+can never modify, so "author the `MB_SERVER` call by hand in TIA" was withdrawn. Grounded on a
+genuine TIA V20 export of an S7-1200 (classic 1214C) Modbus TCP FB, 55,783 bytes, preserved
+byte-exact and converted only in copies.
+
+Five gaps were scoped. Two more turned up while closing them, **both silent**:
+
+1. **`Array[1..10] of Struct` with inline nested members** — hard error. The direct-nested-`<Member>`
+   gate accepted only the literal `Struct`. An array of an anonymous struct nests identically because
+   it *is* the same struct, dimensioned. Widened to `Struct` **or** `Array[…] of Struct`, and to
+   nothing else.
+2. **Doubly-nested structured members** — hard error, and on the critical path: `CONNECT` must point
+   at a `TCON_IP_v4`, which nests an `IP_V4`, which nests an `Array[1..4] of Byte`. A `<Sections>` at
+   the nested position now has three dispositions — collapse a *quoted* named type (FI-56,
+   unchanged), still refuse an anonymous `Struct` (its expansion is its only definition), and
+   **recurse into and keep** an unquoted system structured type. Keeping matters: `IP_V4`'s expansion
+   holds the remote IP address, so collapsing would trade one silent loss for another.
+3. **The `MB_SERVER` 5.3 Part template** — registered, now that the block carrying it round-trips.
+   Ports read off the export's own `<Wires>`. `MB_HOLD_REG`/`CONNECT` are genuinely InOut and are
+   `Input` in the template, which is correct rather than a compromise: they are wired as ordinary
+   symbolic `<Access>` operands in normal input order, and the whole document contains **zero**
+   `<Parameter Section=…>` elements.
+4. 🔴 **The multi-instance member writer dropped `Version` — silently.** It converted without error
+   and came back as `<Member Name="…" Datatype="MB_SERVER" Accessibility="Public" />`: a
+   **versionless** instance declaration, from a source stating `Version="5.3"`. Cause: a
+   multi-instance was *read* as a "bare parameter", a shape with nowhere to put a `Version` or an
+   `AttributeList`. It is not one — it is an ordinary Static member that merely never carries
+   `Remanence`, and that single difference now lives on the write side (`WriteMember`'s
+   `omitRemanence`). The `TON_TIME` member beside it kept its `Version="1.0"` only because it carries
+   `Remanence` and never took that path.
+5. 🔴 **`<Subelement>` array start values were dropped — silently, and this is the finding of the
+   day.** The element name appeared **nowhere in `src/converter`**: not in code, not in tests, not in
+   docs. No parse path read it, no write path emitted it, and no check objected, because members had
+   no unknown-child guard at all. **The block reached `exit 0` with 182 start values gone** — its
+   entire per-node configuration table: IP addresses, node numbers, register addresses, lengths, and
+   the remote IP inside `RemoteAddress.ADDR`. *Converted without error* is not *converted correctly*.
+   New IR grammar `[<index path>] = <value>` (`ir/SPEC.md`), supported on all three member shapes,
+   plus a permanent unknown-child refusal so the next one is an error rather than an omission.
+6. **Parameter-section members lost their `AttributeList`** — FI-59's remedy was wider than its
+   evidence. The rejection it fixed named `Remanence` and only `Remanence`; the bare shape it reached
+   for also drops the `AttributeList`, which nothing asked for. TIA's own export carries
+   `Remanence` **and** a 3-attribute `AttributeList` on an FB Input parameter (and `FB TomraControlSystem`
+   independently showed the same shape in 2026-07). So the *shape* now comes from the member's own
+   `IsBareParameter` and `Remanence` is suppressed **by section** — which is FI-59's actual fix, and
+   still protects hand-authored IR that never learned `BAREPARAM`.
+7. **A multi-line network comment was a permanent hard error.** The format defined no `\n` escape, so
+   the serializer refused one — correct about the risk (the document is split on `\n` before quoted
+   strings are parsed) but leaving no way to represent a real comment. The export has one: three
+   lines of engineer's notes. `to-ir` rejected the **whole block** over its documentation. `\n`/`\r`
+   now escape; the value still occupies one physical line. The five copy-pasted `EscapeString`
+   implementations and two of its inverse were collapsed into one `IrStringEscape` first, so the two
+   halves cannot drift apart.
+
+**Confirm loop, offline half.** `to-ir → to-xml → converter compare` against the preserved original:
+**2 differences**, both deliberate and both pre-dating this work — the multi-instance's inline
+expanded interface (the *callee's* declaration, discarded by design and re-emitted by TIA) and
+`Remanence` on a parameter (which TIA exports but refuses at import). A whole-document element tally
+confirms every other `n→0` is a `Normalizer` volatile: subelements **182 → 182**, and the `Member`
+`157 → 63` / `Section` `43 → 13` / `Sections` `17 → 8` deltas are accounted for **exactly** by that
+one discarded expansion (94 / 30 / 9). `to-ir → to-xml → to-ir` is byte-identical. 996 converter
+tests pass (up from 968), golden harness green at 39, and `drift-check` over the committed corpus
+reports the identical 6 pre-existing drifts before and after — no corpus regression.
+
+**Also fixed here**: `compare`'s own `MEMORYLAYOUT` line printed *"NOT compared — neither document
+declares one"* beside a value one document plainly declared. The skip was right, the stated reason
+was false. It now names which side is silent.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

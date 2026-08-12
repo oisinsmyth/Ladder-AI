@@ -61,7 +61,7 @@ public static class TypeIrSerializer
         return sb.ToString();
     }
 
-    private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string EscapeString(string value) => IrStringEscape.Escape(value);
 }
 
 public static class TypeIrParser

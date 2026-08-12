@@ -2029,21 +2029,49 @@ internal static class Program
             networkComments.Add(block.Networks[i].Comment);
         }
 
-        // A static named as a CALL's instance is a MULTI-INSTANCE and takes the minimal member shape
-        // (TIA: "The attribute 'Remanence' cannot be set"). Derived here because this is the last place
-        // the IR networks and the interface are both in hand. Subscript stripped, same normalisation as
-        // SidecarSynthesizer.ScopeFor. Timers are unaffected — they are TimerBindings, not Calls.
+        // A static named as an INSTANCE is a MULTI-INSTANCE and never carries `Remanence` (TIA: "The
+        // attribute 'Remanence' cannot be set"). Derived here because this is the last place the IR
+        // networks and the interface are both in hand. Subscript stripped, same normalisation as
+        // SidecarSynthesizer.ScopeFor. Timers are unaffected — they are TimerBindings, not Calls, and
+        // their full shape (VERSION/SETPOINT/Remanence) is confirmed real.
+        //
+        // A CALL is not the only thing that names an instance (2026-08-12): every FIXED-SHAPE
+        // instruction takes one too — `MB_SERVER`/`MB_MASTER`/`MB_COMM_LOAD` and the two older Modbus
+        // spellings. Counting only Calls meant hand-authored IR declaring `MB_Server : MB_SERVER
+        // VERSION 5.3` emitted `Remanence` and was refused at import — a mystery rejection rather than
+        // a known consequence, on a block that converted and preflighted clean.
         var multiInstanceStatics = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var call in block.Networks.SelectMany(n => n.Calls))
+
+        void AddInstanceRoot(string? instancePath)
         {
-            if (call.InstancePath is not { } instPath)
+            if (instancePath is not { } path || path.Length == 0)
             {
-                continue;
+                return;
             }
 
-            var head = instPath.Split('.')[0];
+            var head = path.Split('.')[0];
             var subscript = head.IndexOf('[');
             multiInstanceStatics.Add(subscript >= 0 ? head[..subscript] : head);
+        }
+
+        foreach (var call in block.Networks.SelectMany(n => n.Calls))
+        {
+            AddInstanceRoot(call.InstancePath);
+        }
+
+        foreach (var fixedShape in block.Networks.SelectMany(n => n.FixedShapes))
+        {
+            AddInstanceRoot(fixedShape.InstancePath);
+        }
+
+        foreach (var modbusMaster in block.Networks.SelectMany(n => n.ModbusMasters))
+        {
+            AddInstanceRoot(modbusMaster.InstancePath);
+        }
+
+        foreach (var commLoad in block.Networks.SelectMany(n => n.ModbusCommLoads))
+        {
+            AddInstanceRoot(commLoad.InstancePath);
         }
 
         var blockSource = new BlockSource(

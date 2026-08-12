@@ -90,7 +90,7 @@ public static class DbIrSerializer
         return sb.ToString();
     }
 
-    private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string EscapeString(string value) => IrStringEscape.Escape(value);
 
     // Null vs. present-but-empty is a real, must-preserve distinction (mirrors IrSerializer's own
     // InputMembers/OutputMembers handling for BlockSource) — a section header with zero member

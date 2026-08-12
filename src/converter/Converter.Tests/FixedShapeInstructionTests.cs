@@ -144,17 +144,23 @@ public class FixedShapeInstructionTests
     /// THE GUARD THAT MATTERS: widening the supported list must not have turned the fail-closed
     /// behaviour into fail-silent. An instruction the converter carries no template for is still a
     /// hard error, not a silent partial conversion.
+    ///
+    /// <para>The stand-in was `MB_SERVER` until 2026-08-12, when `MB_SERVER` 5.3 became a REGISTERED
+    /// instruction and this test started asserting the fail-closed path using a name that no longer
+    /// takes it — it failed loudly, which is the correct outcome and the reason the name is now
+    /// deliberately one no Siemens family uses. A guard whose "unknown" example silently becomes
+    /// known stops guarding.</para>
     /// </summary>
     [Fact]
     public void Parse_UnknownInstruction_StillHardErrors()
     {
         var document = LoadFixture();
         document.Descendants().First(e => e.Name.LocalName == "Part" && e.Attribute("Name")?.Value == "MB_MASTER")
-            .SetAttributeValue("Name", "MB_SERVER");
+            .SetAttributeValue("Name", "MB_NOT_A_REAL_INSTRUCTION");
 
         var error = Assert.Throws<UnsupportedConstructException>(() => NetworkOf(document, 2));
 
-        Assert.Contains("Unsupported instruction 'MB_SERVER'", error.Message);
+        Assert.Contains("Unsupported instruction 'MB_NOT_A_REAL_INSTRUCTION'", error.Message);
     }
 
     /// <summary>

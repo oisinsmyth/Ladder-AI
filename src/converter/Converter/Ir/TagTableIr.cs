@@ -62,7 +62,7 @@ public static class TagTableIrSerializer
         return sb.ToString();
     }
 
-    private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string EscapeString(string value) => IrStringEscape.Escape(value);
 }
 
 public static class TagTableIrParser

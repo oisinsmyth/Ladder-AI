@@ -96,9 +96,19 @@ internal static partial class DbMemberLineFormat
     public static void SerializeMemberRecursive(StringBuilder sb, string indent, DbMember member)
     {
         SerializeLine(sb, indent, member);
+        var childIndent = indent + "  ";
+
+        // Subelement lines FIRST, then nested members — mirroring the XML, where <Subelement>
+        // children precede nested <Member> children. A subelement line is `[<path>] = <value>`; the
+        // leading '[' is what tells it apart from a nested member line, and the discrimination is
+        // total because a SIMATIC member name can never begin with one.
+        foreach (var subelement in member.Subelements)
+        {
+            sb.Append(childIndent).Append('[').Append(subelement.Path).Append("] = ").Append(subelement.StartValue).Append('\n');
+        }
+
         if (member.NestedMembers is not null)
         {
-            var childIndent = indent + "  ";
             foreach (var nested in member.NestedMembers)
             {
                 SerializeMemberRecursive(sb, childIndent, nested);
@@ -115,12 +125,46 @@ internal static partial class DbMemberLineFormat
 
         var childIndent = indent + "  ";
         var nestedMembers = new List<DbMember>();
+        var subelements = new List<DbSubelement>();
         while (i < lines.Length && lines[i].StartsWith(childIndent, StringComparison.Ordinal))
         {
+            // `[<path>] = <value>` is an ARRAY ELEMENT START VALUE, not a nested member. Accepted in
+            // either order relative to nested member lines (the serializer emits subelements first)
+            // since the leading '[' decides, not position.
+            if (lines[i][childIndent.Length..].StartsWith('['))
+            {
+                subelements.Add(ParseSubelementLine(lines[i], childIndent));
+                i++;
+                continue;
+            }
+
             nestedMembers.Add(ParseMemberRecursive(lines, ref i, childIndent));
         }
 
-        return nestedMembers.Count > 0 ? member with { NestedMembers = nestedMembers } : member;
+        if (nestedMembers.Count > 0)
+        {
+            member = member with { NestedMembers = nestedMembers };
+        }
+
+        return subelements.Count > 0 ? member with { Subelements = subelements } : member;
+    }
+
+    private static DbSubelement ParseSubelementLine(string line, string indent)
+    {
+        var content = line[indent.Length..];
+        var close = content.IndexOf("] = ", StringComparison.Ordinal);
+        if (close < 0)
+        {
+            throw new IrFormatException($"Expected an array start-value line '[<path>] = <value>', got: '{line}'");
+        }
+
+        var path = content[1..close];
+        if (path.Length == 0)
+        {
+            throw new IrFormatException($"Array start-value line has an empty index path: '{line}'");
+        }
+
+        return new DbSubelement(path, content[(close + 4)..]);
     }
 
     public static DbMember ParseLine(string line, string indent)
@@ -241,7 +285,7 @@ internal static partial class DbMemberLineFormat
     [System.Text.RegularExpressions.GeneratedRegex(" COMMENT \"(?<text>.*)\"$")]
     private static partial System.Text.RegularExpressions.Regex CommentSuffixRegex();
 
-    private static string EscapeString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    private static string EscapeString(string value) => IrStringEscape.Escape(value);
 
-    private static string UnescapeString(string value) => value.Replace("\\\"", "\"").Replace("\\\\", "\\");
+    private static string UnescapeString(string value) => IrStringEscape.Unescape(value);
 }

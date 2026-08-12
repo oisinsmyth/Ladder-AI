@@ -274,30 +274,62 @@ public class NetworkTitleCommentTests
         Assert.Equal("New Block Title", reparsed.Title);
     }
 
-    // Embedded-newline guard (S3 pre-flight): nothing escapes \n/\r today, and the whole .ir
-    // document is split on \n before any quoted-string parsing runs, so a raw newline in
-    // AI-generated Title/Comment text would corrupt the format rather than round-trip. Serializer
-    // is the actual prevention point — it must fail loudly rather than emit something unparseable.
+    // EMBEDDED NEWLINES — inverted 2026-08-12, deliberately. These two tests asserted a HARD ERROR,
+    // on reasoning that was half right: the whole .ir document is split on '\n' before any
+    // quoted-string parsing runs, so a RAW newline would corrupt the format. What was missing was
+    // the other half — no escape sequence existed, so the guard was a permanent refusal rather than
+    // a guard, and a real TIA V20 export settled the question by containing one: an S7-1200 Modbus
+    // TCP FB whose first network's comment is three lines of engineer's notes. `to-ir` refused the
+    // WHOLE BLOCK over its documentation, which under the "no IR the AI cannot change" ruling makes
+    // that block permanently unmodifiable for a reason that is presentation, not logic.
+    //
+    // The invariant the old tests were protecting is unchanged and is now asserted directly: the
+    // serialized form stays ONE LINE, and the value survives the round trip intact.
 
     [Fact]
-    public void SerializeNetworkOnly_TitleContainsNewline_ThrowsClearError()
+    public void SerializeNetworkOnly_TitleContainsNewline_EscapesAndStaysOneLine()
     {
-        var network = new IrNetwork(1, "Bad\nTitle", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
+        var network = new IrNetwork(1, "Multi\nLine Title", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) });
 
-        var ex = Assert.Throws<IrFormatException>(() => IrSerializer.SerializeNetworkOnly(network));
-        Assert.Contains("newline", ex.Message, StringComparison.OrdinalIgnoreCase);
+        var text = IrSerializer.SerializeNetworkOnly(network);
+
+        Assert.Contains("NETWORK 1 \"Multi\\nLine Title\"", text);
+        // The point of the escape: the header is still a single physical line.
+        Assert.Equal("NETWORK 1 \"Multi\\nLine Title\"", text.Split('\n')[0]);
+        Assert.Equal("Multi\nLine Title", IrParser.ParseNetworkOnly(text).Title);
     }
 
     [Fact]
-    public void SerializeBlock_CommentContainsCarriageReturn_ThrowsClearError()
+    public void SerializeBlock_CommentContainsCarriageReturn_RoundTripsThroughTheEscape()
     {
-        var block = new IrBlock("0", "FB", "VSDMotor", 5, "LAD", "Bad\rComment", new[]
+        var block = new IrBlock("0", "FB", "VSDMotor", 5, "LAD", "Two\r\nLine\rComment", new[]
         {
             new IrNetwork(1, "Network one", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
         });
         var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
 
-        var ex = Assert.Throws<IrFormatException>(() => IrSerializer.SerializeBlock(block, new[] { sidecar }));
-        Assert.Contains("newline", ex.Message, StringComparison.OrdinalIgnoreCase);
+        var text = IrSerializer.SerializeBlock(block, new[] { sidecar });
+
+        Assert.Contains("COMMENT \"Two\\r\\nLine\\rComment\"", text);
+        var (reparsed, _) = IrParser.ParseBlock(text);
+        Assert.Equal("Two\r\nLine\rComment", reparsed.Comment);
+    }
+
+    // The escape must not have become lossy in the other direction either: a backslash that is
+    // genuinely part of the text still survives, and an escape sequence the format does not define
+    // is passed through verbatim rather than silently rewritten (the behaviour of the naive Replace
+    // pair this superseded — existing .ir comment text must keep reading the same way).
+    [Fact]
+    public void QuotedString_BackslashesAndUndefinedEscapes_RoundTripUnchanged()
+    {
+        var block = new IrBlock("0", "FB", "VSDMotor", 5, "LAD", @"path C:\temp, tab-ish \t, quote """, new[]
+        {
+            new IrNetwork(1, "Network one", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+
+        var (reparsed, _) = IrParser.ParseBlock(IrSerializer.SerializeBlock(block, new[] { sidecar }));
+
+        Assert.Equal(@"path C:\temp, tab-ish \t, quote """, reparsed.Comment);
     }
 }

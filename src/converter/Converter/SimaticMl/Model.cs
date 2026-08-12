@@ -331,8 +331,10 @@ public sealed record BlockSource(
 
     /// <summary>
     /// Names of Static members that are MULTI-INSTANCES — an FB called with one of this block's own
-    /// statics as its instance. They take the minimal member shape; see
-    /// <see cref="DbInterfaceMembers.WriteMember"/>'s <c>bareShape</c> for why TIA requires it.
+    /// statics as its instance, or a FIXED-SHAPE INSTRUCTION's instance (`MB_SERVER`/`MB_MASTER`/
+    /// `MB_COMM_LOAD`, added 2026-08-12: a `<Part>` names an instance just as a `<Call>` does). They
+    /// take the full member shape MINUS `Remanence`; see
+    /// <see cref="DbInterfaceMembers.WriteMember"/>'s <c>omitRemanence</c> for why TIA requires it.
     /// Carried on the model rather than derived in the writer because by the time a BlockSource
     /// exists its networks are already FlgNet XML, and this is a fact about the IR that produced it.
     /// Empty on the parse path, which never writes an interface.

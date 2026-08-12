@@ -22,11 +22,20 @@ public static class CompareOutputFormatter
             return sb.ToString().TrimEnd('\n', '\r');
         }
 
+        // The parenthetical states WHY, and it used to lie whenever exactly one side was silent: it
+        // printed "neither document declares one" directly beside a value the other document plainly
+        // declared, so a reader skimming it concluded no layout existed anywhere. The skip was right;
+        // the reason given was false. A diagnostic that misstates its own reasoning is worse than one
+        // that says less — the Normalizer holds NEITHER side to the other's value when EITHER is
+        // silent, which is the fact to print.
         sb.Append("MEMORYLAYOUT: ")
             .Append(Describe(report.MemoryLayout.First)).Append(" -> ").Append(Describe(report.MemoryLayout.Second))
             .Append(report.MemoryLayout.Compared
                 ? "  (compared — both documents declare one)"
-                : "  (NOT compared — neither document declares one)")
+                : report.MemoryLayout.First is null && report.MemoryLayout.Second is null
+                    ? "  (NOT compared — neither document declares one)"
+                    : $"  (NOT compared — {(report.MemoryLayout.First is null ? "FIRST" : "SECOND")} declares none, " +
+                      "so the other side's value is not asserted against it)")
             .Append('\n');
 
         if (report.Status == CompareStatus.Equivalent)

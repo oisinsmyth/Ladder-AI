@@ -105,9 +105,23 @@ public sealed record DbSource(
 // WriteBareMember's shape, one level deeper — a UDT-typed member's own inner fields, or a timer
 // instance's own PT/ET/IN/Q) — only top-level Static/Input/Output/Temp/DB members carry this so far.
 //
+// Subelements: PER-ELEMENT START VALUES of an ARRAY member — `<Subelement Path="1,3">
+// <StartValue>16#0A</StartValue></Subelement>`, one per initialised element, `Path` being a
+// comma-separated index tuple that walks the enclosing array dimensions outermost-first (so an
+// `Array[1..4] of Byte` nested inside an `Array[1..10] of Struct` yields `Path="7,2"`). An array has
+// no scalar `<StartValue>` of its own, so this is the ONLY place an array's initial data lives.
+//
+// Confirmed real 2026-08-12 on a genuine TIA V20 export of an S7-1200 Modbus TCP FB — 200+ of them
+// in one block, carrying the whole per-node configuration table (IP addresses, node numbers,
+// register addresses, lengths). Every parse path IGNORED the element and every write path omitted
+// it, so the values crossed `to-ir` and vanished: the block converted exit 0 and re-imported with a
+// zeroed configuration table. Silent loss of real data, in the same class as the dropped array
+// index FI documented in the converter README — hence carried verbatim, `Path` as an opaque string
+// (this converter never has to understand array dimensioning to preserve it).
+//
 // Field-count watch, resolved 2026-08-05 (audit F-51): 14 fields, UNCHANGED since 2026-07-20 — the
 // same finding, and the same disposition, as PartNode in Model.cs (see the note there for the
-// reasoning). REVISIT TRIGGER: this record passing 16 fields.
+// reasoning). REVISIT TRIGGER: this record passing 16 fields. Now 15 (Subelements, 2026-08-12).
 public sealed record DbMember(
     string Name,
     string Datatype,
@@ -122,4 +136,14 @@ public sealed record DbMember(
     bool ExternalAccessible = true,
     bool ExternalVisible = true,
     bool ExternalWritable = true,
-    string? Comment = null);
+    string? Comment = null,
+    IReadOnlyList<DbSubelement>? Subelements = null)
+{
+    public IReadOnlyList<DbSubelement> Subelements { get; init; } = Subelements ?? Array.Empty<DbSubelement>();
+}
+
+/// <summary>
+/// One initialised element of an array member — see <see cref="DbMember.Subelements"/>.
+/// <paramref name="Path"/> is the source `Path` attribute verbatim (e.g. `"3"`, `"7,2"`).
+/// </summary>
+public sealed record DbSubelement(string Path, string StartValue);
