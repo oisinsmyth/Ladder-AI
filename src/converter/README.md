@@ -1910,6 +1910,70 @@ Two caveats measured on a real corpus rather than anticipated: compare **normali
 (a `--no-sidecar` disk copy differs from its export by hundreds of lines and is not drift), and line
 endings vary per file, so neither side may be assumed CRLF or LF.
 
+## `compare` — the confirm loop's judgement half (2026-08-12)
+
+`converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]`
+
+The owner's **invariance principle**, stated as a loop
+(`docs/notes/test-environment-build-plan.md`):
+
+```
+export ──► to-ir ──► to-xml ──► import ──► compile ──► export
+   └──────────────── compare THESE TWO ───────────────────┘
+```
+
+**Strictly stronger than `drift-check`.** `drift-check` never leaves the PC, so it can only ask
+whether the converter is self-consistent; this pair has been **through TIA**, so it also catches
+what TIA does on import and on compile. It is the check that would have caught the `MemoryLayout`
+hole `drift-check` called a MATCH: original export `Standard`, converter output silent, TIA applies
+its S7-1200 default, re-export `Optimized` — first ≠ last, caught.
+
+**The orchestration is not the work; the comparison is.** Built naively it misses the same hole:
+a byte-compare fires on every reassigned Part/Wire/Access UId (TIA reassigns them unprompted) and is
+unusable as a gate, while a normalizer that ignores too much is exactly how the hole survived. So
+this walks the **normalized** trees — the same ones `Normalizer.AreSemanticallyEquivalent` hands to
+`XNode.DeepEquals` — and reports **what** differs, not merely **that** something does. The path is a
+path in the normalized document, so it names the element TIA changed:
+
+```
+$ converter compare 01-first-export.xml 06-second-export.xml
+FIRST : 01-first-export.xml
+SECOND: 06-second-export.xml
+MEMORYLAYOUT: Standard -> Optimized  (compared — both documents declare one)
+VALUE-DIFFERS  : /Document/SW.Blocks.GlobalDB/AttributeList/MemoryLayout
+    first : Standard
+    second: Optimized
+VERDICT: DIFFERS — 1 difference(s).                                        # exit 1
+```
+
+A bare same/different verdict would send the operator to a manual XML diff through the very UId
+churn the Normalizer exists to absorb, which is the state this command replaces.
+
+**Exit 0 equivalent / 1 differs / 2 NOT COMPARED.** The third is the point (FI-44, "empty is not
+clean"): a file missing or unparseable, a document carrying no `SW.*` object at all, the same path
+passed twice, or a walk that localizes nothing while the Normalizer says the documents differ —
+each answers the question with *nothing*, and none of them may wear the face of a pass.
+
+### The MemoryLayout premise, enforced rather than assumed
+
+The Normalizer compares `MemoryLayout` as an **optional assertion**: both documents must declare one
+for a difference to be held against them. That weakness is deliberate and belongs to the *other*
+caller — every committed `.ir` predates the emit side, so a strict compare would report ~30 blocks
+drifted for the benign reason that the IR states no layout.
+
+In the confirm loop it cannot legitimately arise: **both inputs are TIA exports, and a TIA export
+always declares a layout**, so the loop gets full strictness for free. But "for free" is a premise,
+and a premise nobody checks is how this class of defect keeps recurring. So a one-sided declaration
+is **exit 2 with the reason**, not a warning — the same fail-closed shape as `to-xml`'s FI-71
+refusal, with `--allow-silent-layout` as the named escape for deliberately comparing converter
+output against an export.
+
+### It cannot orchestrate the loop, and that is FI-24
+
+The loop needs Portal; the converter is a pure in-process file transformer and never shells out or
+touches the environment. So the sequence lives in **`tools/confirm-roundtrip.ps1`** and only the
+judgement lives here. Same split as `drift-check --complete` + `openness-cli export-all`.
+
 ## `cross-check` — whole-project cross-block facts (2026-07-20, FI-22)
 
 `converter cross-check --project <ir-dir> [--json]`

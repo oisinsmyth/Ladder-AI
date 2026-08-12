@@ -22,6 +22,45 @@ with `-p:AutoApproveOpenness=false` or `LADDER_AUTO_APPROVE_OPENNESS=0`. It neve
 **The setup is per-machine, not per-repo.** On a machine where it has not been run, FI-61's
 "never rebuild unattended" rule still applies in full.
 
+## `confirm-roundtrip.ps1` — the confirm loop (2026-08-12)
+
+```
+export ──► to-ir ──► to-xml ──► import ──► compile ──► export
+   └──────────────── compare THESE TWO ───────────────────┘
+```
+
+The owner's invariance principle, run against one block. **Strictly stronger than
+`converter drift-check`**, which never leaves the PC: this goes through TIA, so it also catches what
+TIA does on import and compile — the class the `MemoryLayout` hole belonged to, where the DB
+round-tripped *equal and still wrong* and every PC-side check stayed green.
+
+The **judgement is not in this script**: `converter compare` carries it, in-process, because FI-24
+holds the converter to being a pure file transformer. This script owns Portal, the filesystem and
+the sequence, and nothing else.
+
+**It mutates**, and that governs the design:
+
+| Guard | Why |
+|---|---|
+| **Dry run by default**, stopping before the import and printing the exact commands it would run | The import writes, and is measurably not a no-op — the layout flip happens there |
+| `-Arm` requires `-IsScratchProject`, an explicit caller assertion | Nothing here guesses at "scratch". A project name is not evidence and a wrong guess writes to a real project |
+| `-Arm` requires `-Group`, copied verbatim from `openness-cli list` | A shortened guess fails with an error that does not point at the mismatch |
+| The first export is `Copy-Item`d, never load-and-saved, and its md5 is re-checked after every stage | A comparison against a reformatted reference is worthless |
+| Live-run content + a scratch dir inside the repo is refused | Live-run access is full; **retention** is what the boundary governs (docs/13) |
+| `Start-Process` with file redirection, never a pipe | `openness-cli` launches Portal as a child inheriting stdout; a pipe outlives the command and hangs |
+
+**It deliberately does NOT re-assert `block-layout --set Standard` after the import.** CLAUDE.md
+requires that in ordinary work because a re-import reverts a block to Optimized. Here that revert is
+the measurement, and repairing it would make the loop pass on the exact defect it exists to detect.
+
+Exit codes keep **a stage failure and a content change apart** — "the import failed" and "the
+content changed" are different findings: `0` invariant, `1` changed, `2` not compared, `3` a stage
+failed (the loop did not complete and says nothing about invariance), `4` refused before anything
+ran, `10` dry run (nothing was attempted, so nothing is proven).
+
+`-FirstExport <path>` reuses an export already in hand, which makes the dry run **fully offline** —
+no Portal contact at all.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

@@ -1,6 +1,7 @@
 ﻿using System.Xml.Linq;
 using Converter.CandidateScan;
 using Converter.Claims;
+using Converter.Compare;
 using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
@@ -95,6 +96,11 @@ internal static class Program
             return RunDriftCheck(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "compare")
+        {
+            return RunCompare(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "cross-check")
         {
             return RunCrossCheck(args[1..]);
@@ -143,6 +149,8 @@ internal static class Program
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
             Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
             Console.Error.WriteLine("                    --complete: the exports dir is the WHOLE picture (e.g. a fresh controller dump, FI-70), so a missing .xml OR a .xml with no .ir also fails");
+            Console.Error.WriteLine("       converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]   # the CONFIRM LOOP's judgement half: Normalizer-compare two SimaticML exports and report WHAT differs");
+            Console.Error.WriteLine("                    exit 0 equivalent / 1 differs / 2 NOT COMPARED (missing, unparseable, not a block export, same file twice, or a MemoryLayout premise that did not hold)");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
@@ -1378,6 +1386,81 @@ internal static class Program
         Console.WriteLine(json ? TargetScanOutputFormatter.FormatJson(report) : TargetScanOutputFormatter.FormatText(report));
 
         return report.HasCandidates ? 0 : 1;
+    }
+
+    // THE CONFIRM LOOP's judgement half (docs/notes/test-environment-build-plan.md, owner 2026-08-12).
+    // Pure and in-process: `tools/confirm-roundtrip.ps1` owns Portal and the orchestration, FI-24 owns
+    // the reason why.
+    //
+    // Exit codes follow the house convention already set by relation-reconcile/undriven-scan/
+    // candidate-scan: 0 clean, 1 a real finding, 2 NOTHING WAS JUDGED. The third is the one that
+    // matters here — a comparison that could not be made must never be indistinguishable from one
+    // that passed (FI-44, "empty is not clean").
+    internal static int RunCompare(string[] args)
+    {
+        var paths = new List<string>();
+        var json = false;
+        var allowSilentLayout = false;
+        var maxDifferences = 50;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--json":
+                    json = true;
+                    break;
+                case "--allow-silent-layout":
+                    allowSilentLayout = true;
+                    break;
+                case "--max-differences":
+                    var value = RequireValue(args, ref i, "--max-differences");
+                    if (value is null)
+                    {
+                        return ExitUnusable;
+                    }
+
+                    if (!int.TryParse(value, out maxDifferences) || maxDifferences < 0)
+                    {
+                        Console.Error.WriteLine("--max-differences requires a non-negative integer (0 = show all).");
+                        return ExitUnusable;
+                    }
+
+                    break;
+                default:
+                    if (args[i].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        Console.Error.WriteLine($"Unknown flag '{args[i]}' for 'compare'. Valid flags: --json, --max-differences <n>, --allow-silent-layout.");
+                        return ExitUnusable;
+                    }
+
+                    paths.Add(args[i]);
+                    break;
+            }
+        }
+
+        if (paths.Count != 2)
+        {
+            Console.Error.WriteLine("Usage: converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]");
+            Console.Error.WriteLine("  Compares two SimaticML documents for semantic equivalence (Normalizer) and reports WHAT differs.");
+            Console.Error.WriteLine("  Built for the confirm loop: the export BEFORE a round trip through TIA against the export AFTER it.");
+            Console.Error.WriteLine("  exit 0 equivalent / 1 differs / 2 not compared.");
+            return ExitUnusable;
+        }
+
+        var report = CompareRunner.Run(paths[0], paths[1], allowSilentLayout);
+        var text = json
+            ? CompareOutputFormatter.FormatJson(report)
+            : CompareOutputFormatter.FormatText(report, maxDifferences);
+
+        if (report.Status == CompareStatus.NotCompared)
+        {
+            Console.Error.WriteLine(text);
+            return ExitUnusable;
+        }
+
+        Console.WriteLine(text);
+        return report.Equivalent ? 0 : 1;
     }
 
     private static int RunCrossCheck(string[] args)

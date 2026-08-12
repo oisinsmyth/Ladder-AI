@@ -1,0 +1,119 @@
+using System.Text;
+using System.Text.Json;
+
+namespace Converter.Compare;
+
+// One record set, two renderers (the Digest/TagStatus/DriftCheck pattern).
+public static class CompareOutputFormatter
+{
+    private const int ValueDisplayLimit = 160;
+
+    public static string FormatText(CompareReport report, int maxDifferences)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append("FIRST : ").Append(report.FirstPath).Append('\n');
+        sb.Append("SECOND: ").Append(report.SecondPath).Append('\n');
+
+        if (report.Status == CompareStatus.NotCompared)
+        {
+            sb.Append("NOT COMPARED: ").Append(report.Detail).Append('\n');
+            sb.Append("VERDICT: NOT COMPARED — this is not a pass. Nothing was proven about the round trip.\n");
+            return sb.ToString().TrimEnd('\n', '\r');
+        }
+
+        sb.Append("MEMORYLAYOUT: ")
+            .Append(Describe(report.MemoryLayout.First)).Append(" -> ").Append(Describe(report.MemoryLayout.Second))
+            .Append(report.MemoryLayout.Compared
+                ? "  (compared — both documents declare one)"
+                : "  (NOT compared — neither document declares one)")
+            .Append('\n');
+
+        if (report.Status == CompareStatus.Equivalent)
+        {
+            sb.Append("VERDICT: EQUIVALENT — semantically identical after normalization.\n");
+            return sb.ToString().TrimEnd('\n', '\r');
+        }
+
+        var shown = maxDifferences <= 0
+            ? report.Differences
+            : report.Differences.Take(maxDifferences).ToList();
+
+        foreach (var difference in shown)
+        {
+            sb.Append(Label(difference.Kind)).Append(": ").Append(difference.Path).Append('\n');
+            if (difference.First is not null)
+            {
+                sb.Append("    first : ").Append(Truncate(difference.First)).Append('\n');
+            }
+
+            if (difference.Second is not null)
+            {
+                sb.Append("    second: ").Append(Truncate(difference.Second)).Append('\n');
+            }
+        }
+
+        if (shown.Count < report.Differences.Count)
+        {
+            sb.Append("... ").Append(report.Differences.Count - shown.Count)
+                .Append(" further difference(s) not shown (--max-differences 0 for all)\n");
+        }
+
+        sb.Append("VERDICT: DIFFERS — ").Append(report.Differences.Count).Append(" difference(s).\n");
+        sb.Append("NOTE: paths are in the NORMALIZED document. A UId value shown above is a content-derived key\n")
+            .Append("      the Normalizer substituted for the file's own number — TIA reassigns raw UIds unprompted,\n")
+            .Append("      so the number in the file identifies nothing across two exports.\n");
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatJson(CompareReport report)
+    {
+        var payload = new
+        {
+            first = report.FirstPath,
+            second = report.SecondPath,
+            status = report.Status.ToString(),
+            detail = report.Detail,
+            memoryLayout = new
+            {
+                first = report.MemoryLayout.First,
+                second = report.MemoryLayout.Second,
+                compared = report.MemoryLayout.Compared,
+            },
+            differenceCount = report.Differences.Count,
+            differences = report.Differences.Select(d => new
+            {
+                kind = d.Kind.ToString(),
+                path = d.Path,
+                first = d.First,
+                second = d.Second,
+            }),
+            equivalent = report.Equivalent,
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string Describe(string? layout) => layout ?? "(none declared)";
+
+    private static string Label(DifferenceKind kind) => kind switch
+    {
+        DifferenceKind.ElementMissing => "ELEMENT-MISSING (in first, gone from second)",
+        DifferenceKind.ElementAdded => "ELEMENT-ADDED   (not in first, present in second)",
+        DifferenceKind.ValueDiffers => "VALUE-DIFFERS  ",
+        DifferenceKind.AttributeMissing => "ATTR-MISSING   ",
+        DifferenceKind.AttributeAdded => "ATTR-ADDED     ",
+        DifferenceKind.AttributeDiffers => "ATTR-DIFFERS   ",
+        DifferenceKind.RootElementDiffers => "ROOT-DIFFERS   ",
+        _ => kind.ToString(),
+    };
+
+    private static string Truncate(string value)
+    {
+        var flattened = value.Replace("\r", string.Empty).Replace('\n', ' ');
+        return flattened.Length <= ValueDisplayLimit
+            ? flattened
+            : flattened[..ValueDisplayLimit] + "… (+" + (flattened.Length - ValueDisplayLimit) + " chars)";
+    }
+}
