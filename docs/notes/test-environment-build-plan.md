@@ -296,6 +296,46 @@ is no longer an acceptable resting place for anything that appears in deliverabl
     CLAUDE.md line — since it governs converter scope permanently and well beyond the harness.
     Flagged for the owner rather than done unilaterally. ***
 
+### 🔴 OPEN DECISION — `Normalizer` MAY BE BLIND TO A WIRE-DIRECTION FLIP
+
+Found 2026-08-12 while building `compare`, and it is the `MemoryLayout` class of defect one level
+down. Two facts, each measured independently, that had not been put together:
+
+  1. `Normalizer.Strip` sorts a `<Wire>`'s **own endpoints** by content
+     (`element.Name.LocalName is "Wires" or "Parts" or "Wire"`), justified by a 2026-07-14
+     measurement about multi-endpoint fan-out ordering.
+  2. On a real TIA export, *** PORT DIRECTION IS CARRIED ONLY BY ENDPOINT ORDER *** —
+     `<IdentCon>` first = input-like, `<NameCon>` first = output. There is no attribute, no child
+     and no other marker.
+
+*** SO SORTING THE ENDPOINTS DESTROYS THE ONLY SIGNAL THAT ENCODES DIRECTION *** — an input wire
+and an output wire on the same port name normalize to the same thing. And because `compare`,
+`drift-check` and the `--no-sidecar` derivability check ALL run through the Normalizer, *** ALL
+THREE INHERIT THE BLINDNESS. ***
+
+**Exposure, stated honestly:** in the ordinary case direction still survives via the `<NameCon>`'s
+`Name` attribute, because a given port is conventionally always an input or always an output. The
+gap is any port where the same name can be both — which is exactly the InOut case, since wire
+order *** cannot distinguish an input from an InOut either. ***
+
+  ➜ **Likely fix, and it is narrow:** sort only the DESTINATION endpoints and pin the FIRST one.
+    That keeps the 2026-07-14 fan-out stability the sort was added for, and restores direction.
+  ➜ *** NOT DONE — it needs a decision and the file was mid-edit by another agent. *** Whoever
+    takes it must re-read the 2026-07-14 measurement first; the sort was added on evidence and
+    the fix must not discard what that evidence was protecting.
+
+### ⚠️ POWERSHELL 5.1 WILL MISREAD AN EM DASH IN A `.ps1`, AND THE ERROR POINTS SOMEWHERE ELSE
+
+Measured 2026-08-12. A BOM-less `.ps1` is read as **ANSI**, so a UTF-8 em dash decodes to `”`
+(U+201D) — *** which the parser treats as a QUOTE DELIMITER. *** The script failed with an error
+pointing at an unrelated line **a hundred lines away** from the actual character.
+
+This matters here because this project's prose uses em dashes constantly, so a script written in
+the house voice is a live hazard. *** KEEP `.ps1` FILES ASCII-ONLY AND CRLF ***, matching
+`tools/openness-approve-*.ps1`, and put a comment in the file saying why so nobody "improves" the
+punctuation later. Belongs in a more general hazards note than this build plan — recorded here so
+it is not lost.
+
 ### 🔬 IR discovery run, 2026-08-12 — three findings, one of them a live hazard
 
 The owner imported blocks and deliberately left them **uncompiled** so they could be identified
