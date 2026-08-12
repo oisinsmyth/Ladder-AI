@@ -55,6 +55,15 @@ public enum DifferenceKind
 
     /// <summary>The two roots are not even the same element — nothing below them is comparable.</summary>
     RootElementDiffers,
+
+    /// <summary>
+    /// Two <c>&lt;Wire&gt;</c> elements carry the SAME endpoints and differ only in which one is
+    /// FIRST — i.e. the producer/consumer roles are reversed. A wire's first endpoint is its
+    /// producer and nothing else in a SimaticML document encodes direction (Normalizer, 2026-08-12),
+    /// so this is a direction reversal, NOT a rewiring — which is what the per-attribute output
+    /// made it look like. See <see cref="CompareRunner"/> for why the classification is narrow.
+    /// </summary>
+    WireDirectionDiffers,
 }
 
 /// <summary>

@@ -141,6 +141,16 @@ public static class CompareRunner
         {
             var mine = firstChildren.Where(e => e.Name == name).ToList();
             var theirs = secondChildren.Where(e => e.Name == name).ToList();
+
+            // A wire reversal survives normalization but does not survive it LEGIBLY under the
+            // positional pairing below — see TryCompareWiresAsDirection. Only that shape is
+            // intercepted; everything else falls through unchanged.
+            if (first.Name.LocalName == "Wires" && name.LocalName == "Wire"
+                && TryCompareWiresAsDirection(mine, theirs, path, differences))
+            {
+                continue;
+            }
+
             var count = Math.Max(mine.Count, theirs.Count);
             var indexed = count > 1;
 
@@ -196,6 +206,191 @@ public static class CompareRunner
                 differences.Add(new CompareDifference(DifferenceKind.AttributeDiffers, attributePath, firstValue, secondValue));
             }
         }
+    }
+
+    // ------------------------------------------------------------ wires: direction awareness
+
+    /// <summary>
+    /// Reports a producer/consumer REVERSAL as one finding that says so, instead of the
+    /// per-attribute noise the generic walk produces for it. Returns false — changing nothing —
+    /// whenever the difference is not confidently a pure reversal, leaving the generic walk to
+    /// report it exactly as before.
+    ///
+    /// <para><b>Why the generic walk mis-reads this.</b> A <c>&lt;Wire&gt;</c>'s FIRST endpoint is
+    /// its producer and the rest are its consumers; nothing else in a SimaticML document encodes
+    /// direction (2026-08-12: 106 <c>(part, port)</c> pairs across 34 real exports, zero appearing
+    /// in both slots). The Normalizer therefore pins endpoint 0 and sorts only the tail, so a
+    /// reversal SURVIVES to this walk. But the Normalizer also sorts <c>&lt;Wires&gt;</c> BY each
+    /// wire's rendered content — and a reversal changes that content, so the flipped wire moves to
+    /// a different index. The positional pairing then compares two DIFFERENT wires against each
+    /// other. Measured on a single flipped CALL-output wire: FOUR <c>ATTR-DIFFERS</c> lines in
+    /// which two wires appear to swap their port names and their operands. Every line of that is
+    /// true and a reader can act on it, but it reads like a REWIRING — a materially different
+    /// defect to go hunting for than a direction reversal.</para>
+    ///
+    /// <para><b>Why the classification is all-or-nothing.</b> It fires only when the two containers
+    /// hold the same wires AS ENDPOINT SETS and differ solely in which endpoint is first. Any other
+    /// edit — an endpoint changed, a wire added or removed, an attribute retyped — fails the
+    /// multiset test and falls straight through. That is deliberate and it is the whole safety
+    /// argument: detection is never weakened to improve the message, because an unexplained real
+    /// difference beats a confidently mislabelled one. The cost is that a reversal arriving
+    /// ALONGSIDE another change in the same network still reports as per-attribute noise.</para>
+    ///
+    /// <para>Given equal endpoint multisets, a surviving order difference can only be at endpoint 0
+    /// — the tail is already sorted — so "same set, different order" IS "different producer". That
+    /// is asserted per pair rather than assumed: a pair that differs while its producers match is a
+    /// shape this rule does not describe, and abandons the classification for the whole
+    /// container.</para>
+    /// </summary>
+    private static bool TryCompareWiresAsDirection(
+        List<XElement> mine, List<XElement> theirs, string path, List<CompareDifference> differences)
+    {
+        if (mine.Count == 0 || mine.Count != theirs.Count)
+        {
+            return false;
+        }
+
+        var mineByKey = mine.GroupBy(UnorderedWireKey).ToDictionary(g => g.Key, g => g.ToList());
+        var theirsByKey = theirs.GroupBy(UnorderedWireKey).ToDictionary(g => g.Key, g => g.ToList());
+
+        if (mineByKey.Count != theirsByKey.Count
+            || mineByKey.Any(kv => !theirsByKey.TryGetValue(kv.Key, out var other) || other.Count != kv.Value.Count))
+        {
+            // Not the same wires as endpoint sets, so the difference is not purely one of direction.
+            return false;
+        }
+
+        // XElement does not override Equals/GetHashCode, so this keys on reference identity — which
+        // is what is wanted: two wires can render identically and still be distinct elements.
+        var indexOf = new Dictionary<XElement, int>();
+        for (var i = 0; i < mine.Count; i++)
+        {
+            indexOf[mine[i]] = i;
+        }
+
+        var found = new List<(int Index, CompareDifference Difference)>();
+
+        foreach (var (key, mineGroup) in mineByKey)
+        {
+            var theirsGroup = theirsByKey[key];
+            for (var i = 0; i < mineGroup.Count; i++)
+            {
+                var before = mineGroup[i];
+                var after = theirsGroup[i];
+                if (Render(before) == Render(after))
+                {
+                    continue;
+                }
+
+                var producerBefore = before.Elements().FirstOrDefault();
+                var producerAfter = after.Elements().FirstOrDefault();
+                if (producerBefore is null || producerAfter is null
+                    || Render(producerBefore) == Render(producerAfter))
+                {
+                    return false;
+                }
+
+                var index = indexOf[before];
+                found.Add((index, new CompareDifference(
+                    DifferenceKind.WireDirectionDiffers,
+                    path + "/Wire" + (mine.Count > 1 ? $"[{index + 1}]" : string.Empty),
+                    DescribeWire(before),
+                    DescribeWire(after))));
+            }
+        }
+
+        if (found.Count == 0)
+        {
+            // Equal multisets and every pair identical: the containers match. Fall through so the
+            // ordinary walk says so itself rather than this returning a pass on its own authority.
+            return false;
+        }
+
+        differences.AddRange(found.OrderBy(f => f.Index).Select(f => f.Difference));
+        return true;
+    }
+
+    /// <summary>The wire's own attributes plus its endpoint SET — identical for a wire and its reversal.</summary>
+    private static string UnorderedWireKey(XElement wire) =>
+        "{" + string.Join(",", wire.Attributes()
+                  .Select(a => a.Name.LocalName + "=" + a.Value)
+                  .OrderBy(s => s, StringComparer.Ordinal)) + "}["
+            + string.Join("|", wire.Elements().Select(Render).OrderBy(s => s, StringComparer.Ordinal)) + "]";
+
+    private static string DescribeWire(XElement wire)
+    {
+        var endpoints = wire.Elements().ToList();
+        if (endpoints.Count == 0)
+        {
+            return "(no endpoints)";
+        }
+
+        var producer = DescribeEndpoint(endpoints[0]);
+        var consumers = endpoints.Skip(1).Select(DescribeEndpoint).ToList();
+        return consumers.Count == 0
+            ? producer + " drives nothing"
+            : producer + " drives " + string.Join(", ", consumers);
+    }
+
+    /// <summary>
+    /// A human-readable endpoint. Deliberately does NOT print the normalized <c>UId</c>: for an
+    /// <c>IdentCon</c> it is the Access content key (which embeds a whole <c>&lt;Symbol&gt;</c>
+    /// element) and for a <c>NameCon</c> it is a topology hash — neither reads as anything to an
+    /// operator, and printing them is what made the per-attribute output unreadable in the first
+    /// place. The port name and the operand path are what actually locate the wire.
+    /// </summary>
+    private static string DescribeEndpoint(XElement endpoint) => endpoint.Name.LocalName switch
+    {
+        "Powerrail" => "the power rail",
+        "OpenCon" => "an open connector",
+        "NameCon" => (string?)endpoint.Attribute("Name") is string port && port.Length > 0
+            ? $"port '{port}'"
+            : "an unnamed port",
+        "IdentCon" => DescribeAccessKey((string?)endpoint.Attribute("UId")),
+        _ => endpoint.Name.LocalName,
+    };
+
+    /// <summary>
+    /// Unpacks a Normalizer Access content key — <c>const:&lt;value&gt;</c> or
+    /// <c>tag:&lt;scope&gt;:&lt;Symbol xml&gt;</c> — back into something an operator recognises.
+    /// Any shape it does not recognise degrades to "an operand" rather than guessing.
+    /// </summary>
+    private static string DescribeAccessKey(string? key)
+    {
+        if (key is null)
+        {
+            return "an operand";
+        }
+
+        if (key.StartsWith("const:", StringComparison.Ordinal))
+        {
+            return $"the literal {key["const:".Length..]}";
+        }
+
+        var parts = key.Split(':', 3);
+        if (parts.Length == 3 && parts[0] == "tag")
+        {
+            try
+            {
+                var components = XElement.Parse(parts[2])
+                    .Elements()
+                    .Where(e => e.Name.LocalName == "Component")
+                    .Select(e => (string?)e.Attribute("Name"))
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .ToList();
+
+                if (components.Count > 0)
+                {
+                    return $"operand '{string.Join(".", components)}'";
+                }
+            }
+            catch (XmlException)
+            {
+                // Fall through — an unparseable key is reported as an unnamed operand, never guessed at.
+            }
+        }
+
+        return "an operand";
     }
 
     private static string Render(XElement element) => element.ToString(SaveOptions.DisableFormatting);

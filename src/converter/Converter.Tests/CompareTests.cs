@@ -427,7 +427,248 @@ public class CompareTests : IDisposable
         Assert.DoesNotContain("not shown", CompareOutputFormatter.FormatText(report, maxDifferences: 0));
     }
 
+    // ------------------------------------------------------- wire direction (producer/consumer)
+
+    /// <summary>
+    /// The defect these tests exist for, measured 2026-08-12 on a real export: flipping ONE
+    /// CALL-output wire produced FOUR <c>ATTR-DIFFERS</c> lines in which two wires appeared to swap
+    /// their port names and their operands. Detection was correct — the reversal survives the
+    /// Normalizer's pinned endpoint 0 — but the report read like a REWIRING, a materially different
+    /// defect to go hunting for than a direction reversal.
+    ///
+    /// The CALL-output case is the one that matters most: a callee's parameter names are
+    /// block-author-chosen, so unlike an instruction port (<c>in</c>/<c>out</c>) they carry no
+    /// direction convention of their own, and wire order is genuinely the only thing that says
+    /// which way a parameter runs.
+    /// </summary>
+    [Fact]
+    public void FlippedCallOutputWire_IsReportedAsADirectionReversal()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        FlipWireEndpoints(second, portName: "Output");
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        Assert.Equal(CompareStatus.Differs, report.Status);
+        var difference = Assert.Single(report.Differences);
+        Assert.Equal(DifferenceKind.WireDirectionDiffers, difference.Kind);
+        Assert.EndsWith("/FlgNet/Wires/Wire[2]", difference.Path, StringComparison.Ordinal);
+
+        // The two renderings must state the ROLES, not merely the endpoints — an operator reading
+        // only these two lines has to be able to tell a reversal from a rewiring.
+        Assert.Equal("port 'Output' drives operand 'RealOutput'", difference.First);
+        Assert.Equal("operand 'RealOutput' drives port 'Output'", difference.Second);
+    }
+
+    /// <summary>The finding is useless if the text output does not say what it means.</summary>
+    [Fact]
+    public void FlippedWire_TextOutputNamesTheReversal()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        FlipWireEndpoints(second, portName: "Output");
+
+        var text = CompareOutputFormatter.FormatText(
+            CompareRunner.Run(Write("first.xml", first), Write("second.xml", second)), maxDifferences: 0);
+
+        Assert.Contains("WIRE-DIRECTION", text);
+        Assert.Contains("REVERSED", text);
+        Assert.Contains("port 'Output' drives operand 'RealOutput'", text);
+        Assert.DoesNotContain("ATTR-DIFFERS", text);
+    }
+
+    /// <summary>
+    /// An INPUT wire reverses just as legibly — the producer side is the operand, not the port, so
+    /// this proves the description is derived from position rather than from which endpoint kind
+    /// happens to be an <c>IdentCon</c>.
+    /// </summary>
+    [Fact]
+    public void FlippedCallInputWire_IsReportedAsADirectionReversal()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        FlipWireEndpoints(second, portName: "Input");
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        var difference = Assert.Single(report.Differences);
+        Assert.Equal(DifferenceKind.WireDirectionDiffers, difference.Kind);
+        Assert.Equal("operand 'RealProcess.RealTag' drives port 'Input'", difference.First);
+        Assert.Equal("port 'Input' drives operand 'RealProcess.RealTag'", difference.Second);
+    }
+
+    /// <summary>
+    /// *** THE GUARD THAT MATTERS: detection is never traded away for a better message. *** An
+    /// ordinary attribute difference inside a <c>&lt;Wires&gt;</c> container — here a renamed port,
+    /// which is a rewiring and NOT a reversal — must still be reported exactly as before. The
+    /// direction classifier is all-or-nothing precisely so that this case cannot be mislabelled.
+    /// </summary>
+    [Fact]
+    public void RenamedPortInAWireContainer_StillReportsPerAttribute()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        second.Descendants().First(e => e.Name.LocalName == "NameCon"
+                                        && (string?)e.Attribute("Name") == "Output")
+            .SetAttributeValue("Name", "Result");
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        Assert.Equal(CompareStatus.Differs, report.Status);
+        Assert.DoesNotContain(report.Differences, d => d.Kind == DifferenceKind.WireDirectionDiffers);
+        Assert.Contains(report.Differences, d => d.Kind == DifferenceKind.AttributeDiffers
+                                                 && d.Path.EndsWith("/NameCon/@Name", StringComparison.Ordinal)
+                                                 && d is { First: "Output", Second: "Result" });
+    }
+
+    /// <summary>
+    /// A wire REMOVED from the container is a real difference and must survive as one. The
+    /// classifier's multiset test fails here, so the generic walk reports it — the fallback is the
+    /// safety argument, not a leftover.
+    /// </summary>
+    [Fact]
+    public void DeletedWire_StillReportsThroughTheGenericWalk()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        second.Descendants().First(e => e.Name.LocalName == "Wire"
+                                        && e.Elements().Any(c => (string?)c.Attribute("Name") == "Output"))
+            .Remove();
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        Assert.Equal(CompareStatus.Differs, report.Status);
+        Assert.DoesNotContain(report.Differences, d => d.Kind == DifferenceKind.WireDirectionDiffers);
+        Assert.NotEmpty(report.Differences);
+    }
+
+    /// <summary>
+    /// A reversal arriving ALONGSIDE another edit in the same container falls back to the
+    /// per-attribute output. That is the deliberate cost of the all-or-nothing rule, asserted here
+    /// so the limit is a decision on record rather than a surprise — and the difference is still
+    /// DETECTED either way, which is the property that must not regress.
+    /// </summary>
+    [Fact]
+    public void ReversalCombinedWithAnotherEdit_FallsBackRatherThanGuessing()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        FlipWireEndpoints(second, portName: "Output");
+        second.Descendants().First(e => e.Name.LocalName == "NameCon"
+                                        && (string?)e.Attribute("Name") == "Input")
+            .SetAttributeValue("Name", "Feed");
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        Assert.Equal(CompareStatus.Differs, report.Status);
+        Assert.DoesNotContain(report.Differences, d => d.Kind == DifferenceKind.WireDirectionDiffers);
+        Assert.NotEmpty(report.Differences);
+    }
+
+    /// <summary>
+    /// The classifier must not INVENT findings either. Reordering a fanned-out wire's CONSUMERS
+    /// changes nothing electrically, the Normalizer sorts that tail away, and the verdict stays
+    /// EQUIVALENT — the 2026-07-14 fan-out measurement the tail sort exists for.
+    /// </summary>
+    [Fact]
+    public void ReorderedConsumersOnAFannedOutWire_StayEquivalent()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+
+        // Give the rail wire a second consumer, so it has a tail worth permuting.
+        var railWire = first.Descendants().First(e => e.Name.LocalName == "Wire"
+                                                     && e.Elements().Any(c => c.Name.LocalName == "Powerrail"));
+        var ns = railWire.Name.Namespace;
+        railWire.Add(new XElement(ns + "NameCon", new XAttribute("UId", "24"), new XAttribute("Name", "en2")));
+
+        var second = XDocument.Parse(first.ToString());
+        var secondRail = second.Descendants().First(e => e.Name.LocalName == "Wire"
+                                                        && e.Elements().Any(c => c.Name.LocalName == "Powerrail"));
+        var tail = secondRail.Elements().Skip(1).ToList();
+        foreach (var endpoint in tail)
+        {
+            endpoint.Remove();
+        }
+
+        foreach (var endpoint in Enumerable.Reverse(tail))
+        {
+            secondRail.Add(endpoint);
+        }
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        Assert.Equal(CompareStatus.Equivalent, report.Status);
+        Assert.Empty(report.Differences);
+    }
+
+    /// <summary>
+    /// Reversing a fanned-out wire — swapping its producer with one of several consumers — is still
+    /// a reversal, and the description must show the whole consumer list so the reader can see what
+    /// the wire became.
+    /// </summary>
+    [Fact]
+    public void ReversedFannedOutWire_DescribesEveryConsumer()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var wire = first.Descendants().First(e => e.Name.LocalName == "Wire"
+                                                 && e.Elements().Any(c => (string?)c.Attribute("Name") == "Output"));
+        var ns = wire.Name.Namespace;
+        wire.Add(new XElement(ns + "NameCon", new XAttribute("UId", "24"), new XAttribute("Name", "Spare")));
+
+        var second = XDocument.Parse(first.ToString());
+        FlipWireEndpoints(second, portName: "Output");
+
+        var report = CompareRunner.Run(Write("first.xml", first), Write("second.xml", second));
+
+        var difference = Assert.Single(report.Differences);
+        Assert.Equal(DifferenceKind.WireDirectionDiffers, difference.Kind);
+        Assert.StartsWith("port 'Output' drives ", difference.First, StringComparison.Ordinal);
+        Assert.Contains("operand 'RealOutput'", difference.First);
+        Assert.StartsWith("operand 'RealOutput' drives ", difference.Second, StringComparison.Ordinal);
+        Assert.Contains("port 'Output'", difference.Second);
+    }
+
+    /// <summary>The JSON renderer must carry the kind too — it is the machine-readable half.</summary>
+    [Fact]
+    public void FlippedWire_JsonCarriesTheDirectionKind()
+    {
+        var first = Fixture("SanitizeSourceWithCall.xml");
+        var second = Fixture("SanitizeSourceWithCall.xml");
+        FlipWireEndpoints(second, portName: "Output");
+
+        var json = JsonDocument.Parse(CompareOutputFormatter.FormatJson(
+            CompareRunner.Run(Write("first.xml", first), Write("second.xml", second))));
+
+        var difference = json.RootElement.GetProperty("differences").EnumerateArray().Single();
+        Assert.Equal("WireDirectionDiffers", difference.GetProperty("kind").GetString());
+    }
+
     // ------------------------------------------------------------------------------- helpers
+
+    /// <summary>
+    /// Swaps the PRODUCER of the wire carrying <paramref name="portName"/> with its first consumer
+    /// — a genuine direction reversal that preserves the endpoint set exactly, and the only edit in
+    /// the document.
+    /// </summary>
+    private static void FlipWireEndpoints(XDocument document, string portName)
+    {
+        var wire = document.Descendants().First(e => e.Name.LocalName == "Wire"
+                                                    && e.Elements().Any(c => (string?)c.Attribute("Name") == portName));
+        var endpoints = wire.Elements().ToList();
+        Assert.True(endpoints.Count >= 2, "a wire needs two endpoints before it can be reversed");
+
+        foreach (var endpoint in endpoints)
+        {
+            endpoint.Remove();
+        }
+
+        (endpoints[0], endpoints[1]) = (endpoints[1], endpoints[0]);
+        foreach (var endpoint in endpoints)
+        {
+            wire.Add(endpoint);
+        }
+    }
 
     /// <summary>
     /// Reproduces what TIA does on an import/compile/export cycle: every volatile identifier gets a

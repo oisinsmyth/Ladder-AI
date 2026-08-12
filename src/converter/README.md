@@ -1973,6 +1973,56 @@ is **exit 2 with the reason**, not a warning — the same fail-closed shape as `
 refusal, with `--allow-silent-layout` as the named escape for deliberately comparing converter
 output against an export.
 
+### Direction awareness: a reversed wire says so (2026-08-12)
+
+A `<Wire>`'s **first** endpoint is its **producer** and the rest are its **consumers**; nothing else
+in a SimaticML document encodes direction (106 `(part, port)` pairs across 34 real exports, **zero**
+appearing in both slots). The Normalizer therefore pins endpoint 0 and sorts only the tail, so a
+reversal **survives** to this walk — but it did not survive *legibly*. The Normalizer also sorts
+`<Wires>` **by** each wire's rendered content, and a reversal changes that content, so the flipped
+wire moves to a different index and the positional pairing compares two **different** wires:
+
+```
+# BEFORE — one flipped CALL-output wire, measured
+ATTR-DIFFERS   : …/Wires/Wire[2]/IdentCon/@UId       first: …ScaleMax…      second: …ScaledValue…
+ATTR-DIFFERS   : …/Wires/Wire[2]/NameCon/@Name       first: ScaleFactor     second: ScaledResult
+ATTR-DIFFERS   : …/Wires/Wire[3]/NameCon/@Name       first: ScaledResult    second: ScaleFactor
+ATTR-DIFFERS   : …/Wires/Wire[3]/IdentCon/@UId       first: …ScaledValue…   second: …ScaleMax…
+VERDICT: DIFFERS — 4 difference(s).
+```
+
+Every line of that is true and an operator can act on it — but it reads like a **rewiring**, which is
+a materially different defect to go hunting for than a **direction reversal**. Now:
+
+```
+# AFTER — the same flip
+WIRE-DIRECTION : …/FlgNet/Wires/Wire[3]
+    the SAME endpoints with the producer and consumer roles REVERSED. A wire's FIRST
+    endpoint is its producer; nothing else in the document encodes direction.
+    first : port 'ScaledResult' drives operand 'ScaledValue'
+    second: operand 'ScaledValue' drives port 'ScaledResult'
+VERDICT: DIFFERS — 1 difference(s).
+```
+
+The endpoint descriptions deliberately **omit the normalized `UId`** — for an `IdentCon` it is the
+Access content key (a whole embedded `<Symbol>` element) and for a `NameCon` it is a topology hash.
+Neither reads as anything, and printing them is what made the old output unreadable.
+
+**The classification is all-or-nothing, and that is the safety argument.** It fires only when the two
+`<Wires>` containers hold the same wires **as endpoint sets** and differ solely in which endpoint is
+first — given equal endpoint multisets a surviving order difference can only be at endpoint 0, since
+the tail is already sorted, so *same set, different order* **is** *different producer*. That is
+asserted per pair rather than assumed: a pair that differs while its producers match abandons the
+classification for the whole container. Any other edit — an endpoint changed, a wire added or
+removed, an attribute retyped — fails the multiset test and falls straight through to the
+per-attribute walk, **unchanged**. *** Detection is never weakened to improve the message: an
+unexplained real difference beats a confidently mislabelled one. *** The known cost, asserted as a
+test rather than left as a surprise: a reversal arriving **alongside** another edit in the same
+network still reports as per-attribute noise.
+
+Nine tests, negative-tested by disabling the interception (the five direction tests redden; the
+fallback tests stay green, which is the point of having both).
+
 ### It cannot orchestrate the loop, and that is FI-24
 
 The loop needs Portal; the converter is a pure in-process file transformer and never shells out or

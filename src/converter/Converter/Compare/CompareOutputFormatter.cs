@@ -51,6 +51,15 @@ public static class CompareOutputFormatter
         foreach (var difference in shown)
         {
             sb.Append(Label(difference.Kind)).Append(": ").Append(difference.Path).Append('\n');
+
+            // Without this line the two renderings below look like a rewiring rather than a
+            // reversal — which is the whole reason this difference kind exists.
+            if (difference.Kind == DifferenceKind.WireDirectionDiffers)
+            {
+                sb.Append("    the SAME endpoints with the producer and consumer roles REVERSED. A wire's FIRST\n")
+                  .Append("    endpoint is its producer; nothing else in the document encodes direction.\n");
+            }
+
             if (difference.First is not null)
             {
                 sb.Append("    first : ").Append(Truncate(difference.First)).Append('\n');
@@ -115,6 +124,7 @@ public static class CompareOutputFormatter
         DifferenceKind.AttributeAdded => "ATTR-ADDED     ",
         DifferenceKind.AttributeDiffers => "ATTR-DIFFERS   ",
         DifferenceKind.RootElementDiffers => "ROOT-DIFFERS   ",
+        DifferenceKind.WireDirectionDiffers => "WIRE-DIRECTION ",
         _ => kind.ToString(),
     };
 
