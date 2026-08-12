@@ -2043,14 +2043,17 @@ conversation.
                               new machinery; one new ordering constraint; one residual that
                               does not go away
     X-J  unclaimed numbers    a reserved range for harness-generated objects
-    X-K  CPU stop vs link     CLOSEABLE, not external — Sharp7's `PlcStatus()` answers in STOP.
-                              Verify it inside the next disruptive download, which also
-                              supplies R8's outstanding confirmation
+    X-K  CPU stop vs link     CLOSEABLE, not external. *** RUN HALF MEASURED 2026-08-12 [M]: ***
+                              `PlcGetStatus` returned Run from the rig, and PUT/GET turned out
+                              NOT to be a blocker, so the closer costs a function call rather
+                              than a hardware-config change. STOP half rides the next
+                              authorised download, which also supplies R8's confirmation.
+                              KEY ON `Status == 8` (Run) — Stop is the decoder's catch-all
 
 *** WHAT REMAINS IS VERIFICATION AND BUILD, NOT DESIGN. *** Four things must be MEASURED before
 the parts resting on them are trusted: `MB_SERVER`'s single-scan atomicity (X-A), the `%MW`
-ceiling (X-A), a delegate throw leaving the CPU untouched (G4, D32), and `PlcStatus()` in STOP
-(X-K). Two of those fold into one experiment.
+ceiling (X-A), a delegate throw leaving the CPU untouched (G4, D32), and `PlcGetStatus` reading
+STOP (X-K, whose RUN half is now measured). Two of those fold into one experiment.
 
 *** NUMBERED X- RATHER THAN G- DELIBERATELY (2026-08-12). *** `G` was already carrying two
 unrelated series — the SEVEN DESIGN GAPS G-1..G-7 (all closed; §13's title refers to G-7) and
@@ -2485,14 +2488,54 @@ claim that this gap is "external, not ours to close" was drawn from the Openness
 over-generalised from it: OPENNESS cannot report operating mode, which says nothing about the
 other protocols this project already speaks.
 
-  *** 1. SHARP7's `PlcStatus()` OVER CLASSIC S7comm — THE CLEAN ANSWER. *** It returns
-     `S7CpuStatusRun` / `S7CpuStatusStop` directly. Classic S7comm is served by the CPU's
-     communication firmware, NOT by the user program, so *** IT ANSWERS WHILE THE CPU IS IN
-     STOP *** — which is also why TIA can go online to a stopped CPU. Sharp7 is already in this
-     project's toolchain for standard-access DB reads, so this is a call, not a component.
-     The optimized-block invisibility that constrains Sharp7 elsewhere does not apply: this is
-     a system function, not a DB read.
-     [I — high confidence in the mechanism, NOT yet exercised against this rig. Verify.]
+  *** 1. SHARP7's `PlcGetStatus(ref int)` OVER CLASSIC S7comm — MEASURED AGAINST THE RIG
+     2026-08-12 [M]. IT WORKS. *** Classic S7comm is served by the CPU's communication
+     firmware, not by the user program, which is why TIA can go online to a stopped CPU. The
+     optimized-block invisibility that constrains Sharp7 elsewhere does not apply — this is a
+     system (SZL) request, not a DB read.
+
+        method    : `Sharp7.S7Client.PlcGetStatus(Int32& Status)`   Sharp7 1.1.82.0
+        constants : `Sharp7.S7Consts.S7CpuStatusUnknown = 0`
+                    `Sharp7.S7Consts.S7CpuStatusStop    = 4`
+                    `Sharp7.S7Consts.S7CpuStatusRun     = 8`
+        measured  : rack 0 / slot 1, returned 8 = Run, twice, at 79 and 94 ms — matching the
+                    SZL 0x0011 order-code round trip to within noise, so *** THE ANSWER CAME
+                    FROM THE CPU AND WAS NOT RESOLVED LOCALLY. ***
+
+     [CORRECTED: this section previously named `PlcStatus()` with the constants on `S7Client`.
+      Neither exists. The method takes the status by reference and returns an rc; the constants
+      live on `S7Consts`.]
+
+     *** THE DECODE DETAIL THAT CHANGES HOW THIS MUST BE USED — READ OUT OF THE COMPILED IL. ***
+     `PlcGetStatus` reads ONE BYTE at PDU offset 44 and maps 0 -> Unknown, 4 -> Stop, 8 -> Run,
+     *** AND EVERYTHING ELSE -> Stop. *** So Stop is ALSO THE CATCH-ALL BUCKET: a `Run` reading
+     is precise, a `Stop` reading is "4, or anything unrecognised".
+
+        *** THEREFORE KEY EVERY DECISION ON `Status == 8` (RUN) AND TREAT EVERYTHING ELSE AS
+        "NOT RUNNING". *** That degrades safely if the CPU ever returns an unmapped byte,
+        where keying on `== 4` would read an unknown state as a confident STOP.
+
+     *** AND THE PREDICTED FAILURE MODE DID NOT OCCUR: PUT/GET IS NOT A BLOCKER. *** The worry
+     was that this needs PUT/GET communication, which is off by default on the S7-1200 and
+     would have made X-K's closer a hardware-configuration change — STOP-class, deferred queue.
+     The read succeeded regardless. PUT/GET gates S7 VARIABLE services (Read/Write Var); this
+     is a userdata/SZL request, the same class as `GetOrderCode`, which has always worked here.
+     *** X-K's closer costs a function call, not a disruptive boundary. ***
+     [The rig's actual PUT/GET state remains UNKNOWN — the handover records it as unknown too —
+      so today's success is consistent with either hypothesis. It no longer matters for X-K.]
+
+     TWO THINGS STILL TO DO, both small:
+       - `IS7Client` (`src/harness/Harness.S7/IS7Client.cs`) is a deliberate REDUCTION of
+         Sharp7's surface and carries no status member, so the harness cannot call this yet.
+         Add a read-only `ReadCpuStatus` to the interface and its Sharp7 implementation,
+         mapping to a small enum — the reduction property is worth keeping, since it is what
+         holds `PlcStop()` and its neighbours out of reach.
+       - The STOP-mode read itself, below.
+
+     UNTESTED AND WORTH KNOWING: connection-resource contention between this S7 session (TCP
+     102) and the Modbus session (TCP 502) on a 1214C. Reserved PG/HMI resources make it
+     unlikely to bite, but a status poll opening an S7 connection alongside a live Modbus wave
+     is unproven.
 
   *** AND THE VERIFICATION IS FREE: FOLD IT INTO THE NEXT DISRUPTIVE DOWNLOAD. *** That
   download already stops and restarts the CPU (§9b). Read `PlcStatus()` before, during and

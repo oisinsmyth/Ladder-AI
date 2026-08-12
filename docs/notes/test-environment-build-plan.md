@@ -53,10 +53,22 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 | # | Task | Retires | Why it cannot wait |
 |---|---|---|---|
 | 0.1 | `%MW` capacity on the 1214C, from the datasheet | A3 | Slot size and slot count are derived from it. Guessing means re-laying-out the map later |
-| 0.2 | `PlcStatus()` in RUN over Sharp7 — read-only | A7 (half) | *In progress.* Also establishes whether PUT/GET is even enabled, which is the likeliest way this fails |
-| 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it |
+| 0.2 | ~~`PlcGetStatus` in RUN over Sharp7~~ | A7 (half) | ✅ **DONE 2026-08-12.** Returned Run from the rig at 79–94 ms. PUT/GET was **not** a blocker |
+| 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it. **Now more urgent, see below** |
 | 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
-| 0.5 | Confirm Sharp7 presence, version and connection path in `src/harness/` | — | Prerequisite for 0.2 and for all fault detection |
+| 0.5 | ~~Confirm Sharp7 presence, version and connection path~~ | — | ✅ **DONE.** Sharp7 1.1.82.0; rack 0 / slot 1; address from the device allowlist |
+| 0.6 | Add read-only `ReadCpuStatus` to `IS7Client` + `Sharp7Client` | A7 | **New.** The interface is a deliberate reduction of Sharp7 and has no status member, so the harness cannot call this yet. Keep the reduction — it is what holds `PlcStop()` out of reach |
+
+> ### ⚠ 0.3 got more interesting, not less
+>
+> The S7 status call measured **79–94 ms**, and the spec's assumed Modbus round trip is
+> **79–108 ms**. Those overlap almost exactly — which raises the possibility that the original
+> figure was measured over **S7comm or ICMP rather than Modbus**, and is being used as a Modbus
+> number. If so, the real Modbus round trip is unknown, and with it the poll budget, the tensor
+> width and O11.
+>
+> **This does not change the plan's order — it raises 0.3's priority within phase 0**, and phase
+> 1.2 measures the real figure regardless.
 
 **Deliberately NOT in phase 0:** the G2 bench test. It needs a download, so it rides with phase 1.
 
