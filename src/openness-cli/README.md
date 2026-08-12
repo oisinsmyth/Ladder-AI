@@ -401,11 +401,42 @@ Its purpose is the open question left by `Validate()` being measurably shallow
 (`docs/notes/openness-hmi-write-api.md` §4c): if per-object validation does not gate, does a device
 compile? Whatever it reports is the answer, including "nothing".
 
-**It deliberately does NOT carry `compile`'s FI-52 consistency backstop.** That check is built on
-`PlcBlock.IsConsistent`, and there is no HMI equivalent — no per-screen consistency flag exists to
-cross-examine a green result with. So `hmi-compile` reporting Success means only that the compiler
-said so, and nothing in this tool can strengthen that claim. Exit codes are `0` / `8 = CompileFailed`
-only; there is no `11 = CompileIncomplete` analogue, because there is nothing to detect it with.
+**The verdict keys on ERRORS, never on `State` (2026-08-12)** — the same rule as `compile`, and
+literally the same code path: both call `Program.EffectiveErrorCount`, the fail-closed
+`max(ErrorCount, Error messages in the message tree)`. `compile` earned that rule the expensive way (a
+project-wide hardware warning made every clean per-block compile exit 8 with `errors: 0`);
+`hmi-compile` carried the identical `State != Success` defect and was fixed by ruling rather than by
+being bitten. **Warnings are not swallowed**: the state and the warning count still print, and a
+non-`Success` state with zero errors prints a `PASSED WITH WARNINGS:` line saying so explicitly. Only
+the exit code changed.
+
+### `hmi-compile` success is WEAKER than `compile` success, and the API is why
+
+The two commands take the same flags and print the same `CompileResult` table. **They do not carry the
+same guarantee, and the difference cannot be closed from this side.** Read this before treating a
+green `hmi-compile` the way you would treat a green per-block `compile`:
+
+| | `compile --block/--type` | `hmi-compile` |
+|---|---|---|
+| Errors reported by the compiler | gated (exit 8) | gated (exit 8) |
+| Item still inconsistent afterwards | gated (exit 11) — read back from the item itself | **no such check exists** |
+| What a `0` means | the compiler reported no errors **and** the item re-read as consistent, so TIA will export it | the compiler reported no errors. That is all |
+
+`compile`'s second row is built on `PlcBlock.IsConsistent`, and **there is no HMI equivalent to read.**
+Measured against the V20 API surface (2026-08-12, `PublicAPI/V20/Siemens.Engineering.xml` +
+`Siemens.Engineering.Hmi.xml`): `IsConsistent` exists on exactly **four** types — `PlcBlock`,
+`PlcType`, `PlcForceTable`, `PlcWatchTable`, all `Siemens.Engineering.SW.*` — and on **nothing** in
+`Siemens.Engineering.Hmi.*` (Classic) or `Siemens.Engineering.HmiUnified.*`. The nearest neighbour on
+the Unified side is `HmiValidationResult` (Errors/Warnings), which is the `Validate()` surface already
+measured shallow — it accepts a zero-width screen. So there is no per-screen or per-device flag to
+cross-examine a green result with, and this tool cannot manufacture one.
+
+Consequently `hmi-compile` **does not report a consistency field it cannot fill**: no `CONSISTENT:`
+line, and `consistentAfterCompile` is `null` in `--json` — the same value a whole-device PLC compile
+carries, meaning *the question was not asked*. An always-null field printed as though a check had run
+would read to a consumer as "checked, nothing wrong", which would be false. Exit codes are `0` /
+`8 = CompileFailed` only; there is no `11 = CompileIncomplete` analogue **because there is nothing to
+detect it with**, not because the case cannot arise.
 
 ### Attaching under Portal pileup
 
@@ -769,10 +800,10 @@ shell should branch on these rather than on stderr text.
 | 5 | `UnexpectedError` | Catch-all for any exception not classified below. Prints the full inner-exception chain. Treat as "a bug or an unmodelled Openness failure", not as user error — but see the caveat below |
 | 6 | `SafetyRefused` | `SafetyContentRefusedException` — the command touched safety-classified content and was refused (hard rule 2). Not retryable, by design |
 | 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException`, `BlockMemoryLayoutUnavailableException` (the block resolved but exposes no access mode — name a DB or an FB) |
-| 8 | `CompileFailed` | `compile` ran to completion and reported **at least one error** — the larger of its own `ErrorCount` and the `Error` messages in its message tree, whichever is bigger. **Warnings alone never earn this**, nor does a non-`Success` `State` on its own (2026-08-12): a pre-existing hardware warning returns a non-`Success` state on a clean block, and keying on it made every per-block compile on such a project exit 8 with `errors: 0`. The diagnostics are on stdout (`--json` for structured form) |
+| 8 | `CompileFailed` | `compile`, `compile-all` or `hmi-compile` ran to completion and reported **at least one error** — the larger of its own `ErrorCount` and the `Error` messages in its message tree, whichever is bigger (one shared `Program.EffectiveErrorCount`, so all three judge identically). **Warnings alone never earn this**, nor does a non-`Success` `State` on its own (2026-08-12): a pre-existing hardware warning returns a non-`Success` state on a clean block, and keying on it made every per-block compile on such a project exit 8 with `errors: 0`. `hmi-compile` carried the same `State`-keyed defect and was fixed with it, on the ruling that a known defect left because it has not bitten yet is how it bites later. The diagnostics are on stdout (`--json` for structured form). Also earned by `hmi-create-screen`/`hmi-edit-screen` on a `Validate()` error |
 | 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block, or at least one device failing to compile. Both lists are printed |
 | 10 | `NotConfirmed` | A destructive command printed what it *would* do and `--yes` was absent, so **nothing was changed and Portal was never contacted** — the refusal is decided from the arguments alone, before `Connect`. Earned by `delete`, `block-layout --set`, and the HMI writers |
-| 11 | `CompileIncomplete` | A compile reported **no errors** and left something it should have verified unverified. Two ways to earn it, the same fact from either end: **(a)** a **whole-device** `compile` over blocks that remain flagged `IsConsistent=false` — it did not compile them, and the unverified ones are listed on stderr (FI-52); **(b)** a **per-block/per-type** compile whose own item reads back `IsConsistent=false` afterwards, or whose read-back could not be performed at all (2026-08-12 — the converse of FI-52; TIA will refuse to *export* that item, and nothing in the compile output used to say so). Distinct from `CompileFailed`: nothing reported an error, the gate simply did not prove what it appears to have proved. One code for both because the caller's response is identical — this is not the hard-rule-4 gate passing |
+| 11 | `CompileIncomplete` | A compile reported **no errors** and left something it should have verified unverified. Two ways to earn it, the same fact from either end: **(a)** a **whole-device** `compile` over blocks that remain flagged `IsConsistent=false` — it did not compile them, and the unverified ones are listed on stderr (FI-52); **(b)** a **per-block/per-type** compile whose own item reads back `IsConsistent=false` afterwards, or whose read-back could not be performed at all (2026-08-12 — the converse of FI-52; TIA will refuse to *export* that item, and nothing in the compile output used to say so). Distinct from `CompileFailed`: nothing reported an error, the gate simply did not prove what it appears to have proved. One code for both because the caller's response is identical — this is not the hard-rule-4 gate passing. **`hmi-compile` can never return this**, and that is not reassurance: `IsConsistent` is PLC-only across the whole V20 API, so the HMI path has nothing to detect the condition with (see `hmi-compile` above) |
 | 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
 | 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |
 | 14 | `NothingExamined` | The command ran, nothing went wrong, and it examined **nothing** — so its silence says nothing about the project. `compile-all` earns this when no item is flagged inconsistent. It is not a success because of how the gap arises: an item that compiled *with errors* is still flagged *consistent*, and errors do not survive the process, so the run right after a failed one is the one that examines nothing and looks cleanest. `--force` compiles everything |

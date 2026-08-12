@@ -531,12 +531,32 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public CompileResult? TypeCompileResult { get; set; }
 
+    /// <summary>What an HMI device compile hands back. Null = not configured (and so it throws).</summary>
+    public CompileResult? HmiCompileResult { get; set; }
+
+    public string? LastHmiCompileDeviceFilter { get; private set; }
+
+    public int CompileHmiCalls { get; private set; }
+
     /// <summary>What <see cref="EnumerateBlocks"/> reports — the FI-52 device-level backstop reads it.</summary>
     public IReadOnlyList<BlockInfo>? BlocksForEnumeration { get; set; }
 
     public string? LastCompiledBlock { get; private set; }
 
     public string? LastCompiledType { get; private set; }
+
+    /// <summary>
+    /// The HMI device compile. Configured like the other three and throws when it is not, for the
+    /// same reason: a stub handing back a default clean result would let a verdict test pass without
+    /// exercising the verdict.
+    /// </summary>
+    public CompileResult CompileHmi(string? deviceFilter)
+    {
+        CompileHmiCalls++;
+        LastHmiCompileDeviceFilter = deviceFilter;
+        return HmiCompileResult
+            ?? throw new NotSupportedException("Test did not configure an HMI compile result.");
+    }
 
     public void OpenProject(string projectIdentifier, TimeSpan timeout) => OpenProjectCalls++;
 
@@ -564,8 +584,6 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public HmiCreateScreenResult CreateHmiScreen(string screenName, long width, long height, IReadOnlyList<string> itemTypes) =>
         throw new NotSupportedException();
-
-    public CompileResult CompileHmi(string? deviceFilter) => throw new NotSupportedException();
 
     public HmiEditScreenResult EditHmiScreen(
         string screenName,

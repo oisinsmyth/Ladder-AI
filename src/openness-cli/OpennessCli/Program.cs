@@ -427,15 +427,47 @@ internal static class Program
 
     // Deliberately does NOT carry the FI-52 consistency backstop that `compile` has: that check is
     // built on PlcBlock.IsConsistent, which has no HMI equivalent — there is no per-screen
-    // consistency flag to cross-examine a green result with. So an HMI compile reporting Success
-    // means only that the compiler said so, and nothing here can strengthen it.
-    private static int RunHmiCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
+    // consistency flag to cross-examine a green result with. Confirmed 2026-08-12 against the V20
+    // API surface: `IsConsistent` exists on exactly four types, all of them PLC-side
+    // (PlcBlock, PlcType, PlcForceTable, PlcWatchTable), and on nothing in Siemens.Engineering.Hmi.*
+    // or Siemens.Engineering.HmiUnified.*. So an HMI compile reporting Success means only that the
+    // compiler said so, and nothing here can strengthen it — an asymmetry with `compile` that is a
+    // fact about the API, not an omission to be filled in with an always-null field.
+    internal static int RunHmiCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         var result = gateway.CompileHmi(options.Device);
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
 
-        return result.State != Model.CompileState.Success ? ExitCodes.CompileFailed : ExitCodes.Success;
+        // THE VERDICT KEYS ON ERRORS, NEVER ON State — the same rule as `compile` (see RunCompile),
+        // applied here 2026-08-12. `compile` earned it the expensive way: on a project carrying a
+        // permanent hardware warning, EVERY clean per-block compile returned a non-Success State and
+        // so exited 8 with `errors: 0`, and a caller branching on the exit code read every success as
+        // a failure. `hmi-compile` shares the same Compile()/CompileResult machinery and had the same
+        // defect; it was left alone at the time only because no HMI project had yet demonstrated it.
+        // Leaving a known defect because it has not bitten yet is how it bites later.
+        //
+        // State and the warning count are still REPORTED — "compiled with warnings" and "compiled
+        // clean" are different facts. Only the exit code changed.
+        if (EffectiveErrorCount(result) > 0)
+        {
+            return ExitCodes.CompileFailed;
+        }
+
+        if (result.State != Model.CompileState.Success)
+        {
+            Console.WriteLine();
+            Console.WriteLine(
+                $"PASSED WITH WARNINGS: 0 errors, so this is a pass. State is {result.State}, which is reported " +
+                "and not decisive — measured on the PLC side, one pre-existing project-wide warning returns a " +
+                "non-Success state on every otherwise-clean compile. Read the messages above before treating the " +
+                "warnings as noise.");
+            Console.WriteLine(
+                "There is no consistency read-back to fall back on here: `IsConsistent` is PLC-only, so an HMI " +
+                "compile's verdict rests entirely on what the compiler reported.");
+        }
+
+        return ExitCodes.Success;
     }
 
     private static int RunExport(IOpennessGateway gateway, ExportCommandOptions options, int timeoutOpenSeconds)

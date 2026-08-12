@@ -472,6 +472,53 @@ grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
 OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
 merely ignored. ***
 
+### ✅ THE SPIKE CHECKER IS IN THE PROJECT AND COMPILES — 2026-08-12
+
+*** THE IR PIPELINE WORKS END TO END INTO TIA. *** First time IR-authored content has made the
+full trip. Tag table then block, both exit 0; `sanity-check` after compile: 71 blocks,
+`inconsistentBlocks` = **the pre-existing sample FC only** — ours is not in it. 33 types, 0
+inconsistent. Device compile Success, 0/0.
+
+**The per-block compile exited 8 with `errors: 0`** and *"Block was successfully compiled"* — the
+known `State`-vs-`ErrorCount` defect firing on this project's permanent hardware warning, exactly
+as predicted. *** READING THAT EXIT CODE AS FAILURE WOULD HAVE BEEN WRONG, WHICH IS WHY THE
+INSTRUCTION NOT TO TRUST IT EXISTS. ***
+
+**Verified POSITIVELY rather than resting on the green**, since an absence of errors is not a
+result:
+  - 7 networks, 135 parts, **identical histogram sent vs returned** (`Move` 43, `Ne` 47,
+    `Contact` 32, `Eq` 9, `Add` 2, `Coil` 1, `O` 1). FC number **100** preserved.
+  - *** THE DESCENDING-INDEX MOVE ORDERING SURVIVED *** — the reference sequence is identical end
+    to end, so "lowest disagreeing index written last" is intact **in the controller**, not just
+    in the IR. That trick is what makes `TEAR_INDEX` meaningful.
+  - Text content byte-identical. *** ELEMENT-COUNT DIFF IS 0→n IN EVERY CASE, NEVER n→0 — TIA
+    REMOVED NOTHING ***, adding only export metadata and block-attribute defaults.
+  - **All 26 tags landed, all `Int`, every `%MW` address exact.** *** `%M` NOW WORKS END TO END
+    THROUGH THE TAG-TABLE IR PATH — an explicitly untested area, now measured rather than
+    assumed. ***
+
+*** THE `MemoryLayout` HOLE REPRODUCES ON AN FC, NOT JUST DBs. *** `compare` first exited **2 —
+NOT COMPARED**, its guard firing because the re-export declares `Optimized` and our converter
+output declares none. Re-run with `--allow-silent-layout` (documented for exactly this case, one
+side being converter output): **exit 0, EQUIVALENT**. The tag table compared EQUIVALENT with no
+flag. *** THE GUARD DID ITS JOB — it refused to compare rather than quietly comparing weakly. ***
+
+  ➜ **Assessed harmless for the spike**, and the reasoning is INFERRED not measured: the checker
+    reads and writes `%MW` marker memory directly, which is always classic-S7comm addressable, so
+    the FC's own layout does not affect the mirror's wire visibility.
+  ➜ `Int` caused no trouble at import or compile — **VERIFIED that `Int` works; INFERRED nothing
+    about whether `UInt` is now viable** after `4090b6f`, since the `Int` form is what was imported.
+
+**A cosmetic defect in `compare`'s own output, worth fixing because it misleads:** the
+`--allow-silent-layout` line prints `MEMORYLAYOUT: (none declared) -> Optimized (NOT compared —
+neither document declares one)`. The parenthetical **contradicts the value printed beside it**,
+since the second document plainly declares one. Substance right, message wrong.
+
+**Two limits carried forward, so "0 findings" is not over-read:** all 18 `review` rules report
+`not applicable` on a tag table, so *** THE TAG TABLE IS UNREVIEWED RATHER THAN CLEAN ***; and
+`compare` runs through the Normalizer, so a **port-direction flip stays invisible** until the
+pending fix lands.
+
 ### 🔴 OPEN DECISION — `Normalizer` MAY BE BLIND TO A WIRE-DIRECTION FLIP
 
 Found 2026-08-12 while building `compare`, and it is the `MemoryLayout` class of defect one level
