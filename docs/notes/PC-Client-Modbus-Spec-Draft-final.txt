@@ -1677,3 +1677,230 @@ all are worth recognising on sight rather than rediscovering:
       `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword` or
       `DownloadAllUserManagementDataResetToProject` applied to a scratch project on a bench
       rig, and the result messages do not say which. Nothing downstream depends on knowing.
+
+--------------------------------------------------------------------------------
+16. GAP ANALYSIS — FAULT PATHS AND INTERACTIONS THE DESIGN DID NOT CONSIDER
+--------------------------------------------------------------------------------
+
+Written 2026-08-12 by walking the design for HOLES rather than for inconsistencies. Each item
+is a real gap in what is written above, not a restatement of a known unknown. Ordered by how
+badly they bite; each carries a recommended treatment so none of them reopens the design
+conversation.
+
+................................................................................
+16.1  G-A  *** VECTOR APPLICATION IS NOT ATOMIC, AND A TORN WRITE IS UNDETECTABLE ***
+................................................................................
+
+Nothing in this design makes a vector's arrival at the PLC atomic. Modbus
+write-multiple-registers carries at most 123 registers per transaction, so ANY tensor whose
+combined vector data exceeds that is written across MULTIPLE transactions — and a link drop, a
+retry, or a slow scan between them leaves the program running a HALF-APPLIED VECTOR. The block
+sees a coherent-looking set of inputs that was never a vector anybody wrote, produces a result,
+and that result is reported as a test outcome.
+
+WHY IT IS INVISIBLE: every individual write SUCCEEDED. There is no partial-write error to
+catch — the failure is at a level Modbus does not model.
+
+*** AND IT IS A THIRD BOUND ON TENSOR WIDTH, alongside conflict-freedom and poll bandwidth
+(D29): a tensor is also bounded by what can be applied atomically. ***
+
+TREATMENT — stage-then-commit, a shape this design already uses elsewhere. Write vector data
+to a staging region; then write ONE commit word, a sequence number, in a final single-register
+transaction. The copy layer acts on staged data only when the sequence number INCREMENTS, and
+the result package reports the sequence number it ran under. A torn write then leaves the
+commit word unwritten and the tensor never starts — a detectable non-event instead of a
+plausible wrong answer.
+
+................................................................................
+16.2  G-B  *** NO PER-TEST TIMEOUT — AND THE PACKER ALREADY NEEDS ONE ***
+................................................................................
+
+A vector whose expected condition never occurs hangs its tensor; a hung tensor hangs the wave;
+nothing above bounds it. D26 computes a tensor's cost as the MAX TEST DURATION in it, which
+presumes durations are known — yet no part of the design requires a test to declare one.
+
+*** THE CHEAP RESOLUTION: THIS IS NOT NEW WORK. *** DB-13 cannot compute tensor cost without a
+declared maximum duration per test, so the declaration is an input THE PACKER ALREADY REQUIRES.
+Making it double as the timeout costs nothing and closes the hang.
+
+TREATMENT — every vector declares a maximum duration, in SCANS (the unit §12 argues in) with a
+wall-clock ceiling as backstop. Exceeding it is a DISTINCT OUTCOME — TIMED-OUT, never FAILED —
+because "the condition never occurred" and "the wrong thing happened" are different findings,
+and an agent told only FAILED will go and fix the wrong thing.
+
+................................................................................
+16.3  G-C  *** IF THE COORDINATOR DIES, NOTHING BRINGS THE RIG TO INERT ***
+................................................................................
+
+Every path to inert in this design is driven from the PC. If the coordinator crashes, loses its
+network or is killed mid-tensor, the rig keeps running the last applied vector indefinitely —
+resets released, models running, outputs driven. On restart the coordinator has no idea what
+state the rig is in, and nothing above tells it to find out.
+
+TREATMENT, two parts, and the second is the one that matters:
+  1. ON CONNECT, ASSUME NOTHING — force inert before doing anything else, rather than assuming
+     the rig is where it was left.
+  2. *** A PLC-SIDE WATCHDOG IN THE COPY LAYER: no commit-word change for N seconds -> GO
+     INERT AUTONOMOUSLY. *** The only protection that survives the PC dying, which is exactly
+     the case part 1 cannot cover. It is a handful of rungs, and it is the difference between a
+     crashed coordinator being an inconvenience and being a rig left driving outputs all night.
+
+................................................................................
+16.4  G-D  *** TIME COMPRESSION DESTROYS OBSERVABILITY — D12/DB-12 AGAINST §12 ***
+................................................................................
+
+Two parts of this design pull directly against each other and neither mentions the other.
+
+§12 establishes that polling observes at ~100 ms against a ~10 ms scan, so a one-scan event is
+already about ten times below the sampling floor. DB-12 requires models to run COMPRESSED so
+long tests are runnable at all. *** BUT COMPRESSION SHORTENS THE REAL-TIME SEPARATION OF THE
+EVENTS BEING OBSERVED. *** At 100x, a behaviour occupying 100 scans of plant time collapses
+into one scan of real time — moving from comfortably observable to structurally invisible,
+while every check still reports green because the assertion was simply never sampled.
+
+*** SO THE COMPRESSION FACTOR IS NOT A FREE PARAMETER OF THE MODEL. IT IS BOUNDED BY THE
+OBSERVABILITY REQUIREMENTS OF THE ASSERTIONS BEING TESTED. ***
+
+TREATMENT — the runner computes the maximum admissible compression from the declared
+observability of the assertions in the vector: one needing scan-level resolution caps
+compression far lower than one checking a settled end state. A vector requesting more
+compression than its own assertions can survive is REFUSED, with both numbers shown. Note the
+interaction is with WHICH observability mechanism the assertion uses, not merely the factor —
+LATCHING raises the ceiling substantially, because a latched transient survives compression
+where a sampled level does not.
+
+................................................................................
+16.5  G-E  *** D32's EXCISION INVALIDATES DB-13's PACKING — A SEQUENCING HOLE ***
+................................................................................
+
+DB-13 colours the conflict graph AT ADMISSION, before the download. D32 excises a block AT
+DOWNLOAD TIME, once an unhandled configuration is attributed to it. So the packing that was
+computed no longer describes the test set that exists — and DB-9 says a submission is atomic,
+admitted or refused WHOLE, which the excision has just violated from the other side.
+
+Three things go inconsistent at once: the tensor assignment, the atomicity of the submission
+the excised block belonged to, and any co-running-log expectation derived from the original
+packing.
+
+TREATMENT — excision forces a RE-PACK, never a hole in the existing one. The excised block's
+tests are withdrawn and returned to their submitter as WITHDRAWN-NOT-FAILED (a distinct
+outcome, since nothing about them was tested); the remainder is re-coloured, which may
+legitimately yield FEWER tensors; and the affected submission is reported as PARTIALLY
+WITHDRAWN rather than silently shrunk. DB-9's atomicity rule governs ADMISSION, not survival of
+a download fault, and should say so explicitly.
+
+................................................................................
+16.6  G-F  *** FIRST-SCAN AND POWER-UP REQUIREMENTS ARE UNTESTABLE IN A WAVE — AND THE
+           DESIGN ALREADY CONTAINS THE THING THAT WOULD TEST THEM ***
+................................................................................
+
+"On start-up, all valves shall be closed"; "retentive setpoints shall survive a restart". These
+cannot be tested by the wave loop at all: the inert phase establishes a start STATE but cannot
+produce a first SCAN, and OB100 never runs again once the CPU is in RUN. §7 claims the
+UNTESTABLE-ON-RIG bucket "should be nearly empty" — this is a real category it did not account
+for.
+
+*** BUT THE CAPABILITY IS ALREADY PRESENT AND UNRECOGNISED. *** The disruptive boundary (D25,
+R8) performs a FULL download that STOPS AND RESTARTS THE CPU — measured, §9b. That restart is
+precisely the stimulus these requirements need, and it happens on a schedule the design already
+manages.
+
+TREATMENT — a distinct STARTUP TEST class, not packed into ordinary tensors but SCHEDULED AT A
+DISRUPTIVE BOUNDARY and observed across the restart that boundary already performs. It costs no
+additional CPU stop and converts a whole requirement category from untestable to routine. One
+real constraint: the harness is DISCONNECTED across that download (D18), so first-scan evidence
+must be LATCHED in the copy layer and read after reconnect — it can never be sampled live.
+
+................................................................................
+16.7  G-G  *** THE PACKER CAN MASK A GENUINE MULTI-WRITER DEFECT ***
+................................................................................
+
+Two blocks that both write the same coil are a conflict, so DB-13 puts them in different
+tensors and both tests pass. *** THE SCHEDULER HAS SILENTLY REPAIRED A DEFECT THAT WILL SHIP. ***
+In the deliverable both blocks run in the same scan cycle. `converter cross-check` already
+reports multi-writer facts (C-308) that this design consumes ONLY as graph edges.
+
+TREATMENT — conflict edges carry their PROVENANCE, and edges arising from multi-writer on a
+DELIVERABLE signal are reported as FINDINGS as well as being used for packing. Separating them
+is the right thing to do for testing and the wrong thing to do silently. Cheap: the fact is
+already computed, only the reporting is missing.
+
+................................................................................
+16.8  G-H  *** D28's PER-TEST MODEL INSTANCING IS WRONG WHERE THE PLANT GENUINELY SHARES ***
+................................................................................
+
+D28 instances models per test so the conflict graph does not go complete. Correct when the
+sharing is an artefact of authoring — WRONG when the plant itself shares the thing: one header
+tank feeding two units, one common supply, one shared conveyor. Instancing produces two
+independent tanks where reality has one, and both tests pass against a plant that cannot exist.
+
+*** SHAREDNESS HAS TWO KINDS AND ONLY ONE IS REMOVABLE. *** Accidental sharing should be
+instanced away; PHYSICAL sharing is a real conflict edge that must survive into the packing and
+force those tests apart.
+
+TREATMENT — the model declares which it is, and per M1/M2 that declaration comes from the
+EQUIPMENT-GROUNDED PHYSICAL ANALYSIS the model was authored from, which is the only place the
+distinction is knowable. A model that does not declare it is REFUSED rather than defaulted,
+because both defaults are wrong in one direction.
+
+................................................................................
+16.9  G-I  *** MODELS ARE UNTESTED CODE THAT EVERY RESULT DEPENDS ON ***
+................................................................................
+
+§7a names "the model is wrong" as one of five causes of a red result, and M3/M4 require a
+fidelity declaration — but NOTHING VERIFIES A MODEL. A model is IR like any other block,
+authored by an agent from a written analysis, and every result is conditioned on it. A wrong
+model does not produce one wrong test: it produces a consistent, plausible and wholly wrong
+picture of a piece of equipment. §7a's own worked example — the pre-act offset engineered out
+because the model had no in-flight mass — IS this failure, already written down.
+
+TREATMENT, proportionate rather than a second test pyramid: a model carries a small set of
+ANALYTIC SELF-CHECKS — known inputs with hand-computable outputs, closed-form where the physics
+allows — run when the model is ADMITTED, not per wave. This does not prove fidelity; it catches
+the sign error, the unit error and the transposed coefficient, which is the class that actually
+occurs. The fidelity declaration remains the honest statement of what was not verified.
+
+................................................................................
+16.10 G-J  *** COORDINATOR-GENERATED BLOCKS ARE NOT IN THE CLAIMS REGISTRY ***
+................................................................................
+
+The coordinator generates the copy layer, the models, the %MW mirror scaffolding, OB80 and the
+per-test instance DBs. All occupy BLOCK NUMBERS. `converter claim` exists to stop two parties
+picking the same number, and the coordinator is a party that never claims.
+
+TREATMENT — either the coordinator claims like anybody else, or a NUMBER RANGE IS RESERVED for
+harness-generated objects and the claim tool refuses allocations inside it. The reserved range
+is simpler and has a second benefit: harness objects become recognisable by number in every
+listing, which also tells DB-7's cleanup what it owns.
+
+................................................................................
+16.11 G-K  *** A STOPPED CPU AND A DROPPED LINK LOOK THE SAME, AND THE API CANNOT TELL YOU ***
+................................................................................
+
+If the CPU goes to STOP mid-wave — a genuine fault, not a download — `MB_SERVER` stops serving
+and the harness sees a dead connection, indistinguishable from a network fault. The escape
+hatch is closed: it is MEASURED [M, §13] that `OnlineProvider` exposes NO CPU operating mode,
+and that the download-configuration callback is the ONLY place a stop or start is expressible
+in the public API. *** SO THE TOOLING CANNOT ASK WHETHER THE CPU IS RUNNING. ***
+
+TREATMENT, partial and honest: the cases ARE partially separable BELOW Modbus, because a
+stopped S7-1200 keeps its Ethernet interface up. A TCP connect to 502 REFUSED, against a host
+still answering at IP level, is a live device not serving Modbus — the CPU-stopped shape. No
+route at all is the network shape. Report the distinction as EVIDENCE, never as a verdict, and
+treat either as wave-fatal. *** DO NOT BUILD A RECOVERY PATH THAT ASSUMES IT CAN TELL. *** This
+gap is external, not ours to close.
+
+................................................................................
+16.12 SMALLER, RECORDED SO THEY ARE NOT REDISCOVERED
+................................................................................
+
+  - *** STABLE BUT UNEXPECTED. *** §9's version-register check confirms the value is STABLE. A
+    value that is stable and NOT the one we downloaded means somebody else's program is on the
+    rig — a manual TIA download being the obvious cause. That must refuse to test, and it is a
+    different branch from "still settling".
+  - *** MODELS AND INSTANCE DBs SHARE THE <=20 BUDGET. *** DB-4 counts an agent's FB, UDT and
+    iDB and concludes "roughly six agents per download". Per-test instance DBs (D10) and
+    per-test model instances (D28) are objects too, so the real per-agent object count is
+    higher than three and that figure is optimistic in proportion.
+  - *** EVERY REMOVAL PATH MUST RELEASE ITS CLAIM. *** Noted in DB-11 for a deleted block; it
+    applies to DB-7's cleanup generally, or numbers leak until the range is exhausted.
