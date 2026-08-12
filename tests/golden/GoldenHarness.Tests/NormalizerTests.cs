@@ -241,6 +241,110 @@ public class NormalizerTests
         Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
     }
 
+    // ---- Wire endpoint ORDER carries DIRECTION (2026-08-12) ----------------------------------
+    // A wire's first endpoint is its PRODUCER and the rest are its CONSUMERS, and NOTHING ELSE in
+    // the document says so — no attribute, no child element. `Strip` used to sort a <Wire>'s whole
+    // endpoint list, which normalized an input wire and an output wire on the same port to the
+    // same thing; `compare`, `drift-check` and the `--no-sidecar` derivability check all ran
+    // through it and all inherited the blindness.
+
+    [Fact]
+    public void AreSemanticallyEquivalent_SwappedIdentConNameCon_DirectionFlip_ReturnsFalse()
+    {
+        // THE GUARD. Two wires with the IDENTICAL endpoint set, differing only in which endpoint
+        // is listed first: `<IdentCon>` first means the Access drives the port (an INPUT),
+        // `<NameCon>` first means the port drives the Access (an OUTPUT). Reversing them reverses
+        // the flow of data through that port, so these must never compare equal.
+        var a = XDocument.Parse("<Wires><Wire UId=\"41\"><IdentCon UId=\"21\"/><NameCon UId=\"31\" Name=\"P\"/></Wire></Wires>");
+        var b = XDocument.Parse("<Wires><Wire UId=\"41\"><NameCon UId=\"31\" Name=\"P\"/><IdentCon UId=\"21\"/></Wire></Wires>");
+
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_CallParameterDirectionFlip_ReturnsFalse()
+    {
+        // The case the whole fix exists for. On an instruction port the direction survives the old
+        // sort anyway, because a port name is conventionally always-input or always-output
+        // (measured: across all 34 real TIA exports in simatic-ml/, all 106 (part, port) pairs sit
+        // exclusively at index 0 or exclusively in the tail, never both). A CALL's parameter names
+        // are block-author-chosen and carry no such convention, and `ir/SPEC.md` §Interface records
+        // that a call site does not mark a parameter Input/Output/InOut at all — so for the SAME
+        // parameter name, endpoint order is the only thing distinguishing "the callee reads this
+        // tag" from "the callee writes this tag", and it cannot distinguish an input from an InOut
+        // at all.
+        var a = XDocument.Parse("<Wires><Wire UId=\"70\"><IdentCon UId=\"9\"/><NameCon UId=\"60\" Name=\"Setpoint\"/></Wire></Wires>");
+        var b = XDocument.Parse("<Wires><Wire UId=\"70\"><NameCon UId=\"60\" Name=\"Setpoint\"/><IdentCon UId=\"9\"/></Wire></Wires>");
+
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_ReorderedFanoutConsumers_ReturnsTrue()
+    {
+        // The 2026-07-14 measurement the endpoint sort was added for, and it still holds. A
+        // converter-only round trip (to-ir -> to-xml, no live TIA) of MotorStarter reported a false
+        // mismatch purely from two electrically-identical wires listing the same endpoints in a
+        // different order (docs/evidence/stage-S1.md, "S1 item 26 continued again"). This is that
+        // block's own real shared rail wire — one producer, four consumers — with the CONSUMERS
+        // permuted. A wire has exactly one producer, so any reordering that preserves the endpoint
+        // set can only ever permute the tail, which is why sorting the tail alone still collapses
+        // this while leaving the producer position meaningful.
+        var a = XDocument.Parse(
+            "<Wires><Wire UId=\"60\">" +
+            "<Powerrail/>" +
+            "<NameCon UId=\"39\" Name=\"in\"/><NameCon UId=\"40\" Name=\"in\"/>" +
+            "<NameCon UId=\"44\" Name=\"in\"/><NameCon UId=\"52\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+        var b = XDocument.Parse(
+            "<Wires><Wire UId=\"60\">" +
+            "<Powerrail/>" +
+            "<NameCon UId=\"52\" Name=\"in\"/><NameCon UId=\"44\" Name=\"in\"/>" +
+            "<NameCon UId=\"40\" Name=\"in\"/><NameCon UId=\"39\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+
+        Assert.True(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_ReorderedFanoutConsumers_PartOutputProducer_ReturnsTrue()
+    {
+        // Same fan-out tolerance where the producer is a Part output port rather than the rail —
+        // MotorStarter's own Move-tap/OR-merge shape, the one the 2026-07-14 note calls out.
+        var a = XDocument.Parse(
+            "<Wires><Wire UId=\"71\">" +
+            "<NameCon UId=\"52\" Name=\"out\"/>" +
+            "<NameCon UId=\"53\" Name=\"in\"/><NameCon UId=\"55\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+        var b = XDocument.Parse(
+            "<Wires><Wire UId=\"71\">" +
+            "<NameCon UId=\"52\" Name=\"out\"/>" +
+            "<NameCon UId=\"55\" Name=\"in\"/><NameCon UId=\"53\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+
+        Assert.True(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_FanoutProducerDemotedIntoConsumers_ReturnsFalse()
+    {
+        // The two halves together: identical endpoint SET, tail permuted AND the producer moved
+        // out of index 0. Tolerating the permutation must not tolerate the demotion — this is the
+        // multi-endpoint form of the direction flip, and it is what a blanket sort could not see.
+        var a = XDocument.Parse(
+            "<Wires><Wire UId=\"71\">" +
+            "<NameCon UId=\"52\" Name=\"out\"/>" +
+            "<NameCon UId=\"53\" Name=\"in\"/><NameCon UId=\"55\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+        var b = XDocument.Parse(
+            "<Wires><Wire UId=\"71\">" +
+            "<NameCon UId=\"53\" Name=\"in\"/>" +
+            "<NameCon UId=\"52\" Name=\"out\"/><NameCon UId=\"55\" Name=\"in\"/>" +
+            "</Wire></Wires>");
+
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
     [Fact]
     public void Strip_RemovesOnlyVolatileElements_LeavesStructureIntact()
     {

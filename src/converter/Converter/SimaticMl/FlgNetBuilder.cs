@@ -336,10 +336,30 @@ public static class FlgNetBuilder
         // in the parts list and the connections in the power rail ... with more than two I/Os must
         // be located in the same sequence"). Endpoints were appended in whichever order each
         // production's own dedicated loop happened to reach the shared wire, not real document
-        // order. A null UId (Powerrail itself, the wire's own producer) sorts first — the natural
-        // "source before consumers" position, matching every real rail wire seen.
+        // order.
+        //
+        // ONLY THE CONSUMERS ARE SORTED, AND THE PRODUCER IS PINNED AT INDEX 0 (2026-08-12).
+        // The sort used to cover the WHOLE endpoint list (`OrderBy(e => e.UId ?? int.MinValue)`),
+        // which silently decided producer-vs-consumer order by UId NUMBERING — and that is not
+        // what the position means. **A wire's first endpoint is its PRODUCER and the rest are its
+        // CONSUMERS**: measured across all 34 real TIA exports in `simatic-ml/`, the split is
+        // total — `out`/`out1`/`OUT`/`DEST`/`Ret_Val`/`eno`/`Q`/`ET`/`ScaledResult` appear at
+        // index 0 and NEVER in the tail; `operand`/`in`/`in1`..`in5`/`en`/`pre`/`PT`/`R`/`SRC`/
+        // `IN`/`COUNT`/... appear in the tail and NEVER at index 0. Zero of the 106 (part, port)
+        // pairs are mixed. `BuildFixedShape` already honours this (it inserts the port endpoint
+        // first when `PortDirection.Output`); the older hand-rolled `Build*` methods only got away
+        // with ignoring it because this sort scrambled the order afterwards anyway.
+        //
+        // The consequence of sorting by UId was concrete, not theoretical: TIA numbers an Access
+        // BELOW the Part that reads it, so its own export puts `<IdentCon>` first on a Contact's
+        // operand wire — while the synthesizer numbers the Contact below its Access, so the same
+        // wire came out `<NameCon>` first. Regenerating `ir/test-project001/FC_Inputs.ir` inverted
+        // 100% of its 132 Contact/Coil operand wires against the real export, and NOTHING caught
+        // it, because `Normalizer` sorted a wire's endpoints too and the two blindnesses cancelled.
+        // Sorting only the tail keeps the AirStarSystem fix intact (a rail wire's producer is the
+        // `Powerrail`, which is inserted first, and its consumers still sort into document order).
         var wires = wireEndpointsByUId
-            .Select(kv => new WireNode(kv.Key, kv.Value.OrderBy(e => e.UId ?? int.MinValue).ToList()))
+            .Select(kv => new WireNode(kv.Key, PinProducerAndSortConsumers(kv.Value)))
             .ToList();
 
         // Scope is carried per-entry (not assumed) since 2026-07-11 — a plain tag Access can be
@@ -361,6 +381,33 @@ public static class FlgNetBuilder
         {
             parts.Add(part);
         }
+    }
+
+    // The producer (endpoint 0, as inserted) stays put; every consumer after it sorts by UId into
+    // TIA's document order. See the long comment at the wire-assembly site for why the producer
+    // must not be swept into that sort.
+    private static List<WireEndpoint> PinProducerAndSortConsumers(List<WireEndpoint> endpoints)
+    {
+        if (endpoints.Count <= 2)
+        {
+            return endpoints;
+        }
+
+        var ordered = new List<WireEndpoint>(endpoints.Count) { endpoints[0] };
+        ordered.AddRange(endpoints.Skip(1).OrderBy(e => e.UId ?? int.MinValue));
+        return ordered;
+    }
+
+    // An OUTPUT wire: the Part's own output port DRIVES the destination Access, so the PORT is the
+    // producer and is listed FIRST — matching every real TIA export, and matching what
+    // BuildFixedShape already does for a `PortDirection.Output` argument. These sites used to add
+    // the destination `<IdentCon>` first (i.e. consumer-before-producer); it was invisible only
+    // because the wire-assembly sort then reordered both endpoints by UId anyway.
+    private static void AddProducedWire(
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId, int wireUId, int partUId, string port, int destAccessUId)
+    {
+        AddEndpoint(wireEndpointsByUId, wireUId, new WireEndpoint(EndpointKind.NameCon, partUId, port));
+        AddEndpoint(wireEndpointsByUId, wireUId, new WireEndpoint(EndpointKind.IdentCon, destAccessUId, null));
     }
 
     private static void AddEndpoint(Dictionary<int, List<WireEndpoint>> wireEndpointsByUId, int wireUId, WireEndpoint endpoint)
@@ -504,8 +551,7 @@ public static class FlgNetBuilder
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.MovePartUId, "in");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "out1"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MovePartUId, "out1", sidecar.DestAccessUId);
     }
 
     // Builds a bitwise-And Part, its `en`-chain (identical mechanism to BuildMove's own — may
@@ -537,8 +583,7 @@ public static class FlgNetBuilder
             AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.AndPartUId, $"in{k + 1}");
         }
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.AndPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.AndPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds a Call Part (as its own sibling <Call>/<CallInfo> element, not a <Part Name="Call">
@@ -589,8 +634,12 @@ public static class FlgNetBuilder
                     break;
 
                 case CallArgumentSidecar.OutputArgSidecar output:
-                    AddEndpoint(wireEndpointsByUId, output.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, output.DestAccessUId, null));
-                    AddEndpoint(wireEndpointsByUId, output.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, output.ParamName));
+                    // Producer first — and on a CALL this is the case that MATTERS, because a
+                    // callee's parameter names are block-author-chosen: unlike `out`/`in1`/`PT`,
+                    // nothing about the NAME says which way a parameter points, so endpoint order
+                    // is the only direction signal the document carries (`ir/SPEC.md` §Interface —
+                    // a call site does not mark a parameter as Input, Output or InOut at all).
+                    AddProducedWire(wireEndpointsByUId, output.DestWireUId, sidecar.CallPartUId, output.ParamName, output.DestAccessUId);
                     break;
 
                 default:
@@ -673,8 +722,7 @@ public static class FlgNetBuilder
             AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.MulPartUId, $"in{k + 1}");
         }
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MulPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MulPartUId, "out", sidecar.DestAccessUId);
     }
 
     // The inverse of GraphReducer.MulKindFor — MulStatementSidecar carries its own Kind (BuildMul
@@ -710,8 +758,7 @@ public static class FlgNetBuilder
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.ConvertPartUId, "in");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ConvertPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.ConvertPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds a Swap Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal source,
@@ -731,8 +778,7 @@ public static class FlgNetBuilder
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.SwapPartUId, "in");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.SwapPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.SwapPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds an Abs Part — mirrors BuildSwap exactly (same shape, different source Part Name,
@@ -750,8 +796,7 @@ public static class FlgNetBuilder
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.AbsPartUId, "in");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.AbsPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.AbsPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds a LIMIT Part, its `en` wiring, its three named-port inputs (`MN`/`IN`/`MX` — same
@@ -774,8 +819,7 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.LimitPartUId, "IN");
         AddOperandWire(wireEndpointsByUId, sidecar.Max, sidecar.LimitPartUId, "MX");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.LimitPartUId, "OUT"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.LimitPartUId, "OUT", sidecar.DestAccessUId);
     }
 
     // Builds a T_SUB Part, its `en` wiring, its two named-port inputs (`IN1`/`IN2`, uppercase —
@@ -796,8 +840,7 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.In1, sidecar.TSubPartUId, "IN1");
         AddOperandWire(wireEndpointsByUId, sidecar.In2, sidecar.TSubPartUId, "IN2");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TSubPartUId, "OUT"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.TSubPartUId, "OUT", sidecar.DestAccessUId);
     }
 
     // Builds a T_CONV Part — mirrors BuildConvert exactly, plus Version, using the uppercase
@@ -816,8 +859,7 @@ public static class FlgNetBuilder
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.TConvPartUId, "IN");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.TConvPartUId, "OUT"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.TConvPartUId, "OUT", sidecar.DestAccessUId);
     }
 
     // Builds a Calc Part — mirrors BuildMul's own Cardinality-driven input loop (lowercase
@@ -841,8 +883,7 @@ public static class FlgNetBuilder
             AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.CalcPartUId, $"in{k + 1}");
         }
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CalcPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.CalcPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds a MOVE_BLK_VARIANT Part, its `en` wiring, its four named-port inputs (`SRC`/`COUNT`/
@@ -865,11 +906,9 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.SrcIndex, sidecar.MoveBlkVariantPartUId, "SRC_INDEX");
         AddOperandWire(wireEndpointsByUId, sidecar.DestIndex, sidecar.MoveBlkVariantPartUId, "DEST_INDEX");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.RetValWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.RetValAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.RetValWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MoveBlkVariantPartUId, "Ret_Val"));
+        AddProducedWire(wireEndpointsByUId, sidecar.RetValWireUId, sidecar.MoveBlkVariantPartUId, "Ret_Val", sidecar.RetValAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MoveBlkVariantPartUId, "DEST"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MoveBlkVariantPartUId, "DEST", sidecar.DestAccessUId);
     }
 
     // Builds a WAIT Part, its `en` wiring, and its one named-port input (`WT`, uppercase) — no
@@ -905,8 +944,7 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.FillBlockIPartUId, "in");
         AddOperandWire(wireEndpointsByUId, sidecar.Count, sidecar.FillBlockIPartUId, "count");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DestAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DestWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.FillBlockIPartUId, "out"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.FillBlockIPartUId, "out", sidecar.DestAccessUId);
     }
 
     // Builds a Modbus_Master Part, its `en` wiring, its Instance (same shape TON/Call already
@@ -936,17 +974,13 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.DataLen, sidecar.ModbusMasterPartUId, "DATA_LEN");
         AddOperandWire(wireEndpointsByUId, sidecar.DataPtr, sidecar.ModbusMasterPartUId, "DATA_PTR");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DoneAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "DONE"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DoneWireUId, sidecar.ModbusMasterPartUId, "DONE", sidecar.DoneAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.BusyWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.BusyAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.BusyWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "BUSY"));
+        AddProducedWire(wireEndpointsByUId, sidecar.BusyWireUId, sidecar.ModbusMasterPartUId, "BUSY", sidecar.BusyAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.ErrorAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "ERROR"));
+        AddProducedWire(wireEndpointsByUId, sidecar.ErrorWireUId, sidecar.ModbusMasterPartUId, "ERROR", sidecar.ErrorAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.StatusAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusMasterPartUId, "STATUS"));
+        AddProducedWire(wireEndpointsByUId, sidecar.StatusWireUId, sidecar.ModbusMasterPartUId, "STATUS", sidecar.StatusAccessUId);
     }
 
     // Builds a Modbus_Comm_Load Part, its `en` wiring, its Instance, four ordinary named-port
@@ -991,14 +1025,11 @@ public static class FlgNetBuilder
         AddOperandWire(wireEndpointsByUId, sidecar.RespTo, sidecar.ModbusCommLoadPartUId, "RESP_TO");
         AddOperandWire(wireEndpointsByUId, sidecar.MbDb, sidecar.ModbusCommLoadPartUId, "MB_DB");
 
-        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.DoneAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.DoneWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "DONE"));
+        AddProducedWire(wireEndpointsByUId, sidecar.DoneWireUId, sidecar.ModbusCommLoadPartUId, "DONE", sidecar.DoneAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.ErrorAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.ErrorWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "ERROR"));
+        AddProducedWire(wireEndpointsByUId, sidecar.ErrorWireUId, sidecar.ModbusCommLoadPartUId, "ERROR", sidecar.ErrorAccessUId);
 
-        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.StatusAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "STATUS"));
+        AddProducedWire(wireEndpointsByUId, sidecar.StatusWireUId, sidecar.ModbusCommLoadPartUId, "STATUS", sidecar.StatusAccessUId);
     }
 
     // Builds a registry-driven fixed-shape instruction Part, its `en` wiring, its Instance (same

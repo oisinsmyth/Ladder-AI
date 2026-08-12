@@ -398,9 +398,38 @@ public static class Normalizer
         // already resolved by this point, so sort by remaining content for an order-independent
         // comparison. Deliberately narrow: <Component> order within <Symbol> (and everything
         // else) still matters positionally and must never be reordered.
-        if (element.Name.LocalName is "Wires" or "Parts" or "Wire")
+        //
+        // 🔴 A WIRE'S FIRST ENDPOINT IS EXEMPT FROM THAT SORT (2026-08-12) — it is the wire's
+        // PRODUCER, and its position is the ONLY thing in the document that says so. There is no
+        // attribute, no child element and no other marker: `<IdentCon>` first means the Access
+        // drives the port, `<NameCon>` first means the port drives the Access. Sorting the whole
+        // endpoint list therefore normalized an INPUT wire and an OUTPUT wire on the same port to
+        // the same thing, and `compare`, `drift-check` and the `--no-sidecar` derivability check
+        // all inherited that blindness because all three run through here.
+        //
+        // In the ordinary case direction still survived via the `<NameCon>`'s own `Name`, because
+        // a port is conventionally always-input or always-output — measured across all 34 real TIA
+        // exports in `simatic-ml/`, all 106 (part, port) pairs sit exclusively at index 0 or
+        // exclusively in the tail, none in both. The gap is any port where the same name can be
+        // BOTH, which is exactly the InOut case: at a call site nothing marks a parameter as InOut
+        // (`ir/SPEC.md` §Interface), so wire order cannot distinguish an input from an InOut
+        // either, and a CALL's parameter names are block-author-chosen rather than drawn from that
+        // clean instruction-port vocabulary.
+        //
+        // The 2026-07-14 fan-out measurement this sort was added for is UNAFFECTED, and that was
+        // checked rather than assumed: it was about *** two electrically-identical wires listing
+        // the same endpoints in a different order *** on a converter-only round trip of
+        // MotorStarter (`docs/evidence/stage-S1.md`, "S1 item 26 continued again"). Those are the
+        // CONSUMERS of a fanned-out wire — a wire has exactly one producer, so a reordering that
+        // preserves the endpoint SET can only ever permute the tail. Sorting the tail alone still
+        // collapses it, while a genuine producer/consumer swap now survives to the comparison.
+        if (element.Name.LocalName is "Wires" or "Parts")
         {
             children = children.OrderBy(c => c.ToString()).ToList();
+        }
+        else if (element.Name.LocalName == "Wire" && children.Count > 2)
+        {
+            children = children.Take(1).Concat(children.Skip(1).OrderBy(c => c.ToString())).ToList();
         }
 
         foreach (var child in children)

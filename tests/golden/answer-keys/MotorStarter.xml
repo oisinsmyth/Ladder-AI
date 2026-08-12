@@ -1603,8 +1603,8 @@
                   <NameCon UId="36" Name="in2" />
                 </Wire>
                 <Wire UId="46">
-                  <IdentCon UId="23" />
                   <NameCon UId="36" Name="out" />
+                  <IdentCon UId="23" />
                 </Wire>
                 <Wire UId="49">
                   <IdentCon UId="26" />
@@ -1615,8 +1615,8 @@
                   <NameCon UId="38" Name="in2" />
                 </Wire>
                 <Wire UId="52">
-                  <IdentCon UId="28" />
                   <NameCon UId="38" Name="out" />
+                  <IdentCon UId="28" />
                 </Wire>
                 <Wire UId="55">
                   <IdentCon UId="31" />
@@ -1627,8 +1627,8 @@
                   <NameCon UId="40" Name="in2" />
                 </Wire>
                 <Wire UId="58">
-                  <IdentCon UId="33" />
                   <NameCon UId="40" Name="out" />
+                  <IdentCon UId="33" />
                 </Wire>
                 <Wire UId="45">
                   <NameCon UId="36" Name="eno" />
@@ -1639,8 +1639,8 @@
                   <NameCon UId="37" Name="in" />
                 </Wire>
                 <Wire UId="48">
-                  <IdentCon UId="25" />
                   <NameCon UId="37" Name="out" />
+                  <IdentCon UId="25" />
                 </Wire>
                 <Wire UId="51">
                   <NameCon UId="38" Name="eno" />
@@ -1651,8 +1651,8 @@
                   <NameCon UId="39" Name="in" />
                 </Wire>
                 <Wire UId="54">
-                  <IdentCon UId="30" />
                   <NameCon UId="39" Name="out" />
+                  <IdentCon UId="30" />
                 </Wire>
                 <Wire UId="57">
                   <NameCon UId="40" Name="eno" />
@@ -1663,8 +1663,8 @@
                   <NameCon UId="41" Name="in" />
                 </Wire>
                 <Wire UId="60">
-                  <IdentCon UId="35" />
                   <NameCon UId="41" Name="out" />
+                  <IdentCon UId="35" />
                 </Wire>
               </Wires>
             </FlgNet>
@@ -2856,8 +2856,8 @@
                   <NameCon UId="47" Name="in" />
                 </Wire>
                 <Wire UId="73">
-                  <IdentCon UId="35" />
                   <NameCon UId="47" Name="out1" />
+                  <IdentCon UId="35" />
                 </Wire>
                 <Wire UId="63">
                   <IdentCon UId="27" />
@@ -2880,8 +2880,8 @@
                   <NameCon UId="45" Name="in2" />
                 </Wire>
                 <Wire UId="68">
-                  <IdentCon UId="31" />
                   <NameCon UId="45" Name="out" />
+                  <IdentCon UId="31" />
                 </Wire>
                 <Wire UId="52">
                   <IdentCon UId="21" />
@@ -3082,8 +3082,8 @@
                   <NameCon UId="38" Name="in" />
                 </Wire>
                 <Wire UId="53">
-                  <IdentCon UId="23" />
                   <NameCon UId="38" Name="out1" />
+                  <IdentCon UId="23" />
                 </Wire>
                 <Wire UId="49">
                   <Powerrail />
@@ -3104,8 +3104,8 @@
                   <NameCon UId="40" Name="in" />
                 </Wire>
                 <Wire UId="57">
-                  <IdentCon UId="26" />
                   <NameCon UId="40" Name="out1" />
+                  <IdentCon UId="26" />
                 </Wire>
                 <Wire UId="58">
                   <IdentCon UId="27" />
@@ -3122,8 +3122,8 @@
                   <NameCon UId="42" Name="in" />
                 </Wire>
                 <Wire UId="61">
-                  <IdentCon UId="29" />
                   <NameCon UId="42" Name="out1" />
+                  <IdentCon UId="29" />
                 </Wire>
                 <Wire UId="62">
                   <IdentCon UId="30" />
@@ -3150,8 +3150,8 @@
                   <NameCon UId="46" Name="in" />
                 </Wire>
                 <Wire UId="68">
-                  <IdentCon UId="33" />
                   <NameCon UId="46" Name="out1" />
+                  <IdentCon UId="33" />
                 </Wire>
                 <Wire UId="69">
                   <IdentCon UId="34" />
@@ -3166,8 +3166,8 @@
                   <NameCon UId="48" Name="in" />
                 </Wire>
                 <Wire UId="72">
-                  <IdentCon UId="36" />
                   <NameCon UId="48" Name="out1" />
+                  <IdentCon UId="36" />
                 </Wire>
               </Wires>
             </FlgNet>
