@@ -1,51 +1,51 @@
 ================================================================================
-PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 04
+PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, FINAL
 ================================================================================
 
-*** OVERTAKEN. SUPERSEDED BY PC-Client-Modbus-Spec-Draft-final.txt. Stamped 2026-08-12. ***
-    Kept as reasoning history. DO NOT BUILD FROM THIS DOCUMENT.
-    The Status line below is the status this draft had WHEN WRITTEN, retained as history.
+Status:  *** FINAL. THE ONLY DOCUMENT IN THIS SERIES TO BUILD FROM. *** Supersedes drafts
+         00, 01, 01-post-research, 02, 03 and 04. Each carries an OVERTAKEN stamp at its head
+         and is kept as reasoning history only.
+         *** IF A LATER DOCUMENT EXISTS, THIS LINE IS STALE AND THIS FILE'S OWN OVERTAKEN
+         STAMP IS AUTHORITATIVE *** — every superseded draft in this series claimed to be
+         current in its own moment, which is exactly why the stamps exist. "FINAL" names the
+         end of the DESIGN CONVERSATION, not the end of learning: what is measured during the
+         build supersedes what is written here, and is recorded the same way.
 
-    *** ONE KNOWN CONTRADICTION IN THIS DRAFT, RESOLVED IN THE FINAL. *** §7 argues the
-    coverage denominator must be the requirement CLAUSE and rejects assertions outright as
-    self-referential; D35 then mandates counting per ASSERTION. Both cannot stand. The final
-    resolves it: the assertion set is ENUMERATED FROM THE SPECIFICATION, never from the test
-    suite — which is what §7's objection was actually about, and it does not apply to
-    spec-derived assertions. Read the final's §7, not this one's.
+WHAT THIS IS. The design for a PC-side Modbus TCP client and the multi-agent test-wave
+environment it serves — how many lad-coder agents develop ladder logic concurrently against
+one physical S7-1200 test rig, with their work downloaded, executed, observed and attributed
+without the agents interfering with each other or fooling themselves.
 
-Status:  *** CURRENT. THE ONLY DRAFT TO BUILD FROM. *** Supersedes drafts 00, 01,
-         01-post-research, 02 and 03. Each of those carries an OVERTAKEN stamp at its head
-         (added 2026-08-12) and is kept as reasoning history only.
-         *** IF A LATER DRAFT EXISTS, THIS LINE IS STALE AND ITS OWN OVERTAKEN STAMP IS
-         AUTHORITATIVE *** — every superseded draft in this series claimed CURRENT in its own
-         moment, which is exactly why the stamps were added.
+WHAT CLOSED IN THIS EDITION. Every internal design question is answered or explicitly
+deferred (§15). The wave structure is stated (D26) and the throughput arithmetic that follows
+from it is corrected (§8). The unhandled-configuration policy is decided end to end (D32).
+Inert is defined and given a mechanism (D33, D37).
+
+*** ONE SUBSTANTIVE CORRECTION MADE IN THIS EDITION, FLAGGED HERE BECAUSE IT REVERSES AN
+    ARGUMENT DRAFT 04 MADE AT LENGTH. *** Draft 04 §7 argued the coverage denominator must be
+    the requirement CLAUSE and REJECTED assertions outright as self-referential; draft 04's
+    own D35 then mandated counting per ASSERTION. Both cannot stand. The resolution is in §7
+    and it keeps what each was protecting: *** the assertion set is ENUMERATED FROM THE
+    SPECIFICATION, never from the test suite. *** §7's objection was correct about
+    VECTOR-DERIVED assertions — a denominator defined by what somebody wrote a vector for is
+    always 100% — and simply does not apply to SPEC-DERIVED ones. D35 stands, with that
+    qualifier made explicit and load-bearing.
 
 All seven design gaps are closed. G-7 was MEASURED against the live rig on 2026-08-12 and
 refuted its own expectation — §13.
 
-*** WHAT DRAFT 04 ADDS OVER DRAFT 03. *** Two things, both from the wave-structure
-    conversation of 2026-08-12:
+WHERE THE TOOLING ACTUALLY STANDS, so no section below is read as more or less proven than
+it is. This tooling HAS delivered a program to the CPU — three completed downloads on
+2026-08-12, in all three option modes, UNATTENDED, including one carrying 99 objects that
+stopped the CPU and restarted it (§9b). What is proven is therefore the whole call path and
+the guards' behaviour against a real device. What remains unproven is named in §14 and §15,
+and nowhere else.
 
-      1. *** THE WAVE STRUCTURE IS NOW STATED EXPLICITLY (D26) AND THE THROUGHPUT ARITHMETIC
-         IS CORRECTED (§8). *** Draft 03 said only that execution is "concurrent" (D11), which
-         read as "every test in a wave runs at once" and, when worked through, was computed the
-         opposite way — as a serial sum over tests. Both readings are wrong and they cost a
-         full round of estimates that were out by an order of magnitude. A wave is a SEQUENCE
-         OF TENSORS; a tensor is a BATCH OF TESTS THAT RUN IN PARALLEL.
-      2. *** SIX NEW DESIGN BLOCKS, DB-8 to DB-13 *** (§4a), which is where the feedback-latency
-         question lands. DB-13 (tensor packing) is the one that sets wave duration; DB-8 (the
-         result package) is the one to build first.
-
-    Everything else is draft 03 unchanged.
-
-*** AND A HEADER CORRECTION CARRIED FROM DRAFT 03. *** Draft 03 opened with "NOTHING HAS EVER
-    BEEN DOWNLOADED TO THE DEVICE BY THIS TOOLING", which was true when that paragraph was
-    written and was NOT true by the time draft 03 was committed — §9b records three completed
-    downloads on the same day, one of which carried 99 objects and restarted the CPU. The
-    banner survived because it sat at the top of a document being extended at the bottom.
-    THE CURRENT POSITION: this tooling HAS delivered a program to the CPU, three times, in
-    all three option modes, unattended, including a stop-and-restart. What remains unproven is
-    named in §15 and §14, not here.
+    Historical note, because the reversal matters to how this document reads: drafts 03 and
+    earlier opened with "NOTHING HAS EVER BEEN DOWNLOADED TO THE DEVICE BY THIS TOOLING". That
+    was true when written and was already false when draft 03 was committed — the banner
+    survived at the top of a document being extended at the bottom. It is the exact failure
+    mode §9c's parser rules and the OVERTAKEN stamps both exist to prevent.
 
 Written: 2026-08-12.
 
@@ -126,14 +126,29 @@ in the next batch.
 1.3  LOOP 3 — the wave
 ................................................................................
 
-    collect admitted blocks + vectors
+    collect admitted SUBMISSIONS (DB-9 — atomic: vectors + observability + target blocks)
+      -> PACK INTO TENSORS (DB-13 — colour the conflict graph; this fixes the wave's duration)
       -> derive map, generate copy layer / models / mirror
       -> batch into <=20 DEPENDENCY-CLOSED objects
       -> harness goes inert, DISCONNECTS
       -> download
       -> reconnect -> READ VERSION REGISTER -> confirm stable
-      -> run wave
-      -> distribute results (including the co-running log, §2.4)
+      -> RUN THE WAVE:
+             for each tensor, in order:
+                 establish INERT for the NEXT tensor   (D33 — its start state, dynamics
+                                                        untriggered, resets held, latches
+                                                        released, nothing recorded)
+                 VERIFY inert                          (D33 — two checks: start conditions
+                                                        established AND dynamics quiescent)
+                 raise the START BOOLS                 (D37 — on a LATER scan, never the same
+                                                        one; this edge is the tests' T=0)
+                 observe until the tensor completes    (tests within a tensor run CONCURRENTLY)
+         -> unconditionally, pass or fail (D34) — a failing test never diverts the sequence
+      -> distribute results (DB-8's package, including the co-running log slice, §2.4)
+
+*** THE SHAPE TO HOLD ON TO: inert -> tensor[0] -> inert -> tensor[1] -> ... *** Tensors are
+SEQUENTIAL; the tests inside one are PARALLEL. Wave duration is therefore set by TENSOR COUNT,
+not test count, and each tensor costs its LONGEST member rather than the sum (D26, §8).
 
 ................................................................................
 1.4  THE TWO DOWNLOAD QUEUES  *** the routing rule ***
@@ -237,10 +252,27 @@ So a block whose only evidence of correct behaviour is a one-scan pulse may be u
 that wave, and the runner will correctly REFUSE the vector rather than return a meaningless
 green.
 
+*** THE SECOND UNTESTABLE SHAPE, FROM D37: A BLOCK WITH NO DISCOVERABLE START CONDITION. ***
+D37's start bool binds to a command signal the block ALREADY has, found via
+`converter candidate-scan --direction command` — never to a test-only input, because an input
+added for the harness is scaffolding inside the block under test and DB-5 forbids exactly that
+(what ships would no longer be what was tested). A purely reactive block needs no start gate
+and is held inert by its inputs alone, which is fine. What is NOT fine is a block that is
+neither: it has sequencing to trigger, but nothing external triggers it. *** THAT IS A
+REPORTABLE FINDING ABOUT THE BLOCK, not a harness gap to be worked around by adding an input
+to it *** — and it is the design-for-testability lesson most likely to recur, because nothing
+in ordinary authoring pushes back on it.
+
+    THE THIRD, FROM DB-12: TIMER PRESETS AS LITERALS. A block whose dwell is a literal cannot
+    be time-compressed, so any test longer than the wave budget is unrunnable against it. Check
+    C-122 (dwell-timer PT-home) first — the house style may already require the preset to live
+    in a DB member, in which case conforming blocks are compressible for free.
+
 *** THIS BELONGS IN A NEW SKILL *** for lad-coder or the test designer, carrying the test-
-environment contract: the vector format and its `Basis` requirement, the observability
-declaration, the blacklist mechanism and its reason field, how to read results including the
-co-running log, and the constraint set in §2.2. Premature to write until the environment
+environment contract: the vector format and its `Basis` requirement (now citing clause AND
+assertion, §7), the observability declaration, the start-bool binding and what to do when no
+start condition exists, timer presets as data, the blacklist mechanism and its reason field,
+how to read results including the co-running log, and the constraint set in §2.2. Premature to write until the environment
 exists — named now so the environment is built with a teachable contract rather than one
 reverse-engineered later.
 
@@ -278,7 +310,7 @@ D18. The harness DISCONNECTS across a download. Reconnect plus version check is 
      path, not error handling (§10).
 D19. TIME COMPRESSION is the throughput lever, not download batching (§8).
 
---- new in draft 03 ---
+--- the loop and queue structure (D20-D25) ---
 
 D20. *** LOOP 1 BRACKETS THE TEST LOOP BETWEEN TWO REVIEW PASSES, and ends with a final test
      cycle if the second review changed anything *** (§1.1).
@@ -294,7 +326,7 @@ D25. *** ANY DOWNLOAD THAT REQUIRES TESTING TO STOP MUST BE A FULL DOWNLOAD, NEV
      DIFFERENTIAL ONE. *** If the disruption is being paid for, it buys a known state rather
      than an unknown mixture. SEE R8 — THIS ENTAILS SOMETHING THAT MUST NOT BE MISSED.
 
---- new in draft 04 (the wave-structure conversation, 2026-08-12) ---
+--- the wave structure, and what follows from it (D26-D31) ---
 
 D26. *** A WAVE IS A SEQUENCE OF TENSORS; A TENSOR IS A BATCH OF TESTS THAT RUN IN PARALLEL. ***
 
@@ -343,7 +375,7 @@ D31. *** SUBMISSION IS ATOMIC AND PRECEDES PACKING (DB-9). *** Two independent l
      graph well — trickled submissions yield a worse colouring, hence more tensors, hence a
      longer wave for the same tests.
 
---- ruled by the owner 2026-08-12, closing O6, O9, O12, O13 ---
+--- fault handling, inert, and coverage (D32-D37) ---
 
 D32. *** EVERY UNHANDLED CONFIGURATION ABORTS THE DOWNLOAD, AND WE ABORT IT — NOT TIA
      (O9 RULED). *** The escalation ladder, in order:
@@ -867,33 +899,55 @@ ones that passed.
 
 *** RESOLVED 2026-08-12. THE DENOMINATOR, THE BUCKETS, AND WHAT THE GATE ACTUALLY GATES. ***
 
-THE UNIT IS THE REQUIREMENT CLAUSE, QUALIFIED BY INSTANCE where the requirement is
-instance-scoped. Three reasons, all of them "this already exists":
-  - `TestVector.Basis` ALREADY CITES IT, so vectors are already labelled with their
-    denominator element and no new metadata is needed;
-  - it is LIKE-FOR-LIKE with what it replaces — the functional reviewer's verdict was
-    per-requirement, and that is what makes the substitution honest rather than approximate;
+*** THE UNIT IS THE SPECIFICATION-DERIVED ASSERTION, QUALIFIED BY INSTANCE (D35). *** Draft 04
+said CLAUSE here and mandated ASSERTION in D35; this is the resolution, and it is not a
+compromise between them — it keeps exactly what each was protecting.
+
+*** THE INVARIANT THAT DECIDES IT, AND IT IS ABSOLUTE: THE DENOMINATOR COMES FROM THE
+SPECIFICATION, NEVER FROM THE TEST SUITE. *** Any unit defined by what somebody wrote a vector
+for is SELF-REFERENTIAL — you cannot be missing an assertion nobody wrote, so coverage is
+always 100% and the gate is theatre.
+
+    So the question is not "clause or assertion". It is WHERE THE UNIT IS ENUMERATED.
+      VECTOR-DERIVED assertions .... forbidden. This is what draft 04 §7 was right to reject.
+      SPEC-DERIVED assertions ...... required. Decomposing a clause into its atomic assertions
+                                     is a SPECIFICATION-SIDE operation, performed against the
+                                     requirement text and complete BEFORE any vector exists.
+                                     A vector then CITES into that enumeration; it cannot
+                                     extend it, and an assertion no vector cites is exactly
+                                     what the gate is for.
+
+WHY ASSERTION AND NOT CLAUSE, given the invariant is satisfied either way: a clause carrying
+two assertions — "shall open when X and close when Y" — is marked COVERED by a vector testing
+only one, and the other vanishes silently. The owner expects MANY VECTORS PER CLAUSE, which
+makes this the normal case rather than an edge one: five vectors on that clause can all
+exercise X, and a clause-level denominator reports it fully covered while nothing ever tested
+Y. That is this project's own correlated-check failure wearing coverage clothing.
+
+THE THREE "THIS ALREADY EXISTS" REASONS SURVIVE THE CHANGE, with one adjustment:
+  - `TestVector.Basis` ALREADY CITES THE CLAUSE — it must now cite the clause AND the
+    assertion within it. That is the one piece of new metadata this costs, and it is a field,
+    not a mechanism.
+  - it remains LIKE-FOR-LIKE OR STRICTLY FINER than what it replaces: the functional
+    reviewer's verdict was per-requirement, so an assertion-level verdict is at least as
+    granular, which keeps the substitution honest rather than approximate.
   - `converter relation-reconcile` already works on `(instance, relation-id)` pairs, so
     instance qualification has precedent here rather than being invented.
 
-*** THE DENOMINATOR MUST COME FROM THE SPECIFICATION, NEVER FROM THE TEST SUITE. *** Any unit
-defined by what somebody wrote a vector for is SELF-REFERENTIAL — you cannot be missing an
-assertion nobody wrote, so coverage is always 100%. That is why "assertions" cannot be the
-unit however tempting the granularity.
+*** AND IT RETIRES A PRECONDITION RATHER THAN ADDING ONE. *** Draft 04 required verifying that
+rung-B/C artifacts emit ATOMIC clauses, on pain of silent under-counting. Under a spec-derived
+assertion denominator that check stops being load-bearing: if clauses are already atomic the
+assertion is trivially the clause and the citation costs nothing, and if they are not, the
+decomposition is where the extra assertions are discovered. Either way nothing vanishes
+silently, which was the whole worry.
 
 SIGNALS ARE A SECOND, INDEPENDENT CHECK — NOT THE DENOMINATOR. `converter signal-sweep`'s
 residue answers a different question: is there a SIGNAL no requirement mentions? That catches
 SPEC gaps where clause coverage catches TEST gaps. Two failure modes, two tools, neither
 substituting for the other.
 
-PRECONDITION TO VERIFY: *** CLAUSE ATOMICITY. *** If a clause carries two assertions — "shall
-open when X and close when Y" — a vector testing one marks the whole clause COVERED and the
-other vanishes silently. Either clauses cited as `Basis` are atomic, or coverage records WHICH
-assertion. Check whether the rung-B/C artifacts already produce atomic behaviours; if they do,
-this costs nothing (O13).
-
-THE FOUR BUCKETS. Every clause lands in exactly one, and the wave reports all four:
-    COVERED             a vector exists and cites this clause
+THE FOUR BUCKETS. Every ASSERTION lands in exactly one, and the wave reports all four:
+    COVERED             a vector exists and cites this assertion
     OUT-OF-SCOPE        not a control-logic requirement at all (wiring correctness, HMI
                         behaviour, operator procedure). These were out of scope for the
                         FUNCTIONAL REVIEWER too — they belong to commissioning, not testing,
@@ -919,8 +973,8 @@ bucket turns out large, that is a FINDING TO CHASE, not a category to accept.
 *** THE GATE IS `UNCLASSIFIED = 0`, NOT A PERCENTAGE. *** A threshold fails in a specific way:
 the uncovered remainder is NOT random. It is the requirements that are hard to test, which
 correlates with hard to implement, which is where defects live — so a threshold silently
-concentrates risk in the worst place while reporting a comfortable number. Every clause must
-have been CONSIDERED; not every clause must have a test.
+concentrates risk in the worst place while reporting a comfortable number. Every ASSERTION
+must have been CONSIDERED; not every assertion must have a test.
 
 *** AND THE GATE STOPS THE CLAIM, NOT THE RUN. *** Blocking a wave for a bookkeeping reason
 spends the scarce thing (rig time) to enforce the cheap thing. A wave with incomplete
@@ -933,10 +987,18 @@ the gate still passes. What carries real weight is DEFERRED items having an OWNE
 with their count and AGE reported every wave — aging deferrals are the signal, not the
 classification.
 
-CLASSIFICATION IS STICKY, so this does not churn: once a clause is classified it stays until
-the requirement text changes or the implementing block changes — detectable by clause hash and
-`converter ir-hash` respectively. Re-classification is proportional to CHANGE, not to total
-requirement count.
+CLASSIFICATION IS STICKY, so this does not churn: once an assertion is classified it stays
+until the requirement text changes or the implementing block changes — detectable by hashing
+the assertion text and by `converter ir-hash` respectively. Re-classification is proportional
+to CHANGE, not to total requirement count.
+
+*** ONE CONSEQUENCE OF THE ASSERTION UNIT THAT MUST BE BUILT FOR, NOT DISCOVERED: RE-READING A
+CLAUSE CAN CHANGE ITS DECOMPOSITION. *** A clause previously read as one assertion may later
+decompose into two. That is NOT a classification change and must not be silently absorbed as
+one — the new assertion is UNCLASSIFIED and the gate must fail until someone rules on it.
+Hashing the CLAUSE text alone would miss this, because the clause did not change; the
+DECOMPOSITION did. So the sticky key is (clause hash, assertion index, assertion text hash),
+and a decomposition that yields a different count than last time is reported as its own event.
 
 AND THE INDEPENDENCE MUST SURVIVE THE SWAP. Part of what a functional reviewer provided was a
 SECOND READING of the specification. A vector authored by a different agent preserves that;
@@ -1321,6 +1383,17 @@ in the copy layer, cleared at TEST START rather than read-then-clear, so an obse
 drag the write fence in); and EVENT SCAN-STAMPS (opt-in per signal in the map — a latch answers
 "did it happen", a stamp answers "when, relative to what", at roughly 32x the memory).
 
+*** AND THE "WHAT" A SCAN-STAMP IS RELATIVE TO IS NOW DEFINED: THE START BOOL'S RISING EDGE
+(D37). *** Until that decision existed this section asked stamps to answer "when relative to
+what" while the design supplied no origin, so a stamp was an absolute counter value that only
+became meaningful by comparison with other stamps. Stamps are now DIFFERENCES IN SCANS FROM
+T=0, which is the unit the whole observability argument is conducted in.
+
+    A COROLLARY WORTH BUILDING FOR: the scan counter is free-running and WILL WRAP. A stamp
+    taken as a difference from T=0 is immune to a wrap that happens between waves, which an
+    absolute stamp is not — but a wrap DURING a long test still has to be handled in the
+    subtraction rather than assumed away.
+
 --------------------------------------------------------------------------------
 13. G-7 — MEASURED 2026-08-12. THE EXPECTATION WAS REFUTED.
 --------------------------------------------------------------------------------
@@ -1412,26 +1485,69 @@ running this should expect to be at the machine.
   G8  *** CLOSED — it DOES fire. See §13. ***
 
 --------------------------------------------------------------------------------
-15. STILL OPEN
+15. WHAT REMAINS — AND IT IS NOT DESIGN QUESTIONS
 --------------------------------------------------------------------------------
 
-*** STATUS AS OF 2026-08-12: NO INTERNAL DESIGN QUESTION IS UNANSWERED OR UNDEFERRED. ***
+*** NO INTERNAL DESIGN QUESTION IS UNANSWERED OR UNDEFERRED. *** The full disposition:
 
     CLOSED  : O3 O4 O5 O6 O8 O10 O12 O13   (O8 including its residual)
     RULED   : O9 — the policy is decided (D32); what remains is BUILD and VERIFY, not a
                    decision. Its verification depends on external G4.
-    DEFERRED: O11 O14 — both by explicit ruling, each with a condition recorded in D36 that
-                   must hold WHILE they are deferred.
+    DEFERRED: O11 O14 — both by explicit ruling, each with a condition in D36 that must hold
+                   WHILE they are deferred.
     EXTERNAL: G1 G3 G4 G7 (§14) — not ours to answer. G4 is on O9's critical path.
 
-    SO WHAT IS LEFT IS NOT QUESTIONS. It is (a) build-and-verify work, (b) two measurements
-    scheduled for after the design blocks exist, and (c) four vendor unknowns.
+The per-question detail is retained below, because a closed question's REASONING is what stops
+it being reopened from scratch. What follows is disposition, not open work.
 
-    THREE RESIDUALS carry a recorded treatment rather than a full answer, and are the places
-    a new question is most likely to appear: inert failing to establish (D34, treated by
-    D32's excise path); the Class B/C configurations that reach a human immediately (D32
-    caveat 3); and blocks with no discoverable start condition (D37), which is the thread
-    that runs into the design-for-testability skill.
+................................................................................
+15a. THE WORK THAT REMAINS, IN THE ORDER IT SHOULD BE DONE
+................................................................................
+
+  BUILD, AND VERIFY BEFORE RELYING ON IT
+    1. *** THE THROW-FROM-DELEGATE ABORT (D32). *** The whole guard model depends on it, and
+       it is the one item where the design is decided but the mechanism is unproven.
+       VERIFY: that a throw inside the delegate propagates AND leaves the CPU untouched
+       rather than half-loaded — external G4. Until that is measured, D32 is a plan.
+    2. *** THE DOWNLOAD FEEDBACK PARSER (§9c). *** Two known defects to fix while building
+       it: the transfer verdict must key on the LOAD MANIFEST rather than infer from the
+       absence of an up-to-date phrase (it currently infers while sitting on 99 positive load
+       messages), and the unseen-configuration log must record the OUTCOME of not answering —
+       aborted, or completed anyway — not merely that a new configuration appeared.
+    3. *** THE CONFIGURATION CLASSIFIER (D32 caveat 3). *** Class A / B / C decides whether
+       the fallback download is progress or a wasted CPU stop. It is a lookup table plus an
+       explicit unknown branch, and the unknown branch is the one that matters.
+
+  THEN BUILD, IN DB ORDER
+    4. DB-13 tensor packing and DB-8 the result package — first, together (D30).
+    5. DB-9 the submission unit — both of the above depend on it.
+    6. DB-12 time compression, narrowed to individually long tests.
+    7. DB-10 / DB-11 — last, and only if measurement says they are needed.
+
+  MEASURE, ONCE THERE IS SOMETHING TO MEASURE
+    8. O14 conflict density — the highest-value measurement in the design. Deferred by
+       ruling, WITH D36's condition holding meanwhile: author models instanced per test.
+    9. O11 maximum tensor width against the poll budget — feeds DB-13's colouring as a cap.
+
+................................................................................
+15b. THE PLACES A NEW QUESTION IS MOST LIKELY TO APPEAR
+................................................................................
+
+Five residuals carry a recorded TREATMENT rather than a full answer. None blocks the build;
+all are worth recognising on sight rather than rediscovering:
+
+  - INERT FAILING TO ESTABLISH (D34) — a block latched in a fault that will not reset. Not a
+    test failure; a wave-blocking condition, treated by D32's excise-to-deferred path.
+  - CLASS B / C CONFIGURATIONS (D32) — reach a human immediately and by design. If they turn
+    out to be common rather than rare, the policy is right but the rig is telling us
+    something else.
+  - BLOCKS WITH NO DISCOVERABLE START CONDITION (D37, §2.6) — the thread that runs into the
+    design-for-testability skill.
+  - ASSERTION DECOMPOSITION DRIFT (§7) — a clause re-read into a different number of
+    assertions. Handled by the (clause hash, assertion index, assertion text hash) key, and
+    the failure mode if it is not is silent under-counting.
+  - THE SCAN-COUNTER WRAP (§12) — immune between waves once stamps are differences from T=0,
+    still needs handling within a long test.
 
   O3. *** CLOSED 2026-08-12 — MEASURED. *** A download that stops the CPU CAN restart it
       within the same operation. On the FULL download, `StartModules` was raised in the POST
