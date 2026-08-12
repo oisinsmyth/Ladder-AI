@@ -83,13 +83,16 @@ public static class GraphReducer
         // ModbusMasterStatement/ModbusCommLoadStatement's own doc comments.
         var modbusMasterParts = network.Parts.Where(p => p.Name == "Modbus_Master").ToList();
         var modbusCommLoadParts = network.Parts.Where(p => p.Name == "Modbus_Comm_Load").ToList();
+        // Registry-driven fixed-shape instructions (MB_COMM_LOAD 2.1 / MB_MASTER 2.2 as of
+        // 2026-08-12) — one reducer for the whole family, see ReduceFixedShape.
+        var fixedShapeParts = network.Parts.Where(p => FixedShapeInstructions.IsFixedShapePartName(p.Name)).ToList();
         if (coils.Count == 0 && tonParts.Count == 0 && moveParts.Count == 0 && wordAndParts.Count == 0
             && callParts.Count == 0 && mulParts.Count == 0 && convertParts.Count == 0 && swapParts.Count == 0
             && absParts.Count == 0 && limitParts.Count == 0 && tSubParts.Count == 0 && tConvParts.Count == 0
             && calcParts.Count == 0 && moveBlkVariantParts.Count == 0 && waitParts.Count == 0 && fillBlockIParts.Count == 0
-            && modbusMasterParts.Count == 0 && modbusCommLoadParts.Count == 0)
+            && modbusMasterParts.Count == 0 && modbusCommLoadParts.Count == 0 && fixedShapeParts.Count == 0)
         {
-            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, MOVE_BLK_VARIANT, WAIT, FillBlockI, Modbus_Master, or Modbus_Comm_Load found.");
+            throw new NonReducibleNetworkException($"Network {networkNumber}: no Coil/SCoil/RCoil, TON/TONR/TOF, Move, And, Call, Mul/Add, Convert, Swap, Abs, LIMIT, T_SUB, T_CONV, Calc, MOVE_BLK_VARIANT, WAIT, FillBlockI, Modbus_Master, Modbus_Comm_Load, or fixed-shape registry instruction found.");
         }
 
         var assignments = new List<CoilAssignment>();
@@ -128,6 +131,8 @@ public static class GraphReducer
         var modbusMasterSidecars = new List<ModbusMasterStatementSidecar>();
         var modbusCommLoadStatements = new List<ModbusCommLoadStatement>();
         var modbusCommLoadSidecars = new List<ModbusCommLoadStatementSidecar>();
+        var fixedShapeStatements = new List<FixedShapeStatement>();
+        var fixedShapeSidecars = new List<FixedShapeStatementSidecar>();
         var allAccessEntries = new List<SidecarAccessEntry>();
         var allConstantEntries = new List<SidecarConstantEntry>();
         var visitedWireUIds = new HashSet<int>();
@@ -471,6 +476,25 @@ public static class GraphReducer
             }
         }
 
+        // Registry-driven fixed-shape instructions are reduced last, same reasoning as every other
+        // production above.
+        foreach (var fixedShape in fixedShapeParts)
+        {
+            var (statement, sidecar, accessEntries, constantEntries) =
+                ReduceFixedShape(network, fixedShape, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds);
+            fixedShapeStatements.Add(statement);
+            fixedShapeSidecars.Add(sidecar);
+            foreach (var entry in accessEntries)
+            {
+                AddAccessEntry(allAccessEntries, entry);
+            }
+
+            foreach (var entry in constantEntries)
+            {
+                AddConstantEntry(allConstantEntries, entry);
+            }
+        }
+
         if (visitedWireUIds.Count != network.Wires.Count)
         {
             throw new NonReducibleNetworkException(
@@ -481,11 +505,11 @@ public static class GraphReducer
         var irNetwork = new IrNetwork(
             networkNumber, title, assignments, timerBindings, moveStatements, wordAndStatements, callStatements, null, mulStatements, convertStatements,
             swapStatements, absStatements, limitStatements, tSubStatements, tConvStatements, calcStatements, moveBlkVariantStatements, waitStatements,
-            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements);
+            fillBlockIStatements, modbusMasterStatements, modbusCommLoadStatements, fixedShapeStatements);
         var networkSidecar = new NetworkSidecar(
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
-            moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars);
+            moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars, fixedShapeSidecars);
         // ADR-0006 phase 2: derive per-node fan-out markers ({split N}/{recv N}) from shared part UIds and
         // attach them to the readable Expr trees. Fan-out is recorded per node here — the old per-network
         // SPLIT flag + synthesis heuristic are gone (ADR-0006 phase 3).
@@ -1685,6 +1709,145 @@ public static class GraphReducer
             statusWireUId);
 
         return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    // The reserved readable-form token meaning "this port is wired to <OpenCon>" — deliberately
+    // unconnected. A bare word, matching the `TRUE`/`ENO` sentinel precedent this IR already sets
+    // for EN. Bare words can collide with a real tag name, so the collision is CHECKED rather than
+    // assumed away: a genuine tag called `OPEN` reaching a fixed-shape port is a hard error naming
+    // the collision (see RequireNotOpenSentinel), never a silently-mangled round trip.
+    private const string OpenPortSentinel = "OPEN";
+
+    // One registry-driven fixed-shape instruction (FixedShapeInstructions): `en` via the shared
+    // ResolveEnSource, an <Instance> like TON/Call, and then every port in the template's own
+    // order — each of which may be wired to a tag, wired to a literal, wired to <OpenCon>, or
+    // absent from <Wires> entirely.
+    //
+    // This is deliberately ONE reducer for the whole family rather than a hand-written one per
+    // instruction (as Modbus_Master/Modbus_Comm_Load each have). The port list and each port's
+    // DIRECTION come from the registry because neither exists in the exported network — a fact
+    // that also makes the per-instruction approach unable to scale: every new instruction would
+    // otherwise mean another five files edited in lockstep.
+    private static (FixedShapeStatement Statement, FixedShapeStatementSidecar Sidecar, List<SidecarAccessEntry> AccessEntries, List<SidecarConstantEntry> ConstantEntries) ReduceFixedShape(
+        FlgNetwork network,
+        PartNode part,
+        Dictionary<(int, string), WireNode> wiresByPort,
+        Dictionary<int, AccessNode> accessByUId,
+        Dictionary<int, ConstantAccessNode> constantsByUId,
+        int networkNumber,
+        HashSet<int> visitedWireUIds)
+    {
+        var accessEntries = new List<SidecarAccessEntry>();
+        var constantEntries = new List<SidecarConstantEntry>();
+
+        var version = part.Version
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: {part.Name} UId={part.UId} has no Version.");
+        var template = FixedShapeInstructions.Require(part.Name, version);
+
+        var (en, enSidecar) = ResolveEnSource(
+            network, part.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+
+        var arguments = new List<FixedShapeArgument>();
+        var argumentSidecars = new List<FixedShapeArgumentSidecar>();
+
+        foreach (var port in template.Ports)
+        {
+            if (!wiresByPort.TryGetValue((part.UId, port.Name), out var wire))
+            {
+                // Genuinely absent from <Wires> — a third state, distinct from OpenCon. Emitted as
+                // no argument at all (the "invisible when absent" convention ENO already set).
+                continue;
+            }
+
+            var others = wire.Endpoints
+                .Where(e => !(e.Kind == EndpointKind.NameCon && e.UId == part.UId && e.PortName == port.Name))
+                .ToList();
+
+            if (others.Count != 1)
+            {
+                throw new NonReducibleNetworkException(
+                    $"Network {networkNumber}: {part.Name} UId={part.UId} port '{port.Name}' has {others.Count} other wire " +
+                    "endpoint(s) — exactly one (an Access, a literal constant, or an OpenCon) is supported.");
+            }
+
+            var other = others[0];
+            visitedWireUIds.Add(wire.UId);
+
+            if (other.Kind == EndpointKind.OpenCon)
+            {
+                arguments.Add(new FixedShapeArgument(port.Name, port.Direction == PortDirection.Output
+                    ? new PortBinding.OpenOutput()
+                    : new PortBinding.OpenInput()));
+                argumentSidecars.Add(new FixedShapeArgumentSidecar(port.Name, new PortBindingSidecar.Open(wire.UId, other.UId!.Value)));
+                continue;
+            }
+
+            if (other.Kind != EndpointKind.IdentCon)
+            {
+                throw new UnsupportedConstructException(
+                    $"Network {networkNumber}: {part.Name} UId={part.UId} port '{port.Name}' is wired to a " +
+                    $"{other.Kind} endpoint — only an Access/constant (IdentCon) or an OpenCon is supported. A port fed " +
+                    "by a contact chain is real in principle but has no live example on this instruction family; it is " +
+                    "refused rather than guessed at.");
+            }
+
+            if (accessByUId.TryGetValue(other.UId!.Value, out var access))
+            {
+                RequireNotOpenSentinel(access.DottedPath, part.Name, part.UId, port.Name, networkNumber);
+                AddAccessEntry(accessEntries, new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope));
+                arguments.Add(new FixedShapeArgument(port.Name, port.Direction == PortDirection.Output
+                    ? new PortBinding.Dest(access.DottedPath)
+                    : new PortBinding.Value(new Expr.TagRef(access.DottedPath))));
+                argumentSidecars.Add(new FixedShapeArgumentSidecar(port.Name, new PortBindingSidecar.Tag(access.UId, wire.UId)));
+                continue;
+            }
+
+            if (constantsByUId.TryGetValue(other.UId!.Value, out var constant))
+            {
+                if (port.Direction == PortDirection.Output)
+                {
+                    throw new NonReducibleNetworkException(
+                        $"Network {networkNumber}: {part.Name} UId={part.UId} output port '{port.Name}' is wired to a " +
+                        "literal constant — an output writes a tag.");
+                }
+
+                AddConstantEntry(constantEntries, new SidecarConstantEntry(constant.Value, constant.UId, constant.ConstantType));
+                arguments.Add(new FixedShapeArgument(port.Name, new PortBinding.Value(new Expr.Literal(constant.Value))));
+                argumentSidecars.Add(new FixedShapeArgumentSidecar(port.Name, new PortBindingSidecar.Literal(constant.UId, wire.UId)));
+                continue;
+            }
+
+            throw new NonReducibleNetworkException(
+                $"Network {networkNumber}: {part.Name} UId={part.UId} port '{port.Name}' references unknown Access/Constant UId={other.UId}.");
+        }
+
+        var instance = part.Instance
+            ?? throw new NonReducibleNetworkException($"Network {networkNumber}: {part.Name} UId={part.UId} has no Instance reference.");
+        var instancePath = string.Join('.', instance.ComponentPath);
+
+        var statement = new FixedShapeStatement(part.Name, en, instancePath, arguments);
+        var sidecar = new FixedShapeStatementSidecar(
+            part.UId,
+            part.Name,
+            version,
+            enSidecar,
+            instance.UId,
+            instance.Scope,
+            instance.ComponentPath,
+            argumentSidecars);
+
+        return (statement, sidecar, accessEntries, constantEntries);
+    }
+
+    private static void RequireNotOpenSentinel(string tagPath, string partName, int partUId, string port, int networkNumber)
+    {
+        if (string.Equals(tagPath, OpenPortSentinel, StringComparison.Ordinal))
+        {
+            throw new UnsupportedConstructException(
+                $"Network {networkNumber}: {partName} UId={partUId} port '{port}' is wired to a tag literally named " +
+                $"'{OpenPortSentinel}', which is the reserved readable-IR token for a deliberately unconnected port. " +
+                "Rename the tag — the IR cannot represent both meanings with one word.");
+        }
     }
 
     // Resolves a single IdentCon-fed operand (no chain, unlike a boolean chain position) that's

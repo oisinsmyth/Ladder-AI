@@ -179,6 +179,10 @@ public static class DigestBuilder
         Append(parts, "fillblk", network.FillBlockIs.Count);
         Append(parts, "mb-master", network.ModbusMasters.Count);
         Append(parts, "mb-commload", network.ModbusCommLoads.Count);
+        foreach (var group in network.FixedShapes.GroupBy(f => f.Instruction, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            Append(parts, group.Key.ToLowerInvariant(), group.Count());
+        }
 
         return parts.Count == 0 ? "-" : string.Join(", ", parts);
     }

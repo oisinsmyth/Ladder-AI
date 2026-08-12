@@ -916,6 +916,83 @@ NETWORK 8 "Run enable delay"
     honestly unverified for full live compile, same standard as `WAIT`; scratch state (both broken
     instance DBs, the synthetic test block) cleaned up afterward. See `AITODO.md`.
 
+- **Fixed-shape registry instructions — `MB_COMM_LOAD` 2.1 / `MB_MASTER` 2.2, built 2026-08-12.**
+  Grounded against a genuine TIA V20 export of a live S7-1200 (classic 1214C) Modbus TCP FC.
+
+  **Why this is a table and not two more hand-written productions.** *Section and datatype do not
+  exist at the call site*: the network XML states only a port NAME on `<NameCon>`. Nothing says
+  `DATA_PTR` is an InOut, or a Variant — that lives in the instruction definition, which is not
+  exported. Wire order (`IdentCon` first vs `NameCon` first) distinguishes a read from a write but
+  cannot distinguish an input from an InOut, and says nothing at all about a port wired only to an
+  `<OpenCon>`. So the converter carries the ordered port list and each port's direction itself, per
+  **(Part Name, Version)** — `Converter/SimaticMl/FixedShapeInstructions.cs` — and one reducer,
+  builder, serializer and parser cover the whole family. Adding the next instruction of this shape
+  is a table entry, not five files. (An InOut port is recorded as an `Input`: measured on a real
+  `MB_SERVER` 5.3 export, an InOut is wired as an ordinary symbolic `<Access>` operand in normal
+  input wire order. The enum names the wire shape, which is all the export states.)
+
+  **Version participates in matching, and an unknown version is refused.** TIA emits
+  `MB_COMM_LOAD` 2.1, `MB_MASTER` 2.2 and `MB_SERVER` 5.3 — the version is what changes an
+  instruction's port list, which is exactly the thing the converter is supplying. Accepting an
+  unrecognized version would apply one version's template to another version's wiring: it would
+  convert, import, and misbehave on the controller. Refusal names the known versions.
+
+  **The older `Modbus_Master` 6.0 / `Modbus_Comm_Load` 5.0 pair is KEPT, not replaced** — a
+  different TIA instruction family with the same functional role. Its own dated grounding record
+  (`docs/evidence/stage-S1.md`, Phase 2 Tier 4) has it through a live TIA `Import()` that
+  succeeded, with compile errors about instance DBs and addresses — *not* the "An instruction with
+  the name 'X' cannot be found" TIA raised for `WAIT` in that same session. TIA resolved the name.
+  Neither family aliases the other: their port lists coincide today and nothing guarantees they
+  will at the next version of either.
+
+  - **An unconnected port is a first-class IR state: `OPEN`.** An unwired instruction port is
+    normal, common LAD — this one block leaves 8 of `MB_COMM_LOAD`'s 12 ports and all 4 of
+    `MB_MASTER`'s outputs on `<OpenCon>`. Three states are distinguished: wired
+    (`PORT := <expr>` / `DONE => <tag>`), deliberately unconnected (`PORT := OPEN` /
+    `DONE => OPEN`), and absent from `<Wires>` entirely (no argument at all — the "invisible when
+    absent" convention `ENO` already set). `OPEN` is **shown** in the readable form, unlike the
+    older sidecar-only treatment of `Modbus_Comm_Load`'s `FLOW_CTRL`/`RTS_ON_DLY`/`RTS_OFF_DLY`:
+    a port an AI cannot see is a port an AI cannot write back. The arrow (`:=` vs `=>`) carries the
+    direction, so a readable-only line stays self-describing without the version. It round-trips to
+    exactly the `<OpenCon>` it came from — never a dropped port, never an invented dummy operand —
+    and contributes no tag reference, so `tagstatus`/`preflight` never see a phantom tag. `OPEN` is
+    a reserved bare word (same precedent as `TRUE`/`ENO`); a tag genuinely named `OPEN` on such a
+    port is a hard error naming the collision, not a silent mangle.
+  - Readable form: `<INSTRUCTION>(<instance>, EN := <expr-or-ENO>, <PORT> := <expr>|OPEN, ...,
+    <PORT> => <tag>|OPEN, ...)` — instance path first (same convention as `TON`/`CALL`), ports in
+    the template's own declaration order. The keyword is the source Part Name verbatim.
+  - Sidecar: `fixedshape <n>` / `fixedshapeuid` / `instruction` / `version` / `en` / `instanceuid` /
+    `instancescope` / `instancepath`, then one uniform `port <NAME> tag|literal|open = <uid> <uid>`
+    line per bound port. `open` carries the wire UId and the `<OpenCon>`'s own UId, which is
+    distinct from it and never fabricated.
+  - **Not sidecar-synthesizable**, same as `Modbus_*`: conversion scope is not synthesis scope.
+
+- **A sidecar constant value may contain SPACES (fixed 2026-08-12).** The `  constant <value> =
+  <uid> <type>` line's value was matched as `\S+`, so a classic S7 **area pointer** —
+  `<ConstantType>Any</ConstantType>` carrying `P#DB99.DBX0.0 BYTE 2` as free text, which is how
+  `MOVE_BLK_VARIANT`'s `SRC` arrives — produced IR the converter could emit and then **refused to
+  read back** (`Malformed sidecar constant line`). That is one-way IR: readable by the AI, never
+  writable by it. The value is now greedy to the anchored ` = <uid> <type>` tail, which covers every
+  constant type whose text can carry a space (`Any`/`Pointer` area pointers, `String`/`WString`
+  literals, `DT`/`DTL` structured literals) rather than special-casing `Any`, and survives a value
+  containing ` = ` itself. Backward compatible: a space-free value parses exactly as before.
+  Alongside it, `P#`-prefixed text is now recognized as a **literal** by the readable-form leaf
+  parser (as `T#` already was) — it previously read back as an `Expr.TagRef`, which converted to XML
+  correctly via the sidecar but made every tag-walking tool treat an area pointer as a proposed tag.
+
+- **A comparison's LITERAL is typed by the comparison's own type (fixed 2026-08-12).** FI-55 fixed
+  the `SrcType` half of this in 2026-08 and left the literal half: `SidecarSynthesizer`'s compare
+  step resolved its operands *before* resolving `SrcType` and passed no `constantTypeOverride`, so
+  the literal's `<ConstantType>` came from its own magnitude. With registers declared `UInt` — the
+  honest type for a Modbus holding register — that emitted nine literals as `Int`/`DInt` against
+  `SrcType="UInt"` boxes, which TIA rejects by the same door FI-55 came through ("the data type Int
+  of the actual parameter does not match the data type UInt of the formal parameter"). `SrcType` is
+  now resolved first and handed to both operands, the same rule `MUL`/`ADD`/`CALC` operands already
+  followed. Nothing had hit it because **the committed corpus contains zero `UInt`/`Word`
+  comparisons** — `Word`, `USInt`, `UDInt` and `SInt` are equally unexercised, so the fix and its
+  guards are the general rule, not the `UInt` case. FI-54's duration-literal carve-out is unaffected:
+  a `T#`/`LT#` literal is still a `TypedConstant` with no `<ConstantType>` in any position.
+
 ### Explicit form (fallback, per-network)
 
 Used only when a network's graph doesn't reduce to the readable form. Same information, laid out

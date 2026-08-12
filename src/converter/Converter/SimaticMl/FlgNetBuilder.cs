@@ -140,6 +140,12 @@ public static class FlgNetBuilder
                 $"Network {network.Number}: IR has {network.ModbusCommLoads.Count} Modbus_Comm_Load(s) but the sidecar records {sidecar.ModbusCommLoads.Count}.");
         }
 
+        if (network.FixedShapes.Count != sidecar.FixedShapes.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR has {network.FixedShapes.Count} fixed-shape instruction(s) but the sidecar records {sidecar.FixedShapes.Count}.");
+        }
+
         var parts = new List<PartNode>();
         var emittedPartUIds = new HashSet<int>();
         var wireEndpointsByUId = new Dictionary<int, List<WireEndpoint>>();
@@ -285,6 +291,11 @@ public static class FlgNetBuilder
         for (var mm = 0; mm < network.ModbusMasters.Count; mm++)
         {
             BuildModbusMaster(sidecar.ModbusMasters[mm], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        for (var fs = 0; fs < network.FixedShapes.Count; fs++)
+        {
+            BuildFixedShape(sidecar.FixedShapes[fs], timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
         for (var mc = 0; mc < network.ModbusCommLoads.Count; mc++)
@@ -988,6 +999,59 @@ public static class FlgNetBuilder
 
         AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.StatusAccessUId, null));
         AddEndpoint(wireEndpointsByUId, sidecar.StatusWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.ModbusCommLoadPartUId, "STATUS"));
+    }
+
+    // Builds a registry-driven fixed-shape instruction Part, its `en` wiring, its Instance (same
+    // shape TON/Call/Modbus_* already use), and one wire per bound port.
+    //
+    // The registry is consulted here for one thing the sidecar deliberately does not carry: each
+    // port's DIRECTION, which decides wire endpoint ORDER. An input wires
+    // IdentCon/OpenCon → NameCon; an output wires NameCon → IdentCon/OpenCon. That order is not
+    // semantically load-bearing for `Normalizer` (it sorts a wire's endpoints), but it is what a
+    // real TIA export writes, and regenerating a document that differs from TIA's own shape for no
+    // reason is how avoidable import surprises get manufactured.
+    private static void BuildFixedShape(
+        FixedShapeStatementSidecar sidecar,
+        IReadOnlyDictionary<int, TimerBindingSidecar> timersByTonPartUId,
+        List<PartNode> parts,
+        HashSet<int> emittedPartUIds,
+        Dictionary<int, List<WireEndpoint>> wireEndpointsByUId)
+    {
+        var template = FixedShapeInstructions.Require(sidecar.Instruction, sidecar.Version);
+
+        BuildEnSource(sidecar.En, sidecar.PartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+
+        var instance = new AccessNode(sidecar.InstanceUId, sidecar.InstanceScope, sidecar.InstanceComponentPath);
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.PartUId, sidecar.Instruction, Version: sidecar.Version, Instance: instance));
+
+        foreach (var argument in sidecar.Arguments)
+        {
+            var port = template.PortNamed(argument.Port)
+                ?? throw new IrFormatException(
+                    $"{sidecar.Instruction} {sidecar.Version} has no port named '{argument.Port}' — the sidecar and the " +
+                    "converter's port template disagree.");
+
+            var isOutput = port.Direction == PortDirection.Output;
+            var (wireUId, otherEndpoint) = argument.Binding switch
+            {
+                PortBindingSidecar.Tag tag => (tag.WireUId, new WireEndpoint(EndpointKind.IdentCon, tag.AccessUId, null)),
+                PortBindingSidecar.Literal literal => (literal.WireUId, new WireEndpoint(EndpointKind.IdentCon, literal.ConstantUId, null)),
+                PortBindingSidecar.Open open => (open.WireUId, new WireEndpoint(EndpointKind.OpenCon, open.OpenConUId, null)),
+                _ => throw new IrFormatException($"Unsupported PortBindingSidecar kind: {argument.Binding.GetType().Name}"),
+            };
+
+            var portEndpoint = new WireEndpoint(EndpointKind.NameCon, sidecar.PartUId, argument.Port);
+            if (isOutput)
+            {
+                AddEndpoint(wireEndpointsByUId, wireUId, portEndpoint);
+                AddEndpoint(wireEndpointsByUId, wireUId, otherEndpoint);
+            }
+            else
+            {
+                AddEndpoint(wireEndpointsByUId, wireUId, otherEndpoint);
+                AddEndpoint(wireEndpointsByUId, wireUId, portEndpoint);
+            }
+        }
     }
 
     // A tag-or-literal operand wire — used for a TON's PT, a comparison's in1/in2, and a Move's

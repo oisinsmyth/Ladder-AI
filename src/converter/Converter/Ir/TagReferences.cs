@@ -403,6 +403,35 @@ public static class TagReferences
                 yield return path;
             }
         }
+
+        // Fixed-shape instructions. An OpenInput/OpenOutput port names no tag at all — that is the
+        // whole point of representing "unconnected" as its own state rather than as a placeholder
+        // operand — so it contributes nothing here and never reaches tagstatus/preflight.
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            yield return fixedShape.InstancePath;
+            foreach (var path in FromEnSource(fixedShape.En))
+            {
+                yield return path;
+            }
+
+            foreach (var argument in fixedShape.Arguments)
+            {
+                switch (argument.Binding)
+                {
+                    case PortBinding.Value value:
+                        foreach (var path in FromExpr(value.Expr))
+                        {
+                            yield return path;
+                        }
+
+                        break;
+                    case PortBinding.Dest dest:
+                        yield return dest.Tag;
+                        break;
+                }
+            }
+        }
     }
 
     // Companion to AllTagPaths that yields each Expr-valued field (conditions, EN-source conditions,
@@ -606,6 +635,22 @@ public static class TagReferences
             yield return mcl.RespTo;
             yield return mcl.MbDb;
         }
+
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            foreach (var e in ExprsOfEnSource(fixedShape.En))
+            {
+                yield return e;
+            }
+
+            foreach (var argument in fixedShape.Arguments)
+            {
+                if (argument.Binding is PortBinding.Value value)
+                {
+                    yield return value.Expr;
+                }
+            }
+        }
     }
 
     // FI-22: the reader/writer substrate. Mirrors AllTagPaths' per-statement-kind walk but tags each
@@ -794,6 +839,25 @@ public static class TagReferences
             foreach (var u in Reads(mcl.Parity)) yield return u;
             foreach (var u in Reads(mcl.RespTo)) yield return u;
             foreach (var u in Reads(mcl.MbDb)) yield return u;
+        }
+
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            var fixedShapeGuard = GuardOf(fixedShape.En);
+            yield return new DirectedTagUsage(fixedShape.InstancePath, TagDirection.Write, Guard: fixedShapeGuard);
+            foreach (var u in Reads(fixedShape.En)) yield return u;
+            foreach (var argument in fixedShape.Arguments)
+            {
+                switch (argument.Binding)
+                {
+                    case PortBinding.Value value:
+                        foreach (var u in Reads(value.Expr)) yield return u;
+                        break;
+                    case PortBinding.Dest dest:
+                        yield return new DirectedTagUsage(dest.Tag, TagDirection.Write, Guard: fixedShapeGuard);
+                        break;
+                }
+            }
         }
     }
 

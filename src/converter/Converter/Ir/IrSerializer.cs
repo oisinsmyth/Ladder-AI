@@ -311,6 +311,40 @@ public static class IrSerializer
               .Append(", STATUS => ").Append(modbusCommLoad.StatusTag)
               .Append(")\n");
         }
+
+        // Registry-driven fixed-shape instructions (MB_COMM_LOAD/MB_MASTER as of 2026-08-12).
+        // Same layout as MODBUS_MASTER above — instance path first, then EN, then the template's
+        // own ports in order — except that the port list is data, not code, and a deliberately
+        // unconnected port is SHOWN as `OPEN` rather than hidden in the sidecar. Showing it is the
+        // point: a port an AI cannot see is a port an AI cannot write back.
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            sb.Append("  ").Append(fixedShape.Instruction).Append('(').Append(fixedShape.InstancePath)
+              .Append(", EN := ").Append(SerializeEnSource(fixedShape.En));
+            foreach (var argument in fixedShape.Arguments)
+            {
+                sb.Append(", ").Append(argument.Port);
+                switch (argument.Binding)
+                {
+                    case PortBinding.Value value:
+                        sb.Append(" := ").Append(SerializeExpr(value.Expr));
+                        break;
+                    case PortBinding.Dest dest:
+                        sb.Append(" => ").Append(dest.Tag);
+                        break;
+                    case PortBinding.OpenInput:
+                        sb.Append(" := OPEN");
+                        break;
+                    case PortBinding.OpenOutput:
+                        sb.Append(" => OPEN");
+                        break;
+                    default:
+                        throw new IrFormatException($"Unsupported PortBinding kind: {argument.Binding.GetType().Name}");
+                }
+            }
+
+            sb.Append(")\n");
+        }
     }
 
     // The EN slot's own value — either an ordinary boolean expression (including the existing
@@ -863,6 +897,46 @@ public static class IrSerializer
             sb.Append("    errorwire = ").Append(modbusCommLoad.ErrorWireUId).Append('\n');
             sb.Append("    status = ").Append(modbusCommLoad.StatusAccessUId).Append('\n');
             sb.Append("    statuswire = ").Append(modbusCommLoad.StatusWireUId).Append('\n');
+        }
+
+        // A fixed-shape instruction's ports are DATA, so its sidecar carries one uniform `port`
+        // line per bound port rather than a hand-written field per port name. Kinds mirror
+        // PortBindingSidecar exactly: `tag`/`literal` carry (AccessUId, WireUId); `open` carries
+        // (WireUId, OpenConUId) — an OpenCon's own UId is distinct from its wire's and neither may
+        // be fabricated on rebuild.
+        for (var fs = 0; fs < sidecar.FixedShapes.Count; fs++)
+        {
+            var fixedShape = sidecar.FixedShapes[fs];
+            sb.Append("  fixedshape ").Append(fs).Append('\n');
+            sb.Append("    fixedshapeuid = ").Append(fixedShape.PartUId).Append('\n');
+            sb.Append("    instruction = ").Append(fixedShape.Instruction).Append('\n');
+            sb.Append("    version = ").Append(fixedShape.Version).Append('\n');
+            SerializeEnSourceSidecar(sb, "    ", fixedShape.En);
+
+            sb.Append("    instanceuid = ").Append(fixedShape.InstanceUId).Append('\n');
+            sb.Append("    instancescope = ").Append(fixedShape.InstanceScope).Append('\n');
+            sb.Append("    instancepath = ").Append(string.Join('.', fixedShape.InstanceComponentPath)).Append('\n');
+
+            foreach (var argument in fixedShape.Arguments)
+            {
+                sb.Append("    port ").Append(argument.Port).Append(' ');
+                switch (argument.Binding)
+                {
+                    case PortBindingSidecar.Tag tag:
+                        sb.Append("tag = ").Append(tag.AccessUId).Append(' ').Append(tag.WireUId);
+                        break;
+                    case PortBindingSidecar.Literal literal:
+                        sb.Append("literal = ").Append(literal.ConstantUId).Append(' ').Append(literal.WireUId);
+                        break;
+                    case PortBindingSidecar.Open open:
+                        sb.Append("open = ").Append(open.WireUId).Append(' ').Append(open.OpenConUId);
+                        break;
+                    default:
+                        throw new IrFormatException($"Unsupported PortBindingSidecar kind: {argument.Binding.GetType().Name}");
+                }
+
+                sb.Append('\n');
+            }
         }
     }
 

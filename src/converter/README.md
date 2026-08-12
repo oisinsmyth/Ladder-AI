@@ -24,13 +24,18 @@ parameter-interface support long after both shipped — contradicted by its own 
 The authoritative list is code, not prose: `Converter/SimaticMl/FlgNetParser.cs`'s
 `SupportedPartNames` set — re-read it before editing this paragraph.)*
 
-**33 supported part names**, each added against a real export rather than guessed at:
+**35 supported part names**, each added against a real export rather than guessed at:
 
 `Contact`, `Coil`, `SCoil`, `RCoil`, `O` (OR-merge, recursive-chain branches), `Not` (standalone
 boolean inverter), `And` (bitwise word AND — "WAND"); the full IEC comparison family
 `Eq`/`Ne`/`Gt`/`Ge`/`Lt`/`Le`; timers `TON`/`TONR`/`TOF`; `Move` and `MOVE_BLK_VARIANT`; arithmetic
 `Add`/`Sub`/`Mul`/`Div`; `Convert`, `Calc`, `Abs`, `Swap`, `LIMIT`, `T_SUB`, `T_CONV`, `WAIT`,
 `FillBlockI`, `Modbus_Master`, `Modbus_Comm_Load`.
+
+Plus the **fixed-shape registry** names (`FixedShapeInstructions`, 2026-08-12), which
+`SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1 and `MB_MASTER` 2.2 —
+keyed on **(name, version)**, so an unknown version of a known name is refused rather than
+templated with the wrong port list. See the dated section below.
 
 Supported alongside that set, not part of it: FB/FC **`CALL`** (a `<Call>` sibling of `<Part>` in
 the source XML, normalized internally to `PartNode(Name: "Call")`); negated operands; network- and
@@ -43,8 +48,8 @@ result — a correct refusal, not a bug. Per-construct grounding evidence, namin
 was confirmed against, is in `docs/evidence/stage-S1.md`; each construct also has its own dated
 section below.
 
-**Conversion scope is not synthesis scope.** `LIMIT`, `WAIT`, `FillBlockI`, `Modbus_Master` and
-`Modbus_Comm_Load` convert in both directions when a real sidecar is present, but are **not
+**Conversion scope is not synthesis scope.** `LIMIT`, `WAIT`, `FillBlockI`, `Modbus_Master`,
+`Modbus_Comm_Load` and the fixed-shape registry family convert in both directions when a real sidecar is present, but are **not
 sidecar-synthesizable** — they hard-error (`UnsupportedSynthesisConstructException`) on the
 `--synthesize`/derive-always path, as do InOut `CALL` parameters. See "Sidecar synthesis" below for
 the current synthesizable subset.
@@ -2371,6 +2376,68 @@ actually displays.
 DB/member names. Headline test: take the real `Standard` export, `to-ir`, `to-xml`, assert the
 regenerated XML still says `Standard`. All 908 converter tests pass (up from 890); the offline
 golden-harness suites (39, including `ExportDriftDetectorTests`) stay green.
+
+## Fixed-shape instruction registry, unconnected ports, and two one-way-IR fixes (2026-08-12)
+
+Four defects, found together on ONE real exported block — a genuine TIA V20 export of a live
+S7-1200 (classic 1214C) Modbus TCP FC — each of which alone stopped it round-tripping. The fixture
+`Converter.Tests/Fixtures/FixedShapeModbusTcpBlock.xml` **is** that export, structurally element
+for element (415 lines in both), with four identifier lines replaced by invented ones per the data
+boundary.
+
+**1. The supported instruction spellings were the wrong ones.** `FlgNetParser.SupportedPartNames`
+carried `Modbus_Master`/`Modbus_Comm_Load`; TIA emits `MB_MASTER` Version="2.2" and `MB_COMM_LOAD`
+Version="2.1" — and, on a sibling FB, `MB_SERVER` Version="5.3". *Not one whitelist entry was a
+name TIA actually produces here.* Rather than hand-write a third and fourth production, this added
+**`Converter/SimaticMl/FixedShapeInstructions.cs`**: a `(Part Name, Version) → ordered port list
+with direction` registry, driving one reducer (`GraphReducer.ReduceFixedShape`), one builder
+(`FlgNetBuilder.BuildFixedShape`), one serializer block and one parser block. Adding the next
+instruction of this shape is a table entry.
+
+The registry exists because **section and datatype do not exist at the call site** — the network
+XML states only a port NAME on `<NameCon>`. Wire order distinguishes read from write; it cannot
+distinguish an input from an InOut, and says nothing about a port wired only to an `<OpenCon>`.
+**Version participates in matching and an unknown version is refused** (2.1 vs 2.2 vs 5.3 across
+three real families): applying one version's port template to another version's wiring would
+convert, import, and misbehave on the controller. The older `Modbus_*` pair is **kept, not
+replaced** — see `FixedShapeInstructions`' own doc comment for the live-import evidence that its
+names are real, and why neither family aliases the other.
+
+**2. An unconnected INPUT port could not be reduced.** `<OpenCon>` on an *output* already worked
+(TON's `ET`, `Modbus_Comm_Load`'s `FLOW_CTRL`/`RTS_ON_DLY`/`RTS_OFF_DLY`); an unconnected input was
+`NonReducibleNetworkException: REQ wire 36 for UId=22 has no IdentCon source`. The registry path
+handles both directions uniformly at no extra cost, and makes the state **visible in the readable
+IR** (`PORT := OPEN`, `DONE => OPEN`) rather than sidecar-only — a port an AI cannot see is a port
+an AI cannot write back. Three states are distinguished: wired, `OPEN` (wired to `<OpenCon>`), and
+absent from `<Wires>` entirely (no argument at all). An `OPEN` port names no tag, so it contributes
+nothing to `tagstatus`/`preflight`; a tag genuinely named `OPEN` on such a port is a hard error.
+
+**3. `MOVE_BLK_VARIANT` was IR the AI could read and never write back.** `to-ir` emitted
+`constant P#DB99.DBX0.0 BYTE 2 = 21 Any`; `to-xml` on the converter's own output threw
+`Malformed sidecar constant line` — the sidecar value was matched as `\S+` and a classic S7 area
+pointer contains spaces. Fixed generally (greedy value against the anchored ` = <uid> <type>`
+tail), not `Any`-specifically: `String`/`WString`/`DT`/`DTL`/`Pointer` values can all carry spaces,
+and a value containing ` = ` survives too. Backward compatible with every sidecar in the repo.
+Alongside it, `P#`-prefixed text now parses as a **literal** rather than an `Expr.TagRef` (as `T#`
+already did), so an area pointer stops being reported as a proposed tag.
+
+**4. A comparison's literal was typed by magnitude, not by the comparison's own type.** FI-55 fixed
+the `SrcType` half and left the literal half, so `UInt` registers compared to constants emitted
+nine `Int`/`DInt` literals against `SrcType="UInt"` boxes — the same mismatch TIA rejects. `SrcType`
+is now resolved first and passed to both operands as `constantTypeOverride`, the rule
+`MUL`/`ADD`/`CALC` operands already followed. **The committed corpus contains zero `UInt`/`Word`
+comparisons**, which is why nothing had hit it; the guards are parameterised over
+`Word`/`USInt`/`UDInt`/`SInt`/`LInt` too. FI-54's duration-literal carve-out is untouched.
+
+`MB_SERVER` 5.3 is deliberately **not** in the registry yet: its port list is characterised, but the
+block carrying it also needs `Array[…] of Struct` and doubly-nested structured interface members
+that this converter does not model, so a template added now could not be exercised end to end.
+
+**Confirm loop, offline half**: `to-ir → to-xml → converter compare` against the original export —
+`EQUIVALENT` for each of the three networks individually and for the whole block; the IR text is
+byte-identical across a second round trip. 968 converter tests pass (up from 929); the golden
+harness stays green at 39. No Portal, no import, no compile, no download — that half is the
+owner's, with a person present.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

@@ -788,6 +788,17 @@ public static class Rules
             yield return ("MOVE_BLK_VARIANT", moveBlk.DestTag);
             yield return ("MOVE_BLK_VARIANT", moveBlk.RetValTag);
         }
+
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            foreach (var argument in fixedShape.Arguments)
+            {
+                if (argument.Binding is PortBinding.Dest dest)
+                {
+                    yield return (fixedShape.Instruction, dest.Tag);
+                }
+            }
+        }
     }
 
     // True when the EN Expr tree contains a comparison (Expr.Compare) with a `Step` register on one

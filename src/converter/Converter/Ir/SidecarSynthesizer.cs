@@ -347,6 +347,15 @@ public static class SidecarSynthesizer
             populated.Add("ModbusCommLoads");
         }
 
+        // Fixed-shape registry instructions (MB_COMM_LOAD/MB_MASTER) sit with the Modbus family for
+        // the same reason: synthesizing one means minting an <Instance> for a system-FB instance DB
+        // and an <OpenCon> UId per unconnected port, neither of which has been proven against a
+        // live import. Conversion scope is not synthesis scope (src/converter/README.md).
+        if (network.FixedShapes.Count > 0)
+        {
+            populated.Add("FixedShapes");
+        }
+
         if (populated.Count > 0)
         {
             throw new UnsupportedSynthesisConstructException(
@@ -616,12 +625,33 @@ public static class SidecarSynthesizer
         Expr.Compare compare, ref int nextUid, List<SidecarAccessEntry> accessEntries,
         List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, TagTypeRegistry tagTypes)
     {
-        var left = ResolveOperand(compare.Left, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-        var right = ResolveOperand(compare.Right, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // 🔴 THE COMPARISON'S OWN TYPE TYPES ITS LITERALS — fixed 2026-08-12.
+        //
+        // SrcType is resolved FIRST and then handed to both operands as `constantTypeOverride`, so
+        // a literal's `<ConstantType>` is the comparison's type rather than a guess from the
+        // literal's own digits. FI-55 fixed the SrcType half of exactly this bug and left the
+        // literal half: with registers declared `UInt` — the honest type for a Modbus holding
+        // register — the synthesizer emitted NINE literals as `Int`/`DInt` against `SrcType="UInt"`
+        // compare boxes (`Int 1` x6, `Int 0`, `DInt 65535` x2), which TIA rejects by the same door
+        // FI-55 came through: "the data type Int of the actual parameter does not match the data
+        // type UInt of the formal parameter".
+        //
+        // Real TIA types them consistently — `simatic-ml/test-project001/FB_MotorFwdRevSystem.xml`
+        // carries `<ConstantType>UDInt</ConstantType><ConstantValue>4294967295</ConstantValue>`
+        // against a UDInt compare.
+        //
+        // NOT a UInt fix. Nothing had hit this because the committed corpus contains ZERO
+        // `UInt`/`Word` comparisons — and `Word`, `USInt`, `UDInt` and `SInt` are all equally
+        // unexercised, so the rule is "the operation's type wins", the same rule MUL/ADD/CALC's own
+        // operands (constantTypeOverride: srcType) have always followed. Duration literals keep
+        // their FI-54 carve-out inside ResolveOperand: they are TypedConstants with no
+        // <ConstantType> at all, whatever type the surrounding operation has.
+        var srcType = InferCompareSrcType(compare.Left, compare.Right, tagTypes);
+        var left = ResolveOperand(compare.Left, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType);
+        var right = ResolveOperand(compare.Right, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType);
         var comparePartUId = nextUid++;
         var outgoingWireUId = nextUid++;
 
-        var srcType = InferCompareSrcType(compare.Left, compare.Right, tagTypes);
         return new ChainStepSidecar.CompareStep(comparePartUId, ComparePartNameFor(compare.Operator), srcType, left, right, outgoingWireUId);
     }
 

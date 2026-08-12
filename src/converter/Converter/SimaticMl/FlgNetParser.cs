@@ -13,8 +13,14 @@ public static class FlgNetParser
 {
     public static readonly XNamespace Ns = "http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5";
 
-    private static readonly HashSet<string> SupportedPartNames = new(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" };
+    // The names carried directly here are the ones with bespoke parse paths. Fixed-shape
+    // registry instructions (MB_COMM_LOAD / MB_MASTER, and anything added to
+    // FixedShapeInstructions later) are admitted from that table instead of being listed twice —
+    // one place to add an instruction, so the parser and the reducer can never disagree about
+    // which names are supported.
+    private static readonly HashSet<string> SupportedPartNames = new HashSet<string>(StringComparer.Ordinal)
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" }
+        .Concat(FixedShapeInstructions.PartNames).ToHashSet(StringComparer.Ordinal);
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
     // FB MotorDOL/FilterUnitSystem); Ne confirmed 2026-07-12 (S1 item 22, FB AirStar — identical shape
@@ -82,7 +88,7 @@ public static class FlgNetParser
                 {
                     throw new UnsupportedConstructException(
                         $"Unsupported instruction '{name}' (UId={RequireAttribute(child, "UId")}). " +
-                        "This converter slice supports Contact/Coil/O/TON/TONR/TOF/Eq/Ge/Lt/Ne/Gt/Le/Move/And/Not/SCoil/RCoil/Mul/Add/Sub/Div/Convert/Swap/Abs/LIMIT/T_SUB/T_CONV/Calc/MOVE_BLK_VARIANT/WAIT/FillBlockI/Modbus_Master/Modbus_Comm_Load only.");
+                        $"This converter slice supports {string.Join("/", SupportedPartNames.OrderBy(n => n, StringComparer.Ordinal))} only.");
                 }
 
                 var uid = RequireIntAttribute(child, "UId");
@@ -172,6 +178,20 @@ public static class FlgNetParser
                 {
                     var (modbusVersion, modbusInstance) = ParseModbusFixedShape(child, name, uid);
                     parts.Add(new PartNode(uid, name, Version: modbusVersion, Instance: modbusInstance));
+                }
+                else if (FixedShapeInstructions.IsFixedShapePartName(name))
+                {
+                    // Registry-driven fixed-shape instructions (MB_COMM_LOAD 2.1 / MB_MASTER 2.2 —
+                    // measured 2026-08-12 from a real V20 export). The Part element's own shape is
+                    // byte-for-byte the one ParseModbusFixedShape already validates (bare Version +
+                    // single-component <Instance>, no DisabledENO, no TemplateValue), so that helper
+                    // is reused rather than duplicated. What is new is the VERSION GATE: the port
+                    // list is not in the export, the converter supplies it per (name, version), so
+                    // an unrecognized version is refused here rather than silently templated with
+                    // another version's ports. See FixedShapeInstructions' own doc comment.
+                    var (fixedVersion, fixedInstance) = ParseModbusFixedShape(child, name, uid);
+                    FixedShapeInstructions.Require(name, fixedVersion);
+                    parts.Add(new PartNode(uid, name, Version: fixedVersion, Instance: fixedInstance));
                 }
                 else
                 {

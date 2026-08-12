@@ -141,6 +141,20 @@ public static class NetworkSignature
             tokens.Add($"mbcommload({Canon(mcl.En)},{Canon(mcl.Req)},{Canon(mcl.Port)},{Canon(mcl.Baud)},{Canon(mcl.Parity)},{Canon(mcl.RespTo)},{Canon(mcl.MbDb)})");
         }
 
+        foreach (var fixedShape in network.FixedShapes)
+        {
+            // An unconnected port is part of the shape — two instances differing only in which
+            // ports are left open are genuinely different networks, so "open" is a token, not a gap.
+            var ports = string.Join(",", fixedShape.Arguments.Select(a => a.Binding switch
+            {
+                PortBinding.Value value => Canon(value.Expr),
+                PortBinding.Dest => "out",
+                PortBinding.OpenInput or PortBinding.OpenOutput => "open",
+                _ => "?",
+            }));
+            tokens.Add($"{fixedShape.Instruction.ToLowerInvariant()}({Canon(fixedShape.En)},{ports})");
+        }
+
         // Statement order within the network is part of the shape; join with a fixed separator.
         return string.Join(";", tokens);
     }

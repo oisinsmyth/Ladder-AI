@@ -859,6 +859,65 @@ public static partial class IrParser
             i++;
         }
 
+        // Registry-driven fixed-shape instructions are always emitted last (IrSerializer). The
+        // keyword IS the source Part Name (MB_MASTER, MB_COMM_LOAD), so the line is recognized by
+        // asking FixedShapeInstructions rather than by a hardcoded prefix — one table, so adding an
+        // instruction never touches this parser. Arguments are NAME-KEYED, not positional: a port
+        // absent from <Wires> is absent from the line entirely, and a port wired to <OpenCon> reads
+        // `NAME := OPEN` / `NAME => OPEN`. The arrow carries the direction, so this parse needs no
+        // version lookup at all.
+        var fixedShapes = new List<FixedShapeStatement>();
+        while (i < lines.Length && FixedShapeLineInstruction(lines[i]) is { } instruction)
+        {
+            var fixedShapeMatch = FixedShapeLineRegex().Match(lines[i]);
+            if (!fixedShapeMatch.Success)
+            {
+                throw new IrFormatException(
+                    $"Expected '  {instruction}(<instance-path>, EN := <expr-or-ENO>, <PORT> := <expr>|OPEN, " +
+                    $"<PORT> => <tag>|OPEN, ...)', got: '{lines[i]}'");
+            }
+
+            var fixedShapeArgs = fixedShapeMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+            if (fixedShapeArgs.Length < 2 || !fixedShapeArgs[1].StartsWith("EN := ", StringComparison.Ordinal))
+            {
+                throw new IrFormatException(
+                    $"Expected '<instance-path>, EN := <expr-or-ENO>, ...' inside {instruction}(...), got: '{lines[i]}'");
+            }
+
+            var fixedShapePath = fixedShapeArgs[0];
+            var fixedShapeEn = ParseEnSource(fixedShapeArgs[1]["EN := ".Length..]);
+            var arguments = new List<FixedShapeArgument>();
+            foreach (var argument in fixedShapeArgs.Skip(2))
+            {
+                var inputSplit = argument.IndexOf(" := ", StringComparison.Ordinal);
+                var outputSplit = argument.IndexOf(" => ", StringComparison.Ordinal);
+                if (inputSplit >= 0 && (outputSplit < 0 || inputSplit < outputSplit))
+                {
+                    var port = argument[..inputSplit];
+                    var value = argument[(inputSplit + 4)..];
+                    arguments.Add(new FixedShapeArgument(port, value == OpenPortSentinel
+                        ? new PortBinding.OpenInput()
+                        : new PortBinding.Value(ParseExprTerm(value))));
+                }
+                else if (outputSplit >= 0)
+                {
+                    var port = argument[..outputSplit];
+                    var target = argument[(outputSplit + 4)..];
+                    arguments.Add(new FixedShapeArgument(port, target == OpenPortSentinel
+                        ? new PortBinding.OpenOutput()
+                        : new PortBinding.Dest(target)));
+                }
+                else
+                {
+                    throw new IrFormatException(
+                        $"Expected '<PORT> := <expr>|OPEN' or '<PORT> => <tag>|OPEN' inside {instruction}(...), got: '{argument}'");
+                }
+            }
+
+            fixedShapes.Add(new FixedShapeStatement(instruction, fixedShapeEn, fixedShapePath, arguments));
+            i++;
+        }
+
         // FI-69: a statement written out of kind-order is consumed by no loop above, so it used to fall
         // through to the outer network loop and fail with "Expected 'NETWORK <n> \"<title>\"'" — a message
         // naming a header that is perfectly well-formed. Cost two import passes on a live job before the
@@ -874,7 +933,7 @@ public static partial class IrParser
                     comment is null ? 0 : 1, timers.Count, assignments.Count, moves.Count, wordAnds.Count,
                     calls.Count, muls.Count, converts.Count, swaps.Count, absStatements.Count, limits.Count,
                     tSubs.Count, tConvs.Count, calcs.Count, moveBlkVariants.Count, waits.Count,
-                    fillBlockIs.Count, modbusMasters.Count, modbusCommLoads.Count,
+                    fillBlockIs.Count, modbusMasters.Count, modbusCommLoads.Count, fixedShapes.Count,
                 });
             }
         }
@@ -883,20 +942,44 @@ public static partial class IrParser
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
             && calcs.Count == 0 && moveBlkVariants.Count == 0 && waits.Count == 0 && fillBlockIs.Count == 0
-            && modbusMasters.Count == 0 && modbusCommLoads.Count == 0)
+            && modbusMasters.Count == 0 && modbusCommLoads.Count == 0 && fixedShapes.Count == 0)
         {
-            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI/MODBUS_MASTER/MODBUS_COMM_LOAD statements and isn't marked [empty].");
+            throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI/MODBUS_MASTER/MODBUS_COMM_LOAD/fixed-shape statements and isn't marked [empty].");
         }
 
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
-            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
+            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes);
+    }
+
+    // The reserved readable-form token for a deliberately unconnected port — see
+    // GraphReducer's own OpenPortSentinel and PortBinding's doc comment.
+    private const string OpenPortSentinel = "OPEN";
+
+    // Recognizes a fixed-shape instruction line by asking the registry, so the set of keywords is
+    // never restated here. Returns the instruction name, or null when this line is something else.
+    private static string? FixedShapeLineInstruction(string line)
+    {
+        foreach (var partName in FixedShapeInstructions.PartNames)
+        {
+            if (line.StartsWith($"  {partName}(", StringComparison.Ordinal))
+            {
+                return partName;
+            }
+        }
+
+        return null;
     }
 
     // The kind-order a network body is parsed in (ir/SPEC.md "Statement-kind ordering within one
     // network"), in the same sequence as the section loops in ParseNetwork and as IrSerializer emits.
     // This is the diagnostic's single source of truth: adding a section loop above without adding its
     // row here trips the arity guard in OutOfOrderStatement rather than silently losing the message.
+    // Derived from the registry, never restated: adding an instruction to FixedShapeInstructions
+    // teaches the out-of-order diagnostic about it too.
+    private static readonly string[] FixedShapePrefixes =
+        FixedShapeInstructions.PartNames.Select(n => $"  {n}(").ToArray();
+
     private static readonly (string Display, string[] Prefixes)[] StatementSections =
     {
         ("COMMENT", new[] { "  COMMENT \"" }),
@@ -918,6 +1001,7 @@ public static partial class IrParser
         ("FILLBLOCKI", new[] { "  FILLBLOCKI(" }),
         ("MODBUS_MASTER", new[] { "  MODBUS_MASTER(" }),
         ("MODBUS_COMM_LOAD", new[] { "  MODBUS_COMM_LOAD(" }),
+        ("fixed-shape (MB_COMM_LOAD/MB_MASTER/...)", FixedShapePrefixes),
     };
 
     // The index into StatementSections of the kind this line opens, or -1 if the line is not a
@@ -1195,10 +1279,19 @@ public static partial class IrParser
     // real tag path is never purely numeric and never contains "#" or "." (06-lad-conventions.md
     // C-005: starts with a letter; dotted tag *paths* are structural component separators, not
     // part of any single component's own name).
+    // "P#" is Siemens' own AREA-POINTER notation (`P#DB99.DBX0.0 BYTE 2`) — added 2026-08-12 from a
+    // real V20 export, where MOVE_BLK_VARIANT's SRC is an `<ConstantType>Any</ConstantType>`
+    // constant carrying exactly that text. Without it the leaf fell through to `Expr.TagRef`, so
+    // an area pointer read back as a TAG: harmless to the sidecar-driven XML rebuild (the sidecar
+    // says it is a literal), but wrong for every tool that walks tag references — `tagstatus`
+    // would have called it a PROPOSED tag and `preflight` would have gated on it, for a value that
+    // is not a tag at all. Recognized by prefix for the same shape-based reason as "T#": a real tag
+    // path never contains "#" (06-lad-conventions.md C-005).
     private static Expr ParseLeaf(string text)
     {
         text = text.Trim();
-        if (text.StartsWith("T#", StringComparison.Ordinal) || NumericLiteralRegex().IsMatch(text) || NumericBaseLiteralRegex().IsMatch(text))
+        if (text.StartsWith("T#", StringComparison.Ordinal) || text.StartsWith("P#", StringComparison.Ordinal)
+            || NumericLiteralRegex().IsMatch(text) || NumericBaseLiteralRegex().IsMatch(text))
         {
             return new Expr.Literal(text);
         }
@@ -1401,9 +1494,61 @@ public static partial class IrParser
             modbusCommLoads.Add(ParseModbusCommLoadSidecar(lines, ref i, number));
         }
 
+        var fixedShapes = new List<FixedShapeStatementSidecar>();
+        while (i < lines.Length && FixedShapeHeaderRegex().IsMatch(lines[i]))
+        {
+            fixedShapes.Add(ParseFixedShapeSidecar(lines, ref i, number));
+        }
+
         return new NetworkSidecar(
             number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
-            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads);
+            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes);
+    }
+
+    // A fixed-shape instruction's own sidecar shape: the instruction identity (name + version,
+    // which together key FixedShapeInstructions), the same En/Instance fields
+    // ParseModbusMasterSidecar carries, then one uniform `port` line per bound port.
+    private static FixedShapeStatementSidecar ParseFixedShapeSidecar(string[] lines, ref int i, int networkNumber)
+    {
+        i++; // "  fixedshape <n>" header — position in the list is the index.
+
+        var partUId = int.Parse(RequirePrefixedLine(lines, ref i, "    fixedshapeuid = "));
+        var instruction = RequirePrefixedLine(lines, ref i, "    instruction = ");
+        var version = RequirePrefixedLine(lines, ref i, "    version = ");
+        var en = ParseEnSourceSidecar(lines, ref i, "    ");
+
+        var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
+        var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
+        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+
+        var arguments = new List<FixedShapeArgumentSidecar>();
+        while (i < lines.Length && lines[i].StartsWith("    port ", StringComparison.Ordinal))
+        {
+            var match = FixedShapePortLineRegex().Match(lines[i]);
+            if (!match.Success)
+            {
+                throw new IrFormatException(
+                    $"Malformed sidecar fixed-shape port line in network {networkNumber}: '{lines[i]}'. Expected " +
+                    "'    port <NAME> tag|literal|open = <uid> <uid>'.");
+            }
+
+            var port = match.Groups["port"].Value;
+            var first = int.Parse(match.Groups["first"].Value);
+            var second = int.Parse(match.Groups["second"].Value);
+            PortBindingSidecar binding = match.Groups["kind"].Value switch
+            {
+                "tag" => new PortBindingSidecar.Tag(first, second),
+                "literal" => new PortBindingSidecar.Literal(first, second),
+                "open" => new PortBindingSidecar.Open(first, second),
+                var kind => throw new IrFormatException($"Unknown fixed-shape port binding kind '{kind}' in network {networkNumber}."),
+            };
+
+            arguments.Add(new FixedShapeArgumentSidecar(port, binding));
+            i++;
+        }
+
+        return new FixedShapeStatementSidecar(
+            partUId, instruction, version, en, instanceUId, instanceScope, instancePath, arguments);
     }
 
     // The inverse of IrSerializer.SerializeEnSourceSidecar — "en = condition" followed by the
@@ -2318,8 +2463,38 @@ public static partial class IrParser
     [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+) (?<scope>\S+)$")]
     private static partial Regex SidecarAccessLineRegex();
 
-    [GeneratedRegex(@"^  constant (?<value>\S+) = (?<uid>\d+) (?<type>\S+)$")]
+    // 🔴 The value is `.+`, NOT `\S+` — fixed 2026-08-12. **A constant value can contain spaces**,
+    // and until this changed the converter could emit an IR it could not read back: a classic S7
+    // AREA POINTER, `<ConstantType>Any</ConstantType>` with
+    // `<ConstantValue>P#DB99.DBX0.0 BYTE 2</ConstantValue>`, is carried by TIA as free text with
+    // two spaces in it. `to-ir` wrote `  constant P#DB99.DBX0.0 BYTE 2 = 21 Any` and `to-xml` on
+    // the converter's OWN OUTPUT then threw "Malformed sidecar constant line" — one-way IR, exactly
+    // the class the owner's "no IR the AI cannot change" ruling exists to eliminate.
+    //
+    // **Deliberately NOT special-cased to `Any`.** Every S7 constant type whose text can carry a
+    // space goes through this one line: `Any`/`Pointer` area pointers (`P#DB1.DBX0.0 BYTE 2`),
+    // `String`/`WString` literals (`'a b'`), `DTL`/`DT`/`Date_And_Time` (`DTL#2026-08-12-15:43:40`
+    // has none, but `DT#2026-08-12-15:43:40.9` variants and structured/typed literals generally do),
+    // and any future type at all. A narrow `Any`-only fix would simply have moved the defect.
+    //
+    // Greedy `.+` with the anchored `= <digits> <non-space>$` tail also survives a value that
+    // itself contains " = " (a String constant could): greediness takes the LAST such separator,
+    // which is the real one. Backward compatible with every sidecar in the repo — a space-free
+    // value parses exactly as it did.
+    [GeneratedRegex(@"^  constant (?<value>.+) = (?<uid>\d+) (?<type>\S+)$")]
     private static partial Regex SidecarConstantLineRegex();
+
+    [GeneratedRegex(@"^  fixedshape (?<index>\d+)$")]
+    private static partial Regex FixedShapeHeaderRegex();
+
+    [GeneratedRegex(@"^    port (?<port>\S+) (?<kind>tag|literal|open) = (?<first>\d+) (?<second>\d+)$")]
+    private static partial Regex FixedShapePortLineRegex();
+
+    // The instruction keyword is validated against FixedShapeInstructions by the caller, so this
+    // only has to recognize the line's SHAPE. `args` is `.+` for the same reason the constant line
+    // above is: an operand can be an area pointer with spaces in it.
+    [GeneratedRegex(@"^  (?<name>[A-Za-z_][A-Za-z0-9_]*)\((?<args>.+)\)$")]
+    private static partial Regex FixedShapeLineRegex();
 
     // Integer ("1", "-1", confirmed real, FC ControlDelays) or decimal ("1000.0", "0.5") — the
     // decimal case was never previously exercised in this (text-to-model) direction: every real

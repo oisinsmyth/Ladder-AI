@@ -352,6 +352,65 @@ public sealed record ModbusCommLoadStatement(
     string ErrorTag,
     string StatusTag);
 
+// How one named port of a fixed-shape instruction is bound in the readable IR.
+//
+// The `Open` case is the point of this type (2026-08-12). **An unwired instruction port is normal,
+// common LAD** — a real S7-1200 Modbus TCP network measured that day leaves 8 of MB_COMM_LOAD's 12
+// ports and all 4 of MB_MASTER's outputs wired to `<OpenCon>` — and until this existed the
+// converter could not represent one at all. It could only be handled where a *specific* port had
+// been hardcoded as optional (Modbus_Comm_Load's FLOW_CTRL/RTS_ON_DLY/RTS_OFF_DLY, TON's ET), and
+// those were sidecar-only: invisible in the readable form, so an AI reading the IR could not see
+// the port existed, and could not have written one.
+//
+// So the open cases are DELIBERATELY VISIBLE in the readable text — `PORT := OPEN`, `DONE => OPEN`
+// — and the arrow keeps saying which direction the port faces, so the readable line remains fully
+// self-describing without the registry. That is why there are two open records rather than one:
+// it means a readable-only IR round-trips through text without needing to know the version. It
+// round-trips: it converts back to exactly the `<OpenCon>` it came from, never a dropped port and
+// never an invented dummy operand. A port genuinely ABSENT from `<Wires>` has no argument at all
+// (the "invisible when absent" convention ENO already set), which is a third, distinct state.
+public abstract record PortBinding
+{
+    private PortBinding() { }
+
+    /// <summary>An Input port reading a tag or a literal.</summary>
+    public sealed record Value(Expr Expr) : PortBinding;
+
+    /// <summary>An Output port writing a tag.</summary>
+    public sealed record Dest(string Tag) : PortBinding;
+
+    /// <summary>An Input port wired to `&lt;OpenCon&gt;` — deliberately unconnected: `PORT := OPEN`.</summary>
+    public sealed record OpenInput : PortBinding;
+
+    /// <summary>An Output port wired to `&lt;OpenCon&gt;` — deliberately unconnected: `DONE => OPEN`.</summary>
+    public sealed record OpenOutput : PortBinding;
+}
+
+// One named port's binding on a fixed-shape instruction. Ports appear in the registry's own
+// declaration order; a port absent from the source's <Wires> is absent here too.
+public sealed record FixedShapeArgument(string Port, PortBinding Binding);
+
+// A registry-driven fixed-shape instruction call (`FixedShapeInstructions`) — MB_COMM_LOAD 2.1 and
+// MB_MASTER 2.2 as of 2026-08-12, both measured from a real TIA V20 export of an S7-1200 Modbus TCP
+// block. Instance-DB-backed like TON/Call/Modbus_* (`InstancePath`, same AccessNode-derived shape).
+//
+// Unlike every earlier production, the ports are NOT spelled out as named fields: they come from
+// the (Instruction, Version) template, because section and datatype do not exist at the call site
+// and the converter is the only thing that knows the port list (see `PortDirection`). One
+// implementation therefore covers every instruction of this shape, present and future, rather than
+// a new reducer/builder/parser/serializer quintet per instruction — which is what the older
+// `ModbusMasterStatement`/`ModbusCommLoadStatement` pair each needed.
+//
+// Version is sidecar-only, matching every other Version-carrying instruction here (TON, LIMIT,
+// MOVE_BLK_VARIANT). Consequence to know about: two versions of one instruction cannot be told
+// apart in a readable-only (`--no-sidecar`) IR — which costs nothing today because this family is
+// deliberately NOT sidecar-synthesizable, exactly like Modbus_*.
+public sealed record FixedShapeStatement(
+    string Instruction,
+    EnSource En,
+    string InstancePath,
+    IReadOnlyList<FixedShapeArgument> Arguments);
+
 // One bound argument at a Call site — only wired parameters ever appear at all (confirmed real,
 // 2026-07-12: 19 of 20 real <Call> instances in FC PlantAutoControl have zero; the one wired example,
 // TomraControlSystem, has 8 InputArgs + 2 OutputArgs, in source declaration order). InputArg's Value
@@ -433,7 +492,8 @@ public sealed record IrNetwork(
     IReadOnlyList<WaitStatement>? Waits = null,
     IReadOnlyList<FillBlockIStatement>? FillBlockIs = null,
     IReadOnlyList<ModbusMasterStatement>? ModbusMasters = null,
-    IReadOnlyList<ModbusCommLoadStatement>? ModbusCommLoads = null)
+    IReadOnlyList<ModbusCommLoadStatement>? ModbusCommLoads = null,
+    IReadOnlyList<FixedShapeStatement>? FixedShapes = null)
 {
     public IReadOnlyList<TimerBinding> Timers { get; init; } = Timers ?? Array.Empty<TimerBinding>();
 
@@ -469,11 +529,13 @@ public sealed record IrNetwork(
 
     public IReadOnlyList<ModbusCommLoadStatement> ModbusCommLoads { get; init; } = ModbusCommLoads ?? Array.Empty<ModbusCommLoadStatement>();
 
+    public IReadOnlyList<FixedShapeStatement> FixedShapes { get; init; } = FixedShapes ?? Array.Empty<FixedShapeStatement>();
+
     public bool IsEmpty => Assignments.Count == 0 && Timers.Count == 0 && Moves.Count == 0 && WordAnds.Count == 0
         && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
         && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0
-        && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0;
+        && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0 && FixedShapes.Count == 0;
 }
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
@@ -1015,6 +1077,39 @@ public sealed record ModbusCommLoadStatementSidecar(
     int StatusAccessUId,
     int StatusWireUId);
 
+// The round-trip half of PortBinding — one named port's exact source wiring. Every UId here is
+// preserved verbatim and never fabricated, same contract as OperandSidecar/OpenConnectionSidecar.
+public abstract record PortBindingSidecar
+{
+    private PortBindingSidecar() { }
+
+    /// <summary>Wired to an ordinary tag &lt;Access&gt; (either direction).</summary>
+    public sealed record Tag(int AccessUId, int WireUId) : PortBindingSidecar;
+
+    /// <summary>Wired to a literal-constant &lt;Access&gt; (inputs only).</summary>
+    public sealed record Literal(int ConstantUId, int WireUId) : PortBindingSidecar;
+
+    /// <summary>Wired to an &lt;OpenCon&gt;, which carries its own UId distinct from the wire's.</summary>
+    public sealed record Open(int WireUId, int OpenConUId) : PortBindingSidecar;
+}
+
+public sealed record FixedShapeArgumentSidecar(string Port, PortBindingSidecar Binding);
+
+// One fixed-shape instruction's full round-trip data. Instance fields mirror
+// ModbusMasterStatementSidecar's own exactly. Instruction+Version together key
+// FixedShapeInstructions, which supplies the port list and each port's direction — the direction
+// is what decides wire endpoint ORDER on rebuild (input: IdentCon/OpenCon then NameCon; output:
+// NameCon then IdentCon/OpenCon), which is not derivable from the port name.
+public sealed record FixedShapeStatementSidecar(
+    int PartUId,
+    string Instruction,
+    string Version,
+    EnSourceSidecar En,
+    int InstanceUId,
+    string InstanceScope,
+    IReadOnlyList<string> InstanceComponentPath,
+    IReadOnlyList<FixedShapeArgumentSidecar> Arguments);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -1037,7 +1132,8 @@ public sealed record NetworkSidecar(
     IReadOnlyList<WaitStatementSidecar>? Waits = null,
     IReadOnlyList<FillBlockIStatementSidecar>? FillBlockIs = null,
     IReadOnlyList<ModbusMasterStatementSidecar>? ModbusMasters = null,
-    IReadOnlyList<ModbusCommLoadStatementSidecar>? ModbusCommLoads = null)
+    IReadOnlyList<ModbusCommLoadStatementSidecar>? ModbusCommLoads = null,
+    IReadOnlyList<FixedShapeStatementSidecar>? FixedShapes = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
 
@@ -1074,6 +1170,8 @@ public sealed record NetworkSidecar(
     public IReadOnlyList<ModbusMasterStatementSidecar> ModbusMasters { get; init; } = ModbusMasters ?? Array.Empty<ModbusMasterStatementSidecar>();
 
     public IReadOnlyList<ModbusCommLoadStatementSidecar> ModbusCommLoads { get; init; } = ModbusCommLoads ?? Array.Empty<ModbusCommLoadStatementSidecar>();
+
+    public IReadOnlyList<FixedShapeStatementSidecar> FixedShapes { get; init; } = FixedShapes ?? Array.Empty<FixedShapeStatementSidecar>();
 }
 
 public sealed record ReducedNetwork(IrNetwork Network, NetworkSidecar Sidecar);
