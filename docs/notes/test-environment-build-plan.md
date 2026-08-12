@@ -31,11 +31,11 @@ Ranked by *how much code dies if it is wrong*, not by how likely it is to be wro
 |---|---|---|---|
 | A1 | `MB_SERVER` applies one request's registers within a single scan | **UNMEASURED** | The whole X-A atomicity model → map design, copy layer, client write path |
 | A2 | Modbus TCP performs on this rig at roughly the assumed rate | partly measured | Poll budget, slot width, O11/D29 arithmetic |
-| A3 | `%MW` has ~2048 words on a 1214C | **UNVERIFIED** | Slot sizing, max concurrent slots, map layout |
+| A3 | ~~`%MW` has ~2048 words on a 1214C~~ | ✅ **VERIFIED — it is 4096 words / 8192 bytes**, double the assumption, and **separate from work memory** | *(was: slot sizing, slot count, map layout — the ceiling doubled and the mirror costs no work memory)* |
 | A4 | A block can be driven by its own existing command signal | untested | D37, inert, the entire start-bool mechanism |
 | A5 | Two slots genuinely do not interfere | untested | Everything multi-agent |
 | A6 | A delegate throw leaves the CPU untouched (G4) | **UNMEASURED** | D32's guard model — this one is a *safety* item, not a schedule item |
-| A7 | `PlcStatus()` reports STOP (X-K) | in progress | Fault detection only. Small blast radius |
+| A7 | ~~`PlcGetStatus` reports STOP (X-K)~~ | ✅ **MEASURED in both states.** STOP reads as raw `0x03` via Sharp7's catch-all | *(closed; also mechanises R8's device-side confirmation)* |
 | A8 | Structural DB change: whole-DB reinit or added tags only (G2) | **VENDOR-CONTRADICTORY** | DB-1's change-class table, therefore routing |
 
 **A1 and A3 are the two that must fall first.** They are cheap to test and expensive to be wrong
@@ -53,13 +53,14 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 | # | Task | Retires | Why it cannot wait |
 |---|---|---|---|
 | 0.1 | ~~`%MW` capacity on the 1214C~~ | A3 | ✅ **DONE 2026-08-12.** **8192 bytes / 4096 words** — double the assumed figure — and **separate from work memory**, so the mirror costs zero work memory. Place it **above** the retentive `M` range (retentive `M` is contiguous from MB0 and counts against retain) |
-| 0.1a | Measure the per-slot object cost empirically | **A9 (new)** | **Retain binds first (3,864 B free, 12× tighter than work); work binds second; load is not a constraint.** No compile-time gate exists — compile reports, download enforces, and a reported failure occurred at 98%. Add one slot's objects, compile, read the delta from TIA's Resources view. Do **not** derive it: the optimized 100-byte reserve question is unsourced |
+| 0.1a | Measure the per-slot object cost empirically | — | **Downgraded to informational by ruling:** only **retain** is gated; work/load/block-count are governed by "keep the PLC footprint minimal" instead. Still worth knowing, no longer a gate input |
+| 0.1b | **Assert every harness object is non-retentive** | **A9** | **The one hard memory restriction.** Checkable from the IR before any device is involved. Watch the trap: retain is per-tag on optimized blocks but **all-or-nothing on standard-access ones**, and the harness deliberately creates standard-access blocks |
 | 0.2 | ~~`PlcGetStatus` in RUN over Sharp7~~ | A7 (half) | ✅ **DONE 2026-08-12.** Returned Run from the rig at 79–94 ms. PUT/GET was **not** a blocker |
 | 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it. **Now more urgent, see below** |
 | 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
 | 0.5 | ~~Confirm Sharp7 presence, version and connection path~~ | — | ✅ **DONE.** Sharp7 1.1.82.0; rack 0 / slot 1; address from the device allowlist |
 | 0.6 | ~~Add read-only run-state read to `IS7Client` + `Sharp7Client`~~ | A7 | ✅ **DONE 2026-08-12**, commit `93835e8`. `ReadRunState`; no `Stopped` member; 221 tests pass; verified against the stopped rig |
-| 0.7 | Paired `DBRead` re-read once the CPU is back in RUN | — | **New.** On the stopped CPU, SZL succeeded but `DBRead`/`MBRead` failed `0x00040000`. Either STOP refuses variable access, or PUT/GET is off — and if it is PUT/GET, no Sharp7 DB read works on this rig at all. One read settles it |
+| 0.7 | ~~Paired `DBRead` re-read in RUN~~ | — | ✅ **DONE 2026-08-12. It is NOT the STOP state.** `DBRead` and `MBRead` fail `0x00040000` in RUN too while SZL works — S7 variable access is refused **CPU-wide**, consistent with PUT/GET being off. **Moot by ruling:** all data reads go over Modbus TCP, so no Sharp7 read path is needed and PUT/GET need not be enabled |
 
 > ### ⚠ 0.3 got more interesting, not less
 >

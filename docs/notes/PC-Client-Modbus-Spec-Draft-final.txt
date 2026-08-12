@@ -2647,10 +2647,40 @@ other protocols this project already speaks.
      all — which does not touch the Modbus mirror (that is a different protocol and a different
      port) but does affect the marker-DB identity path and anything else built on `DBRead`.
 
-     *** THE SETTLING EXPERIMENT IS ONE PAIRED RE-READ AND COSTS NOTHING: repeat `DBRead` once
-     the owner returns the CPU to RUN. *** Success in RUN means (a); failure in both means (b).
-     A LEAD, NOT A CONCLUSION: if `rig-read` has previously read the marker DB successfully in
-     RUN, that already rules out (b) — worth checking the history before spending the read.
+     *** SETTLED 2026-08-12 BY THE PAIRED RE-READ, WITH THE CPU BACK IN RUN [M]: IT IS (b).
+     THE STOP STATE WAS NEVER THE CAUSE. *** In RUN, with `PlcGetStatus` confirming `Running
+     (8)`:
+
+         DBRead(38, 0, 104)  -> rc 0x00040000   FAILS
+         DBRead(38, 0, 1)    -> rc 0x00040000   FAILS
+         MBRead(0, 1)        -> rc 0x00040000   FAILS
+         GetOrderCode (SZL)  -> ok              WORKS
+
+     *** SO S7 VARIABLE ACCESS IS REFUSED CPU-WIDE, IN BOTH RUN AND STOP, WHILE SZL IS SERVED
+     IN BOTH. *** The refusal is not the block's doing: an optimized or absent DB cannot affect
+     `M` memory, and would in any case return an ITEM code (`0x00C00000` /`0x00900000`) rather
+     than this. And `0x00040000` is not a local bug — verified against Sharp7's IL, it is set by
+     `if (Length < 25)` AFTER `RecvIsoPacket()` has already SUCCEEDED, so a well-formed reply
+     arrived that is too short to be a read response. *** THAT IS A NEGATIVE ACKNOWLEDGEMENT
+     FROM THE CPU ***, and the elapsed times confirm it: each failure cost a full round trip
+     rather than being rejected locally. Consistent with PUT/GET being DISABLED on this rig,
+     which the handover has recorded as unknown throughout.
+
+     *** AND IT DOES NOT MATTER, BY RULING (owner, 2026-08-12): READS OVER Sharp7/S7comm ARE NO
+     LONGER PART OF THE DESIGN — ALL DATA READS GO OVER MODBUS TCP. *** So the one thing this
+     would have blocked is already routed around, and enabling PUT/GET — a hardware-config
+     change, and therefore STOP-class and deferred-queue work — is NOT needed.
+
+     TWO CONSEQUENCES THAT DO SURVIVE, AND THEY ARE WORTH HOLDING:
+       - *** THE MARKER-DB IDENTITY PATH DOES NOT WORK OVER S7comm ON THIS RIG *** — `rig-read`
+         reports the identity check as unusable, and `DBRead` fails regardless. If a device
+         identity check is wanted, it must come over MODBUS, alongside the version register
+         (§9), which is already a Modbus read. Same mechanism, one channel.
+       - *** X-K IS UNAFFECTED AND IS NOW CONFIRMED IN BOTH STATES. *** `PlcGetStatus` returned
+         `Running (8)` here and `NotRunning` in STOP, while variable access failed in both. The
+         run-state read rides SZL, which is served throughout. *** THIS IS THE THIRD TIME THE
+         SZL-VERSUS-VARIABLE-ACCESS SPLIT HAS DECIDED SOMETHING IN OUR FAVOUR *** — a
+         `DBRead`-based status check would have been dead on this rig from the start.
 
      UNTESTED AND WORTH KNOWING: connection-resource contention between this S7 session (TCP
      102) and the Modbus session (TCP 502) on a 1214C. Reserved PG/HMI resources make it
@@ -2744,6 +2774,38 @@ conflating them). So:
     - *** IF THE FIGURES CANNOT BE READ, REFUSE RATHER THAN ASSUME A CEILING *** — "empty is
       not clean" (FI-44), and a guessed ceiling that is too generous fails at download time
       with the wave already committed.
+
+*** SCOPED BY RULING (owner, 2026-08-12), AND IT COLLAPSES MOST OF WHAT FOLLOWS INTO
+BACKGROUND: THE ONLY MEMORY RESTRICTION THE DESIGN CARRIES IS RETAIN. *** Work memory, load
+memory and the block-count ceiling are NOT gated on — the governing rule instead is:
+
+    *** KEEP WHAT IS ON THE PLC TO THE MINIMUM REQUIRED TO TEST FOR. ***
+
+Which is a design discipline rather than a check, and a better one: a harness that adds only
+what a test needs does not approach any of those three ceilings, and a harness that needs
+policing against them has already gone wrong. So:
+
+    RETAIN ....... *** A HARD RESTRICTION. Every harness-added object is explicitly
+                   NON-RETENTIVE, and any retain increase is refused. *** 3,864 bytes free,
+                   12x tighter than work memory, and it is the one budget that cannot be
+                   recovered by tidying up later.
+    WORK / LOAD /  NOT GATED. Governed by minimality. The measurements below stay recorded
+    BLOCK COUNT    because they set expectations and because a future harness that DOES grow
+                   will want them — not because anything checks them.
+
+    ➜ THIS RETIRES the proposed 85%-of-work-memory gate, the per-object cost measurement as a
+      GATE INPUT (it is still worth knowing, see plan task 0.1a), and the whole "read the
+      budget at admission" apparatus for work and load. *** THE RETAIN RULE NEEDS NO
+      MEASUREMENT AT ALL — "add nothing retentive" is checkable from the IR itself, before any
+      device is involved. ***
+
+    AND THE TRAP THAT MAKES THE RETAIN RULE NON-TRIVIAL IS UNCHANGED AND STILL BITES: retentive
+    tags are per-tag on OPTIMIZED blocks but *** ALL-OR-NOTHING ON STANDARD-ACCESS ONES, so ONE
+    retentive tag makes the WHOLE DB retentive *** — and the harness deliberately creates
+    standard-access blocks for S7comm visibility (§6). That is exactly where an accidental
+    retain increase would come from.
+
+Everything below is the research that produced this, retained as background.
 
 *** RESEARCHED AND ANSWERED 2026-08-12. THE CONSTRAINT ORDER IS NOT WHAT THIS SECTION ASSUMED. ***
 
