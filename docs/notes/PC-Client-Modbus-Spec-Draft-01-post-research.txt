@@ -3,6 +3,12 @@ PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE
 DRAFT 01, POST-RESEARCH
 ================================================================================
 
+*** OVERTAKEN. SUPERSEDED BY PC-Client-Modbus-Spec-Draft-04.txt. Stamped 2026-08-12. ***
+    Kept as reasoning history. DO NOT BUILD FROM THIS DOCUMENT.
+    The Status line below is the status this draft had WHEN WRITTEN, retained as part of
+    that history rather than corrected. Its graduation criterion WAS met — the seven gaps
+    were closed in draft 02, and G-7, the last of them, was measured live (draft 04 §13).
+
 Status:  DRAFT FOR DEBATE. Sits alongside PC-Client-Modbus-Spec-Draft-01.txt, which is
          NOT deleted — parts of it are now wrong and §6 below says which.
 

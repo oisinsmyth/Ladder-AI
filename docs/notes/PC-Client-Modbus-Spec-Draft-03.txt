@@ -2,6 +2,25 @@
 PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 03
 ================================================================================
 
+*** OVERTAKEN. SUPERSEDED BY PC-Client-Modbus-Spec-Draft-04.txt. Stamped 2026-08-12. ***
+    Kept as reasoning history. DO NOT BUILD FROM THIS DOCUMENT.
+    The Status line below is the status this draft had WHEN WRITTEN, retained as part of
+    that history rather than corrected — so "CURRENT" there means "current in draft 03's
+    own moment", not now.
+
+    *** TWO THINGS IN THIS DOCUMENT ARE KNOWN WRONG, AND BOTH ARE FIXED IN DRAFT 04. ***
+    It is the draft most likely to be picked up by mistake, so they are named here:
+
+      1. D11 says only that execution is "CONCURRENT", with no statement of the wave
+         structure. That wording supports two different readings — "every test in a wave
+         runs at once" and a serial sum over tests — and BOTH ARE WRONG. Draft 04's D26
+         states the structure: a wave is a SEQUENCE OF TENSORS, a tensor is a BATCH OF
+         TESTS THAT RUN IN PARALLEL. Anything computed from D11 alone should be recomputed.
+      2. The banner below claiming NOTHING HAS EVER BEEN DOWNLOADED TO THE DEVICE was true
+         when written and was already FALSE by the time this draft was committed — §9b of
+         this same document records three completed downloads, one carrying 99 objects and
+         restarting the CPU. Read §9b, not the banner.
+
 Status:  CURRENT. Supersedes drafts 00, 01, 01-post-research and 02, which are kept as
          reasoning history and must not be built from.
 

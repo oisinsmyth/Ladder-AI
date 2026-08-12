@@ -2,8 +2,12 @@
 PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 04
 ================================================================================
 
-Status:  CURRENT. Supersedes drafts 00, 01, 01-post-research, 02 and 03, which are kept as
-         reasoning history and must not be built from.
+Status:  *** CURRENT. THE ONLY DRAFT TO BUILD FROM. *** Supersedes drafts 00, 01,
+         01-post-research, 02 and 03. Each of those carries an OVERTAKEN stamp at its head
+         (added 2026-08-12) and is kept as reasoning history only.
+         *** IF A LATER DRAFT EXISTS, THIS LINE IS STALE AND ITS OWN OVERTAKEN STAMP IS
+         AUTHORITATIVE *** — every superseded draft in this series claimed CURRENT in its own
+         moment, which is exactly why the stamps were added.
 
 All seven design gaps are closed. G-7 was MEASURED against the live rig on 2026-08-12 and
 refuted its own expectation — §13.

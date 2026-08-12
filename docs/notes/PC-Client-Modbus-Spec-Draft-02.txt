@@ -2,6 +2,12 @@
 PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 02
 ================================================================================
 
+*** OVERTAKEN. SUPERSEDED BY PC-Client-Modbus-Spec-Draft-04.txt. Stamped 2026-08-12. ***
+    Kept as reasoning history. DO NOT BUILD FROM THIS DOCUMENT.
+    The Status line below is the status this draft had WHEN WRITTEN, retained as part of
+    that history rather than corrected — so "CURRENT" there means "current in draft 02's
+    own moment", not now.
+
 Status:  CURRENT. Supersedes drafts 00, 01 and 01-post-research, which are kept as
          reasoning history and should not be built from.
 
