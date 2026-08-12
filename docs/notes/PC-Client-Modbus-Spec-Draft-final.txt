@@ -906,9 +906,77 @@ DB-12 — TIME COMPRESSION  *** narrowed in draft 04, not dropped ***
   in the blocks under test — which is a design-for-testability requirement on authored IR, not
   a property of the harness.
 
-  WORTH CHECKING BEFORE BUILDING ANYTHING: convention *** C-122 (dwell-timer PT-home) *** may
-  already require exactly this. If PT already lives in a DB member by house rule, compression
-  is close to free on conforming blocks and the work is a conformance check, not a change.
+  *** SWEPT 2026-08-12 (plan task 0.4). THE PREMISE WAS HALF RIGHT, AND THE HALF THAT FAILED IS
+  THE HALF THIS SECTION WAS RELYING ON. ***
+
+  1. *** C-122 IS NOT A GENERAL "TIMER PRESETS SHALL BE DATA" RULE AND CANNOT BE CITED AS ONE. ***
+     Its subject is ONLY a step-dwell timer inside a stepper block — a timer whose `IN` is gated
+     by `Step = <n>`. Debounces, settle timers, feedback timeouts, watchdogs, heartbeats, pulse
+     widths and run-hour totalisers are all outside its scope, and a literal PT on any of them
+     is not a violation.
+
+  2. *** AND ITS MECHANISED FORM CANNOT SEE A LITERAL PT AT ALL. *** The PT check is guarded by
+     `if (timer.Pt is Expr.TagRef ptRef)`, so a literal falls straight through with NO finding —
+     the exact case compression cares about is invisible to the rule. Worse, the subject test
+     requires the tag's last component to be literally `Step`, and *** THE LIVE CORPUS CONTAINS
+     NO `.Step` LEAF ANYWHERE (zero hits across 105 .ir files), SO C-122 SELECTS ZERO SUBJECTS
+     AND PASSES VACUOUSLY THERE. *** A green `converter review` says NOTHING about timer presets
+     on that corpus. This is FI-44's "empty is not clean" in a place nobody had looked.
+
+  3. *** CONFORMANCE IN PRACTICE IS NEVERTHELESS GOOD — BUT AS HOUSE STYLE, NOT ENFORCEMENT. ***
+     Measured: 86% / 57% / 77% of timers data-driven across the three corpora, and in ALL THREE
+     *** EVERY PROCESS-BEHAVIOUR TIMER TAKES ITS PRESET FROM DATA ***, with literals confined to
+     a recognisable set of infrastructure boilerplate (hand-start debounce, prestart request,
+     run-hour totaliser, heartbeat tick). Treat that as verified observation, never as a
+     guarantee — nothing enforces it and the checker cannot.
+
+  *** 4. THE FINDING THAT ACTUALLY REDESIGNS THIS BLOCK: THE LONGEST BEHAVIOURS ARE NOT IEC
+  TIMERS AT ALL. *** On the live corpus the multi-day and multi-hour durations are SECONDS
+  ACCUMULATORS — `ADD(EN := SecondTick.Q AND <running>, IN1 := <elapsed>, IN2 := 1)` compared
+  against a DInt setpoint, at six sites across three FBs. A 120-hour behaviour and a 4-hour
+  repeating interval both work this way. *** A COMPRESSION DESIGN BUILT SOLELY AROUND TIMER PTs
+  WOULD HAVE MISSED EVERY ONE OF THEM. ***
+
+  So there are TWO LEVERS, and the second is the better one:
+
+    LEVER A — LOWER THE DURATION SETPOINTS. The durations are already data (per-instance
+      interface members from the parameter DB), so this is a PURE DATA WRITE: no IR edit, no
+      download, and each behaviour compresses independently. Sufficient on its own.
+
+    LEVER B — *** SHORTEN THE TICK PERIOD. *** One change compresses EVERY accumulator that
+      consumes that tick by one uniform factor, *** PRESERVING ALL RELATIVE RATIOS BETWEEN
+      THEM ***, in one place. Cleaner than A for exactly that reason — and the tick is currently
+      a LITERAL, which makes it *** THE SINGLE HIGHEST-VALUE LITERAL IN THE CORPUS TO
+      PARAMETERISE. ***
+
+    🔴 *** AND THE TRAP, WHICH IS THIS SECTION'S OWN DESYNCHRONISATION FAILURE MADE CONCRETE:
+    THERE ARE AT LEAST THREE DISTINCT TICK OSCILLATORS, CONTROL-SIDE AND SIMULATION-SIDE.
+    COMPRESSING THE MODEL TICK WITHOUT THE CONTROL TICK IS PRECISELY THE FAILURE THIS BLOCK
+    WARNS ABOUT *** — and it now has a name and a location rather than being a caution.
+
+  5. *** SHORT LITERALS SET A FLOOR ON THE USABLE RATIO, AND THE FAILURE MODE IS RATIO
+  DISTORTION RATHER THAN LOST RESOLUTION. *** Unchanged literals do not scale with the
+  compressed behaviours around them. A 500 ms feedback debounce is 0.003% of a 4-hour interval
+  and 2.5% of the same interval compressed to 20 seconds — so the block can pass or fail for
+  reasons of CHANGED PROPORTION rather than changed logic. *** THIS IS A SEPARATE BOUND FROM
+  §16.4's observability and timer-resolution limits, and it may bind before either. ***
+
+  WHERE THE PARAMETER MEMBER SHOULD LIVE — costed, and the answer aligns with §16.13's
+  retain-only restriction:
+    - into the block's own interface UDT (what C-122 asks) — restructures EVERY instance DB of
+      every block on that UDT, reinitialising download class, and the retained per-instance
+      state is the batch state. *** EXPENSIVE AND RISKY. ***
+    - into the existing global parameter DB — one structural change, still reinitialising, and
+      that DB is all-retentive with commissioning calibration in it. Cheaper, still a real loss.
+    - *** INTO A NEW, PURPOSE-BUILT NON-RETENTIVE TEST DB — NO RETAINED DATA TO LOSE, SO THE
+      REINIT CLASS IS HARMLESS. THE CHEAPEST SAFE ROUTE, AND IT IS ALREADY WHAT §16.13's
+      "EVERY HARNESS OBJECT IS NON-RETENTIVE" RULE REQUIRES. ***
+
+  A CONFLICT THE SWEEP RAISED THAT IS ALREADY DISSOLVED: it noted that a parameter DB read back
+  over classic S7comm would need STANDARD layout, which forecloses download-without-
+  reinitialisation, while Optimized is invisible on the wire — two requirements pulling opposite
+  ways. *** IT DOES NOT ARISE: ALL DATA READS GO OVER MODBUS BY RULING (§16.11), AND THE COPY
+  LAYER MOVES VALUES BETWEEN `%MW` AND THE DB, SO THE DB'S LAYOUT IS NEVER ON THE WIRE. ***
 
 DB-10 — AGENT SCHEDULING  *** demoted ***
   States: WORKING / AWAITING-WAVE / BLOCKED. Agents YIELD rather than block a slot while
@@ -2235,6 +2303,17 @@ RULE IS TAKE THE SAFE MINIMUM. ***
     RUNNABLE iff comp_min does not exceed comp_max. Otherwise REFUSE, SHOWING BOTH NUMBERS —
     that refusal is a MODEL TASK or a test-design task, and §7's DEFERRED bucket already
     carries the sub-case for exactly this.
+
+*** A THIRD BOUND, ADDED 2026-08-12 FROM THE 0.4 SWEEP — RATIO DISTORTION, AND IT MAY BIND
+BEFORE EITHER OF THE OTHERS. *** The terms above scale presets that are DATA. They say nothing
+about presets that are LITERALS, which do not scale at all — and every corpus swept carries a
+recognisable set of them (debounces, prestart requests, heartbeat ticks). Compress the
+behaviours around an unchanged 500 ms debounce and it goes from 0.003% of a 4-hour interval to
+2.5% of that interval compressed to 20 seconds. *** THE BLOCK THEN PASSES OR FAILS FOR REASONS
+OF CHANGED PROPORTION RATHER THAN CHANGED LOGIC *** — a different failure from losing
+observability, and one no term above catches. Bound the factor so the SHORTEST UNSCALED LITERAL
+in the block under test stays negligible against the SHORTEST COMPRESSED behaviour. Measurement
+and the accumulator finding: DB-12.
 
 *** USE comp_min, NOT comp_max. *** Compression is a fidelity risk, so take the least that
 meets the budget and bank the remainder as margin. Never run at the ceiling merely because the

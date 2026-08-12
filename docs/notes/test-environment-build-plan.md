@@ -31,8 +31,12 @@ them (A3) in our favour by a factor of two, and one whole class of work deleted 
 | **A6** | Delegate throw leaves the CPU untouched (G4) | D32's guard model. A **safety** item |
 | **A8** | Structural DB change vs retentives (G2) | DB-1's change-class table, therefore routing |
 
-**Phase 0 remaining:** 0.3 (desk), 0.4 (desk), 0.1b (a rule to implement, not an experiment).
-Nothing left in phase 0 needs the rig.
+**PHASE 0 IS CLOSED.** 0.3 deferred by ruling (1.2 measures it as a by-product); 0.4 done and it
+redesigned DB-12; everything else retired. The only item carried forward is **0.1b**, which is a
+*rule to enforce* when harness objects are generated, not an experiment to run — it lands in
+phase 2 with the copy-layer generator.
+
+**The critical path is now A1**, and it runs through the phase-1 spike.
 
 ---
 
@@ -85,7 +89,7 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 | 0.1b | **Assert every harness object is non-retentive** | **A9** | **The one hard memory restriction.** Checkable from the IR before any device is involved. Watch the trap: retain is per-tag on optimized blocks but **all-or-nothing on standard-access ones**, and the harness deliberately creates standard-access blocks |
 | 0.2 | ~~`PlcGetStatus` in RUN over Sharp7~~ | A7 (half) | ✅ **DONE 2026-08-12.** Returned Run from the rig at 79–94 ms. PUT/GET was **not** a blocker |
 | 0.3 | ~~Establish what the 79–108 ms round-trip actually measured~~ | A2 | ⏸ **DEFERRED BY RULING 2026-08-12.** The design is committed and the owner knows the rough update times; the exact figure is not a decision input. Phase 1.2 measures it anyway as a by-product, so nothing is lost by not chasing it separately |
-| 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
+| 0.4 | ~~`C-122` conformance sweep~~ | — | ✅ **DONE 2026-08-12, and it redesigned DB-12.** C-122 is **not** a general "presets shall be data" rule (step-dwell timers only), its mechanised form **cannot see a literal PT at all**, and it passes **vacuously** on the live corpus (zero `.Step` leaves). Practice is good anyway — every process-behaviour timer is data-driven — but as house style, not enforcement. **And the longest behaviours are seconds accumulators, not timers**, so the tick oscillator is the real compression lever |
 | 0.5 | ~~Confirm Sharp7 presence, version and connection path~~ | — | ✅ **DONE.** Sharp7 1.1.82.0; rack 0 / slot 1; address from the device allowlist |
 | 0.6 | ~~Add read-only run-state read to `IS7Client` + `Sharp7Client`~~ | A7 | ✅ **DONE 2026-08-12**, commit `93835e8`. `ReadRunState`; no `Stopped` member; 221 tests pass; verified against the stopped rig |
 | 0.7 | ~~Paired `DBRead` re-read in RUN~~ | — | ✅ **DONE 2026-08-12. It is NOT the STOP state.** `DBRead` and `MBRead` fail `0x00040000` in RUN too while SZL works — S7 variable access is refused **CPU-wide**, consistent with PUT/GET being off. **Moot by ruling:** all data reads go over Modbus TCP, so no Sharp7 read path is needed and PUT/GET need not be enabled |
