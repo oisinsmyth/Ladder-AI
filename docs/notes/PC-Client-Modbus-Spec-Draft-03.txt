@@ -502,15 +502,146 @@ MEASURED. Without a coverage gate, "all tests passed" is indistinguishable from 
 requirements verified", and the requirements nobody wrote a vector for look exactly like the
 ones that passed.
 
-  - REQ-to-vector coverage is a GATE on admitting a wave, not a statistic reported after.
-  - Uncovered requirements are reported as EXPLICITLY UNVERIFIED, named individually.
-  - `converter signal-sweep` computes exact residual coverage against a real denominator;
-    `converter trace` does per-REQ forward tracing.
+*** RESOLVED 2026-08-12. THE DENOMINATOR, THE BUCKETS, AND WHAT THE GATE ACTUALLY GATES. ***
+
+THE UNIT IS THE REQUIREMENT CLAUSE, QUALIFIED BY INSTANCE where the requirement is
+instance-scoped. Three reasons, all of them "this already exists":
+  - `TestVector.Basis` ALREADY CITES IT, so vectors are already labelled with their
+    denominator element and no new metadata is needed;
+  - it is LIKE-FOR-LIKE with what it replaces — the functional reviewer's verdict was
+    per-requirement, and that is what makes the substitution honest rather than approximate;
+  - `converter relation-reconcile` already works on `(instance, relation-id)` pairs, so
+    instance qualification has precedent here rather than being invented.
+
+*** THE DENOMINATOR MUST COME FROM THE SPECIFICATION, NEVER FROM THE TEST SUITE. *** Any unit
+defined by what somebody wrote a vector for is SELF-REFERENTIAL — you cannot be missing an
+assertion nobody wrote, so coverage is always 100%. That is why "assertions" cannot be the
+unit however tempting the granularity.
+
+SIGNALS ARE A SECOND, INDEPENDENT CHECK — NOT THE DENOMINATOR. `converter signal-sweep`'s
+residue answers a different question: is there a SIGNAL no requirement mentions? That catches
+SPEC gaps where clause coverage catches TEST gaps. Two failure modes, two tools, neither
+substituting for the other.
+
+PRECONDITION TO VERIFY: *** CLAUSE ATOMICITY. *** If a clause carries two assertions — "shall
+open when X and close when Y" — a vector testing one marks the whole clause COVERED and the
+other vanishes silently. Either clauses cited as `Basis` are atomic, or coverage records WHICH
+assertion. Check whether the rung-B/C artifacts already produce atomic behaviours; if they do,
+this costs nothing (O13).
+
+THE FOUR BUCKETS. Every clause lands in exactly one, and the wave reports all four:
+    COVERED             a vector exists and cites this clause
+    OUT-OF-SCOPE        not a control-logic requirement at all (wiring correctness, HMI
+                        behaviour, operator procedure). These were out of scope for the
+                        FUNCTIONAL REVIEWER too — they belong to commissioning, not testing,
+                        and calling them "untestable" overstated the gap.
+    DEFERRED            testable, but blocked or not yet written. Two sub-cases, and the
+                        second is the interesting one:
+                          - no vector yet — owner and date;
+                          - NEEDS MODEL FIDELITY WE DO NOT HAVE. M4 already routes these to a
+                            refusal, and a refusal naming the missing capability is a MODEL
+                            TASK, not an untestable requirement. This sub-case SHRINKS as the
+                            library matures.
+    UNTESTABLE-ON-RIG   genuinely so. *** SHOULD BE NEARLY EMPTY *** — see below.
+
+*** WHY IT SHOULD BE NEARLY EMPTY, correcting an earlier overstatement in this document. ***
+An earlier draft warned that with no I/O wired, "no actuation can be observed", so the
+untestable set might be large. THAT CONFLATED PHYSICAL ACTUATION WITH THE PROGRAM'S OUTPUT
+DECISION, and only the second matters for control logic. A coil energising IS the decision,
+and the copy layer latches it — so "does the interlock prevent the valve opening?" is answered
+completely by the coil never energising, whether or not anything is wired to it. With coil
+latching and event scan-stamps, control-logic requirements are broadly testable. If this
+bucket turns out large, that is a FINDING TO CHASE, not a category to accept.
+
+*** THE GATE IS `UNCLASSIFIED = 0`, NOT A PERCENTAGE. *** A threshold fails in a specific way:
+the uncovered remainder is NOT random. It is the requirements that are hard to test, which
+correlates with hard to implement, which is where defects live — so a threshold silently
+concentrates risk in the worst place while reporting a comfortable number. Every clause must
+have been CONSIDERED; not every clause must have a test.
+
+*** AND THE GATE STOPS THE CLAIM, NOT THE RUN. *** Blocking a wave for a bookkeeping reason
+spends the scarce thing (rig time) to enforce the cheap thing. A wave with incomplete
+classification still produces useful results — it simply MAY NOT CLAIM "requirements
+verified". That decouples honesty from throughput.
+
+HONEST LIMIT, ACCEPTED: the gate proves someone LOOKED, not that they looked WELL. Classifying
+is cheap; classifying honestly is not, and under pressure everything becomes DEFERRED while
+the gate still passes. What carries real weight is DEFERRED items having an OWNER and a DATE,
+with their count and AGE reported every wave — aging deferrals are the signal, not the
+classification.
+
+CLASSIFICATION IS STICKY, so this does not churn: once a clause is classified it stays until
+the requirement text changes or the implementing block changes — detectable by clause hash and
+`converter ir-hash` respectively. Re-classification is proportional to CHANGE, not to total
+requirement count.
 
 AND THE INDEPENDENCE MUST SURVIVE THE SWAP. Part of what a functional reviewer provided was a
 SECOND READING of the specification. A vector authored by a different agent preserves that;
 one authored by the block's own author does not — it moves the failure rather than removing it
 (D6).
+
+--------------------------------------------------------------------------------
+7a. FAILURE ATTRIBUTION — WHICH OF FIVE THINGS IS WRONG
+--------------------------------------------------------------------------------
+
+A red result has FIVE possible causes, and the receiving agent is the WORST-PLACED party to
+judge: it did not write the vector (D6) or the model (M1), so it can see only its own block
+and will suspect that first.
+
+  1. THE BLOCK IS WRONG           — the finding you wanted
+  2. THE MODEL IS WRONG           — fidelity, or a modelling error
+  3. THE VECTOR IS WRONG          — the author misread the spec
+  4. ANOTHER AGENT INTERFERED     — shared state the graph did not predict
+  5. *** THE BLOCK WAS NEVER DOWNLOADED *** — the cheapest to rule out and the most
+                                    embarrassing to miss
+
+THE DEFAULT FAILURE MODE IS AN AGENT "FIXING" CORRECT CODE UNTIL A WRONG TEST PASSES. Worked
+example: a fill block implements a pre-act offset correctly; the model has no in-flight mass,
+so nothing overshoots, so the fill stops short and the test fails; the agent removes the
+offset and the test passes. *** THE CORRECT IMPLEMENTATION HAS BEEN ENGINEERED OUT BY THE
+TEST, and the report says green. ***
+
+THE APPROACH (decided 2026-08-12): the agent judges — but only after the FREE evidence is
+attached to the result automatically. Cost, honestly priced:
+
+  FREE, attached to every result:
+    - the CO-RUNNING LOG (D21)                          -> cause 4
+    - the VALIDITY STAMP comparison (DB-2): block
+      unchanged but result changed                      -> not cause 1, by construction
+    - the LOAD MANIFEST check (§9a): is this block
+      in the last manifest at all?                      -> cause 5
+    - CROSS-AGENT PATTERN: same shape failing across
+      several agents                                    -> model or environment, not N bugs
+    - the FIDELITY BOUNDARY CHECK — already enforced
+      at ADMISSION by M4, so it never reaches diagnosis -> cause 2, prevented not diagnosed
+    - *** ASSERT ON THE STIMULUS, NOT ONLY THE RESPONSE *** — the model is a block and its
+      state is readable, so check the model actually produced the rate/setpoint the vector
+      parametrised. If it did not, the fault is the model or the parametrisation and the
+      block is exonerated WITHOUT BEING TOUCHED. Sharpest cheap discriminator available;
+      costs a few registers in the mirror.
+
+  CHEAP, on failures only:
+    - BASIS RE-DERIVATION — one spec read by the vector's author        -> cause 3
+    - RE-RUN IN ISOLATION via the enable bitmask — one test, a register
+      write, NO download                                               -> cause 4, confirmed
+    - DOES IT REPRODUCE? intermittent points at interference or the observability floor
+
+  EXPENSIVE, and NEVER BY DEFAULT:
+    - re-run against a DIFFERENT model of the same equipment. Only needed for "the model
+      claims to represent this and does it wrong", which is a MODEL REVIEW problem (M5), not
+      a per-failure diagnostic.
+
+*** ONE HARD RULE: A FAILING TEST MAY NOT BE CLOSED BY CHANGING THE BLOCK UNTIL THE VECTOR'S
+BASIS HAS BEEN RE-CONFIRMED. *** One spec read, on failures only, and it is what stops the
+worked example above.
+
+ORDER OF ELIMINATION: deployment, interference, vector, model, THEN block. *** THE BLOCK IS
+THE LAST HYPOTHESIS, NOT THE FIRST *** — precisely because the receiving agent's instinct is
+the reverse.
+
+WORTH MEASURING ON THE FIRST REAL WAVE: log the eventual TRUE cause of every failure. If they
+are overwhelmingly cause 1, most of this is over-engineering and the co-running log plus a
+re-run-in-isolation button would cover it.
 
 --------------------------------------------------------------------------------
 8. THROUGHPUT — WHERE THE COST ACTUALLY IS
@@ -907,8 +1038,26 @@ running this should expect to be at the machine.
       M1/M2 in §11. ***
   O6. Wave failure policy — does one failing test abort the wave, or does it complete and
       report? Abort loses information; complete risks cascading from a bad state.
-  O8. What minimum coverage admits a wave (§7), and who rules on a requirement declared
-      untestable on a rig?
+  O8. *** CLOSED — §7. *** Denominator = requirement clause x instance; four buckets; the
+      gate is UNCLASSIFIED = 0 rather than a percentage; and it stops the CLAIM, not the RUN.
+      Residual: who rules a clause OUT-OF-SCOPE or UNTESTABLE-ON-RIG. Recommended: whoever
+      signs off the architecture at gate 1 — it is a judgement about the ENVIRONMENT, not the
+      code — and never the block's or the vector's author, both of whom have an incentive to
+      reach for it under pressure.
+
+  O11. *** THE THROUGHPUT CEILING — see the design conversation of 2026-08-12. *** How many
+      concurrent tests can ONE coordinator connection actually service, given 79-108 ms round
+      trips and block-read batching? If the answer is low, D11's concurrent execution is
+      capped below what the design assumes and the wave collapses toward serial. Flagged by
+      the spec-chain audit as load-bearing for anything called multi-agent, and never entered
+      on any list until now.
+
+  O12. WHAT "INERT" MEANS PRECISELY: every block idle, or every block idle AND every model at
+      a declared start condition? The second is more useful and more work — and it decides
+      what the NEXT test in a wave starts from after a failure (see O6).
+
+  O13. CLAUSE ATOMICITY: do the rung-B/C artifacts already produce atomic behaviours? If a
+      cited clause carries two assertions, covering one marks both (§7).
 
   O9. *** NEW, AND THE LARGEST SAFETY QUESTION OPEN: WHICH UNHANDLED CONFIGURATIONS ACTUALLY
       ABORT? *** Measured 2026-08-12: unhandled ABORTED for `StopModules`,
