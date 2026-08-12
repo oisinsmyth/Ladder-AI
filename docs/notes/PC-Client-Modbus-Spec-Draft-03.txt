@@ -430,11 +430,17 @@ R8. *** THE ENTAILMENT OF D25, AND THE ONE PLACE THE GUARD IS DELIBERATELY OPENE
       - and it must NOT relax the deny list for the wave loop, where stopping the CPU
         mid-testing remains forbidden.
 
-    *** OPEN, AND ON THE CRITICAL PATH: WHAT RESTARTS THE CPU AFTERWARDS? *** `IS7Client`
-    exposes no mode change, so today that is a human (O3). There is a `StartModules`
-    configuration in the API [R] which may handle it as part of the same download — NOT
-    MEASURED, and it must not be assumed. Until settled, every disruptive boundary needs a
-    person, which caps unattended operation.
+    *** RESOLVED 2026-08-12 [M]: THE CPU RESTARTS WITHIN THE SAME DOWNLOAD. *** `StartModules`
+    is raised in the POST delegate whenever the download stopped the modules; answering
+    `StartModule` restarted it, and the device reported `PLC_1 stopped.` then `PLC_1 started.`
+    So the disruptive boundary does NOT require a person, and unattended operation is not
+    capped by this. The earlier wording said it was; that was written before the measurement.
+
+    STILL TRUE, and the reason the allowance list must include `StartModules`: if a download
+    stops the CPU and `StartModule` is NOT answered, nothing else in the public API can bring
+    it back. `StartModulesSelections.NoAction` is the ZERO value AND it applies cleanly — so a
+    policy that merely un-denied `StopAll` without also answering `StartModules` would stop the
+    rig, succeed, and leave it stopped while reporting success (R4a's hazard, exactly).
 
 --------------------------------------------------------------------------------
 6. %MW IS STRUCTURAL, NOT PREFERENTIAL
@@ -523,6 +529,52 @@ performed the download; if the version constant is live, the code carrying it is
 
 THREE PURPOSES, ONE MECHANISM, designed once: post-download verification (D14), settling-window
 detection (DB-3), and guarding the frozen map (DB-6).
+
+--------------------------------------------------------------------------------
+9a. THE LOAD MANIFEST — measured 2026-08-12, and better than the version register
+    for one specific question
+--------------------------------------------------------------------------------
+
+*** A DOWNLOAD REPORTS, PER OBJECT, WHAT IT ACTUALLY LOADED. *** The `DownloadResult`
+message tree contains one message per object, verbatim:
+
+    'DB_RigMarker' was loaded successfully.
+    'UDT_CmdAck' was loaded successfully.
+    ... one per object ...
+
+MEASURED, and both runs matched prediction EXACTLY:
+    DIFFERENTIAL : 1 message  — `DB_RigMarker`, precisely the one block that had changed
+    FULL         : 99 messages — and `download-plan` had reported 66 blocks + 33 PLC data
+                   types = 99. The predicted count and the loaded count agree.
+
+THREE USES, and the third is the valuable one:
+
+  (a) POSITIVE EVIDENCE OF TRANSFER, replacing an inference from absence.
+      *** THIS CORRECTS THE PROBE. *** `download-probe` currently reports transfer by
+      searching for "has not been loaded" / "up-to-date" and concluding TRANSFERRED when
+      absent, stating in its own output that "TIA emits no positive 'the software was
+      loaded' sentence to key on". THAT IS FALSE — there are 99 of them. The verdict should
+      key on the per-object load messages and report the COUNT. Fix pending.
+
+  (b) CONFIRMATION OF *WHAT* WAS DOWNLOADED, per object, not merely that something was.
+
+  (c) *** A CROSS-CHECK ON DB-1. *** The coordinator PREDICTS a change set; TIA REPORTS the
+      set it actually loaded. Comparing them checks our change tracker against TIA's own
+      online/offline comparison, on every download, for free. A MISMATCH MEANS OUR TRACKER
+      IS WRONG — and DB-1's baseline is what every STOP/RUN(Init) prediction and every
+      <=20-object batching decision hangs off, so being able to falsify it continuously is
+      worth more than the other two uses combined.
+      It also closes a hole named in DB-1: `openness-cli export-all` reads the OFFLINE
+      PROJECT, so it cannot detect a partially-applied download. The manifest reports what
+      the DEVICE accepted.
+
+RELATIONSHIP TO THE VERSION REGISTER (§9) — they answer different questions and neither
+replaces the other:
+    LOAD MANIFEST   : what moved in THIS operation. Per object. Available only at download
+                      time, from the download's own result.
+    VERSION REGISTER: what is running NOW. Readable at any time, over Modbus, sub-second,
+                      and the only thing that detects an aborted or half-applied download
+                      after the fact.
 
 --------------------------------------------------------------------------------
 10. PROTOCOL COEXISTENCE
@@ -688,9 +740,18 @@ running this should expect to be at the machine.
 15. STILL OPEN
 --------------------------------------------------------------------------------
 
-  O3. *** ON THE CRITICAL PATH VIA R8: what restarts the CPU after a STOP, and may it be
-      automated? *** `StartModules` exists in the API [R] and may do it as part of the same
-      download — NOT MEASURED. Until settled, every disruptive boundary needs a person.
+  O3. *** CLOSED 2026-08-12 — MEASURED. *** A download that stops the CPU CAN restart it
+      within the same operation. On the FULL download, `StartModules` was raised in the POST
+      delegate, `StartModule` applied and read back, and the device reported `PLC_1 stopped.`
+      then `PLC_1 started.` No human was required.
+      IMPORTANT NUANCE: `StartModules` is raised ONLY WHEN THERE IS SOMETHING TO START. It
+      did NOT appear on the differential — which never stopped the CPU — so its absence there
+      was correct rather than a missed opportunity. The API offers a restart exactly when it
+      performed the stop.
+      *** THEREFORE R8's "every disruptive boundary needs a person" IS WITHDRAWN. *** The
+      restart is available through the same callback mechanism, which the type survey had
+      already established is the ONLY expression of a CPU stop or start in the public API —
+      and it turns out to be sufficient.
   O4. How are model fidelity limits recorded, so a green is not over-read?
   O5. Who authors the models, given the correlation caveat and D6?
   O6. Wave failure policy — does one failing test abort the wave, or does it complete and
