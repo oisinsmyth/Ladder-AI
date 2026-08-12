@@ -235,6 +235,45 @@ ignores the attribute. The two checks are not redundant and the PC-only one is t
   ➜ Adopt the confirm loop as the acceptance gate for any converter capability change. It needs
     the block compiled and exportable, which the permission rule now allows.
 
+#### 🔴 THE TRAP: BUILT NAIVELY TODAY, THE LOOP WOULD MISS `MemoryLayout` TOO
+
+The loop compares the first export against the last. Both are TIA-produced XML — first says
+`Standard`, last says `Optimized`. *** IF THAT COMPARISON USES THE NORMALIZER, IT RETURNS MATCH,
+because the Normalizer ignores the attribute — which is exactly why `drift-check` missed it. ***
+A byte-compare would catch it and would also fire on every UId reshuffle, and TIA reassigns Part
+UIds unprompted, so byte-comparison is unusable as a gate.
+
+*** SO THE ORCHESTRATION IS NOT THE WORK. THE COMPARISON IS. *** The loop is stronger in
+principle and only realises that once the compare step is sensitive to the right things.
+
+#### DECIDED 2026-08-12 — SHAPE AND SEQUENCE
+
+**Keep BOTH checks; do not fold one into the other.** They answer different questions:
+`drift-check` asks *"has the committed export drifted from the IR?"* — PC-only, fast, runnable
+constantly. The confirm loop asks *"does this survive a real trip through TIA?"* — expensive,
+mutating, and the right gate for capability changes.
+
+*** THE LOOP CANNOT BE A CONVERTER SUBCOMMAND — FI-24. *** The converter is a pure in-process
+file transformer and Portal/env-touching belongs in `openness-cli` or scripts; that invariant was
+held deliberately. Making the loop an expensive *option on* `drift-check` would put Portal inside
+the converter, which is the one thing FI-24 forbids. The decomposition that keeps both tools
+honest:
+
+  - **`converter compare <first.xml> <last.xml>`** — pure, in-process, Normalizer-based. Small,
+    and it carries the actual judgement.
+  - **`tools/confirm-roundtrip.ps1`** — orchestrates export → to-ir → to-xml → import → compile →
+    export and calls that compare.
+
+**TWO COSTS THE LOOP CARRIES THAT `drift-check` DOES NOT**, and both shape where it can be used:
+  - *** IT MUTATES. *** The import writes, and we know it is not a no-op because the layout
+    flips. So it runs against a SCRATCH project, or restores afterwards. Not a casual check.
+  - Minutes per block, and it needs Portal exclusively — a gate for capability changes and
+    pre-promotion, never something an agent runs per edit.
+
+*** SEQUENCE, AND IT IS NOT OPTIONAL: THE NORMALIZER/`MemoryLayout` FIX LANDS FIRST. *** Building
+the loop before the compare can see layout gives a gate that passes when it should fail, which is
+worse than having no gate at all.
+
 ### 🎯 DESIGN DECISION — *** NO IR THAT THE AI CANNOT CHANGE *** (owner, 2026-08-12)
 
 *** A CONSTRUCT THE CONVERTER CANNOT READ IS A BLOCK THE AI CAN NEVER MODIFY. *** That is not a
