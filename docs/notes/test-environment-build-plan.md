@@ -214,6 +214,49 @@ incrementing generation into every register once per scan, checker **off**.
 > independently from the other end. **Corroboration worth having:** the same trap is waiting in
 > the real result package, and it is invisible precisely when it fires.
 
+### 🧭 THE CONFIRM LOOP — the invariance principle, stated properly (owner, 2026-08-12)
+
+```
+export ──► to-ir ──► to-xml ──► import ──► compile ──► export
+   │                                                      │
+   └──────────────── COMPARE THESE TWO ───────────────────┘
+```
+
+**Compare the very first XML against the very last XML.** That is the invariance claim, and it is
+*** STRICTLY STRONGER THAN WHAT WE HAVE BEEN DOING. *** `drift-check` compares converter output
+against the original export — a loop that never leaves the PC. The confirm loop goes **through
+TIA**, so it also catches whatever TIA does to the content on import and compile.
+
+*** AND IT WOULD HAVE CAUGHT THE `MemoryLayout` HOLE THAT drift-check CALLED A MATCH. *** Original
+export says `Standard`; converter output says nothing; TIA applies `Optimized`; the re-export then
+says `Optimized` — **first ≠ last, caught.** `drift-check` said MATCH because the Normalizer
+ignores the attribute. The two checks are not redundant and the PC-only one is the weaker.
+
+  ➜ Adopt the confirm loop as the acceptance gate for any converter capability change. It needs
+    the block compiled and exportable, which the permission rule now allows.
+
+### 🎯 DESIGN DECISION — *** NO IR THAT THE AI CANNOT CHANGE *** (owner, 2026-08-12)
+
+*** A CONSTRUCT THE CONVERTER CANNOT READ IS A BLOCK THE AI CAN NEVER MODIFY. *** That is not a
+tooling inconvenience, it is a hole in the product's core promise — this project exists to build
+"an AI capable of programming ladder logic", and a permanent no-go region in the corpus
+contradicts that directly.
+
+**This reframes every `UnsupportedConstructException` from "a correct hard error" to "a scope
+item".** The hard error remains correct *behaviour* — failing loud beats failing silent — but it
+is no longer an acceptable resting place for anything that appears in deliverable logic.
+
+  ➜ **Consequence for `SupportedCallParameterSections`:** it gains `InOut`, and the capability
+    gets built. Modbus TCP is now in deliverable scope, so `MB_SERVER` calls will appear in real
+    blocks, and a block the AI cannot touch is exactly what this decision forbids.
+  ➜ **The gate is the confirm loop above**, not a judgement call. Widening the whitelist without
+    proving the round trip would replace a loud correct error with silent infidelity — the same
+    failure class as the `MemoryLayout` hole. The loop is what makes widening safe rather than
+    reckless, and it is the owner's own principle doing the work.
+  ➜ *** THIS DECISION LIKELY DESERVES PROMOTION out of this build plan — into an ADR or a
+    CLAUDE.md line — since it governs converter scope permanently and well beyond the harness.
+    Flagged for the owner rather than done unilaterally. ***
+
 ### 🔬 IR discovery run, 2026-08-12 — three findings, one of them a live hazard
 
 The owner imported blocks and deliberately left them **uncompiled** so they could be identified
