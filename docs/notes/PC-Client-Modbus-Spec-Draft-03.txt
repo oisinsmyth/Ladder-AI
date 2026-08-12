@@ -358,6 +358,32 @@ DB-6 — ISOLATION BY CONSTRUCTION
     3. *** The client instance holds only its own region's bounds, so a write outside it is
        UNADDRESSABLE *** — not rejected by a check that could be skipped.
 
+DB-7 — CLEANUP  *** new 2026-08-12 ***
+  NOTHING IN THE DESIGN EVER REMOVES ANYTHING, and three things accumulate: per-test instance
+  DBs (D10 — one per TEST, not per agent), models, and blocks no longer under test. Left alone
+  they consume scan time (M6), object count, and eventually the <=20 batching budget.
+
+  A CLEANUP STAGE runs on a cadence expressed in test cycles or disruptive downloads. What it
+  removes: instance DBs for completed tests, models no vector still references, and blocks not
+  in any admitted test.
+
+  FOUR RULES, each earned:
+    - *** IT RUNS WHEN TESTS ARE DRAINED *** — the same condition as the deferred queue (D24).
+      Deleting something a running test depends on is the obvious way to make this dangerous.
+    - *** ELIGIBILITY IS GRAPH-PROVEN, NEVER COUNT-BASED. *** "Nothing references this" is a
+      computed fact from the reference graph (`converter cross-check`), not an assumption from
+      age or from a test having finished. A block can be unreferenced by vectors and still
+      called by another block.
+    - *** EVERY REMOVAL IS RECORDED — what, why, and on whose authority. *** Otherwise this
+      becomes the "a block silently disappeared" failure, which is exactly the shape of the
+      folder-download footgun (R5) that we forbade elsewhere.
+    - Deletions are ordinary changes: they route through DB-1, count against the <=20 budget,
+      and — usefully — deleting an FB/FC/DB/UDT is RUN-class [R], so cleanup does NOT need a
+      disruptive boundary of its own.
+
+  INTERACTION: a deleted block frees its number, which the claims registry allocated. Releasing
+  the claim must be part of the removal, or the number stays reserved forever.
+
 --------------------------------------------------------------------------------
 5. DESIGN RULES
 --------------------------------------------------------------------------------
@@ -677,9 +703,59 @@ MODELS (D4, D12). Driving raw values over the wire cannot express time: round tr
 Parametrising a PLC-side model generates the dynamics AT SCAN RATE inside the controller; the
 link carries parameters and results. Already proven in this codebase by the live program's own
 plant simulation.
-  CAVEATS: who verifies the model (correlated again if one agent writes both — O5); FIDELITY
-  decides what a green means (a weigher with no noise, lag or overshoot passes logic a real one
-  would break); models cost scan time.
+
+*** THE MODEL-AUTHORING CONTRACT (resolves O4 and O5, decided 2026-08-12) ***
+
+M1. AN INDEPENDENT lad-coder AUTHORS THE MODEL — never the agent that wrote the block it will
+    test. Same independence rule as D6, same reasoning.
+
+M2. *** THE PHYSICAL ANALYSIS IS GROUNDED IN THE EQUIPMENT, NOT IN THE CONTROL SPECIFICATION.
+    *** This is the load-bearing half of M1 and it is easy to satisfy in appearance only. A
+    model derived from the control spec — or from the same P&ID / equipment-spec artifacts the
+    block was designed from — INHERITS THAT SPEC'S ASSUMPTIONS. A spec that never considered
+    in-flight material yields a model with no in-flight material, and a block that ignores it
+    passes. *** THE SPEC'S BLIND SPOTS BECOME UNTESTABLE, and the independence bought by using
+    a different agent is spent, because both read the same source. *** The analysis must come
+    from how the EQUIPMENT behaves — load-cell dynamics, settling time, in-flight mass, valve
+    travel, sensor quantisation — not from what the control spec says about using it.
+
+M3. EVERY MODEL CARRIES A FIDELITY DECLARATION: what it does and does NOT represent (noise,
+    lag, overshoot, in-flight mass, saturation, quantisation), plus a declared SCAN-TIME
+    BUDGET (M6). It is reproduced in every result derived from it, so a green is never read
+    without its caveats.
+
+M4. *** A VECTOR MAY ONLY ASSERT BEHAVIOURS THE MODEL CLAIMS TO REPRESENT; THE RUNNER REFUSES
+    IT OTHERWISE. *** This makes fidelity MACHINE-CHECKABLE in exactly the way `Observability`
+    already makes sampling limits machine-checkable, and it reuses a discipline the codebase
+    has proven it will honour rather than adding one nobody enforces. Same principle: a green
+    that cannot mean anything is worse than a refusal.
+
+M5. *** A MODEL GETS MORE REVIEW THAN A BLOCK, NOT LESS — THE BLAST RADIUS IS INVERTED. *** A
+    wrong block fails its own tests and the system catches it. A wrong model SILENTLY CORRUPTS
+    EVERY VECTOR THAT USES IT, and the more useful the model, the more results it quietly
+    invalidates. So models go through the same review path as blocks — conventions, simplicity,
+    and a functional review against the physical analysis — plus validation against real plant
+    data wherever any exists. Where none exists, that ABSENCE is recorded in the fidelity
+    declaration.
+
+M6. MODELS COMPETE FOR SCAN TIME. Every model runs every scan and they accumulate with agents,
+    which interacts with OB80's overrun handling and the <=20-object batching. The declared
+    budget makes the ceiling visible before it is hit rather than discovered as a cycle-time
+    trip mid-wave.
+
+M7. *** MODELS ARE PROVISIONAL UNTIL REVIEWED AND VALIDATED. *** The library ACCRETES from
+    models written to order, and the trap in that is that the FIRST few become the standard by
+    default — including their limitations, unexamined, and written before any wave had taught
+    anyone which fidelity actually matters. Promotion into the library is a DECISION, never a
+    consequence of having been first.
+
+THE WORKED EXAMPLE THAT DECIDES M2 AND M4. A fill-control block closes the valve when weight
+reaches setpoint. Against an idealised weigher — instant response, no material in flight — it
+passes cleanly. On the real plant, material already falling continues after the valve closes,
+so the vessel overshoots and the correct implementation needs a pre-act offset. *** THE
+IDEALISED MODEL DOES NOT MERELY MISS THE DEFECT — IT CERTIFIES THE NAIVE IMPLEMENTATION AND
+WOULD REJECT THE CORRECT ONE, *** which closes "early" and under-fills against a model with no
+in-flight mass. That is worse than having no test.
 
 INERT STATE (D5). FB statics survive between tests, so results depend on wave ORDER. A
 GENERATED reset routine, triggered by a command register, with retentive members explicitly
@@ -826,8 +902,9 @@ running this should expect to be at the machine.
       restart is available through the same callback mechanism, which the type survey had
       already established is the ONLY expression of a CPU stop or start in the public API —
       and it turns out to be sufficient.
-  O4. How are model fidelity limits recorded, so a green is not over-read?
-  O5. Who authors the models, given the correlation caveat and D6?
+  O4. *** CLOSED — the fidelity declaration, M3/M4 in §11. ***
+  O5. *** CLOSED — an independent lad-coder, from an EQUIPMENT-grounded physical analysis;
+      M1/M2 in §11. ***
   O6. Wave failure policy — does one failing test abort the wave, or does it complete and
       report? Abort loses information; complete risks cascading from a bad state.
   O8. What minimum coverage admits a wave (§7), and who rules on a requirement declared
@@ -840,8 +917,28 @@ running this should expect to be at the machine.
       neither chose nor can see. The whole protection model in R4/R8 rests on "refuse to
       answer => prevented". For any configuration that behaves like UserManagementDownload,
       refusing prevents NOTHING and produces the ILLUSION of a guard: the log reads "left
-      unhandled on purpose" and the download reports Success. See the recommendation and the
-      worked failure in the design conversation of 2026-08-12.
+      unhandled on purpose" and the download reports Success.
+
+      *** DECIDED 2026-08-12 — THE FIX IS TO THROW FROM THE DELEGATE. *** If we will not
+      answer a configuration, WE abort the download rather than hoping Openness does. That is
+      UNIFORM across every configuration including ones nobody has seen yet — which, given
+      that each of the last three runs produced a configuration nobody predicted, is the case
+      that matters. It also keeps the reporting honest: an abort WE caused is distinguishable
+      from one TIA caused, the same way FailedToApply was separated from RefusedByPolicy.
+      VERIFY BEFORE RELYING ON IT: that a throw inside the delegate propagates and leaves the
+      CPU untouched rather than half-loaded — external gap G4, now on the critical path.
+
+      *** AND A LOG, FOR UNATTENDED RUNS. *** Every configuration NOT SEEN BEFORE is
+      registered, and — the part that makes it useful — SO IS WHAT HAPPENED WHEN WE DID NOT
+      ANSWER IT: aborted, or completed anyway. Without the outcome the log tells you a new
+      configuration exists but not whether the guard held for it, which is the only thing a
+      later fix wave needs.
+
+      WORKED FAILURE, for anyone tempted to leave this: `SelectiveDeleteDownload` offers
+      `AcceptAll | DeleteSelected` and NO NoAction. Rule 3 leaves it unhandled. If it behaves
+      like UserManagementDownload, TIA proceeds and deletes something; the log reads "left
+      unhandled on purpose"; the download reports Success; and the load manifest may never
+      mention what was removed. A silent destructive path wearing the shape of a refusal.
 
   O10. Which selection did TIA apply for `UserManagementDownload`? One of
       `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword`,
