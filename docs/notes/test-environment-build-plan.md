@@ -472,6 +472,43 @@ grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
 OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
 merely ignored. ***
 
+### ✅ `compare` IS DIRECTION-AWARE, AND FI-75 CLOSES THE FOURTH SILENT LOSS — 2026-08-12
+
+**`compare` now explains a flip instead of describing its debris.** Four `ATTR-DIFFERS` lines
+became one `WIRE-DIRECTION` finding naming both roles. *** AND THE ROOT CAUSE OF THE OLD MISREAD IS
+WORTH KEEPING: the Normalizer pins endpoint 0, so the flip survives — but it sorts `<Wires>` BY
+RENDERED CONTENT, so a flip changes that content, the wire moves index, and positional pairing then
+compared two DIFFERENT wires. *** That is why it read as two wires swapping names.
+
+Classification is **all-or-nothing** and falls back rather than guessing; the one real fallback —
+a reversal arriving alongside another edit in the same network — is asserted as a test so the limit
+is on record. **An unexplained real difference beats a confidently mislabelled one.**
+
+⚠️ **AND A CORRECTION TO MY OWN RECORD: the `MemoryLayout` parenthetical defect I logged was ALREADY
+FIXED** (`8c1f8d1`, earlier the same day). *** THE REPORT I RECORDED IT FROM HAD BEEN MEASURED
+AGAINST A PRE-FIX BINARY. *** Same class as FI-73, one level up: **verify a defect against the
+current binary before recording it**, or the log accumulates ghosts.
+
+**FI-75 — the fourth silent loss, and its blast radius is zero.** FI-56 accepted TIA's named-UDT
+expansion by *discarding* it — but the values inside an expansion belong to the *** USE SITE, NOT
+THE TYPE. *** Measured: a UDT declaring no start values, whose instance DB sets a fail-to-run time
+and two reversal timings **existing nowhere else**.
+
+  - *** IT WAS AN ASYMMETRY, NOT A PRINCIPLE: *** top-level `ParseMember` always kept the
+    expansion; only the two **nested** positions discarded it — a shortcut made redundant by the
+    recurse-and-keep machinery gap 2 built.
+  - **Blast radius zero, measured three ways:** all 6 quoted-UDT expansions in the corpus sit at
+    depth 0 with **zero** nested, so the collapse never fired on committed content; `drift-check`
+    **unmoved at its exact baselines**; and `to-ir` over all 38 committed exports produced **0
+    files changed, byte for byte**.
+  - *** THE WRITE SIDE NEEDED A MATCHING CHANGE, AND THIS IS THE PART THAT MATTERED: ***
+    `WriteTypeMember` emitted nested members in the anonymous-`Struct` shape, so keeping the
+    expansion on the read side alone would have *** TRADED A SILENT LOSS FOR A SILENT
+    CORRUPTION. ***
+
+**996 → 1010 tests**, golden harness 46, `drift-check` at exact baselines throughout, Release
+rebuilt in the main checkout and behaviour-verified — so this is the binary the tooling runs.
+
 ### ✅ D32's CLASSIFIER AND X-C's WAVE MARKER — built 2026-08-12, `src/wave-control/`
 
 Standalone solution, library references **nothing** — no Openness, no package, no network. Not
