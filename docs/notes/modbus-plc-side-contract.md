@@ -126,6 +126,40 @@ InOut-`CALL` extension: the already-supported `Modbus_Comm_Load` renders in Sima
 elements at all**, wiring its InOut parameter as an ordinary operand. If `MB_SERVER` renders the same
 way, this is the proven "add one fixed-shape Part" template rather than a grammar change.
 
+> ### 🔴 THE EVIDENCE TAG ON THE PARAGRAPH ABOVE WAS WRONG — CORRECTED 2026-08-12
+>
+> That claim was carried as **`[M] MEASURED`**. It is not measured, and the correction matters
+> because *this paragraph is what the 5-day-versus-12-day estimate rests on*.
+>
+> The only two files in the repo containing `Modbus_Comm_Load` or `Modbus_Master` are
+> **hand-authored unit-test fixtures** — bare `<FlgNet>` fragments with no `<Document>` /
+> `<DocumentInfo>` wrapper. Confirmed by copying them to scratch and running `to-ir`, which
+> **rejects both**: `SimaticMlFormatException: Could not find an SW.Blocks.* element`.
+>
+> *** SO NO GENUINE TIA EXPORT OF ANY MODBUS INSTRUCTION EXISTS ON DISK. *** The "it is a `<Part>`,
+> not a `<Call>`" premise is an assumption about what TIA emits, tested only against what a
+> developer wrote by hand. Correct tag: **`[I]` — inferred from a fixture**.
+>
+> The paragraph is kept because the inference is still reasonable and still the likely answer. It is
+> the *tag* that was doing unearned work.
+
+*** WHAT IS NOW GENUINELY MEASURED (2026-08-12), AND IT NARROWS THE CHANGE SHARPLY *** — established
+by mutating a real green-tier export and running the shipping converter:
+
+  - The parser throws at **`to-ir` parse time**, not merely on the synthesize path. Confirmed.
+    `UnsupportedConstructException: <Call>'s <Parameter Section="InOut"> — only Input/Output have
+    been observed.`
+  - *** `Type="Variant"` IS NOT THE PROBLEM AT ALL. *** A `Variant`-typed **Output** parameter
+    parses to IR with no complaint (exit 0). **The refusal keys on `Section` alone.**
+  - *** THE DECLARATION SIDE ALREADY WORKS, INCLUDING `Variant`, IN BOTH DIRECTIONS. *** A populated
+    `<Section Name="InOut">` interface member — `Word` and `Variant` alike — converts to IR and back
+    to XML byte-for-byte. The corpus never contains one because every real block's InOut section is
+    empty, which is why this had never been exercised.
+
+  ➜ **The gap is confined to `FlgNetParser`'s call-parameter section whitelist.** That materially
+    shrinks the change *if* `MB_SERVER` is a `<Call>`, and makes it irrelevant *if* it is a `<Part>`.
+    **The fork is still open and only the missing export decides it.**
+
 **Zero occurrences of `MB_SERVER` or `Section="InOut"` exist anywhere in the repo**, so nothing on
 disk can answer it. Settling it needs one scratch export of a block containing `MB_SERVER` — which
 must be authored by hand in TIA, precisely because the converter cannot yet produce it.

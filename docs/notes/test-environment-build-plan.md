@@ -346,7 +346,56 @@ it needs the FC exported, which is blocked below.
     once the export confirms the prediction. **(a) is the phase-1 answer**; the spike is
     disposable and a converter change is not.
 
-### ⛔ BLOCKED — and it needs one permission rule
+### ⚙️ TWO `openness-cli` DEFECTS FOUND IN PASSING, 2026-08-12 — both affect any caller
+
+**1. 🔴 `compile --block` EXITS 8 ON `errors: 0`, AND WILL DO SO FOR EVERY BLOCK IN THIS PROJECT.**
+`RunCompile` keys its verdict on `State != Success`, where `compile-all` keys on `ErrorCount` —
+and CLAUDE.md says `compile-all` does that *precisely because* "a project with pre-existing
+hardware warnings returns non-Success on a clean block". **This project has exactly such a
+permanent warning** ("Inputs or outputs are used that do not exist in the configured hardware"),
+so *** EVERY per-block compile here exits 8 regardless of the block. *** A caller trusting the
+exit code reads every clean compile as a failure. `compile` should key on `ErrorCount` the way
+`compile-all` already does.
+
+**2. A CLEAN PER-BLOCK COMPILE DOES NOT IMPLY EXPORTABLE — the converse of FI-52.** FI-52
+established that a *device* compile can leave blocks inconsistent. This adds the other direction: a
+**per-block** compile reporting "Block was successfully compiled", `errors: 0`, that *** STILL
+LEAVES `IsConsistent = false` *** because a referenced block is absent. `sanity-check` caught it;
+the compile's own output did not. So "compiled clean" is not a sufficient precondition for export —
+consistency must be checked separately.
+
+### ⛔ BLOCKED — the FC cannot be exported, and it is not a permission problem
+
+The permission rule landed and the compiles ran. **The FC still cannot be exported**, for a
+different reason: it compiles with `errors: 0` but stays `IsConsistent = false` because
+*** network 1 references an instance DB that does not exist anywhere in the project *** —
+`Called block DB110 in network is not available`, against a project whose highest block number is
+48. TIA then refuses the export outright (exit 5: *"Inconsistent blocks and PLC data types (UDT)
+cannot be exported"*).
+
+A per-block compile cannot invent the missing DB, so the inconsistency is permanent until someone
+creates it. `create-instance-db` was blocked by the classifier and *** would likely have failed
+anyway: the gateway calls `CreateInstanceDB(name, isAutoNumbered: true, …)` and therefore cannot
+place a DB at number 110 *** — so if the FC references by number rather than name, no CLI route
+exists at all.
+
+  ➜ **CHEAPEST UNBLOCK — the owner, in TIA, about a minute:** open the FC and assign or create the
+    instance DB for the call in network 1. Then `compile --block` and `export --block` both work
+    with no further permission changes.
+
+  ⚠ **AND ONE ASSUMPTION TO CHECK WHILE THERE:** *nothing has read the FC's contents*, so **that it
+  contains an `MB_SERVER` call at all is inferred** — from the block's name and the surrounding
+  design notes, not from evidence. The dangling DB110 reference is the only measured fact.
+
+### ✅ The hardware-interrupt OB is fully supported
+
+Exports and converts clean (exit 0), no new construct. An empty marker block —
+`<SecondaryType>HardwareInterrupt</SecondaryType>`, one empty compile unit, and a TIA-supplied
+Input section of informative members (`LADDR : HW_IO`, `USI : Word`, `IChannel : USInt`,
+`EventType : Byte`). All of it round-trips. Its export is preserved as the **first XML** for a
+confirm-loop baseline.
+
+### ⛔ SUPERSEDED — the earlier permission block
 
 TIA **refuses to export an inconsistent block** (verified live, exit 5: *"Inconsistent blocks and
 PLC data types (UDT) cannot be exported"*). So each marker block must be compiled before it can be
