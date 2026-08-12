@@ -40,6 +40,7 @@ public class RigWriteCliTests : IDisposable
         public void Disconnect() => throw Used(nameof(Disconnect));
         public S7Status ReadOrderCode(out string orderCode) => throw Used(nameof(ReadOrderCode));
         public S7Status ReadCpuInfo(out S7CpuInfo info) => throw Used(nameof(ReadCpuInfo));
+        public S7Status ReadRunState(out S7RunStateReading runState) => throw Used(nameof(ReadRunState));
         public S7Status ReadDataBlock(int db, int start, byte[] buffer) => throw Used(nameof(ReadDataBlock));
         public S7Status WriteDataBlock(int db, int start, byte[] buffer) => throw Used(nameof(WriteDataBlock));
         public S7Status WriteBit(int db, int b, int bit, bool value) => throw Used(nameof(WriteBit));

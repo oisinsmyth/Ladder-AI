@@ -70,6 +70,21 @@ public interface IS7Client
     /// <summary>SZL 0x001C. May be unsupported or partially filled depending on CPU and firmware.</summary>
     S7Status ReadCpuInfo(out S7CpuInfo info);
 
+    /// <summary>
+    /// Whether the CPU is running. READ-ONLY: it asks for a status and cannot change a mode.
+    ///
+    /// <para>This is the one member that reads the CPU rather than the program, and it is here because
+    /// no other source has the fact — over Modbus a stopped CPU and a dropped link are the same
+    /// silence, and Openness exposes no operating mode. It does NOT widen the interface towards mode
+    /// CONTROL: Sharp7's <c>PlcStop</c>, <c>PlcHotStart</c> and <c>PlcColdStart</c> stay off this
+    /// interface and therefore stay unreachable from the harness.</para>
+    ///
+    /// <para>The status and the reading answer two different questions and both are needed: the status
+    /// says whether the CPU was asked, the reading says what it said. See
+    /// <see cref="S7RunStateReading"/>.</para>
+    /// </summary>
+    S7Status ReadRunState(out S7RunStateReading runState);
+
     /// <summary>Read <c>buffer.Length</c> bytes from a data block. The size comes from the buffer so
     /// the two can never disagree — a size/buffer mismatch is a classic Sharp7 caller bug.</summary>
     S7Status ReadDataBlock(int dbNumber, int startByte, byte[] buffer);

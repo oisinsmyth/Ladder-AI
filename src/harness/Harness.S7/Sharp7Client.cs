@@ -72,6 +72,29 @@ public sealed class Sharp7Client : IS7Client, IDisposable
         return Status(rc);
     }
 
+    /// <summary>
+    /// The CPU's run state, via <c>PlcGetStatus</c> — a status request, never a mode change.
+    ///
+    /// <para><b>Measured on the bench rig 2026-08-12 in both states:</b> RUN answers PDU byte 0x08 and
+    /// arrives here as 8; STOP answers <b>PDU byte 0x03</b>, which is none of Sharp7's three named
+    /// constants and so arrives as 4 through its CATCH-ALL arm. That catch-all is load-bearing — the
+    /// decoder must not be tightened to {0,4,8}, or a stopped CPU reads as not-stopped on this rig.
+    /// The reasoning lives with the decoder, in <see cref="S7RunStateReading.Decode"/>.</para>
+    /// </summary>
+    public S7Status ReadRunState(out S7RunStateReading runState)
+    {
+        // Sharp7 leaves the ref parameter alone when the request fails, so it starts at the "nothing
+        // was read" sentinel rather than at a value that could be mistaken for an answer.
+        var value = S7RunStateReading.NotRead;
+        var rc = _client.PlcGetStatus(ref value);
+
+        // A failed read is Unknown, never NotRunning. "The CPU did not answer RUN" and "the CPU could
+        // not be asked" are different facts, and telling them apart is the whole reason this read
+        // exists — flattening the second into the first would rebuild the ambiguity it removes.
+        runState = rc == 0 ? S7RunStateReading.Decode(value) : S7RunStateReading.Unread;
+        return Status(rc);
+    }
+
     public S7Status ReadDataBlock(int dbNumber, int startByte, byte[] buffer) =>
         Status(_client.DBRead(dbNumber, startByte, buffer.Length, buffer));
 

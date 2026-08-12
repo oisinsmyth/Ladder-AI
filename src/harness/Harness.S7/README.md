@@ -22,6 +22,7 @@ Harness              DeviceGuard
 | `Sharp7Client` | The real adapter. The only file that cannot be unit-tested, so it does nothing but marshal. |
 | `S7TagMap` | Symbolic name → DB/offset/type. Classic S7comm has no symbolic access, so the binding lives here, with duplicate/overlap/alignment checks. |
 | `S7Values` | Big-endian encode/decode, invariant-culture formatting, range checks that refuse rather than truncate. |
+| `S7RunState` / `S7RunStateReading` | Whether the CPU answered RUN — the fact Modbus cannot supply and Openness does not expose. `Running` / `NotRunning` / `Unknown`, and no `Stopped`: see below. |
 | `IDeviceIdentitySource` | Order code today; a rig marker DB and (untried) the CPU's SZL serial. Composed, contradictions refused. |
 | `S7Transport` | `ITransport` with the write fence behind it. Identity is re-read on **every** connection. |
 | `FileRestorePointStore` | The first `IRestorePointStore` that can answer yes — and the conditions under which it must still say no. |
@@ -45,6 +46,27 @@ identity of the session the bytes will travel on.
 same string. It catches "a different *kind* of box answered"; it cannot catch "a different box of the
 same kind answered". `MarkerDbIdentitySource` is what closes that, and its DB number, offset and
 encoding are still unsettled — hence no defaults.
+
+## The run-state read, and why its decoder must not be tightened
+
+"The CPU went to STOP" and "the link dropped" are the same observation over Modbus, and Openness
+exposes no operating mode, so `IS7Client.ReadRunState` is the only source of that fact here. It is a
+status request and cannot change a mode; `PlcStop`, `PlcHotStart` and `PlcColdStart` stay off the
+interface, so the harness cannot reach them.
+
+**Measured on the rig 2026-08-12, in both states.** RUN answers PDU byte `0x08` and Sharp7 reports 8.
+STOP answers **`0x03`**, which is none of Sharp7's three named constants, so it reaches the caller as
+4 through Sharp7's **catch-all** arm — `S7CpuStatusStop` is never actually returned by this device.
+Confirmed live against the stopped CPU on the same day: `status ok, state NotRunning (4), 78 ms`.
+
+Two consequences the code carries in comments and the tests pin:
+
+- **Do not tighten the decoder** to accept only `{0, 4, 8}`, and do not tighten Sharp7's. On this rig
+  either change reports a stopped CPU as not-stopped, which is the failure the read exists to prevent.
+- **There is no `Stopped` state, by design.** `Running` is exact (only the pass-through value reaches
+  it); everything else is `NotRunning`, which covers STOP, STARTUP, HOLD and any byte nobody has seen.
+  A read that did not complete is `Unknown` and never `NotRunning` — "the CPU did not answer RUN" and
+  "the CPU could not be asked" are different facts, and telling them apart is the entire point.
 
 ## Two conditions in TIA that this code cannot check
 
@@ -92,7 +114,7 @@ How it *should* be referenced needs a decision:
 ## Build & test
 
 ```
-dotnet test src/harness/harness.sln              # 127 tests, no PLC, no network, no rig
+dotnet test src/harness/harness.sln              # 221 tests, no PLC, no network, no rig
 dotnet build -c Release src/harness/harness.sln
 dotnet build src/harness/harness.sln -p:Sharp7Path=C:\some\other\Sharp7.dll
 ```

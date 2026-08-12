@@ -33,6 +33,17 @@ public sealed class FakeS7Client : IS7Client
     /// <summary>Non-zero makes the order-code read fail.</summary>
     public int OrderCodeFailureCode { get; set; }
 
+    /// <summary>
+    /// What <c>PlcGetStatus</c> reports. This is Sharp7's ALREADY-MAPPED value, not the device's byte:
+    /// the rig answers 0x03 in STOP and Sharp7 hands that on as 4 (see
+    /// <see cref="S7RunStateReading.Decode"/>), so scripting a stopped CPU means 4, and scripting a
+    /// device value nobody has seen means whatever Sharp7 would have collapsed it to.
+    /// </summary>
+    public int RunStateValue { get; set; } = S7RunStateReading.RunValue;
+
+    /// <summary>Non-zero makes the run-state read fail — the CPU could not be asked.</summary>
+    public int RunStateFailureCode { get; set; }
+
     public int ReadFailureCode { get; set; }
     public int WriteFailureCode { get; set; }
     public int ConnectFailureCode { get; set; }
@@ -41,6 +52,7 @@ public sealed class FakeS7Client : IS7Client
 
     public int ConnectCount { get; private set; }
     public int OrderCodeReadCount { get; private set; }
+    public int RunStateReadCount { get; private set; }
     public List<string> BitWrites { get; } = new();
     public List<string> BlockWrites { get; } = new();
 
@@ -86,6 +98,20 @@ public sealed class FakeS7Client : IS7Client
     public S7Status ReadCpuInfo(out S7CpuInfo info)
     {
         info = CpuInfo;
+        return S7Status.Success;
+    }
+
+    public S7Status ReadRunState(out S7RunStateReading runState)
+    {
+        RunStateReadCount++;
+
+        if (RunStateFailureCode != 0)
+        {
+            runState = S7RunStateReading.Unread;
+            return new S7Status(RunStateFailureCode, "run state unavailable (fake)");
+        }
+
+        runState = S7RunStateReading.Decode(RunStateValue);
         return S7Status.Success;
     }
 

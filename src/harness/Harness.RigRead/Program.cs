@@ -16,8 +16,11 @@ namespace Harness.RigRead;
 /// arithmetic is wrong and every address derived from it is wrong with it.</para>
 ///
 /// <para><b>It cannot write.</b> Not by policy — by construction. The only device operations it
-/// performs are <c>ConnectTo</c>, <c>DBRead</c>, <c>MBRead</c> and <c>GetOrderCode</c>. See the project
-/// file for the assembly-level statement of the same property.</para>
+/// performs are <c>ConnectTo</c>, <c>DBRead</c>, <c>MBRead</c>, <c>GetOrderCode</c> and
+/// <c>PlcGetStatus</c> — the last asks the CPU for its mode and cannot change one; the calls that do
+/// (<c>PlcStop</c>, <c>PlcHotStart</c>, <c>PlcColdStart</c>) are not on <see cref="IS7Client"/> at all
+/// and are unreachable from here. See the project file for the assembly-level statement of the same
+/// property.</para>
 ///
 /// <para><b>The fence runs before the socket.</b> <see cref="DeviceAccessGuard"/> is consulted first
 /// and a refusal returns without a connection attempt. That ordering is the point of the fence — a
@@ -96,7 +99,15 @@ public static class Program
         RunIdentityPath(client, decision.MatchedEntry);
         Console.WriteLine();
 
-        // ---- 4. THE READ ----
+        // ---- 4. CPU RUN STATE ----
+        //
+        // Before the DB read, because it is the fact that explains a failed one. A CPU in STOP still
+        // connects and still answers SZL, so nothing earlier in this program distinguishes it from a
+        // running CPU, and "the DB read failed" reads very differently once the mode is on the page.
+        ReportRunState(client);
+        Console.WriteLine();
+
+        // ---- 5. THE READ ----
         Console.WriteLine("== read ==");
         var buffer = new byte[length];
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -119,7 +130,8 @@ public static class Program
         Measure(buffer, offset);
 
         Console.WriteLine();
-        Console.WriteLine("Done. Operations performed on the device: ConnectTo, DBRead, GetOrderCode. No write.");
+        Console.WriteLine("Done. Operations performed on the device: ConnectTo, DBRead, GetOrderCode, " +
+                          "PlcGetStatus. No write, no mode change.");
         return ExitOk;
     }
 
@@ -256,6 +268,35 @@ public static class Program
             clock.Stop();
             Console.WriteLine($"  read    : FAILED after {clock.ElapsedMilliseconds} ms — {ex.Message}");
         }
+    }
+
+    // ------------------------------------------------------------------ run state
+
+    /// <summary>
+    /// What the CPU says about its own mode, with the value it was decoded from.
+    ///
+    /// <para>Both are printed because they answer different questions and the second is not derivable
+    /// from the first: <c>NotRunning</c> covers STOP, STARTUP, HOLD and anything Sharp7 did not
+    /// recognise, so the value is what a later reader has to go on. Timed alongside the identity read
+    /// above for the same reason that one is — a failure that costs a full round trip was answered.</para>
+    /// </summary>
+    private static void ReportRunState(IS7Client client)
+    {
+        Console.WriteLine("== CPU run state (PlcGetStatus — a status request; this binary cannot change a mode) ==");
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var status = client.ReadRunState(out var runState);
+        clock.Stop();
+
+        Console.WriteLine($"  status  : {status}");
+        Console.WriteLine($"  state   : {runState}");
+        Console.WriteLine($"  value   : {runState.Sharp7Value} (Sharp7's mapped value, not the CPU's byte)");
+        Console.WriteLine($"  elapsed : {clock.ElapsedMilliseconds} ms");
+
+        if (!status.Ok)
+            Console.WriteLine("  the CPU was not asked successfully — this says nothing about whether it is running.");
+        else if (!runState.Running)
+            Console.WriteLine("  the CPU did not answer RUN. Which non-running mode it is in is not knowable here.");
     }
 
     // ------------------------------------------------------------------ diagnosis
