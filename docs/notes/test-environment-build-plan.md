@@ -472,6 +472,44 @@ grounded.** `NUMBER 100` on the FC is likewise a guess and may collide.
 OB1, and the experiment-1.4 generator — which needs the checker *** DISABLED, not
 merely ignored. ***
 
+### 🔧 PROCESS — `git add` + `git commit` IS NOT ISOLATION. USE `git commit -- <paths>`.
+
+Happened twice on 2026-08-12, the second time to me. *** THE INDEX IS SHARED ACROSS EVERY AGENT IN
+A WORKTREE. *** Staging by explicit path does not protect you, because a *bare* `git commit` in
+any lane commits **the whole index** — including whatever another lane has staged and not yet
+committed. Commit `4f01d32` therefore carries a docs change **and** four `openness-cli` files
+belonging to a different lane, under the docs message.
+
+  ➜ *** THE PRIMITIVE THAT ACTUALLY ISOLATES IS `git commit -- <path> [<path>…]` ***, which
+    commits only the named paths regardless of what else is staged. `git add <path>` followed by a
+    bare `git commit` does **not**.
+  ➜ **And do not fix a sweep by rewriting history while other lanes are live** — a reset or rebase
+    under an actively-writing agent is far worse than a mislabelled commit. Record it instead: an
+    empty commit carrying the intended message and naming where the content landed (`f75aa7f`
+    does this) costs nothing and leaves the history honest.
+
+### ✅ `hmi-compile` NOW KEYS ON ERRORS — and the HMI asymmetry is now measured, not believed
+
+Reuses `Program.EffectiveErrorCount` rather than a second copy, so the fail-closed
+`max(ErrorCount, Error messages in the tree)` behaviour is identical to `compile`'s. Warnings
+still print; only the exit code changed. **539 → 550 tests**, Debug only, Release never touched.
+Both guards negative-tested: reinstating `State != Success` failed 5 of 11; keying on
+`result.ErrorCount` alone failed the fail-closed case.
+
+*** THE CONSISTENCY READ-BACK GENUINELY DOES NOT EXIST FOR HMI, CHECKED RATHER THAN ASSUMED. ***
+Across the V20 API surface every `*Consisten*` member is PLC-side — `PlcBlock`, `PlcType`,
+`PlcForceTable`, `PlcWatchTable`.`IsConsistent` — with **zero** in either HMI namespace. So **no
+always-null field was added**, and two tests assert that *absence* deliberately, *** so nobody
+later "completes the symmetry" with a field that would read as a check that ran and found nothing
+wrong. ***
+
+  ➜ `hmi-compile` success is **weaker than `compile` success**, the difference cannot be closed
+    from our side, and the README now says so outright with the API evidence. An undocumented
+    asymmetry between two commands with matching flags is how someone later trusts an HMI compile
+    the way they trust a PLC one.
+  ➜ CLAUDE.md's *"No FI-52 backstop"* sentence **survives verbatim** — it is now measured true
+    rather than merely believed.
+
 ### ✅ THE SPIKE CHECKER IS IN THE PROJECT AND COMPILES — 2026-08-12
 
 *** THE IR PIPELINE WORKS END TO END INTO TIA. *** First time IR-authored content has made the
