@@ -2579,15 +2579,47 @@ other protocols this project already speaks.
      "confirm at the device once" REQUIREMENT IS SATISFIED BY THE HARNESS ITSELF *** and the
      first unattended disruptive boundary needs no person.
 
-     ONE BUILD ITEM REMAINS (and see §16.13 — the same session turned up a memory constraint
-     the design did not have):
-       - `IS7Client` (`src/harness/Harness.S7/IS7Client.cs`) is a deliberate REDUCTION of
-         Sharp7's surface and carries no status member, so the harness cannot call this yet.
-         Add a read-only `ReadCpuStatus` to the interface and its Sharp7 implementation,
-         mapping to a small enum and keyed on `== 8` — the reduction property is worth keeping,
-         since it is what holds `PlcStop()` and its neighbours out of reach.
-       - CALLER TRAP FOR WHOEVER BUILDS IT: `S7Client.ReadSZL` throws `ArgumentNullException`
-         unless the caller PRE-ALLOCATES `S7SZL.Data`. `PlcGetStatus` has no such requirement.
+     *** BUILT 2026-08-12 — `IS7Client.ReadRunState` (commit 93835e8). *** One read member;
+     `PlcStop`, `PlcHotStart` and `PlcColdStart` remain unreachable, so the interface's
+     reduction property holds. `S7RunState` is `Unknown | Running | NotRunning` and *** HAS NO
+     `Stopped` MEMBER *** — a pinning test fails if anyone adds one. Verified read-only against
+     the stopped rig: `NotRunning (4)`, 78 ms, matching the measurement exactly.
+
+       - *** AN rc FAILURE DECODES TO `Unknown`, NEVER TO `NotRunning`. *** A dead link and "the
+         CPU did not answer RUN" are different facts, and separating them is the whole purpose
+         of the read — flattening one into the other rebuilds the ambiguity it removes.
+       - THE REGRESSION GUARD, which is the point of the exercise: a theory over 4, **3**, 0, 1,
+         6, 7, 9, 0x10, 255 asserts every one is `NotRunning`, and a sweep of -1..255 asserts
+         only 8 may be `Running`. Negative-tested by temporarily tightening the decoder to
+         {0,4,8} — eight tests failed, including the `3` case.
+       - *** HONEST LIMIT, DECLARED RATHER THAN PAPERED OVER: THE TRUE DEVICE BYTE IS NOT
+         RECOVERABLE THROUGH THIS API. *** `PlcGetStatus` collapses it to {0,4,8} BEFORE the
+         adapter sees it, so an unfamiliar byte arrives as 4 and is indistinguishable from a
+         genuine 4. Surfacing it would need a raw request bypassing `PlcGetStatus`; not built.
+       - CALLER TRAP, recorded for whoever does build that raw path: `S7Client.ReadSZL` throws
+         `ArgumentNullException` unless the caller PRE-ALLOCATES `S7SZL.Data`. `PlcGetStatus`
+         has no such requirement.
+
+     *** AND A LOOSE THREAD THE VERIFICATION PULLED, CAUSE NOT ESTABLISHED — DO NOT GUESS IT. ***
+     On the STOPPED CPU, `GetOrderCode` (SZL) SUCCEEDED while `DBRead(38)` and `MBRead(0)` BOTH
+     FAILED with `0x00040000`. Two candidate causes and the evidence does not separate them:
+
+         (a) the STOP state refuses S7 VARIABLE access while still serving SZL, or
+         (b) the pre-existing PUT/GET condition, which §16.11 records as UNKNOWN on this rig.
+
+     *** IT REINFORCES THE X-K DESIGN CHOICE EITHER WAY: SZL ANSWERED WHERE VARIABLE ACCESS DID
+     NOT, so keying the run-state read on SZL was correct and a `DBRead`-based status check
+     would have failed exactly when it was needed. *** More generally: if the harness ever needs
+     to read anything from a NON-RUNNING CPU, SZL may be the only channel available.
+
+     WHY IT MATTERS BEYOND THAT: if the cause is (b), NO Sharp7 DB read works on this rig at
+     all — which does not touch the Modbus mirror (that is a different protocol and a different
+     port) but does affect the marker-DB identity path and anything else built on `DBRead`.
+
+     *** THE SETTLING EXPERIMENT IS ONE PAIRED RE-READ AND COSTS NOTHING: repeat `DBRead` once
+     the owner returns the CPU to RUN. *** Success in RUN means (a); failure in both means (b).
+     A LEAD, NOT A CONCLUSION: if `rig-read` has previously read the marker DB successfully in
+     RUN, that already rules out (b) — worth checking the history before spending the read.
 
      UNTESTED AND WORTH KNOWING: connection-resource contention between this S7 session (TCP
      102) and the Modbus session (TCP 502) on a 1214C. Reserved PG/HMI resources make it

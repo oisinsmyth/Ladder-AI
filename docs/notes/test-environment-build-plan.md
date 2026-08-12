@@ -57,7 +57,8 @@ Nothing here needs the rig writing to, and every item can invalidate a design de
 | 0.3 | Establish what the 79–108 ms round-trip actually measured — Modbus, TCP or ICMP | A2 | The poll budget and every tensor-width number descend from it. **Now more urgent, see below** |
 | 0.4 | `C-122` conformance sweep: do existing blocks already carry PT as data? | — | Decides whether time compression is nearly free or a rewrite |
 | 0.5 | ~~Confirm Sharp7 presence, version and connection path~~ | — | ✅ **DONE.** Sharp7 1.1.82.0; rack 0 / slot 1; address from the device allowlist |
-| 0.6 | Add read-only `ReadCpuStatus` to `IS7Client` + `Sharp7Client` | A7 | **New.** The interface is a deliberate reduction of Sharp7 and has no status member, so the harness cannot call this yet. Keep the reduction — it is what holds `PlcStop()` out of reach |
+| 0.6 | ~~Add read-only run-state read to `IS7Client` + `Sharp7Client`~~ | A7 | ✅ **DONE 2026-08-12**, commit `93835e8`. `ReadRunState`; no `Stopped` member; 221 tests pass; verified against the stopped rig |
+| 0.7 | Paired `DBRead` re-read once the CPU is back in RUN | — | **New.** On the stopped CPU, SZL succeeded but `DBRead`/`MBRead` failed `0x00040000`. Either STOP refuses variable access, or PUT/GET is off — and if it is PUT/GET, no Sharp7 DB read works on this rig at all. One read settles it |
 
 > ### ⚠ 0.3 got more interesting, not less
 >
