@@ -906,6 +906,37 @@ readability conventions (C-601–C-607, the one-reading test). **Decide that del
 than discovering it at review**, and note it makes the contract's "the two counts are one number"
 a code-*generation* invariant rather than a hand-authoring one.
 
+### 🧾 THE A1 RUN-SHEET — client verified 2026-08-12, parameters pinned
+
+Client **builds, 52 tests pass**, and the wire format was reviewed offline (`frames`): one FC16 per
+iteration, 16 registers, 45 bytes, generation in every register, address windows declared as
+`pattern 0..15` / `status 200..208`. Nothing has been sent.
+
+*** THE DEFAULT `--pattern-count` IS 100 AND THE AUTHORED CHECKER IS 16. THE DEFAULT IS WRONG FOR
+THIS RIG. *** The contract's own words: *the two counts are one number*. Run it at the default and
+the checker inspects 16 registers the client never writes — the surplus hold stale values forever,
+the latch trips permanently, and *** IT READS AS "MB_SERVER TEARS" ***, which is the exact false
+positive that would send the whole design down a wrong path.
+
+    --pattern-base  0     register 0  == %MW1000   (MB_HOLD_REG = P#M1000.0 WORD 209)
+    --pattern-count 16    *** MUST MATCH THE CHECKER. NOT the default 100. ***
+    --status-base   200   register 200 == %MW1400, control at 208 == %MW1416
+    --port          ???   *** 502 IS LIKELY TAKEN by the existing Modbus server — use whatever
+                          the IR lane reports, and do not assume. ***
+    --host          the rig, from the device allowlist. No default, deliberately.
+    --arm           REQUIRED to open a socket at all; without it the frames print and it exits 10.
+
+The base addresses need no override: the checker's author placed the mirror so the client's
+defaults land correctly. **Only `--pattern-count`, `--host` and `--port` change.**
+
+**Order:** `probe` → `tear-write` (1.1) → `timing` (1.2, also settles deferred 0.3) → `scan` (1.3)
+→ `tear-read` (1.4) → rebuild with `MB_SERVER` last and repeat for VARIANT 2 (1.5).
+
+*** READ THE VERDICT, NOT THE EXIT CODE: `Stale` MEANS THE EXPERIMENT NEVER RAN *** —
+`CHANGE_COUNT` did not advance — and must never be read as a pass. And the finding is worded **"no
+tear observed in N writes", never "atomic"**: a green run is absence of evidence at *that* count,
+*that* rate and *that* call position.
+
 **Exit criterion:** A1 answered yes or no. If **no**, the map and copy-layer design change *before*
 either is written — which is the entire point of this phase.
 
