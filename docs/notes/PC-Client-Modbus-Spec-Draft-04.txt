@@ -1,0 +1,1315 @@
+================================================================================
+PC-CLIENT MODBUS — MULTI-AGENT TEST WAVE, DRAFT 04
+================================================================================
+
+Status:  CURRENT. Supersedes drafts 00, 01, 01-post-research, 02 and 03, which are kept as
+         reasoning history and must not be built from.
+
+All seven design gaps are closed. G-7 was MEASURED against the live rig on 2026-08-12 and
+refuted its own expectation — §13.
+
+*** WHAT DRAFT 04 ADDS OVER DRAFT 03. *** Two things, both from the wave-structure
+    conversation of 2026-08-12:
+
+      1. *** THE WAVE STRUCTURE IS NOW STATED EXPLICITLY (D26) AND THE THROUGHPUT ARITHMETIC
+         IS CORRECTED (§8). *** Draft 03 said only that execution is "concurrent" (D11), which
+         read as "every test in a wave runs at once" and, when worked through, was computed the
+         opposite way — as a serial sum over tests. Both readings are wrong and they cost a
+         full round of estimates that were out by an order of magnitude. A wave is a SEQUENCE
+         OF TENSORS; a tensor is a BATCH OF TESTS THAT RUN IN PARALLEL.
+      2. *** SIX NEW DESIGN BLOCKS, DB-8 to DB-13 *** (§4a), which is where the feedback-latency
+         question lands. DB-13 (tensor packing) is the one that sets wave duration; DB-8 (the
+         result package) is the one to build first.
+
+    Everything else is draft 03 unchanged.
+
+*** AND A HEADER CORRECTION CARRIED FROM DRAFT 03. *** Draft 03 opened with "NOTHING HAS EVER
+    BEEN DOWNLOADED TO THE DEVICE BY THIS TOOLING", which was true when that paragraph was
+    written and was NOT true by the time draft 03 was committed — §9b records three completed
+    downloads on the same day, one of which carried 99 objects and restarted the CPU. The
+    banner survived because it sat at the top of a document being extended at the bottom.
+    THE CURRENT POSITION: this tooling HAS delivered a program to the CPU, three times, in
+    all three option modes, unattended, including a stop-and-restart. What remains unproven is
+    named in §15 and §14, not here.
+
+Written: 2026-08-12.
+
+Companion documents:
+  docs/notes/modbus-tcp-client-spec.md      the PC-side client (buildable now)
+  docs/notes/modbus-plc-side-contract.md    the PLC-side contract (deferred to the IR work)
+  download-semantics-findings-VERBATIM.md   research findings, verbatim (job scratch)
+  s7-1200-download-semantics.md             the full research document
+
+EVIDENCE CONVENTION. [M] = measured on this project. [R] = vendor documentation. [I] =
+inferred. Where a claim is inferred it says so; this project has been bitten repeatedly by
+confident inference presented as fact.
+
+--------------------------------------------------------------------------------
+0. THE REVERSAL THAT SHAPES EVERYTHING
+--------------------------------------------------------------------------------
+
+Drafts 00 and 01 were built on "downloading stops the CPU, therefore batch". That is
+BACKWARDS. Siemens, verbatim [R]: ***"STEP 7 always tries to download in RUN first. If you
+do not want this to happen, you must put the CPU into STOP."***
+
+On an S7-1200 V4 a new FB/FC/DB/UDT, a deleted one, an FB/FC code change, an OB code change
+and an FB/FC interface change are ALL downloadable in RUN [R].
+
+*** THE RISK IS NOT THAT DOWNLOADS HALT THE WAVE. IT IS THAT THEY DO NOT, AND SILENTLY
+    REINITIALISE STATE. BUILD A CHANGE CLASSIFIER, NOT A BATCH LOCK. ***
+
+And: **the download option you pass does not decide STOP/RUN** [R]. "Software (all)" and
+"Software (only changes)" are not rows in Siemens' table — the Engineering System computes
+the verdict from the change classes inside the delta, plus a size limit. You cannot choose a
+safe option; you can only control what is IN the delta.
+
+--------------------------------------------------------------------------------
+1. THE LOOPS
+--------------------------------------------------------------------------------
+
+Three nested loops and two download queues. This section is the heart of the document.
+
+................................................................................
+1.1  LOOP 1 — one block, authored by one lad-coder
+................................................................................
+
+    author IR
+      -> compile
+      -> REVIEW SKILLS (conventions, simplicity)
+      -> changes from skills
+           +---------------------------------------------------+
+           |  compile -> FUNCTIONAL REVIEW (the test) -> iterate |
+           +---------------------------------------------------+
+      -> REVIEW SKILLS again
+      -> changes from skills
+      -> one last test cycle if needed
+
+*** WHY THE TEST LOOP IS BRACKETED BY TWO REVIEW PASSES. *** Fixing for FUNCTION can break
+FORM, and fixing for FORM can break FUNCTION. Reviews before the bracket kill cheap defects
+before they cost rig time. Reviews after catch what the functional fixes did to readability
+and conventions. The final test cycle catches what those review-driven edits did to
+behaviour. *** WITHOUT THAT LAST STEP THE BLOCK SHIPS IN A STATE THAT WAS NEVER VERIFIED —
+its last verified state would not be its final state. ***
+
+CONSEQUENCE, stated plainly: the test sits INSIDE loop 1, so a lad-coder's iteration rate is
+capped by WAVE CADENCE, not by its own speed. That is accepted; at a minute or two per
+boundary it is not the bottleneck (§8).
+
+................................................................................
+1.2  LOOP 2 — admission
+................................................................................
+
+A block enters the TEST project only after passing preflight and COMPILING CLEAN IN
+ISOLATION.
+
+Not bureaucracy: Openness cannot download a selection [M] — every download is
+whole-software — so THE WHOLE PROJECT MUST COMPILE BEFORE ANYONE'S DOWNLOAD. Without
+admission control one agent's broken block blocks every agent. A failing block is simply not
+in the next batch.
+
+................................................................................
+1.3  LOOP 3 — the wave
+................................................................................
+
+    collect admitted blocks + vectors
+      -> derive map, generate copy layer / models / mirror
+      -> batch into <=20 DEPENDENCY-CLOSED objects
+      -> harness goes inert, DISCONNECTS
+      -> download
+      -> reconnect -> READ VERSION REGISTER -> confirm stable
+      -> run wave
+      -> distribute results (including the co-running log, §2.4)
+
+................................................................................
+1.4  THE TWO DOWNLOAD QUEUES  *** the routing rule ***
+................................................................................
+
+Changes are ROUTED, not merely predicted:
+
+  RUN-CLASS  — new/edited FB, FC, DB, UDT; code changes; new PLC tags.
+               Flow through normal wave boundaries. Cheap, non-disruptive.
+
+  STOP-CLASS — OB add/delete, OB property change, hardware configuration, retentivity
+               settings, text lists.
+               *** DO NOT flow through wave boundaries. They ACCUMULATE IN A DEFERRED
+               QUEUE. ***
+
+The deferred queue is drained when TESTING CANNOT PROGRESS (D24). At that point the
+disruptive download happens, and testing resumes.
+
+*** THIS MAKES DB-1 A ROUTER, NOT JUST A PREDICTOR *** — deciding which queue a change
+belongs in is its primary job, and a better justification for building it than "predict the
+outcome".
+
+ACCEPTED CONSEQUENCE: an agent whose work needs a STOP-class change waits longer, because it
+cannot be tested until the next disruptive boundary. That delay is unavoidable in any design
+and is not treated as a problem.
+
+--------------------------------------------------------------------------------
+2. HOW lad-coder INTERACTS WITH THE TEST ENVIRONMENT
+--------------------------------------------------------------------------------
+
+2.1  WHAT IT OWNS, AND WHAT IT DOES NOT
+
+lad-coder authors PLANT LOGIC — blocks, IR, the things that implement requirements.
+
+THE COORDINATOR GENERATES EVERYTHING ELSE: the %MW mirror, the copy layer with its latches
+and scan-stamps, the block-enable bitmask, OB80, the register map. Per D13 instrumentation is
+a property of the COPY LAYER, not of the blocks under test, so lad-coder never writes
+observability code, and per D8 it never sees a register number — it speaks TAG NAMES.
+
+2.2  WHAT IT NEVER DOES
+
+  - *** IT DOES NOT WRITE ITS OWN TEST VECTORS *** (D6). An agent authoring both a block and
+    its tests encodes its MISREADING into both, and the wave returns green having verified
+    only self-consistency. This is the PlantAutoControl failure exactly.
+  - *** IT DOES NOT TOUCH THE TEST PROJECT. *** The coordinator is its sole writer, which is
+    what makes `SoftwareOnlyChanges` safe (DB-5): that option carries WHATEVER DIFFERS,
+    decided by TIA, so an agent writing there could ship another agent's half-finished work.
+  - *** IT DOES NOT TAKE THE PROJECT ONLINE. *** An Openness download is REFUSED in online
+    mode [M, measured 2026-08-12]. One agent going online blocks the whole wave loop.
+  - *** IT DOES NOT REVISE A SHARED UDT MID-WAVE-SET *** (D16). A modified UDT is
+    `RUN (Init)` for EVERY DB built on it [R] — the widest blast radius available.
+
+2.3  WHAT DOES NOT APPLY TO IT, so it is not over-generalised
+
+The memory-layout revert on re-import [M, measured three times] bites STANDARD-ACCESS blocks,
+which are coordinator-owned mirror scaffolding. lad-coder's ordinary plant blocks are
+optimized and unaffected.
+
+2.4  WHAT COMES BACK
+
+Per-vector pass/fail with OBSERVED VERSUS EXPECTED, never a bare verdict — plus:
+
+*** THE CO-RUNNING LOG. *** Results carry a slice of the wave's TIMELINE: what else ran, and
+when. This exists because computed disjointness (D9) will sometimes miss coupling that is not
+a code reference the graph can see — plant-model state being the obvious case. When agent A
+opens a valve, the model raises a level, and agent B's level-alarm test fails, B's own code is
+innocent and B would otherwise hunt a phantom. INTERMITTENTLY, which is worse than always.
+The log does not prevent interference; it makes it DIAGNOSABLE.
+
+Design implication: the wave must record a timeline, and each agent's results carry the
+relevant slice.
+
+*** HOW A FAILING VECTOR MUST BE READ. *** A failure is evidence the block disagrees with a
+SPEC-DERIVED expectation. Fix the block against THE SPECIFICATION, not against the vector. An
+agent that starts inferring requirements from test data turns the vector into the spec — and
+since a different agent wrote it from the same source, that re-creates the correlated check
+by the back door.
+
+2.5  THE BLACKLIST
+
+lad-coder, or whoever designs the tests, may name other blocks that must NOT run concurrently
+with a given test.
+
+*** GUARDRAIL: A BLACKLIST MAY ONLY EVER ADD EXCLUSIONS, NEVER REMOVE THEM. *** An agent must
+not be able to declare itself compatible with something the reference graph says it conflicts
+with. Computed disjointness (D9) is the FLOOR; the blacklist sits on top for what the graph
+cannot see.
+
+FAILURE MODE TO WATCH: defensive over-blacklisting. If agents exclude everything whenever a
+test looks flaky, concurrency collapses toward serial and nobody notices, because it still
+WORKS. A recorded reason per entry makes that visible.
+
+2.6  DESIGN-FOR-TESTABILITY — a future skill
+
+Some designs are UNOBSERVABLE. A condition true for one scan is roughly ten times below the
+sampling floor; a same-scan coincidence is unobservable at any rate (§12). The copy layer can
+latch and scan-stamp — but ONLY IF DECLARED IN THE MAP BEFORE THE DOWNLOAD that generates it,
+and that declaration is frozen for the wave set.
+
+So a block whose only evidence of correct behaviour is a one-scan pulse may be untestable in
+that wave, and the runner will correctly REFUSE the vector rather than return a meaningless
+green.
+
+*** THIS BELONGS IN A NEW SKILL *** for lad-coder or the test designer, carrying the test-
+environment contract: the vector format and its `Basis` requirement, the observability
+declaration, the blacklist mechanism and its reason field, how to read results including the
+co-running log, and the constraint set in §2.2. Premature to write until the environment
+exists — named now so the environment is built with a teachable contract rather than one
+reverse-engineered later.
+
+--------------------------------------------------------------------------------
+3. DECISIONS
+--------------------------------------------------------------------------------
+
+D1.  (Superseded by D9; retained for numbering continuity.)
+D2.  The register map is authored PC-SIDE and is authoritative. The PLC works off it.
+D3.  Identity comes from the PLC. Program-published, with the weakening recorded.
+D4.  A test vector may PARAMETRISE a PLC-side model rather than drive raw values.
+D5.  Tests are returned to a known INERT state between them, and the reset is VERIFIED.
+D6.  The block author does NOT author its own test vectors.
+D7.  (Superseded by D15.)
+D8.  Agents speak TAG NAMES and never see a register number.
+D9.  Independent means NON-OVERLAPPING REACHABLE STATE — the transitive closure through each
+     block's call tree, COMPUTED from the reference graph, not declared.
+D10. Isolation is structural: PER-TEST INSTANCE DBs.
+D11. Execution is CONCURRENT. The enable bitmask survives as a DIAGNOSTIC (bisect, reproduce
+     in isolation), not as the execution model.
+     *** CLARIFIED IN DRAFT 04 — "CONCURRENT" MEANS WITHIN A TENSOR, AND ONLY THERE. *** As
+     written it reads as "all tests in a wave run at once", which is not the design. Tensors
+     are SEQUENTIAL, separated by a verified inert reset; the tests inside one are concurrent.
+     D26 is the authoritative statement of the structure and this line is subordinate to it.
+D12. Models MUST support time compression; vectors declare the factor they need.
+D13. Instrumentation is a property of the COPY LAYER, not of the blocks under test.
+D14. Post-download verification is a PROGRAM-VERSION CONSTANT read over Modbus, not an
+     upload (§9).
+D15. The map is FROZEN for a wave set; changes land only at a download boundary.
+D16. Shared UDTs are FROZEN for a wave set; a revision lands only at a boundary and
+     invalidates every result for every DB built on it.
+D17. Stop-class refusals are TWO-STAGE — static ones in preflight, baseline-relative ones at
+     admission (R3).
+D18. The harness DISCONNECTS across a download. Reconnect plus version check is the NORMAL
+     path, not error handling (§10).
+D19. TIME COMPRESSION is the throughput lever, not download batching (§8).
+
+--- new in draft 03 ---
+
+D20. *** LOOP 1 BRACKETS THE TEST LOOP BETWEEN TWO REVIEW PASSES, and ends with a final test
+     cycle if the second review changed anything *** (§1.1).
+D21. *** RESULTS CARRY A CO-RUNNING LOG *** — a slice of the wave timeline, so interference
+     the graph could not predict is diagnosable (§2.4).
+D22. *** A BLACKLIST MAY ONLY ADD EXCLUSIONS, NEVER REMOVE THEM *** (§2.5).
+D23. *** CHANGES ARE ROUTED INTO TWO QUEUES: RUN-class flows through wave boundaries;
+     STOP-class ACCUMULATES IN A DEFERRED QUEUE *** (§1.4).
+D24. *** THE DEFERRED QUEUE DRAINS WHEN NO TEST CAN MAKE PROGRESS. *** Chosen over "all
+     queued tests complete" because the deferred queue holds other dependencies too, so in
+     practice the two conditions converge.
+D25. *** ANY DOWNLOAD THAT REQUIRES TESTING TO STOP MUST BE A FULL DOWNLOAD, NEVER A
+     DIFFERENTIAL ONE. *** If the disruption is being paid for, it buys a known state rather
+     than an unknown mixture. SEE R8 — THIS ENTAILS SOMETHING THAT MUST NOT BE MISSED.
+
+--- new in draft 04 (the wave-structure conversation, 2026-08-12) ---
+
+D26. *** A WAVE IS A SEQUENCE OF TENSORS; A TENSOR IS A BATCH OF TESTS THAT RUN IN PARALLEL. ***
+
+         inert -> tensor[0] -> inert -> tensor[1] -> inert -> tensor[2] -> ...
+
+     Tensors are SEQUENTIAL and separated by a verified inert reset (D5). The tests WITHIN one
+     tensor are CONCURRENT (D11, as clarified). Therefore:
+
+         wave = download boundary
+              + SUM over tensors ( inert reset + MAX test duration in that tensor )
+
+     *** WAVE DURATION IS SET BY TENSOR COUNT, NOT BY TEST COUNT, AND A TENSOR COSTS ITS
+     LONGEST MEMBER, NOT THE SUM OF ITS MEMBERS. ***
+
+     Recorded this explicitly because it was got wrong in both directions before it was got
+     right, and the error was worth an order of magnitude (§8). Neither wrong reading was
+     obviously wrong from D11's wording, which is the actual defect being repaired here.
+
+D27. *** TENSOR PACKING IS A GRAPH COLOURING OVER THE CONFLICT GRAPH. *** Pack the submitted
+     tests into the FEWEST tensors such that no two tests in a tensor conflict. Nodes are
+     tests, edges are conflicts, colours are tensors (DB-13). Greedy colouring is sufficient —
+     this does not need to be optimal and the graph is small.
+
+D28. *** MODELS ARE INSTANCED PER TEST, NOT SHARED — this EXTENDS D10 from instance DBs to the
+     models. *** The reason is D27 and it is the sharpest consequence in this draft: a model
+     shared by every test of one piece of equipment places a conflict edge between EVERY PAIR
+     of those tests, the graph goes complete, the colouring degenerates to one test per tensor,
+     and the wave collapses to the serial case. *** THE MODEL, NOT THE INSTANCE DB, IS WHERE
+     THE SHARING ACTUALLY BITES — instancing only the iDBs does not buy the packing. ***
+
+D29. *** TENSOR WIDTH IS BOUNDED ABOVE BY CONFLICT-FREEDOM AND CAPPED BY POLL BANDWIDTH. ***
+     Widening a tensor cuts the tensor count and so the wave — but every test in a tensor must
+     be observed within the SAME poll cycle, so it is TENSOR WIDTH, not total test count, that
+     the K x RTT arithmetic constrains (§12, O11). The two constraints bound one design
+     variable from opposite sides and must be solved together.
+
+D30. *** THE FEEDBACK-LATENCY LEVER IS INFORMATION DENSITY PER WAVE, NOT WAVE DURATION. ***
+     Under D26 a wave is order-of-a-minute, so duration is not what damages IR development —
+     ITERATION COUNT is. Three guessing rounds at a minute each still cost three rounds of an
+     agent editing correct code. This is why DB-8 is the first of the new blocks to build and
+     DB-10/DB-11 are the last.
+
+D31. *** SUBMISSION IS ATOMIC AND PRECEDES PACKING (DB-9). *** Two independent load-bearing
+     reasons: observability declarations must be complete BEFORE the download that generates
+     the copy layer (D13), AND the packer needs the whole submission set at once to colour the
+     graph well — trickled submissions yield a worse colouring, hence more tensors, hence a
+     longer wave for the same tests.
+
+--------------------------------------------------------------------------------
+4. THE DESIGN BLOCKS
+--------------------------------------------------------------------------------
+
+Six were proposed; they collapse into about four components. DB-1 and DB-2 are one graph
+problem, DB-3 and DB-4 are one scheduler, DB-5 is structural, DB-6 is a client invariant.
+
+DB-1 — CHANGE TRACKER *** AND ROUTER ***
+  Three outputs: WHICH objects changed (for the <=20 budget), WHAT CLASS each change is
+  (for routing per D23 and for STOP / RUN (Init) prediction), and BLAST RADIUS (a UDT change
+  is one object plus every DB built on it).
+
+  Change classes [R, Siemens' own RUN-download table, S7-1200 V4 column]:
+    FB/FC code change ............................ RUN, nothing disturbed
+    New / deleted FB, FC, DB, UDT ................ RUN
+    New / deleted OB, or OB property change ...... STOP
+    DB interface change (no memory reserve) ...... RUN (Init) - resets, retentives included
+    Modified UDT ................................. RUN (Init) on EVERY DB built on it
+    Modified retentivity settings ................ STOP
+    New / revised text lists ..................... STOP
+    Hardware configuration ....................... STOP
+    Comments, new PLC tags ....................... RUN
+
+  Existing tooling: `converter ir-hash` (cheap has-it-changed, immune to SIDECAR/UId churn),
+  `converter diff` (changed networks, rest provably identical), `converter cross-check`
+  (reference graph for blast radius).
+
+  RESOLVED GAP: a local ledger desynchronises from the device. Reconciliation via
+  `openness-cli export-all` + `converter drift-check --complete` is a periodic OBLIGATION.
+  *** CAVEAT [M]: export-all reads the OFFLINE PROJECT, not the controller *** — Openness has
+  no upload path — so that reconciliation compares IR-on-disk to the TIA project. The VERSION
+  REGISTER (§9) is the only thing that verifies the DEVICE.
+
+DB-2 — TEST / BLOCK DEPENDENCY
+  Same graph, different query. A test can be invalidated by a block it does NOT target: if B
+  writes a global A reads, B's change invalidates A's PASSING RESULT though A changed nothing.
+  Dependency is transitive over the reference graph.
+
+  Results carry a VALIDITY STAMP: (program version, map version). Without it the system will
+  report a green obtained BEFORE the change that invalidated it.
+
+DB-3 — DOWNLOAD TRACKING AND DURATION
+  "Affected tests" means ALL tests — Openness cannot download a selection, so every download
+  is whole-software.
+
+  SETTLING WINDOW after "finished": `RUN (<21)` integrates across several scan cycles, during
+  which the program runs as a MIXTURE of old and new blocks [R]. Results from that window are
+  meaningless. The version register (§9) makes the window observable rather than guessed.
+
+  FAILURE HANDLING: an aborted download leaves the device in a state Siemens does not
+  document (external gap G4). NEVER resume on the assumption it worked — read the version
+  register first.
+
+  Inert-state-before-download stands, for a stronger reason than throughput: if a DB
+  reinitialises during the download, there is no state to corrupt if you went inert first.
+
+DB-4 — THE 20-OBJECT LIMIT
+  More than 20 changed objects cannot be integrated consistently in one program cycle [R].
+  One agent changing one FB with a UDT and an instance DB is already 3 objects, so roughly
+  SIX AGENTS' CHANGES PER DOWNLOAD.
+
+  Batches must be DEPENDENCY-CLOSED, not arbitrary slices — an FB, its instance DB and its
+  UDT must land together or the program is inconsistent between downloads.
+
+  The whole project must compile before ANY download, so admission control (§1.2) is the fix
+  for one broken block blocking everyone.
+
+DB-5 — TWO PROJECTS: IR DEV, AND TEST ENVIRONMENT
+  The coordinator OWNS the test project, so `SoftwareOnlyChanges` — "the objects that differ
+  online and offline", decided by TIA, not your edit list [M] — can only carry what the
+  coordinator put there. The folder-download-deletes-online-only-blocks footgun [R] is
+  contained for the same reason. Concurrent Openness sessions on DIFFERENT projects are
+  supported and verified here.
+
+  *** Harness scaffolding never contaminates the deliverable *** — MB_SERVER, the models, the
+  latches and the mirror exist only in the test project.
+
+  NAMED COST: what is tested is then not what ships. Extra code, extra scan time, different
+  timing; a timing-sensitive behaviour could pass in test and fail in the deliverable.
+
+DB-6 — ISOLATION BY CONSTRUCTION
+  The research hazards are DATA LOSS, not leakage. The one genuine LEAK is PC-side: if the
+  mirror's layout changes and the PC's map does not, agent A's write lands in agent B's
+  registers. The protection is client-side and can be by construction:
+
+    1. Layout version register checked before EVERY transaction batch, not only at connect —
+       a download can land mid-session.
+    2. The map artifact carries a hash; the version register carries the same value. A
+       mismatch refuses the whole mirror.
+    3. *** The client instance holds only its own region's bounds, so a write outside it is
+       UNADDRESSABLE *** — not rejected by a check that could be skipped.
+
+DB-7 — CLEANUP  *** new 2026-08-12 ***
+  NOTHING IN THE DESIGN EVER REMOVES ANYTHING, and three things accumulate: per-test instance
+  DBs (D10 — one per TEST, not per agent), models, and blocks no longer under test. Left alone
+  they consume scan time (M6), object count, and eventually the <=20 batching budget.
+
+  A CLEANUP STAGE runs on a cadence expressed in test cycles or disruptive downloads. What it
+  removes: instance DBs for completed tests, models no vector still references, and blocks not
+  in any admitted test.
+
+  FOUR RULES, each earned:
+    - *** IT RUNS WHEN TESTS ARE DRAINED *** — the same condition as the deferred queue (D24).
+      Deleting something a running test depends on is the obvious way to make this dangerous.
+    - *** ELIGIBILITY IS GRAPH-PROVEN, NEVER COUNT-BASED. *** "Nothing references this" is a
+      computed fact from the reference graph (`converter cross-check`), not an assumption from
+      age or from a test having finished. A block can be unreferenced by vectors and still
+      called by another block.
+    - *** EVERY REMOVAL IS RECORDED — what, why, and on whose authority. *** Otherwise this
+      becomes the "a block silently disappeared" failure, which is exactly the shape of the
+      folder-download footgun (R5) that we forbade elsewhere.
+    - Deletions are ordinary changes: they route through DB-1, count against the <=20 budget,
+      and — usefully — deleting an FB/FC/DB/UDT is RUN-class [R], so cleanup does NOT need a
+      disruptive boundary of its own.
+
+--------------------------------------------------------------------------------
+4a. THE WAVE-STRUCTURE DESIGN BLOCKS  *** new in draft 04 ***
+--------------------------------------------------------------------------------
+
+DB-1 to DB-7 answer "what may be downloaded, and when". DB-8 to DB-13 answer a different
+question that only appeared once D26 made the wave structure explicit: *** given that a wave
+costs about a minute, what actually limits how fast an agent converges on correct IR? ***
+
+BUILD ORDER, AND IT IS NOT THE NUMBERING (D30):
+
+     FIRST      DB-13  tensor packing      — it sets wave duration, and D28 falls out of it
+     FIRST      DB-8   the result package  — iterations dominate, so density is the lever
+     THEN       DB-9   the submission unit — both DB-13 and D13 depend on it
+     LATER      DB-12  time compression    — narrowed; long tests only
+     LAST       DB-10  agent scheduling    — at a minute a wave, an agent can simply wait
+     LAST       DB-11  the rig pool        — better packing buys the same thing for free
+
+DB-13 — TENSOR PACKING  *** the block that sets wave duration ***
+  Pack N submitted tests into the fewest tensors such that no two tests in a tensor conflict
+  (D27). The conflict EDGES are not new work — every source is something the design already
+  computes:
+
+    - OVERLAPPING REACHABLE STATE (D9) — the transitive closure through each block's call
+      tree, from `converter cross-check`. Already the definition of "independent".
+    - SHARED MODEL INSTANCES — two tests parametrising the same model of the same equipment.
+      See D28; this is the dominant source and the one that is fixable.
+    - BLACKLIST ENTRIES (§2.5, D22) — the manual additions, which may only ADD edges.
+    - THE POLL-BANDWIDTH CAP (D29) — not a pairwise edge but a width limit on any tensor,
+      derived from K x RTT against the observation set the tensor needs.
+
+  MECHANISM. At admission the coordinator holds every submission (DB-9), so it builds the
+  graph and colours it BEFORE the download. Greedy is fine. It then reports the tensor count
+  and the predicted wave duration back with the plan, so an agent can see what its submission
+  cost — a submission that adds one test and one tensor is visibly more expensive than one
+  that adds five tests into existing tensors.
+
+  *** THE MEASUREMENT THAT DECIDES WHETHER ANY OF THIS WORKS: THE CONFLICT DENSITY OF A REAL
+  SUBMISSION SET. *** If tests pack 6-10 wide, waves are about a minute and feedback latency
+  is a non-problem. If they pack 1-2 wide because everything shares a plant model, waves are
+  10x longer and instancing the models (D28) is the highest-value change available anywhere in
+  this design. *** THIS IS ANSWERABLE FROM THE FIRST REAL SUBMISSION SET, BEFORE ANY OF IT IS
+  BUILT *** — it needs the graph, not the rig.
+
+DB-8 — THE RESULT PACKAGE  *** build first alongside DB-13 ***
+  The latency lever (D30): make one wave worth three by removing the reasons an agent has to
+  guess. What a result carries:
+
+    - OBSERVED VERSUS EXPECTED, per assertion, not a pass/fail for the test.
+    - THE BASIS CITATION — which requirement clause and which spec artifact the expectation
+      came from, so a disagreement is traceable to a source rather than argued from the code.
+    - THE FIDELITY DECLARATION of every model involved (M3/M4, §11). A failure against a model
+      declared as approximate is a different fact from one against a model declared exact.
+    - *** THE STIMULUS CHECK *** — evidence the input actually arrived and the block actually
+      ran. Without it "no output" is ambiguous between "the logic is wrong" and "the test never
+      started", and an agent asked to distinguish those from a bare fail will guess.
+    - THE CO-RUNNING LOG SLICE (D21) — which other tests shared the tensor, so interference the
+      graph did not predict is diagnosable. Under D26 this now has an exact meaning: the
+      tensor, not the wave.
+    - THE VALIDITY STAMP (DB-2): program version, map version.
+    - MANIFEST PRESENCE (§9a): whether the object under test appears in the load manifest of
+      the download that preceded the wave. Cheap, and it separates "wrong" from "never loaded".
+
+DB-9 — THE SUBMISSION UNIT
+  A test set is submitted ATOMICALLY (D31): the vectors, their observability declarations, and
+  the blocks they target, as one unit that is admitted or refused whole. Observability must be
+  declared before the download that generates the copy layer (D13) — a declaration arriving
+  after it cannot be honoured until the next boundary — and the packer needs the full set to
+  colour well. A partial submission is a REFUSAL with reasons, never a partial admission.
+
+DB-12 — TIME COMPRESSION  *** narrowed in draft 04, not dropped ***
+  D19 called compression THE throughput lever. Under D26 that is now too strong: compression
+  does nothing for wave OVERHEAD, which is tensor count and inert resets. What it still does,
+  and what nothing else does, is make an individually LONG test runnable at all — a 40-hour
+  dwell cannot run whatever the packing.
+
+  *** AND THE CONSTRAINT THAT HAD NOT BEEN NAMED: YOU CANNOT COMPRESS A MODEL INDEPENDENTLY OF
+  THE LOGIC IT DRIVES. *** Compressing a tank-fill model while the block's own dwell timer runs
+  in real time does not accelerate the test, it DESYNCHRONISES it, and the block fails a test
+  it would pass on real hardware. So compression requires TIMER PRESETS AS DATA, not literals,
+  in the blocks under test — which is a design-for-testability requirement on authored IR, not
+  a property of the harness.
+
+  WORTH CHECKING BEFORE BUILDING ANYTHING: convention *** C-122 (dwell-timer PT-home) *** may
+  already require exactly this. If PT already lives in a DB member by house rule, compression
+  is close to free on conforming blocks and the work is a conformance check, not a change.
+
+DB-10 — AGENT SCHEDULING  *** demoted ***
+  States: WORKING / AWAITING-WAVE / BLOCKED. Agents YIELD rather than block a slot while
+  waiting for a wave boundary. When a result lands, *** RESUME THE OWNING AGENT WITH ITS
+  ORIGINAL CONTEXT rather than spawning a fresh one *** — the fresh agent re-derives what the
+  original already knew, which is the same correlated-cost mistake as re-reading a spec to
+  re-reach a conclusion already recorded.
+
+  DEMOTED BECAUSE OF D26: at roughly a minute a wave, an agent can simply wait, and the
+  machinery is not worth building until measurement says otherwise. Keep the state model
+  written down for when it is.
+
+DB-11 — THE RIG POOL  *** demoted furthest ***
+  If a second rig exists, each rig gets its OWN test project — otherwise the version register
+  (§9) stops identifying what is running where, which is the one thing it exists to do. Claims
+  (`converter claim`) stay GLOBAL across rigs: a block number is a property of the program, not
+  of the rig it happens to be loaded on.
+
+  DEMOTED BECAUSE a second rig buys parallel waves, and better packing (DB-13) buys the same
+  throughput for no hardware and no second project to keep synchronised. Revisit only once
+  packing has demonstrably hit the conflict ceiling.
+
+  INTERACTION: a deleted block frees its number, which the claims registry allocated. Releasing
+  the claim must be part of the removal, or the number stays reserved forever.
+
+--------------------------------------------------------------------------------
+5. DESIGN RULES
+--------------------------------------------------------------------------------
+
+R1. THE OB SET IS PRE-ALLOCATED AT RIG SETUP where practical. *** REVISED IN DRAFT 03: an OB
+    change is no longer FORBIDDEN, it is DEFERRED *** — it is a STOP-class change and routes
+    to the deferred queue (D23). New or deleted OB is `STOP` on this CPU [R], the biggest
+    divergence from the S7-1500, which takes all three in RUN.
+
+R2. SHARED UDTs FROZEN FOR A WAVE SET (D16). A revision lands only at a boundary and
+    re-baselines every DB built on it.
+
+R3. STOP-CLASS HANDLING IS TWO-STAGE (D17):
+      STAGE 1, PREFLIGHT, no device, no baseline — properties of the IR alone: creates an OB,
+        changes retentivity settings, adds a text list. Cheapest feedback; the agent finds out
+        before anyone else is involved. *** These are now ROUTED, not refused. ***
+      STAGE 2, ADMISSION, against DB-1's baseline — "modified UDT" is only a change relative
+        to what is deployed, so reinit-class and object-count decisions happen when a batch is
+        assembled.
+
+R4. *** NEVER WRITE A DOWNLOAD DELEGATE THAT ACCEPTS EVERYTHING. *** A delegate written to
+    say yes to everything so the download goes through is precisely how a harness wipes a rig.
+    `DataBlockReinitialization = StopPlcAndReinitialize` initialises ALL data values INCLUDING
+    RETAIN DATA [R].
+
+    *** CORRECTED 2026-08-12 BY MEASUREMENT — THE MECHANISM IS NOT WHAT THIS RULE SAID. ***
+    The original wording was "answer `NoAction` and let it abort". Measured: **`NoAction`
+    CANNOT BE APPLIED** — `EngineeringTargetInvocationException: The configuration provided is
+    invalid`, on `StopModules` and `DataBlockReinitialization` alike, through the property
+    setter AND the underlying `SetAttribute`, even though `GetAttributeInfos()` reports
+    `CurrentSelection : access=ReadWrite` [M].
+
+    THE GUARD IS "REFUSE TO ANSWER AT ALL", which makes Openness abort with
+    `Download configuration '<type>' was unhandled`. Still fail-closed, through a different
+    door than assumed.
+
+    Two readings remain and are NOT separable without applying a destructive selection: either
+    `NoAction` is invalid FOR THAT INSTANCE because the stop or reinitialisation is genuinely
+    mandatory, or the apply mechanism is broken for every value. *** OPERATIONALLY IT DOES NOT
+    MATTER *** — same rule, same protection.
+
+R4a. *** NEVER INFER SAFETY FROM THE CURRENT SELECTION. *** The zero values differ IN
+    DIRECTION [M]:
+        StopModulesSelections.NoAction ............................ = 0  (safe)
+        DataBlockReinitializationSelections.StopPlcAndReinitialize . = 0  (DESTRUCTIVE)
+    An unanswered configuration therefore reads as SAFE on one and DESTRUCTIVE on the other. A
+    check written against one and reused for the other INVERTS SILENTLY.
+
+R5. NEVER USE FOLDER-SCOPE DOWNLOADS — blocks existing only online are DELETED by them [R].
+
+R6. ADMISSION CONTROL — a block enters the test project only after passing preflight and
+    compiling clean in isolation.
+
+R7. *** REVISED IN DRAFT 03. *** Draft 02 said "never pass `Software` (all)". That stands FOR
+    WAVE-BOUNDARY DOWNLOADS, where it would reset retentive values for no reason. It is
+    REVERSED for the disruptive boundary — see D25 and R8.
+
+R8. *** THE ENTAILMENT OF D25, AND THE ONE PLACE THE GUARD IS DELIBERATELY OPENED. ***
+
+    D25 requires a FULL download whenever testing must stop. MEASURED [M]: a full `Software`
+    download raises `StopModules`, and `NoAction` cannot be applied to it — so *** A FULL
+    DOWNLOAD IS IMPOSSIBLE UNLESS `StopAll` IS ANSWERED, AND `StopAll` IS ON R4's DENY LIST.
+    ***
+
+    Therefore D25 cannot be implemented without a sanctioned exception. The exception must be:
+      - a SEPARATE, EXPLICITLY DECLARED DISRUPTIVE MODE — never a flag on the wave-boundary
+        path, and never a fallback reached by retry;
+      - permitted ONLY when the deferred queue is being drained (D24);
+      - logged as a deliberate CPU stop, with what was in the queue and why;
+      - and it must NOT relax the deny list for the wave loop, where stopping the CPU
+        mid-testing remains forbidden.
+
+    *** RESOLVED 2026-08-12 [M]: THE CPU RESTARTS WITHIN THE SAME DOWNLOAD. *** `StartModules`
+    is raised in the POST delegate whenever the download stopped the modules; answering
+    `StartModule` restarted it, and the device reported `PLC_1 stopped.` then `PLC_1 started.`
+    So the disruptive boundary does NOT require a person, and unattended operation is not
+    capped by this. The earlier wording said it was; that was written before the measurement.
+
+    STILL TRUE, and the reason the allowance list must include `StartModules`: if a download
+    stops the CPU and `StartModule` is NOT answered, nothing else in the public API can bring
+    it back. `StartModulesSelections.NoAction` is the ZERO value AND it applies cleanly — so a
+    policy that merely un-denied `StopAll` without also answering `StartModules` would stop the
+    rig, succeed, and leave it stopped while reporting success (R4a's hazard, exactly).
+
+--------------------------------------------------------------------------------
+6. %MW IS STRUCTURAL, NOT PREFERENTIAL
+--------------------------------------------------------------------------------
+
+Four independent arguments, each arrived at from a different direction:
+
+  1. it cannot suffer the silent layout-revert measured on 2026-08-11 [M, three times];
+  2. `MB_HOLD_REG` requires standard access OR A MEMORY AREA [R] — M memory qualifies;
+  3. adding a scan-stamp to a DB is a structural change; in `%MW` it is a code change;
+  4. *** STRONGEST: standard access can never carry a memory reserve [R, verified five ways],
+     so a standard-access DB can NEVER be downloaded without reinitialization. Its layout is
+     FROZEN FOR THE LIFE OF THE RUNNING PROGRAM — change one member and the whole DB resets to
+     start values, in RUN, with no dialog and no error. ***
+
+Any design that re-derives the map at a boundary is safe ONLY on `%MW`. On a DB mirror every
+re-derivation is a silent wipe.
+
+--------------------------------------------------------------------------------
+7. WHAT THE TEST ENVIRONMENT REPLACES
+--------------------------------------------------------------------------------
+
+IT REPLACES THE FUNCTIONAL REVIEW, where a rig is available. Observing behaviour against a
+spec-derived vector is stronger evidence than an AI reading code against a register.
+
+IT DOES NOT REPLACE THE OTHER REVIEWS. Conventions and simplicity say nothing about
+behaviour and behaviour says nothing about them. They stay in loop 1, twice (§1.1).
+
+*** THE TRAP: COVERAGE. *** A functional reviewer reads EVERY requirement and returns a
+verdict on each. A test suite covers only what somebody wrote a vector for. This trades a
+COMPLETE BUT FALLIBLE check for a NARROW BUT SOLID one — a good trade only if the narrowing is
+MEASURED. Without a coverage gate, "all tests passed" is indistinguishable from "all
+requirements verified", and the requirements nobody wrote a vector for look exactly like the
+ones that passed.
+
+*** RESOLVED 2026-08-12. THE DENOMINATOR, THE BUCKETS, AND WHAT THE GATE ACTUALLY GATES. ***
+
+THE UNIT IS THE REQUIREMENT CLAUSE, QUALIFIED BY INSTANCE where the requirement is
+instance-scoped. Three reasons, all of them "this already exists":
+  - `TestVector.Basis` ALREADY CITES IT, so vectors are already labelled with their
+    denominator element and no new metadata is needed;
+  - it is LIKE-FOR-LIKE with what it replaces — the functional reviewer's verdict was
+    per-requirement, and that is what makes the substitution honest rather than approximate;
+  - `converter relation-reconcile` already works on `(instance, relation-id)` pairs, so
+    instance qualification has precedent here rather than being invented.
+
+*** THE DENOMINATOR MUST COME FROM THE SPECIFICATION, NEVER FROM THE TEST SUITE. *** Any unit
+defined by what somebody wrote a vector for is SELF-REFERENTIAL — you cannot be missing an
+assertion nobody wrote, so coverage is always 100%. That is why "assertions" cannot be the
+unit however tempting the granularity.
+
+SIGNALS ARE A SECOND, INDEPENDENT CHECK — NOT THE DENOMINATOR. `converter signal-sweep`'s
+residue answers a different question: is there a SIGNAL no requirement mentions? That catches
+SPEC gaps where clause coverage catches TEST gaps. Two failure modes, two tools, neither
+substituting for the other.
+
+PRECONDITION TO VERIFY: *** CLAUSE ATOMICITY. *** If a clause carries two assertions — "shall
+open when X and close when Y" — a vector testing one marks the whole clause COVERED and the
+other vanishes silently. Either clauses cited as `Basis` are atomic, or coverage records WHICH
+assertion. Check whether the rung-B/C artifacts already produce atomic behaviours; if they do,
+this costs nothing (O13).
+
+THE FOUR BUCKETS. Every clause lands in exactly one, and the wave reports all four:
+    COVERED             a vector exists and cites this clause
+    OUT-OF-SCOPE        not a control-logic requirement at all (wiring correctness, HMI
+                        behaviour, operator procedure). These were out of scope for the
+                        FUNCTIONAL REVIEWER too — they belong to commissioning, not testing,
+                        and calling them "untestable" overstated the gap.
+    DEFERRED            testable, but blocked or not yet written. Two sub-cases, and the
+                        second is the interesting one:
+                          - no vector yet — owner and date;
+                          - NEEDS MODEL FIDELITY WE DO NOT HAVE. M4 already routes these to a
+                            refusal, and a refusal naming the missing capability is a MODEL
+                            TASK, not an untestable requirement. This sub-case SHRINKS as the
+                            library matures.
+    UNTESTABLE-ON-RIG   genuinely so. *** SHOULD BE NEARLY EMPTY *** — see below.
+
+*** WHY IT SHOULD BE NEARLY EMPTY, correcting an earlier overstatement in this document. ***
+An earlier draft warned that with no I/O wired, "no actuation can be observed", so the
+untestable set might be large. THAT CONFLATED PHYSICAL ACTUATION WITH THE PROGRAM'S OUTPUT
+DECISION, and only the second matters for control logic. A coil energising IS the decision,
+and the copy layer latches it — so "does the interlock prevent the valve opening?" is answered
+completely by the coil never energising, whether or not anything is wired to it. With coil
+latching and event scan-stamps, control-logic requirements are broadly testable. If this
+bucket turns out large, that is a FINDING TO CHASE, not a category to accept.
+
+*** THE GATE IS `UNCLASSIFIED = 0`, NOT A PERCENTAGE. *** A threshold fails in a specific way:
+the uncovered remainder is NOT random. It is the requirements that are hard to test, which
+correlates with hard to implement, which is where defects live — so a threshold silently
+concentrates risk in the worst place while reporting a comfortable number. Every clause must
+have been CONSIDERED; not every clause must have a test.
+
+*** AND THE GATE STOPS THE CLAIM, NOT THE RUN. *** Blocking a wave for a bookkeeping reason
+spends the scarce thing (rig time) to enforce the cheap thing. A wave with incomplete
+classification still produces useful results — it simply MAY NOT CLAIM "requirements
+verified". That decouples honesty from throughput.
+
+HONEST LIMIT, ACCEPTED: the gate proves someone LOOKED, not that they looked WELL. Classifying
+is cheap; classifying honestly is not, and under pressure everything becomes DEFERRED while
+the gate still passes. What carries real weight is DEFERRED items having an OWNER and a DATE,
+with their count and AGE reported every wave — aging deferrals are the signal, not the
+classification.
+
+CLASSIFICATION IS STICKY, so this does not churn: once a clause is classified it stays until
+the requirement text changes or the implementing block changes — detectable by clause hash and
+`converter ir-hash` respectively. Re-classification is proportional to CHANGE, not to total
+requirement count.
+
+AND THE INDEPENDENCE MUST SURVIVE THE SWAP. Part of what a functional reviewer provided was a
+SECOND READING of the specification. A vector authored by a different agent preserves that;
+one authored by the block's own author does not — it moves the failure rather than removing it
+(D6).
+
+--------------------------------------------------------------------------------
+7a. FAILURE ATTRIBUTION — WHICH OF FIVE THINGS IS WRONG
+--------------------------------------------------------------------------------
+
+A red result has FIVE possible causes, and the receiving agent is the WORST-PLACED party to
+judge: it did not write the vector (D6) or the model (M1), so it can see only its own block
+and will suspect that first.
+
+  1. THE BLOCK IS WRONG           — the finding you wanted
+  2. THE MODEL IS WRONG           — fidelity, or a modelling error
+  3. THE VECTOR IS WRONG          — the author misread the spec
+  4. ANOTHER AGENT INTERFERED     — shared state the graph did not predict
+  5. *** THE BLOCK WAS NEVER DOWNLOADED *** — the cheapest to rule out and the most
+                                    embarrassing to miss
+
+THE DEFAULT FAILURE MODE IS AN AGENT "FIXING" CORRECT CODE UNTIL A WRONG TEST PASSES. Worked
+example: a fill block implements a pre-act offset correctly; the model has no in-flight mass,
+so nothing overshoots, so the fill stops short and the test fails; the agent removes the
+offset and the test passes. *** THE CORRECT IMPLEMENTATION HAS BEEN ENGINEERED OUT BY THE
+TEST, and the report says green. ***
+
+THE APPROACH (decided 2026-08-12): the agent judges — but only after the FREE evidence is
+attached to the result automatically. Cost, honestly priced:
+
+  FREE, attached to every result:
+    - the CO-RUNNING LOG (D21)                          -> cause 4
+    - the VALIDITY STAMP comparison (DB-2): block
+      unchanged but result changed                      -> not cause 1, by construction
+    - the LOAD MANIFEST check (§9a): is this block
+      in the last manifest at all?                      -> cause 5
+    - CROSS-AGENT PATTERN: same shape failing across
+      several agents                                    -> model or environment, not N bugs
+    - the FIDELITY BOUNDARY CHECK — already enforced
+      at ADMISSION by M4, so it never reaches diagnosis -> cause 2, prevented not diagnosed
+    - *** ASSERT ON THE STIMULUS, NOT ONLY THE RESPONSE *** — the model is a block and its
+      state is readable, so check the model actually produced the rate/setpoint the vector
+      parametrised. If it did not, the fault is the model or the parametrisation and the
+      block is exonerated WITHOUT BEING TOUCHED. Sharpest cheap discriminator available;
+      costs a few registers in the mirror.
+
+  CHEAP, on failures only:
+    - BASIS RE-DERIVATION — one spec read by the vector's author        -> cause 3
+    - RE-RUN IN ISOLATION via the enable bitmask — one test, a register
+      write, NO download                                               -> cause 4, confirmed
+    - DOES IT REPRODUCE? intermittent points at interference or the observability floor
+
+  EXPENSIVE, and NEVER BY DEFAULT:
+    - re-run against a DIFFERENT model of the same equipment. Only needed for "the model
+      claims to represent this and does it wrong", which is a MODEL REVIEW problem (M5), not
+      a per-failure diagnostic.
+
+*** ONE HARD RULE: A FAILING TEST MAY NOT BE CLOSED BY CHANGING THE BLOCK UNTIL THE VECTOR'S
+BASIS HAS BEEN RE-CONFIRMED. *** One spec read, on failures only, and it is what stops the
+worked example above.
+
+ORDER OF ELIMINATION: deployment, interference, vector, model, THEN block. *** THE BLOCK IS
+THE LAST HYPOTHESIS, NOT THE FIRST *** — precisely because the receiving agent's instinct is
+the reverse.
+
+WORTH MEASURING ON THE FIRST REAL WAVE: log the eventual TRUE cause of every failure. If they
+are overwhelmingly cause 1, most of this is over-engineering and the co-running log plus a
+re-run-in-isolation button would cover it.
+
+--------------------------------------------------------------------------------
+8. THROUGHPUT — WHERE THE COST ACTUALLY IS
+--------------------------------------------------------------------------------
+
+MEASURED BY THE OWNER, from experience: *** download time scales with the NUMBER OF OBJECTS,
+not with the act of downloading. *** A small delta is around 20 seconds; a full program of
+~100 objects around 2 minutes. Worked through the <=20 budget:
+
+    6 agents  x (FB + UDT + iDB) = 18 objects = 1 download  ~= 1-2 min over VPN
+   20 agents                     = 60 objects = 3 downloads ~= 3-6 min over VPN
+
+MINUTES, NOT HOURS. Downloads are cheap enough that there is no reason to hoard them, which
+reinforces DB-4's inversion: smaller, more frequent wave sets are fine.
+
+*** THEREFORE DOWNLOADS ARE ALMOST CERTAINLY NOT THE BOTTLENECK. TEST EXECUTION IS. *** That
+promotes D12 — time compression in the models — from a good idea to THE throughput lever.
+
+--- CORRECTED IN DRAFT 04. The paragraph above is right about downloads and WRONG about what
+    replaces them. ---
+
+Under D26 the cost of the test half of a wave is:
+
+    wave = download boundary + SUM over tensors ( inert reset + MAX test duration in tensor )
+
+Worked, for 6 agents x 5 vectors = 30 tests, packing 6 wide into *** 5 TENSORS ***:
+
+    inert 2 s,  longest test  5 s,  5 tensors  ->  ~55 s
+    inert 5 s,  longest test 10 s,  5 tensors  ->  ~1.6 min
+    inert 10 s, longest test 60 s,  5 tensors  ->  ~6 min
+
+*** THE SAME 30 TESTS COMPUTED AS A SERIAL SUM GIVE 8 TO 35 MINUTES. THE PACKED FIGURE IS 5
+    TO 10 TIMES SMALLER, AND THE PACKED FIGURE IS THE CORRECT ONE. *** The serial arithmetic
+    was performed in this project first, believed, and used to argue that feedback latency
+    would ruin IR development. It would not. Recorded so the wrong number is not re-derived.
+
+TWO CONSEQUENCES THAT CHANGE PRIORITIES:
+
+  1. *** THE BOTTLENECK IS TENSOR COUNT, AND TENSOR COUNT IS SET BY CONFLICT DENSITY *** — so
+     the throughput lever is DB-13's packing and D28's per-test model instances, not time
+     compression. D12/D19 keep a narrower job: individually long tests (DB-12).
+  2. *** AT ABOUT A MINUTE A WAVE, FEEDBACK LATENCY IS NOT THE PROBLEM; ITERATION COUNT IS ***
+     (D30). Optimise the information a wave returns (DB-8) before optimising how often waves
+     happen.
+
+WHAT WOULD FALSIFY THE PACKED FIGURE: tests that do not pack. If conflict density forces 1-2
+per tensor, tensor count returns to test count and the serial arithmetic becomes correct after
+all. That is a measurement, not a judgement — see DB-13's closing note.
+
+--------------------------------------------------------------------------------
+9. THE VERSION REGISTER — LOAD-BEARING IN THREE PLACES
+--------------------------------------------------------------------------------
+
+The marker DB exists because the CPU will not state its own identity, so the PROGRAM
+publishes it. The same trick answers post-download verification without any upload.
+
+The coordinator knows exactly which IR set it downloaded, computes a build hash, and
+GENERATES A LITERAL into the copy layer:
+
+    MOVE  16#A93F2C71  ->  MW_ProgramVersion
+
+That constant lives IN THE CODE, so it can only be present if that code is running.
+Verification becomes ONE REGISTER READ — no upload, no Portal session, sub-second.
+
+WHAT IT CATCHES: a download that aborted or was refused (the register still shows the OLD
+version — external gap G4's undocumented half-loaded case, detected without needing Siemens to
+document it); a download that never reached the device; and the SETTLING WINDOW, since the
+value flaps or reads old until integration completes, so waiting for stability MEASURES the
+window rather than guessing it.
+
+WHAT IT DOES NOT CATCH: individual block corruption. That is a reasonable trust boundary — TIA
+performed the download; if the version constant is live, the code carrying it is live.
+
+THREE PURPOSES, ONE MECHANISM, designed once: post-download verification (D14), settling-window
+detection (DB-3), and guarding the frozen map (DB-6).
+
+--------------------------------------------------------------------------------
+9a. THE LOAD MANIFEST — measured 2026-08-12, and better than the version register
+    for one specific question
+--------------------------------------------------------------------------------
+
+*** A DOWNLOAD REPORTS, PER OBJECT, WHAT IT ACTUALLY LOADED. *** The `DownloadResult`
+message tree contains one message per object, verbatim:
+
+    'DB_RigMarker' was loaded successfully.
+    'UDT_CmdAck' was loaded successfully.
+    ... one per object ...
+
+MEASURED, and both runs matched prediction EXACTLY:
+    DIFFERENTIAL : 1 message  — `DB_RigMarker`, precisely the one block that had changed
+    FULL         : 99 messages — and `download-plan` had reported 66 blocks + 33 PLC data
+                   types = 99. The predicted count and the loaded count agree.
+
+THREE USES, and the third is the valuable one:
+
+  (a) POSITIVE EVIDENCE OF TRANSFER, replacing an inference from absence.
+      *** THIS CORRECTS THE PROBE. *** `download-probe` currently reports transfer by
+      searching for "has not been loaded" / "up-to-date" and concluding TRANSFERRED when
+      absent, stating in its own output that "TIA emits no positive 'the software was
+      loaded' sentence to key on". THAT IS FALSE — there are 99 of them. The verdict should
+      key on the per-object load messages and report the COUNT. Fix pending.
+
+  (b) CONFIRMATION OF *WHAT* WAS DOWNLOADED, per object, not merely that something was.
+
+  (c) *** A CROSS-CHECK ON DB-1. *** The coordinator PREDICTS a change set; TIA REPORTS the
+      set it actually loaded. Comparing them checks our change tracker against TIA's own
+      online/offline comparison, on every download, for free. A MISMATCH MEANS OUR TRACKER
+      IS WRONG — and DB-1's baseline is what every STOP/RUN(Init) prediction and every
+      <=20-object batching decision hangs off, so being able to falsify it continuously is
+      worth more than the other two uses combined.
+      It also closes a hole named in DB-1: `openness-cli export-all` reads the OFFLINE
+      PROJECT, so it cannot detect a partially-applied download. The manifest reports what
+      the DEVICE accepted.
+
+RELATIONSHIP TO THE VERSION REGISTER (§9) — they answer different questions and neither
+replaces the other:
+    LOAD MANIFEST   : what moved in THIS operation. Per object. Available only at download
+                      time, from the download's own result.
+    VERSION REGISTER: what is running NOW. Readable at any time, over Modbus, sub-second,
+                      and the only thing that detects an aborted or half-applied download
+                      after the fact.
+
+--------------------------------------------------------------------------------
+9b. ALL THREE DOWNLOAD OPTIONS, MEASURED 2026-08-12
+--------------------------------------------------------------------------------
+
+  OPTION        CONFIGURATIONS RAISED                          CPU              TRANSFERRED
+  ------------  ---------------------------------------------  ---------------  -------------
+  Differential  DataBlockReinitialization, ConsistentBlocks     NEVER STOPPED    1 block
+  Full          StopModules, ConsistentBlocks,                  stopped ->       99 objects
+                AlarmTextLibrariesDownload, StartModules        RESTARTED
+  Hardware      StopModules, OverwriteSystemData,               stopped ->       HW config,
+                UserManagementDownload, StartModules            RESTARTED        connection,
+                                                                                 routing
+
+Hardware, verbatim: `PLC_1 stopped.` / `Hardware configuration was loaded successfully.` /
+`Connection configuration was downloaded successfully.` / `Routing configuration was loaded
+successfully.` / `PLC_1 started.`
+
+*** THE PATTERN, NOW SEEN THREE TIMES: WHEN A DOWNLOAD OPTION ENTAILS AN ACTION, `NoAction`
+    IS DECLARED IN THE ENUM BUT REJECTED BY THE INSTANCE. *** StopModules, DataBlockReini-
+    tialization and OverwriteSystemData all refuse it. The "decline" is largely FICTIONAL —
+    which is why refusing to ANSWER, rather than answering NoAction, is the only real guard,
+    and why the allowance list must name what each option entails.
+
+*** AND A CORRECTION THAT WEAKENS THE GUARD MODEL — SEE §15 O9. *** `UserManagementDownload`
+was LEFT UNHANDLED ON PURPOSE (three selections, no NoAction, so choosing would have been a
+guess) *** AND THE DOWNLOAD COMPLETED ANYWAY. *** So "unhandled -> abort" is NOT universal:
+it held for StopModules and OverwriteSystemData and did not hold here. TIA proceeded with a
+default we did not choose and cannot see. That is not a guard.
+
+Vindicated on the way: the rule "several selections and no NoAction => leave unhandled" was
+added over an earlier, sloppier instruction of mine. Had the tool guessed here,
+`DownloadAllUserManagementDataResetToProject` was on the menu.
+
+--------------------------------------------------------------------------------
+9c. THE DOWNLOAD FEEDBACK PARSER — a required component
+--------------------------------------------------------------------------------
+
+The `DownloadResult` message tree is the richest evidence any download produces, and every
+run so far has proved it carries more than the design assumed. It needs a real parser, not
+phrase-matching bolted on.
+
+WHAT IT MUST EXTRACT:
+
+  1. *** THE LOAD MANIFEST *** — every `'<name>' was loaded successfully` message, as a SET
+     of object names plus a count. This is the positive evidence of transfer (§9a) and the
+     cross-check on DB-1.
+  2. *** RUN-STATE TRANSITIONS *** — `PLC_1 stopped.` / `PLC_1 started.`, in order, so the
+     coordinator knows the state the CPU was left in rather than inferring it.
+  3. *** NON-OBJECT LOADS *** — `Hardware configuration`, `Connection configuration`,
+     `Routing configuration` were each reported with their own wording. A parser keyed only
+     on the block form would silently drop all three.
+  4. *** THE UP-TO-DATE SIGNAL *** — `The software has not been loaded, because it is
+     up-to-date`, which means SUCCESS WITH NOTHING TRANSFERRED.
+  5. Per-node state, error and warning counts, preserved with their nesting.
+
+DESIGN RULES, each earned by something that has already gone wrong:
+
+  - *** NEVER READ `state=Success` AS EVIDENCE OF TRANSFER. *** The first run that returned
+    Success transferred nothing.
+  - *** REPORT THE COUNT, NOT A BOOLEAN. *** "1 object" versus "99 objects" is what makes the
+    DB-1 cross-check possible; a yes/no throws that away.
+  - *** UNDETERMINED IS A THIRD VERDICT AND MUST NEVER COLLAPSE INTO A NEGATIVE. ***
+  - *** SURFACE UNRECOGNISED MESSAGE SHAPES — DO NOT DROP THEM. *** Four distinct message
+    vocabularies have appeared in six runs, and each new download option produced one nobody
+    predicted. A parser that classifies only what it knows will go quietly blind exactly when
+    something new happens, which is exactly when you need it.
+  - Prefer POSITIVE evidence over inference from absence. The probe currently infers transfer
+    from the absence of an up-to-date phrase while sitting on 99 positive load messages — the
+    correction §9a records.
+
+WHERE IT IS USED: post-download verification (with §9's version register), the DB-1
+cross-check, run-state tracking for DB-3's settling window, and the per-agent results that
+carry the co-running log (§2.4).
+
+--------------------------------------------------------------------------------
+10. PROTOCOL COEXISTENCE
+--------------------------------------------------------------------------------
+
+"Tolerate disruption" understates it. *** `MB_SERVER` IS PART OF THE PROGRAM BEING
+DOWNLOADED *** — the Modbus server is itself being replaced, so the connection does not merely
+risk disruption, it goes away. If `MB_SERVER`'s instance DB interface changed, that iDB
+reinitialises and connection state goes with it.
+
+    coordinator signals pause -> harness goes INERT -> harness DISCONNECTS
+        -> download -> harness RECONNECTS -> read version register -> confirm STABLE
+        -> resume
+
+Reconnect-and-verify is the normal path, not error handling (D18).
+
+AND [M]: an Openness download is REFUSED while the project is ONLINE. So the coordinator's
+automated downloads and a human working ONLINE in the same project are MUTUALLY EXCLUSIVE.
+
+--------------------------------------------------------------------------------
+11. MODELS, INERT STATE, FAILURE HANDLING, PROVENANCE
+--------------------------------------------------------------------------------
+
+MODELS (D4, D12). Driving raw values over the wire cannot express time: round trips are
+79-108 ms [M] against a scan of ~10 ms, and a PID loop cannot be closed over a VPN at all.
+Parametrising a PLC-side model generates the dynamics AT SCAN RATE inside the controller; the
+link carries parameters and results. Already proven in this codebase by the live program's own
+plant simulation.
+
+*** THE MODEL-AUTHORING CONTRACT (resolves O4 and O5, decided 2026-08-12) ***
+
+M1. AN INDEPENDENT lad-coder AUTHORS THE MODEL — never the agent that wrote the block it will
+    test. Same independence rule as D6, same reasoning.
+
+M2. *** THE PHYSICAL ANALYSIS IS GROUNDED IN THE EQUIPMENT, NOT IN THE CONTROL SPECIFICATION.
+    *** This is the load-bearing half of M1 and it is easy to satisfy in appearance only. A
+    model derived from the control spec — or from the same P&ID / equipment-spec artifacts the
+    block was designed from — INHERITS THAT SPEC'S ASSUMPTIONS. A spec that never considered
+    in-flight material yields a model with no in-flight material, and a block that ignores it
+    passes. *** THE SPEC'S BLIND SPOTS BECOME UNTESTABLE, and the independence bought by using
+    a different agent is spent, because both read the same source. *** The analysis must come
+    from how the EQUIPMENT behaves — load-cell dynamics, settling time, in-flight mass, valve
+    travel, sensor quantisation — not from what the control spec says about using it.
+
+M3. EVERY MODEL CARRIES A FIDELITY DECLARATION: what it does and does NOT represent (noise,
+    lag, overshoot, in-flight mass, saturation, quantisation), plus a declared SCAN-TIME
+    BUDGET (M6). It is reproduced in every result derived from it, so a green is never read
+    without its caveats.
+
+M4. *** A VECTOR MAY ONLY ASSERT BEHAVIOURS THE MODEL CLAIMS TO REPRESENT; THE RUNNER REFUSES
+    IT OTHERWISE. *** This makes fidelity MACHINE-CHECKABLE in exactly the way `Observability`
+    already makes sampling limits machine-checkable, and it reuses a discipline the codebase
+    has proven it will honour rather than adding one nobody enforces. Same principle: a green
+    that cannot mean anything is worse than a refusal.
+
+M5. *** A MODEL GETS MORE REVIEW THAN A BLOCK, NOT LESS — THE BLAST RADIUS IS INVERTED. *** A
+    wrong block fails its own tests and the system catches it. A wrong model SILENTLY CORRUPTS
+    EVERY VECTOR THAT USES IT, and the more useful the model, the more results it quietly
+    invalidates. So models go through the same review path as blocks — conventions, simplicity,
+    and a functional review against the physical analysis — plus validation against real plant
+    data wherever any exists. Where none exists, that ABSENCE is recorded in the fidelity
+    declaration.
+
+M6. MODELS COMPETE FOR SCAN TIME. Every model runs every scan and they accumulate with agents,
+    which interacts with OB80's overrun handling and the <=20-object batching. The declared
+    budget makes the ceiling visible before it is hit rather than discovered as a cycle-time
+    trip mid-wave.
+
+M7. *** MODELS ARE PROVISIONAL UNTIL REVIEWED AND VALIDATED. *** The library ACCRETES from
+    models written to order, and the trap in that is that the FIRST few become the standard by
+    default — including their limitations, unexamined, and written before any wave had taught
+    anyone which fidelity actually matters. Promotion into the library is a DECISION, never a
+    consequence of having been first.
+
+THE WORKED EXAMPLE THAT DECIDES M2 AND M4. A fill-control block closes the valve when weight
+reaches setpoint. Against an idealised weigher — instant response, no material in flight — it
+passes cleanly. On the real plant, material already falling continues after the valve closes,
+so the vessel overshoots and the correct implementation needs a pre-act offset. *** THE
+IDEALISED MODEL DOES NOT MERELY MISS THE DEFECT — IT CERTIFIES THE NAIVE IMPLEMENTATION AND
+WOULD REJECT THE CORRECT ONE, *** which closes "early" and under-fills against a model with no
+in-flight mass. That is worse than having no test.
+
+INERT STATE (D5). FB statics survive between tests, so results depend on wave ORDER. A
+GENERATED reset routine, triggered by a command register, with retentive members explicitly
+written. *** THE RESET IS READ BACK AND CONFIRMED *** — an unverified reset is the "a warning
+is not a gate" shape. Per-test instance DBs (D10) remove most of the need.
+
+FAILURE HANDLING. Reject both a pre-wave smoke pass (costs time every wave to guard something
+rare) and accept-the-risk-then-serialise (the expensive part is ATTRIBUTION). Instead:
+generate an OB80 so an overrun is LOGGED rather than STOPping the CPU; write a "block currently
+executing" register so OB80 attributes it for free; keep the block-enable bitmask as runtime
+data so bisecting is a register write.
+  Justified by COST ASYMMETRY, not probability: after a STOP a human must restore RUN, so
+  unattended, one bad block turns a wave into a dead night.
+  HONEST LIMIT: OB80 does not save you from a true infinite loop.
+  NOTE: OB80 is itself a STOP-class change (a new OB), so it is installed at rig setup or via
+  the deferred queue — never mid-wave.
+
+PROVENANCE (D6). `TestVector.Basis` is required; a vector that cannot cite its specification
+clause is not admissible into a wave.
+
+BYTE AND WORD ORDER. Because we author both ends the convention is ours and a round-trip proves
+the halves agree. ONE RESIDUAL: `MB_SERVER`'s own byte-to-register presentation is Siemens'
+behaviour, which no fake we write can validate. Build swap as a configurable transform and
+CALIBRATE with a known bit pattern — one measurement, once.
+
+--------------------------------------------------------------------------------
+12. THE OBSERVABILITY FLOOR
+--------------------------------------------------------------------------------
+
+Polling observes at roughly 100 ms against a scan of ~10 ms, so a one-scan event is about ten
+times below anything a sampler can see. NO POLLING RATE RECOVERS IT, and no protocol choice
+changes it.
+
+So the copy layer provides: a FREE-RUNNING SCAN COUNTER (always, unconditionally — one counter
+for the whole program; its absence silently degrades every `WaitScans` into a wall-clock guess
+on a non-real-time host); LATCHED TRANSIENTS (default on for coil-shaped signals — set-dominant
+in the copy layer, cleared at TEST START rather than read-then-clear, so an observation does not
+drag the write fence in); and EVENT SCAN-STAMPS (opt-in per signal in the map — a latch answers
+"did it happen", a stamp answers "when, relative to what", at roughly 32x the memory).
+
+--------------------------------------------------------------------------------
+13. G-7 — MEASURED 2026-08-12. THE EXPECTATION WAS REFUTED.
+--------------------------------------------------------------------------------
+
+*** ANSWER: YES. `DataBlockReinitialization` IS RAISED when a download restructures a
+    STANDARD-access DB. *** The worry that it might never fire — its documented message is
+    scoped to "different memory reserves" and a standard-access DB has none in either copy —
+    is WRONG.
+
+THE DELTA. One variable changed; one configuration appeared:
+
+                          PHASE A (clean project)      PHASE B (restructured std-access DB)
+  SoftwareOnlyChanges     Success, 0 configurations    *** DataBlockReinitialization RAISED ***
+  Software                StopModules -> abort         StopModules -> abort
+  Hardware                StopModules -> abort         StopModules -> abort
+
+Phase A's `SoftwareOnlyChanges` returned "The software has not been loaded, because it is
+up-to-date" — TIA confirming the baseline was clean, which is what made the delta readable.
+`Software` and `Hardware` hit `StopModules` FIRST and never reached the question;
+configurations arrive ONE AT A TIME and the first unanswered one ends the download.
+
+WHY THE DOCUMENTATION MISLED US:
+    doc  : "Different memory reserves in the online block and offline block are preventing
+            'Download without reinitialization'."
+    live : "The data blocks will be re-initialized with their start values."
+
+WHAT `Software` AND `Hardware` TAUGHT, not the question asked: both raise `StopModules` and
+reject `NoAction` there too, so *** THE API DOES NOT OFFER "DO NOT STOP THE MODULES" AS A LEGAL
+ANSWER *** — the stop is a PRECONDITION, not a prompt. That is what forces R8.
+
+SIX REAL DOWNLOAD ATTEMPTS, EVERY ONE ABORTED CLEANLY. The CPU kept running throughout and
+nothing was written — evidence toward external gap G4 without settling it.
+
+ALSO MEASURED, none of it in the research:
+  - `DownloadProvider` is obtained from the DEVICE ITEM via `GetService<DownloadProvider>()`.
+  - `ConfigurationTargetInterface` IMPLEMENTS `IConfiguration`, so a download can be targeted
+    by passing that node to the four-argument overload — no `ConfigurationAddress` required and
+    no `ApplyConfiguration()`. `ConfigurationPcInterface` does NOT implement it.
+  - *** THE PROJECT'S ConnectionConfiguration CARRIES NO ADDRESSES. *** Modes, PC interfaces
+    and target interfaces exist; every address list is empty. The TIA GUI's "Extended download"
+    dialog scans and lets a human pick, and THAT CHOICE DOES NOT PERSIST where the API reads it.
+  - An Openness download is REFUSED while the project is ONLINE.
+  - A re-import reverted a block's memory layout to Optimized for the THIRD measured time.
+
+--------------------------------------------------------------------------------
+13a. THE NEXT EXPERIMENT — AND WHY IT IS A DIFFERENT KIND OF STEP
+--------------------------------------------------------------------------------
+
+*** EVERY TEST SO FAR SUCCEEDED BY REFUSING. *** The guards were exercised against a real
+device and held; six downloads aborted; nothing was written. Refusal WAS the success
+condition, which is why the risk was low throughout.
+
+*** THE NEXT ONE SUCCEEDS ONLY BY NOT REFUSING. *** Proving that this tooling can DELIVER a
+program requires answering `StopAll` — a selection R4's deny list exists to forbid — stopping
+the CPU, and then restarting it. That is a materially different act from anything attempted
+so far, and it should be framed as its own decision rather than rolled into a working
+session.
+
+WHAT IT NEEDS, and each is a place it can go wrong:
+  - R8's disruptive mode, explicitly declared, never a flag on the wave-boundary path;
+  - permission to answer ONLY what the chosen download option already entails — `StopAll`,
+    and `StopPlcAndReinitialize` if raised, since `Software` (all) resets values including
+    retentive ones anyway. *** `ResetModule -> DeleteAll` AND `InitializeMemory -> AcceptAll`
+    MUST STAY DENIED EVEN HERE *** — they destroy beyond what the option entails;
+  - a way back to RUN. O3 is unresolved: `IS7Client` exposes no mode change, and whether the
+    post-download `StartModules` configuration can restart the CPU is [R], NOT MEASURED.
+
+RECOMMENDED SHAPE, the same one that made G-7 safe: a phase that proves the INSTRUMENTATION
+on something harmless, then a phase that proves the CAPABILITY. Do not combine them — if the
+capability phase fails, you need to already know whether your observation of it is
+trustworthy.
+
+AND THE HONEST PRECONDITION: the CPU may end up STOPPED with no automated way back. Anyone
+running this should expect to be at the machine.
+
+--------------------------------------------------------------------------------
+14. EXTERNAL UNKNOWNS — the research's own gaps, not ours
+--------------------------------------------------------------------------------
+
+  G1  "MOST CPUs of the S7-1200 V4 and higher" support download without reinitialization. No
+      page enumerates which do not.
+  G3  Whether a hardware download wipes retentive data — two Siemens editions contradict each
+      other.
+  G4  Whether an aborted download leaves the CPU untouched or half-loaded. Undocumented. Six
+      clean aborts observed 2026-08-12 — evidence, not proof; no partial state was deliberately
+      provoked.
+  G7  Whether a start-values-only edit is RUN or RUN (Init). No row exists in Siemens' table,
+      checked in both language renderings.
+  G8  *** CLOSED — it DOES fire. See §13. ***
+
+--------------------------------------------------------------------------------
+15. STILL OPEN
+--------------------------------------------------------------------------------
+
+  O3. *** CLOSED 2026-08-12 — MEASURED. *** A download that stops the CPU CAN restart it
+      within the same operation. On the FULL download, `StartModules` was raised in the POST
+      delegate, `StartModule` applied and read back, and the device reported `PLC_1 stopped.`
+      then `PLC_1 started.` No human was required.
+      IMPORTANT NUANCE: `StartModules` is raised ONLY WHEN THERE IS SOMETHING TO START. It
+      did NOT appear on the differential — which never stopped the CPU — so its absence there
+      was correct rather than a missed opportunity. The API offers a restart exactly when it
+      performed the stop.
+      *** THEREFORE R8's "every disruptive boundary needs a person" IS WITHDRAWN. *** The
+      restart is available through the same callback mechanism, which the type survey had
+      already established is the ONLY expression of a CPU stop or start in the public API —
+      and it turns out to be sufficient.
+  O4. *** CLOSED — the fidelity declaration, M3/M4 in §11. ***
+  O5. *** CLOSED — an independent lad-coder, from an EQUIPMENT-grounded physical analysis;
+      M1/M2 in §11. ***
+  O6. Wave failure policy — does one failing test abort the wave, or does it complete and
+      report? Abort loses information; complete risks cascading from a bad state.
+  O8. *** CLOSED — §7. *** Denominator = requirement clause x instance; four buckets; the
+      gate is UNCLASSIFIED = 0 rather than a percentage; and it stops the CLAIM, not the RUN.
+      Residual: who rules a clause OUT-OF-SCOPE or UNTESTABLE-ON-RIG. Recommended: whoever
+      signs off the architecture at gate 1 — it is a judgement about the ENVIRONMENT, not the
+      code — and never the block's or the vector's author, both of whom have an incentive to
+      reach for it under pressure.
+
+  O11. *** THE THROUGHPUT CEILING — RE-SCOPED IN DRAFT 04, AND STILL OPEN. *** How many
+      concurrent tests can ONE coordinator connection service, given 79-108 ms round trips and
+      block-read batching? Flagged by the spec-chain audit as load-bearing for anything called
+      multi-agent, and never entered on any list until draft 03.
+      *** WHAT D26/D29 CHANGE ABOUT IT: THE QUESTION IS NOW SHARPER AND SMALLER. *** It is not
+      "how many tests can run at once in a wave" — under D26 a wave is sequential tensors, so
+      the answer only ever has to cover ONE TENSOR'S observation set. So O11 becomes: *** WHAT
+      IS THE MAXIMUM TENSOR WIDTH THE POLL BUDGET SUSTAINS? *** That number is a hard cap fed
+      straight into DB-13's colouring, alongside the conflict edges.
+      AND THE TENSION IS NOW EXPLICIT (D29): conflict-freedom pushes tensors WIDER (fewer
+      tensors, shorter wave), poll bandwidth pushes them NARROWER. If the poll cap lands below
+      the conflict-free width, the poll cap is the binding constraint and §8's packed figures
+      do not hold — that is the specific way this question is still load-bearing.
+
+  O14. *** NEW IN DRAFT 04, AND THE HIGHEST-VALUE MEASUREMENT AVAILABLE: WHAT IS THE CONFLICT
+      DENSITY OF A REAL SUBMISSION SET? *** Everything in §8's corrected arithmetic rests on
+      tests packing 6-10 wide. Nothing has ever measured whether they do.
+      IF THEY PACK WIDE: waves are about a minute, feedback latency is a non-problem, DB-10 and
+      DB-11 are never needed, and DB-8 is the only thing worth building for throughput.
+      IF THEY PACK 1-2 WIDE (the likely cause being one shared model per piece of equipment):
+      tensor count returns to test count, the serial arithmetic is correct after all, and
+      *** D28 — per-test model instances — becomes the single highest-value change in the
+      design. ***
+      *** ANSWERABLE NOW, WITHOUT THE RIG AND BEFORE BUILDING ANY OF IT: *** it needs a real
+      submission set and the reference graph (`converter cross-check`), both of which exist as
+      soon as the first test set is authored. Do this before committing to DB-10/DB-11.
+
+  O12. WHAT "INERT" MEANS PRECISELY: every block idle, or every block idle AND every model at
+      a declared start condition? The second is more useful and more work — and it decides
+      what the NEXT test in a wave starts from after a failure (see O6).
+
+  O13. CLAUSE ATOMICITY: do the rung-B/C artifacts already produce atomic behaviours? If a
+      cited clause carries two assertions, covering one marks both (§7).
+
+  O9. *** NEW, AND THE LARGEST SAFETY QUESTION OPEN: WHICH UNHANDLED CONFIGURATIONS ACTUALLY
+      ABORT? *** Measured 2026-08-12: unhandled ABORTED for `StopModules`,
+      `DataBlockReinitialization` and `OverwriteSystemData`, and DID NOT abort for
+      `UserManagementDownload` — that download completed with TIA applying a default we
+      neither chose nor can see. The whole protection model in R4/R8 rests on "refuse to
+      answer => prevented". For any configuration that behaves like UserManagementDownload,
+      refusing prevents NOTHING and produces the ILLUSION of a guard: the log reads "left
+      unhandled on purpose" and the download reports Success.
+
+      *** DECIDED 2026-08-12 — THE FIX IS TO THROW FROM THE DELEGATE. *** If we will not
+      answer a configuration, WE abort the download rather than hoping Openness does. That is
+      UNIFORM across every configuration including ones nobody has seen yet — which, given
+      that each of the last three runs produced a configuration nobody predicted, is the case
+      that matters. It also keeps the reporting honest: an abort WE caused is distinguishable
+      from one TIA caused, the same way FailedToApply was separated from RefusedByPolicy.
+      VERIFY BEFORE RELYING ON IT: that a throw inside the delegate propagates and leaves the
+      CPU untouched rather than half-loaded — external gap G4, now on the critical path.
+
+      *** AND A LOG, FOR UNATTENDED RUNS. *** Every configuration NOT SEEN BEFORE is
+      registered, and — the part that makes it useful — SO IS WHAT HAPPENED WHEN WE DID NOT
+      ANSWER IT: aborted, or completed anyway. Without the outcome the log tells you a new
+      configuration exists but not whether the guard held for it, which is the only thing a
+      later fix wave needs.
+
+      WORKED FAILURE, for anyone tempted to leave this: `SelectiveDeleteDownload` offers
+      `AcceptAll | DeleteSelected` and NO NoAction. Rule 3 leaves it unhandled. If it behaves
+      like UserManagementDownload, TIA proceeds and deletes something; the log reads "left
+      unhandled on purpose"; the download reports Success; and the load manifest may never
+      mention what was removed. A silent destructive path wearing the shape of a refusal.
+
+  O10. Which selection did TIA apply for `UserManagementDownload`? One of
+      `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword`,
+      `DownloadAllUserManagementDataResetToProject` was applied on our behalf and the result
+      messages do not say which.
