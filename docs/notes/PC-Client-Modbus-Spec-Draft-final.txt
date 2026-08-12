@@ -300,7 +300,12 @@ D7.  (Superseded by D15.)
 D8.  Agents speak TAG NAMES and never see a register number.
 D9.  Independent means NON-OVERLAPPING REACHABLE STATE — the transitive closure through each
      block's call tree, COMPUTED from the reference graph, not declared.
-D10. Isolation is structural: PER-TEST INSTANCE DBs.
+D10. Isolation is structural: PER-SLOT INSTANCE DBs — *** ONE PER TEST TENSOR, NOT ONE PER
+     VECTOR. Corrected 2026-08-12. *** This read "per-test instance DBs", which was taken to
+     mean per VECTOR and is wrong: a slot's vectors run SEQUENTIALLY through the same block
+     with a verified inert phase between them (D26a), and results are collected per index, so
+     nothing needs preserving from one vector to the next. One iDB per slot is sufficient.
+     The isolation that matters is BETWEEN SLOTS, which is what this decision was always for.
 D11. Execution is CONCURRENT. The enable bitmask survives as a DIAGNOSTIC (bisect, reproduce
      in isolation), not as the execution model.
      *** CLARIFIED IN DRAFT 04 — "CONCURRENT" MEANS WITHIN A TENSOR, AND ONLY THERE. *** As
@@ -345,6 +350,75 @@ D25. *** ANY DOWNLOAD THAT REQUIRES TESTING TO STOP MUST BE A FULL DOWNLOAD, NEV
 --- the wave structure, and what follows from it (D26-D31) ---
 
 D26. *** A WAVE IS A SEQUENCE OF TENSORS; A TENSOR IS A BATCH OF TESTS THAT RUN IN PARALLEL. ***
+     *** TERMINOLOGY CORRECTED 2026-08-12 BY THE OWNER — THE WORD "TENSOR" WAS BEING USED FOR
+     THE WRONG OBJECT, AND THE CORRECT NAMING IS D26a BELOW. *** Everything D26 says about
+     SEQUENCE and PARALLELISM is right; what it calls a tensor is the WIRE SLICE, and the
+     submitted unit is something else. Read D26a first — it is authoritative on the shape.
+
+D26a. *** THE WAVE MODEL, IN THE OWNER'S TERMS AND THEY ARE THE CORRECT ONES. ***
+
+       A SLOT supplies       testTensor_N = { a, b, c, ... }   ONE methodology, several
+                                                                value-sets. Vectors within it
+                                                                differ ONLY in VALUES.
+       The wire carries      modbusTensor(i) = testTensor_0[i] ++ testTensor_1[i] ++ ...
+                                                                the i-th vector of EVERY slot,
+                                                                concatenated. i is the WAVE
+                                                                INDEX.
+       The wave runs         i = 0, 1, 2, ... with a verified inert phase between each.
+
+     *** SO WHAT RUNS IN PARALLEL IS ONE INDEX ACROSS ALL SLOTS; WHAT RUNS IN SEQUENCE IS THE
+     INDEX. *** The unit a slot submits is a COLUMN (one methodology over many values); the
+     unit the wire applies is a ROW across all columns.
+
+     THREE RULES FALL OUT, AND THEY ARE WHY THE MAP CAN BE FROZEN AT ALL (D15):
+       1. *** "SAME METHODOLOGY" MEANS SAME REGISTER LAYOUT AND SAME OBSERVABILITY
+          DECLARATION — VALUES ONLY. *** This is the load-bearing half of the rule. A slot's
+          register layout is therefore CONSTANT across every i, so the map is derived once per
+          wave set and each index only rewrites values into a fixed shape.
+       2. *** TENSOR LENGTHS MAY DIFFER, AND A SLOT WITH NO VECTOR AT INDEX i IS NULL — AND
+          NULL MEANS INERT. *** No new encoding: the slot's START BOOL IS SIMPLY NOT RAISED at
+          that index, so D33's inert holds (resets asserted, dynamics untriggered) and the
+          values are don't-care. The wave runs to MAX tensor length; short slots go quiet.
+       3. *** A SLOT EXITS WHEN ITS OWN TENSOR IS DONE, NOT WHEN THE WAVE IS. *** Therefore
+          *** FEEDBACK LATENCY IS BOUNDED BY A SLOT'S OWN TENSOR LENGTH, NOT THE WAVE'S. *** A
+          3-vector slot has its results after index 2 even if the wave runs to index 6, so
+          results are DISTRIBUTED PER SLOT ON COMPLETION and never batched to wave end.
+
+     WHAT THIS CORRECTS ELSEWHERE, all of it recorded rather than silently patched:
+       - DB-13 does NOT determine wave length. Wave length is MAX TENSOR LENGTH. What the
+         conflict graph decides is WHICH SLOTS MAY SHARE A WAVE SET (see DB-13).
+       - O14's framing was wrong: conflict density cannot lengthen a wave, it forces slots
+         into SEPARATE wave sets. It costs WAVES PER PROJECT, not seconds per wave.
+       - §8's "5 tensors" figure is right; its DERIVATION was not. The count is max tensor
+         length (5), not a colouring of 30 tests 6 wide. Same number, wrong reason — and the
+         wrong reason gives wrong answers as soon as tensor lengths differ, which rule 2
+         above says they will.
+
+D26b. *** A SLOT IS PER (AGENT, METHODOLOGY) — AN AGENT MAY HOLD SEVERAL. *** Decided
+     2026-08-12 to remove a serialisation the one-tensor-per-AGENT rule would have imposed:
+     an agent needing to test three behaviours would have needed three wave sets, run
+     serially, because a second methodology breaks the stable-layout property of rule 1.
+
+     Untying the slot from the agent removes that. Three methodologies against one block DO
+     conflict — same reachable state — but given each slot its OWN instance DB (D10) and its
+     OWN model instance (D28), they become independent INSTANCES of the same block type, and
+     independent instances are conflict-free by the same D9 argument that lets two agents
+     share a wave.
+
+         shared by the agent : FB + UDT                    2 objects
+         per slot            : iDB + model + model-iDB     3 objects
+         an agent with K slots                             2 + 3K   (K=1 -> 5, K=3 -> 11)
+
+     *** THE TRADE IS OBJECTS FOR WALL-CLOCK, AND OBJECTS ARE THE CHEAP SIDE *** — three wave
+     sets cost three downloads and three full wave durations; three slots cost six extra
+     objects ONCE, because they persist across waves.
+
+     *** THE CONDITION, AND IT IS COMPUTABLE, NOT DECLARED: K SLOTS ARE PERMITTED ONLY IF THE
+     BLOCK CAN BE INSTANTIATED K TIMES WITHOUT SHARED MUTABLE STATE. *** An FB with an
+     instance DB, or a stateless FC — fine. A block writing to a shared global DB — NOT fine,
+     the instances are not independent, and that case is correctly back to serial. It is the
+     same disjointness test as D9 applied to instances of ONE block rather than to different
+     blocks, and `converter cross-check`'s multi-writer facts already surface it.
 
          inert -> tensor[0] -> inert -> tensor[1] -> inert -> tensor[2] -> ...
 
@@ -648,15 +722,21 @@ DB-4 — THE 20-OBJECT LIMIT
   D28 a model instance PER TEST — both of which are objects, and neither of which existed as
   decisions when that figure was written.
 
-    INTRODUCTION WAVE — an agent's test set appears for the first time:
-        FB + UDT + iDB .................................  3
-        per-test instance DBs   (D10, 5 vectors) .......  5
-        per-test model instances (D28, >=1 each) ....... >=5
+    INTRODUCTION WAVE — a slot appears for the first time:
+        shared by the agent : FB + UDT .................  2
+        per slot            : iDB + model + model-iDB ..  3
         ------------------------------------------------------
-        per agent ...................................... >=13   => ONE agent per download,
-                                                                   not six. 6 agents x 5
-                                                                   vectors ~ 78 objects ~ 4
-                                                                   downloads.
+        agent with K slots ............................. 2 + 3K   (K=1 -> 5, K=3 -> 11)
+                                                                  => ROUGHLY FOUR single-slot
+                                                                     agents per download.
+
+    *** THIS SUPERSEDES A FIGURE OF ">=13 OBJECTS PER AGENT, SO ONE AGENT PER DOWNLOAD" THAT
+    STOOD HERE FOR ABOUT AN HOUR ON 2026-08-12. *** It came from an audit finding that was
+    arithmetically correct given the premise it was handed — one instance DB and one model
+    instance PER VECTOR — and that premise was a misreading of the wave model, corrected in
+    D26a/D10. Vectors within a slot run sequentially through ONE instance, so the multiplier
+    is the number of SLOTS, not the number of vectors. Recorded because a wrong number was
+    briefly in this document with an audit's authority behind it.
 
     STEADY-STATE ITERATION — the agent edits its block and re-runs existing tests:
         the FB, sometimes a UDT ........................ 1-2    => the original ~6 agents per
@@ -750,10 +830,20 @@ BUILD ORDER, AND IT IS NOT THE NUMBERING (D30):
      LAST       DB-10  agent scheduling    — at a minute a wave, an agent can simply wait
      LAST       DB-11  the rig pool        — better packing buys the same thing for free
 
-DB-13 — TENSOR PACKING  *** the block that sets wave duration ***
-  Pack N submitted tests into the fewest tensors such that no two tests in a tensor conflict
-  (D27). The conflict EDGES are not new work — every source is something the design already
-  computes:
+DB-13 — WAVE-SET ADMISSION  *** it does NOT set wave duration — corrected 2026-08-12 ***
+
+  *** WHAT THIS BLOCK ACTUALLY DECIDES: WHICH SLOTS MAY SHARE A WAVE SET. *** It was written
+  as "pack tests into the fewest tensors", on the understanding that tensor count set the
+  wave's length. Under the corrected model (D26a) every slot runs at every index, so there is
+  no packing decision inside a wave at all: *** WAVE LENGTH IS MAX TENSOR LENGTH ACROSS THE
+  SLOTS, and nothing this block does can change it. ***
+
+  The colouring survives, applied to a different thing: colour the SLOTS, and *** EACH COLOUR
+  CLASS IS A WAVE SET. *** Conflicting slots cannot run concurrently, so they go into
+  DIFFERENT wave sets — which costs an extra wave, not a longer one.
+
+  So the conflict graph is now an ADMISSION mechanism, not a scheduler, and the thing it
+  buys is SLOTS PER WAVE rather than seconds per wave. The edges are unchanged:
 
     - OVERLAPPING REACHABLE STATE (D9) — the transitive closure through each block's call
       tree, from `converter cross-check`. Already the definition of "independent".
@@ -1956,12 +2046,56 @@ catch — the failure is at a level Modbus does not model.
 *** AND IT IS A THIRD BOUND ON TENSOR WIDTH, alongside conflict-freedom and poll bandwidth
 (D29): a tensor is also bounded by what can be applied atomically. ***
 
-TREATMENT — stage-then-commit, a shape this design already uses elsewhere. Write vector data
-to a staging region; then write ONE commit word, a sequence number, in a final single-register
-transaction. The copy layer acts on staged data only when the sequence number INCREMENTS, and
-the result package reports the sequence number it ran under. A torn write then leaves the
-commit word unwritten and the tensor never starts — a detectable non-event instead of a
-plausible wrong answer.
+*** RESOLVED 2026-08-12 — AND THE MECHANISM WAS ALREADY IN THE DESIGN. NO STAGING REGION, NO
+SEQUENCE NUMBER, NO NEW PLC-SIDE LOGIC. ***
+
+The proposed fix was stage-then-commit with a sequence word. Unnecessary, because of D26a:
+*** THE VECTOR DATA DOES NOT NEED TO BE ATOMIC AT ALL — NOTHING IS RUNNING WHILE IT IS
+WRITTEN. *** The rig is inert during the write. What must be atomic is the START.
+
+And D37's start bools already are that: ONE BIT PER SLOT, so every start bool in the wave fits
+in a single register write.
+
+    inert established, VERIFIED (D33)
+      -> write modbusTensor(i) across AS MANY TRANSACTIONS AS IT TAKES   (nothing is running)
+      -> *** ONE TRANSACTION RAISING ALL START BOOLS *** — the commit, and D37's T=0
+      -> observe
+
+A torn write in the data phase therefore leaves the start bools unraised, *** so nothing runs
+and it is a detectable non-event rather than a plausible wrong answer *** — the exact property
+wanted, obtained from a mechanism that exists for another reason.
+
+*** THE PARTITION REQUIREMENT SURVIVES ONLY ON THE READ SIDE. *** Polling happens DURING a
+test, so a read spanning transactions can catch a publish half-done. Per-SLOT coherence is
+sufficient — slots are independent by construction (D9) — so the rule is:
+
+    *** EACH SLOT'S RESULT REGION MUST FIT IN ONE FC03 READ (125 REGISTERS), AND A READ NEVER
+    STRADDLES TWO SLOTS. *** Refused at MAP-DERIVATION time if a slot exceeds it — a
+    design-time error, never a runtime one.
+
+Slots are FIXED-SIZE, sized to the largest slot in the wave set, so a client's bounds check is
+`base + index x slot_size` (DB-6 point 3 becomes arithmetic rather than a check).
+
+TWO THINGS THAT FALL OUT AND MUST BE BUILT FOR:
+
+  1. *** `MB_SERVER`'s POSITION IN THE SCAN IS LOAD-BEARING. *** An atomic Modbus write still
+     lands DURING the `MB_SERVER` call, so blocks executing before that call in the same scan
+     see the old values and blocks after it see the new — a torn read ACROSS BLOCKS despite a
+     perfectly atomic write. *** `MB_SERVER` IS CALLED FIRST IN THE SCAN, BEFORE ANY COPY-LAYER
+     READ. *** That is a checkable rule, not a convention.
+  2. *** THERE IS A HARD MEMORY CEILING ON THE MIRROR, AND IT BOUNDS CONCURRENT SLOTS
+     DIRECTLY. *** The 1214C's bit memory is 4096 bytes ~ 2048 words TOTAL — the whole `%MW`
+     space, including the version register (§9, two words) and the scan counter. At a
+     100-register slot that is about twenty slots for everything. [I — order of magnitude
+     confident, exact figure NOT verified against the CPU datasheet. Verify before designing
+     to it.] This is a THIRD bound on concurrency, alongside D29's conflict-freedom and poll
+     bandwidth, and it is the only one that is hard.
+
+*** ONE ASSUMPTION UNDERNEATH ALL OF THIS THAT IS NOT MEASURED [I]: that `MB_SERVER` applies
+one request's registers within a SINGLE SCAN. *** It is how the instruction is documented to
+behave, and the whole atomicity-by-addressing argument rests on it. Cheap to test — write a
+known pattern across a full slot in a loop while the program checks for a mixture — and this
+project has been caught twice this week by exactly this class of obviously-true premise.
 
 ................................................................................
 16.2  X-B  *** NO PER-TEST TIMEOUT — AND THE PACKER ALREADY NEEDS ONE ***
@@ -1989,13 +2123,31 @@ network or is killed mid-tensor, the rig keeps running the last applied vector i
 resets released, models running, outputs driven. On restart the coordinator has no idea what
 state the rig is in, and nothing above tells it to find out.
 
-TREATMENT, two parts, and the second is the one that matters:
-  1. ON CONNECT, ASSUME NOTHING — force inert before doing anything else, rather than assuming
-     the rig is where it was left.
-  2. *** A PLC-SIDE WATCHDOG IN THE COPY LAYER: no commit-word change for N seconds -> GO
-     INERT AUTONOMOUSLY. *** The only protection that survives the PC dying, which is exactly
-     the case part 1 cannot cover. It is a handful of rungs, and it is the difference between a
-     crashed coordinator being an inconvenience and being a rig left driving outputs all night.
+*** SCOPED 2026-08-12 BY RULING: IF THE COORDINATOR DIES, EVERY TEST AND RESULT IN FLIGHT IS
+INVALID. *** No autonomous recovery, no PLC-side watchdog for now — the option to improve it
+later is held open deliberately.
+
+*** THIS IS DEFENSIBLE SPECIFICALLY BECAUSE OF THE RIG FENCE, AND THAT DEPENDENCY MUST BE
+RECORDED. *** A rig left running is harmless only because its outputs are PHYSICALLY INCAPABLE
+OF ACTUATING (ADR-0009). *** IF THIS IS EVER POINTED AT A RIG WHOSE OUTPUTS CAN ACTUATE, THE
+SCOPING IS NO LONGER SAFE AND THE WATCHDOG BECOMES MANDATORY. *** That is the condition to
+revisit on, and it is a property of the TARGET, not of this design.
+
+THREE SMALL THINGS THE SCOPING STILL REQUIRES:
+  1. *** ON CONNECT, ASSUME NOTHING *** — force inert before anything else, rather than
+     assuming the rig is where it was left. Cheap, and not the watchdog.
+  2. *** A PERSISTED WAVE-IN-PROGRESS MARKER ON THE PC SIDE. *** Without it a restarted
+     coordinator cannot tell "I died mid-wave" from "I am starting clean", and will treat
+     stale rig state as a fresh start. This is the one piece that must actually be built, and
+     it is a file.
+  3. *** RESULTS FROM AN INTERRUPTED WAVE ARE DISCARDED, NEVER RE-READ. *** The version
+     register can confirm the PROGRAM is intact; it says nothing about whether a test
+     completed.
+
+HELD FOR LATER, so the improvement path is written down rather than rediscovered: a PLC-side
+watchdog in the copy layer — no commit change for N seconds, GO INERT AUTONOMOUSLY — is the
+only protection that survives the PC dying, which is exactly what item 1 cannot cover. A
+handful of rungs.
 
 ................................................................................
 16.4  X-D  *** TIME COMPRESSION DESTROYS OBSERVABILITY — D12/DB-12 AGAINST §12 ***
@@ -2013,13 +2165,41 @@ while every check still reports green because the assertion was simply never sam
 *** SO THE COMPRESSION FACTOR IS NOT A FREE PARAMETER OF THE MODEL. IT IS BOUNDED BY THE
 OBSERVABILITY REQUIREMENTS OF THE ASSERTIONS BEING TESTED. ***
 
-TREATMENT — the runner computes the maximum admissible compression from the declared
-observability of the assertions in the vector: one needing scan-level resolution caps
-compression far lower than one checking a settled end state. A vector requesting more
-compression than its own assertions can survive is REFUSED, with both numbers shown. Note the
-interaction is with WHICH observability mechanism the assertion uses, not merely the factor —
-LATCHING raises the ceiling substantially, because a latched transient survives compression
-where a sampled level does not.
+*** RESOLVED 2026-08-12: FULLY COMPUTABLE FROM CONSTRAINTS ALREADY IN THIS DOCUMENT, AND THE
+RULE IS TAKE THE SAFE MINIMUM. ***
+
+  (Naming note, and it is not pedantry: the compression factor is written `comp` throughout,
+   never abbreviated to a capital-F-underscore form. In a Siemens project that prefix is the
+   FAIL-SAFE marker, which hard rule 2 forbids the whole area of — so the obvious mathematical
+   shorthand collides with a safety identifier. The repo's write-side guard blocked this
+   section twice on exactly that, correctly, and the fix was to rename rather than bypass.)
+
+    comp_min = T_plant / T_budget                 the LEAST compression that fits the wave
+
+    comp_max = min of:
+        per assertion   T_event / scan_period     if LATCHED     (~10 ms)
+                        T_event / poll_period     if SAMPLED     (~100 ms)
+        per timer       PT / (k x scan_period)    k ~ 5
+        model           comp_stable               declared by the model (M3/M4 already
+                                                  require the fidelity declaration)
+
+    RUNNABLE iff comp_min does not exceed comp_max. Otherwise REFUSE, SHOWING BOTH NUMBERS —
+    that refusal is a MODEL TASK or a test-design task, and §7's DEFERRED bucket already
+    carries the sub-case for exactly this.
+
+*** USE comp_min, NOT comp_max. *** Compression is a fidelity risk, so take the least that
+meets the budget and bank the remainder as margin. Never run at the ceiling merely because the
+ceiling permits it.
+
+*** THE TIMER BOUND IS THE ONE NOBODY HAD, AND IT OFTEN BINDS FIRST. *** If presets are data
+(DB-12's requirement) they are scaled by the factor too, and a preset scaled below a few scan
+times stops behaving like a timer — it rounds toward zero, and the block then passes or fails
+for reasons unrelated to its logic. Dwell presets are usually the shortest meaningful time in
+a block, so this bound frequently bites before observability does.
+
+*** AND THE 10x SPREAD BETWEEN LATCHED AND SAMPLED MAKES OBSERVABILITY A THROUGHPUT LEVER, NOT
+ONLY A CORRECTNESS ONE *** — a latch captures a one-scan event, where a sampled level must
+still be present when the poll arrives.
 
 ................................................................................
 16.5  X-E  *** D32's EXCISION INVALIDATES DB-13's PACKING — A SEQUENCING HOLE ***
