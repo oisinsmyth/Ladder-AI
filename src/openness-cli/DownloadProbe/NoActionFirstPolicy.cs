@@ -193,10 +193,27 @@ internal static class NoActionFirstPolicy
     ///       because a DB was RESTRUCTURED — which reinitialises that DB by definition. The
     ///       configuration is reporting the consequence of the change, not proposing an extra one.
     ///
+    ///   OverwriteSystemData       / Overwrite               `DownloadOptions.Hardware` MEANS
+    ///       downloading a hardware configuration, and replacing the target's system data IS what a
+    ///       hardware download does — the configuration reports the consequence of the option the
+    ///       caller chose, it does not propose an extra one. That is exactly R8's test for membership
+    ///       of this list. Measured 2026-08-12 on a live rig: a `Hardware` download raised this with
+    ///       its current selection ALREADY `Overwrite`, and the normal policy's `NoAction` FAILED TO
+    ///       APPLY by both routes (property set and SetAttribute), so the configuration went
+    ///       unanswered and Openness aborted.
+    ///
     ///   StartModules              / StartModule             Puts the modules back. This is the only
     ///       route to RUN this tool has: `IS7Client` exposes no mode change, and nothing else here
     ///       does either. Answering it is strictly LESS destructive than not answering it — the
     ///       alternative outcome is a CPU left in STOP.
+    ///
+    /// *** THE PATTERN, NOW SEEN THREE TIMES, AND WHY THE `NoAction` DECLINE IS LARGELY FICTIONAL. ***
+    /// StopModules, DataBlockReinitialization and OverwriteSystemData each DECLARE `NoAction` in their
+    /// selection enum and each REJECT IT ON THE INSTANCE when the chosen download option entails the
+    /// action (`StopAll`, `StopPlcAndReinitialize`, `Overwrite` respectively). So the enum's decline
+    /// option is not a guard: what the enum offers and what the instance accepts are different things,
+    /// and only REFUSING TO ANSWER — leaving the configuration unhandled so the download aborts — is a
+    /// real one. That is why this list must name what each option ENTAILS rather than what looks safe.
     ///
     /// *** THESE ARE CHOSEN AHEAD OF <c>NoAction</c>, WHICH IS THE WHOLE POINT AND MUST NOT BE READ
     /// AS AN OVERSIGHT. *** Every one of these configurations also offers `NoAction`, so a mode that
@@ -210,6 +227,7 @@ internal static class NoActionFirstPolicy
         {
             ("StopModules", "StopAll"),
             ("DataBlockReinitialization", "StopPlcAndReinitialize"),
+            ("OverwriteSystemData", "Overwrite"),
             ("StartModules", StartModulesSelection),
         };
 

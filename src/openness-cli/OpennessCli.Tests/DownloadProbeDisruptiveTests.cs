@@ -197,8 +197,10 @@ public class DownloadProbeDisruptiveTests
             new[] { ("ResetModule", "DeleteAll"), ("InitializeMemory", "AcceptAll") },
             disruptive.ToArray());
 
-        // The two that left the list are exactly the two that became allowances — no third entry
-        // quietly dropped out.
+        // Exactly two entries left the list, and they are these two by name — no third entry quietly
+        // dropped out. (The allowance list is LONGER than this: an allowance need not have been on the
+        // deny list at all — OverwriteSystemData never was — so the two sets are checked separately
+        // and never derived from one another.)
         var removed = normal.Where(n => !disruptive.Contains(n)).ToList();
         Assert.Equal(
             new[] { ("StopModules", "StopAll"), ("DataBlockReinitialization", "StopPlcAndReinitialize") },
@@ -225,13 +227,14 @@ public class DownloadProbeDisruptiveTests
     }
 
     [Fact]
-    public void Disruptive_TheAllowanceList_IsExactlyThreeNamedPairs()
+    public void Disruptive_TheAllowanceList_IsExactlyFourNamedPairs()
     {
         Assert.Equal(
             new[]
             {
                 ("StopModules", "StopAll"),
                 ("DataBlockReinitialization", "StopPlcAndReinitialize"),
+                ("OverwriteSystemData", "Overwrite"),
                 ("StartModules", "StartModule"),
             },
             NoActionFirstPolicy.DisruptiveAllowances.ToArray());
@@ -241,6 +244,30 @@ public class DownloadProbeDisruptiveTests
         Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("ResetModule", "StopAll", SelectionPolicyMode.Disruptive));
         Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("StopModules", "DeleteAll", SelectionPolicyMode.Disruptive));
         Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("StopHSystem", "StopHSystem", SelectionPolicyMode.Disruptive));
+        Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("OverwriteOnMemoryCard", "Overwrite", SelectionPolicyMode.Disruptive));
+        Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("OverwriteSystemData", "Load", SelectionPolicyMode.Disruptive));
+    }
+
+    /// <summary>
+    /// The two lists are checked against each other exactly once, here, and the claim is NOT that they
+    /// partition anything: an allowance need not have been denied (OverwriteSystemData never was, on
+    /// either path). What must hold is that nothing is on BOTH lists at once under the disruptive mode
+    /// — a pair that was permitted and denied simultaneously would make the guard meaningless.
+    /// </summary>
+    [Fact]
+    public void Disruptive_NoPairIsBothAllowedAndDenied()
+    {
+        foreach (var allowance in NoActionFirstPolicy.DisruptiveAllowances)
+        {
+            Assert.DoesNotContain(allowance, NoActionFirstPolicy.DisruptiveDeniedSelections);
+            Assert.False(
+                NoActionFirstPolicy.IsDenied(
+                    allowance.ConfigurationType, allowance.Selection, SelectionPolicyMode.Disruptive),
+                $"{allowance.ConfigurationType} -> {allowance.Selection} is allowed and denied at once.");
+        }
+
+        Assert.Equal(4, NoActionFirstPolicy.DisruptiveAllowances.Count);
+        Assert.Equal(2, NoActionFirstPolicy.DisruptiveDeniedSelections.Count);
     }
 
     // ---- with the flag, the three become reachable — ahead of NoAction ---------------------------
@@ -290,8 +317,90 @@ public class DownloadProbeDisruptiveTests
     }
 
     /// <summary>
-    /// The three allowance names, checked against the enums the installed V20 assembly actually
-    /// declares rather than against three strings someone typed. A Siemens rename would otherwise
+    /// <c>OverwriteSystemData</c>, the third instance of the pattern: the enum DECLARES
+    /// <c>NoAction</c>, the instance REJECTS it once the chosen option entails the overwrite, so the
+    /// normal policy's answer aborts a hardware download. Measured on a live rig 2026-08-12 — the
+    /// configuration was raised with <c>Overwrite</c> already selected and <c>NoAction</c> failed to
+    /// apply by BOTH routes.
+    ///
+    /// Both halves are asserted together because the normal path must NOT be widened by this change:
+    /// without <c>--disruptive</c> a hardware download still answers <c>NoAction</c> and still aborts.
+    /// </summary>
+    [Fact]
+    public void OverwriteSystemData_IsAnsweredWithOverwrite_OnlyInDisruptiveMode()
+    {
+        var offered = new[] { "NoAction", "Overwrite" };
+
+        // NORMAL — unchanged, and unchanged is the requirement.
+        Assert.Equal("NoAction", NoActionFirstPolicy.Decide("OverwriteSystemData", offered, SelectionPolicyMode.Normal).Selection);
+        Assert.Equal("NoAction", NoActionFirstPolicy.Decide("OverwriteSystemData", offered).Selection);
+        Assert.False(NoActionFirstPolicy.IsDisruptiveAllowance("OverwriteSystemData", "Overwrite", SelectionPolicyMode.Normal));
+
+        // DISRUPTIVE — chosen, and chosen AHEAD of NoAction, which is the only thing that helps: a
+        // mode that merely stopped denying it would still answer NoAction, still be refused by the
+        // API, and still abort.
+        var disruptive = NoActionFirstPolicy.Decide("OverwriteSystemData", offered, SelectionPolicyMode.Disruptive);
+        Assert.Equal("Overwrite", disruptive.Selection);
+        Assert.Equal(ConfigurationDecisionKind.AnsweredByDisruptiveAllowance, disruptive.Kind);
+        Assert.True(disruptive.IsLoud);
+        Assert.Contains("DISRUPTIVE MODE", disruptive.Reason, StringComparison.Ordinal);
+        Assert.True(NoActionFirstPolicy.IsDisruptiveAllowance("OverwriteSystemData", "Overwrite", SelectionPolicyMode.Disruptive));
+    }
+
+    /// <summary>
+    /// And when it is the only selection offered, both modes still differ: disruptive answers it, and
+    /// the normal mode takes it only under the LOUD "there was nothing else to take" arm — never
+    /// quietly, and never as an allowance.
+    /// </summary>
+    [Fact]
+    public void OverwriteSystemData_AsTheSoleSelection_IsAnsweredByTheAllowanceOnlyInDisruptiveMode()
+    {
+        var disruptive = NoActionFirstPolicy.Decide("OverwriteSystemData", new[] { "Overwrite" }, SelectionPolicyMode.Disruptive);
+        Assert.Equal("Overwrite", disruptive.Selection);
+        Assert.Equal(ConfigurationDecisionKind.AnsweredByDisruptiveAllowance, disruptive.Kind);
+
+        var normal = NoActionFirstPolicy.Decide("OverwriteSystemData", new[] { "Overwrite" }, SelectionPolicyMode.Normal);
+        Assert.NotEqual(ConfigurationDecisionKind.AnsweredByDisruptiveAllowance, normal.Kind);
+        Assert.Equal(ConfigurationDecisionKind.AnsweredOnlySelectionAvailable, normal.Kind);
+        Assert.True(normal.IsLoud);
+    }
+
+    [Fact]
+    public void Recorder_InDisruptiveMode_AppliesOverwrite_AndSaysItCameFromTheAllowance()
+    {
+        using var log = new ProbeLog(new StringWriter(), filePath: null);
+        var recorder = new ConfigurationRecorder(log, "PRE", SelectionPolicyMode.Disruptive);
+        var selection = new StubSelection("OverwriteSystemDataSelections", new[] { "NoAction", "Overwrite" });
+
+        var record = recorder.Record(
+            ViewFor("OverwriteSystemData", "Delete and replace system data in target", selection));
+
+        Assert.Equal(new[] { "Overwrite" }, selection.Applied);
+        Assert.Equal("Overwrite", record.ChosenSelection);
+        Assert.Equal(ConfigurationDecisionKind.AnsweredByDisruptiveAllowance, record.Decision);
+        Assert.Equal(ConfigurationOutcomeKind.Answered, record.Outcome);
+        Assert.Contains("PERMITTED ONLY BY --disruptive", string.Join("\n", log.Lines), StringComparison.Ordinal);
+    }
+
+    /// <summary>The negative control on the identical configuration: the normal path is untouched.</summary>
+    [Fact]
+    public void Recorder_WithoutDisruptive_AppliesNoActionToOverwriteSystemData()
+    {
+        using var log = new ProbeLog(new StringWriter(), filePath: null);
+        var recorder = new ConfigurationRecorder(log, "PRE");
+        var selection = new StubSelection("OverwriteSystemDataSelections", new[] { "NoAction", "Overwrite" });
+
+        var record = recorder.Record(
+            ViewFor("OverwriteSystemData", "Delete and replace system data in target", selection));
+
+        Assert.Equal(new[] { "NoAction" }, selection.Applied);
+        Assert.DoesNotContain("Overwrite", selection.Applied);
+        Assert.Equal(ConfigurationDecisionKind.AnsweredNoAction, record.Decision);
+    }
+
+    /// <summary>
+    /// The four allowance names, checked against the enums the installed V20 assembly actually
+    /// declares rather than against four strings someone typed. A Siemens rename would otherwise
     /// leave the allowance matching nothing — which fails SAFE on StopModules (abort) and fails
     /// SILENTLY on StartModules (the CPU simply stays stopped), so it has to fail here instead.
     /// </summary>
@@ -305,8 +414,22 @@ public class DownloadProbeDisruptiveTests
             "StopPlcAndReinitialize",
             Enum.GetNames(typeof(Siemens.Engineering.Download.Configurations.DataBlockReinitializationSelections)));
         Assert.Contains(
+            "Overwrite",
+            Enum.GetNames(typeof(Siemens.Engineering.Download.Configurations.OverwriteSystemDataSelections)));
+        Assert.Contains(
             NoActionFirstPolicy.StartModulesSelection,
             Enum.GetNames(typeof(Siemens.Engineering.Download.Configurations.StartModulesSelections)));
+
+        // OverwriteSystemDataSelections declares exactly two members, NoAction = 0 and Overwrite = 1 —
+        // read off the installed V20 assembly rather than off a log transcription. The zero value is
+        // again the decline, which is the value the API refused on the live rig.
+        Assert.Equal(
+            new[] { "NoAction", "Overwrite" },
+            Enum.GetNames(typeof(Siemens.Engineering.Download.Configurations.OverwriteSystemDataSelections))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray());
+        Assert.Equal(0, (int)Siemens.Engineering.Download.Configurations.OverwriteSystemDataSelections.NoAction);
+        Assert.Equal(1, (int)Siemens.Engineering.Download.Configurations.OverwriteSystemDataSelections.Overwrite);
 
         // And the reason StartModules must be answered explicitly rather than left alone: the enum's
         // ZERO value — what an untouched field reads as — is NoAction, which does not start anything.
@@ -351,12 +474,14 @@ public class DownloadProbeDisruptiveTests
         // Empty is not clean: a reflection walk matching nothing would pass vacuously.
         Assert.True(examined >= 20, $"Only {examined} selection configurations were examined.");
 
-        // And the allowance fired on EXACTLY the three configurations it names — not on a fourth that
-        // happens to share a selection name.
+        // And the allowance fired on EXACTLY the four configurations it names — not on a fifth that
+        // happens to share a selection name. `OverwriteOnMemoryCard` is the live control for that: it
+        // is a real V20 configuration in this sweep and it is NOT answered by the allowance.
         Assert.Equal(
             new[]
             {
                 "DataBlockReinitialization -> StopPlcAndReinitialize",
+                "OverwriteSystemData -> Overwrite",
                 "StartModules -> StartModule",
                 "StopModules -> StopAll",
             },
@@ -453,6 +578,10 @@ public class DownloadProbeDisruptiveTests
             Assert.Contains($"{type} -> {selection}", text, StringComparison.Ordinal);
         }
 
+        // Spelled out as a literal as well as through the loop above: the loop passes whatever the
+        // list happens to hold, so it cannot show that THIS allowance reached the banner.
+        Assert.Contains("OverwriteSystemData -> Overwrite", text, StringComparison.Ordinal);
+
         Assert.Contains("STILL DENIED, EVEN HERE", text, StringComparison.Ordinal);
         Assert.Contains("SHRUNK, NOT EMPTIED", text, StringComparison.Ordinal);
         Assert.Contains("BE AT THE MACHINE", text, StringComparison.Ordinal);
@@ -473,6 +602,10 @@ public class DownloadProbeDisruptiveTests
         Assert.DoesNotContain("ALLOWED TO STOP THE CPU", text, StringComparison.Ordinal);
         Assert.DoesNotContain("SHRUNK, NOT EMPTIED", text, StringComparison.Ordinal);
         Assert.Contains("(--disruptive was NOT given)", text, StringComparison.Ordinal);
+
+        // The new allowance is not advertised at all without the flag. (The other three cannot be
+        // asserted the same way: two of them are printed here as DENIED entries, spelled identically.)
+        Assert.DoesNotContain("OverwriteSystemData", text, StringComparison.Ordinal);
 
         foreach (var (type, selection) in NoActionFirstPolicy.DeniedSelections)
         {

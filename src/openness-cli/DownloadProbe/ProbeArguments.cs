@@ -46,6 +46,11 @@ internal sealed class ProbeArguments
     /// — there is no default and no first-one-wins, because the candidate list on a normal
     /// engineering PC includes a PLCSIM virtual adapter and a wrong pick writes to the wrong thing.
     /// Narrowing only: it selects among what the project already declares and cannot introduce one.
+    ///
+    /// May carry a trailing <c>" #&lt;n&gt;"</c> naming <c>ConfigurationPcInterface.Number</c> as well,
+    /// because a Name does not identify an adapter — see
+    /// <see cref="ConnectionTargetSelector.TrySplitTrailingNumber"/> for the parse rule. Taken
+    /// VERBATIM here; the whole of the matching, including the split, lives in the selector.
     /// </summary>
     internal string? PcInterface { get; }
 
@@ -115,6 +120,11 @@ internal static class ProbeArgumentParser
         "  --pc-interface  the PC adapter to download through, by EXACT name (case-sensitive, whole\n" +
         "                  string). REQUIRED whenever the project declares more than one; no default,\n" +
         "                  no substring matching. A refusal lists every candidate verbatim.\n" +
+        "                  Two adapters can share a NAME and differ only in NUMBER, so the value may\n" +
+        "                  also carry a trailing ' #<n>' — the exact form `openness-cli download-plan`\n" +
+        "                  prints, e.g. \"Microsoft Hyper-V Network Adapter #2\". The value is tried\n" +
+        "                  WHOLE as a name first, so a name containing a '#' is never split; a number\n" +
+        "                  naming no adapter is refused, never resolved by name alone.\n" +
         "  --target        the target interface, by EXACT name, when the chosen PC interface has more\n" +
         "                  than one. Not an IP address: the project's address collections are empty.\n" +
         "  --log-dir       where the verbatim configuration log is written. Defaults to\n" +

@@ -1008,14 +1008,23 @@ public class DownloadProbeTests
 
     // ---- the download target: never picked for you ----------------------------------------------
     //
-    // The three names below are the ACTUAL adapters on the engineering PC this tool runs on, read
-    // from `openness-cli download-plan`. One of them is a PLCSIM virtual adapter, which is exactly
-    // why none of the matching here is allowed to be helpful: a substring or a case-folded match
-    // could send a real download to a simulator, or to a VPN TAP adapter, without saying so.
+    // The three strings below are the adapters on the engineering PC this tool runs on AS
+    // `openness-cli download-plan` RENDERS THEM. One of them is a PLCSIM virtual adapter, which is
+    // exactly why none of the matching here is allowed to be helpful: a substring or a case-folded
+    // match could send a real download to a simulator, or to a VPN TAP adapter, without saying so.
+    //
+    // CORRECTION, 2026-08-12: the trailing "#N" is NOT part of ConfigurationPcInterface.Name — it is
+    // the separate Number property, which download-plan renders into one display string. These
+    // constants therefore keep their #N as PART OF THE NAME on purpose, which makes them the fixture
+    // for the "a name legitimately containing a '#' is not mangled" rule. The real shape — a shared
+    // Name plus distinct Numbers — is SameNamedAdapterPair() below.
 
     private const string HyperV = "Microsoft Hyper-V Network Adapter #2";
     private const string Plcsim = "Siemens PLCSIM Virtual Ethernet Adapter #1";
     private const string Tap = "TAP-Windows Adapter V9 #2";
+
+    /// <summary>The Name the two Hyper-V adapters actually share, with the #N stripped off.</summary>
+    private const string HyperVName = "Microsoft Hyper-V Network Adapter";
 
     /// <summary>
     /// The real shape: three PC interfaces under one mode, each with a single target interface named
@@ -1028,8 +1037,20 @@ public class DownloadProbeTests
         Target(Tap, "1 X1", "node-tap"),
     };
 
-    private static ConnectionTarget<string> Target(string pcInterface, string targetInterface, string node) =>
-        new("PN/IE", pcInterface, targetInterface, Array.Empty<string>(), "StandInNode", node);
+    /// <summary>
+    /// MEASURED 2026-08-12, and the reason --pc-interface had to grow a number: a second Hyper-V
+    /// adapter appeared on the machine between sessions, and BOTH report the same <c>Name</c>. Only
+    /// <c>Number</c> tells them apart, and they can reach different networks.
+    /// </summary>
+    private static IReadOnlyList<ConnectionTarget<string>> SameNamedAdapterPair() => new[]
+    {
+        Target(HyperVName, "1 X1", "node-hyperv-1", number: 1),
+        Target(HyperVName, "1 X1", "node-hyperv-2", number: 2),
+    };
+
+    private static ConnectionTarget<string> Target(
+        string pcInterface, string targetInterface, string node, int number = 1) =>
+        new("PN/IE", pcInterface, number, targetInterface, Array.Empty<string>(), "StandInNode", node);
 
     [Fact]
     public void Target_WithSeveralPcInterfaces_AndNoneNamed_RefusesAndNamesThemAll()
@@ -1142,6 +1163,202 @@ public class DownloadProbeTests
         // Exact here too: a target interface is no more guessable than an adapter.
         Assert.True(ConnectionTargetSelector.Select(many, HyperV, "1 x2").IsRefusal);
         Assert.True(ConnectionTargetSelector.Select(many, HyperV, "1 X").IsRefusal);
+    }
+
+    // ---- two adapters, one name: --pc-interface can say WHICH ----------------------------------
+    //
+    // MEASURED 2026-08-12. A second Hyper-V adapter appeared on the machine between sessions and
+    // both report the SAME ConfigurationPcInterface.Name; the "#N" that download-plan prints is the
+    // separate Number property. A name-only match therefore pooled two adapters' target interfaces
+    // and refused with "--target IS REQUIRED ... has 2 target interfaces" — the right refusal for
+    // the wrong reason, and with nothing the operator could type to resolve it.
+
+    /// <summary>
+    /// The API fact the whole change rests on, read from the installed V20 assembly rather than
+    /// inferred from the rendered string: <c>Number</c> exists, it is an <c>Int32</c>, it is separate
+    /// from <c>Name</c>, and it is read-only. A Siemens change to any of that fails here.
+    /// </summary>
+    [Fact]
+    public void ConfigurationPcInterface_ExposesNumber_AsAnInt32SeparateFromName()
+    {
+        var pcInterface = typeof(Siemens.Engineering.Connection.ConfigurationPcInterface);
+
+        var number = pcInterface.GetProperty(
+            "Number", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+
+        Assert.NotNull(number);
+        Assert.Equal(typeof(int), number!.PropertyType);
+        Assert.True(number.CanRead);
+        Assert.False(number.CanWrite);
+
+        // And Name really is only the name — the "#N" is not in it, which is why matching on Name
+        // alone could not distinguish the two adapters.
+        var name = pcInterface.GetProperty(
+            "Name", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        Assert.NotNull(name);
+        Assert.Equal(typeof(string), name!.PropertyType);
+    }
+
+    /// <summary>
+    /// THE BUG. The bare shared name matches both adapters, and that is still a refusal — but the
+    /// refusal now prints the numbers, so it says exactly what to pass instead of repeating the
+    /// string that was just refused.
+    /// </summary>
+    [Fact]
+    public void PcInterface_TwoAdaptersSharingAName_RefuseTheBareName_AndPrintBothNumbers()
+    {
+        var selection = ConnectionTargetSelector.Select(SameNamedAdapterPair(), HyperVName, null);
+
+        Assert.True(selection.IsRefusal);
+        Assert.Null(selection.Chosen);
+
+        var text = string.Join("\n", selection.RefusalLines);
+        Assert.Contains("AMBIGUOUS", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #1\"", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #2\"", text, StringComparison.Ordinal);
+
+        // NOT the old message, which blamed the target interfaces and named no way out.
+        Assert.DoesNotContain("--target IS REQUIRED", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PcInterface_TheNumberedForm_ResolvesToExactlyThatAdapter()
+    {
+        var chosen = Assert.IsType<ConnectionTarget<string>>(
+            ConnectionTargetSelector.Select(SameNamedAdapterPair(), HyperVName + " #2", null).Chosen);
+
+        Assert.Equal("node-hyperv-2", chosen.Node);
+        Assert.Equal(2, chosen.PcInterfaceNumber);
+        Assert.Equal(HyperVName, chosen.PcInterfaceName);
+
+        // And the other one is reachable the same way — the number selects, it does not merely
+        // disambiguate towards whichever was enumerated first.
+        Assert.Equal(
+            "node-hyperv-1",
+            Assert.IsType<ConnectionTarget<string>>(
+                ConnectionTargetSelector.Select(SameNamedAdapterPair(), HyperVName + " #1", null).Chosen).Node);
+    }
+
+    /// <summary>
+    /// A number naming nothing is a HARD REFUSAL. Falling back to the name would silently ignore the
+    /// one thing the operator said, and would re-pool the two adapters the number exists to separate.
+    /// </summary>
+    [Fact]
+    public void PcInterface_ANumberThatNamesNoAdapter_IsRefused_NeverFallenBackToNameOnly()
+    {
+        var selection = ConnectionTargetSelector.Select(SameNamedAdapterPair(), HyperVName + " #9", null);
+
+        Assert.True(selection.IsRefusal);
+        Assert.Null(selection.Chosen);
+
+        var text = string.Join("\n", selection.RefusalLines);
+        Assert.Contains("NO PC INTERFACE", text, StringComparison.Ordinal);
+        Assert.Contains("#9", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #1\"", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #2\"", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The parse rule, stated as a test: the value is tried WHOLE as a Name first, so a name that
+    /// legitimately ends in " #2" resolves on its own name and is never split. RealAdapterSet's
+    /// fixture names carry their "#N" inside the Name for exactly this reason.
+    /// </summary>
+    [Fact]
+    public void PcInterface_ANameThatLegitimatelyContainsAHash_IsNotMangled()
+    {
+        var chosen = Assert.IsType<ConnectionTarget<string>>(
+            ConnectionTargetSelector.Select(RealAdapterSet(), HyperV, null).Chosen);
+
+        Assert.Equal(HyperV, chosen.PcInterfaceName);
+        Assert.Equal("node-hyperv", chosen.Node);
+
+        // And when such a name is itself duplicated, the number is still reachable — the LAST " #<n>"
+        // is the one read, so "<name ending in #2> #7" means name "...#2", number 7.
+        var awkward = new[]
+        {
+            Target(HyperV, "1 X1", "node-a", number: 7),
+            Target(HyperV, "1 X1", "node-b", number: 8),
+        };
+
+        Assert.True(ConnectionTargetSelector.Select(awkward, HyperV, null).IsRefusal);
+        Assert.Equal(
+            "node-b",
+            Assert.IsType<ConnectionTarget<string>>(
+                ConnectionTargetSelector.Select(awkward, HyperV + " #8", null).Chosen).Node);
+    }
+
+    [Theory]
+    // Only a trailing ' #<digits>' at the very end, with at least one character before the space.
+    [InlineData("Adapter #2", true, "Adapter", 2)]
+    [InlineData("Adapter #0", true, "Adapter", 0)]
+    [InlineData("Adapter #10", true, "Adapter", 10)]
+    [InlineData("Adapter #2 #3", true, "Adapter #2", 3)]
+    [InlineData("Adapter", false, null, 0)]
+    [InlineData("Adapter #", false, null, 0)]
+    [InlineData("Adapter #2x", false, null, 0)]
+    [InlineData("Adapter #2 ", false, null, 0)]
+    [InlineData("Adapter#2", false, null, 0)]          // no space: '#' is just a character in a name
+    [InlineData("Adapter #-1", false, null, 0)]
+    [InlineData("Adapter # 2", false, null, 0)]
+    [InlineData(" #2", false, null, 0)]                // nothing before the separator names no adapter
+    [InlineData("#2", false, null, 0)]
+    [InlineData("", false, null, 0)]
+    public void PcInterface_TheTrailingNumberParseRule(string requested, bool split, string? name, int number)
+    {
+        Assert.Equal(split, ConnectionTargetSelector.TrySplitTrailingNumber(requested, out var actualName, out var actualNumber));
+
+        if (split)
+        {
+            Assert.Equal(name, actualName);
+            Assert.Equal(number, actualNumber);
+        }
+        else
+        {
+            // On a refusal to split the value is left whole, so the caller's name-only path sees it
+            // unchanged rather than a truncated guess.
+            Assert.Equal(requested, actualName);
+        }
+    }
+
+    /// <summary>
+    /// The null-request path counts adapters by (Name, Number) too. Counting by name alone made two
+    /// same-named adapters look like one, so the "you must name it" refusal never fired and the run
+    /// went on to pool their target interfaces.
+    /// </summary>
+    [Fact]
+    public void PcInterface_WithNothingRequested_TwoSameNamedAdaptersStillRequireAName()
+    {
+        var selection = ConnectionTargetSelector.Select(SameNamedAdapterPair(), null, null);
+
+        Assert.True(selection.IsRefusal);
+        var text = string.Join("\n", selection.RefusalLines);
+        Assert.Contains("--pc-interface IS REQUIRED", text, StringComparison.Ordinal);
+        Assert.Contains("2 PC interfaces", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #1\"", text, StringComparison.Ordinal);
+        Assert.Contains($"\"{HyperVName} #2\"", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The suffix is ADDITIVE: everything that resolved before still resolves, unchanged. A single
+    /// adapter takes its bare name, and takes no name at all.
+    /// </summary>
+    [Fact]
+    public void PcInterface_TheSingleAdapterCase_StillWorksWithTheBareName()
+    {
+        var only = new[] { Target(HyperVName, "1 X1", "node-only", number: 5) };
+
+        Assert.Equal("node-only", Assert.IsType<ConnectionTarget<string>>(
+            ConnectionTargetSelector.Select(only, HyperVName, null).Chosen).Node);
+
+        Assert.Equal("node-only", Assert.IsType<ConnectionTarget<string>>(
+            ConnectionTargetSelector.Select(only, HyperVName + " #5", null).Chosen).Node);
+
+        Assert.Equal("node-only", Assert.IsType<ConnectionTarget<string>>(
+            ConnectionTargetSelector.Select(only, null, null).Chosen).Node);
+
+        // Still exact, even with only one candidate: a wrong number is refused, not rounded off.
+        Assert.True(ConnectionTargetSelector.Select(only, HyperVName + " #6", null).IsRefusal);
+        Assert.True(ConnectionTargetSelector.Select(only, HyperVName.ToLowerInvariant() + " #5", null).IsRefusal);
     }
 
     /// <summary>

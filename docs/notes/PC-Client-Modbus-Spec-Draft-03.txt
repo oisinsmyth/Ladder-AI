@@ -577,6 +577,80 @@ replaces the other:
                       after the fact.
 
 --------------------------------------------------------------------------------
+9b. ALL THREE DOWNLOAD OPTIONS, MEASURED 2026-08-12
+--------------------------------------------------------------------------------
+
+  OPTION        CONFIGURATIONS RAISED                          CPU              TRANSFERRED
+  ------------  ---------------------------------------------  ---------------  -------------
+  Differential  DataBlockReinitialization, ConsistentBlocks     NEVER STOPPED    1 block
+  Full          StopModules, ConsistentBlocks,                  stopped ->       99 objects
+                AlarmTextLibrariesDownload, StartModules        RESTARTED
+  Hardware      StopModules, OverwriteSystemData,               stopped ->       HW config,
+                UserManagementDownload, StartModules            RESTARTED        connection,
+                                                                                 routing
+
+Hardware, verbatim: `PLC_1 stopped.` / `Hardware configuration was loaded successfully.` /
+`Connection configuration was downloaded successfully.` / `Routing configuration was loaded
+successfully.` / `PLC_1 started.`
+
+*** THE PATTERN, NOW SEEN THREE TIMES: WHEN A DOWNLOAD OPTION ENTAILS AN ACTION, `NoAction`
+    IS DECLARED IN THE ENUM BUT REJECTED BY THE INSTANCE. *** StopModules, DataBlockReini-
+    tialization and OverwriteSystemData all refuse it. The "decline" is largely FICTIONAL —
+    which is why refusing to ANSWER, rather than answering NoAction, is the only real guard,
+    and why the allowance list must name what each option entails.
+
+*** AND A CORRECTION THAT WEAKENS THE GUARD MODEL — SEE §15 O9. *** `UserManagementDownload`
+was LEFT UNHANDLED ON PURPOSE (three selections, no NoAction, so choosing would have been a
+guess) *** AND THE DOWNLOAD COMPLETED ANYWAY. *** So "unhandled -> abort" is NOT universal:
+it held for StopModules and OverwriteSystemData and did not hold here. TIA proceeded with a
+default we did not choose and cannot see. That is not a guard.
+
+Vindicated on the way: the rule "several selections and no NoAction => leave unhandled" was
+added over an earlier, sloppier instruction of mine. Had the tool guessed here,
+`DownloadAllUserManagementDataResetToProject` was on the menu.
+
+--------------------------------------------------------------------------------
+9c. THE DOWNLOAD FEEDBACK PARSER — a required component
+--------------------------------------------------------------------------------
+
+The `DownloadResult` message tree is the richest evidence any download produces, and every
+run so far has proved it carries more than the design assumed. It needs a real parser, not
+phrase-matching bolted on.
+
+WHAT IT MUST EXTRACT:
+
+  1. *** THE LOAD MANIFEST *** — every `'<name>' was loaded successfully` message, as a SET
+     of object names plus a count. This is the positive evidence of transfer (§9a) and the
+     cross-check on DB-1.
+  2. *** RUN-STATE TRANSITIONS *** — `PLC_1 stopped.` / `PLC_1 started.`, in order, so the
+     coordinator knows the state the CPU was left in rather than inferring it.
+  3. *** NON-OBJECT LOADS *** — `Hardware configuration`, `Connection configuration`,
+     `Routing configuration` were each reported with their own wording. A parser keyed only
+     on the block form would silently drop all three.
+  4. *** THE UP-TO-DATE SIGNAL *** — `The software has not been loaded, because it is
+     up-to-date`, which means SUCCESS WITH NOTHING TRANSFERRED.
+  5. Per-node state, error and warning counts, preserved with their nesting.
+
+DESIGN RULES, each earned by something that has already gone wrong:
+
+  - *** NEVER READ `state=Success` AS EVIDENCE OF TRANSFER. *** The first run that returned
+    Success transferred nothing.
+  - *** REPORT THE COUNT, NOT A BOOLEAN. *** "1 object" versus "99 objects" is what makes the
+    DB-1 cross-check possible; a yes/no throws that away.
+  - *** UNDETERMINED IS A THIRD VERDICT AND MUST NEVER COLLAPSE INTO A NEGATIVE. ***
+  - *** SURFACE UNRECOGNISED MESSAGE SHAPES — DO NOT DROP THEM. *** Four distinct message
+    vocabularies have appeared in six runs, and each new download option produced one nobody
+    predicted. A parser that classifies only what it knows will go quietly blind exactly when
+    something new happens, which is exactly when you need it.
+  - Prefer POSITIVE evidence over inference from absence. The probe currently infers transfer
+    from the absence of an up-to-date phrase while sitting on 99 positive load messages — the
+    correction §9a records.
+
+WHERE IT IS USED: post-download verification (with §9's version register), the DB-1
+cross-check, run-state tracking for DB-3's settling window, and the per-agent results that
+carry the co-running log (§2.4).
+
+--------------------------------------------------------------------------------
 10. PROTOCOL COEXISTENCE
 --------------------------------------------------------------------------------
 
@@ -758,3 +832,18 @@ running this should expect to be at the machine.
       report? Abort loses information; complete risks cascading from a bad state.
   O8. What minimum coverage admits a wave (§7), and who rules on a requirement declared
       untestable on a rig?
+
+  O9. *** NEW, AND THE LARGEST SAFETY QUESTION OPEN: WHICH UNHANDLED CONFIGURATIONS ACTUALLY
+      ABORT? *** Measured 2026-08-12: unhandled ABORTED for `StopModules`,
+      `DataBlockReinitialization` and `OverwriteSystemData`, and DID NOT abort for
+      `UserManagementDownload` — that download completed with TIA applying a default we
+      neither chose nor can see. The whole protection model in R4/R8 rests on "refuse to
+      answer => prevented". For any configuration that behaves like UserManagementDownload,
+      refusing prevents NOTHING and produces the ILLUSION of a guard: the log reads "left
+      unhandled on purpose" and the download reports Success. See the recommendation and the
+      worked failure in the design conversation of 2026-08-12.
+
+  O10. Which selection did TIA apply for `UserManagementDownload`? One of
+      `KeepOnlineUserManagementData`, `UpdateUserManagementDataButKeepOnlinePassword`,
+      `DownloadAllUserManagementDataResetToProject` was applied on our behalf and the result
+      messages do not say which.

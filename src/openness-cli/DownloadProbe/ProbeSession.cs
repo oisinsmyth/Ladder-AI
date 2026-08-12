@@ -690,6 +690,23 @@ internal static class ProbeSession
         {
             foreach (ConfigurationPcInterface pc in mode.PcInterfaces)
             {
+                // Name alone does NOT identify an adapter: two Hyper-V adapters on this machine share
+                // a Name byte for byte and differ only in Number (System.Int32, read-only). The #N in
+                // `openness-cli download-plan`'s output is this property, not part of the Name.
+                int pcNumber;
+                try
+                {
+                    pcNumber = pc.Number;
+                }
+                catch (Exception ex)
+                {
+                    pcNumber = ConnectionTarget<IConfiguration>.UnknownPcInterfaceNumber;
+                    log.Line(
+                        $"  WARNING: PC interface '{Safe(() => pc.Name)}' has an unreadable Number: " +
+                        ExceptionReport.Summarise(ex) +
+                        " — it cannot be named on --pc-interface, so it can only be selected if it is unambiguous.");
+                }
+
                 foreach (ConfigurationTargetInterface targetInterface in pc.TargetInterfaces)
                 {
                     var addresses = new List<string>();
@@ -708,6 +725,7 @@ internal static class ProbeSession
                     candidates.Add(new ConnectionTarget<IConfiguration>(
                         Safe(() => mode.Name),
                         Safe(() => pc.Name),
+                        pcNumber,
                         Safe(() => targetInterface.Name),
                         addresses,
                         targetInterface.GetType().FullName ?? nameof(ConfigurationTargetInterface),
