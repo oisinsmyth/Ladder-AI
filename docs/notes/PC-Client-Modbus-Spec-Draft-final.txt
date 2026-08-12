@@ -2810,10 +2810,74 @@ because the OS itself consumes work memory for process images, diagnostics and c
     EVER MEETS A SECOND RIG, THIS IS THE FAILURE THAT WILL LOOK LIKE "THE CODE GOT BIGGER". ***
     Firmware IS readable — `GetOrderCode`/SZL 0x0011 is one of the few things a 1200 does answer.
 
-FAMILY FIGURES (work memory ≥V4.6 / load / retain ≥V4.5 / bit memory) [R]:
-    1211C  75 KB / 1 MB / 14 KB / 4096 B      1215C  200 KB / 4 MB / 14 KB / 8192 B
-    1212C 100 KB / 2 MB / 14 KB / 4096 B      1217C  250 KB / 4 MB / 14 KB / 8192 B
-    1214C 150 KB / 4 MB / 14 KB / 8192 B   <- the rig, and the measurement matches exactly
+FAMILY FIGURES — *** RE-SOURCED 2026-08-12 AFTER THE OWNER CHALLENGED THE SOURCING, AND THE
+CHALLENGE WAS RIGHT. *** The table below now rests on ONE clean primary source, **Siemens
+ST 70 · 2025** (the current SIMATIC ordering catalogue), which carries technical-specification
+tables *** PER ARTICLE NUMBER *** and agrees with our screenshot on both figures it states.
+Every row is keyed on the article number, not the model name, so the old silent assumption
+that a model name implies a memory figure is gone.
+
+    article number          work    load   retain   flag(M)
+    6ES7211-1xE40-0XB0      75 KB   1 MB   14 KB     4096 B
+    6ES7212-1xE40-0XB0     100 KB   2 MB   14 KB     4096 B
+    *** 6ES7214-1xG40-0XB0 150 KB   4 MB   14 KB     8192 B  <- THE RIG (1AG40); work + load
+                                                                confirmed by our own screenshot ***
+    6ES7215-1xG40-0XB0     200 KB   4 MB   14 KB     8192 B
+    6ES7217-1AG40-0XB0     250 KB   4 MB   14 KB     8192 B   (only one article number exists)
+
+*** THE OWNER'S RECOLLECTION — "THREE VERSIONS OF THE 1214C WITH DIFFERENT MEMORY" — IS
+CORRECT, BUT THE DISCRIMINATOR IS THE GENERATION, NOT THE VARIANT [R]: ***
+
+    6ES7214-1xG31-0XB0  (31-series, discontinued) ....  75 KB
+    6ES7214-1xG40-0XB0  (40-series, firmware <=V4.5) .. 100 KB
+    6ES7214-1xG40-0XB0  (40-series, firmware >=V4.6) .. 150 KB   <- ours, and the highest
+
+    WITHIN the 40-series the three 1214C article numbers — `1AG40` (DC/DC/DC, transistor
+    outputs, 4 x 100 kHz PTO), `1BG40` (AC/DC/Relay) and `1HG40` (DC/DC/Relay) — are
+    *** IDENTICAL IN MEMORY ***, stated side by side in one Siemens table [R]. They differ in
+    supply and output type only. Same for 1211C/1212C/1215C; the 1217C has one article number.
+
+*** AND A DATASHEET DEFECT THAT WOULD HAVE PRODUCED EXACTLY THE OPPOSITE CONCLUSION [R]. ***
+Siemens' ordering TITLE STRING disagrees with the technical-data table IN THE SAME DOCUMENT:
+`6ES7214-1BG40-0XB0` is titled "PROGRAM/DATA MEMORY: 75 KB" while its own Memory table reads
+"100 kbyte". Anyone comparing article numbers by product description would conclude the
+variants differ in memory. *** THEY DO NOT — IT IS A STALE TITLE STRING. NEVER COMPARE ARTICLE
+NUMBERS BY THE CATALOGUE DESCRIPTION; READ THE TECHNICAL-DATA TABLE. ***
+
+*** A SIEMENS-INTERNAL CONTRADICTION ON BLOCK COUNT, REPORTED RATHER THAN RECONCILED. *** The
+"1024 blocks total" ceiling recorded above comes from System Manual V4.4 Table 1-2 — a page
+whose 1214C memory figures our screenshot DISPROVES, so it is a contaminated source. The clean
+2025 datasheets instead say "the maximum number of addressable blocks ranges from 1 to 65535.
+There is NO RESTRICTION, the entire working memory can be used." A reading that reconciles them
+exists (65535 = the numbering range, 1024 = concurrent blocks) but it is [I] and is NOT
+asserted. *** IF THE HARNESS'S BLOCK COUNT EVER APPROACHES EITHER FIGURE, MEASURE IT ON THE
+RIG RATHER THAN READING IT OFF A PAGE. ***
+
+*** WHAT THE SWEEP COST: ROUGHLY HALF THE ORIGINAL SOURCING FAILED, AND THE FAILURES WERE ALL
+ONE THING — PRE-V4.5/V4.6 PRINTS. *** Discarded as figure sources: the V4.1 datasheet print for
+our own article number (100/4M/10K — disproved by the screenshot), the CPU firmware-overview
+entry, and a V4.4-vintage 1212C datasheet. System Manual V4.4 is retained for its DEFINITIONS
+and MECHANISMS (which the screenshot cannot disprove) but flagged version-stale for FIGURES;
+its block-size, block-count, DB-size and IEC-timer-cost numbers now have no clean source and
+are UNVERIFIED. *** THE ONE THAT MATTERED MOST SURVIVED: M = 8192 BYTES for our exact article
+number is re-sourced clean on ST 70 · 2025, so the mirror conclusion stands. ***
+
+FIRMWARE, AND WHY IT MUST TRAVEL WITH THE FIGURES: the V4.5 retain increase (10 -> 14 KB) is
+SOLIDLY sourced — the product information names our exact article number and both figures, and
+14 KB matches the screenshot exactly. The V4.6 work-memory increase gives per-CPU "after"
+figures but no "before" and no article-number table, so that half is [R] on the outcome and [I]
+on the framing. *** IT NO LONGER MATTERS, because ST 70 · 2025 states the current figures
+outright and needs no firmware story to hold them up *** — the firmware split is now only an
+EXPLANATION for why old pages disagree, not a prop under the table. But the operational
+consequence survives either way: *** A RIG ON PRE-V4.6 FIRMWARE GENUINELY SHOWS 100 KB / 10 KB,
+SO RECORD THE FIRMWARE VERSION ALONGSIDE EVERY MEMORY BASELINE THE HARNESS CAPTURES. ***
+Cheapest route to it: TIA's Online & diagnostics view — the same session that produced the
+memory reading. NOT from `GetOrderCode`'s V-fields, which are unexplained bytes, and not from
+Openness, which would report the CONFIGURED firmware rather than what is running.
+
+RETAIN IS NOW THE WEAKEST-SOURCED COLUMN FAMILY-WIDE — ST 70 · 2025 omits the retentive row
+entirely. For OUR device it is measured, so the harness is unaffected; for the 1211C and 1212C
+it rests on a single blanket sentence and is thin. Treat with care if a second rig appears.
     *** G2 IS A DIFFERENT MEMORY MODEL, NOT A BIGGER ONE: it SPLITS work memory into SEPARATE
     PROGRAM AND DATA BUDGETS *** (1214C G2: 250 KB program + 750 KB data), 8 MB load, 20 KB
     retain — so on G2 "work memory" is not one number, and a harness adding CODE hits a
