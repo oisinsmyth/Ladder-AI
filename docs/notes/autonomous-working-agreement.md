@@ -143,6 +143,32 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** A CONTRADICTION BETWEEN TWO SECTIONS OF OUR OWN METHOD DOCUMENT, FOUND BY *USING* IT RATHER
+  THAN BY REVIEWING IT. *** Measured 2026-08-13, on the **first live use** of
+  `assertion-enumeration.md`: §1 defines the falsifiability test **existentially per assertion**,
+  §2.2 wrote the same test as a **one-sided** tie-break. On the first real clause they gave
+  **different denominators — 13 assertions or 14** — and the merged reading left *no assertion
+  isolating a whole defect class*, so a vector could have covered it in good faith without ever
+  testing it. **Two people had read the document and neither saw it.**
+    ➜ **A specification is not validated by being read. It is validated by someone trying to follow
+      it and reporting where it stopped being followable.** Prose can be internally inconsistent and
+      still read perfectly, because a reader resolves the ambiguity silently and moves on — the
+      *user* cannot, because they have to emit one answer.
+    ➜ So when a document defines a procedure, **the first execution of it is a test run**, and its
+      author should expect findings against the document rather than against the work.
+- *** A FENCE THAT LEFT THE AGENT UNABLE TO PRODUCE ITS OWN DELIVERABLE. *** Same day, same lane:
+  `assertion-enumerator` is denied `Bash` **deliberately and correctly**, so that it cannot run the
+  converter over a block and let the implementation contaminate the spec-side denominator. But an
+  assertion ID is a **SHA-256**, and that same fence removes every way to compute one. *** THE AGENT
+  THE DESIGN MAKES RESPONSIBLE FOR THE DENOMINATOR CANNOT PRODUCE THE IDENTIFIERS IT IS CITED BY. ***
+  It did the right thing — emitted the normalised text and **no** `id:`, rather than fabricating hex
+  that `IdDoesNotRecompute` exists to catch — but the artifact is unusable until someone else stamps
+  it, and nobody had been assigned that.
+    ➜ **When you fence an agent, enumerate its deliverable and check each part is still reachable.**
+      The fence is usually right; what is missing is the *hand-off* it implies.
+    ➜ **A capability an agent must not have on its INPUTS may still be needed for its OUTPUTS.** Those
+      are different questions and a single tool grant answers both at once — which is why the fence
+      looked complete.
 - *** A PLAUSIBLE MECHANISM INVENTED TO EXPLAIN A GREEN THAT WAS GREEN BECAUSE NOTHING WAS
   EXAMINED. *** This is *empty is not clean* appearing in the **explanations** rather than in the
   checks — and it is how a check keeps its blind spot, because once a green has a reason nobody
