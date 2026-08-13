@@ -127,6 +127,12 @@ running does not license:
       build.* That is a structural property, not a disciplinary one, and it is worth designing for.
     ➜ **Run the guard on the real thing at least once.** Unit tests prove the logic; only the
       device, the binary or the live invocation proves the guard is *reachable*.
+    ➜ *** AND EXECUTE THE GUARD'S OWN ADVICE. A REFUSAL MESSAGE IS A SECOND ARTIFACT AND IT IS
+      UNTESTED. *** Measured the same day: a client's tear-verdict guard was mutation-tested four
+      ways and correct every time, and **the recovery it printed was refused by the guard itself** —
+      it named the one command the guard blocks in exactly that state. The tests checked the
+      *decision*; nobody had read the *sentence* while standing in the situation it describes. Do
+      that, out loud, on the device.
 - **Inference reported as measurement.** `[M]` means measured here, and a `[M]` that turns out to
   be a hand-authored fixture costs more than the gap it hid.
 - **Guessing at hardware, tags or addresses.** Read them, or say they are proposed.

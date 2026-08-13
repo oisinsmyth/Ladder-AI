@@ -1364,6 +1364,50 @@ that adds width without limit and there is a real, if small, per-register term.
     FC03 limit?** First action is the interleaved measurement, **not a policy**: deciding it from
     four confounded runs is precisely the inference-as-measurement this project forbids.
 
+### 🔴 THE GUARD REFUSED ITS OWN PRESCRIBED RECOVERY — 2026-08-13, found only by executing it
+
+The `tear-write` guard added earlier the same day (refuse a verdict computed from a latch the run did
+not cause) was **mutation-tested four ways and correct every time.** Then its advice was followed
+verbatim on the device:
+
+```
+*** exit=4 ***  VERDICT: INVALID - THE TEAR LATCH PREDATES THIS RUN.
+```
+
+*** THE RECOVERY IT PRINTED NAMED THE ONE COMMAND THE GUARD BLOCKS IN EXACTLY THAT STATE. ***
+`tear-write` is the only obvious full-width writer, and the guard refuses it precisely when it is
+needed. The advice was circular and the recovery **could not be performed at all.**
+
+  ➜ **The tests checked the DECISION. Nobody had read the SENTENCE while standing in the situation it
+    describes.** A refusal message is a second artifact and it is untested by anything that tests the
+    logic. *** THIS IS THE FOURTH INSTANCE OF THE DAY'S CLASS *** and the standing rule in
+    `autonomous-working-agreement.md` now carries it: execute the guard's own advice, out loud, on
+    the device.
+  ➜ **Fixed and re-verified by re-provoking and following the printed text verbatim.** The advice now
+    names `timing --sweep <N> --op write` as the primer — `timing` has no verdict to protect — states
+    outright that `tear-write --no-reset` is refused *"which is why it is not the advice"*, and warns
+    the sweep must equal `--pattern-count`. 70 → 72 tests.
+  ➜ **All three `LatchOrigin` outcomes are now observed on the device**, not only in tests, including
+    the `ClearedByReset` branch. And the documented principle held under live conditions: the reset is
+    acknowledged once the block agrees, and was not before.
+
+**The trap is confirmed real rather than merely remembered.** `--pattern-count 16` against the
+123-wide checker latched immediately (`TEAR_INDEX 16, A=1, B=20`) and printed `A1 IS FALSE` — a
+legitimate command with one parameter wrong. What is new is that **the verdict now arrives carrying
+the reason to disbelieve it**: the adjacency warning fires on the run's own result and the onset line
+reports its resolution honestly. The guard correctly does *not* suppress that one — that run genuinely
+caused that latch.
+
+> #### 📌 The one inexact liveness figure of the day, and why it is benign
+>
+> `CHANGE_COUNT = 29` for 30 writes. **Mechanism established by controlled contrast, not inferred from
+> sequence:** a primer of `--iterations 1` leaves the block on generation 1, and `tear-write` also
+> *starts* at generation 1, so its first write does not change `pattern[0]`. A primer of
+> `--iterations 2` gives 30/30. Benign — the verdict is unaffected and the liveness gate only fails on
+> `changes == 0`. **Deliberately not code-fixed:** the remedy is one flag at the call site, and
+> hard-coding `--iterations 2` into the advice would be a magic number defended by nothing. Recorded
+> because exact liveness was claimed earlier and this is its one documented exception.
+
 ## PHASE 2 — THE WALKING SKELETON
 
 **Cost: the first real chunk. Assumptions retired: A4. First code intended to survive.**
@@ -1390,6 +1434,78 @@ a green suite that never demonstrated it can go red is the most expensive illusi
 here. This gate is cheap now and impossible to retrofit honestly later.
 
 ---
+
+### ✅ PHASE 2 IS BUILT — 2.3 THROUGH 2.6, AND THE EXIT CRITERION IS DEMONSTRATED (2026-08-13)
+
+`8f9e65e`, `2a4573c`. **280 → 375 tests**, and `harness.sln` now runs **five** assemblies rather than
+three — worth knowing, because a `tail` of `dotnet test` shows only the last one.
+
+  - **2.3** `Harness.Skeleton` — an FC that ramps a count to a limit while its own start command is
+    on, plus a model written from the block's **specification**: it never names an operator, a rung or
+    an address. That is what keeps the model an independent statement of intent rather than a
+    transcription of the code it checks.
+  - **2.4** `Harness.Wire`, on **NModbus** (phase 1's raw sockets were a deliberate one-off so a
+    library silently retrying or splitting could not be mistaken for the PLC tearing). `MirrorClient`
+    exposes **slot indices, not registers**, so a write outside the region is *unaddressable* rather
+    than rejected by a check someone could skip.
+  - **2.5** Both of D33's checks and D37's later-scan commit, enforced against the observed scan
+    counter.
+  - **2.6** Version register: a `%MD` literal in the copy layer, and a client check classifying
+    Confirmed / Absent / Stale / **WordOrderSuspect** / Unsettled, with a settling window it measured.
+
+> #### 🎯 THE EXIT CRITERION, AND HOW IT WAS MET
+>
+> *** GREEN/RED IS DEMONSTRATED BY EXECUTING THE GENERATED IR TEXT *** through a small interpreter for
+> the subset the generators emit — **not by flipping a C# flag**, which would have tested the harness
+> and not the logic. The two builds differ by **one line**, which converts to a different SimaticML
+> `Part` (`Lt` → `Le`, verified through the real converter).
+>
+> **And the defect is also shown INVISIBLE under a different vector** — so the RED is not a harness
+> that reddens everything, which is the way this gate is usually failed while looking passed.
+
+**Still owed on the device**, and stated as owed rather than assumed: that both builds compile and
+download and give the same two results; the **start-bool bit order** (still `[I]` — the simulator and
+`BitAddressOf` agree, but *both from the same premise*, so they are not independent); the 32-bit word
+order; and `MB_SERVER` against this map.
+
+#### 🔴 The 0.1b correction — and the brief that asked for it was half wrong
+
+The dispatch said the address rule was unimplemented. **It was not — the previous lane had built it.**
+What was real is the second half: *** THE ADDRESS RULE COULD BE SATISFIED VACUOUSLY THREE WAYS *** —
+an object set with no address at all (passed with the mirror rule never executing), a declared tag line
+with no parseable address (silently skipped), and an absolute address written outside a tag table
+(never scanned). `AddressesExamined` is now a **separate denominator** and `Passed` requires both to be
+non-zero, with no relaxing flag. Which is the same shape as everything else found today: the rule was
+right, and *nothing established that it had run.*
+
+#### Two admissions from the lane's own testing, both worth keeping
+
+  1. *** ONE OF ITS OWN TESTS COULD NOT FAIL. *** Neutering the one-transaction commit into a
+     per-register loop left the suite green — the test used a **3-slot** map whose start bools fit in
+     a single register, so the loop and the transaction were indistinguishable. Rewritten against 17
+     slots. **A test that cannot fail has proven nothing**, and only mutation found it.
+  2. **The negative-test script itself had a defect:** restoring a file with `mv` gave it an older
+     mtime than the build output, so MSBuild served a **stale binary** and a clean tree reported a
+     failure. Every break still compiled, and the two runs that could have been contaminated were
+     re-run clean and agreed. *Recorded rather than quietly re-run* — the tooling that verifies the
+     tests is not itself above suspicion.
+
+#### Four things the spec and plan do not say
+
+  1. **The minimal copy layer lags results by one scan** (it runs before the block). Invisible beneath
+     the 3.3-scan sampling floor, but a real property of 2.2's design rather than an accident.
+  2. *** A COMPLETION FLAG IS NOT A SETTLING SIGNAL. *** The defective build raises `Done` at 10 and
+     then ramps on to 15. **A faster-than-floor poll would read mid-ramp and report a WRONG ANSWER,
+     not an error** — the worst available outcome, and the one the observability floor otherwise
+     hides. Asserted, so a future change fails a test.
+  3. §9's two-register version register is only free to check **if placed in the control region**;
+     anywhere else DB-6's per-batch check costs a round trip.
+  4. `DWord` tags and `16#........` literals round-trip byte-identically — **§9's own worked line had
+     never been through the toolchain, and its pre-audit `%MW` form would not have compiled.**
+
+All five generated artifacts round-trip `to-xml` → `to-ir --no-sidecar` byte-identically through the
+Release converter. Nothing written into `ir/`; no rig or Portal contact; `NModbusTransport.Connect`
+has never been called.
 
 ## PHASE 3 — TWO SLOTS
 
