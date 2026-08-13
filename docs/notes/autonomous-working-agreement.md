@@ -143,6 +143,26 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** OUR OWN OUTPUT BECAME THE STANDARD IT WAS BEING JUDGED AGAINST. *** Measured 2026-08-13, and
+  it wore **two faces in one defect** — `converter to-xml` omitted the empty `InOut` section that
+  every real TIA instance-DB export declares, which cascaded into **26 spurious differences** and
+  made *** EVERY INSTANCE DB PERMANENTLY DRIFTED, WITH `drift-check` UNABLE TO SEE THE CONTENT
+  UNDERNEATH. ***
+    ➜ **A FIXTURE AUTHORED BY READING OUR OWN OUTPUT IS NOT A FIXTURE, IT IS A MIRROR.** Both
+      hand-authored instance-DB fixtures declared `Static` alone — *our writer's shape* — so every
+      round trip agreed with the writer and **not one of them could have failed.** ➜ *Read a fixture's
+      expectations out of the foreign artifact, never out of what we emit.* (Same root as the
+      `Modbus_*` names taken from hand-authored fixtures: *the fixtures were evidence about the
+      SHAPE, never the NAME.*)
+    ➜ *** AND THE DEFECT WAS FILED AS A PROPERTY OF THE ANSWER KEY. *** Both golden baselines
+      recorded the three drifted iDBs as *"interface cascade from its FB"* — a deferred re-export,
+      i.e. **the reference data's fault**. The real cause sat in a raw test's own entry text as a
+      *co-factor of the deferral*. **A defect in our output, written down as an accepted tolerance of
+      the corpus, becomes a closed question** — nobody re-opens a difference that already has an
+      entry explaining it. It survived a re-export *from TIA* still red and was not re-examined.
+      ➜ **When a baseline entry blames the reference data, ask once whether our side produced it.**
+        An accepted-tolerance entry is the most durable hiding place a defect has, because it is
+        indistinguishable from diligence.
 - *** A CONTRADICTION BETWEEN TWO SECTIONS OF OUR OWN METHOD DOCUMENT, FOUND BY *USING* IT RATHER
   THAN BY REVIEWING IT. *** Measured 2026-08-13, on the **first live use** of
   `assertion-enumeration.md`: §1 defines the falsifiability test **existentially per assertion**,
