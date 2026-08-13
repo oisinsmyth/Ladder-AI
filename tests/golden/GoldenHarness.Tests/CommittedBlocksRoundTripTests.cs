@@ -56,7 +56,7 @@ public class CommittedBlocksRoundTripTests
     /// Asserted in BOTH directions: an entry here must STILL diverge, so a fresh export silently
     /// closing the gap turns the suite red and tells you to delist it.
     /// </summary>
-    private static readonly Dictionary<string, string> KnownIncompleteAnswerKeys = new(StringComparer.Ordinal)
+    internal static readonly Dictionary<string, string> KnownIncompleteAnswerKeys = new(StringComparer.Ordinal)
     {
         // Surfaced 2026-08-13 by converter `ae62f76` (an Interface is compared, not discarded).
         // NodeStatusAlarms is one of four 2026-07-10 seed artifacts committed with their TIA scaffolding

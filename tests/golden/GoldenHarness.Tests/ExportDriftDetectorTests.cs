@@ -18,6 +18,12 @@ public enum DriftDisposition
     /// <summary>
     /// The committed EXPORT is not a faithful TIA artifact, so the divergence is in the answer key and
     /// not in our output. Clears on a fresh export. Never gates.
+    ///
+    /// *** THIS IS A CLAIM ABOUT THE CORPUS, NOT ABOUT THE CONVERTER, AND IT IS THE DISPOSITION MOST
+    /// EASILY REACHED FOR AS AN EXCUSE *** — "our output is right and the answer key is wrong" is what
+    /// every failing comparison feels like from the inside. So it is the one disposition with a
+    /// MECHANISED EVIDENCE BAR rather than a precedent to point at; see
+    /// <see cref="ExportDriftDetectorTests.EveryIncompleteExportClaim_MeetsTheEvidenceBar"/>.
     /// </summary>
     IncompleteExport,
 
@@ -70,22 +76,31 @@ public class ExportDriftDetectorTests
 
         // ---- test-project001: RULED, REPAIR UNFINISHED -----------------------------------------
         // Surfaced 2026-08-13 by BlockInterfaceFidelityTests (raw, Normalizer-free) and confirmed by
-        // drift-check once ae62f76 landed. Both UDTs had been edited by the 2026-07-17 C-115 handshake
-        // pass and never re-exported. Owner ruling: REMOVE THE MEMBER — THE COMMITTED EXPORT IS THE
-        // TRUTH DRIVER.
+        // drift-check once ae62f76 landed. Both UDTs carry the 2026-07-17 C-115 handshake pass — an
+        // `AutoStartSignal : Bool` member plus three member comments — which was never re-exported.
         //
-        // *** THE RULING WAS APPLIED TO THE MEMBER ONLY, AND THE SAME PASS ALSO ADDED COMMENTS. ***
-        // `AutoStartSignal : Bool` is gone from both .ir files, and both are STILL drifted. Measured
-        // with `converter compare` after the edit — the residue is member COMMENTS present in the .ir
-        // and absent from the export:
-        //     UDT_PusherIO             -> Cycling
-        //     UDT_ShredderSequencerIO  -> EnableUpstream, InCycle
-        // Same pass, same 2026-07-17 ruling, same never-re-exported cause. Applying the ruling as
-        // stated removes those three comments too (lad-coder, hard rule 8 — not this lane's edit).
+        // *** THE RULING WAS REVERSED, AND THE SECOND ONE IS THE ONE IN FORCE. *** The first reading
+        // was "remove the member, the committed export is the truth driver". Applying it left both
+        // UDTs STILL drifted, because the same pass also added comments (UDT_PusherIO -> Cycling;
+        // UDT_ShredderSequencerIO -> EnableUpstream, InCycle). Putting the bigger question up rather
+        // than deleting three more lines is what produced the actual answer: THE THING THAT DRIFTED IS
+        // ITSELF AN OWNER RULING, deliberately made and never carried into TIA.
+        //
+        // OWNER RULING (b), 2026-08-13, IN FORCE: THE IR WAS RIGHT AND THE EXPORT IS STALE. Task 09
+        // should have reached the controller. The repair is therefore NOT a deletion — it is: restore
+        // the member, import task 09 into the project, re-export, so simatic-ml/ finally reflects what
+        // the IR has said since July. In flight with lad-coder (Portal).
+        //
+        // WHEN THAT LANDS, BOTH ENTRIES SHOULD BE DELETED OUTRIGHT — not re-filed as Deferred, and not
+        // trimmed to some residue. The member coming back is part of the repair, not a new drift.
+        //
+        // *** AND DO NOT PREDICT THE RESULTING COUNT. *** It has been predicted twice on this exact
+        // pair (6/17 both times, by two independent people) and measured 8/15 both times. Let the
+        // drifted-set assertion above tell you what actually happened, and measure it.
         new("UDT_PusherIO", DriftDisposition.RepairInProgress,
-            "C-115 pass residue: the `Cycling` member COMMENT is in the .ir and not in the export. `AutoStartSignal` was removed; the comment was not."),
+            "Owner ruling (b) 2026-08-13: the IR is right and the EXPORT is stale — the 2026-07-17 C-115 pass (member `AutoStartSignal` + the `Cycling` comment) never reached TIA. Repair = restore, import task 09, re-export. Delete this entry when the fresh .xml is committed."),
         new("UDT_ShredderSequencerIO", DriftDisposition.RepairInProgress,
-            "C-115 pass residue: the `EnableUpstream` and `InCycle` member COMMENTS are in the .ir and not in the export. `AutoStartSignal` was removed; the comments were not."),
+            "Owner ruling (b) 2026-08-13: the IR is right and the EXPORT is stale — the 2026-07-17 C-115 pass (member `AutoStartSignal` + the `EnableUpstream`/`InCycle` comments) never reached TIA. Repair = restore, import task 09, re-export. Delete this entry when the fresh .xml is committed."),
     };
 
     public static IEnumerable<object[]> Projects()
@@ -164,6 +179,95 @@ public class ExportDriftDetectorTests
             "\n\nFinish the repair (then delete the entry), or — if the ruling has changed and this drift " +
             "is now accepted — re-file it as Deferred WITH the new ruling in its Reason. What must not " +
             "happen is that it stays here looking like something someone already agreed to.");
+    }
+
+    /// <summary>
+    /// *** THE EVIDENCE BAR FOR <see cref="DriftDisposition.IncompleteExport"/>, MECHANISED. ***
+    ///
+    /// <para>"Our output is right and the answer key is wrong" is what EVERY failing comparison feels
+    /// like from the inside, so this disposition would otherwise become the excuse of choice, and
+    /// `NodeStatusAlarms` would become the precedent people point at rather than the standard they have
+    /// to meet. What earned it there was specific and checkable, so it is checked:</para>
+    ///
+    /// <list type="number">
+    /// <item><b>The committed export is independently identifiable as NOT a faithful TIA artifact.</b>
+    /// The marker this corpus has is a missing <c>&lt;DocumentInfo&gt;</c> envelope — every genuine V20
+    /// export carries one, and the four 2026-07-10 seed files were committed with TIA's scaffolding
+    /// trimmed off. That is a property of the FILE, checkable without any opinion about our output, and
+    /// it is what this test enforces.</item>
+    /// <item><b>A genuine peer export exists.</b> At least one <c>&lt;DocumentInfo&gt;</c>-carrying
+    /// export of the same root kind must be in the corpus — otherwise "TIA would have carried this
+    /// element" is an assertion with nothing behind it. (`ScaleValue.xml` is the peer that proves a real
+    /// FC export carries an <c>&lt;Interface&gt;</c>.)</item>
+    /// </list>
+    ///
+    /// <para>Two further conditions cannot be mechanised here and are the AUTHOR's to satisfy and record
+    /// in the Reason — state them or do not use this disposition:</para>
+    /// <list type="number">
+    /// <item><b>The difference is LOCALISED AND ENUMERATED</b>, with <c>converter compare</c>, not
+    /// "VERDICT: DIFFERS". `NodeStatusAlarms` was ONE difference and the Reason says which.</item>
+    /// <item><b>Every difference is an ADDITION of TIA's own defaults</b> — an element the trimmed
+    /// export lacks and a genuine one carries. *** IF ANY DIFFERENCE IS A CONTENT CHANGE — A MEMBER, A
+    /// VALUE, A WIRE, A TYPE — IT IS NEVER IncompleteExport, *** however sure you are that we are right.
+    /// That is a drift, and the two UDTs above are what happens when you rule on one without asking why
+    /// it is there.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public void EveryIncompleteExportClaim_MeetsTheEvidenceBar()
+    {
+        var repo = ToolPaths.RepoRoot();
+        var allExports = ExportRoundTripRunner.CommittedExports().ToList();
+        Assert.True(allExports.Count > 0, "no committed exports found — empty is not clean");
+
+        // Vacuity guard: the marker only discriminates if some exports actually carry it. If nothing in
+        // the corpus had a <DocumentInfo>, this test would wave everything through.
+        var faithful = allExports.Where(e => File.ReadAllText(e.ExportPath).Contains("<DocumentInfo")).ToList();
+        Assert.True(faithful.Count > 0,
+            "no committed export carries a <DocumentInfo>, so 'missing DocumentInfo' distinguishes " +
+            "nothing and this bar is vacuous. Empty is not clean.");
+
+        // Every site that can file an IncompleteExport claim, so the bar cannot be dodged by filing in
+        // the easiest of the three.
+        var claims = Baseline.Where(d => d.Disposition == DriftDisposition.IncompleteExport).Select(d => d.Block)
+            .Concat(CommittedBlocksRoundTripTests.KnownIncompleteAnswerKeys.Keys)
+            .Concat(SynthesisParityTests.KnownIncompleteAnswerKey.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var block in claims)
+        {
+            var export = allExports.FirstOrDefault(e => e.Name == block);
+            Assert.True(export.Name is not null,
+                $"'{block}' is filed as IncompleteExport but has no committed export at all — that is a " +
+                "missing answer key, not an incomplete one, and belongs in KnownMissingExports.");
+
+            Assert.True(
+                !File.ReadAllText(export.ExportPath).Contains("<DocumentInfo", StringComparison.Ordinal),
+                $"'{block}' is filed as IncompleteExport, but its committed export CARRIES a " +
+                "<DocumentInfo> envelope — i.e. it is a faithful TIA artifact and there is no corpus " +
+                "defect to blame. The difference is therefore ours until proven otherwise. " +
+                "'Our output is right and the answer key is wrong' is what every failing comparison " +
+                "feels like from the inside; this bar exists so that it has to be shown rather than felt.");
+
+            var kind = RootKindOf(export.ExportPath);
+            Assert.True(
+                faithful.Any(e => RootKindOf(e.ExportPath) == kind),
+                $"'{block}' is filed as IncompleteExport (root <{kind}>) but the corpus holds no genuine " +
+                $"<DocumentInfo>-carrying export of that kind, so there is nothing to establish what a " +
+                "real TIA export of it looks like. Without a peer, 'the answer key is incomplete' is an " +
+                "assertion with nothing behind it.");
+        }
+    }
+
+    private static string RootKindOf(string exportPath)
+    {
+        using var reader = new StreamReader(exportPath);
+        var doc = System.Xml.Linq.XDocument.Load(reader);
+        return doc.Root?.Elements()
+            .Select(e => e.Name.LocalName)
+            .FirstOrDefault(n => n.StartsWith("SW.", StringComparison.Ordinal)) ?? "?";
     }
 
     /// <summary>

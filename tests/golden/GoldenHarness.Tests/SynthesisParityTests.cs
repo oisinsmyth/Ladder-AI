@@ -63,7 +63,7 @@ public class SynthesisParityTests
     /// Asserted in both directions — an entry that starts passing turns the suite red so it gets moved
     /// into <see cref="KnownGreen"/>, where it becomes a hard guard again.
     /// </summary>
-    private static readonly Dictionary<string, string> KnownIncompleteAnswerKey = new(StringComparer.Ordinal)
+    internal static readonly Dictionary<string, string> KnownIncompleteAnswerKey = new(StringComparer.Ordinal)
     {
         ["NodeStatusAlarms"] = "committed export is a trimmed 2026-07-10 seed artifact carrying no <Interface>; sole difference is that element (measured with `converter compare`). Clears on a fresh export — see CommittedBlocksRoundTripTests.KnownIncompleteAnswerKeys.",
     };

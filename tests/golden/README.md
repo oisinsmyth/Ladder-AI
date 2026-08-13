@@ -364,3 +364,32 @@ passing turns the suite red and tells you to promote it back to a hard guard.
 discarded, and the drifted set immediately grew by three. Until that fix `drift-check` reported `MATCH`
 on **any** UDT no matter what had changed, because a UDT's interface *is* its whole definition and the
 Normalizer discarded any interface with no `Static` section.
+
+### `IncompleteExport` has to be earned, not cited (2026-08-13)
+
+`IncompleteExport` says *the answer key is wrong, not us*. **That is a claim about the corpus, not about
+the converter, and it is what every failing comparison feels like from the inside** — so it is the one
+disposition most likely to be reached for later as an excuse, with `NodeStatusAlarms` cited as precedent.
+It is a **bar**, not a precedent, and two of its four conditions are mechanised
+(`EveryIncompleteExportClaim_MeetsTheEvidenceBar`, which covers **all three** filing sites so it cannot be
+dodged by filing in the easiest one):
+
+1. **Mechanised** — the committed export must be independently identifiable as *not* a faithful TIA
+   artifact. The marker this corpus has is a **missing `<DocumentInfo>` envelope**: every genuine V20
+   export carries one, and the four 2026-07-10 seed files were committed with TIA's scaffolding trimmed.
+   That is a property of the *file*, checkable without any opinion about our output.
+2. **Mechanised** — a **genuine peer export of the same root kind** must exist in the corpus, or "TIA
+   would have carried this element" has nothing behind it. (`ScaleValue.xml` is what proves a real FC
+   export carries an `<Interface>`.)
+3. **Author's, stated in the `Reason`** — the difference must be **localised and enumerated** with
+   `converter compare`, never "VERDICT: DIFFERS". `NodeStatusAlarms` was *one* difference and its Reason
+   says which.
+4. **Author's, stated in the `Reason`** — every difference must be an **addition of TIA's own defaults**:
+   an element the trimmed export lacks and a genuine one carries. *** IF ANY DIFFERENCE IS A CONTENT
+   CHANGE — A MEMBER, A VALUE, A WIRE, A TYPE — IT IS NEVER `IncompleteExport`, *** however sure you are
+   that we are right. That is drift, and the two UDTs are what happens when you rule on one without first
+   asking why it is there.
+
+The vacuity guard matters as much as the bar: if *no* export carried a `<DocumentInfo>`, "missing
+`<DocumentInfo>`" would distinguish nothing and the check would wave everything through, so that is
+asserted too.
