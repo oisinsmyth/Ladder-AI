@@ -2728,6 +2728,72 @@ when non-zero is indistinguishable from a check that does not exist.*
     the real gateway's call to the finder **has never run against a live project.** *A live
     `sanity-check` against a project carrying a known duplicate would settle it.*
 
+### 🔴🔴🔴 `openness-cli compile <project>` HAS ALWAYS COMPILED THE HARDWARE, NOT THE PROGRAM (2026-08-13, `d36ad20`)
+
+Openness exposes **three** PLC compilers, and `CompileDeviceItem` reaches the wrong one:
+
+| scope | reached from | its actual message tree |
+|---|---|---|
+| **station** | `Device` | `Hardware configuration` **and** `Program blocks` |
+| **device item** | `DeviceItem` | `Hardware configuration` **ONLY** ← *** WHAT `compile` USES *** |
+| **software** | `PlcSoftware` | `Program blocks` **only** ← *** NEVER ONCE INVOKED BEFORE TODAY *** |
+
+The fallback to `PlcSoftware` fires only when the device item returns null, **which on an S7-1200 never
+happens — dead code.**
+
+**Measured verbatim, same project, minutes apart, with an uncompiled block sitting in it:** `compile`
+printed only *"Hardware was not compiled"* — *** PROGRAM BLOCKS ABSENT, NOT "UP TO DATE" *** — while
+`compile --software` printed *"FC_ModbusTCP_Sample (FC8): Block was successfully compiled."*
+
+> #### 🧭 THIS IS THE REAL MECHANISM BEHIND FI-52
+>
+> FI-52 was recorded as *"a device-level compile does not clear the inconsistent flag"*, which reads
+> like a TIA quirk to be worked around. *** IT DOES NOT CLEAR THE FLAG BECAUSE IT NEVER LOOKS AT THE
+> PROGRAM. *** Which is also exactly why it reported `Success, errors=0` over **nineteen uncompiled
+> blocks** — the measurement that produced FI-52 in the first place. The workaround was right; the
+> reason recorded for it was not.
+>
+> **The same correction applies to `sanity-check`:** its `Device compiles:` line is this hardware-only
+> compile, *** SO ITS VALUE HAS ALWAYS BEEN THE `INCONSISTENT:` ENUMERATION AND ITS COMPILE HALF WAS
+> NEVER A PROGRAM CHECK. *** `compile-all` is **unaffected** — its per-block compiles are real.
+
+### 🔴 THERE IS NO REBUILD-ALL THROUGH OPENNESS — measured, not inferred
+
+`Compile()` **takes no arguments**, and every compiler reports `attributes: (none) / invocations:
+Compile()`. *** SO EVERY OPENNESS COMPILE IS A DELTA COMPILE. TIA's GUI HAS BOTH; OPENNESS HAS ONLY
+ONE. *** And the known cure for *"An internal consistency error has occurred"* is the GUI's
+**rebuild-all**, which has **no CLI substitute at all**.
+
+  ➜ *** AN UNATTENDED AGENT THAT HITS THAT ERROR CANNOT CLEAR IT AND NEEDS A HUMAN. *** That is a
+    standing limit on unattended operation, not a defect to be fixed — and it should be written into
+    the working agreement rather than rediscovered.
+
+### 📍 THE DOWNLOAD-MESSAGE QUESTION, ANSWERED SMALLER
+
+**The block-level detail is nowhere reachable**, and the search was exhaustive rather than assumed:
+not in the exception (*two sentences, both the same sentence* — and `download-probe` already prints
+every detail message, **so this is the API, not our reporting**); no `DownloadResult` exists on the
+throw path; and **not on disk** — the project's `Logs/` is empty, ~100 `OnlineService` logs are all
+**0 bytes**, Siemens telemetry logs Openness *call names* only, and TIA's live 8 MB ETW trace carries
+the block's **name** but **zero** occurrences of `successfully compiled`, `Compiling finished`,
+`could not be compiled` or `errors:`.
+
+  ➜ *** THE ROUTE TO THAT GRANULARITY IS TO RUN THE COMPILE THAT FINDS IT BEFORE THE DOWNLOAD DOES. ***
+    Which is what the scope finding above makes possible for the first time.
+
+**Built:** `compile-scopes` (read-only survey), `compile --software`, `compile --station`, and
+`download-probe --to-folder` — a non-destructive `Download(DirectoryInfo, …)` that **reaches the
+download's compile path** (verified: it raises the same `ConsistentBlocksDownload` configuration) with
+**nothing on the wire**. **609 tests**, Release never rebuilt.
+
+  ⚠️ **Two caveats not buried:** *** THE FAILURE WAS NOT REPRODUCED *** — re-import, per-block compile,
+    `sanity-check` and a real device download all succeeded, and no mechanism is being written up that
+    was not measured. (Useful for next time: **every failing run raised ZERO configurations**, so the
+    compile fails *before the first callback* — reproduction needs no `--disruptive` and carries no
+    CPU-stop risk.) And the rebuilt `download-probe.exe` **was approved for Openness by hand** —
+    flagged deliberately, because that binary is designed *not* to self-approve so that someone
+    notices.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
