@@ -11,22 +11,22 @@ INTERFACE
     Remanence : Bool BAREPARAM INFORMATIVE "=True, if remanent data are available"
   CONSTANT
 
-NETWORK 1 "Input Mapping"
+NETWORK 1 "Hopper-Blockage Stimulus Model"
+  COMMENT "Advances the commanded timeline the hopper-blockage monitor is tested against and presents it to the input buffer's test members. It runs ahead of the input map because for a commanded input the model is the field: the map that follows chooses between the terminal and the test member, and it must find this scan's commanded state rather than the previous scan's. Outside a run it drives nothing and the map reads the field."
+  CALL FB_HopperBlockageStim(iDB_HopperBlockageStim, EN := TRUE)
+
+NETWORK 2 "Input Mapping"
   CALL FC_Inputs(EN := TRUE)
 
-NETWORK 2 "Control"
+NETWORK 3 "Control"
   CALL FC_ControlMain(EN := TRUE)
 
-NETWORK 3 "Alarms"
+NETWORK 4 "Alarms"
   CALL FC_AlarmsMain(EN := TRUE)
 
-NETWORK 4 "Output Mapping"
+NETWORK 5 "Output Mapping"
   CALL FC_Outputs(EN := TRUE)
 
-NETWORK 5 "Modbus Server"
-  COMMENT "Serves the harness mirror in marker memory to a Modbus TCP client. It runs ahead of the copy layer below so that the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as the copy layer last left it, and what the client writes is in place before the copy layer next reads it."
+NETWORK 6 "Modbus Server"
+  COMMENT "Serves the harness mirror in marker memory to a Modbus TCP client. It runs last so the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as this scan left it, and what the client writes is in place before the next scan reads it."
   CALL FB_Comms_ModbusServer(iDB_Comms_ModbusServer, EN := TRUE)
-
-NETWORK 6 "Hopper-Blockage Stimulus Model"
-  COMMENT "Advances the commanded timeline the hopper-blockage monitor is tested against. Its outputs currently drive nothing: reaching the monitor means running between the field read and the control, so that the control sees this scan's commanded state rather than this scan's field state, and this call is not at that position."
-  CALL FB_HopperBlockageStim(iDB_HopperBlockageStim, EN := TRUE)

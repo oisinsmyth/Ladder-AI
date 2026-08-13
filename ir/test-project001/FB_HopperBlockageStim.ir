@@ -161,3 +161,14 @@ NETWORK 20 "Re-Arm For The Next Run"
   COMMENT "Clears the completion flag once the harness has dropped the start bool, and clears the retained pre-boundary flag once a scenario has completed. Clearing the retained flag here rather than on the start edge is what lets it survive the CPU restart it exists for: a run that has finished its scenario has no further use for it, and the run after that needs a clear-down again."
   RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running
   RCOIL PreBoundaryDone := Stim.ScenarioDone
+
+NETWORK 21 "Force The Monitored Inputs"
+  COMMENT "Presents the commanded plant to the input map through the input buffer's own test-injection members, which is the facility the input map already provides: with the test flag set the map ignores the physical terminal and takes each input from its test member. Only the flag and the two inputs this model commands are written, and only while a run is under way - outside a run the flag is low and every input comes from the field exactly as it otherwise would. The operator reset is written directly because it is not a field input and does not pass through the map."
+  COIL DB_Input.Test[0] := Running
+  COIL DB_Input.Test[5] := Running AND Stim.Run
+  COIL DB_Input.Test[8] := Running AND Stim.Hopper
+  COIL DB_Controls.FaultReset := Running AND Stim.FaultReset
+
+NETWORK 22 "Hold The Reverse Feedback Clear"
+  COMMENT "The model commands one running feedback, and the plant-running condition the monitor sees is the forward feedback or the reverse one. The reverse feedback's test member is therefore held clear for the whole run rather than left at whatever it happened to contain, so that the commanded stop is a stop and not merely the forward feedback going low."
+  RCOIL DB_Input.Test[6] := Running
