@@ -3490,6 +3490,50 @@ how much now hangs off a single measured fact.
     record *"CPU left stopped, recovery download owed"* — but that is a change to committed behaviour
     **and this commit was already correcting a specification.**
 
+### ✅ THE FOUR `openness-cli` DEFECTS FIXED — and two findings outrank their fixes (2026-08-13, `96783e2`)
+
+**661 tests, Debug, Portal never attached** — all four were decidable offline while the rig lane held it.
+
+**1. The registry fails SAFE — and `[]` IS THE DESIGN, not a recording bug.** `MarkLaunched` writes on
+launch; `Unmark` **deletes on successful open** — *** THE RECORD IS ERASED AT EXACTLY THE MOMENT IT
+BECOMES INTERESTING TO A READER. *** The registry only ever tracks **empty orphans**, so
+`MarkedByThisTool` is *structurally incapable* of being true for a process in use. Its one consumer is
+`!hasProject && IsMarkedAsLaunchedByThisTool(pid)` — an empty registry makes the second conjunct false,
+so it **never reuses and always launches fresh.** *Safe and wasteful, exactly as CLAUDE.md's stated
+property requires.* **All six call sites checked; nothing fails open.**
+
+  ➜ *** FIXED WITH A SECOND, REPORT-ONLY LAUNCH HISTORY THAT IS NEVER UNMARKED AND CONSULTED BY NO
+    DECISION — DELIBERATELY NOT BY RELAXING THE GUARD, SINCE THE OBVIOUS FIX WOULD EDIT A SAFETY RULE
+    TO SATISFY A REPORTING NEED. *** A test asserts the two remain different methods.
+
+**2. The impossible timestamp: `AcquisitionTime`, which our own doc comment called *"an age signal"*.**
+*** IT IS NOT THE PROCESS'S AGE — AND WHAT IT *DOES* MEAN WAS NEITHER ESTABLISHED NOR GUESSED. *** What
+changed is that it is no longer *presented* as something it is not: the table now leads with `STARTED`
+(the OS's own `Process.StartTime`), `ACQUIRED` carries **`! BEFORE START`** when it contradicts the OS,
+and an unreadable start **claims nothing rather than flagging on unknown data.**
+
+**3. `portal-status` gains an `OS-ONLY` class** and an `OPENNESS-INVISIBLE:` count — and **an OS-only
+process is never read as "empty", since its null project is an absence of information, not a fact.**
+
+**4. Exit 12: on the device path it was UNREACHABLE CODE** — a missing arm, from the same lane's own
+commit an hour earlier. *** AND ITS OWN DEFECT-4 TESTS, WRITTEN THAT HOUR, PASSED OVER THE BUG: *** the
+decision lived **inline in a method needing Portal, a device and a download**, so the only assertable
+part was `Classify` — **which was already correct.** Now `ProbeVerdict.Decide` is *** A PURE FUNCTION,
+MADE ONE PRECISELY SO A TEST CAN INTERROGATE IT WITHOUT A RIG. *** And the finding it should have
+reported is real: **the raised-configuration set depends on `--options`.**
+
+> #### ⚖️ AND THE LANE CORRECTED ITS OWN EARLIER REPORT, UNPROMPTED
+>
+> It had written that the stale-handle exceptions (`Collection was modified`,
+> `EngineeringObjectDisposedException`) were *"consistent with another lane running `import-all`"*.
+> *** GIVEN THAT THE THROWS KILL THE ATTACHED PORTAL PROCESS, A KILLED-AND-RELAUNCHED PORTAL IS AT
+> LEAST AS GOOD AN EXPLANATION — STALE HANDLES ARE EXACTLY WHAT THAT LOOKS LIKE. *** It asserts
+> neither, and says plainly that **its earlier guess now has a competitor and should not have been
+> offered.**
+>
+> **That further weakens the orchestrator's contention diagnosis**, which already stood as *unexamined
+> rather than retired*. It now has a **better-supported competitor**, and remains unexamined.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
