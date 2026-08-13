@@ -49,6 +49,99 @@ public class ProbeReportTests
         return JsonSerializer.Serialize(payload);
     }
 
+    // ---- THE FIRST-CLASS MANIFEST (the probe's `loadManifest`, 2026-08-13) -------------------------
+
+    private static string WithLoadManifest(string? source, bool available, string[]? loaded, string verdict = "Transferred")
+    {
+        var manifest = new Dictionary<string, object?>
+        {
+            ["available"] = available,
+            ["source"] = source,
+            ["loadedObjects"] = loaded,
+            ["loadedObjectCount"] = loaded?.Length,
+            ["verdict"] = available ? verdict : null,
+            ["verdictReason"] = available ? "at least one item was reported loaded by name." : null,
+            ["unrecognisedMessageCount"] = available ? 0 : (int?)null,
+        };
+
+        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["tool"] = "download-probe",
+            ["exitCode"] = 0,
+            ["loadManifest"] = manifest,
+
+            // The log is STILL embedded and STILL describes a different set. If the reader silently fell
+            // back to it, this test would pass for the wrong reason — so the two are deliberately made to
+            // disagree.
+            ["log"] = ReadFixture("differential-one-object.txt").Replace("\r\n", "\n").Split('\n'),
+        });
+    }
+
+    /// <summary>
+    /// *** THE SCRAPE IS GONE. *** The probe now emits the manifest built by
+    /// <c>DownloadResultAdapter</c> — first-hand, off the live <c>DownloadResult</c>, which is the path
+    /// <c>ProbeLogReader</c>'s own documentation names and which nothing had ever used. This is F2.
+    /// </summary>
+    [Fact]
+    public void The_first_class_loadManifest_is_preferred_over_the_embedded_log()
+    {
+        var report = ProbeReport.FromStdout(WithLoadManifest("DownloadResultAdapter", true, new[] { "FC_A", "FB_B", "DB_C" }));
+
+        Assert.Equal(new[] { "DB_C", "FB_B", "FC_A" }, report.Manifest.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(TransferVerdict.Transferred, report.Verdict);
+        Assert.Equal("DownloadResultAdapter", report.Source);
+        Assert.Contains("FIRST-HAND", report.Detail, StringComparison.Ordinal);
+
+        // The embedded log names DB_Data01 and nothing else. If it had been read, this would be it.
+        Assert.DoesNotContain("DB_Data01", report.Manifest);
+    }
+
+    /// <summary>
+    /// <c>available: false</c> is <b>"nobody looked"</b>, never "TIA loaded nothing". The probe emits every
+    /// list as null in that case precisely so the two cannot be confused; reading a null as an empty set
+    /// here would undo that at the first consumer.
+    /// </summary>
+    [Fact]
+    public void An_unavailable_loadManifest_is_Undetermined_and_NOT_an_empty_load()
+    {
+        var report = ProbeReport.FromStdout(WithLoadManifest("none", available: false, loaded: null));
+
+        Assert.Equal(TransferVerdict.Undetermined, report.Verdict);
+        Assert.NotEqual(TransferVerdict.NothingTransferred, report.Verdict);
+        Assert.Empty(report.Manifest);
+        Assert.False(report.ManifestAvailable);
+        Assert.Contains("nobody looked", report.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A manifest the probe says came from <c>ProbeLogReader</c> is USED and LABELLED, not upgraded. The
+    /// source is recorded by whoever built the feedback and is never assumed by the reader.
+    /// </summary>
+    [Fact]
+    public void A_manifest_the_probe_says_is_RE_DERIVED_is_labelled_as_such()
+    {
+        var report = ProbeReport.FromStdout(WithLoadManifest("ProbeLogReader", true, new[] { "FC_A" }));
+
+        Assert.Equal("ProbeLogReader", report.Source);
+        Assert.Contains("NOT first-hand", report.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>An older probe build is a real thing to be handed.</b> Without a <c>loadManifest</c> the reader
+    /// falls back to the embedded log rather than reporting no manifest — losing it silently would be
+    /// worse than reading a rendering, and the source says which happened.
+    /// </summary>
+    [Fact]
+    public void Without_a_loadManifest_the_reader_still_falls_back_to_the_embedded_log()
+    {
+        var report = ProbeReport.FromStdout(ProbeJson(ReadFixture("differential-one-object.txt")));
+
+        Assert.Contains("DB_Data01", report.Manifest);
+        Assert.Equal(nameof(ProbeLogReader), report.Source);
+    }
+
+    // ---- THE FALLBACK PATH, against recorded live-rig logs -----------------------------------------
+
     [Fact]
     public void A_full_load_yields_the_ninety_nine_names_the_device_reported()
     {

@@ -161,7 +161,7 @@ public sealed class OpennessDeviceGateway : IDeviceGateway
     /// </summary>
     private static bool IsLoaded(DeploymentPlan plan, ProbeReport report, out string detail)
     {
-        if (report.Feedback is null)
+        if (!report.ManifestAvailable)
         {
             detail = "no load manifest could be recovered, so transfer is not positively evidenced. §9c forbids inferring it from the absence of a failure.";
             return false;
@@ -187,7 +187,7 @@ public sealed class OpennessDeviceGateway : IDeviceGateway
             return false;
         }
 
-        detail = $"every one of the {plan.DownloadableObjects.Count} downloadable object(s) supplied appears in the device's own load manifest of {report.Manifest.Count}.";
+        detail = $"every one of the {plan.DownloadableObjects.Count} downloadable object(s) supplied appears in the device's own load manifest of {report.Manifest.Count} (source: {report.Source}).";
         return true;
     }
 

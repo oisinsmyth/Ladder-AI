@@ -355,8 +355,68 @@ public class ArgumentVocabularyTests
     /// replaced it with an allowlist. This is what reported that, rather than the gateway silently
     /// diverging into a fence that refuses <c>GenProject1.ap20</c> — the actual scratch project.</para>
     /// </summary>
+    /// <summary>
+    /// *** THE INVARIANT: THE GATEWAY'S FENCE IS NEVER LOOSER THAN THE PROBE'S. ***
+    ///
+    /// <para><b>Asserted as a property over paths, not as a shared string literal.</b> The previous version
+    /// of this test asserted that both files contained <c>" scratch.ap20"</c> — a PROXY, and one that was
+    /// always going to break the moment either side improved, which is exactly what happened. The invariant
+    /// is what matters and the literal never was.</para>
+    ///
+    /// <para><b>What "not looser" reduces to, given the probe's own stated rule</b> (allowlist of resolved
+    /// paths, two fixed files, <c>repo:</c> resolution, no override): the gateway must allow a path <i>only
+    /// if that path is a resolved entry of one of those two files</i>. So the test drives the gateway's
+    /// fence with a battery of candidates — including every shape the OLD suffix fence would have admitted —
+    /// and asserts the allow-set is exactly the allowlist's own contents.</para>
+    ///
+    /// <para><b>What cannot be asserted here, stated rather than glossed:</b> the two fences cannot be run
+    /// against each other. <c>ScratchProjectGuard</c> is <c>internal</c> in a <c>net48</c> assembly that
+    /// references <c>Siemens.Engineering</c>; this one is <c>net8.0</c> and must stay that way, or every
+    /// harness build joins TIA's <c>(Path, FileHash)</c> approval cycle. So the strongest available check is
+    /// this property plus the file-location agreement below — and a divergence in the RESOLUTION RULES
+    /// (junction handling, 8.3 short names) would not be caught by either. That gap is real and is reported.</para>
+    /// </summary>
     [Fact]
-    public void The_gateways_fence_uses_the_same_allowlist_files_as_the_probes_own_guard()
+    public void The_gateway_allows_ONLY_what_an_allowlist_names_which_is_the_probes_own_rule()
+    {
+        var allowed = new[] { AllowedProject };
+
+        var candidates = new[]
+        {
+            AllowedProject,
+
+            // Every one of these SATISFIES the file-name-suffix fence the gateway shipped with. On a
+            // machine carrying about nineteen private engineering projects, a convention is something anything
+            // can be renamed into — which is the openness-cli lane's measured argument, applied here.
+            Path.Combine(FenceRoot, "Site scratch.ap20"),
+            Path.Combine(FenceRoot, "Scratch", "Site Scratch.AP20"),
+            Path.Combine(FenceRoot, "Anything scratch.ap20"),
+
+            // And these do not: near-misses, a sibling in the allowlisted folder, and nothing at all.
+            Path.Combine(FenceRoot, "Scratch", "Other.ap20"),
+            Path.Combine(FenceRoot, "Scratch.ap20"),
+            Path.Combine(FenceRoot, "not-rooted", "refused.ap20"),
+            string.Empty,
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var expected = allowed.Contains(candidate, StringComparer.OrdinalIgnoreCase);
+            var decision = ScratchAllowlist.Evaluate(candidate, FenceRoot);
+
+            Assert.True(expected == decision.Allowed,
+                $"'{candidate}' — the allowlist {(expected ? "names" : "does NOT name")} it and the fence said {(decision.Allowed ? "ALLOW" : "REFUSE")}. "
+                + "The gateway writes BEFORE the probe refuses, so a gateway fence looser than the allowlist means a full import and compile land in a project nobody named.");
+        }
+    }
+
+    /// <summary>
+    /// The two fences must read the SAME two files, or "not looser" is being asserted about different data.
+    /// This is the part that has to be a source read, and it is deliberately about LOCATIONS rather than
+    /// about a shared convention string.
+    /// </summary>
+    [Fact]
+    public void Both_fences_read_the_same_two_allowlist_files()
     {
         var guard = ReadSource("src/openness-cli/DownloadProbe/ScratchProjectGuard.cs", "ScratchProjectGuard");
 
@@ -370,7 +430,57 @@ public class ArgumentVocabularyTests
 
         Assert.True(
             guard.Contains("\"Ladder-AI\"", StringComparison.Ordinal),
-            "the gateway reads the machine-local allowlist under %ProgramData%/Ladder-AI and ScratchProjectGuard does not name that folder. The rig's project path cannot be committed, so it lives there and nowhere else.");
+            "the gateway reads the machine-local allowlist under %ProgramData%/Ladder-AI and ScratchProjectGuard does not name that folder. "
+            + "The rig's project is a copy of a live engineering job, so its path may not be committed and lives there and nowhere else.");
+
+        // *** NO OVERRIDE, CHECKED RATHER THAN STATED — and with the instrument controlled. *** The same
+        // search over a file that demonstrably HAS an environment read excludes a false clean from a typo.
+        var fenceSource = ReadSource("src/harness/Harness.Device/ScratchAllowlist.cs", "ScratchAllowlist");
+        var probeArgs = ReadSource("src/openness-cli/DownloadProbe/ProbeArguments.cs", "ProbeArgumentParser");
+
+        Assert.DoesNotContain("GetEnvironmentVariable", fenceSource, StringComparison.Ordinal);
+        Assert.Contains("GetEnvironmentVariable", probeArgs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// *** THE MANIFEST KEYS THE GATEWAY READS ARE KEYS THE PROBE ACTUALLY EMITS. ***
+    ///
+    /// <para>Checked against <c>DownloadProbe/Program.cs</c>'s own <c>BuildLoadManifest</c>, not against
+    /// that lane's report of it. The report was accurate; reading the serialiser is what makes that a
+    /// verified fact rather than a relayed one, and it is what turns a future rename into a red test
+    /// instead of a gateway that silently falls back to scraping the log.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("loadManifest")]
+    [InlineData("available")]
+    [InlineData("source")]
+    [InlineData("loadedObjects")]
+    [InlineData("verdict")]
+    [InlineData("verdictReason")]
+    [InlineData("unrecognisedMessageCount")]
+    public void Every_loadManifest_key_the_gateway_reads_is_one_the_probe_emits(string key)
+    {
+        var program = ReadSource("src/openness-cli/DownloadProbe/Program.cs", "BuildLoadManifest");
+
+        Assert.True(
+            program.Contains("\"" + key + "\"", StringComparison.Ordinal),
+            $"the gateway reads loadManifest.{key} and download-probe's BuildLoadManifest does not emit that key. "
+            + "The gateway would fall back to scraping the embedded log — quietly, and reading a RENDERING instead of the live DownloadResult.");
+    }
+
+    /// <summary>
+    /// The refusal names the exact path and format, and <b>says the machine-local file is the owner's to
+    /// write</b>. An agent creating it would be granting its own permission to download to a live-job copy.
+    /// </summary>
+    [Fact]
+    public void The_refusal_names_the_remedy_and_forbids_an_agent_from_applying_it()
+    {
+        var decision = ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "Scratch", "Other.ap20"), FenceRoot);
+
+        Assert.False(decision.Allowed);
+        Assert.Contains(ScratchAllowlist.MachineAllowlistPath, decision.Reason, StringComparison.Ordinal);
+        Assert.Contains(ScratchAllowlist.RepoRelativeAllowlist, decision.Reason, StringComparison.Ordinal);
+        Assert.Contains("MUST NEVER BE CREATED BY AN AGENT", decision.Reason, StringComparison.Ordinal);
     }
 
     /// <summary>

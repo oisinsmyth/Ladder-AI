@@ -18,7 +18,17 @@ this document and the code cannot drift apart silently.
 
 | value | how to obtain it | status |
 |---|---|---|
-| `<project>` — the `.ap20` | **Must be named `… scratch.ap20`** (leading space). `DownloadProbe.ScratchProjectGuard.RequiredSuffix`. | ⚠️ **NO SUCH PROJECT EXISTS ON THIS MACHINE.** `GenProject1.ap20` and `SampleProject.ap20` are the two allowlisted scratch projects and **neither matches the probe's guard** — a download against either exits 3 having contacted nothing. The rig project has to be created or renamed to that shape first. |
+| `<project>` — the `.ap20` | **Must be named in an ALLOWLIST.** Both the probe and this gateway compare the RESOLVED PATH against `tools/download-probe.allowlist` (committed) and `%ProgramData%\Ladder-AI\download-probe.allowlist` (machine-local). No flag, no environment variable, no override. | ⚠️ **The rig's own project needs one line in the MACHINE-LOCAL file** — its path is a copy of a live engineering job and may not be committed. **That file is the owner's to write and must never be created by an agent**: writing it is granting a download target. `GenProject1.ap20` is already in the committed list. |
+
+> #### ⚠️ CORRECTION TO AN EARLIER VERSION OF THIS DOCUMENT
+>
+> §0 previously said **"NO SUCH PROJECT EXISTS ON THIS MACHINE"** under the old file-name-suffix
+> guard. **That was wrong**, and it was this lane's own over-generalisation: the measurement was that
+> `GenProject1.ap20` and `SampleProject.ap20` — the two entries in `confirm-roundtrip.allowlist` —
+> did not match the suffix. **A `Live Runs/` scratch copy did**, because the suffix had been fitted to
+> exactly those projects. Had the fence been rebuilt as a repo-only allowlist on the strength of that
+> sentence, it would have broken the one project that worked. Hence two allowlist files, and hence
+> this correction rather than a quiet edit.
 | `--group <device>/<path>` | `openness-cli list <project>` — copy the `Path` column **verbatim**. | OPERATOR |
 | `--pc-interface "<name>"` | `openness-cli download-plan <project> --json` — it prints the configured PC interfaces with their `#<n>`. | OPERATOR |
 | `--target "<name>"` | same report; needed only if the chosen PC interface offers more than one. | OPERATOR, optional |
@@ -33,21 +43,36 @@ src\openness-cli\OpennessCli\bin\Release\net48\openness-cli.exe
 src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe
 ```
 
-> ⚠️ **`download-probe.exe` has NO `ApproveForOpenness` post-build target**, deliberately — its
-> `.csproj` says so in as many words: self-approving the one binary that can transfer a program would
-> mean a `dotnet build` silently grants Portal access to it. **Approve it by hand before the session:**
->
-> ```
-> tools\openness-approve-build.ps1 -Status
-> tools\openness-approve-build.ps1 -Exe src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe
-> ```
->
-> Until it is approved the first attach either hangs to the connect timeout or throws
-> `EngineeringSecurityException`. **Both mean "needs approval", not "Portal is wedged".**
+### 🔴 TWO PRECONDITIONS THE RELEASE BINARY DOES NOT SATISFY TODAY
 
-> ⚠️ **Do not rebuild `openness-cli` or `download-probe` during the session.** TIA whitelists by
-> `(Path, FileHash)`. `dotnet test src/openness-cli/openness-cli.sln` IS a rebuild. `converter.sln`
-> and `harness.sln` are safe.
+**1. `Release\net48\download-probe.exe` IS STALE.** The allowlist fence and the first-class
+`loadManifest` landed on 2026-08-13, and that lane **built Debug only** — `portal-status` reported
+**two Portal sessions in use**, so Release was treated as untouchable. The Release binary therefore
+still carries the old file-name-suffix guard and emits **no `loadManifest`**. It must be rebuilt:
+
+```
+openness-cli portal-status                       # must show no lane holding Portal
+dotnet build -c Release src\openness-cli\openness-cli.sln
+```
+
+**2. `download-probe.exe` must then be APPROVED BY HAND.** Its `.csproj` deliberately omits the
+`ApproveForOpenness` post-build target — self-approving the one binary that can transfer a program
+would mean a `dotnet build` silently grants Portal access to it. The per-machine approval setup **has**
+been run, so the `openness-cli` half self-approves; only this one needs the manual call:
+
+```
+tools\openness-approve-build.ps1 -Exe src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe
+tools\openness-approve-build.ps1 -Status         # read-only: is it approved RIGHT NOW
+```
+
+> ⚠️ **Until it is approved the first attach either hangs to the connect timeout or throws
+> `EngineeringSecurityException`. BOTH MEAN "NEEDS APPROVAL", NOT "PORTAL IS WEDGED".** That
+> misreading has cost this project an hour before, and an operator discovering it mid-session is
+> exactly the person most likely to make it.
+
+> ⚠️ **After that, do not rebuild `openness-cli` or `download-probe` during the session.** TIA
+> whitelists by `(Path, FileHash)`. `dotnet test src/openness-cli/openness-cli.sln` IS a rebuild.
+> `converter.sln` and `harness.sln` are safe.
 
 ---
 
@@ -156,15 +181,22 @@ download-probe.exe %P% --options SoftwareOnlyChanges [--device %D%] --pc-interfa
 | `8` CompletedWithErrors | Failed | `Attempted = true`, `Loaded = false` |
 | `7` AbortedByUnhandledConfiguration | Failed **for a deployment**, even though it is a successful *experiment* for the probe | `Attempted = true` |
 | `10` SelectionApplyFailed | **NotProven — the run is VOID.** The tool stopped answering after the first configuration it could not apply; device state unknown | `Attempted = true`, must be read before trusted |
-| `3` RefusedByPath | Failed. Portal not contacted. **If this fires, the gateway's own fence is looser than the probe's** — that is the bug to fix | nothing happened |
+| `3` RefusedByPath | Failed. Portal not contacted. **If this fires, the gateway's own fence is looser than the probe's** — that is the bug to fix, and `Harness.Device.Tests` asserts the property that prevents it | nothing happened |
 | `6` SafetyRefused | Failed. Hard rule 2: stop and report | nothing happened |
 | `4` NoProvider / `5` NoDownloadTarget | NotProven / Failed | |
 | `1` UsageError | Failed — **a flag the gateway emits is not one that binary accepts.** Check against `ProbeArguments.cs`, never a README | |
 
 ### Step 6 — THE LOAD MANIFEST (the only positive evidence of transfer)
 
-Not a command. The gateway parses `download-probe --json`'s stdout, takes the embedded `log` array,
-and runs it through `Ladder.Download`'s `ProbeLogReader` → `DownloadFeedbackParser`.
+Not a command. The gateway reads `download-probe --json`'s **`loadManifest`** object — built by
+`DownloadResultAdapter` off the live Openness `DownloadResult`, which is the first-hand path
+`ProbeLogReader`'s own documentation names. `loadManifest.source` says which authority produced it and
+the gateway reports that verbatim; **`available: false` is read as "nobody looked", never as "TIA
+loaded nothing"**.
+
+*Fallback:* on an older probe build with no `loadManifest`, the gateway parses the embedded `log`
+array through `ProbeLogReader` instead and labels the source accordingly. **Given precondition 1
+above, the Release binary today is that older build.**
 
 `Loaded` is true only when **both**:
 
@@ -225,6 +257,10 @@ the harness generates today it fires zero times. That is a guard that could sile
 
 Recommended order, cheapest refusal first:
 
+0. **The two preconditions in §0**: a Release rebuild of `openness-cli.sln` while no lane holds
+   Portal, then `openness-approve-build.ps1 -Exe` for `download-probe.exe`. And **one line in
+   `%ProgramData%\Ladder-AI\download-probe.allowlist`, written by the owner**, naming the rig
+   project's absolute path.
 1. `openness-cli portal-status` — no lane holds Portal.
 2. `tools\openness-approve-build.ps1 -Status` — is `download-probe.exe` approved *right now*.
 3. `openness-cli list %P%` — copy the `Path` column for `--group`.

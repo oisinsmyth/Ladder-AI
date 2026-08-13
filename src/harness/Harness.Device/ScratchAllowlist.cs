@@ -88,7 +88,7 @@ public static class ScratchAllowlist
         {
             return new Decision(false,
                 "NO ALLOWLIST ENTRY WAS FOUND ANYWHERE, so nothing is allowlisted and this is a refusal — an absent fence must never read as an open one. "
-                + $"Consulted: {string.Join(" ; ", consulted)}. A project whose path may not be committed (the rig's is a copy of a live job) goes in the machine-local file.",
+                + $"Consulted: {string.Join(" ; ", consulted)}. " + HowToGrant,
                 consulted, 0);
         }
 
@@ -98,9 +98,23 @@ public static class ScratchAllowlist
             allowed
                 ? $"'{target}' is named in an allowlist ({entries.Count} entr(ies) read)."
                 : $"'{target}' IS NOT AN ALLOWLISTED PROJECT. This gateway imports, compiles and downloads; adding a project is a decision made once in a file, never a flag. "
-                  + $"{entries.Count} entr(ies) read from: {string.Join(" ; ", consulted)}.",
+                  + $"{entries.Count} entr(ies) read from: {string.Join(" ; ", consulted)}. " + HowToGrant,
             consulted, entries.Count);
     }
+
+    /// <summary>
+    /// The refusal's own remedy, naming the exact path and format.
+    ///
+    /// <para><b>An agent must never write the machine-local file.</b> Doing so would be granting its own
+    /// permission to download to a live-job copy — the working agreement's "supply the mechanism, let the
+    /// owner run it". So this is a sentence, and the file is the owner's to create.</para>
+    /// </summary>
+    public static string HowToGrant =>
+        "TO GRANT ONE: a path that may be committed goes in " + RepoRelativeAllowlist
+        + " (one per line; absolute, or 'repo:<path-from-repo-root>'). "
+        + "A path that may NOT be committed — the rig's project is a copy of a live engineering job, and CLAUDE.md's live-run boundary is RETENTION, not access — goes in "
+        + MachineAllowlistPath + " instead, one ABSOLUTE path per line. "
+        + "*** THAT FILE IS THE OWNER'S TO WRITE AND MUST NEVER BE CREATED BY AN AGENT: writing it is granting a download target, not configuring a tool. ***";
 
     /// <summary>Absolute paths, one per entry. Blank lines and <c>#</c> comments are skipped.</summary>
     private static IEnumerable<string> ReadEntries(string listPath, string? repoRoot)
