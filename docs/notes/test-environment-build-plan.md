@@ -1408,6 +1408,59 @@ caused that latch.
 > hard-coding `--iterations 2` into the advice would be a magic number defended by nothing. Recorded
 > because exact liveness was claimed earlier and this is its one documented exception.
 
+### 📐 F-4 ANSWERED — NO WIDTH EFFECT ON THE TAIL IS DETECTABLE (2026-08-13)
+
+Interleaved cycles of **16 → 64 → 123** registers, never blocked, 10 repeats read / 8 write, 300
+iterations each — **16,200 round trips in one session**, percentiles nearest-rank so they compare
+directly with everything already recorded. A middle width was included to separate a graded effect
+from a step.
+
+| pooled p99 | w16 | w64 | w123 |
+|---|---|---|---|
+| **READ** | **188** | 164 | **158** |
+| **WRITE** | **156** | 152 | **195** |
+
+*** THE HIGHEST TAIL IS AT WIDTH 16 IN ONE ARM AND WIDTH 123 IN THE OTHER. *** Per-run p99 gives
+**−47.5 ms** and **+51.3 ms** — opposite signs of similar magnitude, both confidence intervals
+spanning zero. All six cells fall in 152–195, **bracketing both 173 and 201.**
+
+**Two design choices that make the comparison mean something:**
+
+  - **The read arm led**, because `timing --op read` never writes and therefore **cannot latch at any
+    width** — no priming, no recovery, and the checker does identical work in every run.
+  - **The write arm was pre-latched deliberately.** A partial-width write latches, and *a latched
+    checker skips its comparison* — so a narrow arm would otherwise run against a **lighter PLC scan**
+    than a wide one. Pre-latching, with `--pattern-count == --sweep` so the restore never fired
+    mid-experiment, made that condition **uniform across widths rather than confounded with them.**
+
+#### The limits, stated rather than glossed
+
+  - *** THE DESIGN IS NOT POWERED FOR 28 ms AT p99 *** — smallest detectable difference **83 ms**
+    (read) and **145 ms** (write), because a per-run p99 is itself an extreme-value statistic (per-run
+    SDs of 92 and 146 ms). Reaching 10 ms of standard error that way needs ~170 runs per arm, roughly
+    **17 hours**. This is not a strong null and is not presented as one.
+  - **p90 IS adequately powered** (13 and 21 ms detectable) and gives **+0.5 and +3.4 ms** — *** a
+    28 ms width effect at p90 is EXCLUDED in both arms. *** That is where the conclusion rests.
+  - **And one observation needs no power argument at all:** at a **single fixed width**, inside one
+    session, per-run p99 ranged **136 → 371 ms** (read w16) and **136 → 562 ms** (write w123). *** THE
+    SPREAD WITHIN ONE WIDTH IS AN ORDER OF MAGNITUDE LARGER THAN THE 28 ms BEING EXPLAINED. ***
+  - The **body** does move, reproducibly and tinily: median **74.8 → 75.7 ms** from width 16 to 123 —
+    **the same +1.0 ms in both arms.**
+
+#### What follows
+
+  ➜ *** THE 173 → 201 MOVE IS NOT SUPPORTABLE AS A WIDTH FINDING. *** Session-to-session variation
+    alone can produce it. **That does not make 201 wrong — it makes its provenance different from what
+    §12a implied.** The constant should be revisited on **BREADTH** (many sessions, different times of
+    day), **not on width**: one session cannot answer how bad the tail gets across days.
+  ➜ **Nothing here argues for capping slot width on timing grounds.** F-4 asked two questions and only
+    the first is answered; the cap remains the owner's call.
+  ➜ 🚩 **PROPOSED, OWNER'S: specify the tail as p90 PLUS AN EXPLICIT EXCEEDANCE RATE** ("fraction of
+    round trips over 250 ms") rather than as a p99 point estimate. **An exceedance rate pools across
+    runs without inheriting an order statistic's variance** — whereas a p99 point estimate is exactly
+    what defeated a 16,200-round-trip experiment. Persuasive, and deliberately **not adopted**: it
+    changes how every budget in §12a is expressed.
+
 ## PHASE 2 — THE WALKING SKELETON
 
 **Cost: the first real chunk. Assumptions retired: A4. First code intended to survive.**
