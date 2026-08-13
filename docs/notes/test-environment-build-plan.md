@@ -380,7 +380,31 @@ phase 2 with the copy-layer generator.
 > > line is that only an actual attach proves it. **That attach is step 0 of the rig session**, not
 > > something to claim now.
 > >
-> > 🔴 **THE ONE THING ONLY THE OWNER CAN DO:** if the session targets a `Live Runs/` scratch project
+> > ### ✅ AND THE OWNER MAY NOT BE NEEDED AT ALL — TARGET `GenProject1`
+> >
+> > The rig has historically been driven from **a copy of a live engineering job**, whose path cannot be
+> > committed and therefore needs the owner to write the machine-local allowlist. **But that is a
+> > property of the old target, not a requirement of the session.** Measured 2026-08-13:
+> >
+> > | | |
+> > |---|---|
+> > | `GenProject1`'s configured device | `S7-1200 station_1/PLC1` **`6ES7 214-1AG40-0XB0`** |
+> > | the physical bench rig | **the same order code**, read off the device and corroborated by a successful download |
+> > | the block under test | **present in `GenProject1`** — it is where 5.2's block lives |
+> > | the committed allowlist | already contains `repo:GenProject1/GenProject1.ap20` |
+> >
+> > *** SO THE SESSION CAN TARGET `GenProject1` AND NEEDS NO OWNER ACTION, NO MACHINE-LOCAL FILE, AND
+> > NO SITE PATH ANYWHERE NEAR THE REPOSITORY. ***
+> >
+> > ⚠️ **Two things I have NOT measured, stated as assumptions rather than buried.** The download must
+> > be **`Software`**, not `Hardware` — a software download does not reconfigure the device, and that
+> > is the documented default. And `GenProject1` carries the project's **standing hardware warning**
+> > (*"inputs or outputs are used that do not exist in the configured hardware"*), so its IO does not
+> > all exist on the rig — **which should not matter, because the harness reads the `%MW` mirror over
+> > Modbus and never physical IO.** *Should not is an inference, not a measurement.* If it is wrong,
+> > it fails at the first data read and the fallback is the old target plus one owner-written line.
+> >
+> > 🔴 **IF THE OWNER PREFERS THE LIVE-RUN RIG PROJECT INSTEAD:** if the session targets a `Live Runs/` scratch project
 > > rather than `GenProject1`, its path must be added to the **machine-local** allowlist at
 > > `%ProgramData%\Ladder-AI\download-probe.allowlist`. **No agent may write that file** — it is the
 > > owner granting a download target, and the path cannot go in the committed list (docs/13).
