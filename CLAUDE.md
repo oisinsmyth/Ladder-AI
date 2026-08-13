@@ -114,10 +114,13 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, stand
                                     # evidence about the SHAPE, never the NAME. **MIGRATING THE LEGACY `Modbus_*` ENTRIES ONTO THE REGISTRY IS RULED *NOT NOW* (2026-08-13, `docs/notes/deferred-items.md` D-8):**
                                     # it would discard the live-Import evidence and rewrite committed IR text for no measured gain. Revisit ONLY on a real export that CONTRADICTS the retained names — tidiness is not a trigger.
                                     # New instructions of this shape are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited
-                                    # in lockstep. **`MB_SERVER` 5.3 is CHARACTERISED BUT DELIBERATELY NOT REGISTERED:** the block carrying it needs `Array[..] of Struct` and doubly-nested
-                                    # structured interface members the converter cannot model, so the template could not be exercised end to end — and an UNEXERCISED PORT LIST is precisely what
-                                    # the registry exists to prevent. `MB_SERVER` is a `<Part>`, measured: an InOut port wires as an ORDINARY SYMBOLIC `<Access>` in normal input order, so the
-                                    # `<Call>`/`Section="InOut"` whitelist is IRRELEVANT to it
+                                    # in lockstep. ✅ **`MB_SERVER` 5.3 IS REGISTERED AND THE IR PATH WORKS — corrected 2026-08-13, owner-flagged.** This line previously read "CHARACTERISED BUT
+                                    # DELIBERATELY NOT REGISTERED", which was true until **2026-08-12**, when `MbServer53` was added to `FixedShapeInstructions.cs` on exactly the condition the old note
+                                    # set for it. Verified behaviourally, not by reading the table: the Release converter takes a real `MB_SERVER` IR block to SimaticML, **exit 0, the part emitted**.
+                                    # 🔴 **AND THE STALE LINE COST A WRONG PLAN.** It was read as "MB_SERVER cannot be moved into a project", which stopped a rig deployment a step early — so note the
+                                    # distinction it never made: *the converter's registry governs IR → SimaticML ONLY.* `openness-cli export`/`import` produce and consume SimaticML **straight from TIA
+                                    # and never touch the converter**, so a converter limitation is NEVER by itself a reason a block cannot reach a project. `MB_SERVER` is a `<Part>`, measured: an InOut
+                                    # port wires as an ORDINARY SYMBOLIC `<Access>` in normal input order, so the `<Call>`/`Section="InOut"` whitelist is IRRELEVANT to it
 converter to-ir|to-xml ...          # UNCONNECTED PORTS ARE VISIBLE IN THE IR, not hidden in the sidecar (2026-08-12): `REQ := OPEN` / `DONE => OPEN` for a deliberately unwired port, versus no
                                     # argument at all when the port is absent from `<Wires>` entirely. That visibility is the point — under the "no IR the AI cannot change" ruling (**ADR-0010**) a sidecar-only
                                     # treatment meant an AI could not SEE the port existed, let alone write one. `OPEN` is a reserved bare word (precedent: `TRUE`/`ENO`); a tag genuinely named
