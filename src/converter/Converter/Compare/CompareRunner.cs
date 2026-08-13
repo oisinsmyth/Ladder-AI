@@ -151,6 +151,13 @@ public static class CompareRunner
                 continue;
             }
 
+            // An interface's <Section> siblings are identified by their Name attribute, not by
+            // position — see TryCompareSectionsByName. Same interception shape as wires above.
+            if (name.LocalName == "Section" && TryCompareSectionsByName(mine, theirs, path, differences))
+            {
+                continue;
+            }
+
             var count = Math.Max(mine.Count, theirs.Count);
             var indexed = count > 1;
 
@@ -307,6 +314,110 @@ public static class CompareRunner
         }
 
         differences.AddRange(found.OrderBy(f => f.Index).Select(f => f.Difference));
+        return true;
+    }
+
+    // -------------------------------------------------------- interface sections: pair by NAME
+
+    /// <summary>
+    /// Pairs <c>&lt;Section&gt;</c> siblings by their <c>Name</c> attribute instead of by position, so
+    /// one section present on one side and absent on the other reports as ONE difference rather than
+    /// misaligning every section after it.
+    ///
+    /// <para><b>Why the generic walk cannot do this.</b> It pairs children by ELEMENT NAME and then by
+    /// position within that name — which is right nearly everywhere, because SimaticML's repeated
+    /// siblings (<c>Member</c>, <c>Component</c>) are genuinely ordered and carry no identity of their
+    /// own. An interface's sections are the exception: every <c>&lt;Section&gt;</c> shares one element
+    /// name and is identified by an attribute from a closed vocabulary
+    /// (Input/Output/InOut/Static/Temp/Constant/Return/None). Position therefore pairs Input with
+    /// Input only by luck, and stops doing so the moment either side omits an optional section.</para>
+    ///
+    /// <para><b>Measured, 2026-08-13.</b> <c>DbSourceWriter</c> emitted Input, Output, Static for an
+    /// instance DB where TIA emits Input, Output, InOut, Static. The single missing EMPTY element slid
+    /// <c>Static</c> into <c>InOut</c>'s slot, and the walk then compared our whole Static section
+    /// against TIA's empty InOut: *** 26 differences on iDB_MotorFwdRevSystem_Shredder ***, one
+    /// ATTR-DIFFERS plus 24 phantom added members plus one phantom missing section, for a block whose
+    /// committed export was independently confirmed current. By name it is one ELEMENT-MISSING that
+    /// names the section — which is the finding a reader can act on.</para>
+    ///
+    /// <para><b>This is diagnosis, not forgiveness.</b> A missing section is still a difference and
+    /// still fails the comparison; <see cref="Normalizer.AreSemanticallyEquivalent"/> is untouched and
+    /// still holds the two documents to <c>XNode.DeepEquals</c>. Teaching the comparator that an
+    /// absent section equals an empty one would have made the writer defect invisible instead of
+    /// legible — the shape that let the <c>MemoryLayout</c> hole survive a green <c>drift-check</c>.
+    /// Section ORDER is content too, so a pure reorder is reported in its own right
+    /// (<see cref="DifferenceKind.SectionOrderDiffers"/>) rather than silently absorbed by the
+    /// name-keyed pairing.</para>
+    ///
+    /// <para>Returns false — changing nothing — unless every section on both sides carries a distinct
+    /// non-empty <c>Name</c>. A repeated or unnamed section is a shape this rule does not describe, and
+    /// the positional walk handles it exactly as before.</para>
+    /// </summary>
+    private static bool TryCompareSectionsByName(
+        List<XElement> mine, List<XElement> theirs, string path, List<CompareDifference> differences)
+    {
+        if (!TryKeyByName(mine, out var mineByName) || !TryKeyByName(theirs, out var theirsByName))
+        {
+            return false;
+        }
+
+        // First document's order, then any section only the second has, in its own order — so the
+        // report reads in the order a person opening the first file would meet them.
+        var names = mine.Select(SectionName)
+            .Concat(theirs.Select(SectionName).Where(n => !mineByName.ContainsKey(n)))
+            .ToList();
+
+        foreach (var name in names)
+        {
+            var sectionPath = $"{path}/Section[@Name='{name}']";
+            var inFirst = mineByName.TryGetValue(name, out var first);
+            var inSecond = theirsByName.TryGetValue(name, out var second);
+
+            if (inFirst && !inSecond)
+            {
+                differences.Add(new CompareDifference(DifferenceKind.ElementMissing, sectionPath, Render(first!), null));
+            }
+            else if (!inFirst && inSecond)
+            {
+                differences.Add(new CompareDifference(DifferenceKind.ElementAdded, sectionPath, null, Render(second!)));
+            }
+            else
+            {
+                CompareElements(first!, second!, sectionPath, differences);
+            }
+        }
+
+        // The sections both sides share, in each side's own document order. Pairing by name is blind
+        // to a reorder by construction, so it is asserted here instead of assumed away.
+        var commonInFirstOrder = mine.Select(SectionName).Where(theirsByName.ContainsKey).ToList();
+        var commonInSecondOrder = theirs.Select(SectionName).Where(mineByName.ContainsKey).ToList();
+        if (!commonInFirstOrder.SequenceEqual(commonInSecondOrder, StringComparer.Ordinal))
+        {
+            differences.Add(new CompareDifference(
+                DifferenceKind.SectionOrderDiffers,
+                path + "/Section",
+                string.Join(", ", commonInFirstOrder),
+                string.Join(", ", commonInSecondOrder)));
+        }
+
+        return true;
+    }
+
+    private static string SectionName(XElement section) => (string?)section.Attribute("Name") ?? string.Empty;
+
+    private static bool TryKeyByName(List<XElement> sections, out Dictionary<string, XElement> byName)
+    {
+        byName = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        foreach (var section in sections)
+        {
+            var name = SectionName(section);
+            if (name.Length == 0 || !byName.TryAdd(name, section))
+            {
+                byName = new Dictionary<string, XElement>(StringComparer.Ordinal);
+                return false;
+            }
+        }
+
         return true;
     }
 

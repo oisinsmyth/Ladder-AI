@@ -64,6 +64,15 @@ public enum DifferenceKind
     /// made it look like. See <see cref="CompareRunner"/> for why the classification is narrow.
     /// </summary>
     WireDirectionDiffers,
+
+    /// <summary>
+    /// Two <c>&lt;Sections&gt;</c> containers hold the SAME named <c>&lt;Section&gt;</c> elements in a
+    /// DIFFERENT ORDER. Sections are paired by their <c>Name</c> attribute rather than positionally
+    /// (see <see cref="CompareRunner"/>), which is what stops one missing optional section from
+    /// cascading — and this kind is the reason that pairing hides nothing: an interface's section
+    /// order is real content, so a pure reorder is still reported, in its own words.
+    /// </summary>
+    SectionOrderDiffers,
 }
 
 /// <summary>

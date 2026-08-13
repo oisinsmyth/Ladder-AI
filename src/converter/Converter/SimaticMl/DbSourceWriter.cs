@@ -21,21 +21,56 @@ public static class DbSourceWriter
         }
 
         // Input/Output/InOut: confirmed real 2026-07-13, `TomraControlInst1` — see DbModel.cs's own
-        // doc comment. Only emitted when present (mirrors BlockSourceWriter's own
-        // WriteMemberSection); every Instance/Global DB grounded before this one has none, so
-        // this stays a no-op for them.
+        // doc comment.
+        //
+        // 🔴 SECTION PRESENCE IS DECIDED BY DB KIND, NOT BY WHETHER MEMBERS EXIST (2026-08-13).
+        //
+        // AN INSTANCE DB'S Interface ALWAYS DECLARES ALL FOUR — Input, Output, InOut, Static — even
+        // when the first three are empty. Measured against every real TIA V20 export of one in the
+        // corpus (`simatic-ml/test-project001/iDB_MotorFwdRevSystem_Shredder.xml`,
+        // `iDB_PusherControl.xml`, `iDB_ShredderSequencer.xml`): each opens
+        // `<Section Name="Input" /><Section Name="Output" /><Section Name="InOut" />` before Static.
+        // Not a coincidence of those three — an instance DB IS an FB's storage, and
+        // BlockSourceWriter already emits all three unconditionally for an FB (the sole exception
+        // being an OB, where TIA's own Import() rejects Output/InOut outright).
+        //
+        // A GLOBAL DB is the opposite, and equally measured: all seven in that corpus declare Static
+        // ALONE, with no Input/Output/InOut element of any kind. So the discriminator is the DB kind,
+        // which the model already carries as InstanceOfName — the same field that decides the root
+        // element name below. Nothing is stored twice and nothing new has to be authored.
+        //
+        // WHY NOT "emit it when the model says the section is present". The model CANNOT say:
+        // InOutMembers is non-nullable with an empty default, so *absent* and *present-but-empty* are
+        // the same value, and the readable IR has no INOUT header for an empty section either.
+        // Making all three nullable and teaching the IR to carry the distinction would also work —
+        // but it puts a TIA STRUCTURAL CONSTANT into hand-authored text, so an AI writing a new
+        // iDB's `.ir` would have to remember three empty section headers or silently emit a document
+        // TIA never produces. Deriving it is the fix that cannot be forgotten.
+        //
+        // WHAT IT COST, AND WHY NOTHING SAID SO: `to-xml` emitted Input, Output, Static for an
+        // instance DB where TIA emits Input, Output, InOut, Static. The Normalizer aligns interface
+        // sections POSITIONALLY, so the one missing empty element slid Static into InOut's slot and
+        // every member of it read as added-then-missing — 26 differences on
+        // `iDB_MotorFwdRevSystem_Shredder`, whose committed export was independently confirmed
+        // current. *** NO RE-EXPORT COULD EVER HAVE CLEARED THAT ***, and while it stood
+        // `drift-check` could not see the block's real content at all: a permanently-red check that
+        // is also blind. `CompareRunner` now pairs sections by NAME so the same shape reports as ONE
+        // difference rather than a cascade — that is diagnosis, this is the cure, and the two are
+        // deliberately separate (a comparator taught to forgive a missing section would have HIDDEN
+        // this instead, which is how the MemoryLayout hole survived a green drift-check).
+        var isInstanceDb = db.InstanceOfName is not null;
         var sectionsChildren = new List<XElement>();
-        if (db.InputMembers is not null)
+        if (isInstanceDb || db.InputMembers is not null)
         {
-            sectionsChildren.Add(WriteMemberSection("Input", db.InputMembers));
+            sectionsChildren.Add(WriteMemberSection("Input", db.InputMembers ?? Array.Empty<DbMember>()));
         }
 
-        if (db.OutputMembers is not null)
+        if (isInstanceDb || db.OutputMembers is not null)
         {
-            sectionsChildren.Add(WriteMemberSection("Output", db.OutputMembers));
+            sectionsChildren.Add(WriteMemberSection("Output", db.OutputMembers ?? Array.Empty<DbMember>()));
         }
 
-        if (db.InOutMembers.Count > 0)
+        if (isInstanceDb || db.InOutMembers.Count > 0)
         {
             sectionsChildren.Add(WriteMemberSection("InOut", db.InOutMembers));
         }

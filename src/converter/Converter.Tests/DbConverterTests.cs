@@ -26,6 +26,39 @@ public class DbConverterTests
         {
             AssertDbMembersEqual(expected.Members[i], actual.Members[i]);
         }
+
+        // 🔴 THIS HELPER USED TO STOP AT `Members` — one of the four interface sections — while every
+        // caller is named "...PreservesEverything" or "...IsStable" (2026-08-13). Input/Output/InOut
+        // could gain, lose or reorder members and every DB round-trip test in this file would still
+        // pass. That is how `DbSourceWriter` came to omit the empty `<Section Name="InOut" />` an
+        // instance DB always carries, unnoticed, until a corpus reconciliation surfaced it as 26
+        // phantom differences. A round trip that examines a quarter of the interface is not a round
+        // trip; a name that claims otherwise is the part that closes the question.
+        AssertParameterSectionEqual("Input", expected.InputMembers, actual.InputMembers);
+        AssertParameterSectionEqual("Output", expected.OutputMembers, actual.OutputMembers);
+        AssertParameterSectionEqual("InOut", expected.InOutMembers, actual.InOutMembers);
+    }
+
+    // Null (section absent) and empty (section present with no members) are DELIBERATELY not
+    // interchangeable here: it is exactly the distinction the writer defect turned on, and a helper
+    // that shrugged at it would re-open the hole it exists to close.
+    private static void AssertParameterSectionEqual(string section, IReadOnlyList<DbMember>? expected, IReadOnlyList<DbMember>? actual)
+    {
+        Assert.True(
+            (expected is null) == (actual is null),
+            $"'{section}' section presence differs: expected {(expected is null ? "absent" : $"present ({expected.Count} member(s))")}, " +
+            $"got {(actual is null ? "absent" : $"present ({actual.Count} member(s))")}.");
+
+        if (expected is null || actual is null)
+        {
+            return;
+        }
+
+        Assert.Equal(expected.Count, actual.Count);
+        for (var i = 0; i < expected.Count; i++)
+        {
+            AssertDbMembersEqual(expected[i], actual[i]);
+        }
     }
 
     private static void AssertDbMembersEqual(DbMember expected, DbMember actual)

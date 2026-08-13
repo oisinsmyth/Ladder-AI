@@ -69,9 +69,17 @@ public class BlockInterfaceFidelityTests
         // ---- narrower question (the Interface alone) and must not silently agree with it.
         ["FB_PusherControl"] = "D-7: the B-5/REQ-028 re-arming fix landed in the .ir and was never re-exported.",
         ["FB_ShredderSequencer"] = "D-7: as above.",
-        ["iDB_MotorFwdRevSystem_Shredder"] = "D-7: interface cascade from its FB; also the empty <Section Name=\"InOut\"/> below.",
-        ["iDB_PusherControl"] = "D-7: interface cascade from its FB; also the empty <Section Name=\"InOut\"/> below.",
-        ["iDB_ShredderSequencer"] = "D-7: interface cascade from its FB; also the empty <Section Name=\"InOut\"/> below.",
+
+        // 🔴 The three iDB entries that stood here were REMOVED 2026-08-13 — see the matching note in
+        // ExportDriftDetectorTests. They named two causes ("D-7 interface cascade from its FB; also
+        // the empty <Section Name=\"InOut\"/>") and the SECOND one was the whole of it: our writer
+        // omitted the empty InOut section every real instance-DB export carries. This test SAW that —
+        // it is a raw, Normalizer-free interface comparison, so unlike drift-check it was never
+        // blind — and it is written down right here, in the entry's own text, as a co-factor of a
+        // deferred re-export. *** A DEFECT IN OUR OUTPUT WAS RECORDED AS A PROPERTY OF THE ANSWER
+        // KEY, AND THAT IS WHAT KEPT IT ALIVE. *** A "known drift" entry is a closed question; the
+        // moment the InOut clause was written beside a D-7 citation it stopped being read as a bug at
+        // all. Fixed in DbSourceWriter; all three now match.
 
         // ---- a provenance difference, not a content one -------------------------------------
         // Four committed exports (AlarmWords, CommsProcessData, EquipmentStatus, NodeStatusAlarms)

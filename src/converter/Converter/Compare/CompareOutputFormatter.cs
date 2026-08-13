@@ -125,6 +125,7 @@ public static class CompareOutputFormatter
         DifferenceKind.AttributeDiffers => "ATTR-DIFFERS   ",
         DifferenceKind.RootElementDiffers => "ROOT-DIFFERS   ",
         DifferenceKind.WireDirectionDiffers => "WIRE-DIRECTION ",
+        DifferenceKind.SectionOrderDiffers => "SECTION-ORDER  ",
         _ => kind.ToString(),
     };
 

@@ -70,9 +70,31 @@ public class ExportDriftDetectorTests
         new("DB_Settings", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
         new("FB_PusherControl", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
         new("FB_ShredderSequencer", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
-        new("iDB_MotorFwdRevSystem_Shredder", DriftDisposition.Deferred, "D-7: interface cascade from its FB."),
-        new("iDB_PusherControl", DriftDisposition.Deferred, "D-7: interface cascade from its FB."),
-        new("iDB_ShredderSequencer", DriftDisposition.Deferred, "D-7: interface cascade from its FB."),
+
+        // ---- 🔴 THREE ENTRIES REMOVED HERE, 2026-08-13, AND THE REASON THEY CARRIED WAS FALSE ----
+        //
+        // `iDB_MotorFwdRevSystem_Shredder`, `iDB_PusherControl` and `iDB_ShredderSequencer` sat here
+        // as `Deferred` — "D-7: interface cascade from its FB", i.e. *their FB's fix was never
+        // re-exported, so of course the instance DB differs; re-export clears it*. That reason is
+        // WRONG, and it was wrong the whole time.
+        //
+        // The real cause was in OUR OWN WRITER: `DbSourceWriter` emitted Input, Output, Static for an
+        // instance DB where TIA emits Input, Output, InOut, Static, and the Normalizer aligned
+        // interface sections POSITIONALLY — so one missing EMPTY element slid Static into InOut's slot
+        // and cascaded (26 localized differences on iDB_MotorFwdRevSystem_Shredder). *** NO RE-EXPORT
+        // COULD EVER HAVE CLEARED IT ***, which is exactly what a deferred-re-export disposition
+        // promises would happen.
+        //
+        // MEASURED, not argued, and by an authority that is not this fix: while it was being written,
+        // ANOTHER LANE re-exported `iDB_PusherControl` and `iDB_ShredderSequencer` from TIA. Both
+        // stayed DRIFTED under the pre-fix binary against their own fresh exports. And
+        // `iDB_MotorFwdRevSystem_Shredder`, whose export has not been touched since 2026-07-17, went
+        // to MATCH on the fix alone. Same corpus, two binaries: 5 drifted -> 1.
+        //
+        // This is the working agreement's "a plausible mechanism invented to explain" a result nobody
+        // re-examined — the red twin of a false green. Once the cascade had a reason, the 26
+        // differences stopped being read, and underneath them `drift-check` could not see these
+        // blocks' actual content at all. Entries deleted rather than re-filed: there is no residue.
 
         // ---- test-project001: RULED, REPAIR UNFINISHED -----------------------------------------
         // Surfaced 2026-08-13 by BlockInterfaceFidelityTests (raw, Normalizer-free) and confirmed by
