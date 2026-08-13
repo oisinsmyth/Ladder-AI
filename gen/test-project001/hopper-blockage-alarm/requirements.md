@@ -79,10 +79,22 @@ Same one deviation flagged in the prior scoped run, re-flagged at RFI-Q-HBA-06:
   or signal name and is therefore stable under re-decomposition **by construction**; an ordinal is
   stable only for as long as nobody inserts. Correspondingly: **assertion ordinals are assigned
   append-only — a re-decomposition never reorders within a clause — and the reading order of a clause's
-  text implies NOTHING about its assertions' ordinals.** `REQ-HBA-002` is the live example and **must
-  not be "tidied"**: it states limb 1 **first** but limb 1 is `002.A3`, appended so earlier ordinals
-  would not shift. Renumbering to match the prose would retarget every citation while moving no text
-  and firing no gate.
+  text implies NOTHING about its assertions' ordinals.** `REQ-HBA-002` is the historical example: it
+  states limb 1 **first** but limb 1 is `002.A3`, appended so earlier ordinals would not shift.
+  **Status after AR-HBA-22: RECORDED DEFAULT, no longer load-bearing** — since AR-HBA-21 removed the
+  last ordinal reference, **no register prose depends on an ordinal** and reordering within a clause is
+  genuinely free. ⚠️ **Scope of that claim, stated precisely: VERIFIED FOR THIS REGISTER, UNVERIFIED
+  ELSEWHERE.** The gate rejects ordinal `Basis` citations **by shape**, so no vector can *cite* one —
+  but **nothing stops an ordinal appearing in a vector's prose, a review finding or a wave report**, and
+  none of those has been read. Keep append-only as the default until they have been.
+- **Vocabulary: the coverage-bucket term is `UNCLASSIFIED`, never "uncovered".** `UNCLASSIFIED` is a
+  **computed set difference** and the gate is `UNCLASSIFIED = 0`. At present **27 − 25 = 2, so the
+  coverage gate SHOULD be failing, and it is correct that it is**; it clears when the two vectors land
+  **and somebody classifies them** — an identity that is **not** the enumerator's, **not** the block
+  author's, and **not** a vector author's for the two escape-hatch buckets. Where this register says a
+  *case* is "uncovered" (REQ-HBA-003's freeze scope, AR-HBA-09, the AR-HBA-08 entry) it means a **gap in
+  the specification's reasoning** and has nothing to do with coverage classification — the two senses
+  are unrelated and must not be conflated.
 - **Signal names are not part of assertion identity either — preserve this deliberately.** A signal
   name belongs in an assertion's `response_signal:` field, never inside the hashed sentence. Measured
   on the AR-HBA-01 round: **naming the previously-unnamed output cost ZERO re-hashes**, because no
@@ -918,13 +930,33 @@ AR-HBA-14 touches every clause at once, which is the profile of an edit that int
    says "the **specified** one" explicitly. After AR-HBA-14 that word is *redundant*. **It must NOT be
    removed.** Deleting it would move stamped text and dangle both vector sets' citations, to buy
    nothing. **Redundancy here is deliberate and load-bearing; do not tidy it.**
-   > 🔴 **The hazard reaches further than the stamped text (enumerator, carried here 2026-08-13).**
-   > **Do not delete "specified" from `002.A3` or `008.A3` either — even though they are UNSTAMPED and
-   > deleting it would be FREE TODAY.** If AR-HBA-14 is ever overturned or narrowed, **those two are the
-   > only assertions of the 27 that survive on their own words**; every other one depends on a Format
-   > line, which is a **weaker load path than the sentence itself**. *** That is the worst kind of tidy —
-   > costless at the moment you do it. *** The cost lands only if a later ruling moves, which is exactly
-   > when nobody is looking at these two.
+   > 🔴 **The hazard reaches further than the stamped text (enumerator, carried here 2026-08-13;
+   > reference form fixed by AR-HBA-21).**
+   > **Every assertion whose own hashed text contains the word "specified" — at present two — survives
+   > on its own words if AR-HBA-14 is ever overturned or narrowed.** Every other assertion depends on the
+   > Format line, which is a **weaker load path than the sentence itself**. **Do not delete the word from
+   > either, even though they are unstamped and deleting it would be free today.** *** That is the worst
+   > kind of tidy — costless at the moment you do it. ***
+   >
+   > *** THIS REFERENCE IS DELIBERATELY SELF-FALSIFYING, AND THAT IS THE ENTIRE POINT. *** It identifies
+   > those assertions by a **property of their wording** — not by name, ordinal or claim. **Delete the
+   > word and the sentence stops naming that assertion, and the count stops matching.** It therefore
+   > **breaks visibly at the moment the protection is breached, instead of outliving it.** It is
+   > **set-defined, not count-defined**, so any future assertion needing the same protection is picked up
+   > automatically and no one has to remember to add it.
+   >
+   > **Why NOT a behaviour phrase here**, though AR-HBA-19 mandates that form everywhere else: a
+   > behaviour phrase identifies an assertion by its **claim** — and **a claim is exactly what a
+   > rewording preserves.** A behaviour phrase would go on pointing at these two *after* the word was
+   > deleted, so *** the note would survive the deletion it exists to prevent, going on asserting a
+   > protection that no longer exists *** — the wrong-pointer defect (AR-HBA-17) **inside the note
+   > written to stop the tidy.**
+   >
+   > *Orientation only, never the identifier: these are the early-assertion floor, one for the alarm and
+   > one for the stop demand.*
+   >
+   > **The general lesson, worth carrying past this register:** *** the ordinal never encoded the reason;
+   > it just pointed at two assertions that happened to have it. ***
 2. **AR-HBA-14 × AR-HBA-03's bounds table.** The table's "Where it lives at runtime" column says "FB's
    own `TIME` tunable", which could be misread as making the block authoritative. It is not: that column
    says where the specified value is **installed**, not where it is **defined**. **If the block's
@@ -1109,10 +1141,18 @@ A new kind of edit for this register, so read for what it interacts with rather 
    it.**
 2. **AR-HBA-19 × AR-HBA-14/18's residual `002.A3` / `008.A3`.** The "specified" hazard note names those
    two **to identify assertions whose wording must be preserved** — an *identifying* use, not a
-   *citing* one, and the enumerator supplied **no substitution** for them. **Left as ordinals and
-   flagged here**: they are the register's only remaining positional references and they are therefore
-   the only place AR-HBA-20's discipline is still doing real work. If those two are ever de-cited, this
-   register stops depending on ordinals entirely.
+   *citing* one, and the enumerator supplied **no substitution** for them at the time. They were the
+   register's only remaining positional references and therefore the only place AR-HBA-20's discipline
+   was still doing real work.
+   > ✅ **RESOLVED by AR-HBA-21 (eighth round).** They were **not** replaced with a behaviour phrase —
+   > that would have been actively wrong, because the note's subject is **how those assertions are
+   > worded**, and a behaviour phrase identifies by **claim**, which a rewording preserves. They are now
+   > identified by the **property** ("every assertion whose own hashed text contains the word
+   > *specified*"), which is **self-falsifying**. **No register prose depends on an ordinal any more**,
+   > which is what let AR-HBA-22 demote AR-HBA-20 to a recorded default.
+   > *(This paragraph itself had gone stale between rounds — corrected in the eighth-round read, and
+   > noted as one more instance of the class: a cross-reference that describes a state the register has
+   > since left.)*
 3. **AR-HBA-20 × REQ-HBA-002's structure.** Recorded above as the live case. Worth noting that the
    append-only discipline and AR-HBA-13's *"restoration, not reversal"* pull the same way: limb 1 is
    both **stated first** and **appended last**, and *both* facts are deliberate.
@@ -1125,6 +1165,93 @@ neither ruling touches a clause `Text`.
 supplies a duration to the "cleared" case, which that split leaves open); it does not interact with
 AR-HBA-10's `WITHIN` bound except by supplying the floor that bound lacks; and neither ruling this round
 touches a clause `Text`, so the 27 remain byte-identical.
+
+## Eighth round (2026-08-13) — rulings AR-HBA-21…22
+
+Closes the residual left open by AR-HBA-19: the two ordinal references in the "specified" hazard note.
+**The answer was not the behaviour phrase used everywhere else — a behaviour phrase would have been
+actively wrong there**, for a better reason than the one raised.
+
+### AR-HBA-21 — identify them by the PROPERTY, not by name, ordinal or claim
+
+**RULING:** replace the ordinal reference with a **property-based, self-falsifying** one: *every
+assertion whose own hashed text contains the word "specified" — at present two*.
+
+**Why a behaviour phrase would have been wrong here.** The note's subject is **not what those two
+assertions claim**; it is **how they are worded** — they carry the word "specified" in their own hashed
+text. A behaviour phrase identifies an assertion by its **claim**, and *** a claim is exactly what a
+rewording preserves. *** So if someone later deleted the word, the phrase would still point at them and
+
+> *** THE NOTE WOULD GO ON ASSERTING A PROTECTION THAT NO LONGER EXISTS — THE WRONG-POINTER DEFECT
+> (AR-HBA-17), INSIDE THE NOTE WRITTEN TO STOP THE TIDY. ***
+
+**Why self-falsifying is the right property, and it is the entire point.** Delete the word and the
+sentence **stops naming that assertion, and the count stops matching**. The reference therefore **breaks
+visibly at the moment the protection is breached, instead of outliving it.** Every other reference form
+this register has used fails in the opposite direction — it keeps reading correctly after the thing it
+protects is gone.
+
+**Set-defined, not count-defined.** "At present two" is an orientation aid, not the definition. Any
+future assertion that comes to carry the word is picked up automatically, and nobody has to remember to
+extend the note.
+
+**An orientation gloss is permitted and is marked as such** — *the early-assertion floor, one for the
+alarm and one for the stop demand* — **never as the identifier.** No ordinal, no hash, no signal name.
+
+**The general lesson, recorded because it outlives this register:** *** the ordinal never encoded the
+reason; it just pointed at two assertions that happened to have it. *** A reference that carries the
+*reason* can be checked against reality; one that carries only a *pointer* can only be checked against
+existence — and AR-HBA-19 already showed an existence check passing a silently narrowed reference.
+
+**CHANGED:** the "specified" hazard note in AR-HBA-14's combination re-read item 1. **No clause text, no
+assertion text.**
+
+### AR-HBA-22 — AR-HBA-20 demoted to a recorded default, with the claim's SCOPE stated
+
+**RULING:** keep AR-HBA-20's sentence as a **recorded default, no longer load-bearing**. Record that
+*"no prose depends on ordinals"* is *** VERIFIED FOR THIS REGISTER, UNVERIFIED ELSEWHERE. ***
+
+**Why it can be demoted.** After AR-HBA-21 **no register prose depends on an ordinal**, so reordering
+within a clause is genuinely free and append-only stops carrying weight. That is the outcome AR-HBA-20
+predicted: *de-citing earns the freedom §3.2 appeared to promise.*
+
+⚠️ **Why the claim must be scoped rather than stated generally.** It is verified **for the register
+only**. The gate rejects ordinal `Basis` citations **by shape**, so no vector can *cite* an ordinal —
+**but nothing stops an ordinal appearing in a vector's prose, a review finding or a wave report**, and
+none of those has been read.
+
+> **A scope-less claim here would be exactly the guarantee-that-licenses-the-damage shape, one turn
+> later** — a correctness property, correctly stated, that makes an unsafe operation look safe because
+> it does not cover the thing that actually depends on it. **This register has already produced four
+> members of that family; writing a fifth into the ruling that retires the fourth would be a poor
+> joke.** Append-only therefore stands as the default until the other artifacts have been read.
+
+**CHANGED:** Format section (AR-HBA-20's bullet — status + scope). **No clause text.**
+
+### Combination read — a self-falsifying reference and a demotion
+
+Both are new kinds of edit for this register.
+
+1. **AR-HBA-21 × AR-HBA-19.** These prescribe **different** reference forms, and that is deliberate, not
+   an inconsistency: AR-HBA-19's behaviour phrase is right when the subject is **what an assertion
+   claims**; AR-HBA-21's property reference is right when the subject is **how an assertion is worded**.
+   **The rule that reconciles them: identify by whatever the note is actually about, so the reference
+   fails when its subject does.** Recorded here because a future reader will otherwise see AR-HBA-21 as
+   an exception to AR-HBA-19 and "correct" it — which would reinstate exactly the defect AR-HBA-21
+   removes.
+2. **AR-HBA-22 × AR-HBA-20.** Demotion is **not** deletion. AR-HBA-20's sentence stays, and its live
+   example stays, because the scope caveat means the discipline is still the default. **Do not read
+   "no longer load-bearing" as "no longer applies."**
+3. **AR-HBA-21 × the UNCLASSIFIED vocabulary.** The note calls the two assertions "unstamped", which is
+   about **citation state**, while `UNCLASSIFIED` is about **coverage classification**. Both are true of
+   them right now and they are different facts; neither is a synonym for the other, and the note is
+   about a third thing again — their **wording**. Three orthogonal properties of the same two
+   assertions, which is precisely why identifying them by the right one mattered.
+
+**Checked and found clean:** no substitution altered a conclusion; AR-HBA-21 introduces no claim about
+block behaviour, so the count stays **27**; the register's three plain-English uses of "uncovered" refer
+to **gaps in specification reasoning**, not to coverage buckets, and are correct as written — the
+Format section now says so explicitly so the two senses cannot be conflated later.
 
 ## Pre-stamp consistency pass (2026-08-13)
 
