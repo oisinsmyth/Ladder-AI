@@ -63,8 +63,41 @@ phase 2 with the copy-layer generator.
 >
 > **IN FLIGHT:** *** 5.2 — THE MILESTONE. *** **Enumeration DONE** — 13 assertions over 7 clauses,
 > re-decomposition to **14** pending the §2.2 correction. Register rulings + block consistency with
-> `lad-coder`; vectors by a **different** agent to follow; then one rig session. Also: **6.2** (claims
-> + the reserved range), the contract's compression surface, and the InstanceDB `InOut` fix.
+> `lad-coder`; vectors by a **different** agent to follow; then one rig session. Also: the deployment
+> gateway, **6.1**, and the InstanceDB `InOut` fix.
+>
+> > **THE CONTRACT NOW SPECIFIES MORE THAN THE CODE DOES, DELIBERATELY AND TEMPORARILY.** §2.3 grew
+> > `blockCompression` + `model.compStable`; §2.4 became the single absent-treatment table. Three gaps
+> > are recorded in the skill as **known holes rather than papered over**, and all three are the same
+> > defect one field over: **`completionValue` defaults to 1**, so a block signalling completion with a
+> > *state number* is compared against a value nobody stated and a **healthy block reads as never
+> > having finished**; **`GateCli.Evaluate` never passes the inputs** to the gate that wants them, so
+> > 10b is NOT CHECKED even for a submission that could answer it; and **10b keys on
+> > `runtimeCompression` while the branch inside `Plan` keys on `comp_min`**, so **a wave at comp 8
+> > with `comp_min = 1` passes today with no `comp_stable` declared at all.** Owed by the harness.
+>
+> > ### 📐 X-J's RESERVED BAND — DECLARED 2026-08-13, BY ME, BECAUSE NOBODY HAD
+> >
+> > 6.2 built the range type and **correctly refused to invent the band**: the spec's X-J treatment
+> > says *"a NUMBER RANGE IS RESERVED for harness-generated objects"* and **names no numbers**, and a
+> > reservation with no declarer is the convention X-J exists to replace. So:
+> >
+> > *** BLOCK NUMBERS 9000–9999 ARE RESERVED FOR HARNESS-GENERATED OBJECTS, INDEPENDENTLY IN EACH
+> > NUMBER SPACE (FC, FB, DB). ***
+> >
+> > **Four digits beginning with 9** because the spec's second benefit is that harness objects are
+> > *recognisable by number in every listing*, which is also how DB-7's cleanup knows what it owns.
+> > **A thousand rather than a hundred** because the per-test instance DBs scale with tests × slots,
+> > and the band costs nothing — where running out would mean renumbering live objects.
+> >
+> > 🔴 **CARVE-OUT, AND THE RULE BREAKS WITHOUT IT: OB NUMBERS ARE EXCLUDED.** The spec names **OB80**
+> > as a harness-generated object, and an OB's number is **fixed by its event class** — it is
+> > *identified*, not *chosen*. A band applied to OBs would be violated by the very first object the
+> > spec lists, and the audit would emit a false finding on a correct project. **The first false
+> > finding is what gets an audit switched off**, so this is not a footnote.
+> >
+> > Overturnable at one line. What must follow: the band consumed by `HarnessNumberRange` rather than
+> > hardcoded at a call site, and `claim --allocate` refusing inside it.
 >
 > > 🔴 **5.2's INDEPENDENCE IS STRONGER THAN THE DESIGN ASKED FOR, BY ACCIDENT.** D6 wants the block
 > > author and the vector author to be different agents. **The block — `FB_HopperBlockageMonitor` —
@@ -87,6 +120,32 @@ phase 2 with the copy-layer generator.
 > (*one throw of each kind is one, not six*); whether an **ordinary** delegate exception also kills
 > Portal, *since D32's throw-on-unhandled fires in production*; and **three named exports** that each
 > close a class with zero new test code.
+>
+> > ### 🔴 THE SESSION'S ORDER IS NOT ARBITRARY — THE DESTRUCTIVE PROBES GO LAST
+> >
+> > **A6's POST-abort throw leaves the CPU STOPPED with a recovery download owed (34 s, measured).**
+> > So every question that needs a *healthy, loaded* controller must be answered **before** the first
+> > deliberate abort, or each repetition costs a recovery cycle and the session turns into
+> > download-recover-download. The agenda, in the only order that works:
+> >
+> > | # | what | why it sits here |
+> > |---|---|---|
+> > | 1 | **Deploy** — the loop puts an object on a controller for the first time | everything else needs a loaded CPU |
+> > | 2 | **5.2's test run** — vectors against `FB_HopperBlockageMonitor`, result package back | the milestone; needs the deployment intact |
+> > | 3 | **The three named exports** | read-only, free while the project is open |
+> > | 4 | **A6 repetition, both kinds** | *destructive* — the first abort ends the healthy window |
+> > | 5 | **Does an ORDINARY delegate exception kill Portal?** | same class; D32's throw-on-unhandled fires in production, so this is the one that matters operationally |
+> >
+> > **Two items 6.6/6.7 added that also want this session, and both are cheap once #1 works:**
+> > **no wave has ever run compressed** (every compression constant is arithmetic over measured
+> > inputs, exercised against the simulator only), and **X-D's timer floor rests on `k ≈ 5`, which is
+> > the spec's number and not a measured one** — the scan period under it *is* measured, so what is
+> > unverified is precisely whether a preset scaled to 5 scans still behaves like a timer on a 1214C.
+> > Fold both into #2 rather than scheduling a second session.
+> >
+> > **And record the run-state at each step.** A6 taught us the two abort kinds differ in exactly
+> > that, and a session that only records outcomes cannot tell a CPU that kept running from one that
+> > stopped and was recovered.
 >
 > **FOR THE OWNER — two open questions, plus six rulings I made so nothing blocked:**
 >
