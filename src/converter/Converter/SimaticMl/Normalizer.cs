@@ -478,19 +478,49 @@ public static class Normalizer
             return true;
         }
 
-        // FC/FB "Interface" (parameter declarations) is safe to skip ONLY because
-        // BlockSourceParser.RequireDefaultInterface already hard-errored upstream if it was
-        // anything but the standard parameterless-FC boilerplate — by the time a document reaches
-        // here, a code block's Interface is known-boilerplate. A DB's "Interface" is the real
-        // member declarations (DbSourceParser has no equivalent boilerplate guard — there's
-        // nothing to default to) and must never be skipped. Structural test, not a blanket name
-        // match: a DB's Interface always has a "Static" Section, a code block's never does.
-        // Caught live, 2026-07-10: the original blanket "Interface" strip would have made every
-        // DB round-trip trivially pass without ever comparing member content.
-        if (child.Name.LocalName == "Interface")
-        {
-            return !child.Descendants().Any(e => e.Name.LocalName == "Section" && (string?)e.Attribute("Name") == "Static");
-        }
+        // 🔴 "Interface" IS NO LONGER SKIPPED AT ALL (2026-08-13). AN INTERFACE IS COMPARED.
+        //
+        // THE ORIGINAL PREMISE, AND EXACTLY WHY IT EXPIRED. The rule here used to be: skip a code
+        // block's Interface, keep a DB's, told apart structurally by whether a "Static" Section is
+        // present. The skip was justified — in this file's own words — by
+        // `BlockSourceParser.RequireDefaultInterface` having "already hard-errored upstream if it
+        // was anything but the standard parameterless-FC boilerplate", so "by the time a document
+        // reaches here, a code block's Interface is known-boilerplate". That was true when written
+        // (2026-07-10) and it is the whole load the skip was carrying.
+        //
+        // *** THAT GUARD NO LONGER EXISTS. *** FC/FB parameter-interface modelling landed on
+        // 2026-07-12 (S1 item 20: Input/Output/InOut/Constant sections), which is precisely the
+        // change that made a code block's Interface real content — and `RequireDefaultInterface`
+        // was removed with it. Its only surviving trace in this repository was the sentence above,
+        // citing a guarantee nothing had provided for a month. A premise that expires silently is
+        // worse than one that was never true, because the comment goes on justifying it.
+        //
+        // WHAT THE STRUCTURAL TEST ACTUALLY CAUGHT, measured 2026-08-13 against real exports:
+        //     DB  -> Static (+ nothing else)                          kept    (correct)
+        //     FB  -> Input/Output/InOut/Static/Temp/Constant/None     kept    (BY ACCIDENT: an FB
+        //                                                                      happens to have Static)
+        //     FC  -> Input/Output/InOut/Temp/Constant/Return          DISCARDED
+        //     UDT -> None                                             DISCARDED
+        // So the two categories that fell through are *** AN FC WITH PARAMETERS *** and
+        // *** A UDT, WHICH IS NOTHING BUT ITS INTERFACE. *** Measured consequences: `ScaleValue`'s
+        // `ScaleFactor` retyped Real -> Int compared EQUIVALENT against its real export, and
+        // `drift-check` printed MATCH for `UDT_PusherIO` and `UDT_ShredderSequencerIO` while each
+        // declares an `AutoStartSignal : Bool` member that is absent from its committed export.
+        //
+        // WHAT THE ORIGINAL EVIDENCE WAS PROTECTING, AND WHETHER IT STILL NEEDS PROTECTING. The
+        // structural test existed ONLY to carve the DB case out of a BLANKET skip — this file
+        // records that the blanket strip "would have made every DB round-trip trivially pass
+        // without ever comparing member content", caught live 2026-07-10. That protection is
+        // preserved here in full and then some: with no skip at all, a DB's members are still
+        // compared, and so is everything the carve-out never reached. The original evidence is not
+        // discarded by this change; it is the reason the change is a deletion rather than a wider
+        // exception. (Contrast the wire-endpoint sort, which was added on evidence that a naive
+        // fix would throw away — there is no such evidence here. The only thing the skip protected
+        // was a guarantee that no longer exists.)
+        //
+        // Nothing replaces it: if two documents' interfaces differ, that IS a difference. A
+        // volatile attribute *inside* an Interface would belong in VolatileElementNames on its own
+        // measured evidence, not behind a blanket discard of the whole element.
 
         return false;
     }
