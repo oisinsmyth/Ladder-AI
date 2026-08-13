@@ -93,7 +93,8 @@ public static class GateCli
             document.Enumeration?.RequiredObservations?.ToDictionary(
                 e => e.Key,
                 e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
-                StringComparer.Ordinal));
+                StringComparer.Ordinal),
+            document.Enumeration?.Bounds);
 
         var fidelity = document.Model is null
             ? null
@@ -249,7 +250,8 @@ public static class GateCli
         v.CompressionFactor,
         (IReadOnlyCollection<string>?)v.AssertedBehaviours ?? Array.Empty<string>(),
         v.CompletionSignal ?? string.Empty,
-        v.Kills);
+        v.Kills,
+        v.BoundsUsed);
 
     /// <summary>The report shape the 5.1 skill's Step 5 specifies.</summary>
     public static void Write(SubmissionReport report, SubmissionDocument document, TextWriter output)

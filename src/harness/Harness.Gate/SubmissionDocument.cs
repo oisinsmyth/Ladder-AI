@@ -236,6 +236,25 @@ public sealed class EnumerationDocument
     /// <para>Absent means gate 3h is NOT CHECKED — not a pass.</para>
     /// </summary>
     public Dictionary<string, List<string>>? RequiredObservations { get; set; }
+
+    /// <summary>
+    /// The enumeration's <c>bounds:</c> table — bound name to the SPECIFIED value, e.g.
+    /// <c>{ "persistence_threshold": "T#60S" }</c>.
+    ///
+    /// <para><b>AMB-19.</b> Clauses refer to this table BY NAME so that no number enters a hashed
+    /// assertion text — which is what makes a re-issue cost zero re-hashes, and which also means
+    /// <b>retuning a value here changes what many assertions are true of while moving no assertion ID at
+    /// all</b>. Nothing downstream would notice: no citation dangles, no ID mismatches, and staleness
+    /// keys on assertion IDs rather than on bound values.</para>
+    ///
+    /// <para><b>Carry the BARE VALUE, not the enumeration's provenance prose.</b> The YAML writes
+    /// <c>"T#60S  (Q-HBA-01, owner) — the SPECIFIED value"</c>; this field wants <c>"T#60S"</c>. A
+    /// transcribed comparison is the same trust <c>normalisedTexts</c> already rests on, and a
+    /// mis-transcription shows up as a loud STALE naming both strings rather than as a silent pass.</para>
+    ///
+    /// <para>Absent means gate 3i is NOT CHECKED — never a pass.</para>
+    /// </summary>
+    public Dictionary<string, string>? Bounds { get; set; }
 }
 
 public sealed class MapDocument
@@ -288,6 +307,17 @@ public sealed class VectorDocument
     public List<string>? AssertedBehaviours { get; set; }
     public string? CompletionSignal { get; set; }
     public string? Kills { get; set; }
+
+    /// <summary>
+    /// <b>Which specified bound this vector was written against</b> — bound name to the value used, e.g.
+    /// <c>{ "persistence_threshold": "T#60S" }</c>. Compared against <c>enumeration.bounds</c> by gate 3i.
+    ///
+    /// <para><b>Absent is NOT CHECKED, and it is the AMB-19 hole itself rather than a formality.</b> A
+    /// vector that never records the number it was written against cannot be found stale by anything —
+    /// the bound is retuned, the vector goes on testing the old value, no ID moves, nothing dangles and
+    /// every gate stays green. The field is where a vector makes itself falsifiable on that axis.</para>
+    /// </summary>
+    public Dictionary<string, string>? BoundsUsed { get; set; }
 }
 
 public sealed class ExpectationDocument

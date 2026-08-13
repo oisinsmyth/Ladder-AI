@@ -93,7 +93,10 @@ public sealed record ResultPackage(
     SlotOutcome RunOutcome,
     IReadOnlyList<AssertionOutcome> Assertions,
     IReadOnlyList<int> CoRunners,
-    ValidityStamp Stamp)
+    ValidityStamp Stamp,
+    // AMB-19. Null means the question was not asked for this result; the STATES inside it are the
+    // answers, and four of the five are not passes. See BoundsCurrencyCheck.
+    VectorBoundsCurrency? BoundsCurrency = null)
 {
     /// <summary>
     /// The verdict, in the one precedence that keeps each state meaning what it says.
@@ -105,6 +108,18 @@ public sealed record ResultPackage(
     {
         get
         {
+            // *** AMB-19, AND IT COMES BEFORE ADMISSIBILITY ON PURPOSE. *** A vector whose declared bound
+            // no longer matches the specification is not testing what it says it tests, and that is prior
+            // to whether it is well-formed: there is no useful sense in which a well-formed test of the
+            // wrong number is admissible. It is STALE and not REFUSED because Refused reads as "the
+            // author broke a rule" — this author broke none, the number moved underneath them. And it is
+            // STALE and not FAIL because Fail reads as "the block disagreed with the specification",
+            // which would send somebody to edit correct logic. Only NotDeclared/NoTable fall through, and
+            // they do so because the submission gate refuses them first; if one ever reaches here, the
+            // gate was bypassed and Caveats carries it.
+            if (BoundsCurrency is { PremiseOutOfDate: true })
+                return ResultVerdict.Stale;
+
             if (!Admissibility.Admissible)
                 return ResultVerdict.Refused;
 
@@ -156,6 +171,16 @@ public sealed record ResultPackage(
 
         ResultVerdict.Unsettled =>
             "The value never met its settling condition, or an assertion was never read. NOTHING WAS LEGITIMATELY READ — this is not 'the value was wrong'. A completion flag is not a settling signal; declare what makes the value final.",
+
+        // The two roads to Stale need two different next actions, so they are not collapsed into one
+        // sentence. A frozen mirror is a RIG problem; an out-of-date bound is a VECTOR problem, and
+        // telling somebody the experiment never ran when it was the premise that expired would send them
+        // to the wrong place entirely.
+        ResultVerdict.Stale when BoundsCurrency is { PremiseOutOfDate: true } =>
+            "THE VECTOR'S PREMISE IS OUT OF DATE — IT WAS WRITTEN AGAINST A BOUND THE SPECIFICATION NO LONGER STATES (AMB-19). "
+            + "*** THIS IS NOT A DEFECT IN THE BLOCK AND MUST NOT BE READ AS ONE: DO NOT EDIT THE BLOCK. *** No assertion ID moved, because no hashed assertion text contains a number — "
+            + "which is exactly why nothing else here could have caught it. Re-read the vector against the current bounds table, then re-submit. "
+            + BoundsCurrency.Detail,
 
         ResultVerdict.Stale =>
             "THE EXPERIMENT NEVER RAN. This result says nothing whatsoever about the block, and no part of it may be read as evidence. " + Stimulus.Detail,

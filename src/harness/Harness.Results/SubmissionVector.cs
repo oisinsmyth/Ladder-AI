@@ -176,7 +176,14 @@ public sealed record SubmissionVector(
     int CompressionFactor,
     IReadOnlyCollection<string> AssertedBehaviours,
     string CompletionSignal,
-    string? Kills);
+    string? Kills,
+    // *** WHICH SPECIFIED BOUND THIS VECTOR WAS WRITTEN AGAINST — AMB-19. *** Bound name to the value
+    // the author used, e.g. { "persistence_threshold": "T#60S" }. NULL MEANS THE VECTOR SAID NOTHING,
+    // which is NOT CHECKED and never a pass: a vector that records no number can never be found stale,
+    // so it survives a retune with every mechanical check still green. See BoundsCurrencyCheck for why
+    // that channel exists at all — no hashed assertion text contains a numeric bound, deliberately, so
+    // retuning the table moves no assertion ID and nothing downstream notices.
+    IReadOnlyDictionary<string, string>? BoundsUsed = null);
 
 /// <summary>
 /// Who wrote something, for D6's independence check.

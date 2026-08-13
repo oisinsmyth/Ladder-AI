@@ -122,6 +122,7 @@ public static class SubmissionGate
         gates.Add(RequiredObservations(vectors, enumeration));
         gates.Add(EnumeratorIndependence(vectors, enumeration, blockAuthor));
         gates.Add(AssertionFormAuthority(vectors, enumeration));
+        gates.Add(BoundsCurrency(vectors, enumeration));
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
             "whether the cited assertion is a faithful reading of the clause is what the independent author is for. It is recorded, never verified."));
         gates.Add(Fidelity(vectors, fidelity));
@@ -505,6 +506,89 @@ public static class SubmissionGate
             problems.Count == 0
                 ? $"every citation observes EVERY signal its assertion depends on, across {vectors.Count(v => v.Basis is not null)} cited vector(s)."
                 : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 3i — bounds currency (AMB-19)
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>Does this vector still test the number the specification currently states?</b>
+    ///
+    /// <para>*** THE HOLE THIS CLOSES IS MADE ENTIRELY OUT OF CORRECT DECISIONS. *** No hashed assertion
+    /// text contains a numeric bound — that is what makes a re-issue cost zero re-hashes, and it is the
+    /// property gate 3g and gate 3h both lean on. The enumeration therefore says, rightly, that retuning
+    /// the bounds table re-hashes nothing. Put those together and <b>a retune changes the truth
+    /// conditions of every assertion referring to the table while moving ZERO IDs</b> — 22 of 27 on the
+    /// hopper enumeration. A vector written against the old number goes on passing: no dangling citation
+    /// for gate 3 to catch, no ID mismatch for gate 3g to catch, and no <c>Stale</c> verdict, because
+    /// staleness keys on assertion IDs and not on bound values.</para>
+    ///
+    /// <para>🔴 <b>A MISMATCH REFUSES THE SUBMISSION AND IS REPORTED AS STALE, NEVER AS A FAILURE OF THE
+    /// BLOCK.</b> The vector may have been perfectly correct when written; what changed is underneath it.
+    /// Reporting that as a disagreement would send an agent to edit correct logic — the identical defect
+    /// to the missing-predicate case, where a vector's own omission surfaced as the block being wrong.
+    /// <see cref="ResultPackage.Verdict"/> carries the same distinction through to the result.</para>
+    ///
+    /// <para><b>NOT CHECKED means a comparison could not be made</b>, and it fails closed: no table at
+    /// all, or a vector that declares no bound. The second is the hole itself rather than a formality —
+    /// <b>a vector that never records which number it was written against can never be found stale by
+    /// anything</b>, so it is precisely the vector that survives a retune in silence.</para>
+    /// </summary>
+    private static GateResult BoundsCurrency(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    {
+        const string name = "3i bounds currency (AMB-19)";
+        const string verifier = nameof(BoundsCurrencyCheck) + ", against the enumeration's bounds table";
+
+        if (enumeration.CarriesNoBounds)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, verifier,
+                $"the enumeration supplied no `bounds` table, so the number each of these {vectors.Count} vector(s) was written against was compared against nothing. "
+                + "*** AN ABSENT TABLE IS NOT AN AGREEING ONE. *** This is AMB-19's channel wide open: a bound can be retuned, every assertion referring to it changes what it is true of, "
+                + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`.");
+        }
+
+        var findings = vectors
+            .Select(v => BoundsCurrencyCheck.Evaluate(v.Id, v.BoundsUsed, enumeration.Bounds))
+            .ToArray();
+
+        var stale = findings.Where(f => f.PremiseOutOfDate).ToArray();
+        var undeclared = findings.Where(f => f.State == BoundsCurrencyState.NotDeclared).ToArray();
+
+        // Undeclared is reported FIRST and as NOT CHECKED even when stale vectors were also found, because
+        // the two are different facts and the weaker one must not be dressed in the stronger one's status:
+        // "we compared and refused" would hide "and these others we could not compare at all". Both refuse
+        // the submission, so nothing is admitted either way — only the report differs, and the report is
+        // the build list.
+        if (undeclared.Length > 0)
+        {
+            var detail =
+                $"{undeclared.Length} of {vectors.Count} vector(s) state no bound, so nothing could establish whether they still test the specified number: "
+                + string.Join(" | ", undeclared.Select(f => f.VectorId))
+                + ". *** A VECTOR THAT RECORDS NO BOUND CANNOT BE FOUND STALE BY ANYTHING *** — it survives a retune with every mechanical check green, which is AMB-19 exactly. "
+                + "Declare `boundsUsed` on each vector: bound name to the value it was written against.";
+
+            if (stale.Length > 0)
+            {
+                detail += " AND, SEPARATELY, THESE WERE COMPARED AND DISAGREE — STALE, NOT FAILED, and not a defect in the block: "
+                    + string.Join(" | ", stale.Select(f => f.Detail));
+            }
+
+            return new GateResult(name, GateStatus.NotChecked, false, verifier, detail);
+        }
+
+        if (stale.Length > 0)
+        {
+            return new GateResult(name, GateStatus.Checked, false, verifier,
+                string.Join(" | ", stale.Select(f => f.Detail))
+                + " *** THE BLOCK IS NOT ACCUSED OF ANYTHING HERE. Do NOT edit the block on the strength of this finding. ***");
+        }
+
+        var agreed = findings.SelectMany(f => f.Agreed).Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
+
+        return new GateResult(name, GateStatus.Checked, true, verifier,
+            $"every one of {vectors.Count} vector(s) states the bound it was written against, and every one matches the enumeration's current table ({string.Join("; ", agreed)}). "
+            + "A retune of any of these values would now refuse this submission rather than silently changing what it tests.");
     }
 
     /// <summary>

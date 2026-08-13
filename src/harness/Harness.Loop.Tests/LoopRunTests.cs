@@ -32,7 +32,10 @@ public class LoopRunTests
 
     private static readonly string AssertionIdValue = AssertionId.Compute(ClauseId, AssertionText);
 
-    private static AssertionEnumeration Enumeration(AssertionForm form = AssertionForm.When, string enumerator = "agent-c") =>
+    private static AssertionEnumeration Enumeration(
+        AssertionForm form = AssertionForm.When,
+        string enumerator = "agent-c",
+        IReadOnlyDictionary<string, string>? bounds = null) =>
         AssertionEnumeration.Of(
             new[] { ClauseId },
             new[] { AssertionIdValue },
@@ -44,7 +47,8 @@ public class LoopRunTests
                 // AMB-14: every signal a citation of this assertion depends on. One here, and the
                 // vector observes it.
                 [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { TrivialBlock.CountTag },
-            });
+            },
+            bounds);
 
     private static SubmissionVector Vector(
         int step = 5, int limit = 10, string expected = "10", int settlingScans = 3,
@@ -65,7 +69,13 @@ public class LoopRunTests
             CompressionFactor: 1,
             AssertedBehaviours: new[] { "ramp-to-limit" },
             CompletionSignal: completionSignal ?? TrivialBlock.DoneTag,
-            Kills: kills);
+            Kills: kills,
+            // AMB-19: the limit IS the specified bound this vector was written against, so it is declared
+            // from the same variable rather than restated. Request() then derives the enumeration's table
+            // from this, which keeps every loop fixture CURRENT by construction — deliberately, because
+            // these tests are about the loop. Staleness itself is tested in BoundsCurrencyTests and in
+            // SubmissionGateTests, where the table and the vector are set independently.
+            BoundsUsed: new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = limit.ToString() });
 
     internal static LoopRequest Request(
         SubmissionVector? vector = null,
@@ -76,7 +86,9 @@ public class LoopRunTests
         RuntimeCompression? compression = null,
         BlockCompressionInputs? compressionInputs = null) =>
         new(new[] { vector ?? Vector() },
-            enumeration ?? Enumeration(),
+            // The bounds table is derived from the vector's own declaration, so these fixtures are
+            // bounds-CURRENT whatever `limit` a test picks. See the note on Vector's BoundsUsed.
+            enumeration ?? Enumeration(bounds: (vector ?? Vector()).BoundsUsed),
             fidelity ?? FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity("agent-a"),
             conflicts ?? ConflictGraph.Empty,

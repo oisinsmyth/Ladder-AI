@@ -20,7 +20,12 @@ public sealed record VectorDeclaration(
     string CompletionSignal,
     AgentIdentity VectorAuthor,
     AgentIdentity BlockAuthor,
-    ObservabilityReport? Observability);
+    ObservabilityReport? Observability,
+    /// <summary>
+    /// AMB-19's finding for this vector. Null means the question was never asked, which is itself a
+    /// caveat rather than a pass — see <see cref="BoundsCurrencyCheck"/>.
+    /// </summary>
+    VectorBoundsCurrency? BoundsCurrency = null);
 
 /// <summary>
 /// Assembles DB-8's package from what a run produced and what the submission declared.
@@ -88,7 +93,8 @@ public static class ResultPackageBuilder
             new ValidityStamp(
                 stimulus?.Version?.Observed ?? expectedBuild.Value,
                 map.MapHash,
-                Caveats(declaration, stimulus, slotsCoveredByOneRead)));
+                Caveats(declaration, stimulus, slotsCoveredByOneRead)),
+            declaration.BoundsCurrency);
     }
 
     /// <summary>
@@ -126,6 +132,20 @@ public static class ResultPackageBuilder
         if (stimulus?.Version is null)
         {
             caveats.Add("THE VERSION REGISTER WAS NOT READ for this result, so what was RUNNING is asserted from the plan rather than from the device.");
+        }
+
+        // AMB-19's two NOT-CHECKED states. They do not change the VERDICT — the submission gate refuses
+        // them before a run happens — but if one reaches a built package the gate was bypassed, and a
+        // result whose bound nobody compared must not read as one whose bound agreed.
+        if (declaration.BoundsCurrency is null)
+        {
+            caveats.Add(
+                "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle "
+                + "and no other check here would notice — this result may be a green against a number the specification no longer states.");
+        }
+        else if (declaration.BoundsCurrency.State is BoundsCurrencyState.NotDeclared or BoundsCurrencyState.NoTable)
+        {
+            caveats.Add("BOUNDS CURRENCY WAS NOT ESTABLISHED (AMB-19). " + declaration.BoundsCurrency.Detail);
         }
 
         if (declaration.Fidelity is { ValidatedAgainstPlantData: false } fidelity)

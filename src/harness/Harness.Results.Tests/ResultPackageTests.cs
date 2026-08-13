@@ -30,7 +30,11 @@ public class ResultPackageTests
         IReadOnlyCollection<string>? behaviours = null,
         string vectorAuthor = "agent-b",
         string blockAuthor = "agent-a",
-        bool observabilitySupported = true) =>
+        bool observabilitySupported = true,
+        // AMB-19. The default is a vector whose bound MATCHES the current table, because the default
+        // fixture is a healthy submission. Null models "nobody asked", which is a caveat and not a pass.
+        VectorBoundsCurrency? boundsCurrency = null,
+        bool omitBoundsCurrency = false) =>
         new("V-1",
             basis ?? new Basis("REQ-14", "REQ-14.a"),
             fidelity ?? FidelityDeclaration.Of("M_Weigher", new[] { "fill-to-setpoint", "valve-close" },
@@ -40,7 +44,14 @@ public class ResultPackageTests
             "Demo_Done",
             new AgentIdentity(vectorAuthor),
             new AgentIdentity(blockAuthor),
-            observabilitySupported ? Supportable : null);
+            observabilitySupported ? Supportable : null,
+            omitBoundsCurrency ? null : boundsCurrency ?? CurrentBounds);
+
+    /// <summary>A vector whose declared bound matches the enumeration's table — AMB-19's only passing state.</summary>
+    private static readonly VectorBoundsCurrency CurrentBounds = BoundsCurrencyCheck.Evaluate(
+        "V-1",
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" });
 
     private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
@@ -308,8 +319,91 @@ public class ResultPackageTests
             Package(settling: SettlingState.NotSettled).WhatToDoNext,
             Package(stimulus: new StimulusEvidence(false, false, 0, 8, ManifestPresence.Loaded, null)).WhatToDoNext,
             Package(declaration: Declaration(vectorAuthor: "agent-a")).WhatToDoNext,
+
+            // AMB-19's road to Stale is not the frozen-mirror road, and telling somebody the experiment
+            // never ran when it was the PREMISE that expired sends them to the rig instead of the vector.
+            Package(declaration: Declaration(boundsCurrency: Retuned)).WhatToDoNext,
         };
 
-        Assert.Equal(6, instructions.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(7, instructions.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // AMB-19 — a bound that moved underneath a correct vector
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>The table now says 900; the vector was written against 500 and nobody re-read it.</summary>
+    private static readonly VectorBoundsCurrency Retuned = BoundsCurrencyCheck.Evaluate(
+        "V-1",
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "900" });
+
+    [Fact]
+    public void A_RETUNED_BOUND_IS_STALE_AND_NOT_FAIL_even_when_every_assertion_HELD()
+    {
+        // The trap in full: the run is healthy, the stimulus confirmed, the value settled and every
+        // assertion agreed. Under the old scheme that is an unqualified PASS against a number the
+        // specification no longer states.
+        var package = Package(declaration: Declaration(boundsCurrency: Retuned));
+
+        Assert.Equal(ResultVerdict.Stale, package.Verdict);
+        Assert.False(package.ConclusiveAboutTheBlock);
+    }
+
+    [Fact]
+    public void A_RETUNED_BOUND_IS_STALE_AND_NOT_FAIL_even_when_an_assertion_DISAGREED()
+    {
+        // The direction that matters most. A disagreement observed against the wrong number is not
+        // evidence about the block, and reporting Fail here is precisely the "blame the block for a
+        // retune nobody told the vector about" defect.
+        var package = Package(
+            declaration: Declaration(boundsCurrency: Retuned),
+            assertions: new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", "15") });
+
+        Assert.Equal(ResultVerdict.Stale, package.Verdict);
+        Assert.NotEqual(ResultVerdict.Fail, package.Verdict);
+    }
+
+    [Fact]
+    public void A_RETUNED_BOUND_OUTRANKS_INADMISSIBILITY_so_the_verdict_is_STALE_and_not_REFUSED()
+    {
+        // Refused reads as "the author broke a rule". This author broke none — the number moved
+        // underneath them — so bounds currency is asked before admissibility.
+        var package = Package(declaration: Declaration(vectorAuthor: "agent-a", boundsCurrency: Retuned));
+
+        Assert.Equal(ResultVerdict.Stale, package.Verdict);
+    }
+
+    [Fact]
+    public void The_STALE_instruction_for_a_retune_says_DO_NOT_EDIT_THE_BLOCK_and_never_says_the_experiment_did_not_run()
+    {
+        var instruction = Package(declaration: Declaration(boundsCurrency: Retuned)).WhatToDoNext;
+
+        Assert.Contains("DO NOT EDIT THE BLOCK", instruction, StringComparison.Ordinal);
+        Assert.Contains("AMB-19", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("THE EXPERIMENT NEVER RAN", instruction, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_vector_that_DECLARED_NO_BOUND_does_not_change_the_verdict_but_is_CAVEATED()
+    {
+        // Unknown currency is not known staleness, so it must not masquerade as one. What it may not do
+        // is vanish: the submission gate refuses it first, and if one ever reaches a package the gate
+        // was bypassed and the result must still say so.
+        var undeclared = BoundsCurrencyCheck.Evaluate("V-1", null,
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" });
+
+        var package = Package(declaration: Declaration(boundsCurrency: undeclared));
+
+        Assert.Equal(ResultVerdict.Pass, package.Verdict);
+        Assert.Contains(package.Stamp.Caveats, c => c.Contains("BOUNDS CURRENCY WAS NOT ESTABLISHED", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_package_NOBODY_ASKED_about_bounds_carries_the_caveat_rather_than_silence()
+    {
+        var package = Package(declaration: Declaration(omitBoundsCurrency: true));
+
+        Assert.Contains(package.Stamp.Caveats, c => c.Contains("NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND", StringComparison.Ordinal));
     }
 }

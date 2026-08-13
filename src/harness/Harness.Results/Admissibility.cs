@@ -66,13 +66,28 @@ public sealed record Basis(string ClauseId, string AssertionId);
 /// re-issues cost zero re-hashes when an output was renamed. Naming both signals in the text to close
 /// this would give that property away to fix something that lives in a field.</para>
 /// </param>
+/// <param name="Bounds">
+/// The enumeration's <c>bounds:</c> table — the SPECIFIED values that clauses refer to BY NAME rather
+/// than by number.
+///
+/// <para><b>AMB-19, and it is the exact price of the property described just above.</b> Keeping numbers
+/// out of the hashed text is what has made four re-issues cost zero re-hashes; the same choice means
+/// <b>retuning this table changes what many assertions are TRUE OF while moving no assertion ID at
+/// all</b>. A vector written against the old value then goes on passing — nothing dangles, nothing
+/// reads Stale — because staleness keys on assertion IDs and not on bound values.</para>
+///
+/// <para><b>So the table is carried here to be COMPARED against what a vector says it used</b>
+/// (<see cref="BoundsCurrencyCheck"/>). Absent means the comparison was made against nothing, which the
+/// gate reports as NOT CHECKED and never as agreement.</para>
+/// </param>
 public sealed record AssertionEnumeration(
     IReadOnlySet<string> Clauses,
     IReadOnlySet<string> Assertions,
     IReadOnlyDictionary<string, AssertionForm> Forms,
     AgentIdentity Enumerator,
     IReadOnlyDictionary<string, string>? NormalisedTexts = null,
-    IReadOnlyDictionary<string, IReadOnlySet<string>>? RequiredObservations = null)
+    IReadOnlyDictionary<string, IReadOnlySet<string>>? RequiredObservations = null,
+    IReadOnlyDictionary<string, string>? Bounds = null)
 {
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
@@ -97,19 +112,27 @@ public sealed record AssertionEnumeration(
     public IReadOnlySet<string>? RequiredObservationsOf(string assertionId) =>
         RequiredObservations is not null && RequiredObservations.TryGetValue(assertionId, out var signals) ? signals : null;
 
+    /// <summary>
+    /// True when no bounds table was supplied, so AMB-19's comparison has nothing to compare against.
+    /// <b>Not the same as a table that agrees with every vector.</b>
+    /// </summary>
+    public bool CarriesNoBounds => Bounds is null || Bounds.Count == 0;
+
     public static AssertionEnumeration Of(
         IEnumerable<string> clauses,
         IEnumerable<string> assertions,
         IReadOnlyDictionary<string, AssertionForm>? forms = null,
         string enumerator = "",
         IReadOnlyDictionary<string, string>? normalisedTexts = null,
-        IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null) =>
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null,
+        IReadOnlyDictionary<string, string>? bounds = null) =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
             new AgentIdentity(enumerator),
             normalisedTexts,
-            requiredObservations);
+            requiredObservations,
+            bounds);
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>

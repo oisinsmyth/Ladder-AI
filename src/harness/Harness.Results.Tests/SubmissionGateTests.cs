@@ -44,7 +44,11 @@ public class SubmissionGateTests
         IReadOnlyList<ObservabilityDeclaration>? expectations = null,
         AssertionForm form = AssertionForm.When,
         SettlingDeclaration? settling = null,
-        IReadOnlyList<BlacklistEntry>? blacklist = null) =>
+        IReadOnlyList<BlacklistEntry>? blacklist = null,
+        // AMB-19: the default vector DECLARES the bound it was written against, because the default
+        // fixture is supposed to be a COMPLETE submission. Pass an empty dictionary to model the vector
+        // that says nothing — that is the hole, and it has its own tests below.
+        IReadOnlyDictionary<string, string>? boundsUsed = null) =>
         new(id, slot, 0, new AgentIdentity(author),
             basis ?? new Basis("REQ-014", AssertionIdValue),
             new Dictionary<string, string> { ["Demo_Step"] = "5" },
@@ -58,7 +62,12 @@ public class SubmissionGateTests
             comp,
             new[] { "ramp-to-limit" },
             "Demo_Done",
-            kills);
+            kills,
+            boundsUsed ?? SpecifiedBounds);
+
+    /// <summary>The enumeration's bounds table for these fixtures — AMB-19's right-hand side.</summary>
+    private static readonly IReadOnlyDictionary<string, string> SpecifiedBounds =
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = "10", ["dwell"] = "T#5S" };
 
     private static SubmissionReport Check(
         IReadOnlyList<SubmissionVector>? vectors = null,
@@ -73,7 +82,7 @@ public class SubmissionGateTests
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations),
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
             FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity(blockAuthor),
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
@@ -225,7 +234,8 @@ public class SubmissionGateTests
             new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
             {
                 [AssertionIdValue] = new HashSet<string>(signals, StringComparer.Ordinal),
-            });
+            },
+            SpecifiedBounds);
 
     /// <summary>
     /// *** AMB-14's CASE. *** A simultaneity claim names two signals. A vector observing ONE of them, and
@@ -662,5 +672,135 @@ public class SubmissionGateTests
 
         Assert.False(gate.Passed);
         Assert.Contains("declares no expected value", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 3i — bounds currency (AMB-19). The channel made entirely out of correct decisions.
+    // ---------------------------------------------------------------------------------------------
+
+    private static AssertionEnumeration EnumerationWithBounds(IReadOnlyDictionary<string, string>? bounds) =>
+        AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, bounds);
+
+    [Fact]
+    public void A_vector_written_against_the_CURRENT_bounds_passes_gate_3i_and_the_pass_NAMES_the_values()
+    {
+        var gate = Gate(Check(), "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+
+        // A pass that does not say WHICH numbers it compared is not distinguishable from one that
+        // compared nothing, which is the whole complaint this gate answers.
+        Assert.Contains("ramp_limit = 10", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("dwell = T#5S", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_RETUNED_bound_refuses_the_submission_although_NOT_ONE_ASSERTION_ID_MOVED()
+    {
+        // The retune, exactly as AMB-19 describes it: the table now says T#9S, the vector still says
+        // T#5S, and the enumeration is otherwise IDENTICAL — same clause, same assertion ID, same
+        // normalised text. Every other gate stays green, which is the point.
+        var retuned = EnumerationWithBounds(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ramp_limit"] = "10",
+            ["dwell"] = "T#9S",
+        });
+
+        var report = Check(enumeration: retuned);
+
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        // Nothing else noticed. Not decoration — it is the measurement that says the hole was real:
+        // the citation still resolves, the ID still recomputes, the form still agrees.
+        Assert.True(Gate(report, "3 basis").Passed);
+        Assert.True(Gate(report, "3g assertion IDs recompute").Passed);
+        Assert.True(Gate(report, "3e assertion form authority").Passed);
+
+        var gate = Gate(report, "3i bounds currency");
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("dwell", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("T#5S", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("T#9S", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_retune_is_reported_as_STALE_and_the_refusal_SAYS_NOT_TO_EDIT_THE_BLOCK()
+    {
+        // The distinction the brief turns on. A Fail would send an agent to edit correct logic — the
+        // same defect as the missing-predicate case one gate up — so the wording is load-bearing and is
+        // asserted rather than left to whoever next edits the string.
+        var retuned = EnumerationWithBounds(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ramp_limit"] = "10",
+            ["dwell"] = "T#9S",
+        });
+
+        var gate = Gate(Check(enumeration: retuned), "3i bounds currency");
+
+        Assert.Contains("STALE, NOT FAILED", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("Do NOT edit the block", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("the block disagreed", gate.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_vector_that_states_NO_BOUND_is_NOT_CHECKED_and_never_a_pass()
+    {
+        // *** THIS IS AMB-19 ITSELF, NOT A FORMALITY. *** A vector recording no number cannot be found
+        // stale by anything, so it is the one that survives a retune in silence.
+        var silent = Vector(boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal));
+
+        var report = Check(new[] { silent });
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+        Assert.Contains("CANNOT BE FOUND STALE BY ANYTHING", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_ABSENT_bounds_table_is_NOT_CHECKED_rather_than_agreement()
+    {
+        var report = Check(enumeration: EnumerationWithBounds(null));
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("AN ABSENT TABLE IS NOT AN AGREEING ONE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_UNDECLARED_vector_keeps_its_NOT_CHECKED_status_even_when_another_vector_is_STALE()
+    {
+        // The two facts must not be collapsed. "We compared and refused" would hide "and these others we
+        // could not compare at all", and the second is the build list.
+        var retuned = EnumerationWithBounds(new Dictionary<string, string>(StringComparer.Ordinal) { ["dwell"] = "T#9S" });
+
+        var stale = Vector(id: "V-stale", boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal) { ["dwell"] = "T#5S" });
+        var silent = Vector(id: "V-silent", boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal));
+
+        var gate = Gate(Check(new[] { stale, silent }, enumeration: retuned), "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("V-silent", gate.Detail, StringComparison.Ordinal);
+
+        // And the stale one is still NAMED — downgrading the status must not lose the finding.
+        Assert.Contains("V-stale", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("STALE, NOT FAILED", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_bound_the_table_does_not_contain_is_UNKNOWN_rather_than_stale()
+    {
+        var gate = Gate(
+            Check(new[] { Vector(boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal) { ["settle_time"] = "T#1S" }) }),
+            "3i bounds currency");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("does not contain", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("never to the block", gate.Detail, StringComparison.Ordinal);
     }
 }

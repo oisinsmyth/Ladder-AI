@@ -23,7 +23,8 @@ public class GateCliTests
       "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"],
                        "forms": { "REQ-014:ffcc38": "When" }, "enumerator": "agent-c",
                        "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" },
-                       "requiredObservations": { "REQ-014:ffcc38": ["Demo_Count"] } },
+                       "requiredObservations": { "REQ-014:ffcc38": ["Demo_Count"] },
+                       "bounds": { "ramp_limit": "10" } },
       "map": { "providedFor": { "Demo_Count": ["Latched"] } },
       "tagMapPath": "tags.json",
       "deployment": {
@@ -44,7 +45,8 @@ public class GateCliTests
         "compressionFactor": 1,
         "assertedBehaviours": ["ramp-to-limit"],
         "completionSignal": "Demo_Done",
-        "kills": "a ramp that overshoots by one step"
+        "kills": "a ramp that overshoots by one step",
+        "boundsUsed": { "ramp_limit": "10" }
       }]
     }
     """;
@@ -368,6 +370,34 @@ public class GateCliTests
 
         // And with it, the same document is admissible — so the pass-through is load-bearing for a PASS
         // and not only for a refusal.
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(Good).Exit);
+    }
+
+    [Fact]
+    public void BOTH_HALVES_OF_AMB_19_REACH_THE_GATE_FROM_THE_DOCUMENT()
+    {
+        // The table and the vector's declaration are two separate pass-throughs, and dropping EITHER has
+        // to turn the good fixture red — a check wired on one side only is a check whose other side is
+        // decoration. Tested by removal rather than by inspection, so the wiring cannot rot silently.
+        var noTable = Good.Replace("\"bounds\": { \"ramp_limit\": \"10\" }", "\"boundsRemoved\": {}", StringComparison.Ordinal);
+        Assert.NotEqual(Good, noTable);
+        Assert.Equal(GateExit.NotAdmissible, Run(noTable).Exit);
+        Assert.Contains("AN ABSENT TABLE IS NOT AN AGREEING ONE", Run(noTable).Output, StringComparison.Ordinal);
+
+        var noDeclaration = Good.Replace("\"boundsUsed\": { \"ramp_limit\": \"10\" }", "\"boundsUsedRemoved\": {}", StringComparison.Ordinal);
+        Assert.NotEqual(Good, noDeclaration);
+        Assert.Equal(GateExit.NotAdmissible, Run(noDeclaration).Exit);
+        Assert.Contains("CANNOT BE FOUND STALE BY ANYTHING", Run(noDeclaration).Output, StringComparison.Ordinal);
+
+        // And the retune itself, end to end through the CLI: the ONLY edit is the table's value, so
+        // nothing else in the document can account for the refusal.
+        var retuned = Good.Replace("\"bounds\": { \"ramp_limit\": \"10\" }", "\"bounds\": { \"ramp_limit\": \"30\" }", StringComparison.Ordinal);
+        var (exit, output) = Run(retuned);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("STALE, NOT FAILED", output, StringComparison.Ordinal);
+        Assert.Contains("Do NOT edit the block", output, StringComparison.Ordinal);
+
         Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(Good).Exit);
     }
 
