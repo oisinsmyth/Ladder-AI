@@ -1797,6 +1797,59 @@ deliberately coupled pair is caught rather than silently tolerated.
 
 ---
 
+### ✅ PHASE 3 IS BUILT — and the interfering pair had to be built subtly to be real (2026-08-13, `0c3cb93`)
+
+**375 → 436 tests**, five assemblies green. `WaveRun` with max-tensor length, uncommanded null slots
+and per-slot distribution on exit (3.4/3.5); the echo region plus an `SCOIL` latch of each block's own
+start condition, cleared at inert (3.3).
+
+> #### 🎯 HOW THE INTERFERING PAIR WAS MADE TO GENUINELY INTERFERE
+>
+> The second block gains **one network writing into the first block's accumulator** — overlapping
+> reachable state (D9), the edge DB-13's conflict graph is defined by, and a real extra `Add` part in
+> the SimaticML.
+>
+> *** THE LOAD-BEARING DETAIL IS THAT THE RUNG IS GATED ON THE SECOND BLOCK'S OWN START CONDITION. ***
+> Every block is called every scan, **including throughout inert** (D37) — so a coupling written the
+> obvious way would corrupt the first block's **solo** run too, and *** A DIFFERENTIAL CANNOT SEE A
+> FAULT PRESENT IN BOTH OF ITS ARMS. IT WOULD HAVE COME BACK CLEAN. *** Gating makes the coupling exist
+> only when both slots are active, which is what A5 actually asks.
+>
+> Held by three assertions: the pair diverges (`[10,1]` solo versus `[12,1]` together); **each block
+> alone still matches its model**; and the two builds differ by **exactly one rung**. Detection is the
+> exit criterion's own differential, and **the models catch it independently and agree** — asserted
+> deliberately, because a coupling only the differential could see would be one the models were blind
+> to.
+
+**A second interference source closed:** `RegisterMap` now **refuses to exist** with overlapping
+regions — a throw, not a report, since an aliased map is a derivation defect with no caller to tell.
+
+**14 guards broken and confirmed red**, plus *** A SECOND TEST THAT COULD NOT FAIL, IN TWO PHASES. ***
+The disjointness check began as a post-condition **inside `MapAllocator`** — deleting it left the suite
+green, because the allocator can never produce an overlapping map. Moved into `RegisterMap`'s
+construction, where a hand-built bad map goes red. *(Second-order trap met on the way: a `with`
+expression **skips a record's validation**, so the test rebuilds through the real constructor.)*
+
+#### What the spec does not say
+
+  - 🔴 *** THE ECHO LATCH IS NOT BEHAVIOURALLY EXERCISED AND CANNOT BE, PC-SIDE. *** The copy layer
+    re-drives the start condition every scan, so within an index a level `COIL` reads **identically**
+    to an `SCOIL` at any poll rate. Kept, because X-E's reasoning implies it and it matters for a start
+    condition the copy layer does not drive — but **labelled unexercised rather than left looking
+    proven.** The *clearing* at inert is exercised.
+  - **The echo guards the map's remaining `[I]`:** a wrong `BitAddressOf` byte now presents as
+    `CommandedButDidNotRun` rather than as an unexplained timeout.
+  - *** "ONE INERT PHASE PER TENSOR" IS ONLY WELL-DEFINED BECAUSE THE TENSOR'S SLOTS ARE CONFLICT-FREE
+    *** — an assumption the code depends on and **cannot check**.
+
+> #### ⚠️ A5 IS NOT RETIRED, AND THE DISTINCTION MATTERS
+>
+> What is shown is that **the harness does not couple slots, and that a coupling is caught.** What is
+> *not* shown is *** WHETHER TWO INDEPENDENT BLOCKS INTERFERE ON A 1214C ***, which is what A5 is and
+> what everything multi-agent rests on. Still owed on the device: A5 itself, `MB_SERVER` against the
+> wider two-slot map, and **the intermittent, poll-timing-dependent form of interference** — the one
+> PC-side work explicitly cannot reach.
+
 ## PHASE 4 — THE DOWNLOAD LOOP
 
 **Cost: moderate. Mostly PC-side, and mostly already specified.**
