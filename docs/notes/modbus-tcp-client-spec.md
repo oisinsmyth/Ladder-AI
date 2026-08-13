@@ -91,7 +91,9 @@ one width and was being applied at another:
 | median, full width | **75–77 ms** — confirms the 78 ms working figure, unchanged |
 | p99, per run | **157 / 201 / 168 / 185 ms** — two of four exceed 173 |
 | p99, n-weighted | ~183 ms (central estimate, **not** the constant used) |
-| **p99 used for every budget** | **201 ms** — the *worst observed*, deliberately |
+| **p99 — used for every BOUND** | **201 ms** — the *worst observed*, deliberately |
+| **p90 — used for every DURATION** | **102.79 ms** — pooled, n = 16,200, CI [101.77, 103.93] |
+| **`exceed_250`** | **0.352%** (57/16,200) — *"about one round trip in 300"*; CI ±26%, so never quote it to three figures |
 | marginal cost per register | **~0.040 ms on writes, no trend on reads** — so a full-width write costs ~4.9 ms more than a single-register one, ~6% of a round trip |
 
 **Why the worst observed and not the middle:** four runs is a thin basis for a tail statistic (SD
@@ -126,11 +128,17 @@ side. **Confidence is low-to-moderate; more runs is the only thing that firms it
 `ITransport.Read` is per-tag, so a naive implementation costs one round trip per tag. Re-derived on
 the measured figures (`PC-Client-Modbus-Spec-Draft-final.txt` §12a derivation 6):
 
-- a 50-tag assertion sweep, one round trip each: **3.9 s** typical, **10.1 s at the p99** — plus a
-  50/2000 = 2.5% chance that any given sweep eats a 2,216 ms outlier;
-- the same 50 tags inside **one** FC03 (≤125 registers): **one** round trip, 78 ms typical / 201 ms
-  at the p99 — a **50x** reduction;
-- a scan-counter poll: one round trip, 78 ms typical / 201 ms at the p99.
+- a 50-tag assertion sweep, one round trip each: **5.1 s at `RTT_p90`** (10.1 s at the p99, the
+  pessimistic case) — plus **~0.18 expected round trips over 250 ms per sweep, about one sweep in
+  six**;
+- the same 50 tags inside **one** FC03 (≤125 registers): **one** round trip, **102.79 ms at
+  `RTT_p90`** (201 ms at the p99) — a **50x** reduction;
+- a scan-counter poll: one round trip, **102.79 ms at `RTT_p90`** (201 ms at the p99).
+
+> 🔴 **These are DURATION-shaped figures, which is why they key on `RTT_p90`. Do not carry that
+> substitution into a timeout.** §12a's F-5 kind rule: **bound-shaped figures — timeouts, backstops,
+> caps, admission limits — keep `RTT_p99`, and `RTT_max` remains the outlier term.** By definition
+> **10% of round trips exceed the p90**, so a timeout set there would fire on one request in ten.
 
 **Therefore `ModbusTransport` reads in blocks and serves tags from a snapshot.** One transaction
 fetches a contiguous register range; individual tag reads decode out of that buffer.
@@ -142,11 +150,10 @@ trade is now measured rather than asserted —
 | | cost |
 |---|---|
 | widening a read across the full range | **~1.0 ms** (interleaved, better controlled) — **~4.9 ms** (across-session, conservative) |
-| one additional round trip | **78 ms** typical, **201 ms** at the p99 |
+| one additional round trip | **102.79 ms** at `RTT_p90` |
 
-— so **batching wins by at least 16x at the median and 41x at the p99**, and by ~80x/~200x on the
-better-controlled figure. The conservative number is the one quoted, so nothing turns on which is
-right. Under the old assumption a narrow range was a saving; it is worth hundredths of a millisecond
+— so **batching wins by at least 21x**, and by ~100x on the better-controlled figure. The
+conservative number is the one quoted, so nothing turns on which is right. Under the old assumption a narrow range was a saving; it is worth hundredths of a millisecond
 per register, against 78–201 ms for every extra exchange it forces.
 
 > ✅ **The earlier `[I]` is retired — measured at 123 registers, and it held.** This note used to warn

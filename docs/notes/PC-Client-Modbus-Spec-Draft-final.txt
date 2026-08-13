@@ -1593,16 +1593,20 @@ rounds per test:
 
     round trips per index  =  K x ceil(W/123) + P x ceil(K/R) + 1        R = floor(125/W)   [D]
 
-      W = 123, R = 1 : 6 + 12 + 1 = 19/index = 95/wave = *** 19.1 s at RTT_p99 201 ms ***
-      W =  20, R = 6 : 6 +  2 + 1 =  9/index = 45/wave = ***  9.0 s ***
+      W = 123, R = 1 : 6 + 12 + 1 = 19/index = 95/wave = *** 9.8 s at RTT_p90 102.79 ms ***
+      W =  20, R = 6 : 6 +  2 + 1 =  9/index = 45/wave = *** 4.6 s ***
 
     (The read term is `P x ceil(K/R)` because ONE FC03 read may cover R WHOLE slots — X-A's rule
-     as amended by F-1, adopted 2026-08-13. It was `P x K` until then.)
+     as amended by F-1, adopted 2026-08-13. It was `P x K` until then. And the figures are keyed
+     on RTT_p90 because a wave cost is DURATION-SHAPED — §12a's F-5 kind rule; they were quoted
+     at RTT_p99 for part of 2026-08-13, which was a 1-in-100 case being presented as the cost.)
 
     row as written above          test half + boundary      + wire (R=1)      + wire (R=6)
-    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->  *** ~74 s, +35% ***  ~64 s, +16%
-    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->      ~114 s, +20%     ~104 s, +10%
-    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->      ~389 s,  +5%     ~379 s,  +2%
+    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->  *** ~65 s, +18% ***  ~60 s,  +8%
+    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->      ~105 s, +10%     ~100 s,  +5%
+    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->      ~380 s,  +3%     ~375 s,  +1%
+
+    (at RTT_p99, the pessimistic case: 74 / 114 / 389 at R=1, 64 / 104 / 379 at R=6)
 
 *** THE CONCLUSIONS OF THIS SECTION ALL SURVIVE — ~74 s is still order-of-a-minute, downloads are
 still not the bottleneck, and the packed-versus-serial ratio is unaffected because the serial case
@@ -2065,6 +2069,43 @@ THE INPUTS — all [M], on the rig, over the tunnel
                                                      The body DOES move with width — reproducibly,
                                                      and tinily.
 
+  *** AND THE SAME 16,200 ROUND TRIPS YIELD F-5's TWO CONSTANTS — EXTRACTED 2026-08-13. ***
+
+    RTT_p90            102.79 ms     [M]  pooled, nearest-rank, n = 16,200
+                                          95% CI [101.77, 103.93]  ->  +/- ~1.05%
+    exceed_250         57 / 16,200   [M]  = *** 0.352% *** — the fraction of round trips over
+                       = 0.352%           250 ms. 95% CI [0.261%, 0.443%]  ->  +/- ~26%
+    max in this session   837 ms     [M]  *** 8.1x the p90 *** (the 2,216 ms figure carried as
+                                          RTT_max is from the earlier narrow sweep, and remains
+                                          the worst ever seen — 21.6x the p90)
+
+    COMPOSITION, RECORDED SO NOBODY TAKES THE POOLING ON TRUST: *** 9,000 READ (FC03) + 7,200
+    WRITE (FC16). *** The two arms differ by **2.1 ms at p90** and **0.08 pp in exceedance** —
+    small enough that pooling is defensible, and stated rather than asserted so the reader can
+    disagree with the judgement instead of being unable to see it.
+
+    *** POOLING ACROSS SESSIONS WAS MEASURED, NOT ASSUMED — AND THIS ANSWERS THE OBVIOUS
+    OBJECTION BEFORE IT IS RAISED. ***
+
+        five earlier armed runs, DIFFERENT AND EARLIER SESSIONS   n =  7,000  ->  105.57 / 0.371%
+        the F-4 interleaved session                               n = 16,200  ->  102.79 / 0.352%
+        everything together                                       n = 23,200  ->  103.55 / 0.358%
+
+    *** INDEPENDENT SESSIONS AGREE TO 2.8 ms ON p90 AND 0.02 pp ON THE RATE. *** The objection
+    is the natural one — *§12a's own constants block says the p99 is a SESSION figure, so why is
+    a p90 from one session any better?* — and it has an answer: *** F-4's SESSION-DOMINANCE
+    FINDING IS SPECIFIC TO THE p99 AND DOES NOT CARRY TO THESE TWO. *** The p99 varied by 44 ms
+    across four runs of one session; the p90 varies by 2.8 ms across sessions weeks apart. That
+    is not a claim about tails in general, it is a measurement about these two statistics.
+
+    *** THE 250 ms THRESHOLD IS WELL-PLACED RATHER THAN UNIQUELY CORRECT, AND THAT DISTINCTION
+    IS RECORDED SO IT IS NOT DEFENDED AS THOUGH IT WERE DERIVED. *** It clears the worst F-4
+    p99 cell (195 ms) by 28%, which is the property that matters: *** exceed_250 MEASURES THE
+    REGIME BEYOND THE p99 RATHER THAN RESTATING IT. *** Alternatives work and were computed —
+    `>200 ms` gives 0.55%, `>300 ms` gives 0.25% — so the choice is a reasonable place to stand
+    on a smooth curve, not a discovered boundary. Moving it later is a re-report, not a
+    re-measurement.
+
   *** THIS IS NOT A STRONG NULL AND MUST NOT BE WRITTEN UP AS ONE. THE POWER LIMITS ARE PART OF
   THE RESULT: ***
     - *** THE DESIGN IS NOT POWERED FOR 28 ms AT p99. *** Smallest detectable difference is 83 ms
@@ -2087,75 +2128,107 @@ the harness will actually use it. A LAN figure would be better and would also be
 THE CONSTANTS EVERY DERIVATION BELOW USES, AND WHICH BAND EACH TAKES
 ................................................................................
 
+    *** EACH CONSTANT NOW CARRIES THE KIND OF FIGURE IT MAY BE USED IN — see the F-5 rule below.
+    A CONSTANT USED IN THE WRONG KIND IS A DEFECT, NOT A STYLE CHOICE. ***
+
     RTT_typ  =   78 ms   [D]  the WORST of the median band, and the full-width re-measurement
-                              CONFIRMS IT (75-77). *** EXPECTED DURATIONS ONLY. *** Unchanged
-                              2026-08-13.
+                              CONFIRMS IT (75-77). *** DURATION-SHAPED ONLY. *** Unchanged
+                              2026-08-13. Superseded IN PRACTICE by RTT_p90 for planning figures,
+                              and retained because it is what "typical" means in prose.
+    RTT_p90  = 102.79 ms [M]  n = 16,200, CI [101.77, 103.93]. *** DURATION-SHAPED ONLY —
+                              NEVER A BOUND. *** 10% of round trips exceed it by construction.
+                              The planning figure: what a wave costs, what a sweep costs.
+    exceed_250 = 0.352%  [M]  57/16,200, CI [0.261%, 0.443%]. *** NEITHER A DURATION NOR A BOUND —
+                              it is an EXPOSURE RATE. *** It sizes nothing; it COUNTS what escapes
+                              whatever was sized. Multiply by the round trips in an operation.
+                              Quote as "about one in 300", never to three figures.
     RTT_p99  =  201 ms   [M]  *** THE WORST RUN p99 OBSERVED, NOT THE WEIGHTED CENTRAL ESTIMATE.
                               The choice of the worst rather than the middle is argued immediately
                               below and is deliberate. *** EVERY BUDGET, EVERY CAP, EVERY WIDTH
                               USES THIS ONE. A wave issues hundreds of round trips, so "one in a
                               hundred" is not a rare event within a single wave — it is several
                               per wave.
+                              *** BOUND-SHAPED ONLY, AND F-5 DID NOT RETIRE IT. *** Every cap,
+                              timeout, backstop, admission limit and observability window still
+                              keys on THIS, not on the p90.
                               *** IT IS A SESSION FIGURE, NOT A WIDTH FIGURE — see the re-basing
                               note below. It was raised from 173 while a width effect was
                               suspected; the width effect was then looked for and NOT FOUND, and
                               the value stands on a different footing than the one it was raised
                               on. ***
-    RTT_max  = 2216 ms   [M]  *** TIMEOUTS ONLY, NEVER THROUGHPUT. *** Derivation 4. Not
-                              re-measured at full width; unchanged.
+    RTT_max  = 2216 ms   [M]  *** TIMEOUTS ONLY, NEVER THROUGHPUT — the outlier term in every
+                              BOUND. *** Derivation 4. Not re-measured at full width; unchanged.
+                              The F-4 session's own maximum was 837 ms (8.1x the p90); 2,216 ms
+                              remains the worst ever observed and is what a timeout must clear.
     scan     = 23.33 ms  [D]  the LOADED row. The harness always has traffic on it, so idle is
                               the wrong row to budget from — and the difference is only 3%, so
                               taking the pessimistic one costs nothing.
 
-*** 🔴 THE TAIL METRIC IS CHANGING — F-5 ADOPTED BY THE OWNER, 2026-08-13. THE TRANSITION IS STAGED,
-AND THIS BLOCK IS WHERE ITS STATE LIVES. ***
+*** ✅ F-5 IS LANDED — THE TAIL IS NOW SPECIFIED AS A PAIR, 2026-08-13. ***
 
-    THE FORM THE DESIGN NOW COMMITS TO:
+    RTT_p90     = 102.79 ms      [M]  n = 16,200, 95% CI [101.77, 103.93], +/- ~1.05%
+    exceed_250  = 0.352%         [M]  57 events / 16,200, 95% CI [0.261%, 0.443%], +/- ~26%
 
-        RTT_p90        <PENDING EXTRACTION>   the budgeting constant
-        exceed_250     <PENDING EXTRACTION>   fraction of round trips over 250 ms
-                                              (threshold above all six of F-4's pooled cells)
+*** 🔴🔴 AND THE RULE THAT GOVERNS THEM, WHICH IS MORE IMPORTANT THAN EITHER NUMBER. READ THIS
+BEFORE SUBSTITUTING EITHER CONSTANT ANYWHERE. ***
 
-    A budget is then a p90-keyed figure PLUS an expected count of over-threshold exchanges:
-    `exceed_250 x (round trips in the operation)`, which is a number the reader can act on.
+    *** EVERY FIGURE IN THIS SECTION IS EITHER DURATION-SHAPED OR BOUND-SHAPED, AND THEY TAKE
+    DIFFERENT CONSTANTS: ***
 
-    *** BOTH CONSTANTS ARE COMPUTABLE FROM DATA THAT ALREADY EXISTS — F-4's 16,200 round trips —
-    AND NEITHER HAS BEEN EXTRACTED. F-4 REPORTED p90 *DIFFERENCES* (+0.5 / +3.4 ms), NEVER p90
-    *LEVELS*. *** So they are named here as pending rather than filled with a plausible figure:
-    *** THIS DOCUMENT WILL NOT CARRY AN INVENTED p90 IN ORDER TO LOOK FINISHED *** — that is the
-    precise failure `[M]`/`[D]` exists to prevent, and it would be this section's own convention
-    broken in this section.
+      DURATION-SHAPED — "how long will this take", "what does a wave cost", "what throughput
+      follows".            ***  MAY KEY ON RTT_p90.  ***  These get TIGHTER AND MORE HONEST.
+                           Under-estimating costs a schedule, and the error is symmetric.
 
-    *** UNTIL THEY LAND, EVERY BUDGET BELOW CONTINUES TO KEY ON `RTT_p99 = 201`. *** The interim
-    is stated rather than left to be discovered, and it is safe in the right direction: a
-    p99-keyed budget is stricter than the p90-keyed one that will replace it, so nothing built
-    against 201 becomes wrong when the figures arrive — it becomes conservative.
+      BOUND-SHAPED — timeouts, backstops, caps, admission limits, observability windows, X-B's
+      per-request floor.   ***  MUST KEEP KEYING ON RTT_p99. RTT_max REMAINS THE OUTLIER TERM.
+                           RTT_p90 MUST NEVER BE SUBSTITUTED INTO ONE.  ***
 
-    WHAT TO PRODUCE, PRECISELY, SO WHOEVER TAKES IT DOES NOT HAVE TO GUESS THE INTENT:
-      - `RTT_p90`: pooled across all runs and both arms, nearest-rank, at the widths the design
-        uses. Pooled, NOT a mean of per-run p90s — pooling is the entire point (below).
-      - `exceed_250`: the count of round trips exceeding 250 ms divided by the total, pooled the
-        same way. Report the raw count as well as the fraction; a fraction whose numerator is 3
-        should not be read as though its numerator were 300.
-      - `O11 GAINS A SECOND INPUT.` Its cap is keyed on the read cycle, so it takes the p90 for
-        the cycle time AND the exceedance rate for the residual risk — a wave set admitted on the
-        p90 has a stated, countable number of polls that will miss, rather than an implied 1%.
+    *** WHY, IN ONE MEASUREMENT: BY DEFINITION 10.0% OF ROUND TRIPS EXCEED THE p90 — 1,620 OF THE
+    16,200. A BACKSTOP SET AT RTT_p90 WOULD FIRE ON ONE ROUND TRIP IN TEN. *** And the worst in
+    that same session was 837 ms, EIGHT TIMES the p90. For a bound, a shorter allowance does not
+    mean "conservative" — it means *** MORE SPURIOUS `TIMED-OUT`, WHICH IS THE EXACT FAILURE THAT
+    VERDICT EXISTS TO KEEP VISIBLE *** (X-B). A spurious TIMED-OUT is believed.
 
-    *** AND THE HONEST TRADE, RECORDED BECAUSE IT IS THE THING SOMEONE WILL OBJECT TO LATER:
-    BUDGETS BECOME WEAKER AS BOUNDS AND HONESTER AS STATEMENTS. *** A p90-keyed budget is wrong
-    ~10% of the time BY CONSTRUCTION and says so; the p99-keyed one it replaces is wrong ~1% of
-    the time BY ASSERTION, on a p99 nobody could pin down. The second sounds better and is less
-    true.
+    🔴 *** THIS CORRECTS A STATEMENT THIS BLOCK CARRIED FOR PART OF A DAY. *** It said that keying
+    budgets on `RTT_p99` meanwhile was *"safe in the right direction, since a p99-keyed budget is
+    stricter than the p90-keyed one that replaces it."* *** THAT IS TRUE ONLY FOR DURATION-SHAPED
+    FIGURES AND FALSE — DANGEROUSLY — FOR ANY BOUND. *** For a bound, moving from p99 to p90 is
+    not a tightening, it is a *loosening of the protection with a tightening of the trigger*, and
+    it makes healthy tests fail.
 
-    WHY THE CHANGE AT ALL — THE ARGUMENT THAT CARRIED IT: *** A p99 POINT ESTIMATE IS EXACTLY WHAT
-    DEFEATED A 16,200-ROUND-TRIP EXPERIMENT. *** An order statistic inherits the variance of the
-    handful of samples in its own tail, so F-4 could not resolve 28 ms at the p99 and would have
-    needed ~170 runs per arm (~17 hours) to do so — while its p90 was adequately powered from the
-    same data. An exceedance rate is a Bernoulli trial per round trip: it POOLS across runs, gains
-    precision linearly with sessions, and makes the constants block's BREADTH revisit trigger
-    cheap to satisfy instead of expensive. *** AND IT IS NOT A NEW IDIOM — IT IS DERIVATION 4's
-    IDIOM GENERALISED *** from the single worst sample to the whole tail; derivation 4 is the most
-    defensible arithmetic in this section precisely because it is already shaped this way.
+    *** AND THE DEEPER POINT, WHICH IS THE WHOLE REASON F-5 WAS ADOPTED: A SINGLE TAIL NUMBER WAS
+    BEING ASKED TO DO TWO JOBS. *** Replacing one single number with a different single number
+    would repeat that mistake in the other direction. *** THE PAIR DESCRIBES THE DISTRIBUTION'S
+    SHAPE — p90 says where the body ends, exceed_250 says how often the outlier regime is
+    entered — AND EACH HALF HAS A JOB. *** Neither is "the tail figure".
+
+    A bound is therefore quoted as a p99-keyed figure PLUS its residual exposure:
+    `exceed_250 x (round trips in the operation)` — an expected count of over-threshold exchanges,
+    which is a number the reader can act on rather than an implied percentage.
+
+    *** HOW TO QUOTE THE TWO, AND THEY ARE NOT QUOTED THE SAME WAY: ***
+      - *** p90 AS A NUMBER *** — 102.79 ms, +/- ~1.05%. It is precise, and it is SILENT about the
+        worst case.
+      - *** exceed_250 AS AN ORDER OF MAGNITUDE — "about one round trip in 300." *** It rests on
+        57 events, so its 95% interval is +/- ~26%; quoting "0.352%" to three figures implies a
+        precision it does not have. It is the ONLY one of the two that describes the outlier
+        regime at all, which is why it earns its place despite the width.
+
+    🔴 *** A CORRECTION TO THE REASONING THIS DOCUMENT GAVE FOR PREFERRING AN EXCEEDANCE RATE, AND
+    IT IS WORTH RECORDING BECAUSE THE WRONG VERSION IS PLAUSIBLE. *** F-5 argued that an exceedance
+    rate is better because it *"pools across runs without inheriting an order statistic's
+    variance."* *** THAT IS WRONG FOR THE p90. THE PROBLEM WITH THE p99 WAS NEVER THAT IT IS AN
+    ORDER STATISTIC — IT IS THAT IT IS AN ORDER STATISTIC IN THE SPARSE TAIL. ***
+
+        at p99 of a 300-sample run   you are reading the 4th-worst value
+        at p90 of 16,200             the rank has SD 38 out of 14,580, sits inside a ~2 ms
+                                     window, and has ~1,600 samples above it
+
+    *** DENSITY AROUND THE QUANTILE GOVERNS THE VARIANCE, NOT QUANTILE-NESS. *** The p90 is an
+    order statistic and is the most precise number in this section (+/- 1.05%); the exceedance
+    rate is a simple count and is the least precise (+/- 26%, on 57 events). The original
+    reasoning had the mechanism backwards while reaching a defensible conclusion, which is the
+    kind of error that survives review.
 
 *** WHY RTT_p99 IS SET AT THE WORST OBSERVED (201) AND NOT THE WEIGHTED ESTIMATE (183) — THE
 REASONING IS EXPLICIT BECAUSE PICKING ONE SILENTLY IS THE FAILURE HERE. ***
@@ -2249,8 +2322,14 @@ A poll is one round trip. There is no separate "poll rate" to choose: the coordi
 slot per FC03 (X-A), serialised on one connection, so a K-slot tensor gives each slot a poll
 period of `K x RTT`. For K=1:
 
-    floor_typ  = RTT_typ / scan = 78  / 23.33 = 3.3 scans      [D]  unchanged 2026-08-13
-    floor_p99  = RTT_p99 / scan = 201 / 23.33 = 8.6 scans      [D]  *** was 7.4 at RTT_p99 = 173 ***
+    floor_typ  = RTT_typ / scan = 78    / 23.33 = 3.3 scans    [D]  DURATION — the typical gap
+    floor_p90  = RTT_p90 / scan = 102.79/ 23.33 = 4.4 scans    [D]  DURATION — *** NEW 2026-08-13,
+                                                                    and this is the honest
+                                                                    "how far apart are polls"
+                                                                    figure ***
+    floor_p99  = RTT_p99 / scan = 201   / 23.33 = 8.6 scans    [D]  *** BOUND — THIS IS THE ONE A
+                                                                    DECLARATION MUST CLEAR, AND IT
+                                                                    DOES NOT MOVE TO THE p90 ***
     floor_best = 71 / 23.33                    = 3.0 scans      [D]  the FASTEST MEDIAN in the
                                                                      sweep — the irreducible
                                                                      floor for K=1. *** SAID
@@ -2263,9 +2342,16 @@ period of `K x RTT`. For K=1:
                                                                      luckiest exchange possible.
     floor_tail = 2216 / 23.33                  = 95 scans       [D]  once per 2,000 polls
 
-  *** A SAMPLED LEVEL MUST PERSIST FOR 9 SCANS TO BE CAUGHT AT THE p99 (was 8 at RTT_p99 = 173),
-  AND FOR 95 SCANS TO BE CAUGHT AGAINST THE WORST GAP EVER MEASURED. *** (ceil of floor_p99 and
-  floor_tail.) Multiply both by K for a K-slot tensor.
+  *** A SAMPLED LEVEL MUST PERSIST FOR 9 SCANS TO BE CAUGHT AT THE p99, AND FOR 95 SCANS TO BE
+  CAUGHT AGAINST THE WORST GAP EVER MEASURED. *** (ceil of floor_p99 and floor_tail.) Multiply
+  both by K for a K-slot tensor.
+
+  *** THE PERSISTENCE REQUIREMENT IS A BOUND AND KEEPS THE p99 — F-5 CHANGES NOTHING HERE, AND
+  THE TEMPTATION TO "UPDATE" IT IS EXACTLY WHAT THE KIND RULE EXISTS TO STOP. *** At the p90 the
+  same arithmetic gives 4.4 scans, which would let an author declare a 5-scan window — and
+  *** 10% OF POLL GAPS WOULD THEN EXCEED THE DECLARED WINDOW, PRODUCING A MISSED ASSERTION
+  REPORTED AS A PASS *** roughly one poll in ten rather than one in a hundred. The 4.4 figure is
+  a DESCRIPTION of typical spacing; 8.6 is the REQUIREMENT. Same division, two different jobs.
 
   §12's CONCLUSION SURVIVES INTACT: a one-scan event is invisible to any sampler, because even a
   poller running flat out at the best round trip on record leaves a 3-scan hole. What does NOT
@@ -2318,6 +2404,13 @@ across a full-width slot) does to the question.
 
       ceil(K/R) x RTT_p99  <=  S x scan
       *** K_max(S)  =  R x floor( S x 23.33 / 201 )       R = floor(125 / W) ***      [D]
+
+      *** BOUND-SHAPED. IT KEEPS THE p99 AND MUST NOT BE RE-KEYED ON THE p90 (F-5's kind rule).
+      *** An admission cap sized on the p90 admits roughly TWICE the slots — at the p90 the table
+      below reads 2 / 4 / 11 / 22 / 45 against 1 / 2 / 5 / 11 / 23 — and the extra slots are
+      admitted on the assumption that a poll cycle fits a window that *** 10% OF POLL CYCLES WOULD
+      EXCEED ***. The failure is not a slow wave; it is a missed assertion reported as a pass,
+      which is derivation 2's whole reason for existing.
 
   *** THE CAP IS NOW PROPORTIONAL TO SLOTS-PER-READ. *** The old table is the `R = 1` column, and
   it is the WORST case rather than the only one:
@@ -2382,10 +2475,18 @@ DERIVATION 3 — THE WIRE TERM §8's WAVE MODEL OMITS  [D]
         W =  25, R = 5  :  6 +  4 + 1 = *** 11 ***      -42%
         W =  20, R = 6  :  6 +  2 + 1 = ***  9 ***      -53%
 
-      per index (W=123) : 19 x 78 = 1.48 s typical / 19 x 201 = 3.82 s at the p99
-      per wave  (W=123) : x 5 = 7.4 s typical, *** 19.1 s at the p99 ***
-      per wave  (W= 25) : x 5 = 4.3 s typical, *** 11.1 s at the p99 ***
-      per wave  (W= 20) : x 5 = 3.5 s typical, ***  9.0 s at the p99 ***
+      *** DURATION-SHAPED — SO THIS IS THE ONE THAT MOVES TO THE p90 (F-5, 2026-08-13). *** The
+      question is "what does a wave cost", the error is symmetric, and nothing gates on it.
+
+      per wave  (W=123, 95 round trips) : *** 9.8 s at RTT_p90 ***   (19.1 s at the p99)
+      per wave  (W= 25, 55 round trips) : *** 5.7 s at RTT_p90 ***   (11.1 s at the p99)
+      per wave  (W= 20, 45 round trips) : *** 4.6 s at RTT_p90 ***   ( 9.0 s at the p99)
+
+      *** THE p90 ROW IS THE PLANNING FIGURE AND THE p99 ROW IS RETAINED AS THE PESSIMISTIC
+      ONE *** — both are quoted because a schedule wants the first and a worst-case wants the
+      second, and neither is a bound on anything.
+      *** THE WIRE TERM ROUGHLY HALVES, WHICH IS F-5 DOING WHAT IT WAS ADOPTED FOR: the old
+      figure was not wrong, it was a 1-in-100 case being quoted as though it were the cost. ***
 
   *** WHAT THE WIN ACTUALLY IS, STATED THREE WAYS, BECAUSE "5x" IS TRUE OF ONLY THE FIRST: ***
 
@@ -2409,12 +2510,15 @@ DERIVATION 3 — THE WIRE TERM §8's WAVE MODEL OMITS  [D]
   savings will look at the read term first, and the read term is no longer where the cost is.
 
   AGAINST §8's THREE ROWS (each of which is `5 x (inert + test)` plus a ~20 s download boundary),
-  at the worst case W=123 / R=1 and at a sanely-sized W=20 / R=6:
+  at RTT_p90, at the worst case W=123 / R=1 and at a sanely-sized W=20 / R=6:
 
                                           base      + wire (R=1)     + wire (R=6)
-      inert  2 s, test  5 s :  35 + 20 =   55 s  ->  74 s  (+35%)  ->  64 s  (+16%)
-      inert  5 s, test 10 s :  75 + 20 =   95 s  -> 114 s  (+20%)  -> 104 s  (+10%)
-      inert 10 s, test 60 s : 350 + 20 =  370 s  -> 389 s   (+5%)  -> 379 s   (+2%)
+      inert  2 s, test  5 s :  35 + 20 =   55 s  ->  65 s  (+18%)  ->  60 s   (+8%)
+      inert  5 s, test 10 s :  75 + 20 =   95 s  -> 105 s  (+10%)  -> 100 s   (+5%)
+      inert 10 s, test 60 s : 350 + 20 =  370 s  -> 380 s   (+3%)  -> 375 s   (+1%)
+
+  (the same rows at RTT_p99, retained as the pessimistic case: 74 / 114 / 389 at R=1, and
+   64 / 104 / 379 at R=6)
 
   *** "A WAVE IS ORDER-OF-A-MINUTE" SURVIVES — 74 s is still order-of-a-minute — BUT §8's
   FASTEST ROW IS MORE THAN A THIRD OPTIMISTIC, AND §8's ROWS ARE THE ONES EVERY THROUGHPUT
@@ -2440,6 +2544,21 @@ cost when it does".
 
       P(at least one outlier in a wave) = 1 - (1 - 0.0005)^95 = *** 4.6%, about one wave in 22 ***
 
+  *** AND F-5 REPLACES THE WEAKEST STEP IN THAT ARITHMETIC WITH A MEASURED RATE — 2026-08-13. ***
+  The 0.05% above is *one sample in 2,000 being the LARGEST*, which is not a rate at all: it
+  bounds P(exceeding 2,216 ms) at roughly 1/2000 and measures nothing. `exceed_250` IS a rate,
+  measured on 57 events, and it lets the same idiom be applied to a threshold that actually has
+  data behind it:
+
+      expected over-250 ms exchanges per wave  = 95 x 0.00352 = *** 0.33 ***                [D]
+      P(at least one)  = 1 - (1 - 0.00352)^95  = *** ~28%, about one wave in 3.5 ***         [D]
+      at W=20 (45 round trips)                 = 0.16 expected, ~15%, about one wave in 7    [D]
+
+  *** THE TWO FIGURES ARE NOT IN COMPETITION — THEY DESCRIBE DIFFERENT PARTS OF THE SAME TAIL. ***
+  About one wave in 3.5 contains a round trip over 250 ms; about one in 22 contains one over
+  2,216 ms. The first is measured, the second is a single observation. *** QUOTE THE FIRST AS "ABOUT
+  ONE IN THREE OR FOUR WAVES", NOT AS 28.5% *** — it inherits the exceedance rate's +/- 26%.
+
   WHAT IT COSTS IN DURATION: +2.2 s on a ~74 s wave = +3%. *** NEGLIGIBLE, AND THAT IS THE WHOLE
   OF ITS THROUGHPUT SIGNIFICANCE. *** It must not be added to RTT_p99, and no budget above
   includes it.
@@ -2461,8 +2580,15 @@ cost when it does".
       *** RULE [D]: X-B's WALL-CLOCK BACKSTOP IS COMPUTED, NOT GUESSED: ***
 
           backstop = (declared max duration in scans x 23.33 ms)
-                   + (expected round trips for the test x RTT_p99)      <- 201 ms, was 173
-                   + one RTT_max allowance (2,216 ms)                   <- unchanged
+                   + (expected round trips for the test x RTT_p99)      <- 201 ms. *** STAYS ***
+                   + one RTT_max allowance (2,216 ms)                   <- *** STAYS ***
+
+      *** 🔴 THE BACKSTOP IS THE SHARPEST CASE OF F-5's KIND RULE, AND IT DELIBERATELY DID NOT
+      MOVE. *** It is BOUND-shaped: a shorter allowance produces MORE spurious TIMED-OUT, not more
+      safety. Substituting RTT_p90 for the middle term would shrink the allowance by half while
+      *** 10% OF ROUND TRIPS EXCEED THAT FIGURE BY CONSTRUCTION *** — on a test issuing 19 round
+      trips, roughly two would be expected to blow the per-trip assumption every run. The
+      2,216 ms outlier term is untouched for the same reason and must not be trimmed.
 
       A backstop computed on RTT_typ, or without the outlier allowance, will fire on a healthy
       test roughly once every 22 waves and report TIMED-OUT — the outcome X-B invented precisely
@@ -2485,7 +2611,10 @@ replaced, and *** THE TIMER TERM — THE ONE X-D SAYS OFTEN BINDS FIRST — IS H
 
     scan_period   ~10 ms   ->   23.33 ms                        [M]  unchanged 2026-08-13
     poll_period  ~100 ms   ->   K x RTT_p99, >= 201 ms at K=1    [D, derivation 2]
-                                *** RAISED FROM 173 ON 2026-08-13 — this term tightens by 14% ***
+                                *** BOUND-SHAPED — KEEPS THE p99 (F-5's kind rule). *** `comp_max`
+                                is a CEILING on compression; sizing it with the p90 would permit a
+                                compression at which 10% of poll cycles no longer resolve the
+                                behaviour, and the symptom is a green that was never sampled.
     timer floor  k x scan, k~5:  50 ms  ->  *** 116.7 ms ***     [D]  *** UNCHANGED — it depends
                                 only on the scan, which did not move ***
 
@@ -2518,14 +2647,18 @@ DERIVATION 6 — WHY BATCHING GOT STRONGER, NOT WEAKER  [D]
 `docs/notes/modbus-tcp-client-spec.md` §5 makes block reads MANDATORY on the old figures. The new
 figures strengthen every part of that argument:
 
-    50 tags read individually  : 50 x  78 ms = *** 3.9 s ***  typical                    [D]
-                                 50 x 201 ms = *** 10.1 s *** at the p99 (was 8.7 s at 173) [D]
-                                 plus a 50/2000 = 2.5% chance of eating a 2,216 ms outlier
+    *** DURATION-SHAPED THROUGHOUT — SO THESE MOVE TO THE p90 (F-5). *** Nothing here gates
+    anything; they are all "how long does this take".
+
+    50 tags read individually  : 50 x 102.79 ms = *** 5.1 s at RTT_p90 ***                 [D]
+                                 (10.1 s at the p99, retained as the pessimistic case)
+                                 plus ~0.18 expected over-250 ms exchanges per sweep — about
+                                 one sweep in six                                          [D]
     the same 50 tags in ONE FC03 (<= 125 registers)
-                               : 1 round trip = 78 ms typical / 201 ms at the p99         [D]
+                               : 1 round trip = *** 102.79 ms at RTT_p90 *** (201 at the p99)
                                  *** A 50x REDUCTION *** — and the wide read now has a MEASURED
                                  price rather than an assumed-free one: see below
-    a scan-counter poll        : 1 round trip — 78 ms typical, 201 ms at the p99          [D]
+    a scan-counter poll        : 1 round trip — *** 102.79 ms at RTT_p90 *** (201 at the p99)
 
 *** THE MARGIN IS NOW QUANTIFIED RATHER THAN ASSERTED, AND IT IS ENORMOUS (2026-08-13). *** The
 per-register cost is measured: ~0.040 ms on writes, no trend on reads [M]. So the choice between
@@ -2533,11 +2666,12 @@ one wide transaction and two narrow ones is:
 
     widening a read by ~110 registers :  ~1.0 ms  [M, interleaved — the better-controlled figure]
                                          ~4.9 ms  [D, across-session — the conservative one]
-    one additional round trip         :  78 ms typical, 201 ms at the p99                 [D]
+    one additional round trip         :  *** 102.79 ms at RTT_p90 *** (78 median, 201 p99)  [D]
     ------------------------------------------------------------------------------------
-    *** BATCHING WINS BY AT LEAST 16x AT THE MEDIAN AND 41x AT THE p99 — AND BY ~80x / ~200x ON
-    THE BETTER-CONTROLLED MEASUREMENT. *** The conservative figure is quoted as the headline
-    throughout, so nothing in this document turns on which of the two is right.       [D]
+    *** BATCHING WINS BY AT LEAST 21x AT THE p90 — AND BY ~100x ON THE BETTER-CONTROLLED
+    PER-REGISTER MEASUREMENT. *** The conservative figure is quoted as the headline throughout, so
+    nothing in this document turns on which of the two is right. A per-register COST COEFFICIENT
+    is neither duration- nor bound-shaped and takes no RTT constant at all.           [D]
 
 *** THE MAP SHOULD THEREFORE STILL BE LAID OUT FOR THE WIDEST LEGAL READ, NOT THE SMALLEST
 SUFFICIENT ONE. *** Under the old assumption a narrow range was a saving; it is not — it is worth
@@ -2657,12 +2791,20 @@ conclusion without the ruling.
        cells) — in place of the single `RTT_p99` figure every budget currently multiplies by.
 
        *** THE ARGUMENT FOR IT, AND IT IS A GOOD ONE: A p99 POINT ESTIMATE IS EXACTLY WHAT
-       DEFEATED A 16,200-ROUND-TRIP EXPERIMENT. *** An order statistic inherits enormous variance
-       from the handful of samples in its own tail, so measuring it harder is expensive and slow
-       (F-4: ~170 runs per arm, ~17 hours, for 10 ms of standard error). *** AN EXCEEDANCE RATE
-       POOLS ACROSS RUNS WITHOUT INHERITING THAT VARIANCE *** — every round trip in every run is
-       one Bernoulli trial against a fixed threshold, so 16,200 of them estimate it precisely, and
-       adding sessions strengthens it linearly instead of fighting an extreme-value estimator.
+       DEFEATED A 16,200-ROUND-TRIP EXPERIMENT. *** Measuring it harder is expensive and slow
+       (F-4: ~170 runs per arm, ~17 hours, for 10 ms of standard error), while the p90 from the
+       same data was precise to +/- 1%.
+
+       🔴 *** THE MECHANISM ORIGINALLY GIVEN HERE WAS WRONG, AND THE CORRECTED ONE IS IN THE
+       CONSTANTS BLOCK. *** This entry said an exceedance rate is better because it *"pools across
+       runs without inheriting an order statistic's variance"*. *** THE PROBLEM WITH THE p99 WAS
+       NEVER THAT IT IS AN ORDER STATISTIC — IT IS THAT IT IS AN ORDER STATISTIC IN THE SPARSE
+       TAIL, WHERE THERE IS ALMOST NO DATA. *** The p90 is equally an order statistic and is the
+       most precise figure in this section. *** DENSITY AROUND THE QUANTILE GOVERNS THE VARIANCE,
+       NOT QUANTILE-NESS *** — and measured against that, the exceedance rate is the LEAST precise
+       of the pair (+/- 26% on 57 events, against the p90's +/- 1.05%). It earns its place not by
+       precision but because *** IT IS THE ONLY ONE OF THE TWO THAT DESCRIBES THE OUTLIER REGIME
+       AT ALL. *** Recorded because the wrong version is plausible and reached a right answer.
 
        *** AND IT IS NOT A NEW IDIOM — IT IS DERIVATION 4's IDIOM, GENERALISED. *** Derivation 4
        already treats the 2,216 ms outlier exactly this way: a rate (0.05%), multiplied by the
@@ -2738,6 +2880,68 @@ SHOULD KNOW THAT BEFORE RULING ON THE REST. ***
 
   *** NO CONFLICTS FOUND. *** F-1 does not contradict any pending flag, and does not reopen any
   ruling recorded in this document.
+
+................................................................................
+THE F-5 AUDIT — EVERY FIGURE §12a FEEDS, PARTITIONED BY KIND
+................................................................................
+
+*** DONE 2026-08-13, CALL SITE BY CALL SITE, BECAUSE "SUBSTITUTE THE NEW CONSTANT" IS EXACTLY THE
+CHANGE THAT LOOKS SAFE AND IS NOT. *** Each row says which constant the figure takes and whether
+it moved.
+
+  DURATION-SHAPED — moved to RTT_p90. Tighter, and honester.
+
+    figure                                   was (p99)      now (p90)     where
+    ---------------------------------------  ------------   -----------   -----------------
+    wire term per wave, W=123                  19.1 s          9.8 s      derivation 3
+    wire term per wave, W=20                    9.0 s          4.6 s      derivation 3
+    §8 row 1 (inert 2 s, test 5 s)               74 s           65 s      derivation 3, §8
+    §8 row 2                                    114 s          105 s      derivation 3, §8
+    §8 row 3                                    389 s          380 s      derivation 3, §8
+    50-tag unbatched sweep                     10.1 s          5.1 s      derivation 6
+    one FC03 / a scan-counter poll              201 ms      102.79 ms     derivation 6
+    batching win                             41x (p99)         21x        derivation 6
+    typical poll spacing (NEW)                     —        4.4 scans     derivation 1
+
+  BOUND-SHAPED — *** KEPT RTT_p99 DELIBERATELY. NONE OF THESE MOVED. ***
+
+    figure                                   constant       why it must not move
+    ---------------------------------------  -----------   --------------------------------
+    floor_p99 — the persistence a SAMPLED     RTT_p99       at the p90 an author could declare
+    window must clear (9 scans)                             5 scans; 10% of gaps exceed it and
+                                                            the symptom is a PASS
+    O11's K_max admission cap                 RTT_p99       the p90 admits ~2x the slots
+                                                            (2/4/11/22/45 vs 1/2/5/11/23)
+    X-B's wall-clock backstop, middle term    RTT_p99       shorter allowance = MORE spurious
+                                                            TIMED-OUT, the verdict's own defeat
+    X-B's per-request timeout floor (3,000 ms) RTT_max      keyed on the worst ever observed,
+                                                            never on any percentile
+    X-D's poll_period inside comp_max         RTT_p99       a CEILING on compression; the p90
+                                                            permits a factor at which 10% of
+                                                            cycles no longer resolve anything
+    the 2,216 ms outlier allowance            RTT_max       not padding, and not trimmable
+
+  *** NEITHER — AND THE ASK WAS WORTH MAKING, BECAUSE THREE THINGS TURNED OUT TO BE NEITHER: ***
+
+    1. *** EXPOSURE RATES. `exceed_250` IS A THIRD KIND AND THIS IS THE MOST USEFUL FINDING OF THE
+       AUDIT. *** It sizes nothing. It COUNTS what escapes whatever was sized — multiply it by the
+       round trips in an operation and you get an expected number of over-threshold exchanges.
+       *** IT BELONGS BESIDE A BOUND, NOT INSTEAD OF ONE: *** a bound says what we designed for,
+       an exposure rate says how often we will be outside it, and neither answers the other's
+       question. That is the whole content of "the pair describes the shape".
+    2. *** STRUCTURAL CLAIMS — ROBUST ACROSS THE WHOLE DISTRIBUTION, SO NO CONSTANT APPLIES. ***
+       "A one-scan event is invisible to any sampler" holds at the fastest median (3.0 scans), at
+       the p90 (4.4) and at the p99 (8.6). *** A CLAIM THAT SURVIVES EVERY CONSTANT SHOULD NOT BE
+       RE-QUOTED WITH ONE *** — attaching a number to it makes it look like a measurement that
+       could move, when its whole strength is that it cannot.
+    3. **COST COEFFICIENTS AND PROTOCOL ARITHMETIC.** The per-register cost (~0.009-0.040 ms),
+       `R = floor(125/W)`, the 125/123 limits and the 23.33 ms scan take no RTT constant at all.
+       The scan is a property of the controller; `R` is a property of Modbus.
+
+  *** ONE JUDGEMENT CALL INSIDE THE AUDIT, RECORDED RATHER THAN BURIED: the latched-vs-sampled
+  spread (8.6x at the p99, 4.4x at the p90). *** It is used as an ARGUMENT — that latching is a
+  throughput lever — rather than as a budget, so it is descriptive and both figures are quoted.
+  If it is ever used to SIZE something it becomes bound-shaped and takes the p99.
 
 ................................................................................
 SHAPE OR MAGNITUDE? — WHAT THE 2026-08-13 p99 CORRECTION DID AND DID NOT DO

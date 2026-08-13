@@ -74,11 +74,16 @@ times below anything a sampler can see"* — inherited from the harness (`TestVe
 replacements, re-derived 2026-08-13 in `PC-Client-Modbus-Spec-Draft-final.txt` §12a:
 
 - a poll is **one round trip**, so the poll period is not a chosen parameter — it is `K x RTT` for a
-  `K`-slot read set: **78 ms typical, 201 ms at the p99** [M] (the p99 measured at *full width*,
-  2026-08-13 — a figure of 173 ms derived from a narrow sweep stood here for one day);
+  `K`-slot read set: **102.79 ms at the p90, 201 ms at the p99** [M];
 - the scan is **23.33 ms** under load, 22.64 ms idle [M], not ~10 ms;
-- so the floor is **3.3 scans typical and 8.6 at the p99** [D] — not ten. The **irreducible** floor
+- so the floor is **4.4 scans typically and 8.6 at the p99** [D] — not ten. The **irreducible** floor
   is 3 scans: even a poller running flat out at the fastest *median* measured leaves that hole.
+
+> 🔴 **Two figures, two jobs — §12a's F-5 kind rule.** **4.4 scans describes** how far apart polls
+> typically land. **8.6 scans is the requirement** a sampled observation window must clear, and it
+> keys on the p99 deliberately: at the p90, *10% of poll gaps exceed the declared window by
+> construction*, and a missed sampled assertion reports as a **pass**, not an error. Never size an
+> observability window on the typical figure.
 
 **The conclusion is unchanged and the instrumentation below is unchanged: a one-scan event is still
 structurally invisible, no polling rate recovers it, and no protocol choice changes it** — this is
