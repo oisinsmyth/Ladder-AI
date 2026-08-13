@@ -52,11 +52,19 @@ internal static class Program
     /// The whole program, with the Portal half injected so that everything before it — which is
     /// everything that decides whether Portal is contacted at all — is testable without Portal.
     /// </summary>
+    /// <param name="fenceOrigin">
+    /// Where the allowlist search starts — the directory this binary was built into, in every real
+    /// run. Injected ONLY so the fence's own tests can stand up a repository with a known allowlist;
+    /// <see cref="Main"/> never passes it and there is no argument, flag or environment variable that
+    /// reaches it. Omitting it selects the REAL discovery, so the default is the safe one: a caller
+    /// that forgets this parameter gets the fence, not a hole.
+    /// </param>
     internal static int Run(
         IReadOnlyList<string> args,
         TextWriter stdout,
         TextWriter stderr,
-        Func<ProbeArguments, ProbeLog, ProbeOutcome> runSession)
+        Func<ProbeArguments, ProbeLog, ProbeOutcome> runSession,
+        string? fenceOrigin = null)
     {
         var parsed = ProbeArgumentParser.Parse(args);
         if (parsed is ProbeParseResult.Failure failure)
@@ -69,9 +77,11 @@ internal static class Program
 
         // FIRST, and before any side effect at all — not even a log file is created. The guard's
         // value is that it is reachable with no Portal session and no artifacts in existence.
-        if (!ScratchProjectGuard.IsScratchProject(arguments.ProjectPath))
+        var fence = ScratchProjectGuard.Evaluate(
+            arguments.ProjectPath, fenceOrigin ?? AppDomain.CurrentDomain.BaseDirectory);
+        if (!fence.Permitted)
         {
-            stderr.WriteLine(ScratchProjectGuard.DescribeRefusal(arguments.ProjectPath));
+            stderr.WriteLine(fence.Text);
             return ProbeExitCodes.RefusedByPath;
         }
 
@@ -97,7 +107,7 @@ internal static class Program
         ProbeOutcome outcome;
         using (log)
         {
-            WriteHeader(log, arguments, logPath);
+            WriteHeader(log, arguments, logPath, fence);
 
             try
             {
@@ -131,11 +141,15 @@ internal static class Program
         return outcome.ExitCode;
     }
 
-    private static void WriteHeader(ProbeLog log, ProbeArguments arguments, string logPath)
+    private static void WriteHeader(ProbeLog log, ProbeArguments arguments, string logPath, GuardDecision fence)
     {
         log.Rule("download-probe");
         log.Line($"started (UTC)  : {DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)}");
         log.Line($"project        : {arguments.ProjectPath}");
+
+        // WHICH ENTRY VOUCHED FOR THIS PROJECT, in the artifact. A fence that only speaks when it
+        // refuses leaves a permitted run unable to say what permitted it.
+        log.Block(fence.Lines);
         log.Line($"options        : {arguments.Options}");
         log.Line($"device filter  : {arguments.Device ?? "(none — one PLC device must resolve)"}");
         log.Line($"pc interface   : {arguments.PcInterface ?? "(none given — REQUIRED unless the project declares exactly one)"}");
@@ -346,6 +360,11 @@ internal static class Program
             ["selectionApplyFailed"] = outcome.ExitCode == ProbeExitCodes.SelectionApplyFailed,
             ["unhandledConfigurations"] = outcome.UnhandledConfigurations,
             ["failedToApplyConfigurations"] = outcome.FailedToApplyConfigurations,
+            // *** THE LOAD MANIFEST, FIRST-CLASS. *** See BuildLoadManifest: this is what `Loaded`
+            // keys on, and until 2026-08-13 the only way to reach it from another process was to
+            // parse the `log` array below.
+            ["loadManifest"] = BuildLoadManifest(outcome),
+
             ["resultState"] = outcome.ResultState,
             ["resultErrorCount"] = outcome.ResultErrorCount,
             ["resultWarningCount"] = outcome.ResultWarningCount,
@@ -361,6 +380,106 @@ internal static class Program
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// *** THE LOAD MANIFEST AS DATA, NOT AS PROSE. ***
+    ///
+    /// The manifest is the ONLY positive evidence that a download carried anything —
+    /// <c>DownloadResult.State</c> was <c>Success</c> on a live run that transferred nothing — so it
+    /// is the single most load-bearing value this binary produces. Its consumer is a SEPARATE
+    /// PROCESS (the harness deployment gateway targets net8.0 and must never link
+    /// <c>Siemens.Engineering</c>, or every harness build joins the (Path,FileHash) approval cycle),
+    /// and until this existed that process recovered the manifest by RE-PARSING THE RENDERED LOG
+    /// embedded below. Anything the renderer dropped was invisible to it.
+    ///
+    /// THE KEYS ARE <c>Ladder.Download.DownloadFeedback</c>'s OWN PROPERTY NAMES, camel-cased, and
+    /// deliberately not a shape invented here: both existing consumers already speak that vocabulary,
+    /// so nothing has to change to accept this.
+    ///
+    /// *** NULL, NEVER AN EMPTY LIST, WHEN NO RESULT EXISTED. *** An abort, a throw and a folder run
+    /// produce no <c>DownloadResult</c> at all. "Nothing was examined" and "a manifest naming nothing"
+    /// are opposite findings — the second says TIA loaded nothing, the first says nobody knows — and
+    /// an empty array would render them identically. Empty is not clean (FI-44).
+    /// </summary>
+    private static Dictionary<string, object?> BuildLoadManifest(ProbeOutcome outcome)
+    {
+        if (outcome.Feedback is not { } feedback)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["available"] = false,
+                ["source"] = "none",
+                ["resultPresent"] = false,
+                ["verdict"] = Ladder.Download.TransferVerdict.Undetermined.ToString(),
+                ["verdictReason"] =
+                    "No DownloadResult was produced, so no manifest was derived: the download aborted, threw, "
+                    + "or wrote to a folder. NOTHING WAS EXAMINED — which is not the same as nothing having been "
+                    + "loaded, and must not be read as it.",
+                ["loadedObjects"] = null,
+                ["loadedObjectCount"] = null,
+                ["loadedObjectMessageCount"] = null,
+                ["duplicateLoadedObjects"] = null,
+                ["nonObjectLoadSubjects"] = null,
+                ["nonObjectLoadCount"] = null,
+                ["transferredItemCount"] = null,
+                ["runStateDisclosed"] = null,
+                ["runStateTransitions"] = null,
+                ["finalRunStateEvent"] = null,
+                ["upToDateSignalPresent"] = null,
+                ["unrecognisedMessages"] = null,
+                ["unrecognisedMessageCount"] = null,
+                ["anomalies"] = null,
+            };
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["available"] = true,
+
+            // Which authority produced this, as RECORDED BY WHOEVER BUILT IT — never assumed here.
+            // The adapter reads the live Openness objects; the log reader re-derives from a rendering
+            // and is for forensics only. A consumer that cannot tell them apart cannot tell a
+            // first-hand answer from a second-hand one.
+            ["source"] = outcome.FeedbackSource ?? "unknown",
+            ["resultPresent"] = feedback.ResultPresent,
+            ["verdict"] = feedback.Verdict.ToString(),
+            ["verdictReason"] = feedback.VerdictReason,
+
+            ["loadedObjects"] = feedback.LoadedObjects,
+            ["loadedObjectCount"] = feedback.LoadedObjectCount,
+            ["loadedObjectMessageCount"] = feedback.LoadedObjectMessageCount,
+            ["duplicateLoadedObjects"] = feedback.DuplicateLoadedObjects,
+
+            ["nonObjectLoadSubjects"] = feedback.NonObjectLoadSubjects,
+            ["nonObjectLoadCount"] = feedback.NonObjectLoadCount,
+            ["transferredItemCount"] = feedback.TransferredItemCount,
+
+            // An empty transition list means the download SAID NOTHING about run state. It does not
+            // mean the CPU kept running, and `runStateDisclosed` is carried so a consumer cannot
+            // read the absence as the reassurance.
+            ["runStateDisclosed"] = feedback.RunStateDisclosed,
+            ["runStateTransitions"] = feedback.RunStateTransitions
+                .Select(t => new Dictionary<string, object?>
+                {
+                    ["transition"] = t.Transition.ToString(),
+                    ["device"] = t.Device,
+                    ["order"] = t.Order,
+                    ["text"] = t.Text,
+                })
+                .ToList(),
+            ["finalRunStateEvent"] = feedback.FinalRunStateEvent?.ToString(),
+
+            ["upToDateSignalPresent"] = feedback.UpToDateSignalPresent,
+
+            // Carried in full, never dropped: every download option measured so far produced a
+            // vocabulary nobody predicted, and this list being non-empty is the signal that the
+            // parser needs extending — which it can only be if it is reported.
+            ["unrecognisedMessages"] = feedback.UnrecognisedMessages.Select(m => m.Text).ToList(),
+            ["unrecognisedMessageCount"] = feedback.UnrecognisedMessageCount,
+
+            ["anomalies"] = feedback.Anomalies,
+        };
     }
 
     private static Dictionary<string, object?> Describe(RecordedConfiguration record) => new()

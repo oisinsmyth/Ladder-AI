@@ -25,6 +25,24 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\OpennessCli\OpennessCli.csproj" />
+
+    <!--
+      Ladder.Download (netstandard2.0, no Siemens reference, no network, no Portal) — THE LOAD
+      MANIFEST PARSER, linked rather than reimplemented.
+
+      *** THIS IS THE LIVE PATH THAT LIBRARY WAS BUILT FOR. *** DownloadResultAdapter's own docs say
+      so: "the live path is DownloadResultAdapter, straight off the Openness object. Never route a
+      live download through a log file: the log is the probe's RENDERING of the result, and anything
+      the renderer drops is gone before this reader sees it." Until 2026-08-13 nothing did that — the
+      deployment gateway (net8.0, a separate process that must never link Siemens.Engineering or every
+      harness build joins the (Path,FileHash) approval cycle) recovered the manifest by parsing this
+      tool's rendered log. The manifest is what `Loaded` keys on, so it is the single most load-bearing
+      value this binary produces, and it was reaching its consumer by scraping.
+
+      Referencing it here rather than writing a second parser keeps ONE opinion about what a load
+      manifest is: this binary's JSON and the harness's reading of it are now the same code.
+    -->
+    <ProjectReference Include="..\..\download-feedback\DownloadFeedback\DownloadFeedback.csproj" />
   </ItemGroup>
 
   <!--

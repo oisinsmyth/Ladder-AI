@@ -1,0 +1,62 @@
+# download-probe -- THE DEVICE-DOWNLOAD ALLOWLIST
+#
+# `download-probe` is the ONE binary in this repository that calls DownloadProvider.Download, and a
+# download is DEVICE-LEVEL: it transfers the whole PLC software and stops the CPU. This file names
+# the projects it may open. Everything else is refused with exit 3, BEFORE Portal is contacted.
+#
+# *** ALLOWLIST, NEVER A DENYLIST (ADR-0011 requirement 1). *** As of 2026-08-13 this engineering PC
+# carries about NINETEEN real production .ap20 projects in sibling folders of the scratch ones, so "the
+# project nobody thought to list" is not hypothetical here. A denylist would have to be complete, and
+# it would stop being complete the next time a job folder arrived.
+#
+# *** WHY THIS SUPERSEDED A FILE-NAME SUFFIX (2026-08-13) -- AND THE SUFFIX WAS NOT ARBITRARY. ***
+# The guard used to accept any project whose file name ended " scratch.ap20". That convention had a
+# real origin: the scratch COPIES of live jobs on this machine are named that way, so the suffix was
+# fitted to the projects the tool was actually being pointed at, and it deliberately avoided naming
+# any of their paths in the repository (see the data-boundary note below -- that constraint is real
+# and this file still honours it). It is superseded because it was wrong in both DIRECTIONS, not
+# because it was careless:
+#
+#   * IT BLOCKED THE LEGITIMATE CASE. The S6 sandbox project is GenProject1.ap20 and the other repo
+#     scratch project is SampleProject.ap20; neither ends in the suffix, so neither could ever be the
+#     target of a download however deliberately somebody chose it. Renaming a live Openness-managed
+#     project folder was judged not worth the risk for a naming-only change (CLAUDE.md "Codename
+#     note"), so this was not fixable by renaming.
+#   * IT DID NOT STOP THE DANGEROUS CASE. A file-name suffix is a CONVENTION, and anything can be
+#     renamed into one. A guard that a private engineering project could satisfy by rename is not
+#     protecting the nineteen sitting beside the scratch ones.
+#
+# *** THERE IS NO OVERRIDE. *** No flag, no environment variable, no argument that names a different
+# allowlist. Adding a project here is a decision, made once, by the owner, with the restore point
+# named -- it is not something an agent does to get a run through.
+#
+# FORMAT
+#   One project per line. Blank lines and lines starting with # are ignored.
+#   Each entry is the path to the project FILE (.apNN), in one of two forms:
+#     repo:<path>   resolved against the root of the repository this binary was built in. Portable
+#                   across checkouts and git worktrees, which is why the repo projects use it.
+#     <absolute>    a fully-qualified path, e.g. D:\Scratch\Thing\Thing.ap20
+#   A bare relative path is REFUSED rather than guessed at.
+#
+# An entry that does not exist on this machine simply never matches. That fails CLOSED, which is the
+# safe direction, so it is not itself an error.
+#
+# *** A PROJECT WHOSE PATH MAY NOT BE COMMITTED DOES NOT GO HERE -- NOT EVEN AS AN EXAMPLE. *** A
+# copy of a live engineering job may not have its path, folder name or file name written into this
+# repository in any form (CLAUDE.md, "Live runs": use anything, commit nothing; docs/13). This file
+# is TRACKED, so such a path goes in the machine-local allowlist instead, at the fixed path
+#     %ProgramData%\Ladder-AI\download-probe.allowlist
+# which download-probe reads as well as this one. Same format, same weight, same absence of any
+# override.
+#
+# WHY OUTSIDE THE REPOSITORY RATHER THAN A GITIGNORED COMPANION BESIDE THIS FILE. A gitignored file
+# inside the repo is protected by a PATTERN, and a pattern protects the file somebody thought of. On
+# 2026-08-13 an agent's `.claude/settings.local.json.bak` sat untracked but UNIGNORED, one `git add
+# -A` from committing a site path -- the tracked file was protected and the thing beside it was
+# not. A path outside the working tree cannot be committed by any accident of ignore rules, by any
+# `git add -f`, and by any tool that walks the repo. It is not a weaker fence: it is the same file
+# with the same rules, in the one place where a mistake cannot publish it.
+
+# The S6 sandbox / validation project. Called test-project001 everywhere in docs and IR; the live
+# Portal folder on disk keeps its original name (CLAUDE.md, "Codename note").
+repo:GenProject1/GenProject1.ap20

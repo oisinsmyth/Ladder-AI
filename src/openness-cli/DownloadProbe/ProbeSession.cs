@@ -72,6 +72,27 @@ internal sealed class ProbeOutcome
     internal TransferVerdict? Transfer { get; set; }
 
     /// <summary>
+    /// *** THE LOAD MANIFEST — WHAT WAS REPORTED LOADED, BY NAME. *** Derived by
+    /// <c>Ladder.Download</c> from the live <c>DownloadResult</c> message tree, never from this
+    /// tool's rendering of it, and emitted as first-class JSON so a consumer never has to scrape the
+    /// log for it.
+    ///
+    /// NULL MEANS NO DOWNLOAD RESULT EXISTED — an abort, a throw, or a folder run. Empty is not
+    /// clean: null and "a manifest naming nothing" are different findings and must never render
+    /// alike, which is why this is nullable rather than an empty feedback object.
+    /// </summary>
+    internal Ladder.Download.DownloadFeedback? Feedback { get; set; }
+
+    /// <summary>
+    /// WHICH AUTHORITY PRODUCED <see cref="Feedback"/>. <c>DownloadResultAdapter</c> is first-hand —
+    /// the live Openness objects; <c>ProbeLogReader</c> re-derives from a RENDERING and is forensics
+    /// only. Reported rather than assumed, because a consumer that cannot tell them apart cannot tell
+    /// a first-hand answer from a second-hand one, and this binary is the only place that can ever
+    /// hold the first-hand one.
+    /// </summary>
+    internal string? FeedbackSource { get; set; }
+
+    /// <summary>
     /// The last thing printed, after the verdict. Carries the CPU-run-state advisory — the sentence
     /// someone has to read before walking away from a rig whose CPU may be stopped.
     /// </summary>
@@ -780,6 +801,13 @@ internal static class ProbeSession
         log.Blank();
         log.Block(TransferVerdicts.DescribeRunState(messages));
 
+        var feedback = BuildFeedback(resultState, result.ErrorCount, result.WarningCount, messages);
+        log.Blank();
+        log.Rule("LOAD MANIFEST (Ladder.Download, from the live result — not from this log)");
+        log.Block(feedback.ToReport().Replace("\r\n", "\n").TrimEnd('\n').Split('\n'));
+        log.Line("(Emitted as first-class JSON under --json's `loadManifest`. A consumer reads THAT,");
+        log.Line(" never this rendering — anything a renderer drops is gone before a scraper sees it.)");
+
         var exitCode = result.ErrorCount > 0 ? ProbeExitCodes.CompletedWithErrors : ProbeExitCodes.Completed;
         return new ProbeOutcome(
             exitCode,
@@ -790,8 +818,54 @@ internal static class ProbeSession
             ResultErrorCount = result.ErrorCount,
             ResultWarningCount = result.WarningCount,
             Transfer = transfer,
+            Feedback = feedback,
+            FeedbackSource = nameof(Ladder.Download.DownloadResultAdapter),
         };
     }
+
+    /// <summary>
+    /// *** THE LIVE PATH <c>DownloadResultAdapter</c> WAS BUILT FOR, AND THIS IS ITS FIRST CALLER. ***
+    ///
+    /// The projection is taken from the nodes this tool already read off the Siemens objects rather
+    /// than from <c>DownloadResult</c> a second time, for one reason: <see cref="ReadMessages"/>
+    /// guards every property read and RECORDS A FAILURE AS A NODE. Re-reading here would either
+    /// duplicate that care or drop it, and a dropped message reads downstream as "nothing said that".
+    ///
+    /// The delegates are where the guess about Siemens' member names belongs — in the caller, where
+    /// it fails to compile if it is wrong. That guess has already been made and survived a live run,
+    /// in <see cref="ReadMessages"/>; this method only re-shapes what it produced.
+    /// </summary>
+    private static Ladder.Download.DownloadFeedback BuildFeedback(
+        string? resultState, int errorCount, int warningCount, IReadOnlyList<DownloadMessageNode> messages)
+    {
+        var summary = Ladder.Download.DownloadResultAdapter.Adapt<DownloadMessageNode>(
+            resultState,
+            errorCount,
+            warningCount,
+            messages,
+            m => m.Text,
+            m => m.State,
+            m => m.ErrorCount,
+            m => m.WarningCount,
+            m => ParseTimestamp(m.Timestamp),
+            m => m.Children);
+
+        return Ladder.Download.DownloadFeedbackParser.Parse(summary);
+    }
+
+    /// <summary>
+    /// The node's own timestamp, rendered "O" by <see cref="ReadMessages"/>. Unparseable is null —
+    /// a timestamp takes no part in any classification, so losing one costs ordering detail in the
+    /// report and nothing else.
+    /// </summary>
+    private static DateTimeOffset? ParseTimestamp(string? rendered) =>
+        DateTimeOffset.TryParse(
+            rendered,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind,
+            out var parsed)
+            ? parsed
+            : (DateTimeOffset?)null;
 
     /// <summary>
     /// Reads the whole message TREE off the Siemens objects, recursively, into a form a test can

@@ -157,7 +157,11 @@ internal static class ProbeArgumentParser
         "               [--target <exact target-interface name>] [--log-dir <dir>]\n" +
         "               [--timeout-connect <seconds>] [--timeout-open <seconds>] [--disruptive]\n" +
         "\n" +
-        "  <project.ap20>  MUST be the scratch project: a file name ending '" + ScratchProjectGuard.RequiredSuffix + "'.\n" +
+        "  <project.ap20>  MUST be an ALLOWLISTED scratch project: the PATH to the .apNN file, resolved\n" +
+        "                  and compared against '" + ScratchProjectGuard.RepoRelativeAllowlist + "' in this repository and\n" +
+        "                  '" + ScratchProjectGuard.MachineAllowlistPath + "'.\n" +
+        "                  There is NO override flag and no environment variable; a project whose path may\n" +
+        "                  not be committed (a copy of a live job) goes in the machine-local file.\n" +
         "  --options       REQUIRED, no default. Exactly one of the three literals above.\n" +
         "  --pc-interface  the PC adapter to download through, by EXACT name (case-sensitive, whole\n" +
         "                  string). REQUIRED whenever the project declares more than one; no default,\n" +

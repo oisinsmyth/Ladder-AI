@@ -121,20 +121,30 @@ public class DownloadProbeDisruptiveTests
         Assert.Empty(selection.Applied);
     }
 
-    /// <summary>The scratch-path guard is not a thing <c>--disruptive</c> gets to skip.</summary>
+    /// <summary>
+    /// The device-download fence is not a thing <c>--disruptive</c> gets to skip. The project here
+    /// EXISTS and sits in the same folder as the allowlisted one — the mistyped-path case — so the
+    /// refusal is the allowlist's, not an accident of a path that happens not to resolve.
+    /// </summary>
     [Fact]
     public void Disruptive_DoesNotBypassTheScratchPathGuard()
     {
         var logDir = NewTempDir();
         var stderr = new StringWriter();
+        using var repo = ProbeFenceRepo.Permitting();
+
+        var neighbour = Path.Combine(Path.GetDirectoryName(repo.ProjectPath)!, "NotAllowlisted.ap20");
+        File.WriteAllText(neighbour, "(a project nobody allowlisted)");
 
         var exit = ProbeProgram.Run(
-            new[] { RealProject, "--options", "Software", "--disruptive", "--log-dir", logDir },
+            new[] { neighbour, "--options", "Software", "--disruptive", "--log-dir", logDir },
             new StringWriter(),
             stderr,
-            (_, _) => throw new InvalidOperationException("Portal was contacted despite a non-scratch project."));
+            (_, _) => throw new InvalidOperationException("Portal was contacted despite a non-allowlisted project."),
+            repo.BinaryDirectory);
 
         Assert.Equal(ProbeExitCodes.RefusedByPath, exit);
+        Assert.Contains("not on the allowlist", stderr.ToString(), StringComparison.Ordinal);
         Assert.Empty(Directory.GetFiles(logDir));
     }
 
@@ -929,7 +939,8 @@ public class DownloadProbeDisruptiveTests
     private static IReadOnlyList<string> RunWithStubSession(bool disruptive)
     {
         var logDir = NewTempDir();
-        var args = new List<string> { ScratchProject, "--options", "Software", "--log-dir", logDir };
+        using var repo = ProbeFenceRepo.Permitting();
+        var args = new List<string> { repo.ProjectPath, "--options", "Software", "--log-dir", logDir };
         if (disruptive)
         {
             args.Add("--disruptive");
@@ -944,7 +955,8 @@ public class DownloadProbeDisruptiveTests
             {
                 captured = log.Lines.ToArray();
                 return new ProbeOutcome(ProbeExitCodes.Completed, "stub");
-            });
+            },
+            repo.BinaryDirectory);
 
         return captured;
     }

@@ -1098,6 +1098,86 @@ that finds it before the download does.** The software/station scopes report per
 (`FC_ModbusTCP_Sample (FC8): Block was successfully compiled.`), which is precisely the granularity
 the exception lacks.
 
+### 🔴 `download-probe`'s fence is an ALLOWLIST, not a file-name suffix (2026-08-13)
+
+**The guard used to accept any project whose file name ended `" scratch.ap20"`. It was wrong in both
+directions**, and neither half was fixable by renaming anything:
+
+* **It blocked the legitimate case.** `GenProject1.ap20` (the S6 sandbox, deliberately not renamed —
+  CLAUDE.md "Codename note") and `SampleProject.ap20` could never be the target of a download,
+  however deliberately somebody chose one.
+* **It did not stop the dangerous case.** A file-name suffix is a *convention*, and anything can be
+  renamed into one. This machine carries about **nineteen real production `.ap20` projects** beside the
+  scratch ones; a fence any of them could satisfy by rename was not protecting them.
+
+*The suffix was not arbitrary* — the scratch **copies of live jobs** on this machine are named that
+way, so it was fitted to the projects the tool was being pointed at, and it deliberately avoided
+naming any of their paths in the repository. That constraint is real and the replacement still
+honours it (below).
+
+**The replacement is ADR-0011's pattern**, because its properties were argued for and measured there:
+allowlist never denylist; entries absolute or **`repo:`-prefixed** so a committed file is portable
+across worktrees; the check runs **before anything else**, so Portal is never contacted on a refusal;
+junctions **detected and refused**, not half-resolved; `..`, casing and 8.3 short names cannot walk
+around it; **and no override — no flag, no environment variable, no argument names a different
+allowlist.** Refusal is **exit 3 (`RefusedByPath`)**, unchanged.
+
+**Two allowlist files, both fixed paths, both read:**
+
+| file | for |
+|---|---|
+| `tools/download-probe.allowlist` | projects whose paths may be committed. Tracked, reviewable in `git log`. |
+| `%ProgramData%\Ladder-AI\download-probe.allowlist` | a project whose **path may not be committed** — a copy of a live engineering job (CLAUDE.md "Live runs": use anything, commit nothing). |
+
+**Why the second one lives OUTSIDE the working tree rather than being a gitignored companion.** A
+gitignored file is protected by a *pattern*, and a pattern protects the file somebody thought of — on
+2026-08-13 an agent's `.claude/settings.local.json.bak` sat untracked but **unignored**, one
+`git add -A` from committing a site path. A path outside the tree cannot be published by an
+ignore-rule gap, a `git add -f`, or any tool that walks the repo. It is the same file with the same
+rules, in the one place where a mistake cannot leak it.
+
+**Every "empty is not clean" case is a refusal, never a pass:** no allowlist file, an allowlist of
+comments only, a malformed entry, an unresolvable path, a junction, a project that is a directory, a
+file that is not `.apNN`. And a **permitted** run prints which entry vouched for it, into the log —
+a fence that only speaks when it refuses leaves a successful run unable to say what permitted it.
+
+**Proved the way ADR-0011's fence is proved, not by inspection:** the session delegate — the probe's
+only route to Portal — is a stub that **appends to a sentinel file**, and the refusal test asserts the
+sentinel does not exist *and* that no log file was created. The instrument is controlled: a permitted
+case asserts the sentinel **is** written. Disconnecting the fence turns **4 tests red**, the sentinel
+test among them.
+
+### `download-probe --json` carries the LOAD MANIFEST as data (2026-08-13)
+
+**The manifest is the only positive evidence that a download carried anything** — `DownloadResult.State`
+was `Success` on a live run that transferred nothing — so it is what the harness's `Loaded` verdict
+keys on, and the most load-bearing value this binary produces. It was reaching its consumer **by
+scraping**: the deployment gateway is a separate process (net8.0; it must never link
+`Siemens.Engineering` or every harness build joins the `(Path, FileHash)` approval cycle), so it
+re-parsed the *rendered log* embedded in the JSON, and anything the renderer dropped was invisible to
+it.
+
+`download-probe` now references **`Ladder.Download`** (netstandard2.0, no Siemens reference, no
+network, no Portal) and calls `DownloadResultAdapter` on the live message tree — **this is the live
+path that library's own documentation names, and until now nothing used it.** The result is emitted
+under `--json` as `loadManifest`, whose keys are `DownloadFeedback`'s own property names, camel-cased:
+`loadedObjects`, `loadedObjectCount`, `duplicateLoadedObjects`, `nonObjectLoadSubjects`,
+`transferredItemCount`, `verdict`, `verdictReason`, `runStateDisclosed`, `runStateTransitions`,
+`finalRunStateEvent`, `upToDateSignalPresent`, `unrecognisedMessages`, `anomalies`.
+
+* **`source` says which authority produced it** — `DownloadResultAdapter` is first-hand, off the live
+  objects; `ProbeLogReader` re-derives from a rendering and is forensics only. A consumer that cannot
+  tell them apart cannot tell a first-hand answer from a second-hand one.
+* **`available: false` with every list and count `null`** when no `DownloadResult` existed (an abort, a
+  throw, a `--to-folder` run). *Empty is not clean:* an empty array would say "TIA loaded nothing",
+  which is the opposite of "nobody looked". Mutating those nulls to empty lists turns a test red.
+* **Additive.** The embedded `log` array and the `transferVerdict` / `softwareLoaded` / `logFile` keys
+  the gateway reads today are untouched, so nothing breaks on the day this lands.
+* **Tested against recorded live-rig downloads**, not fixtures authored by reading our own output: the
+  99-object full load, the 1-object differential, the up-to-date run and the aborted run, read from
+  `src/download-feedback/DownloadFeedback.Tests/Fixtures/`. A missing fixture is a failure, never a
+  skip. Removing the `loadManifest` key turns **7 tests red**.
+
 ### `download-probe --to-folder` — the download's own compile, without the download
 
 `DownloadProvider` has a second overload, `Download(DirectoryInfo, DownloadConfigurationDelegate)`,

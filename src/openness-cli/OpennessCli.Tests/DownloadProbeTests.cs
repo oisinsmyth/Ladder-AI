@@ -34,56 +34,15 @@ namespace OpennessCli.Tests;
 /// </summary>
 public class DownloadProbeTests
 {
-    // Invented paths only. The real scratch project is a live engineering job, and its name may not
-    // enter this repository (CLAUDE.md, "Live runs": use anything, commit nothing).
+    // Invented paths only. The scratch project the rig uses is a copy of a live engineering job, and
+    // its name may not enter this repository (CLAUDE.md, "Live runs": use anything, commit nothing).
+    //
+    // These two are ARGUMENT-PARSER fixtures and nothing more. The fence itself is tested in
+    // DownloadProbeAllowlistTests, against real files under a temporary allowlist, because since
+    // 2026-08-13 it compares RESOLVED PATHS against an allowlist rather than matching a file name —
+    // so a string that never exists on disk can no longer be a fixture for it.
     private const string ScratchProject = @"C:\work\Widget Line scratch.ap20";
     private const string RealProject = @"C:\work\Widget Line.ap20";
-
-    // ---- the scratch-path guard ----------------------------------------------------------------
-
-    [Theory]
-    [InlineData(@"C:\work\Widget Line scratch.ap20")]
-    [InlineData(@"C:\work\Widget Line SCRATCH.AP20")]
-    [InlineData(@"C:\work\a scratch.ap20")]
-    [InlineData(@"relative\thing scratch.ap20")]
-    public void Guard_Accepts_OnlyAScratchProject(string path) =>
-        Assert.True(ScratchProjectGuard.IsScratchProject(path));
-
-    [Theory]
-    [InlineData(@"C:\work\Widget Line.ap20")]
-    [InlineData(@"C:\work\Widget Line scratch.ap19")]
-    // No leading space: a project that merely CONTAINS the word is not the scratch copy.
-    [InlineData(@"C:\work\myscratch.ap20")]
-    [InlineData(@"C:\work\scratch.ap20")]
-    // A directory named "... scratch.ap20" must not vouch for a different file inside it.
-    [InlineData(@"C:\work\Widget Line scratch.ap20\Widget Line.ap20")]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
-    public void Guard_Refuses_EverythingElse(string? path) =>
-        Assert.False(ScratchProjectGuard.IsScratchProject(path));
-
-    [Fact]
-    public void Guard_Refuses_BeforePortalIsContactedAndBeforeAnyLogFileExists()
-    {
-        var logDir = NewTempDir();
-        var stdout = new StringWriter();
-        var stderr = new StringWriter();
-
-        var exit = ProbeProgram.Run(
-            new[] { RealProject, "--options", "SoftwareOnlyChanges", "--log-dir", logDir },
-            stdout,
-            stderr,
-            (_, _) => throw new InvalidOperationException("Portal was contacted. The guard did not run first."));
-
-        Assert.Equal(ProbeExitCodes.RefusedByPath, exit);
-        Assert.Contains("REFUSED", stderr.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Portal was NOT contacted", stderr.ToString(), StringComparison.Ordinal);
-
-        // Not even an artifact: the refusal happens before the log file is opened, so a wrong path
-        // leaves nothing at all behind.
-        Assert.Empty(Directory.GetFiles(logDir));
-    }
 
     [Fact]
     public void Guard_RefusalCodeIsDistinctFromEveryOtherOutcome()
@@ -981,9 +940,10 @@ public class DownloadProbeTests
     public void Run_PropagatesTheSessionExitCode_AndTheFooterCallsAnAbortAResult()
     {
         var logDir = NewTempDir();
+        using var repo = ProbeFenceRepo.Permitting();
 
         var exit = ProbeProgram.Run(
-            new[] { ScratchProject, "--options", "Hardware", "--log-dir", logDir },
+            new[] { repo.ProjectPath, "--options", "Hardware", "--log-dir", logDir },
             new StringWriter(),
             new StringWriter(),
             (_, log) =>
@@ -992,7 +952,8 @@ public class DownloadProbeTests
                 return new ProbeOutcome(
                     ProbeExitCodes.AbortedByUnhandledConfiguration,
                     "Aborted by 1 unhandled configuration(s): StopModules.");
-            });
+            },
+            repo.BinaryDirectory);
 
         Assert.Equal(ProbeExitCodes.AbortedByUnhandledConfiguration, exit);
 
@@ -1009,16 +970,18 @@ public class DownloadProbeTests
     {
         var logDir = NewTempDir();
         var stdout = new StringWriter();
+        using var repo = ProbeFenceRepo.Permitting();
 
         ProbeProgram.Run(
-            new[] { ScratchProject, "--options", "SoftwareOnlyChanges", "--log-dir", logDir },
+            new[] { repo.ProjectPath, "--options", "SoftwareOnlyChanges", "--log-dir", logDir },
             stdout,
             new StringWriter(),
             (_, log) =>
             {
                 log.Line("MARKER-LINE-IN-THE-SESSION");
                 return new ProbeOutcome(ProbeExitCodes.Completed, "done");
-            });
+            },
+            repo.BinaryDirectory);
 
         var written = Assert.Single(Directory.GetFiles(logDir));
         Assert.Contains("MARKER-LINE-IN-THE-SESSION", File.ReadAllText(written), StringComparison.Ordinal);
@@ -1031,16 +994,18 @@ public class DownloadProbeTests
         var logDir = NewTempDir();
         var stdout = new StringWriter();
         var stderr = new StringWriter();
+        using var repo = ProbeFenceRepo.Permitting();
 
         ProbeProgram.Run(
-            new[] { ScratchProject, "--options", "SoftwareOnlyChanges", "--json", "--log-dir", logDir },
+            new[] { repo.ProjectPath, "--options", "SoftwareOnlyChanges", "--json", "--log-dir", logDir },
             stdout,
             stderr,
             (_, log) =>
             {
                 log.Line("MARKER-LINE-IN-THE-SESSION");
                 return new ProbeOutcome(ProbeExitCodes.Completed, "done");
-            });
+            },
+            repo.BinaryDirectory);
 
         var json = stdout.ToString();
         using var document = System.Text.Json.JsonDocument.Parse(json);
@@ -1056,6 +1021,7 @@ public class DownloadProbeTests
     public void Run_RefusesRatherThanRunningUnlogged_WhenTheLogFileCannotBeOpened()
     {
         var stderr = new StringWriter();
+        using var repo = ProbeFenceRepo.Permitting();
 
         // A path that cannot be a directory: an existing FILE stands where the log directory would go.
         var blocker = Path.Combine(Path.GetTempPath(), "download-probe-blocker-" + Guid.NewGuid().ToString("N"));
@@ -1064,10 +1030,11 @@ public class DownloadProbeTests
         try
         {
             var exit = ProbeProgram.Run(
-                new[] { ScratchProject, "--options", "SoftwareOnlyChanges", "--log-dir", blocker },
+                new[] { repo.ProjectPath, "--options", "SoftwareOnlyChanges", "--log-dir", blocker },
                 new StringWriter(),
                 stderr,
-                (_, _) => throw new InvalidOperationException("The session must not run without a log."));
+                (_, _) => throw new InvalidOperationException("The session must not run without a log."),
+                repo.BinaryDirectory);
 
             Assert.Equal(ProbeExitCodes.EnvironmentError, exit);
             Assert.Contains("refused rather than run un-logged", stderr.ToString(), StringComparison.Ordinal);
@@ -1669,16 +1636,18 @@ public class DownloadProbeTests
     {
         var logDir = NewTempDir();
         IReadOnlyList<string> captured = Array.Empty<string>();
+        using var repo = ProbeFenceRepo.Permitting();
 
         ProbeProgram.Run(
-            new[] { ScratchProject, "--options", options.ToString(), "--log-dir", logDir },
+            new[] { repo.ProjectPath, "--options", options.ToString(), "--log-dir", logDir },
             new StringWriter(),
             new StringWriter(),
             (_, log) =>
             {
                 captured = log.Lines.ToArray();
                 return new ProbeOutcome(ProbeExitCodes.Completed, "stub");
-            });
+            },
+            repo.BinaryDirectory);
 
         return captured;
     }
