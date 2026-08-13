@@ -3439,6 +3439,57 @@ sentence.*
   ➜ **§7 itself needed no amendment** — it never said *when* instance qualification happens, so the
     exploitable reading was introduced downstream and is corrected there.
 
+### ✅ 4.2's LADDER IS BUILT — PHASE 4 COMPLETE, AND CLASS A IS CORRECTED (2026-08-13, `f50ca06`)
+
+**217 → 255 tests.** One new **required** fact on each allowance entry — *** WHICH DELEGATE RAISES IT ***
+— and every rung derives from it:
+
+| entry | raised in | abort leaves | rung |
+|---|---|---|---|
+| `StopModules` | PRE | CPU **running**, project unchanged | step 6 — unchanged, **now justified rather than assumed** |
+| `DataBlockReinitialization` | PRE | CPU running | step 6 |
+| `StartModules` | **POST** | *** CPU STOPPED, COMPLETE PROGRAM *** | **answer within the current download** |
+
+  1. **`ClassAEntry` requires `raisedIn` and refuses `Unknown`.** *** THE REQUIRED PARAMETER BROKE EVERY
+     CALL SITE, WHICH IS THE GUARD WORKING *** — the same shape as the converter's `portType`.
+  2. **`DisruptiveDownloadWouldResolveIt` narrowed to PRE** — leaving it true for POST **is** the
+     circularity D32's own defect note flagged.
+  3. *** THE ONE THAT CHANGES BEHAVIOUR: the policy ANSWERS a POST entry even on a NON-disruptive wave
+     boundary *** — because **refusing `StartModules` does not *defer* a stop, it LEAVES one.** It is
+     raised only because the download already stopped the CPU.
+
+For an abort that lands post-transfer anyway: `RecoveryDownloadThatStartsTheCpu`, carrying the measured
+**34 s** in its reason.
+
+> #### 🎯 NOTHING REMAINS UNPROVEN FOR WANT OF THE HALF-LOADED CASE — AND THAT IS ASSERTED, NOT ASSUMED
+>
+> A6 feared a half-loaded CPU; what was measured is **a complete program not running**, and the
+> genuinely half-loaded case needs a throw *during* transfer with **no configuration raised there to
+> hang one on.** So: `Uncharacterised` is the **zero value**; any rung derived from it reports
+> `[UNPROVEN]`; and *** A TEST ASSERTS EVERY LIVE ALLOWANCE ENTRY NAMES A MEASURED STAGE, MAKING THE
+> UNPROVEN BRANCH UNREACHABLE BY CONSTRUCTION. ***
+>
+> **And that unreachable branch has its own test — built because *a flag that is permanently true is
+> indistinguishable from a constant*.**
+
+**Throw-on-unhandled: the exception CARRIES the aftermath**, *** because the catch site is where the
+next step is decided, and deciding it without knowing the CPU's state is the original mistake. ***
+
+**The excision threshold is a required argument with no default.** D32 calls step 5 *"an ordinary
+boundary"* — **true for a small closure and false for nineteen-of-twenty** — and *** NOBODY HAS
+MEASURED WHERE THAT TURNS OVER, SO THE TYPE WILL NOT INVENT A NUMBER. ***
+
+**What went red is the measure of the finding:** *** RESTORING D32 AS WRITTEN (one rung per class)
+BREAKS 3 TESTS; FLIPPING ONE TABLE ENTRY SO THE POST AFTERMATH READS AS "RUNNING" BREAKS 5. *** That is
+how much now hangs off a single measured fact.
+
+  ➜ **A pre-existing test failed on the way in, correctly** — a theory asserting all three entries
+    reach step 6, **pinning D32 as written.** *** REPLACED, NOT DELETED, WITH THE REASON IN THE TEST
+    BODY. ***
+  ➜ **Flagged rather than bundled:** `EscalationRecord` predates the new rungs and ought to be able to
+    record *"CPU left stopped, recovery download owed"* — but that is a change to committed behaviour
+    **and this commit was already correcting a specification.**
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
