@@ -10,7 +10,9 @@ written in the field — ***the difference between a gate and a formality.***
 - ***THE DENOMINATOR COMES FROM THE SPECIFICATION, NEVER FROM THE TEST SUITE.*** Any unit defined by
   what somebody wrote a vector for is self-referential: you cannot be missing an assertion nobody
   wrote, so coverage is always 100% and the gate is theatre.
-- The unit is the **assertion, qualified by instance**. Decomposition is a **spec-side** operation,
+- The unit is the **assertion, qualified by instance** — and *both axes* are spec-side: the
+  assertion set **and** the instance set are the enumerator's (R4, amended 2026-08-13; see the
+  correction under §1.2, which is the sharpest thing in this document). Decomposition is a **spec-side** operation,
   complete before any vector exists. A vector **cites into** the enumeration and cannot extend it.
 - Four buckets; the gate is **`UNCLASSIFIED = 0`**, not a percentage; it **stops the claim, not the
   run**.
@@ -68,8 +70,34 @@ here at all. `NEVER` is for ordinary control interlocks.)*
 | **R1** | **SPLIT ON TRIGGER.** A distinct trigger condition is a distinct assertion. | Includes the **negative case** wherever the spec states one — *"and shall not open otherwise"* is its own assertion, and it is the one most often lost. |
 | **R2** | **SPLIT ON RESPONSE.** A distinct observable output or state change is a distinct assertion. | Two responses to one trigger are two assertions: a defect can produce one and not the other. |
 | **R3** | ***DO NOT SPLIT ON QUALIFIERS.*** Timing bounds, tolerances, units, hysteresis, and persistence are **attributes of a response**, not separate assertions. | *"Opens within 2 s when X"* is **one** assertion, not "opens" plus "within 2 s". A timing defect is a failure **of that assertion**, reported as observed-versus-expected. |
-| **R4** | **SPLIT ON INSTANCE.** The coverage unit is `(assertion, instance)` — §7/D35, with `relation-reconcile`'s `(instance, relation-id)` as precedent. | Instance qualification happens at citation time; the enumeration itself is per **class**, and instances multiply it. |
+| **R4** | **SPLIT ON INSTANCE.** The coverage unit is `(assertion, instance)` — §7/D35, with `relation-reconcile`'s `(instance, relation-id)` as precedent. | ***THE INSTANCE SET IS DECLARED BY THE ENUMERATOR, FROM THE CLAUSE TEXT*** (`EnumeratedClause.Instances`). The assertion itself is written once, per **class**; the declared instance set multiplies it into coverage units. **A citation SELECTS from that set. It cannot add to it, and an instance a citation names that the enumerator did not declare is a FINDING, not a new unit.** |
 | **R5** | ***NEVER SPLIT ON IMPLEMENTATION.*** An assertion may not name a rung, an operator, an address, a block or a tag internal to the design. | If a proposed split can only be *described* in terms of **how** the thing is built, it is not a split — it is a peek at the implementation, and it re-correlates the check (the same disease M2 names for models). |
+
+> 🔴 ***R4 WAS AMENDED ON 2026-08-13 BY OWNER RULING, AND THE WORDING IT REPLACES WAS MINE AND WAS
+> EXPLOITABLE. IT IS RECORDED RATHER THAN REWRITTEN BECAUSE THE FAILURE IS SUBTLE ENOUGH TO BE
+> REINTRODUCED BY SOMEONE TIDYING THE SENTENCE.***
+>
+> R4 used to read: *"Instance qualification happens at citation time; the enumeration itself is per
+> class, and instances multiply it."* Read literally — and the coverage lane did read it literally —
+> ***THAT MAKES THE DENOMINATOR'S SIZE DEPEND ON WHAT THE CITATIONS MENTION.*** If instances enter
+> the count when a vector names one, then ***AN INSTANCE NOBODY WROTE A VECTOR FOR COULD NOT BE
+> MISSING***, because it was never in the denominator to begin with. Three feeders with vectors for
+> two reports 100%.
+>
+> **That is §7's self-referential trap arriving by a side door** — the exact thing §7 rejects by
+> name, reintroduced one level down at the instance axis while the assertion axis stayed clean.
+>
+> ***AND IT IS THE ONE INFLATION ROUTE THAT NEEDS NO SECOND PARTY AT ALL, WHICH IS WHY IT MATTERS
+> MORE THAN ITS SIZE SUGGESTS.*** Every other route in §5 has to get past somebody: a coarse
+> decomposition faces the vector author's dispute channel, a bucket laundering faces the gate-1
+> signer. This one needs no accomplice and no untruth — the vector author simply writes vectors for
+> the instances they thought of, and the denominator obligingly shrinks to fit. **The structural
+> defence every other route relies on does not apply to it.**
+>
+> **The ruling: the instance set is the enumerator's, declared from the clause text.** `Each of the
+> three feeders` declares three, whether or not anyone ever cites the third.
+> **The code already took this reading** (`EnumeratedClause.Instances`); this doc was the only thing
+> that made the other reading available, and it should not be the thing that reopens it.
 
 ### 1.3 Worked examples
 
@@ -79,7 +107,7 @@ here at all. `NEVER` is for ordinary control interlocks.)*
 | *"The pump shall start within 3 s of the start command."* | **1** | R3 — the bound qualifies the response |
 | *"On a fault the drive shall stop and the alarm shall latch."* | **2** | R2 — two responses, independently breakable |
 | *"The conveyor shall not start unless the guard is closed."* | **1**, `NEVER` form | prohibition, no natural trigger |
-| *"Each of the three feeders shall stop on low level."* | **1 assertion × 3 instances** | R4 — one class-level statement, three coverage units |
+| *"Each of the three feeders shall stop on low level."* | **1 assertion × 3 instances** | R4 — one class-level statement; the enumerator declares the three, giving three coverage units |
 | *"The mixer shall run for 30 s then stop."* | **2** | R1 — *start-on-command* and *stop-after-30-s* have different triggers; a preset defect breaks only the second |
 
 ---
@@ -127,7 +155,9 @@ demand agreement but to route the disagreement:
 
 ```
 REQ-014:3f9a1c                 an assertion of clause REQ-014
-REQ-014:3f9a1c@Feeder_02       the coverage unit — assertion qualified by instance (R4)
+REQ-014:3f9a1c@Feeder_02       the coverage unit — assertion qualified by instance (R4).
+                              *** `Feeder_02` MUST BE ONE OF THE CLAUSE'S DECLARED INSTANCES;
+                              a citation naming an undeclared one is a finding, not a new unit ***
 ```
 
 - **`REQ-014`** — the clause's **stable ID from the requirements register**.
@@ -236,12 +266,25 @@ Each row is an attack that requires no dishonesty — only a generous reading.
 | 5 | **Citing an assertion the vector does not actually test.** | **Partly mechanical:** the assertion's response signal must appear in the citing vector's `Expectations` — a set-difference, the same shape as `trace`'s guard-containment hop | mentioning a signal is not testing it — the rest is judgement |
 | 6 | **Quoting a bare percentage.** | ***A COVERAGE FIGURE MAY NOT BE REPORTED WITHOUT ALL FOUR BUCKET COUNTS AND THE OLDEST DEFERRAL'S AGE.*** Mechanically enforced in the report generator: a bare percentage is not an available output | none — this one closes cleanly |
 | 7 | **Padding the denominator.** | No incentive: padding *lowers* the covered fraction. And a "assertion" nothing could falsify fails the §1 definition | none |
+| 8 | 🔴 ***INSTANCE SHRINKAGE — write vectors for two of three feeders and let the third never enter the denominator.*** Found 2026-08-13, and it needed no dishonesty and no accomplice | **R4 as amended:** the instance set is declared by the ENUMERATOR from the clause text, so the third feeder is in the denominator whether or not anyone cites it. A citation **selects**; an undeclared instance is a finding | closed **only because R4 was amended** — the previous wording left it open |
 
 **The structural reason this is defensible at all:** coverage is a ratio of **two spec-side counts**
 (enumerated, classified) and **one vector-side count** (cited). ***ONLY THE VECTOR-SIDE COUNT IS
 UNDER THE TEST AUTHOR'S CONTROL, AND IT IS THE NUMERATOR.*** The denominator is produced before any
-vector exists, by someone else, and is reviewed. Every attack above is an attack on the denominator,
-which is why they all have to route through a second party.
+vector exists, by someone else, and is reviewed.
+
+> 🔴 ***THIS PARAGRAPH USED TO END: "Every attack above is an attack on the denominator, which is why
+> they all have to route through a second party." ROUTE 8 FALSIFIED THAT, AND THE CORRECTION IS THE
+> USEFUL PART.*** Route 8 attacked the denominator **without routing through anyone**, because the
+> old R4 let the *numerator's* authors decide part of the denominator's *size*. The second-party
+> defence is real but it is **not automatic** — it holds only where the denominator is genuinely
+> produced elsewhere, and any wording that lets a citation influence what counts as complete quietly
+> removes it.
+>
+> ***SO THE STANDING TEST FOR ANY FUTURE CHANGE TO THIS DOCUMENT IS: CAN A VECTOR AUTHOR, ACTING IN
+> GOOD FAITH AND WRITING NOTHING FALSE, MAKE THE DENOMINATOR SMALLER?*** If yes, the change is
+> wrong however reasonable it reads. That question would have caught R4's original wording, and
+> nothing else did for the length of time it stood.
 
 ---
 
@@ -257,6 +300,8 @@ Matching `test-environment-contract.md`'s column, because the skill needs exactl
 | ID recomputes from the normalised text | **rehash and compare — a hand-edited ID is caught** |
 | IDs unique within a clause; identical normalisations are a duplicate error | set |
 | No `Basis` citation names an ID absent from the enumeration | dangling-citation check |
+| **No citation names an INSTANCE the clause did not declare** (R4) | set-membership against `EnumeratedClause.Instances` — **a finding, never an added unit** |
+| **Every declared instance appears in the denominator** whether or not anything cites it | count = assertions × declared instances, computed spec-side |
 | No `Basis` citation uses the display-ordinal form | shape |
 | The cited assertion's response signal appears in the vector's `Expectations` | set-difference |
 | Every assertion in **exactly one** bucket; `UNCLASSIFIED` residual = 0 | **computed, never declared** |
@@ -295,6 +340,10 @@ Matching `test-environment-contract.md`'s column, because the skill needs exactl
    it does not say by whom. If it is the block's author, D6's independence is lost at the
    denominator — which would undo most of this document. ***THIS IS THE ONE THAT MATTERS MOST OF THE
    THREE, AND IT SHOULD BE RULED BEFORE THE SKILL IS BUILT.***
+   ➜ 🔴 **R4's amendment (2026-08-13) makes this MORE load-bearing, not less.** The enumerator now
+   owns the **instance set** as well as the assertion set, so a compromised enumerator can shrink
+   the denominator on *two* axes rather than one. Whatever independence rule is chosen has to cover
+   the whole enumeration, not just the decomposition.
 4. **The assertions-per-clause norm is unmeasured.** §5 rows 1 and 2 lean on an outlier report, and
    there is no corpus yet to be an outlier against. It becomes useful after the first real
    enumeration, not before — recorded so nobody quotes a threshold that was never measured.

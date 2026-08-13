@@ -11,6 +11,23 @@ proven.
 Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (gates),
 `CHANGELOG.md` (dated), `CLAUDE.md` environment notes.
 
+## The compile scope, and how its verdict is read — decided 2026-08-13
+
+Recorded here rather than left in a commit message, because everything below in this file assumes it.
+
+- ***`openness-cli compile` DEFAULTS TO THE STATION SCOPE*** (hardware configuration **and** program
+  blocks), per the owner's ruling. The old behaviour — Openness's device-item compiler, which sees
+  **hardware only** — is still reachable, **by name**, as `--hardware`. Keeping it reachable and
+  making it un-typo-able were the same decision: it is occasionally the right scope, and it must
+  never again be the one you get by accident.
+- ***THE VERDICT KEYS ON THE ERROR COUNT AND NEVER ON THE COMPILE'S STATE.*** The station scope
+  surfaces the project's standing hardware warning, so ***A HEALTHY PROJECT LEGITIMATELY RETURNS
+  NON-`Success`*** — measured: `OVERALL: HEALTHY` alongside `Warning (errors=0, warnings=2)`.
+  `sanity-check`'s `IsHealthy` was re-keyed onto the error count for exactly this reason; on `State`
+  it would have marked a healthy project unhealthy on **every run, forever**.
+- **Warnings are still reported and still worth reading. They are simply not the gate.** A criterion
+  that fails on a healthy project gets worked around, and then it protects nothing.
+
 ## Compile stage
 
 ### "Inconsistent blocks and PLC data types (UDT) cannot be exported"

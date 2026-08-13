@@ -39,3 +39,21 @@ The unit of review is the **IR diff**, plus the AI's one-paragraph intent statem
 - Review happens in the diff, before import — never "import it and eyeball it in TIA" (TIA's LAD view hides what changed).
 - Rejections go back with a reason; recurring rejection reasons become convention rules (`06`) or CLAUDE.md instructions.
 - If reviewing feels rubber-stampy, stop and re-read R-09. The checklist exists for the day the AI is wrong *convincingly*.
+
+### The review skills take IR, and they ask for it rather than making it — decided 2026-08-13
+
+When handed a SimaticML `.xml` instead of `.ir`, all three review skills (`review-simplicity`,
+`review-conventions`, `review-functional`) **stop and ask the caller to convert it**. The obvious
+alternative was to give each skill a `Bash(...to-ir:*)` permission so it could convert the file
+itself. **Decided against, and recorded so it can be reversed knowingly rather than rediscovered:**
+
+- ***THE CONVERSION IS THE CALLER'S JOB.*** A reviewer that silently transforms its own input has
+  changed what it reviewed, and the caller no longer knows which artifact the findings are against.
+- ***`review-simplicity` HOLDS NO `Bash` PERMISSION AT ALL, BY DESIGN.*** Granting one to fix an
+  input-format inconvenience would be the first crack in that, and it is the reviewer whose whole
+  value is that it only reads.
+- **Proportion:** the symptom was one copy-pasted line repeated across three skills. ***WIDENING
+  THREE PERMISSION SETS TO FIX A COPY-PASTED LINE IS A LARGER CHANGE THAN THE LINE DESERVED.***
+
+**The alternative stays available.** If an owner wants the skills to self-convert, this is a
+permission edit, not a redesign — and the argument above is what should be answered first.

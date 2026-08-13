@@ -7,6 +7,10 @@ them — losing the thing the corpus is for.
 
 > **Where a reader of a non-clean `preflight` should look: here, first.** If a finding below matches
 > what you are seeing, it is known and accepted. If it does not, it is new and worth chasing.
+>
+> ⚠️ **The file has TWO parts and they carry different weight.** Everything under *Accepted* is a
+> decision. The section at the foot — ***AWAITING A RULING*** — is **not accepted**, is open, and is
+> recorded so it is not met twice as a surprise. **Do not read the file's title as covering it.**
 
 **These are REAL findings. Accepted is not the same as wrong.** Every entry below would be a genuine
 defect in a block being delivered. What makes them acceptable is *where they are* — a reference
@@ -55,6 +59,51 @@ site practice. A rule that its own source material fails is either a rule that h
 site deliberately (which is the case here — see docs/06's *"generated code answers to a stricter
 bar than existing site practice"*) or a rule that is wrong. **The findings are what makes that
 distinction visible, and deleting them hides it.**
+
+---
+
+---
+
+# ⏸ AWAITING A RULING — ***NOT ACCEPTED***, and do not read it as though it were
+
+Everything above is a decision. **This section is not.** It is here because a reader checking a
+corpus finding will come to this file, and they must not conclude from its title that everything in
+`ir/` has been signed off.
+
+## `AutoStartSignal` is declared in two committed UDTs and absent from their exports — and `drift-check` says `MATCH`
+
+**Measured by the golden lane, 2026-08-13.** ***`Normalizer.IsVolatile` DISCARDS ANY `<Interface>`
+THAT HAS NO `Section Name="Static"`.*** Two consequences that were not intended and are not small:
+
+- **an FC with parameters has no `Static` section** — so its whole interface is discarded;
+- ***a UDT IS NOTHING BUT ITS INTERFACE*** — so for a UDT, the Normalizer discards the entire object
+  and compares what is left.
+
+**Live in the committed corpus right now:** `UDT_PusherIO.ir` and `UDT_ShredderSequencerIO.ir` each
+declare `AutoStartSignal : Bool`, that member is **absent from their committed exports**, and
+***`drift-check` PRINTS `MATCH` FOR BOTH.***
+
+**Why this is a different kind of thing from the two accepted findings above.** Those are real
+findings we have decided to keep. This is a **genuine discrepancy between the `.ir` and what the
+project actually contains, hidden by the very check built to detect discrepancies.** Nobody has
+decided to keep it, and it should not be quietly inherited by whoever reads this file next.
+
+**Who owns which half:**
+
+| | |
+|---|---|
+| **The `Normalizer` fix** | with the **converter lane**. Not a corpus question |
+| **What to do about the two `.ir` files** | ***THE OWNER'S DECISION***, and any edit to `ir/` is `lad-coder`'s under **hard rule 8** |
+
+> ***NO EDIT TO `ir/` IS PROPOSED HERE, DELIBERATELY.*** There are at least two defensible outcomes —
+> the member is real and the exports are stale, or the member was never built and the `.ir` is
+> aspirational — and **they are opposite repairs**. Guessing between them is exactly the "fixed it in
+> passing" failure the rest of this file exists to prevent, and it would be done by the wrong party.
+
+**What can be said without a ruling:** once the Normalizer is fixed, `drift-check` will stop printing
+`MATCH`, and *that* is the moment the corpus question becomes unavoidable. **Recording it now means
+the finding is not discovered a second time as a surprise** — and the standing rule below still
+applies to it in one respect: **do not fix it in passing.**
 
 ---
 
