@@ -48,10 +48,11 @@ phase 2 with the copy-layer generator.
 > **The one A1 limit that survives is a round-trip property, not a width one:** two writes have
 > still never been put inside a single scan, because the round trip is ~78 ms against a ~23 ms scan.
 >
-> 🔴 **One correction is in flight and it propagates.** `RTT_p99 = 173` was derived at 16 registers
-> and **is too low at 123** — measured 157/201/168/185, n-weighted ~183. O11, X-B's timeout backstop,
-> X-D's ceiling and §8's durations all key on it, and phase 4's admission control is already built
-> against it. `RTT_typ = 78` is confirmed and unaffected.
+> ✅ **That correction has landed: `RTT_p99` is now 201** (the worst observed full-width run p99, set
+> pessimistically and argued). **No conclusion changed shape**; §12a carries a shape-or-magnitude table
+> for the lanes. Two consequences: **phase 4's admission control is over-admitting at S ≥ 50** and needs
+> a look, and **"marginal cost per register is zero" is now false as stated** — it is ~6% of a round
+> trip, so the conclusion survives by a measured ~16x rather than by assumed infinity.
 >
 > **Phase 2 (2.1, 2.2, 0.1b) and phase 4 (4.3, 4.4) are built.** Phase 2 was started before A1's
 > width caveat fell because phase 2's gate is A4 — and the caveat is what the allocator would have
@@ -1296,6 +1297,72 @@ sync. Deliberately restored off build A rather than left on it, and the reason i
 build A would report "no tear observed" with full liveness while no checker runs** — the stimulus
 check passing because the thing publishing liveness is not the thing that detects the fault.
 `FC_Comms_ModbusTearGen` (FC 101) remains in the project **uncalled**, so `BLOCKS:` is now **74**.
+
+### 🔧 `RTT_p99` CORRECTED TO 201 ms — and the width explanation was DECLINED, 2026-08-13 (`51e3730`)
+
+`RTT_p99` was derived from the 16-register sweep and re-measured at 123: **157 / 201 / 168 / 185**.
+It is now **201 — the worst observed run p99, not the n-weighted 183** — and the choice is argued in
+§12a rather than made silently:
+
+  1. **The statistics land there anyway.** Mean 177.75, SD 19.3, SE 9.7 → a ~95% upper bound on the
+     mean run-p99 is **≈197**. Taking the worst observation is not pessimism stacked on statistics,
+     it is where the statistics already point.
+  2. *** THE COST ASYMMETRY IS ONE-SIDED. *** Too high costs a few slots of width and slightly longer
+     backstops — both cheap, and derivation 4 had already established that a generous timeout is
+     free. Too low costs **a missed assertion reported as a pass.**
+  3. **The run-to-run spread (44 ms) exceeds the correction being made (10–28 ms)** — the dominant
+     uncertainty is sampling, not the constant.
+
+**Recorded as the weakest constant in §12a**, confidence low-to-moderate: it is a 1-in-100 statistic
+from four runs, and no figure derived from it should be quoted to three significant figures. More
+runs is the only thing that firms it up.
+
+> #### 🚩 THE EXPLANATION WAS REFUSED, AND THAT REFUSAL IS THE POINT
+>
+> It would have been natural to write *"the tail widens with register width"*. **That is not
+> supportable from this data:** one of the four full-width runs came in at **157, below the old 173**,
+> and the run-to-run spread exceeds the shift being explained. The honest statement is a comparison
+> of two measurements, not a mechanism.
+>
+> *** THE SETTLING MEASUREMENT IS INTERLEAVED NARROW AND WIDE RUNS IN ONE SESSION *** — same rig,
+> same session, alternating, so session-level variation cannot masquerade as a width effect. Until
+> that exists, "width causes it" is inference wearing a measurement's clothes, which is exactly what
+> the working agreement forbids.
+
+### 🔴 "THE MARGINAL COST PER REGISTER IS ZERO" IS NOW FALSE AS STATED — the conclusion survives by 16x
+
+Measured at full width: **~0.040 ms per register**, i.e. **~4.9 ms across a 123-register slot**. That
+is **~6% of a round trip**, against **100%** for a second round trip.
+
+*** SO THE DESIGN CONCLUSION IS UNCHANGED AND IS NOW MEASURED RATHER THAN ASSUMED: WIDTH IS CHEAP,
+ROUND TRIPS ARE NOT — by a factor of ~16, not by infinity. *** Batching wins by a measured 16x/41x
+rather than an assumed unboundedness. Anywhere the phrase "free" or "indistinguishable from zero"
+appears, it should now read **"~6% of a round trip"**, because a claim of *zero* invites a design
+that adds width without limit and there is a real, if small, per-register term.
+
+### 📐 SHAPE OR MAGNITUDE — *** NO CONCLUSION CHANGED SHAPE ***
+
+§12a now carries this table explicitly for the lanes building on it:
+
+| | was → now |
+|---|---|
+| `floor_p99` | 7.4 → **8.6** scans (persist **≥9**, was ≥8) |
+| `K_max` at S ≥ 50 | **−14%**: 6→5, 13→11, 26→23 |
+| `K_max` at S = 10 / 20 | *** UNCHANGED — and these are the rows that bite hardest *** |
+| wire term / §8 fastest row | 16.4 → **19.1 s** / 71 → **74 s** |
+| X-B backstop | +16%, the `RTT_p99` term only |
+| X-D **timer** term | **unchanged — and it is the term that binds first** |
+| `RTT_typ`, `scan`, `RTT_max`, the 3,000 ms timeout floor, the outlier rate | **all unchanged** |
+
+  ➜ **Who must act:** a lane holding a *named* `RTT_p99` needs a one-line change. *** ANYTHING
+    HOLDING A BAKED-IN `K_max` IS NOW OVER-ADMITTING AT S ≥ 50 — WHICH IS RE-COLOURING, NOT
+    RE-COSTING *** — so phase 4's admission control needs a look. Batching's conclusion is untouched.
+    The harness allocator needs no action unless it derives a poll budget from width.
+  ➜ **F-3 strengthened:** an all-latched wave set is *indifferent* to whether the p99 is 173, 201 or
+    250 — worth having while the constant is this uncertain.
+  ➜ 🚩 **NEW, OWNER'S: F-4 — is the tail width-sensitive, and should slot width be capped below the
+    FC03 limit?** First action is the interleaved measurement, **not a policy**: deciding it from
+    four confounded runs is precisely the inference-as-measurement this project forbids.
 
 ## PHASE 2 — THE WALKING SKELETON
 
