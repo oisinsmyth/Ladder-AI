@@ -189,6 +189,47 @@ namespace Ladder.Wave
             Reason = (reason ?? string.Empty).Trim();
         }
 
+        /// <summary>
+        /// *** THE DECLARED BAND — 9000-9999, RULED BY THE COORDINATOR 2026-08-13 IN
+        /// `docs/notes/test-environment-build-plan.md`. OVERTURNABLE AT ONE LINE. ***
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// 6.2 built this type and deliberately refused to invent a band: the spec's X-J treatment says
+        /// "a NUMBER RANGE IS RESERVED for harness-generated objects" and NAMES NO NUMBERS, and a
+        /// reservation with no declarer is the convention X-J exists to replace. It now has one.
+        /// </para>
+        /// <para>
+        /// FOUR DIGITS BEGINNING WITH 9, because X-J's second benefit is that harness objects are
+        /// recognisable BY NUMBER in every listing — which is also how DB-7's cleanup knows what it
+        /// owns. A THOUSAND RATHER THAN A HUNDRED, because per-test instance DBs scale with tests x
+        /// slots and the band costs nothing, where running out means renumbering live objects.
+        /// </para>
+        /// <para>
+        /// 🔴 *** OB IS EXCLUDED, AND THE RULE BREAKS ON ITS OWN FIRST EXAMPLE WITHOUT IT. *** The spec
+        /// names OB80 as a harness-generated object, and an OB's number is FIXED BY ITS EVENT CLASS —
+        /// it is IDENTIFIED, not chosen. A band applied to OBs would be violated by the very first
+        /// object X-J's own treatment lists, and the audit would emit a FALSE FINDING ON A CORRECT
+        /// PROJECT. *** THE FIRST FALSE FINDING IS WHAT GETS AN AUDIT SWITCHED OFF ***, so the
+        /// exclusion is structural in two places: the space list below omits OB, and
+        /// <see cref="HarnessNumberLedger.Audit"/> ENUMERATES the OBs it exempted rather than skipping
+        /// them silently — a silent exemption and a correct pass look identical.
+        /// </para>
+        /// <para>
+        /// CONSUMED, NOT HARDCODED AT A CALL SITE. Callers take the band from here so that overturning
+        /// it is the one line the ruling says it is.
+        /// </para>
+        /// </remarks>
+        public static HarnessNumberRange Declared() =>
+            new HarnessNumberRange(
+                9000,
+                9999,
+                new[] { "FB", "FC", "DB" },
+                "coordinator, docs/notes/test-environment-build-plan.md 2026-08-13",
+                "X-J: recognisable by number in every listing, which is how DB-7 cleanup knows what it " +
+                "owns; a thousand because per-test instance DBs scale with tests x slots. OB EXCLUDED — " +
+                "an OB's number is fixed by its event class. Overturnable at one line");
+
         /// <summary>The first reserved number, inclusive.</summary>
         public int FirstNumber { get; }
 
