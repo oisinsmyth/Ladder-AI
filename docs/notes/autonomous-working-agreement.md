@@ -113,6 +113,19 @@ running does not license:
 - **A check that shares its subject's blind spot.** The converter emitted wire endpoints in the
   wrong order and the Normalizer was blind in exactly the same way, so *** the two cancelled and
   every check passed. ***
+- *** A PROOF IS ONLY AS STRONG AS THE MOST INDEPENDENT AUTHORITY IN ITS LOOP. *** A round-trip
+  check is structurally blind to any error the round trip **preserves**. Measured 2026-08-13: the
+  converter typed every hex literal `Int` regardless of its destination, so every 32-bit build stamp
+  failed to import — and `to-xml` → `to-ir --no-sidecar` passed **byte-identically**, because both
+  halves of that loop are converter code. *** ALL 1,069 TESTS WERE GREEN BEFORE THE FIX AND AFTER IT.
+  NOT ONE OF THEM COULD TELL THE WRONG TYPE FROM THE RIGHT ONE. ***
+    ➜ **Ask of any proof: who in this loop could disagree with us?** If the answer is "nobody", it
+      demonstrates self-consistency and nothing else. The checks here that have an outside authority
+      are `compare` + `confirm-roundtrip.ps1` (it has been **through TIA**) and the golden harness
+      against a real export; the converter round trip, `diff` and `ir-hash` have none.
+    ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
+      never passed the type; making the parameter **required** fixed the class, where fixing six
+      omissions would have left the seventh to be written next year.
 - *** A GUARD THAT WAS WRITTEN, TESTED AROUND, AND NEVER ACTUALLY EXECUTED. *** This is the most
   reliable failure mode this project has, and on **2026-08-13 it happened three times in one day**:
   `compile`'s exit-code fix sat in source while the Release binary every skill invokes predated it;

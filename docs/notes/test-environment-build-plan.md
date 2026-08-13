@@ -1781,6 +1781,60 @@ restored — leaving the defective RED build would be a trap, and reverting woul
 `MB_HOLD_REG` retarget further harness work needs. Build D is one import away and the original server
 pointer was exported before it was touched.
 
+### ✅ THE `ConstantType` DEFECT IS FIXED AS ONE RULE — and its post-mortem is the day's best (2026-08-13, `8a5618d`)
+
+> *** A LITERAL'S `ConstantType` IS THE DECLARED TYPE OF THE PORT IT IS WRITTEN INTO. Magnitude is
+> only the fallback where no declared type exists — and that fallback REFUSES rather than guesses. ***
+
+**Two independent causes, both real:**
+
+  1. *** THE MAGNITUDE PATH NEVER RAN FOR BASE-PREFIXED LITERALS. *** `long.TryParse("16#A93F2C71")`
+     fails, so every `16#`/`2#`/`8#` literal fell straight through to the `Int` default — **not a bad
+     guess, no guess at all.** And widening the parse would *not* have fixed it: 2,839,872,113 would
+     then be typed `UDInt` into a `DWord` port and rejected by the same door. **A bit string's width
+     is a declaration choice its digits cannot express**, so inference now returns null and the caller
+     hard-errors (FI-71's precedent).
+  2. **Six operand sites never passed the port type** — including the CALL-argument site, where the
+     callee's `param.Type` was resolved **on the very next line** and used for the sidecar's `Type`
+     while the literal beside it was typed by magnitude.
+
+  ➜ *** THE STRUCTURAL HALF IS WHAT STOPS A THIRD INSTANCE: `constantTypeOverride = null` BECAME A
+    REQUIRED PARAMETER `portType`. AN OPTIONAL PARAMETER IS AN INVITATION, AND SIX SITES ACCEPTED IT.
+    *** Fixing six omissions would have left the seventh to be written next year.
+  ➜ **The one site the rule genuinely cannot cover is `MOVE_BLK_VARIANT`** — `SRC` is a `Variant` and
+    `COUNT`/indices carry TIA port types in no registry here — so those pass `null` **explicitly, with
+    the reason stated**, rather than being special-cased quietly.
+
+**1069 → 1124 tests.** Reverting the two fix points: 11 of 30 red. *** THE FOUR
+`BasePrefixedLiteral_…IsARefusalNotAGuess` ROWS FAILED BY *SUCCEEDING* — a silent wrong answer is what
+shipped. *** And *** NOTHING PRE-EXISTING BROKE, WHICH IS ITSELF THE FINDING: ALL 1,069 WERE GREEN
+BEFORE AND AFTER, AND NOT ONE COULD TELL THE WRONG TYPE FROM THE RIGHT ONE. ***
+
+**No `C-nnn` exists for a literal fitting its destination**, so no rule failed — *there was never one
+to fail*. Inventing a rule ID from the tooling side was correctly refused; the check went to
+**pre-flight** as `literal-fit`, whose stated job is exactly the known import/compile error classes.
+Measured gap: `MOVE(IN := 70000)` into an `Int` member had been reported **CLEAN**. Zero findings
+across the whole 26-file corpus. *** WHETHER THE CONVENTIONS SHOULD GAIN A LITERAL-FIT RULE IS THE
+OWNER'S. ***
+
+> #### 🧭 WHAT ELSE RESTS ON A BLIND ROUND TRIP — the table worth keeping
+>
+> | proof | blind to a *consistent* error? |
+> |---|---|
+> | `to-xml` → `to-ir --no-sidecar` (the phase-2 proof) | *** YES — both halves are converter code *** |
+> | `converter diff`, `ir-hash` | **YES**, structurally — `ConstantType` is not in readable IR |
+> | `drift-check` | **per file** — blind only where the corpus entry was converter-produced |
+> | `compare` + `confirm-roundtrip.ps1` | *** NO — WOULD HAVE CAUGHT IT. *** Verified live: `first: DWord / second: Int` |
+> | golden harness vs a real TIA export | **NO** — `ConstantType` is on no ignore list (checked, then measured) |
+>
+> *** A PROOF IS ONLY AS STRONG AS THE MOST INDEPENDENT AUTHORITY IN ITS LOOP, AND THE CONVERTER ROUND
+> TRIP HAS NONE. *** Now in `autonomous-working-agreement.md`, and it is the argument for arming
+> `confirm-roundtrip.ps1`.
+
+**Still owed:** *** THE 32-BIT CASE IS UNPROVEN ON A DEVICE — nothing here is evidence that TIA
+*accepts* the emitted XML. *** That is an import plus a compile, and the substituted-stamp workaround
+stays until it passes.
+
 ## PHASE 3 — TWO SLOTS
 
 **Cost: small. Assumptions retired: A5 — and everything multi-agent rests on it.**
