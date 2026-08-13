@@ -225,6 +225,14 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
 - **Re-raise condition fixed by AR-HBA-07 (agent ruling, not owner).** The re-raise keys on the
   **accumulator alone**, never on `PlantRunning`. So the sequence *stop the plant → reset → hopper
   still high, accumulator frozen past threshold* **re-raises**. See AR-HBA-07.
+- **"Stays false" is defined by AR-HBA-18 (agent ruling, not owner).** In this clause's "condition has
+  cleared" case, **"and stays false" means "stays false UNTIL THE RAISE CONDITION IS NEXT SATISFIED"** —
+  not "for as long as the vector happens to observe", and not "forever". This is the **floor** in the
+  post-power-cycle window: `007.A5` is a `WITHIN` bound, i.e. an **upper** limit, which a **short**
+  preset satisfies **more** easily rather than less, so nothing else there supplies a lower bound. A
+  duration that depends on how long a test watched is not a specification — it would make the
+  requirement's strength a property of the test. No clause text changes; this fixes the referent of
+  wording already stamped. See AR-HBA-18.
 - **Observability of the de-assert fixed by AR-HBA-08 (agent ruling, not owner).** The earlier wording
   "drops (if at all)" left a vector unable to tell whether "never went low" passes or fails; the Text
   above now splits it by case. See AR-HBA-08.
@@ -894,6 +902,13 @@ AR-HBA-14 touches every clause at once, which is the profile of an edit that int
    says "the **specified** one" explicitly. After AR-HBA-14 that word is *redundant*. **It must NOT be
    removed.** Deleting it would move stamped text and dangle both vector sets' citations, to buy
    nothing. **Redundancy here is deliberate and load-bearing; do not tidy it.**
+   > 🔴 **The hazard reaches further than the stamped text (enumerator, carried here 2026-08-13).**
+   > **Do not delete "specified" from `002.A3` or `008.A3` either — even though they are UNSTAMPED and
+   > deleting it would be FREE TODAY.** If AR-HBA-14 is ever overturned or narrowed, **those two are the
+   > only assertions of the 27 that survive on their own words**; every other one depends on a Format
+   > line, which is a **weaker load path than the sentence itself**. *** That is the worst kind of tidy —
+   > costless at the moment you do it. *** The cost lands only if a later ruling moves, which is exactly
+   > when nobody is looking at these two.
 2. **AR-HBA-14 × AR-HBA-03's bounds table.** The table's "Where it lives at runtime" column says "FB's
    own `TIME` tunable", which could be misread as making the block authoritative. It is not: that column
    says where the specified value is **installed**, not where it is **defined**. **If the block's
@@ -906,12 +921,114 @@ AR-HBA-14 touches every clause at once, which is the profile of an edit that int
    was last zero".
 4. **AR-HBA-15 × AR-HBA-05.** Because a `FaultReset` does **not** zero the accumulator (AR-HBA-05), a
    reset *mid-episode* does break limb 1's precondition and limb 1 steps aside. **That leaves no hole:**
-   AR-HBA-07 governs that case, keying the re-raise on the accumulator alone.
+   the case is covered by **`005.A1` / `005.A2`**.
+   > 🔴 **Corrected by AR-HBA-17.** This originally read *"AR-HBA-07 governs that case"*. **It does
+   > not.** AR-HBA-07 lives in `005.A3` / `005.A6`, and **both are triggered by the accumulator being at
+   > or past the threshold** — whereas a mid-episode reset is by definition **below** threshold, which is
+   > `005.A1` / `005.A2`'s case. The conclusion (limb 1 steps aside, no hole) was and remains correct;
+   > only the guard named was wrong. See AR-HBA-17 for why a wrong pointer is worse than a missing one.
 
 **Checked and found clean:** AR-HBA-14 strengthens rather than alters AR-HBA-03 (it pins the *referent*
 of an arrangement that was already "value beside, quantity in the text"); AR-HBA-16 adds no assertion and
 so cannot move a count; and none of the three rulings touches a clause `Text`, so the 25 stamped
 assertion texts remain byte-identical and **neither vector set dangles.**
+
+## Sixth round (2026-08-13) — rulings AR-HBA-17…18
+
+**27 stands.** No assertion decomposes differently under AR-HBA-14/15/16 and no wording change is
+proposed to any of the 27. Both rulings below are **additive / notes-level**: **no stamped assertion
+text moves.**
+
+This round's defect was **in a ruling's REASONING, not its conclusion** — which is why the re-read
+below reads the reasoning rather than the rulings.
+
+### AR-HBA-17 — AR-HBA-15's item 4 named the wrong guard *(closes the enumerator's combination finding)*
+
+**RULING:** correct item 4 to name **`005.A1` / `005.A2`**. The conclusion stands — limb 1 does step
+aside and there is no hole — but the guard that actually covers the case is the one to name.
+
+**The error.** Item 4 said that when a `FaultReset` arrives **after accrual has begun** (say 10 s of
+60 s), *"AR-HBA-07 governs that case."* ***It does not.*** AR-HBA-07 lives in `005.A3` and `005.A6`, and
+**both are triggered by the accumulator being at or past the threshold.** A mid-episode reset is by
+definition **below** threshold — `005.A1` / `005.A2`'s case.
+
+**Why this is worse than a cross-reference slip:**
+
+> *** A vector author following item 4 would test the past-threshold scenario and never test the
+> below-threshold one — the only one where the floor is at risk. ***
+
+**A wrong pointer in a ruling's reasoning is worse than a missing one: it satisfies the reader that the
+case is handled.** A missing pointer invites a look; a confident wrong one closes the question. This is
+the same family as the narrowing repair and the self-referential parameter — *a defect that leaves every
+outward sign of correctness intact* — and it is now the third distinct member of that family found in
+this register.
+
+**Found by the enumerator's combination check, NOT by re-reading the ruling.** Recorded because it says
+where the check has teeth: the ruling had been read several times, including by me in the round that
+wrote it, and re-reading did not surface it. **Cross-referencing a ruling against the assertions it
+claims to rely on is a different operation from reading it**, and only the former caught this.
+
+**CHANGED:** AR-HBA-15's combination re-read, item 4. **No clause text, no assertion text.**
+
+### AR-HBA-18 — "stays false" means until the raise condition is next satisfied *(closes AMB-18)*
+
+**RULING:** **"stays false until the raise condition is next satisfied."** Settled as a **notes-level
+definition**, not a rewording.
+
+**Reasoning.** With item 4 corrected, the floor in that window is carried by **`005.A1`'s "and stays
+false" and nothing else** — `007.A5` is a `WITHIN` bound, an **upper** limit, which a **short** preset
+satisfies **more** easily rather than less. Three readings were available:
+
+| reading | verdict |
+|---|---|
+| until the raise condition is next satisfied | **RULED** — covered, and independent of the test |
+| bounded by the vector's observation window | **rejected — vector-dependent**, missed by any vector that stops observing early |
+| unbounded ("forever") | rejected as absurd — the alarm is *supposed* to return |
+
+**A duration that depends on how long a vector happened to watch is not a specification: it makes the
+requirement's strength a property of the test.** That is the same objection as AR-HBA-14's — a claim
+whose terms are supplied by the thing being measured — one level out, with the *test* rather than the
+*implementation* supplying them.
+
+🔴 **Settled as a definition and not a rewording, deliberately.** `005.A1` is **stamped and cited by two
+vector sets**: a rewording dangles both, a definition costs **zero**. AR-HBA-15 was settled the same way
+for the same reason, and this is now the established route for fixing a *referent* after stamping.
+
+**CHANGED:** REQ-HBA-005 Notes (definition). **No clause text.**
+
+### Combination re-read of the REASONING — one class found, and it is not yet closed
+
+Read the ruling **prose** this round, not the rulings, and specifically every **assertion-ID citation**
+in it — the operation that caught AR-HBA-17.
+
+**Six such citations exist. Three are current** (`008.A1`/`A2`, `003.A1`, `007.A5` — all carried in from
+the round that ruled them). ⚠️ **Three are `005.A*` citations written in EARLIER rounds and have not been
+re-verified against any later decomposition:**
+
+| where | citation | status |
+|---|---|---|
+| AR-HBA-08's closing line | ``005.A3`` / ``005.A5`` | written when the count was 19; **unverified at 27** |
+| AR-HBA-11's `RULING:` line | ``005.A5`` | written at 23; **unverified at 27** |
+| AR-HBA-11's reasoning point 1 | ``005.A5`` | same |
+
+**This is a defect CLASS, not three typos: an assertion-ID citation inside a ruling's reasoning goes
+stale silently every time the decomposition grows.** The count has gone 13 → 19 → 23 → 25 → 27, and
+nothing re-checks these on the way past. AR-HBA-17 is the first instance to be caught; **these three are
+the same shape and are NOT being guessed at here.** `005.A3` is at least *plausible* for AR-HBA-08 (its
+"condition still holds" case is the at/past-threshold one, which this round's brief confirms `005.A3`
+is), but `005.A5` cannot be checked from the register alone.
+
+> **Referred to the enumerator, which is the authority on assertion identity** — not resolved here, and
+> deliberately not "corrected" by inference. Either it confirms the three, or they should be **de-cited
+> in favour of naming the behaviour** rather than the ID. **AR-HBA-11's is the one that matters**: its
+> entire argument is *"`005.A5` already carries it"*, so if that ID is wrong the ruling's justification
+> points at nothing — the exact failure AR-HBA-17 describes, sitting in the ruling that was written to
+> make an assertion testable.
+
+**Checked and found clean:** AR-HBA-18's definition does not disturb AR-HBA-08's by-case split (it
+supplies a duration to the "cleared" case, which that split leaves open); it does not interact with
+AR-HBA-10's `WITHIN` bound except by supplying the floor that bound lacks; and neither ruling this round
+touches a clause `Text`, so the 27 remain byte-identical.
 
 ## Pre-stamp consistency pass (2026-08-13)
 
