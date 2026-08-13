@@ -112,6 +112,21 @@ running does not license:
 - **A check that shares its subject's blind spot.** The converter emitted wire endpoints in the
   wrong order and the Normalizer was blind in exactly the same way, so *** the two cancelled and
   every check passed. ***
+- *** A GUARD THAT WAS WRITTEN, TESTED AROUND, AND NEVER ACTUALLY EXECUTED. *** This is the most
+  reliable failure mode this project has, and on **2026-08-13 it happened three times in one day**:
+  `compile`'s exit-code fix sat in source while the Release binary every skill invokes predated it;
+  eighteen review rules reported *"not applicable"* on tag tables and the run exited 0; and a
+  `timing` mirror-restore added that morning **could never have run at all** — the client's own
+  address fence refused its own write and the tool exited before the guard that would have said so.
+  In every case the surrounding code was tested and green.
+    ➜ **Ask of every guard you write: what would happen if it silently stopped running?** If the
+      answer is "everything still passes", the guard is decoration.
+    ➜ **Prefer guards that CANNOT be silently disconnected.** The good example from that same day:
+      a variable existing solely to feed the check, so removing the check trips
+      `CS0219: assigned but never used` under warnings-as-errors — *disconnecting it fails to
+      build.* That is a structural property, not a disciplinary one, and it is worth designing for.
+    ➜ **Run the guard on the real thing at least once.** Unit tests prove the logic; only the
+      device, the binary or the live invocation proves the guard is *reachable*.
 - **Inference reported as measurement.** `[M]` means measured here, and a `[M]` that turns out to
   be a hand-authored fixture costs more than the gap it hid.
 - **Guessing at hardware, tags or addresses.** Read them, or say they are proposed.
