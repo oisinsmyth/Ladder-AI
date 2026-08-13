@@ -1643,7 +1643,13 @@ public static class OutputFormatter
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    private static readonly string[] PortalStatusHeaders = { "PID", "CLASS", "PROJECT", "UI", "ACQUIRED" };
+    // STARTED comes before ACQUIRED because STARTED is the one that means what a reader assumes.
+    // ACQUIRED is the raw Openness value and has been measured reporting a time FIFTY MINUTES BEFORE
+    // its own process existed, so it is shown with a "!" when it contradicts the OS rather than
+    // printed plausibly. LAUNCHED is the report-only launch history, which — unlike the reuse
+    // registry behind CLASS — survives a project being opened, and is what makes a silent relaunch
+    // visible at all.
+    private static readonly string[] PortalStatusHeaders = { "PID", "CLASS", "PROJECT", "UI", "STARTED", "ACQUIRED", "LAUNCHED" };
 
     public static string FormatPortalStatusTable(PortalStatusReport report)
     {
@@ -1651,7 +1657,8 @@ public static class OutputFormatter
         sb.Append("PROCESSES: ").Append(report.Total)
             .Append("  IN-USE: ").Append(report.InUseCount)
             .Append("  SELF-LAUNCHED ORPHANS: ").Append(report.SelfLaunchedOrphanCount)
-            .Append("  STRAYS: ").Append(report.StrayEmptyCount).Append('\n');
+            .Append("  STRAYS: ").Append(report.StrayEmptyCount)
+            .Append("  OPENNESS-INVISIBLE: ").Append(report.OpennessInvisibleCount).Append('\n');
         sb.Append("NOTE: ").Append(report.Note).Append('\n');
 
         if (report.Processes.Count == 0)
@@ -1686,6 +1693,10 @@ public static class OutputFormatter
                 projectPath = p.Process.ProjectPath,
                 hasUserInterface = p.Process.HasUserInterface,
                 acquired = p.Process.Acquired,
+                startedAt = p.Process.StartedAt,
+                acquiredPrecedesStart = p.Process.AcquiredPrecedesStart,
+                launchedByThisTool = p.Process.LaunchedByThisTool,
+                opennessVisible = p.Process.OpennessVisible,
                 markedByThisTool = p.Process.MarkedByThisTool,
             }),
             counts = new
@@ -1706,6 +1717,7 @@ public static class OutputFormatter
         PortalProcessClass.InUse => "in-use",
         PortalProcessClass.SelfLaunchedOrphan => "self-launched-orphan",
         PortalProcessClass.StrayEmpty => "stray-empty",
+        PortalProcessClass.OpennessInvisible => "OS-ONLY",
         _ => c.ToString(),
     };
 
@@ -1714,8 +1726,15 @@ public static class OutputFormatter
         p.Process.Pid.ToString(CultureInfo.InvariantCulture),
         ClassLabel(p.Class),
         string.IsNullOrEmpty(p.Process.ProjectPath) ? "(none)" : p.Process.ProjectPath!,
-        p.Process.HasUserInterface ? "yes" : "no",
-        p.Process.Acquired.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+        p.Process.OpennessVisible ? (p.Process.HasUserInterface ? "yes" : "no") : "?",
+        p.Process.StartedAt is DateTime started
+            ? started.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+            : "(unreadable)",
+        !p.Process.OpennessVisible
+            ? "(not visible to Openness)"
+            : p.Process.Acquired.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+              + (p.Process.AcquiredPrecedesStart ? "  ! BEFORE START" : string.Empty),
+        p.Process.LaunchedByThisTool ? "by us" : "not by us",
     };
 
     private static string[] ToRow(BlockInfo b) => new[]

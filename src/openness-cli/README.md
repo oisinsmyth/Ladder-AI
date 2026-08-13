@@ -1123,6 +1123,55 @@ Same exception, same text, **zero configurations raised** — which is exactly w
 failing run (`bn-07/33/41/42/54`) recorded. So `--to-folder` **is** a faithful stand-in for the
 download's compile gate, and it is the only one that needs no controller, no network and no CPU.
 
+### 🔴 THE 1.7 THROWS KILL THE PORTAL PROCESS — and four reporting defects hid it (2026-08-13)
+
+The owner observed at the machine, and the rig lane measured **by PID**: **both throws kill the Portal
+process the download was attached to.** PRE killed 16972 of `11228 16972`; POST killed 8256 of
+`8256 13912`. *Why* Portal dies is not established and is not guessed at here.
+
+**A count alone could not see it** — 2→1 reads as "an idle instance closed" unless you hold the PIDs.
+**And our own tooling silently relaunches**, so every surface we had showed an ordinary run. Four
+defects, all of them *reporting* failures, all now fixed and negative-tested:
+
+1. **`launched-instances.json` is `[]` — and that is the design, not a bug.** `MarkLaunched` writes on
+   launch, `Unmark` deletes on successful open, so the record is **erased at exactly the moment it
+   becomes interesting to a reader**. The registry only ever tracks *empty orphans*, so
+   `MarkedByThisTool` is structurally incapable of being true for a process in use.
+   **Which direction does it fail in? SAFE.** The reuse guard is
+   `!hasProject && IsMarkedAsLaunchedByThisTool(pid)`; an empty registry makes the second conjunct
+   false, so an empty process is **never** reused and a fresh one is launched — safe, and wasteful.
+   *Nothing consulted it in a way that fails open.* Fixed by a **second, report-only launch history**
+   (`launched-history.json`) that is never unmarked and **consulted by no decision** — deliberately
+   not by relaxing the guard, which would have edited a safety rule to satisfy a reporting need.
+2. **`portal-status` reported `PROCESSES: 1` while the OS showed two.** It enumerated only
+   `TiaPortal.GetProcesses()`, so it agreed with the API and disagreed with the machine, silently —
+   and **a process Openness cannot see is precisely the case you reach for this command in.** It now
+   cross-checks the OS process list and reports the difference as its own class, `OS-ONLY`. An
+   OS-only process is never classified as "empty": its null project is an absence of information, not
+   a fact.
+3. **It dated PID 16972 `ACQUIRED 14:47:51` when that process started `15:38:09`** — fifty minutes
+   before its own existence. `TiaPortalProcess.AcquisitionTime` is **not** the process's age and had
+   been documented as one. The table now leads with `STARTED` (the OS start time, which is the age
+   signal) and flags `ACQUIRED` with `! BEFORE START` when it contradicts the OS. What
+   `AcquisitionTime` *does* mean is not established and is not guessed at. **A plausible wrong
+   timestamp is worse than a missing one**, because it invites exactly the reasoning-from-sequence
+   this project spent the day avoiding.
+4. **The guard failed in the binary written to carry it.** A POST run was **armed**, raised **zero**
+   POST configurations, **never invoked the delegate**, completed the download — **and exited 0**,
+   where the contract says `12`. The cause was a **missing arm**: the completion path tested "did it
+   fire" and had no branch for *armed and never fired*. **Can exit 12 fire today? On the folder path
+   yes; on the device path it could not — it was unreachable code.** Now decided in one place,
+   `ProbeVerdict.Decide`, which is a pure function precisely so a test can interrogate it without a
+   rig — the decision previously lived inline in a method needing Portal, a device and a download, so
+   the only assertable part was `Classify`, which was already correct. **And the finding it should
+   have reported is real: the raised-configuration set depends on `--options`** — forcing
+   `--options Software` made the download stop the CPU and the post delegate *was* then reached.
+
+Every one of the four has a **"did not run" partner test**: an ordinary process must not be flagged
+OS-only, an ordinary timestamp must not be flagged impossible, a PID we never launched must be false
+in both records, and an unarmed run must never earn exit 12. That shape — *a guard whose non-firing
+had nothing testing it* — is now the seventh of its kind found across the lanes.
+
 ### Experiment 1.7 — the delegate throw: `--throw-from-pre-delegate` / `--throw-from-post-delegate`
 
 **The capability. Firing it at a device is a separate, owner-present act** (the working agreement puts

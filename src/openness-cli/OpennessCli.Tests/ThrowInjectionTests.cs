@@ -254,6 +254,108 @@ public class ThrowInjectionTests
         Assert.Contains("NOWHERE", detail, StringComparison.Ordinal);
     }
 
+    // ---- defect 4: the guard that did not fire ---------------------------------------------
+
+    /// <summary>
+    /// *** THE GUARD FAILING IN THE BINARY WRITTEN TO CARRY IT. ***
+    ///
+    /// Measured on a real run: <c>--throw-from-post-delegate</c> was ARMED, the download raised ZERO
+    /// post configurations, the delegate was NEVER INVOKED, the download completed — <b>and the tool
+    /// exited 0</b>, where its own contract says 12. The lane caught it by reading the configuration
+    /// list; the exit code said everything was fine. That is *"if you get zero configurations you
+    /// have not tested what you think you are testing"* failing to fire, in the one program written
+    /// to enforce it.
+    ///
+    /// The cause was a MISSING arm, not a wrong one — the completion path tested
+    /// <c>Fired is not null</c> and had no branch for armed-and-never-fired at all. Which is why
+    /// this test exists at the level it does: <c>Classify</c> is the only place the distinction is
+    /// decidable without Portal, and it must return <c>NeverFired</c> rather than anything a caller
+    /// could round to success.
+    /// </summary>
+    [Fact]
+    public void ArmedAndNeverInvoked_ClassifiesAsNeverFired_NotAsAnythingSuccessful()
+    {
+        var injection = new ThrowInjection(DelegatePhase.Post);
+
+        var (outcome, detail) = injection.Classify(thrown: null);
+
+        Assert.Equal(InjectionOutcome.NeverFired, outcome);
+        Assert.Contains("NEVER INVOKED", detail, StringComparison.Ordinal);
+        Assert.Null(injection.Fired);
+    }
+
+    /// <summary>
+    /// The distinction the exit codes rest on: "armed and never fired" and "fired and swallowed" both
+    /// arrive with <c>thrown == null</c>, and they are opposite findings. If these ever collapsed
+    /// into one outcome, a run that tested nothing would be reported as a run that discovered
+    /// something.
+    /// </summary>
+    [Fact]
+    public void NeverFiredAndSwallowed_AreDistinguishedByWhetherTheThrowHappened()
+    {
+        var neverFired = new ThrowInjection(DelegatePhase.Pre).Classify(thrown: null).Outcome;
+        var swallowed = Armed(out _).Classify(thrown: null).Outcome;
+
+        Assert.Equal(InjectionOutcome.NeverFired, neverFired);
+        Assert.Equal(InjectionOutcome.Swallowed, swallowed);
+        Assert.NotEqual(neverFired, swallowed);
+    }
+
+    // THE "DID NOT RUN" CASE for the guard itself: an UNARMED run must never earn either injection
+    // code. A guard that fires when nobody asked for it is as useless as one that never fires.
+    [Fact]
+    public void AnUnarmedRun_IsNeitherFiredNorNeverFired_InAWayThatCouldGateIt()
+    {
+        var injection = ThrowInjection.None;
+
+        Assert.False(injection.IsArmed);
+        Assert.Null(injection.Fired);
+
+        // NeverFired is reported, but IsArmed is what the session branches on — so an ordinary run
+        // cannot be reclassified into exit 12 by this.
+        Assert.Equal(InjectionOutcome.NeverFired, injection.Classify(thrown: null).Outcome);
+    }
+
+    // ---- defect 4, at the level the bug actually lived --------------------------------------
+
+    /// <summary>
+    /// *** THE ASSERTION THAT WOULD HAVE CAUGHT IT. ***
+    ///
+    /// The two tests above exercise <c>Classify</c>, which was <b>already correct</b> — the bug was a
+    /// missing branch in the session's precedence chain, and that chain lived inline in a method
+    /// needing Portal, a device and a download, so nothing could assert it. The chain is now a value
+    /// decided by <see cref="ProbeVerdict.Decide"/>, and this is the case that was silently absent.
+    /// </summary>
+    [Fact]
+    public void ArmedAndNeverFired_EarnsTwelve_EvenWhenTheDownloadCompleted()
+    {
+        Assert.Equal(
+            ProbeExitCodes.InjectionNeverFired,
+            ProbeVerdict.Decide(failedToApplyCount: 0, injectionArmed: true, injectionFired: false));
+    }
+
+    // THE "DID NOT RUN" CASES for the chain itself — all three must leave the download's own verdict
+    // alone. A precedence rule that fires when it should not is the same defect pointed the other way.
+    [Theory]
+    [InlineData(false, false)]  // ordinary run: nothing armed
+    [InlineData(true, true)]    // armed and fired: the injection reporter owns the outcome
+    public void TheChain_LeavesAnOrdinaryRunAlone(bool armed, bool fired)
+    {
+        Assert.Null(ProbeVerdict.Decide(failedToApplyCount: 0, injectionArmed: armed, injectionFired: fired));
+    }
+
+    /// <summary>
+    /// A failed apply outranks the injection verdict: "the run proves nothing at all" is strictly
+    /// stronger than "this particular experiment did not run".
+    /// </summary>
+    [Fact]
+    public void AFailedApply_OutranksAnUnfiredInjection()
+    {
+        Assert.Equal(
+            ProbeExitCodes.SelectionApplyFailed,
+            ProbeVerdict.Decide(failedToApplyCount: 1, injectionArmed: true, injectionFired: false));
+    }
+
     // ---- the exit codes stay distinct ------------------------------------------------------
 
     // A deliberate failure must never share a code with a real one, or with "nothing happened".

@@ -27,6 +27,15 @@ public static class PortalStatusClassifier
     // — a human's window, a first-connect-dialog wait, or stale pileup — never this tool's to touch.
     private static PortalProcessClass ClassifyOne(PortalProcessInfo p)
     {
+        // Checked FIRST, because every other branch reads a field the Openness API supplies, and for
+        // this process the API supplied nothing. Classifying it as "empty" from a null ProjectPath
+        // would be inventing a fact: we do not know whether it has a project open, we know only that
+        // Openness will not say.
+        if (!p.OpennessVisible)
+        {
+            return PortalProcessClass.OpennessInvisible;
+        }
+
         if (!string.IsNullOrEmpty(p.ProjectPath))
         {
             return PortalProcessClass.InUse;
@@ -78,6 +87,28 @@ public static class PortalStatusClassifier
             parts.Add(
                 $"{strays} stray empty Portal instances — consistent with stale-process pileup (the known " +
                 "correlate of \"second instance won't connect\"); closing the idle ones may help.");
+        }
+
+        // Said loudly and FIRST in the reader's eye, because this is the case where the command used
+        // to disagree with the operating system in silence.
+        var invisible = processes.Count(p => p.Class == PortalProcessClass.OpennessInvisible);
+        if (invisible > 0)
+        {
+            parts.Insert(0,
+                $"*** {invisible} Portal process(es) the OPERATING SYSTEM shows and the Openness API DOES NOT. *** " +
+                "Nothing can be read from them through Openness — not their project, not their mode — so they are " +
+                "listed with their OS start time only. A Portal that has just died, is still starting, or has lost " +
+                "its Openness endpoint looks exactly like this.");
+        }
+
+        // The impossible-timestamp flag, reported wherever it appears rather than only in the table.
+        var impossible = processes.Count(p => p.Process.AcquiredPrecedesStart);
+        if (impossible > 0)
+        {
+            parts.Add(
+                $"{impossible} process(es) report an ACQUIRED time EARLIER THAN THEIR OWN START TIME — a value " +
+                "that cannot be true. AcquisitionTime is the raw Openness API value and is not this process's age; " +
+                "read STARTED for that.");
         }
 
         return string.Join(" ", parts);

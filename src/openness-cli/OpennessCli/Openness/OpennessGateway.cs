@@ -154,21 +154,111 @@ public sealed class OpennessGateway : IOpennessGateway
     // AcquisitionTime are all readable WITHOUT Attach() (docs/notes/openness-api-surface-v20.md,
     // confirmed 2026-07-14), so nothing here attaches, launches, opens, or closes anything. All
     // Siemens types stay quarantined in this method; only the POCO leaves it.
+    /// <summary>
+    /// Every Portal process, from BOTH sources — <c>TiaPortal.GetProcesses()</c> and the operating
+    /// system — cross-checked against each other.
+    ///
+    /// 🔴 **It used to enumerate only the first (fixed 2026-08-13).** Measured: `portal-status`
+    /// reported `PROCESSES: 1` while the OS showed two. This is the read-only diagnostic the project
+    /// reaches for when Portal misbehaves, and **a process Openness cannot see is precisely the case
+    /// you reach for it in** — a Portal that has just died, is still starting, or has lost its
+    /// Openness endpoint. Reporting only what the API admits to made the tool agree with the API and
+    /// disagree with the machine, silently.
+    ///
+    /// The OS half is read by process name and is deliberately best-effort: a process that cannot be
+    /// read is still COUNTED and reported, never dropped, because dropping it is the defect.
+    /// </summary>
     public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses()
     {
         var results = new List<PortalProcessInfo>();
+        var seen = new HashSet<int>();
+
         foreach (TiaPortalProcess process in TiaPortal.GetProcesses())
         {
-            var projectPath = process.ProjectPath?.FullName;
+            var projectPath = TryRead(() => process.ProjectPath?.FullName);
+            var pid = process.Id;
+            seen.Add(pid);
             results.Add(new PortalProcessInfo(
-                process.Id,
+                pid,
                 string.IsNullOrEmpty(projectPath) ? null : projectPath,
                 process.AcquisitionTime,
                 process.Mode == TiaPortalMode.WithUserInterface,
-                LaunchedInstanceRegistry.IsMarkedAsLaunchedByThisTool(process.Id)));
+                LaunchedInstanceRegistry.IsMarkedAsLaunchedByThisTool(pid),
+                StartedAt: ReadProcessStart(pid),
+                LaunchedByThisTool: LaunchedInstanceRegistry.WasLaunchedByThisTool(pid),
+                OpennessVisible: true));
+        }
+
+        foreach (var pid in EnumerateOsPortalPids())
+        {
+            if (seen.Contains(pid))
+            {
+                continue;
+            }
+
+            // Everything the Openness API would have told us is unknown by construction here, and is
+            // left at its default rather than filled with a plausible-looking value.
+            results.Add(new PortalProcessInfo(
+                pid,
+                ProjectPath: null,
+                Acquired: default,
+                HasUserInterface: false,
+                MarkedByThisTool: false,
+                StartedAt: ReadProcessStart(pid),
+                LaunchedByThisTool: LaunchedInstanceRegistry.WasLaunchedByThisTool(pid),
+                OpennessVisible: false));
         }
 
         return results;
+    }
+
+    // The OS-side half. Best-effort by design: this exists to make a DISAGREEMENT visible, so an
+    // enumeration failure must never silently reduce the count back to the API's answer.
+    private static IReadOnlyList<int> EnumerateOsPortalPids()
+    {
+        var pids = new List<int>();
+        foreach (var name in PortalProcessNames)
+        {
+            try
+            {
+                foreach (var process in System.Diagnostics.Process.GetProcessesByName(name))
+                {
+                    using (process)
+                    {
+                        pids.Add(process.Id);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // A name that cannot be enumerated contributes nothing; the others still do.
+            }
+        }
+
+        return pids;
+    }
+
+    // Process NAME, without extension, as Process.GetProcessesByName wants it. Both spellings are
+    // kept because the executable has been observed under the long name and the short one, and a
+    // name that matches nothing costs one empty query.
+    private static readonly string[] PortalProcessNames = { "Siemens.Automation.Portal", "TIAPortal" };
+
+    /// <summary>
+    /// The OS process start time — <b>the age signal</b>, and the value
+    /// <see cref="PortalProcessInfo.AcquiredPrecedesStart"/> checks the API's own timestamp against.
+    /// Null when the process cannot be read at all, which is a fact, not a zero.
+    /// </summary>
+    private static DateTime? ReadProcessStart(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return process.StartTime;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     public void OpenProject(string projectIdentifier, TimeSpan timeout)

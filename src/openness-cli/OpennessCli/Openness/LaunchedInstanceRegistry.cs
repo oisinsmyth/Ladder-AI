@@ -26,6 +26,30 @@ internal static class LaunchedInstanceRegistry
         "openness-cli",
         "launched-instances.json");
 
+    /// <summary>
+    /// THE SECOND, REPORT-ONLY RECORD. Every PID this tool has ever launched and that is still
+    /// alive — and, unlike the reuse registry above, <b>it is never unmarked</b>.
+    ///
+    /// 🔴 **WHY IT EXISTS (2026-08-13).** `launched-instances.json` was observed as `[]` before and
+    /// after repeated launches, and `portal-status` therefore reported a freshly-launched instance
+    /// as plain `in-use`. That is not a recording bug — it is the design: <see cref="MarkLaunched"/>
+    /// writes on launch and <see cref="Unmark"/> deletes on successful open, so the record is
+    /// **erased at exactly the moment it becomes interesting to a reader.** The reuse registry only
+    /// ever tracks *empty orphans*, so `MarkedByThisTool` is structurally incapable of being true for
+    /// a process with a project open — and a relaunch after a Portal crash was invisible, because
+    /// nothing durable said "we launched this one".
+    ///
+    /// **Kept strictly separate from the reuse guard, on purpose.** The obvious fix — stop unmarking
+    /// — would make <see cref="IsMarkedAsLaunchedByThisTool"/> return true for processes it currently
+    /// says nothing about, i.e. it would edit a safety guard to satisfy a reporting need. This record
+    /// is written by the same call, read by nothing but `portal-status`, and **consulted by no
+    /// decision**. Nothing here can make the reuse guard fail open, because the guard never reads it.
+    /// </summary>
+    private static readonly string LaunchLogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "openness-cli",
+        "launched-history.json");
+
     // Called immediately after `new TiaPortal(...)` returns — before anything else can go wrong
     // (a slow/refused Projects.Open(), a client kill) — so the mark is durable even if this
     // process never gets to call Unmark itself.
@@ -34,7 +58,24 @@ internal static class LaunchedInstanceRegistry
         var pids = Load();
         pids.Add(processId);
         Save(pids);
+
+        // The report-only half. Deliberately a second write rather than a flag on the first: the
+        // reuse registry's contents are load-bearing for a safety decision and this is not.
+        var history = LoadHistory();
+        history.Add(processId);
+        SaveHistory(history);
     }
+
+    /// <summary>
+    /// Whether this tool launched this exact process, <b>regardless of whether a project was later
+    /// opened into it</b>. Report-only: no decision in this codebase branches on it, and the reuse
+    /// guard (<see cref="IsMarkedAsLaunchedByThisTool"/>) deliberately does not consult it.
+    /// </summary>
+    public static bool WasLaunchedByThisTool(int processId) => LoadHistory().Contains(processId);
+
+    private static HashSet<int> LoadHistory() => LoadPruned(LaunchLogPath);
+
+    private static void SaveHistory(HashSet<int> pids) => SaveTo(LaunchLogPath, pids);
 
     // Called once this same invocation successfully opens its own target into the process it just
     // launched — the process is no longer empty, so there's nothing left to reuse/orphan-detect
@@ -59,17 +100,19 @@ internal static class LaunchedInstanceRegistry
     // corrupt, or unreadable registry file is treated as empty rather than a hard failure — this
     // mechanism is a durability nicety for cleaning up orphans, not something any real operation
     // should ever fail over.
-    private static HashSet<int> Load()
+    private static HashSet<int> Load() => LoadPruned(RegistryPath);
+
+    private static HashSet<int> LoadPruned(string path)
     {
         List<int>? stored;
         try
         {
-            if (!File.Exists(RegistryPath))
+            if (!File.Exists(path))
             {
                 return new HashSet<int>();
             }
 
-            stored = JsonSerializer.Deserialize<List<int>>(File.ReadAllText(RegistryPath));
+            stored = JsonSerializer.Deserialize<List<int>>(File.ReadAllText(path));
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -93,17 +136,19 @@ internal static class LaunchedInstanceRegistry
         return alive;
     }
 
-    private static void Save(HashSet<int> pids)
+    private static void Save(HashSet<int> pids) => SaveTo(RegistryPath, pids);
+
+    private static void SaveTo(string path, HashSet<int> pids)
     {
         try
         {
-            var directory = Path.GetDirectoryName(RegistryPath);
+            var directory = Path.GetDirectoryName(path);
             if (directory is not null)
             {
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(RegistryPath, JsonSerializer.Serialize(pids));
+            File.WriteAllText(path, JsonSerializer.Serialize(pids));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -275,10 +275,16 @@ internal static class ProbeSession
         log.Blank();
         log.Block(outcome.ClosingLines);
 
+        // THE PRECEDENCE CHAIN IS DECIDED IN ONE PLACE, AND THAT PLACE IS TESTABLE (2026-08-13).
+        // Both branches below act on this single verdict rather than each deciding for itself — which
+        // is how the injection arm came to be missing entirely: the decision lived inline in a method
+        // that cannot run without Portal, a device and a download, so nothing could assert it.
+        var verdict = ProbeVerdict.Decide(failedToApply.Count, injection.IsArmed, injection.Fired is not null);
+
         // Precedence, and the reason this is checked HERE rather than only on the abort path: a
         // failed apply invalidates every other reading of the run, including a download that went on
         // to complete. Whatever the exit code was about to be, it becomes this one.
-        if (failedToApply.Count > 0)
+        if (verdict == ProbeExitCodes.SelectionApplyFailed)
         {
             log.Blank();
             log.Rule("THIS RUN PROVES NOTHING — A SELECTION COULD NOT BE APPLIED");
@@ -302,6 +308,45 @@ internal static class ProbeSession
                 $"TOOL FAILURE: {failedToApply.Count} selection(s) could not be applied " +
                 $"({string.Join(", ", failedToApply.Select(r => $"{r.TypeName}='{r.AttemptedSelection}'"))}). " +
                 $"The run's result means nothing.  {outcome.Transfer?.Headline}");
+        }
+
+        // 🔴 THE GUARD THAT DID NOT FIRE, IN THE BINARY WRITTEN TO CARRY IT (fixed 2026-08-13).
+        //
+        // Measured on a real run: --throw-from-post-delegate was ARMED, the download raised ZERO
+        // post configurations, the delegate was NEVER INVOKED, the download completed — AND THE TOOL
+        // EXITED 0. Its own contract says 12 means "armed and the delegate was never invoked". The
+        // lane caught it only by reading the configuration list; the exit code said everything was
+        // fine. That is "if you get zero configurations you have not tested what you think you are
+        // testing" failing in the one program written to enforce it.
+        //
+        // The cause was a missing arm, not a wrong one: the completion path checked `Fired is not
+        // null` and had no branch for armed-and-never-fired at all, so the case fell through to the
+        // ordinary result. Empty is not clean — an experiment that did not run is not a pass.
+        //
+        // WHY IT MATTERS BEYOND THE EXIT CODE: the raised-configuration set DEPENDS ON --options.
+        // Forcing `--options Software` made the download stop the CPU, and the post delegate was then
+        // reached. So "the delegate was never invoked" is a real, option-dependent finding about the
+        // API, and 12 is exactly the code that should have reported it.
+        //
+        // Placed AFTER the failedToApply block deliberately: a failed apply means the run proves
+        // nothing at all, which is a stronger statement than "this particular experiment did not
+        // run", so it keeps precedence.
+        if (verdict == ProbeExitCodes.InjectionNeverFired)
+        {
+            log.Blank();
+            log.Rule("*** THE INJECTION WAS ARMED AND NEVER FIRED — NOTHING WAS LEARNED ***");
+            log.Line($"--throw-from-{injection.Phase.ToString()!.ToLowerInvariant()}-delegate was given and that delegate was");
+            log.Line("NEVER INVOKED, so no exception was thrown. This run says nothing about what Openness");
+            log.Line("does with one, whatever else it reports below.");
+            log.Line($"{injection.Phase.ToString()!.ToUpperInvariant()} configurations raised on this run: " +
+                     $"{(injection.Phase == DelegatePhase.Pre ? pre.Recorded.Count : post.Recorded.Count)}.");
+            log.Line("The set of configurations a download raises DEPENDS ON --options; a different option value");
+            log.Line("may reach this delegate where this one did not.");
+
+            return outcome.Reclassify(
+                ProbeExitCodes.InjectionNeverFired,
+                $"INJECTION NEVER FIRED: the {injection.Phase} delegate was armed and never invoked, so the " +
+                $"experiment did not run. {outcome.Transfer?.Headline}");
         }
 
         return outcome;
