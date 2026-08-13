@@ -597,6 +597,70 @@ INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-che
 
 ## `import-all` — putting a whole program back (2026-08-11)
 
+### 🔴 IT COULD NOT READ A SINGLE FILE TIA PRODUCED, FROM THE DAY IT WAS WRITTEN UNTIL 2026-08-13
+
+Measured, against a complete restore point of the scratch project:
+
+```
+export-all   ->  126 exported, 0 refused, 0 failed, COMPLETE
+import-all   ->  0 file(s) would be imported, 126 rejected     (exit 13)
+```
+
+**Every restore point taken that week was unusable, and nobody found out — because the restore path
+is the one thing you only exercise when something has already gone wrong.**
+
+**The mechanism was a deny-list where a search belonged.** `ReadRootElement` walked elements,
+skipped the two names it knew — `Document` and `Engineering` — and returned whatever came next. A
+real TIA export carries a third header element:
+
+```xml
+<Document>
+  <Engineering version="V20" />
+  <DocumentInfo>…</DocumentInfo>      <!-- never on the skip list -->
+  <SW.Blocks.FC ID="0">…
+```
+
+so it returned `"DocumentInfo"`, which classifies as nothing, and every file was rejected by name
+with a reason. *(Grepping the source for `DocumentInfo` finds nothing, which is the point: the code
+never named the element it was tripping over.)*
+
+**Single-file `import` was unaffected all week and that is what disguised it** — it never
+classifies, because the caller states the kind with `--type`/`--tagtable`. So the same files went in
+one at a time, all day, and the failure looked like bad files rather than a bad reader.
+
+**Why the tests passed: the fixtures were the problem.** They hand-wrote
+`<Document><Engineering/><SW.Blocks.FB/></Document>` — a document TIA does not produce. The fixture
+agreed with the code about a shape neither had checked against reality, so the pair was
+self-consistent and wrong. *A test whose input was written to match the implementation is not a test
+of anything.*
+
+**The fix is a LOCATE, not a longer skip list** — `ReadObjectElement` returns the first element
+whose `LocalName` starts with `SW.`. A deny-list is only ever as complete as the documents someone
+happened to look at; searching for what you want cannot be broken by a header element nobody has
+seen yet. This is also exactly what `src/converter` has always done
+(`BlockSourceParser`: `Descendants().FirstOrDefault(e => e.Name.LocalName.StartsWith("SW.Blocks."))`),
+and the converter consumes these same exports without trouble — one rule, and the one already proven
+against real files. Document order at any depth is safe because the outer object always precedes its
+own nested `SW.*` children (a real FC export has `SW.Blocks.FC` at line 54 and
+`SW.Blocks.CompileUnit` at line 95); `LocalName` rather than `Name` so a namespace prefix cannot hide
+it. A file with no `SW.*` object is still a rejection, and the message now **names the top-level
+elements it did see** — "no SW.* element" over a 3 MB file is not diagnosable on its own.
+
+**Proof, end to end, with real output:** `export-all` → 126 files → `import-all --dry-run` over that
+exact directory → **126 planned, 0 rejected**. `ImportAllRealExportTests` holds it, reading the
+committed `simatic-ml/test-project001/` corpus — 23 genuine de-identified TIA exports, every one
+carrying `DocumentInfo`. **Negative-tested:** reinstating the deny-list turns 3 of those tests red,
+while all 24 pre-existing hand-fixture tests stay green — which is the measurement that the old
+fixtures could never have caught this.
+
+**Same class elsewhere: checked, and clean.** `src/converter`'s `BlockSourceParser`, `DbSourceParser`
+and `Program`'s kind detection all locate by name (`Descendants(…StartsWith("SW."))`); `converter
+compare` gates on `Root.DescendantsAndSelf().Any(e => LocalName.StartsWith("SW."))`; `drift-check`
+reads through the same parsers and is exercised against the committed real-export corpus. The one
+positional read in the converter — `CompareRunner`'s `before.Elements().FirstOrDefault()` — operates
+on a `<Wire>`'s children to find its producer end, where position *is* the schema. **`import-all` was
+the only consumer of these documents that guessed.**
+
 `openness-cli import-all <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run]`
 
 `import` is built for the two or three files a change touches: it takes them as **one** kind

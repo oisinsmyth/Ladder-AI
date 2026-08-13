@@ -89,7 +89,7 @@ public static class ImportAllPlanner
             string root;
             try
             {
-                root = ReadRootElement(file);
+                root = ReadObjectElement(file);
             }
             catch (Exception ex)
             {
@@ -102,7 +102,7 @@ public static class ImportAllPlanner
             {
                 rejections.Add(new Rejected(
                     file,
-                    $"root element '{root}' is not a block, PLC data type or tag table (expected SW.Blocks.*, " +
+                    $"object element '{root}' is not a block, PLC data type or tag table (expected SW.Blocks.*, " +
                     "SW.Types.* or SW.Tags.PlcTagTable)"));
                 continue;
             }
@@ -131,13 +131,56 @@ public static class ImportAllPlanner
     }
 
     /// <summary>
-    /// Reads the first element inside &lt;Document&gt;. Cheap on purpose: these files reach 3 MB and
-    /// nothing here needs their content, only their kind.
+    /// FINDS THE <c>SW.*</c> OBJECT. Does not "read the root element", which is what this used to do
+    /// and why nothing exported by TIA could be imported.
+    ///
+    /// 🔴 **THE DEFECT (2026-08-13).** This walked elements, skipped exactly two names it knew about
+    /// — <c>Document</c> and <c>Engineering</c> — and returned whatever came next. A real TIA export
+    /// carries a THIRD header element:
+    /// <code>
+    /// &lt;Document&gt;
+    ///   &lt;Engineering version="V20" /&gt;
+    ///   &lt;DocumentInfo&gt;…&lt;/DocumentInfo&gt;      &lt;-- never on the skip list
+    ///   &lt;SW.Blocks.FC ID="0"&gt;…
+    /// </code>
+    /// so it returned <c>"DocumentInfo"</c>, which classifies as nothing, and every file was
+    /// rejected. Measured: a `export-all` of 126 items, then `import-all --dry-run` over that exact
+    /// directory — <b>0 planned, 126 rejected</b>. NOT ONE FILE OF A COMPLETE RESTORE POINT WAS
+    /// READABLE BY THE TOOL WHOSE JOB IS TO PUT IT BACK, and had been so since `import-all` was
+    /// written.
+    ///
+    /// **Why the tests did not catch it: the fixtures were the problem.** They hand-wrote
+    /// <c>&lt;Document&gt;&lt;Engineering/&gt;&lt;SW.Blocks.FB/&gt;&lt;/Document&gt;</c> — no
+    /// <c>DocumentInfo</c> — so they described a document TIA does not produce, and passed. The
+    /// end-to-end test beside them now uses real `export-all` output for exactly this reason.
+    ///
+    /// **Why single-file `import` was fine all week:** it never classifies. The caller states the
+    /// kind with <c>--type</c>/<c>--tagtable</c>, so this code path is not on it — which is what made
+    /// the failure look like bad files rather than a bad reader.
+    ///
+    /// **The fix is a LOCATE, not a longer skip list.** A deny-list is only ever as complete as the
+    /// documents someone happened to look at; searching for what we want cannot be broken by a header
+    /// element nobody has seen yet. This is also what `src/converter` has always done
+    /// (<c>BlockSourceParser</c>: <c>Descendants().FirstOrDefault(e =&gt; e.Name.LocalName
+    /// .StartsWith("SW.Blocks."))</c>), and the converter consumes these same exports without
+    /// trouble — one rule, one behaviour, and the one that was already proven against real files.
+    ///
+    /// Document order, at any depth, is deliberate and safe: the outer object always precedes its own
+    /// nested <c>SW.*</c> children (a real FC has <c>SW.Blocks.FC</c> at line 54 and
+    /// <c>SW.Blocks.CompileUnit</c> at line 95). <c>LocalName</c>, not <c>Name</c>, so a namespace
+    /// prefix cannot hide it.
+    ///
+    /// Still cheap: <c>XmlReader</c>, forward-only, stopping at the first match. These files reach
+    /// 3 MB and nothing here needs their content, only their kind.
     /// </summary>
-    public static string ReadRootElement(string path)
+    public static string ReadObjectElement(string path)
     {
         var settings = new XmlReaderSettings { IgnoreComments = true, IgnoreWhitespace = true, DtdProcessing = DtdProcessing.Prohibit };
         using var reader = XmlReader.Create(path, settings);
+
+        // Kept so a failure can NAME what the file did contain. "no SW.* element" over a 3 MB file
+        // is not diagnosable; "saw Document, Engineering, DocumentInfo" is the whole answer.
+        var seen = new List<string>();
 
         while (reader.Read())
         {
@@ -146,21 +189,20 @@ public static class ImportAllPlanner
                 continue;
             }
 
-            if (reader.Name == "Document")
+            if (reader.LocalName.StartsWith("SW.", StringComparison.Ordinal))
             {
-                continue;
+                return reader.LocalName;
             }
 
-            // <Engineering version="V20" /> is a sibling header, not the payload.
-            if (reader.Name == "Engineering")
+            if (reader.Depth <= 1 && seen.Count < 10 && !seen.Contains(reader.LocalName))
             {
-                continue;
+                seen.Add(reader.LocalName);
             }
-
-            return reader.Name;
         }
 
-        throw new InvalidOperationException("no element found inside <Document>");
+        throw new InvalidOperationException(
+            "contains no SW.* object element (expected SW.Blocks.*, SW.Types.* or SW.Tags.PlcTagTable). " +
+            $"Top-level elements seen: {(seen.Count == 0 ? "(none)" : string.Join(", ", seen))}");
     }
 
     public static ItemKind? ClassifyRoot(string rootElement)
