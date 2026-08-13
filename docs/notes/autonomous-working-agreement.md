@@ -217,6 +217,28 @@ running does not license:
       constrain**, since both outputs moving together at the wrong moment satisfies it.
     ➜ And: **clear evidence on the harness DROPPING its start bool, never on the edge.** *A latch
       cleared on the edge is cleared again by a harness restart mid-run, taking the evidence with it.*
+- *** WHEN AN OBJECT HAS NO DERIVABLE PROPERTY, LOOK AT WHAT REFERS TO IT. *** Measured 2026-08-13. A
+  tag table carries **no number**, so classifying it looked like it had to fall back to its **name** —
+  a convention anything can be renamed into. I authorised reporting it *unclassified* as the honest
+  answer. It was not the best one: *** A TAG TABLE HAS NO NUMBER, BUT A TAG HAS REFERRERS, AND A
+  REFERRER HAS A NUMBER. *** Classification moved **per tag**, off the graph, and the table's name
+  stopped being an input at all.
+    ➜ The property that makes it hold: **laundering now costs what it should.** Renaming a plant table
+      to the harness name is a *literal no-op*; to launder a tag you must move **every reference** into
+      the reserved band, **which breaks the plant program.** *When a classifier cannot be fooled
+      without breaking the thing being classified, it is derived rather than declared.*
+    ➜ **So before accepting an honest gap, ask what the object is connected to.** Identity is often
+      available one level out even when it is absent on the object itself.
+    ➜ And it stated its own limits in the code, not just the report: the corpus is **only as complete
+      as what it was given** (printed beside every verdict), **a forged corpus is a different threat
+      and is not defended against**, and one object class still has **no answer at all**.
+- *** A SCOPE THAT ONLY SPEAKS WHEN IT EXEMPTS SOMETHING HAS AN INVISIBLE FAILURE MODE. *** Same lane:
+  the derivation is printed on **every** file, **including the plant ones it did not exempt**. If a
+  classifier is silent on the objects it leaves alone, then a classifier that has stopped working and
+  one that found nothing to exempt produce **identical output.**
+    ➜ Pair it with: **an "unclassified" verdict must gate exactly as a negative one does, and differ
+      only in what it SAYS.** *"This is plant"* and *"no property could tell me"* are different facts,
+      and collapsing them is how a classifier that stopped running looks like one that found nothing.
 - *** A SCOPE THAT SUPPRESSES IS ONE STEP FROM A SCOPE THAT HIDES. *** When exempting a class of object
   from a check, the requirement is never *"stop reporting these"* — it is *** "the checker KNOWS what
   they are and SAYS SO". *** A counted, labelled, non-gating bucket; **a count of zero is a different
