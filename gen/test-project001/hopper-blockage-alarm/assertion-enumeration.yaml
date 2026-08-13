@@ -12,9 +12,19 @@
 # NEITHER OF THE TWO LIVE VECTOR SETS DANGLES. *** See `citation_cost:`.
 #
 # ---------------------------------------------------------------------------------------------------
-# NO `id:` KEY for the two NEW assertions — §3.4. The 25 existing ones keep the IDs already stamped,
-# because their text has not moved; a stamper must NOT recompute-and-replace an unchanged text into a
-# different ID, and equally must not preserve an ID whose text HAS moved. Neither case arises here.
+# NO `id:` KEY when this artifact is issued — §3.4. A stamper must NOT recompute-and-replace an
+# unchanged text into a different ID, and equally must NOT preserve an ID whose text HAS moved.
+#
+# 🔴 CORRECTED AFTER STAMPING, because this comment said something false and the truth is STRONGER.
+# It read "the 25 existing ones KEEP the IDs already stamped". THEY DID NOT KEEP THEM — there were
+# none in the document to keep: this artifact is re-issued from scratch every round, so issue 5
+# arrived carrying no `id:` at all. All 27 were computed FRESH, and the 25 matched THE OLD ONES
+# BECAUSE THE TEXT IS IDENTICAL.
+#
+# *** PRESERVATION IS A PROPERTY OF THE STAMPER; RECOMPUTATION IS A PROPERTY OF THE TEXT — AND ONLY
+# THE SECOND CONFIRMS THE FOUR PASSES THAT SAID NO TEXT MOVED. *** A stamper that "kept" them would
+# have proved nothing about the text and would have hidden a moved sentence. Verified independently
+# in Python, 27/27, text-only, clause never hashed, zero duplicate (clause, text) pairs.
 # ---------------------------------------------------------------------------------------------------
 
 enumerator: assertion-enumerator
@@ -527,7 +537,17 @@ ambiguities_open:
 
   - id: AMB-19
     severity: high
-    status: "OPEN — a HARNESS fix, not a register one. Does not block stamping and moves no text."
+    status: >-
+      *** CLOSED 2026-08-13 — BUILT AS GATE 3i (`BoundsCurrencyCheck`, commit 14d9a8b). *** A vector now
+      declares `boundsUsed` and submission compares it against the table. A mismatch is STALE, NEVER
+      FAIL — the refusal text ends "Do NOT edit the block on the strength of this finding", asserted by
+      a test — and it OUTRANKS BOTH NEIGHBOURS in the result package: before admissibility (a Refused
+      reads as "the author broke a rule", and this author broke none) and before content (a retuned
+      bound is Stale EVEN WHEN AN ASSERTION DISAGREED, because a disagreement measured against the
+      wrong number is not evidence). A vector stating no bound is NOT CHECKED and keeps that status
+      beside a provably stale sibling — "we compared and refused" must not hide "and these we could
+      not compare at all". Measured on a submission whose ONLY edit was the table's value: gates 3, 3g
+      and 3e all reported CHECKED/PASSED and 3i was the single refusal. That is the hole, printed.
     what: >
       A SILENT-STALENESS CHANNEL THAT EXISTS ONLY IN COMBINATION, each ruling being individually
       correct. AR-HBA-03 says retuning the bounds table re-hashes nothing. AR-HBA-14 makes 22
@@ -542,7 +562,12 @@ ambiguities_open:
 
   - id: AMB-14
     severity: medium
-    status: "OPEN, unchanged, still not blocking — it changes no assertion text."
+    status: >-
+      *** CLOSED 2026-08-13. *** `EnumerationDocument.RequiredObservations` carries the co-signals this
+      entry said the wire format could not, and gate 3h checked all 27 — every citation now observes
+      every signal it depends on. Closed WITHOUT naming both signals in any hashed sentence, which was
+      the point: that fix would have traded away the property keeping re-hashes at zero, to repair
+      something that lives in a field.
     what: >-
       `EnumeratedAssertion.ResponseSignal` is a SINGLE string, but REQ-HBA-008 A1/A2 are SIMULTANEITY
       claims needing both signals observed. A vector can cite one, expect on `HopperBlockedInhibit` alone,
@@ -641,33 +666,33 @@ gate_projection_template:
   clauses: [REQ-HBA-001, REQ-HBA-002, REQ-HBA-003, REQ-HBA-004, REQ-HBA-005, REQ-HBA-006, REQ-HBA-007, REQ-HBA-008]
   assertions: "<25 already-stamped IDs, unchanged + 2 newly computed>"
   forms:
-    REQ-HBA-001.A1: When
-    REQ-HBA-001.A2: When
-    REQ-HBA-001.A3: When
-    REQ-HBA-001.A4: When
-    REQ-HBA-002.A1: When
-    REQ-HBA-002.A2: When
-    REQ-HBA-002.A3: When
-    REQ-HBA-003.A1: When
-    REQ-HBA-003.A2: When
-    REQ-HBA-003.A3: When
-    REQ-HBA-003.A4: When
-    REQ-HBA-004.A1: Never
-    REQ-HBA-005.A1: When
-    REQ-HBA-005.A2: When
-    REQ-HBA-005.A3: When
-    REQ-HBA-005.A4: Never
-    REQ-HBA-005.A5: When
-    REQ-HBA-005.A6: When
-    REQ-HBA-006.A1: When
-    REQ-HBA-007.A1: When
-    REQ-HBA-007.A2: When
-    REQ-HBA-007.A3: When
-    REQ-HBA-007.A4: When
-    REQ-HBA-007.A5: When
-    REQ-HBA-008.A1: Never
-    REQ-HBA-008.A2: Never
-    REQ-HBA-008.A3: Never
+    REQ-HBA-001:ab68c1: When
+    REQ-HBA-001:8ea7f6: When
+    REQ-HBA-001:0772fa: When
+    REQ-HBA-001:2bdfa7: When
+    REQ-HBA-002:efe6b5: When
+    REQ-HBA-002:bfda9d: When
+    REQ-HBA-002:feecbe: When
+    REQ-HBA-003:607fdf: When
+    REQ-HBA-003:652dd6: When
+    REQ-HBA-003:aa1d87: When
+    REQ-HBA-003:09e3a8: When
+    REQ-HBA-004:14c9b6: Never
+    REQ-HBA-005:0463ce: When
+    REQ-HBA-005:7e39bc: When
+    REQ-HBA-005:179eb7: When
+    REQ-HBA-005:6e1e8d: Never
+    REQ-HBA-005:34fd97: When
+    REQ-HBA-005:e7e0e0: When
+    REQ-HBA-006:469954: When
+    REQ-HBA-007:4197e0: When
+    REQ-HBA-007:7edf6c: When
+    REQ-HBA-007:578675: When
+    REQ-HBA-007:9855c5: When
+    REQ-HBA-007:34dc51: When
+    REQ-HBA-008:d97781: Never
+    REQ-HBA-008:741315: Never
+    REQ-HBA-008:047ac6: Never
   enumerator: assertion-enumerator
 
 ratios:
