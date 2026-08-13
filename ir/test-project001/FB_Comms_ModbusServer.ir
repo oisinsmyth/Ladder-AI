@@ -4,7 +4,7 @@ NUMBER 9000
 LANGUAGE LAD
 MEMORYLAYOUT Optimized
 TITLE "Modbus TCP Server"
-COMMENT "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 31 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose last four are the block-under-test observations. The span is 31 rather than a round number because it is the width the mirror actually needs: the stimulus command block is mostly durations, and a duration is 32 bits and therefore two registers, so counting signals rather than registers understates it by ten. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; %M is used rather than a data block because bit memory has no memory-layout attribute and so cannot silently become unreadable on the wire. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart."
+COMMENT "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 35 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose last eight are the block-under-test observations and the harness violation latches. The span is 31 rather than a round number because it is the width the mirror actually needs: the stimulus command block is mostly durations, and a duration is 32 bits and therefore two registers, so counting signals rather than registers understates it by ten. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; %M is used rather than a data block because bit memory has no memory-layout attribute and so cannot silently become unreadable on the wire. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart."
 
 INTERFACE
   INPUT
@@ -28,7 +28,7 @@ INTERFACE
 
 NETWORK 1 "Serve The Harness Mirror"
   COMMENT "Runs the Modbus TCP server on every scan. The holding-register area covers 8 words from M1000.0, which is the whole of the harness mirror. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there."
-  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 31, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)
+  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 35, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)
 
 SIDECAR
 NETWORK 1
@@ -36,7 +36,7 @@ NETWORK 1
   access MbServer.DISCONNECT = 21 LocalVariable
   access Comms = 23 LocalVariable
   access MbServer.STATUS = 24 LocalVariable
-  constant P#M1000.0 WORD 31 = 22 Any
+  constant P#M1000.0 WORD 35 = 22 Any
   fixedshape 0
     fixedshapeuid = 25
     instruction = MB_SERVER

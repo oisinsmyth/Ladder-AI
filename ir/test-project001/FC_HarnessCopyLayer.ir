@@ -10,7 +10,7 @@ INTERFACE
   CONSTANT
 
 NETWORK 1 "Program version"
-  MOVE(EN := TRUE, IN := 16#F3240D01) => HX_ProgramVersion
+  MOVE(EN := TRUE, IN := 16#21D74D35) => HX_ProgramVersion
 
 NETWORK 2 "Free-running scan counter"
   ADD(EN := TRUE, IN1 := HX_ScanCount, IN2 := 1) => HX_ScanCount
@@ -42,3 +42,7 @@ NETWORK 7 "Results out - slot HBA - Bool"
   COIL HX_HBA_R001 := iDB_HopperBlockageMonitor.IO.HopperBlockStopReq
   COIL HX_HBA_R002 := iDB_HopperBlockageStim.Stim.Armed
   COIL HX_HBA_R003 := iDB_HopperBlockageStim.Stim.ScenarioDone
+  COIL HX_HBA_R004 := iDB_HarnessViolationLatch.AlarmFellWithoutReset
+  COIL HX_HBA_R005 := iDB_HarnessViolationLatch.AlarmLowUnderHeldReset
+  COIL HX_HBA_R006 := iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh
+  COIL HX_HBA_R007 := iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow

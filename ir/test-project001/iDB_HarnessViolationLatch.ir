@@ -1,0 +1,14 @@
+DB iDB_HarnessViolationLatch
+  ROOTID 0
+  NUMBER 9003
+  INSTANCEOF FB_HarnessViolationLatch
+  COMMENT "The state of the harness violation latches. Nothing here is retained: a latch that survived a download would report a violation from a previous run, and the run that would be blamed is the one after it."
+  INPUT
+  OUTPUT
+  MEMBERS
+    AlarmMem : Bool
+    ResetSinceRaise : Bool
+    AlarmFellWithoutReset : Bool
+    AlarmLowUnderHeldReset : Bool
+    InhibitLowWhileAlarmHigh : Bool
+    InhibitHighWhileAlarmLow : Bool

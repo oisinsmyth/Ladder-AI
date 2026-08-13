@@ -21,3 +21,7 @@ TAGTABLE HarnessMirror
     HX_HBA_R001 34 : Bool @ %M1057.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1. Bool, bit 0 of this register."
     HX_HBA_R002 37 : Bool @ %M1059.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 2. Bool, bit 0 of this register."
     HX_HBA_R003 3A : Bool @ %M1061.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 3. Bool, bit 0 of this register."
+    HX_HBA_R004 3D : Bool @ %M1063.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 4. Bool, bit 0 of this register."
+    HX_HBA_R005 40 : Bool @ %M1065.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 5. Bool, bit 0 of this register."
+    HX_HBA_R006 43 : Bool @ %M1067.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 6. Bool, bit 0 of this register."
+    HX_HBA_R007 46 : Bool @ %M1069.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 7. Bool, bit 0 of this register."

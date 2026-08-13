@@ -1,0 +1,46 @@
+BLOCK FB FB_HarnessViolationLatch
+ROOTID 0
+NUMBER 9003
+LANGUAGE LAD
+TITLE "Harness Violation Latches"
+COMMENT "Latches the four states the requirement register forbids outright, so that a forbidden state lasting a single scan is still there to be read a hundred milliseconds later. A forbidden state cannot be sampled: a sampler that looks a hundred times still looks between scans, and a miss reports as a pass rather than as an error - so a latch is the only admissible instrument for a claim of the form 'this never happens', not a convenience. Everything here is computed from what the monitored block already publishes on its own interface and from the stimulus model's own phase; nothing reaches inside the monitored block and nothing writes to it. The latches are armed by the stimulus model's observation window rather than running free from the start of the run, because every run legitimately begins by driving the monitor through a clear-down, and a free-running latch would fill from that and read violated whatever the monitor did. They are cleared when the harness drops the start bool, which is the same point the start echo is cleared."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    AlarmMem : Bool COMMENT "Previous scan's alarm state, for the constructed falling edge."
+    ResetSinceRaise : Bool COMMENT "An operator reset has been asserted at some point since the alarm was last raised. Held rather than recomputed because the requirement is about what happened SINCE the raise, and a reset that has already ended is still a reset that happened - reading the reset signal alone would make a fall a violation as soon as the pulse ended."
+    AlarmFellWithoutReset : Bool COMMENT "Violation: the alarm de-asserted with no operator reset since it was raised."
+    AlarmLowUnderHeldReset : Bool COMMENT "Violation: the alarm read clear while a continuously-true operator reset was present inside the observation window."
+    InhibitLowWhileAlarmHigh : Bool COMMENT "Violation: the stop demand read clear while the alarm was asserted."
+    InhibitHighWhileAlarmLow : Bool COMMENT "Violation: the stop demand read set while the alarm was not asserted."
+
+NETWORK 1 "Reset Seen Since The Alarm Was Raised"
+  COMMENT "Records an operator reset asserted while the alarm stands, and forgets it the moment the alarm is raised again, so each raise is judged against the resets that followed it and not against an older one. The rising edge is constructed from the previous scan's value, which is written below this network so that the comparison sees the previous scan."
+  SCOIL ResetSinceRaise := iDB_HopperBlockageStim.Stim.FaultReset AND iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm
+  RCOIL ResetSinceRaise := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT AlarmMem
+
+NETWORK 2 "Alarm De-Asserted With No Reset Behind It"
+  COMMENT "The alarm falling while no reset is present and none has been asserted since it was raised. Both terms are needed: the reset is what legitimately clears the alarm in the same scan, and the held record covers a fall that arrives after the pulse has ended - without it a late fall would read as a violation, and without the live term a fall caused by the pulse itself would."
+  SCOIL AlarmFellWithoutReset := AlarmMem AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageStim.Stim.FaultReset AND NOT ResetSinceRaise AND iDB_HopperBlockageStim.Stim.Armed
+
+NETWORK 3 "Alarm Held Clear By A Standing Reset"
+  COMMENT "The alarm reading clear while the operator reset is continuously true, inside the observation window. The window is what carries the 'past the threshold' half of the claim: it opens only after the stimulus model's own threshold has elapsed, so the alarm is clear at a moment when a correct monitor would be asserting it. Before the window this same state is entirely legitimate, which is why it may not be watched from the start of the run."
+  SCOIL AlarmLowUnderHeldReset := iDB_HopperBlockageStim.Stim.FaultReset AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed
+
+NETWORK 4 "The Two Outputs Disagreeing"
+  COMMENT "The stop demand and the alarm are required to agree, and the two directions are latched separately because one latch on their inequality could not say which way round it went. Note what this pair does not constrain: it is satisfied by both outputs moving together at the wrong moment, so it is evidence about the relation and about nothing else - what pins the pair to the plant is the timing assertions, not these."
+  SCOIL InhibitLowWhileAlarmHigh := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND iDB_HopperBlockageStim.Stim.Armed
+  SCOIL InhibitHighWhileAlarmLow := iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed
+
+NETWORK 5 "Previous Alarm State"
+  COMMENT "Stores this scan's alarm state for the next scan's falling-edge comparison. Written after the networks that read it, so those see the previous scan's value."
+  COIL AlarmMem := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm
+
+NETWORK 6 "Clear For The Next Run"
+  COMMENT "The four latches are cleared when the harness drops the start bool, which is the point at which it has finished reading them and is re-arming. They are deliberately not cleared at the start of a run: a latch cleared on the start edge would be cleared again by a restart of the harness mid-run, and the evidence would go with it."
+  RCOIL AlarmFellWithoutReset := NOT iDB_HopperBlockageStim.Stim.Start
+  RCOIL AlarmLowUnderHeldReset := NOT iDB_HopperBlockageStim.Stim.Start
+  RCOIL InhibitLowWhileAlarmHigh := NOT iDB_HopperBlockageStim.Stim.Start
+  RCOIL InhibitHighWhileAlarmLow := NOT iDB_HopperBlockageStim.Stim.Start
