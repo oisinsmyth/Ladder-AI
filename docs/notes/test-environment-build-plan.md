@@ -2844,6 +2844,56 @@ TIA's download message named only the block. ***
     HEALTHY PROJECT. *** It must read *errors 0, state not decisive*. Hard rule 4's Commands table had
     the same wording and **is corrected in `CLAUDE.md`**.
 
+### ✅ TEN OWNER RULINGS RECORDED — 2026-08-13 (`91e3517`)
+
+| # | ruling | landed |
+|---|---|---|
+| 1 | **F-5 adopted** — tail as p90 + exceedance rate | §12a constants block *(staged)* |
+| 2 | **No stepped submission vectors** | contract **§2.1** (new) |
+| 3 | **Interface-for-testability ALLOWED, with a limit** | contract **§9.1** rewritten + new **§9.1a** |
+| 4 | Design-for-testability convention **proposed** | `docs/06` *Proposed rules*, no ID |
+| 5 | **Literal-fit rule approved** | `docs/06` **C-310** *(error)* |
+| 6 | **Settling model kept** as caller-supplied | contract **§5.1** (new) |
+| 7 | ADR-0011's two confirmations | ADR-0011, 4 places + status |
+| 8 | Corpus findings **accepted, not fixed** | new `accepted-corpus-findings.md` |
+| 9 | **C-001 harness carve-out, permanent** | `docs/06` **C-008** *(info)* |
+| 10 | **A8/G2 deferred again** | `deferred-items.md` |
+
+**Ruling 2's reasoning is the owner's and is architectural, not schema:** *** A MODEL IN THE PLC SHOULD
+SUPPLY THE STIMULUS. *** A second stimulus arriving mid-test from the PC has no defined relationship to
+T=0 **and the PC is the wrong place for it** — dynamic stimulus belongs to a model running on the
+controller's own timebase.
+
+**F-5's two constants were NOT invented.** F-4 reported p90 *differences*, never *levels*, so
+`RTT_p90` and `exceed_250` are marked `<PENDING EXTRACTION>` with exactly what to compute (**pooled
+nearest-rank, not a mean of per-run p90s**; raw count *and* fraction). Budgets keep keying on
+`RTT_p99 = 201` meanwhile — *** SAFE IN THE RIGHT DIRECTION, since a p99-keyed budget is STRICTER than
+the p90-keyed one that replaces it, so nothing built against 201 becomes wrong, only conservative. ***
+
+> #### 🚩 RULING 3 DOES NOT REACH ITS OWN MOTIVATING CASE — back to the owner
+>
+> The scoping works in three of four places: a member is a **tag**, not a register, so §2.1's register
+> clause is untouched; the copy layer still owns everything that *observes*, so **exposing is not
+> instrumenting**; and §2.1's *"never writes observability code"* needs only a narrow amendment.
+>
+> *** WHAT DOES NOT RECONCILE: "EXPOSE AN EXISTING VALUE" AND "ADD A VALUE THAT DOES NOT EXIST YET"
+> ARE DIFFERENT ACTS, AND THE RULING DOES NOT DISTINGUISH THEM. *** Surfacing a Static the logic
+> already computes is nearly free and clearly permitted. But **a requirement whose evidence is a
+> one-scan coincidence usually has no existing internal value** — so making it observable means
+> computing something **new**, which is new logic, which is what §2.1 forbids *and* where the owner's
+> own counter-case (*"changing the interface may invalidate the testing"*) bites hardest.
+>
+> *** AND THAT IS THE EXACT CASE §2.6 RAISED IN THE FIRST PLACE. *** The proposed convention inherits
+> the same ambiguity, so it should be settled **before the rule is numbered.**
+
+  ➜ **Ruling 4 left open deliberately:** *"where possible"* as drafted lets an author **decline any
+    exposure by assertion** — a warn that is a formality. Two candidate fixes offered, neither chosen,
+    with a preference argued from C-610's precedent that *an undeclared absence is indistinguishable
+    from an oversight.*
+  ➜ **Ruling 6's gap is kept INSIDE the ruling**, deliberately: `WaveRun` observes completion, not
+    settling, so the contract asks for a declaration the runner does not enforce. *** A GAP INSIDE A
+    RULING IS THE KIND THAT GETS READ AS CLOSED. ***
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
