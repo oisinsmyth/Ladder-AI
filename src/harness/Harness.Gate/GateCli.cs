@@ -122,7 +122,34 @@ public static class GateCli
             map,
             floor,
             Math.Max(1, document.RuntimeCompression),
-            document.ComputedConflicts?.ToHashSet(StringComparer.Ordinal));
+            ToConflictGraph(document));
+    }
+
+    /// <summary>
+    /// Both conflict inputs, combined — <b>and neither is allowed to launder the other</b>.
+    ///
+    /// <para>A bare block name in <c>computedConflicts</c> becomes an edge with <c>Unstated</c> provenance,
+    /// so a document mixing the two gets the honest answer: the packing set is complete, and X-G's report
+    /// is NOT CHECKED because part of the graph never said why. Null on BOTH means no graph at all, which
+    /// is a third state again.</para>
+    /// </summary>
+    private static ConflictGraph? ToConflictGraph(SubmissionDocument document)
+    {
+        if (document.ComputedConflicts is null && document.ConflictEdges is null)
+            return null;
+
+        var edges = new List<ConflictEdge>();
+
+        foreach (var e in document.ConflictEdges ?? new List<ConflictEdgeDocument>())
+        {
+            edges.Add(new ConflictEdge(
+                e.BlockA ?? string.Empty, e.BlockB ?? string.Empty, e.Provenance,
+                e.Signal ?? string.Empty, e.Class));
+        }
+
+        edges.AddRange(ConflictGraph.WithoutProvenance(document.ComputedConflicts ?? new List<string>()).Edges);
+
+        return new ConflictGraph(edges);
     }
 
     private static SubmissionVector ToVector(VectorDocument v) => new(
@@ -136,7 +163,7 @@ public static class GateCli
         v.Inputs ?? new Dictionary<string, string>(),
         v.StartBool ?? string.Empty,
         (v.Expectations ?? new List<ExpectationDocument>())
-            .Select(e => new ObservabilityDeclaration(e.Signal ?? string.Empty, e.Nature, e.Mode, e.WindowScans))
+            .Select(e => new ObservabilityDeclaration(e.Signal ?? string.Empty, e.Nature, e.Mode, e.WindowScans, e.Expected))
             .ToArray(),
         v.AssertionForm,
         string.IsNullOrWhiteSpace(v.SettlingCondition)

@@ -27,7 +27,7 @@ public class GateCliTests
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
         "clause": "REQ-014", "assertion": "REQ-014:3f9a1c",
         "startBool": "Demo_Start",
-        "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0 }],
+        "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
         "maxDurationScans": 20,
         "blacklist": [{ "block": "FC_Other", "reason": "shares the plant model" }],
@@ -257,5 +257,73 @@ public class GateCliTests
             .Replace("\"resultRegistersPerSlot\": 20", "\"resultRegistersPerSlot\": 125", StringComparison.Ordinal);
 
         Assert.Equal(GateExit.NotAdmissible, Run(wide).Exit);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE PASS-THROUGHS — the class of hole this component has now found seven times
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void THE_EXPECTED_VALUE_REACHES_THE_GATE_FROM_THE_DOCUMENT()
+    {
+        // The field existed on the checked type and the DOCUMENT had no way to state one, so every
+        // CLI-supplied expectation arrived with a null predicate and nothing noticed. Dropping the
+        // pass-through again turns the good fixture red, which is the property that was missing.
+        var withoutPredicate = Good.Replace(", \"expected\": \"10\"", string.Empty, StringComparison.Ordinal);
+        var (exit, output) = Run(withoutPredicate);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("declares no expected value", output, StringComparison.Ordinal);
+
+        // And with it, the same document is admissible — so the pass-through is load-bearing for a PASS
+        // and not only for a refusal.
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(Good).Exit);
+    }
+
+    [Fact]
+    public void A_CONFLICT_EDGES_ENTRY_REACHES_THE_GATE_AND_ITS_SIGNAL_IS_NAMED_IN_THE_REPORT()
+    {
+        var withEdge = Good.Replace(
+            "\"computedConflicts\": [],",
+            """
+            "conflictEdges": [{ "blockA": "FC_PumpA", "blockB": "FC_PumpB", "provenance": "MultiWriter",
+                                "signal": "Pump_Run", "class": "Deliverable" }],
+            """,
+            StringComparison.Ordinal);
+
+        var (exit, output) = Run(withEdge);
+
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, exit);
+        Assert.Contains("Pump_Run", output, StringComparison.Ordinal);
+        Assert.Contains("MULTI-WRITER FINDING(S) ON DELIVERABLE SIGNALS", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_BARE_CONFLICT_LIST_IS_NOT_ADMISSIBLE_because_its_multi_writer_report_would_mean_nothing()
+    {
+        var bareList = Good.Replace("\"computedConflicts\": [],", "\"computedConflicts\": [\"FC_Other\"],", StringComparison.Ordinal);
+
+        var (exit, output) = Run(bareList);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("8c multi-writer provenance (X-G)", output, StringComparison.Ordinal);
+        Assert.Contains("nothing to do with multi-writers", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_RUNTIME_COMPRESSION_REACHES_BOTH_COMPRESSION_GATES()
+    {
+        var compressed = Good.Replace("\"runtimeCompression\": 1", "\"runtimeCompression\": 4", StringComparison.Ordinal);
+
+        var (exit, output) = Run(compressed);
+
+        // 10b fails closed above comp=1: three of X-D's four ceilings are properties of the block and the
+        // model, and contract section 2 gives an author nowhere to state them.
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("10b time compression", output, StringComparison.Ordinal);
+        Assert.Contains("OFTEN BINDS FIRST", output, StringComparison.Ordinal);
+
+        // And the timer ceiling that binds first is quoted at its MEASURED value, not X-D's original.
+        Assert.Contains("4.3x", output, StringComparison.Ordinal);
     }
 }

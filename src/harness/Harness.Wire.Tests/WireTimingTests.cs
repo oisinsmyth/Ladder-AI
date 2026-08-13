@@ -26,7 +26,7 @@ public class WireTimingTests
     {
         // §12a derivation 4: without the RTT_max term a healthy test reports TIMED-OUT roughly once every
         // 22 waves, and a spurious TIMED-OUT is worse than a spurious FAILED because it is believed.
-        var backstop = WireTiming.BackstopMs(declaredScans: 100, expectedRoundTrips: 2);
+        var backstop = WireTiming.BackstopMs(new ScanBudget(100, 1), RuntimeCompression.Uncompressed, expectedRoundTrips: 2);
         var withoutOutlier = (int)Math.Ceiling(100 * WireTiming.ScanPeriodMs) + (2 * WireTiming.RttP99Ms);
 
         Assert.Equal(withoutOutlier + WireTiming.RttMaxObservedMs, backstop);
@@ -70,8 +70,9 @@ public class WireTimingTests
     [Fact]
     public void A_negative_duration_is_refused_rather_than_producing_a_shorter_backstop()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.BackstopMs(-1, 2));
-        Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.BackstopMs(1, -2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ScanBudget(-1, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            WireTiming.BackstopMs(new ScanBudget(1, 1), RuntimeCompression.Uncompressed, -2));
     }
 
     // ---------------------------------------------------------------------------------------------

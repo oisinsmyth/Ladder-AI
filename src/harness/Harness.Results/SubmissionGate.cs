@@ -81,10 +81,12 @@ public static class SubmissionGate
         floorScans: 1, declaredCompression: 1, runtimeCompression: 1);
 
     /// <summary>Run every gate over one submission.</summary>
-    /// <param name="computedConflicts">
-    /// Blocks the reference graph says conflict with this submission's targets (D9). <b>Null means the
+    /// <param name="conflicts">
+    /// The computed disjointness graph (D9), <b>with X-G's provenance on every edge</b>. <b>Null means the
     /// graph was not available</b>, which makes the blacklist gate NOT CHECKED rather than passed — a
-    /// blacklist compared against an absent graph is a blacklist nobody checked.
+    /// blacklist compared against an absent graph is a blacklist nobody checked. A graph built by
+    /// <see cref="ConflictGraph.WithoutProvenance"/> is available but unprovenanced, which is a different
+    /// and equally reportable state.
     /// </param>
     public static SubmissionReport Check(
         IReadOnlyList<SubmissionVector> vectors,
@@ -94,7 +96,8 @@ public static class SubmissionGate
         MirrorObservability map,
         double floorScans,
         int runtimeCompression,
-        IReadOnlySet<string>? computedConflicts)
+        ConflictGraph? conflicts,
+        BlockCompressionInputs? compressionInputs = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -122,10 +125,13 @@ public static class SubmissionGate
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
         gates.Add(StartBool(vectors));
-        gates.Add(Blacklist(vectors, computedConflicts));
+        gates.Add(Blacklist(vectors, conflicts));
         gates.Add(new GateResult("8b blacklist — over-broad?", GateStatus.Judgement, true, "density, reported not gated",
             $"blacklist density is {vectors.Sum(v => v.Blacklist.Count)} entr(ies) across {vectors.Count} vector(s). Over-blacklisting is measurable and not preventable."));
+        gates.Add(MultiWriterProvenance(conflicts));
         gates.Add(LivenessPreconditions(vectors, map));
+        gates.Add(CompressionCeiling(vectors, floorScans, runtimeCompression));
+        gates.Add(CompressionBoundsNotInTheSubmission(vectors, runtimeCompression, floorScans, compressionInputs));
 
         return new SubmissionReport(gates, vectors.Count);
     }
@@ -156,6 +162,16 @@ public static class SubmissionGate
 
             if (v.Expectations.Count == 0)
                 problems.Add($"{label}: no Expectations. A vector that asserts nothing cannot fail, so its pass says nothing.");
+
+            // *** THE PREDICATE. *** Contract section 2 lists one and ObservabilityDeclaration.Expected
+            // carries it, and until now NOTHING CHECKED IT — an expectation with no predicate reached the
+            // result package, where a null becomes the string "<no predicate>" and is compared against the
+            // observed value. That yields a FAILED on a vector that should have been REFUSED: the author is
+            // told the block is wrong when what is wrong is that nobody said what right looks like.
+            foreach (var e in v.Expectations.Where(e => string.IsNullOrWhiteSpace(e.Expected)))
+            {
+                problems.Add($"{label}: expectation '{e.Signal}' declares no expected value. An expectation with nothing to compare against cannot fail, so its pass says nothing — and it does not become an error, it becomes a spurious disagreement against a placeholder.");
+            }
 
             // Kills is in the code and absent from contract section 2's format. Section 10 requires
             // mutation testing and this is the only mechanism for it that exists, so it is required here
@@ -401,8 +417,10 @@ public static class SubmissionGate
     // 8 — blacklist
     // -------------------------------------------------------------------------------------------------
 
-    private static GateResult Blacklist(IReadOnlyList<SubmissionVector> vectors, IReadOnlySet<string>? computedConflicts)
+    private static GateResult Blacklist(IReadOnlyList<SubmissionVector> vectors, ConflictGraph? conflicts)
     {
+        var computedConflicts = conflicts?.BlocksForPacking;
+
         if (computedConflicts is null)
         {
             return new GateResult("8 blacklist", GateStatus.NotChecked, false, "cross-check conflict graph",
@@ -438,6 +456,177 @@ public static class SubmissionGate
             problems.Count == 0
                 ? $"{declared.Count} declared exclusion(s) on top of {computedConflicts.Count} computed conflict(s); every entry carries a reason, and the type carries no way to remove one. NOTE: the blacklist names BLOCKS while admission colours SLOTS, so naming a block excludes every slot testing it."
                 : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 8c — X-G: the packer can mask a genuine multi-writer defect
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>X-G, and the thing worth getting right is what an EMPTY report means.</b>
+    ///
+    /// <para>Two blocks that both write the same coil are a conflict, so DB-13 puts them in different
+    /// tensors and both tests pass — <b>the scheduler has silently repaired a defect that will ship.</b>
+    /// The fact is already computed by <c>converter cross-check</c> (C-308) and this design consumed it
+    /// only as a graph edge. Reporting it is the fix X-G asks for.</para>
+    ///
+    /// <para><b>It reports on clean graphs too</b>, for the same reason F-6's collapse report prints its
+    /// no-collapse line: a report that appears only on bad news teaches its reader that absence means
+    /// "not run". And <b>a graph with unrecorded provenance is NOT CHECKED, never a clean bill</b> — that
+    /// is the one state in which "0 multi-writer findings" would be true of the report and say nothing
+    /// about the program.</para>
+    ///
+    /// <para><b>A finding does not refuse the submission, and that is a decision.</b> The defect is in the
+    /// DELIVERABLE — two blocks writing one signal in one scan cycle — not in the vectors, and X-G's own
+    /// treatment says "reported as FINDINGS as well as being used for packing". Refusing here would make a
+    /// vector author responsible for a program defect they cannot fix. <b>Whether it should instead be a
+    /// hard refusal is an owner question</b>, and it is recorded rather than decided in the code.</para>
+    /// </summary>
+    private static GateResult MultiWriterProvenance(ConflictGraph? conflicts)
+    {
+        if (conflicts is null)
+        {
+            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "cross-check conflict graph with provenance",
+                "no conflict graph was supplied, so no multi-writer fact could be reported. An absent graph and a graph with no multi-writers produce the same empty report, which is why this is NOT CHECKED rather than a pass.");
+        }
+
+        if (!conflicts.ProvenanceComplete)
+        {
+            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "provenance on every conflict edge",
+                conflicts.Render()
+                + " Edges without provenance are the state this gate exists for: the packer will still separate the blocks, both tests will still pass, and nothing will have said that a multi-writer on a deliverable signal is what is being separated.");
+        }
+
+        return new GateResult("8c multi-writer provenance (X-G)", GateStatus.Checked, true, nameof(ConflictGraph),
+            conflicts.Render()
+            + (conflicts.MultiWriterFindings.Count > 0
+                ? " REPORTED, NOT REFUSED: the defect is in the deliverable rather than in this submission, and X-G's treatment is to report. Whether it should refuse is an open owner question."
+                : string.Empty));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 10 — X-D: time compression, and the half of it a submission can answer
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>X-D's assertion ceiling, per vector — and it catches a case gate 5 structurally cannot.</b>
+    ///
+    /// <para>Gate 5 exempts LATCHED and STAMPED expectations from the observability floor, correctly: a
+    /// latch holds until cleared at test start and cannot fall in a poll gap. <b>X-D does not exempt them
+    /// from the scan-period ceiling.</b> An event compressed below one scan of real time does not happen
+    /// long enough to be latched either — <c>comp_max = T_event / scan_period</c> — so a latched
+    /// declaration that clears gate 5 at every compression can still be void at the one being run.</para>
+    ///
+    /// <para><b>For SAMPLED expectations this is deliberately the same inequality as gate 5</b>, computed
+    /// from the other side: <c>window.At(comp) &gt;= floor</c> is <c>comp &lt;= window.PlantScans /
+    /// floor</c>. They cannot disagree because they are one division in <c>ScanBudget</c>, and a test
+    /// sweeps the range asserting the boundary is the same number. What this adds is the CEILING as a
+    /// number the author can act on, rather than only the verdict that one particular factor failed.</para>
+    /// </summary>
+    private static GateResult CompressionCeiling(IReadOnlyList<SubmissionVector> vectors, double floorScans, int runtimeCompression)
+    {
+        var problems = new List<string>();
+        var ceilings = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            var declared = Math.Max(1, v.CompressionFactor);
+            var perVector = new List<(string Signal, double Ceiling)>();
+
+            foreach (var e in v.Expectations.Where(e => e.WindowScans >= 1))
+            {
+                var window = new Harness.Wire.ScanBudget(e.WindowScans, declared);
+                perVector.Add((e.Signal, e.Mode == InstrumentationMode.Sampled
+                    ? TimeCompression.SampledCeiling(window, floorScans)
+                    : TimeCompression.LatchedCeiling(window)));
+            }
+
+            if (perVector.Count == 0)
+            {
+                ceilings.Add($"{v.Id}: no window declared on any expectation, so no assertion ceiling could be computed for it");
+                continue;
+            }
+
+            var binding = perVector.MinBy(c => c.Ceiling);
+            ceilings.Add($"{v.Id}: comp_max(assertion) = {binding.Ceiling:0.##}x, bound by '{binding.Signal}'");
+
+            if (runtimeCompression > binding.Ceiling)
+            {
+                problems.Add($"{v.Id}: this wave runs at comp={runtimeCompression} and the vector's own assertion ceiling is {binding.Ceiling:0.##}x, bound by '{binding.Signal}'. "
+                    + "X-D: compression shortens the REAL-TIME separation of the events being observed, so past this factor the assertion is not merely hard to catch — it is never sampled, and every check still reports green. USE comp_min, NOT comp_max.");
+            }
+        }
+
+        return new GateResult("10a time compression — assertion ceiling (X-D)", GateStatus.Checked, problems.Count == 0, nameof(TimeCompression),
+            problems.Count == 0
+                ? $"this wave runs at comp={runtimeCompression}, under every vector's assertion ceiling. {string.Join("; ", ceilings)}. NOTE: the LATCHED ceiling is checked here and NOT by gate 5 — latching is exempt from the observability floor, never from the scan-period term."
+                : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// <b>X-D's other three ceilings, which a submission does not carry — and the treatment depends on
+    /// whether anything is actually being compressed.</b>
+    ///
+    /// <para>The timer bound (<c>PT / (k x scan)</c>, which X-D says <i>often binds first</i>), the model's
+    /// declared <c>comp_stable</c>, and the ratio-distortion bound on unscaled literals are properties of
+    /// the BLOCK and the MODEL, not of the vectors. Contract §2 gives an author nowhere to state them.</para>
+    ///
+    /// <para><b>So: at comp = 1 this is a real pass</b> — nothing is scaled, and none of the three can bind.
+    /// That is computed from the submission, not assumed. <b>Above comp = 1 it is NOT CHECKED and fails
+    /// closed</b>, because the plan is then compressing a block whose shortest preset nobody stated. On a
+    /// 500 ms preset the timer ceiling is 4.3x, not the 10x X-D originally assumed, so this is exactly the
+    /// range where a submission would otherwise sail through.</para>
+    /// </summary>
+    private static GateResult CompressionBoundsNotInTheSubmission(
+        IReadOnlyList<SubmissionVector> vectors, int runtimeCompression, double floorScans, BlockCompressionInputs? inputs)
+    {
+        var declaredFactors = vectors.Select(v => Math.Max(1, v.CompressionFactor)).ToArray();
+
+        // *** IT KEYS ON THE RUNTIME FACTOR ALONE, AND THAT IS A DECISION. *** A vector's DECLARED comp is
+        // the unit its scan counts are stated in; it says nothing about how fast the model will be driven.
+        // Only the RUNTIME factor scales presets, distorts the ratio of an unscaled literal, and asks a
+        // model to behave at a rate. A vector declaring comp=10 while the wave runs at 1 is running a model
+        // in real time and none of these three ceilings can bind on it.
+        if (runtimeCompression <= 1)
+        {
+            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.Checked, true, nameof(TimeCompression),
+                $"nothing is compressed at run time — this wave runs at comp={runtimeCompression}, whatever the vectors' declared factor(s) of {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))} — so X-D's timer, model-stability and ratio-distortion ceilings cannot bind. "
+                + $"That is computed from the submission, not assumed: at comp=1 a DATA preset is unscaled, an unscaled LITERAL keeps its proportion, and the model is not being asked to run at a factor. "
+                + $"For reference, the timer floor is k x scan = {TimeCompression.TimerScanMultiple} x {Harness.Wire.WireTiming.ScanPeriodMs} = {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset would cap compression at {500 / TimeCompression.TimerFloorMs:0.0}x — not the 10x X-D originally assumed.");
+        }
+
+        if (inputs is null)
+        {
+            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.NotChecked, false, "TimeCompression.Plan, via BlockCompressionInputs",
+                $"this wave runs at comp={runtimeCompression} with declared factor(s) {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))}, so compression IS being applied — and three of X-D's four ceilings were compared against nothing. "
+                + $"No timer presets were supplied (the term X-D says OFTEN BINDS FIRST: PT / (k x scan), floor {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset caps at {500 / TimeCompression.TimerFloorMs:0.0}x), no model comp_stable, and no negligible-fraction threshold for the ratio-distortion bound. "
+                + "Supply them as BlockCompressionInputs. An unknown ceiling is not a high one.");
+        }
+
+        var plan = TimeCompression.Plan(
+            new CompressionRequest(inputs.PlantMs, inputs.BudgetMs,
+                vectors.SelectMany(v => v.Expectations).ToArray(),
+                declaredFactors.Max(), Math.Max(1, (int)Math.Round(floorScans * Harness.Wire.WireTiming.ScanPeriodMs / Harness.Wire.WireTiming.RttP99Ms)),
+                inputs.Presets, inputs.ModelCompStable, inputs.NegligibleFraction),
+            floorScans);
+
+        if (!plan.Runnable)
+        {
+            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.Checked, false, nameof(TimeCompression),
+                plan.Render());
+        }
+
+        if (runtimeCompression > plan.CompMax)
+        {
+            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.Checked, false, nameof(TimeCompression),
+                $"this wave runs at comp={runtimeCompression} and comp_max is {plan.CompMax:0.##}x, bound by {plan.BindingBound}. " + plan.Render());
+        }
+
+        return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.Checked, true, nameof(TimeCompression),
+            plan.Render()
+            + (runtimeCompression > plan.CompMin
+                ? $" *** THIS WAVE RUNS AT comp={runtimeCompression}, ABOVE comp_min. *** It clears the ceiling, and X-D's rule is to take the LEAST compression that meets the budget and bank the remainder as margin — compression is a fidelity risk, and running above comp_min spends that margin for nothing."
+                : string.Empty));
     }
 
     // -------------------------------------------------------------------------------------------------

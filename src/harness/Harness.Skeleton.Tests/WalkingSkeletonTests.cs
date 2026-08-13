@@ -157,7 +157,7 @@ public class WalkingSkeletonTests
         Assert.True(VersionCheck.Confirm(rig.Client, rig.Stamp).Confirmed);
         rig.Plc.Running = false;
 
-        var run = SlotRun.Run(rig.Client, 0, SkeletonRig.RampVector(DiscriminatingStep, DiscriminatingLimit));
+        var run = SlotRun.Run(rig.Client, RuntimeCompression.Uncompressed, 0, SkeletonRig.RampVector(DiscriminatingStep, DiscriminatingLimit));
 
         Assert.Equal(SlotOutcome.NotInert, run.Outcome);
         Assert.Equal(InertOutcome.ScanCounterStalled, run.Inert.Outcome);
@@ -184,10 +184,10 @@ public class WalkingSkeletonTests
         // X-B invented TIMED-OUT precisely so "the condition never occurred" would be distinguishable
         // from a real failure. Here the limit is far enough away that the backstop elapses first.
         var rig = SkeletonRig.Build();
-        var vector = SkeletonRig.RampVector(1, 30000) with { DeclaredScans = 1 };
+        var vector = SkeletonRig.RampVector(1, 30000) with { Duration = new ScanBudget(1, 1) };
 
         var elapsed = 0L;
-        var run = SlotRun.Run(rig.Client, 0, vector, () => elapsed += 500);
+        var run = SlotRun.Run(rig.Client, RuntimeCompression.Uncompressed, 0, vector, () => elapsed += 500);
 
         Assert.Equal(SlotOutcome.TimedOut, run.Outcome);
         Assert.Contains("TIMED-OUT is not FAILED", run.Detail, StringComparison.Ordinal);

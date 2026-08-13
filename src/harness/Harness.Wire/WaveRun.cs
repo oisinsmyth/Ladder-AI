@@ -62,13 +62,21 @@ public static class WaveRun
     /// point: a caller that only reads the returned <see cref="WaveResult"/> has re-batched the feedback
     /// to wave end, which is the latency the rule exists to remove.
     /// </param>
+    /// <param name="compression">
+    /// <b>The factor this wave actually runs at.</b> It comes before the tensors because it governs how
+    /// every scan count in them is read: a maximum duration declared at one <c>comp</c> and consumed at
+    /// another is a backstop that fires on a healthy test. Required, never defaulted — see
+    /// <see cref="ScanBudget"/>.
+    /// </param>
     public static WaveResult Run(
         MirrorClient client,
+        RuntimeCompression compression,
         IReadOnlyList<SlotTensor> tensors,
         Func<long>? nowMs = null,
         Action<SlotDistribution>? onSlotComplete = null)
     {
         ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(compression);
         ArgumentNullException.ThrowIfNull(tensors);
 
         if (tensors.Count == 0)
@@ -118,7 +126,7 @@ public static class WaveRun
 
             var startScan = InertPhase.Commit(client, inert, commanded);
 
-            var perIndex = Observe(client, active, index, startScan, inert, nowMs);
+            var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
             foreach (var (slotIndex, result) in perIndex)
                 collected[slotIndex].Add(result);
 
@@ -157,6 +165,7 @@ public static class WaveRun
     /// </summary>
     private static IReadOnlyList<(int SlotIndex, SlotRunResult Result)> Observe(
         MirrorClient client,
+        RuntimeCompression compression,
         IReadOnlyList<SlotTensor> active,
         int index,
         long startScan,
@@ -167,11 +176,16 @@ public static class WaveRun
         var done = new List<(int SlotIndex, SlotRunResult Result)>();
         var polls = 0;
 
-        // The backstop is per index and takes the LONGEST declared duration in the tensor, because the
-        // index costs its longest member. Round trips are counted as (slots + 1) per poll round: registers
-        // appear nowhere in it, which is the point — nothing here is derived from slot width.
+        // The backstop is per index and takes the LONGEST duration in the tensor, because the index costs
+        // its longest member. *** LONGEST IS MEASURED AFTER RE-EXPRESSION AT THIS WAVE'S comp, NOT ON THE
+        // RAW COUNTS *** — two vectors in one tensor may declare their scans at different factors, and 20
+        // scans at comp=10 is ten times the behaviour of 20 scans at comp=1. Comparing the bare integers
+        // picks the wrong vector and under-sizes the bound, which is a spurious TIMED-OUT on a healthy test.
+        // Round trips are counted as (slots + 1) per poll round: registers appear nowhere in it, which is
+        // the point — nothing here is derived from slot width.
         var backstop = WireTiming.BackstopMs(
-            outstanding.Values.Max(v => v.DeclaredScans),
+            outstanding.Values.MaxBy(v => v.Duration.At(compression))!.Duration,
+            compression,
             expectedRoundTrips: WireTiming.RoundTripsPerIndex(
                 active.Count,
                 client.Map.VectorRegistersPerSlot,

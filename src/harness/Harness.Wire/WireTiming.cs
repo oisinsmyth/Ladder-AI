@@ -75,15 +75,30 @@ public static class WireTiming
     /// <para><c>(declared scans x scan period) + (expected round trips x RTT_p99) + one RTT_max
     /// allowance.</c> <b>Without the last term a healthy test reports TIMED-OUT roughly every 22nd
     /// wave</b> — and a spurious TIMED-OUT is worse than a spurious FAILED, because it is believed.</para>
+    ///
+    /// <para><b>Every term is BOUND-shaped and none of them may move to the p90 (§12a's F-5 kind rule).</b>
+    /// The middle term keeps <see cref="RttP99Ms"/>: substituting <c>RTT_p90</c> would halve the allowance
+    /// while 10% of round trips exceed that figure BY CONSTRUCTION, so on a test issuing 19 round trips
+    /// roughly two would be expected to blow the per-trip assumption every run. The last term keeps
+    /// <see cref="RttMaxObservedMs"/> and <b>is not padding</b>.</para>
+    ///
+    /// <para><b>The scan term takes a <see cref="ScanBudget"/> and the run's
+    /// <see cref="RuntimeCompression"/>, never a bare count</b> — the declaration is in scans AT THE
+    /// AUTHOR'S <c>comp</c>, and the same behaviour occupies a different number of scans at the factor the
+    /// wave actually runs. A duration declared at <c>comp = 10</c> and consumed as though it were
+    /// <c>comp = 1</c> is ten times too short, and the symptom is a TIMED-OUT on a healthy test. There is
+    /// deliberately no overload that takes an <c>int</c>: the hole is closed by being unexpressible rather
+    /// than by a check that a later edit could drop.</para>
     /// </summary>
-    public static int BackstopMs(int declaredScans, int expectedRoundTrips)
+    public static int BackstopMs(ScanBudget declared, RuntimeCompression runtime, int expectedRoundTrips)
     {
-        if (declaredScans < 0)
-            throw new ArgumentOutOfRangeException(nameof(declaredScans), declaredScans, "a duration in scans cannot be negative.");
+        ArgumentNullException.ThrowIfNull(declared);
+        ArgumentNullException.ThrowIfNull(runtime);
+
         if (expectedRoundTrips < 0)
             throw new ArgumentOutOfRangeException(nameof(expectedRoundTrips), expectedRoundTrips, "a round-trip count cannot be negative.");
 
-        return (int)Math.Ceiling(declaredScans * ScanPeriodMs)
+        return (int)Math.Ceiling(declared.BoundAt(runtime) * ScanPeriodMs)
              + (expectedRoundTrips * RttP99Ms)
              + RttMaxObservedMs;
     }

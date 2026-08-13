@@ -25,7 +25,7 @@ public class SubmissionGateTests
             basis ?? new Basis("REQ-014", "REQ-014:3f9a1c"),
             new Dictionary<string, string> { ["Demo_Step"] = "5" },
             startBool,
-            expectations ?? new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+            expectations ?? new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10") },
             form,
             settling ?? new SettlingDeclaration("count unchanged across 3 scans", new[] { "Demo_Count" }),
             maxDuration,
@@ -40,11 +40,12 @@ public class SubmissionGateTests
         IReadOnlyList<SubmissionVector>? vectors = null,
         string blockAuthor = "agent-a",
         MirrorObservability? map = null,
-        IReadOnlySet<string>? conflicts = null,
+        ConflictGraph? conflicts = null,
         double floor = 9,
         int runtimeCompression = 1,
         bool omitConflictGraph = false,
-        AssertionEnumeration? enumeration = null) =>
+        AssertionEnumeration? enumeration = null,
+        BlockCompressionInputs? compressionInputs = null) =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
@@ -53,7 +54,16 @@ public class SubmissionGateTests
             new AgentIdentity(blockAuthor),
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
             floor, runtimeCompression,
-            omitConflictGraph ? null : conflicts ?? new HashSet<string>());
+            omitConflictGraph ? null : conflicts ?? ConflictGraph.Empty,
+            compressionInputs);
+
+    /// <summary>
+    /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.
+    /// The default helper declares none — legal for a latch, which is exempt from the observability floor —
+    /// and X-D then reports the assertion ceiling as NOT DECLARED rather than as unbounded.
+    /// </summary>
+    private static SubmissionVector[] Windowed =>
+        new[] { Vector(expectations: new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 40, "10") }) };
 
     private static GateResult Gate(SubmissionReport report, string startsWith) =>
         report.Gates.Single(g => g.Gate.StartsWith(startsWith, StringComparison.Ordinal));
@@ -89,9 +99,19 @@ public class SubmissionGateTests
         var report = Check(omitConflictGraph: true);
 
         Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
-        var blacklist = Assert.Single(report.NotChecked);
-        Assert.StartsWith("8 blacklist", blacklist.Gate, StringComparison.Ordinal);
+
+        // An absent graph now costs TWO gates, and they are different questions: the blacklist could not be
+        // compared against anything, and X-G's multi-writer report would have been empty for a reason that
+        // has nothing to do with multi-writers.
+        var blacklist = Gate(report, "8 blacklist");
+        Assert.Equal(GateStatus.NotChecked, blacklist.Status);
         Assert.Contains("a blacklist nobody checked", blacklist.Detail, StringComparison.Ordinal);
+
+        var provenance = Gate(report, "8c multi-writer");
+        Assert.Equal(GateStatus.NotChecked, provenance.Status);
+        Assert.Contains("the same empty report", provenance.Detail, StringComparison.Ordinal);
+
+        Assert.Equal(2, report.NotChecked.Count);
     }
 
     [Fact]
@@ -349,7 +369,7 @@ public class SubmissionGateTests
     public void An_EMPTY_conflict_graph_is_a_different_statement_from_an_ABSENT_one()
     {
         // "The graph ran and found no conflicts" is a result. "No graph was supplied" is not.
-        Assert.Equal(GateStatus.Checked, Gate(Check(conflicts: new HashSet<string>()), "8 blacklist").Status);
+        Assert.Equal(GateStatus.Checked, Gate(Check(conflicts: ConflictGraph.Empty), "8 blacklist").Status);
         Assert.Equal(GateStatus.NotChecked, Gate(Check(omitConflictGraph: true), "8 blacklist").Status);
     }
 
@@ -373,5 +393,155 @@ public class SubmissionGateTests
     public void The_post_run_stimulus_check_is_named_as_post_run_and_not_claimed_at_submission()
     {
         Assert.Contains("is not a submission-time gate", Gate(Check(), "9 liveness preconditions").Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 8c — X-G, multi-writer provenance
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_multi_writer_on_a_DELIVERABLE_signal_is_REPORTED_by_name_on_a_passing_submission()
+    {
+        var graph = new ConflictGraph(new[]
+        {
+            new ConflictEdge("FC_PumpA", "FC_PumpB", ConflictProvenance.MultiWriter, "Pump_Run", SignalClass.Deliverable),
+        });
+
+        var report = Check(conflicts: graph);
+        var gate = Gate(report, "8c multi-writer");
+
+        // It does not refuse: the defect is in the DELIVERABLE, not in these vectors. But a passing gate
+        // that said nothing would be the packer repairing a shipping defect silently, which is X-G's whole
+        // complaint.
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Contains("Pump_Run", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("REPORTED, NOT REFUSED", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(SubmissionVerdict.AdmissibleSubjectToJudgement, report.Verdict);
+    }
+
+    [Fact]
+    public void A_CONFLICT_LIST_WITH_NO_PROVENANCE_MAKES_THE_SUBMISSION_NOT_ADMISSIBLE()
+    {
+        // The pre-X-G input shape. An empty multi-writer report over it means nothing, and reporting it as
+        // a clean bill is exactly the silence X-G was raised about.
+        var report = Check(conflicts: ConflictGraph.WithoutProvenance(new[] { "FC_Other" }));
+
+        Assert.Equal(GateStatus.NotChecked, Gate(report, "8c multi-writer").Status);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        // And the BLACKLIST gate still ran — the packing half of the graph is unaffected.
+        Assert.Equal(GateStatus.Checked, Gate(report, "8 blacklist").Status);
+    }
+
+    [Fact]
+    public void A_clean_provenanced_graph_reports_ZERO_FINDINGS_rather_than_saying_nothing()
+    {
+        Assert.Contains("0 multi-writer edges on deliverable signals",
+            Gate(Check(), "8c multi-writer").Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 10 — X-D, and the interaction with X-B
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_WAVE_RUNNING_ABOVE_A_VECTORS_ASSERTION_CEILING_IS_REFUSED()
+    {
+        var sampled = new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Sampled, 20, "10") };
+        var map = MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Sampled }));
+
+        // 20 scans at comp=1 against a floor of 9 gives a ceiling of ~2.2x. At comp=1 it runs; at comp=3
+        // the window is 6.7 scans and the assertion is simply never sampled.
+        Assert.True(Gate(Check(new[] { Vector(expectations: sampled) }, map: map, runtimeCompression: 1), "10a time compression").Passed);
+
+        var refused = Gate(Check(new[] { Vector(expectations: sampled) }, map: map, runtimeCompression: 3), "10a time compression");
+
+        Assert.False(refused.Passed);
+        Assert.Contains("USE comp_min, NOT comp_max", refused.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_LATCHED_CEILING_IS_CHECKED_HERE_AND_GATE_5_STRUCTURALLY_CANNOT_SEE_IT()
+    {
+        // Gate 5 exempts LATCHED from the observability floor, correctly — a latch cannot fall in a poll
+        // gap. X-D does not exempt it from the SCAN-PERIOD term: an event compressed below one scan of real
+        // time does not happen long enough to be latched either. So this is a hole gate 5 cannot close.
+        var latched = new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 4, "10") };
+        var report = Check(new[] { Vector(expectations: latched) }, runtimeCompression: 9);
+
+        Assert.True(Gate(report, "5 observability").Passed);
+        Assert.False(Gate(report, "10a time compression").Passed);
+    }
+
+    [Fact]
+    public void The_THREE_CEILINGS_A_SUBMISSION_CANNOT_CARRY_ARE_A_REAL_PASS_AT_COMP_ONE_AND_NOT_CHECKED_ABOVE_IT()
+    {
+        // Both branches, because the interesting one is the pass: at comp=1 a DATA preset is unscaled, an
+        // unscaled LITERAL keeps its proportion and the model is not being asked to run at a factor, so
+        // none of the three CAN bind. That is computed from the submission rather than assumed.
+        var uncompressed = Gate(Check(runtimeCompression: 1), "10b time compression");
+        Assert.Equal(GateStatus.Checked, uncompressed.Status);
+        Assert.True(uncompressed.Passed);
+        Assert.Contains("4.3x", uncompressed.Detail, StringComparison.Ordinal);
+
+        var compressed = Gate(Check(runtimeCompression: 2), "10b time compression");
+        Assert.Equal(GateStatus.NotChecked, compressed.Status);
+        Assert.Contains("OFTEN BINDS FIRST", compressed.Detail, StringComparison.Ordinal);
+        Assert.Contains("An unknown ceiling is not a high one", compressed.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SUPPLYING_THE_BLOCK_LEVEL_CEILINGS_TURNS_10b_INTO_A_REAL_CHECK_and_the_TIMER_can_then_REFUSE()
+    {
+        // The remedy the NOT CHECKED text names has to exist, or the gate is a dead end wearing the costume
+        // of a build list. Supplied, the plan runs — and a 500 ms DATA preset caps compression at 4.3x, so
+        // a wave at 6x is refused by the term X-D says binds first.
+        static BlockCompressionInputs Inputs(double plantMs) =>
+            new(plantMs, 1_000, new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }, 100, 0.01);
+
+        var ok = Gate(Check(Windowed, runtimeCompression: 2, compressionInputs: Inputs(2_000)), "10b time compression");
+        Assert.Equal(GateStatus.Checked, ok.Status);
+        Assert.True(ok.Passed);
+        Assert.Contains("RUNNABLE", ok.Detail, StringComparison.Ordinal);
+
+        var tooFast = Gate(Check(Windowed, runtimeCompression: 6, compressionInputs: Inputs(6_000)), "10b time compression");
+        Assert.Equal(GateStatus.Checked, tooFast.Status);
+        Assert.False(tooFast.Passed);
+        Assert.Contains("Timer", tooFast.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RUNNING_ABOVE_comp_min_BUT_UNDER_THE_CEILING_IS_ADMITTED_AND_SAID_OUT_LOUD()
+    {
+        // X-D: never run at the ceiling merely because the ceiling permits it. Compression is a fidelity
+        // risk, so the margin between comp_min and comp_max is margin, not headroom to spend.
+        var gate = Gate(
+            Check(Windowed, runtimeCompression: 3,
+                compressionInputs: new BlockCompressionInputs(1_100, 1_000, new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }, 100, 0.01)),
+            "10b time compression");
+
+        Assert.True(gate.Passed);
+        Assert.Contains("ABOVE comp_min", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("compression is a fidelity risk", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The schema gate's predicate — a field that existed and nothing checked
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AN_EXPECTATION_WITH_NO_EXPECTED_VALUE_IS_REFUSED_AT_THE_SCHEMA_GATE()
+    {
+        // Contract section 2 lists a predicate and ObservabilityDeclaration carried it with nothing
+        // checking it. Left alone it does not become an error downstream — it becomes a spurious
+        // DISAGREEMENT against the placeholder string, so the author is told the block is wrong when what
+        // is wrong is that nobody said what right looks like.
+        var noPredicate = new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) };
+
+        var gate = Gate(Check(new[] { Vector(expectations: noPredicate) }), "1 schema");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("declares no expected value", gate.Detail, StringComparison.Ordinal);
     }
 }

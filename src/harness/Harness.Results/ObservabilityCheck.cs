@@ -1,3 +1,5 @@
+using Harness.Wire;
+
 namespace Harness.Results;
 
 /// <summary>Why one expectation's observability was or was not supportable. Each names a different fix.</summary>
@@ -243,7 +245,14 @@ public static class ObservabilityCheck
         // 4. THE COMPRESSION RE-CHECK. A window declared in scans is only valid at the comp it was
         //    computed at: a behaviour occupying 20 scans at comp = 1 occupies 2 at comp = 10, crossing
         //    the floor with nobody editing the vector.
-        var effective = expectation.WindowScans * (double)declaredCompression / runtimeCompression;
+        //
+        //    *** THE ARITHMETIC IS ScanBudget's, NOT THIS FILE'S, AND THAT IS THE POINT. *** X-B's
+        //    backstop re-expresses a scan count for exactly the same reason and in exactly the same
+        //    direction, so the two are one division in one place rather than two derivations that agree
+        //    until somebody edits one. TimeCompression.SampledCeiling inverts this same inequality to give
+        //    X-D's sampled ceiling, and a test sweeps the range asserting the boundary is the same number.
+        var window = new ScanBudget(expectation.WindowScans, declaredCompression);
+        var effective = window.At(new RuntimeCompression(runtimeCompression));
 
         if (expectation.WindowScans < floorScans)
         {

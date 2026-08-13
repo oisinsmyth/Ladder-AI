@@ -14,16 +14,18 @@ namespace Harness.Wire;
 /// is proven yet.
 /// </param>
 /// <param name="CompletionValue">The value that register reads when the test is over.</param>
-/// <param name="DeclaredScans">
-/// The vector's declared maximum duration IN SCANS — the unit the observability floor argues in (X-B).
-/// It is an input to the wall-clock backstop, never the backstop itself.
+/// <param name="Duration">
+/// The vector's declared maximum duration IN SCANS, <b>with the compression factor it was declared at</b>
+/// (X-B). It is an input to the wall-clock backstop, never the backstop itself — and it is a
+/// <see cref="ScanBudget"/> rather than an <c>int</c> because a scan count consumed at the wrong <c>comp</c>
+/// produces a spurious TIMED-OUT on a healthy test.
 /// </param>
 public sealed record WireVector(
     ushort[] Values,
     InertDeclaration Inert,
     int CompletionRegister,
     ushort CompletionValue,
-    int DeclaredScans);
+    ScanBudget Duration);
 
 /// <summary>How one vector ended. TIMED-OUT is deliberately not FAILED.</summary>
 public enum SlotOutcome
@@ -81,10 +83,16 @@ public sealed record SlotRunResult(
 public static class SlotRun
 {
     /// <summary>Run one vector against one slot.</summary>
+    /// <param name="compression">
+    /// <b>The factor this run actually uses</b>, which is not necessarily the one the vector's scan counts
+    /// were declared at. Required rather than defaulted: a default of 1 here would silently re-introduce
+    /// exactly the mismatch <see cref="ScanBudget"/> exists to close.
+    /// </param>
     /// <param name="nowMs">Monotonic milliseconds. Injected so the backstop is testable with no clock skew and no waiting.</param>
-    public static SlotRunResult Run(MirrorClient client, int slotIndex, WireVector vector, Func<long>? nowMs = null)
+    public static SlotRunResult Run(MirrorClient client, RuntimeCompression compression, int slotIndex, WireVector vector, Func<long>? nowMs = null)
     {
         ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(compression);
         ArgumentNullException.ThrowIfNull(vector);
 
         var roundTripsBefore = client.RoundTrips;
@@ -103,7 +111,7 @@ public static class SlotRun
 
         // Two round trips per poll round: the control region (scan counter, and the version check rides
         // on it) and the slot's own result region. That is exactly RegisterMap.PollRoundTrips at K=1.
-        var backstop = WireTiming.BackstopMs(vector.DeclaredScans, expectedRoundTrips: 2);
+        var backstop = WireTiming.BackstopMs(vector.Duration, compression, expectedRoundTrips: 2);
         var deadline = nowMs() + backstop;
 
         var polls = 0;

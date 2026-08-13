@@ -9,18 +9,33 @@ namespace Harness.Loop;
 /// The blocks and tag tables being tested. They feed the build stamp — so a change to the block under
 /// test is a different download, and a result carrying the old stamp identifies itself as stale.
 /// </param>
+/// <param name="RuntimeCompression">
+/// <b>The factor this turn actually runs at — ONE value, feeding both the gate and the wave.</b>
+///
+/// <para>It is the same number that decides whether a sampled window still clears the observability floor
+/// and whether X-B's backstop is long enough, and those two must never be able to disagree. Before it was
+/// threaded through, the gate was evaluated at the request's factor and the wave's backstops were computed
+/// as though every vector ran at <c>comp = 1</c>: a submission admitted at comp=10 would then be bounded ten
+/// times too generously, and a submission whose vectors declared comp=10 while the wave ran at 1 would be
+/// bounded ten times too TIGHTLY and report TIMED-OUT on a healthy test.</para>
+/// </param>
 public sealed record LoopRequest(
     IReadOnlyList<SubmissionVector> Vectors,
     AssertionEnumeration Enumeration,
     FidelityDeclaration? Fidelity,
     AgentIdentity BlockAuthor,
-    IReadOnlySet<string>? ComputedConflicts,
+    ConflictGraph? ComputedConflicts,
     MirrorGeometry Geometry,
     IReadOnlyList<SlotRequest> Slots,
     IReadOnlyList<SlotBinding> Bindings,
     CopyLayerNaming Naming,
     IReadOnlyList<HarnessObject> ProgramUnderTest,
-    int RuntimeCompression = 1);
+    RuntimeCompression? RuntimeCompression = null,
+    BlockCompressionInputs? CompressionInputs = null)
+{
+    /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
+    public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
+}
 
 /// <summary>
 /// Build-plan 5.3 — <b>the inner loop: an admitted submission in, a result package per vector out.</b>
@@ -82,9 +97,13 @@ public static class LoopRun
         // which is what lets the observability gate run before anything is spent.
         var mirror = MirrorObservability.FromMinimalCopyLayer(request.Bindings.SelectMany(b => b.ResultSources));
 
+        // *** ONE COMPRESSION VALUE, READ ONCE. *** It goes to the gate below and to the wave at step 7,
+        // and the local is what makes it impossible for the two to be different numbers.
+        var compression = request.Compression;
+
         var gate = SubmissionGate.Check(
             request.Vectors, request.Enumeration, request.Fidelity, request.BlockAuthor,
-            mirror, floor, request.RuntimeCompression, request.ComputedConflicts);
+            mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs);
 
         if (gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {
@@ -146,7 +165,7 @@ public static class LoopRun
             .ToArray();
 
         var roundTripsBefore = client.RoundTrips;
-        var wave = WaveRun.Run(client, tensors, nowMs);
+        var wave = WaveRun.Run(client, compression, tensors, nowMs);
 
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
         var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore);
@@ -198,7 +217,7 @@ public static class LoopRun
                     vector.AssertedBehaviours, vector.CompletionSignal, vector.Author, request.BlockAuthor,
                     ObservabilityCheck.Evaluate(vector.Expectations, vector.Form,
                         MirrorObservability.FromMinimalCopyLayer(binding.ResultSources),
-                        WireTiming.ObservabilityFloorScans(1), vector.CompressionFactor, request.RuntimeCompression)),
+                        WireTiming.ObservabilityFloorScans(1), vector.CompressionFactor, request.Compression.Factor)),
                 request.Enumeration,
                 run,
                 slotIndex,
@@ -302,7 +321,10 @@ public static class LoopRun
             // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
             // loop inventing a convention contract section 2 does not state.
             unchecked((ushort)vector.CompletionValue),
-            vector.MaxDurationScans);
+            // *** THE DURATION CARRIES ITS OWN comp. *** The declaration is in scans at the AUTHOR's
+            // factor, and the wave re-expresses it at the factor it runs — see ScanBudget. The schema gate
+            // has already refused a MaxDuration below 1, so the construction cannot throw here.
+            new ScanBudget(vector.MaxDurationScans, Math.Max(1, vector.CompressionFactor)));
     }
 
     // -------------------------------------------------------------------------------------------------

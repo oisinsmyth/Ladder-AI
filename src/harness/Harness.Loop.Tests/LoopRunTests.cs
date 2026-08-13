@@ -54,19 +54,22 @@ public class LoopRunTests
         SubmissionVector? vector = null,
         AssertionEnumeration? enumeration = null,
         TrivialBlockDefect defect = TrivialBlockDefect.None,
-        IReadOnlySet<string>? conflicts = null,
-        FidelityDeclaration? fidelity = null) =>
+        ConflictGraph? conflicts = null,
+        FidelityDeclaration? fidelity = null,
+        RuntimeCompression? compression = null,
+        BlockCompressionInputs? compressionInputs = null) =>
         new(new[] { vector ?? Vector() },
             enumeration ?? Enumeration(),
             fidelity ?? FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity("agent-a"),
-            conflicts ?? new HashSet<string>(),
+            conflicts ?? ConflictGraph.Empty,
             Geometry(),
             new[] { new SlotRequest("S0", 2, 2) },
             new[] { TrivialBlock.Binding("S0") },
             new CopyLayerNaming(BlockNumber: 900),
             TrivialBlock.Generate(ProgramBase, blockNumber: 901, defect),
-            RuntimeCompression: 1);
+            RuntimeCompression: compression ?? RuntimeCompression.Uncompressed,
+            CompressionInputs: compressionInputs);
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {
@@ -384,6 +387,113 @@ public class LoopRunTests
         Assert.Contains(LoopResult.OwedOnTheDevice, o => o.Contains("F-1's PREMISE", StringComparison.Ordinal));
         Assert.Contains(LoopResult.OwedOnTheDevice, o => o.Contains("BIT ORDER", StringComparison.Ordinal));
         Assert.Contains(LoopResult.OwedOnTheDevice, o => o.Contains("A5", StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 5. X-D against X-B — the loop is where the two could disagree
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The vector's declared <c>comp</c> reaches the WAVE's backstop, not only the gate.</b>
+    ///
+    /// <para>The gate re-checks every window at the factor the run will use; until this was wired, the wave
+    /// computed its backstops from the raw scan counts as though every vector were declared at
+    /// <c>comp = 1</c>. A vector declaring 20 scans at <c>comp = 10</c> would then be bounded ten times too
+    /// tightly and report TIMED-OUT on a healthy test — the one verdict the design built to be
+    /// unambiguous, and the one that is believed.</para>
+    /// </summary>
+    [Fact]
+    public void THE_DECLARED_COMPRESSION_REACHES_THE_BACKSTOP_AND_NOT_ONLY_THE_GATE()
+    {
+        static string TimeoutDetail(int declaredComp)
+        {
+            // A limit far enough away that nothing completes before the backstop, and an injected clock so
+            // no test waits. Both runs are otherwise identical.
+            var vector = Vector(step: 1, limit: 30_000) with { CompressionFactor = declaredComp };
+            var elapsed = 0L;
+
+            var result = LoopRun.Execute(Request(vector: vector), new SimulatedGateway(Geometry()), () => elapsed += 400);
+
+            Assert.Equal(LoopOutcome.Ran, result.Outcome);
+            var run = result.Wave!.For(0).Results[0];
+            Assert.Equal(SlotOutcome.TimedOut, run.Outcome);
+            return run.Detail;
+        }
+
+        var atOne = TimeoutDetail(1);
+        var atThree = TimeoutDetail(3);
+
+        // 20 scans declared at comp=3, run at comp=1, is SIXTY scans of real time — and the backstop says so.
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 3)} ms", atOne, StringComparison.Ordinal);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 3), RuntimeCompression.Uncompressed, 3)} ms", atThree, StringComparison.Ordinal);
+        Assert.NotEqual(atOne, atThree);
+    }
+
+    /// <summary>
+    /// <b>The wave's own compression — the seam where the gate and the runner could hold different
+    /// numbers.</b>
+    ///
+    /// <para>Until a compressed run was reachable at all, passing <c>Uncompressed</c> to the wave instead
+    /// of the request's factor was INDISTINGUISHABLE from passing it correctly: every admissible run was at
+    /// comp=1, so the argument could have been a literal and no test would have known. That is the class of
+    /// defect this component has found seven times, and it is closed by making the compressed path
+    /// reachable rather than by asserting harder about the uncompressed one.</para>
+    /// </summary>
+    [Fact]
+    public void THE_RUNTIME_COMPRESSION_REACHES_THE_WAVE_and_a_literal_ONE_there_would_be_INVISIBLE_without_this()
+    {
+        static string TimeoutDetail(RuntimeCompression compression)
+        {
+            var elapsed = 0L;
+            var request = Request(
+                vector: Vector(step: 1, limit: 30_000),
+                compression: compression,
+                compressionInputs: new BlockCompressionInputs(
+                    PlantMs: 2_000, BudgetMs: 1_000,
+                    Presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) },
+                    ModelCompStable: 100, NegligibleFraction: 0.01));
+
+            var result = LoopRun.Execute(request, new SimulatedGateway(Geometry()), () => elapsed += 400);
+
+            Assert.Equal(LoopOutcome.Ran, result.Outcome);
+            return result.Wave!.For(0).Results[0].Detail;
+        }
+
+        // Same vector, same declaration of 20 scans at comp=1: run at comp=2 the test really does take ten
+        // scans, and the bound follows it.
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 3)} ms",
+            TimeoutDetail(RuntimeCompression.Uncompressed), StringComparison.Ordinal);
+
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), new RuntimeCompression(2), 3)} ms",
+            TimeoutDetail(new RuntimeCompression(2)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_compressed_run_WITH_the_block_level_ceilings_supplied_is_admissible_and_reaches_the_device()
+    {
+        var (result, gateway) = Run(Request(
+            compression: new RuntimeCompression(2),
+            compressionInputs: new BlockCompressionInputs(
+                PlantMs: 2_000, BudgetMs: 1_000,
+                Presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) },
+                ModelCompStable: 100, NegligibleFraction: 0.01)));
+
+        Assert.Equal(LoopOutcome.Ran, result.Outcome);
+        Assert.Equal(1, gateway.Deployments);
+    }
+
+    [Fact]
+    public void A_COMPRESSED_RUN_IS_REFUSED_BEFORE_THE_DEVICE_because_three_of_X_Ds_ceilings_are_unstated()
+    {
+        // Fail-closed, and it is a real consequence rather than a formality: nothing may run compressed
+        // until a submission can state the block's presets and the model's comp_stable. The refusal is at
+        // the GATE, so nothing is deployed and no wave is spent.
+        var (result, gateway) = Run(Request(compression: new RuntimeCompression(4)));
+
+        Assert.Equal(LoopOutcome.NotAdmissible, result.Outcome);
+        Assert.Contains(result.Gate!.NotChecked, g => g.Gate.StartsWith("10b time compression", StringComparison.Ordinal));
+        Assert.Equal(0, gateway.Deployments);
+        Assert.Equal(0, gateway.Opens);
     }
 
     [Fact]

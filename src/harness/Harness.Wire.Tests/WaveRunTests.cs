@@ -41,7 +41,75 @@ public class WaveRunTests
         Inert: new InertDeclaration(new Dictionary<int, ushort> { [0] = 0, [1] = 0 }),
         CompletionRegister: 1,
         CompletionValue: 1,
-        DeclaredScans: 1);
+        Duration: new ScanBudget(1, 1));
+
+    /// <summary>
+    /// <b>The wave's compression reaches the backstop, and the two directions are the two failures.</b>
+    ///
+    /// <para>A duration is declared in scans AT THE AUTHOR'S <c>comp</c>. Run faster, the test really does
+    /// take fewer scans and the bound should shrink; run slower, it takes more and a bound computed on the
+    /// raw figure fires on a healthy test. This is the case that has no test until somebody writes one:
+    /// every other test here runs uncompressed, where the declared and runtime factors are both 1 and the
+    /// re-expression is indistinguishable from ignoring it.</para>
+    /// </summary>
+    [Fact]
+    public void THE_WAVES_COMPRESSION_REACHES_THE_BACKSTOP_and_dropping_it_would_bound_the_wrong_duration()
+    {
+        var declaredAtOne = new ScanBudget(20, 1);
+
+        var atOne = RunToTimeout(declaredAtOne, RuntimeCompression.Uncompressed);
+        var atTwo = RunToTimeout(declaredAtOne, new RuntimeCompression(2));
+
+        // Same declaration, different wave: the scan term halves and nothing else moves.
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, RuntimeCompression.Uncompressed, 3)} ms", atOne, StringComparison.Ordinal);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, new RuntimeCompression(2), 3)} ms", atTwo, StringComparison.Ordinal);
+        Assert.NotEqual(atOne, atTwo);
+
+        // And the other direction, which is the one that reports TIMED-OUT on a healthy test: a duration
+        // declared at comp=10 needs TEN TIMES the scans when the wave runs uncompressed.
+        var declaredAtTen = new ScanBudget(20, 10);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, 3)} ms",
+            RunToTimeout(declaredAtTen, RuntimeCompression.Uncompressed), StringComparison.Ordinal);
+
+        Assert.True(WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, 3)
+                  > WireTiming.BackstopMs(declaredAtTen, new RuntimeCompression(10), 3));
+    }
+
+    [Fact]
+    public void The_index_backstop_takes_the_longest_duration_AFTER_re_expression_not_the_biggest_INTEGER()
+    {
+        // Two vectors in one index, declared at different factors: 5 scans at comp=10 is fifty plant scans
+        // and 20 at comp=1 is twenty. Comparing the bare integers picks the wrong one and under-sizes the
+        // bound by more than half.
+        var (client, wire, _) = Wired(slots: 2);
+        wire.OnTransaction = _ => { };
+
+        var elapsed = 0L;
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed, new[]
+        {
+            new SlotTensor(0, new[] { Vector() with { Duration = new ScanBudget(20, 1) } }),
+            new SlotTensor(1, new[] { Vector() with { Duration = new ScanBudget(5, 10) } }),
+        }, () => elapsed += 250);
+
+        var expected = WireTiming.BackstopMs(new ScanBudget(5, 10), RuntimeCompression.Uncompressed, 4);
+
+        Assert.Contains($"backstop of {expected} ms", wave.For(0).Results[0].Detail, StringComparison.Ordinal);
+    }
+
+    private static string RunToTimeout(ScanBudget duration, RuntimeCompression compression)
+    {
+        var (client, wire, _) = Wired(slots: 1);
+        wire.OnTransaction = _ => { };  // nothing ever completes
+
+        var elapsed = 0L;
+        var wave = WaveRun.Run(client, compression,
+            new[] { new SlotTensor(0, new[] { Vector() with { Duration = duration } }) },
+            () => elapsed += 250);
+
+        var run = wave.For(0).Results[0];
+        Assert.Equal(SlotOutcome.TimedOut, run.Outcome);
+        return run.Detail;
+    }
 
     private static SlotTensor Tensor(int slot, int length) =>
         new(slot, Enumerable.Range(0, length).Select(_ => Vector()).ToArray());
@@ -55,7 +123,7 @@ public class WaveRunTests
     {
         var (client, _, _) = Wired();
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 4), Tensor(1, 2) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 4), Tensor(1, 2) });
 
         Assert.Equal(4, wave.Length);
         Assert.Equal(4, wave.For(0).Results.Count);
@@ -67,7 +135,7 @@ public class WaveRunTests
     {
         var (client, wire, map) = Wired();
 
-        WaveRun.Run(client, new[] { Tensor(0, 2), Tensor(1, 1) });
+        WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 2), Tensor(1, 1) });
 
         // At the last index only slot 0 was commanded. No separate encoding for the null slot exists.
         var commits = wire.Log.Where(t => t.IsWrite && t.StartRegister == map.StartBools.Register).ToArray();
@@ -84,7 +152,7 @@ public class WaveRunTests
         var (client, _, _) = Wired();
         var order = new List<int>();
 
-        WaveRun.Run(client, new[] { Tensor(0, 3), Tensor(1, 1) }, onSlotComplete: d => order.Add(d.SlotIndex));
+        WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 3), Tensor(1, 1) }, onSlotComplete: d => order.Add(d.SlotIndex));
 
         Assert.Equal(new[] { 1, 0 }, order);
     }
@@ -99,7 +167,7 @@ public class WaveRunTests
         // issued for a set of slots that are ALL finished.
         var (client, wire, map) = Wired(3);
 
-        WaveRun.Run(client, new[] { Tensor(0, 3), Tensor(1, 1), Tensor(2, 1) });
+        WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 3), Tensor(1, 1), Tensor(2, 1) });
 
         var reads = wire.Log
             .Where(t => !t.IsWrite && t.StartRegister >= map.ResultBlock.Register && t.StartRegister < map.ResultBlock.End)
@@ -130,8 +198,8 @@ public class WaveRunTests
 
         var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
 
-        var sizedWave = WaveRun.Run(sized.Client, tensors);
-        var paddedWave = WaveRun.Run(padded.Client, tensors);
+        var sizedWave = WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,tensors);
+        var paddedWave = WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,tensors);
 
         Assert.Equal(6, sized.Map.SlotsPerRead);
         Assert.Equal(1, padded.Map.SlotsPerRead);
@@ -149,8 +217,8 @@ public class WaveRunTests
         var padded = Wired(slots: 6, resultWidth: 123);
         var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
 
-        WaveRun.Run(sized.Client, tensors);
-        WaveRun.Run(padded.Client, tensors);
+        WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,tensors);
+        WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,tensors);
 
         Assert.Equal(
             sized.Wire.Log.Count(t => t.IsWrite),
@@ -180,7 +248,7 @@ public class WaveRunTests
     {
         var (client, _, _) = Wired();
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 2), Tensor(1, 2) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 2), Tensor(1, 2) });
 
         Assert.True(wave.Log.Agrees);
         Assert.Equal(2, wave.Log.Indices.Count);
@@ -196,7 +264,7 @@ public class WaveRunTests
         var (client, wire, _) = Wired();
         wire.SuppressEchoFor.Add(1);
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 1), Tensor(1, 1) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 1), Tensor(1, 1) });
 
         Assert.False(wave.Log.Agrees);
         Assert.Equal(CoRunningOutcome.CommandedButDidNotRun, wave.Log.Indices[0].Outcome);
@@ -209,7 +277,7 @@ public class WaveRunTests
         var (client, wire, _) = Wired();
         wire.ForceEchoFor.Add(1);
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 1) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 1) });
 
         Assert.False(wave.Log.Agrees);
         Assert.Equal(CoRunningOutcome.RanButWasNotCommanded, wave.Log.Indices[0].Outcome);
@@ -222,7 +290,7 @@ public class WaveRunTests
         var (client, wire, _) = Wired(3);
         wire.SuppressEchoFor.Add(2);
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 1), Tensor(1, 1), Tensor(2, 1) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 1), Tensor(1, 1), Tensor(2, 1) });
 
         // Slot 2 was PLANNED alongside slots 0 and 1 and did not run. A log built from the plan would
         // name it; this one does not, which is the whole of X-E.
@@ -239,7 +307,7 @@ public class WaveRunTests
         // index later.
         var (client, _, _) = Wired();
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 2), Tensor(1, 1) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 2), Tensor(1, 1) });
 
         Assert.Equal(new[] { 0, 1 }, wave.Log.Indices[0].Executed);
         Assert.Equal(new[] { 0 }, wave.Log.Indices[1].Executed);
@@ -261,7 +329,7 @@ public class WaveRunTests
     {
         var (client, _, _) = Wired();
 
-        Assert.Throws<ArgumentException>(() => WaveRun.Run(client, Array.Empty<SlotTensor>()));
+        Assert.Throws<ArgumentException>(() => WaveRun.Run(client, RuntimeCompression.Uncompressed,Array.Empty<SlotTensor>()));
     }
 
     [Fact]
@@ -272,7 +340,7 @@ public class WaveRunTests
         var (client, _, _) = Wired();
 
         Assert.Throws<ArgumentException>(() =>
-            WaveRun.Run(client, new[] { Tensor(0, 1), new SlotTensor(1, Array.Empty<WireVector>()) }));
+            WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 1), new SlotTensor(1, Array.Empty<WireVector>()) }));
     }
 
     [Fact]
@@ -280,7 +348,7 @@ public class WaveRunTests
     {
         var (client, _, _) = Wired();
 
-        Assert.Throws<ArgumentException>(() => WaveRun.Run(client, new[] { Tensor(0, 1), Tensor(0, 1) }));
+        Assert.Throws<ArgumentException>(() => WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 1), Tensor(0, 1) }));
     }
 
     [Fact]
@@ -300,7 +368,7 @@ public class WaveRunTests
         var (client, wire, _) = Wired();
         wire.ScansPerTransaction = 0;
 
-        var wave = WaveRun.Run(client, new[] { Tensor(0, 3), Tensor(1, 3) });
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,new[] { Tensor(0, 3), Tensor(1, 3) });
 
         Assert.Equal(2, wave.Distributions.Count);
         Assert.All(wave.Distributions, d => Assert.Equal(SlotOutcome.NotInert, d.Results.Single().Outcome));

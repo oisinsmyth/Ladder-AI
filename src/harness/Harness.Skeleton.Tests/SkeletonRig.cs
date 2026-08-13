@@ -132,7 +132,7 @@ internal sealed class SkeletonRig
         }),
         CompletionRegister: TrivialBlock.DoneRegister,
         CompletionValue: 1,
-        DeclaredScans: TrivialBlockModel.Predict(step, limit).Scans);
+        Duration: new ScanBudget(TrivialBlockModel.Predict(step, limit).Scans, 1));
 
     /// <summary>One peak vector, with its inert declaration.</summary>
     public static WireVector PeakVector(int level, int trip) => new(
@@ -144,16 +144,16 @@ internal sealed class SkeletonRig
         }),
         CompletionRegister: PeakBlock.AlarmRegister,
         CompletionValue: 1,
-        DeclaredScans: PeakBlockModel.Predict(level, trip).Scans);
+        Duration: new ScanBudget(PeakBlockModel.Predict(level, trip).Scans, 1));
 
     /// <summary>Run one vector against slot 0 of a one-slot rig and judge it against the ramp model.</summary>
     public (SlotRunResult Run, TrivialBlockVerdict Verdict) RunAndJudge(int step, int limit)
     {
-        var run = SlotRun.Run(Client, 0, RampVector(step, limit));
+        var run = SlotRun.Run(Client, RuntimeCompression.Uncompressed, 0, RampVector(step, limit));
         return (run, TrivialBlockModel.Judge(step, limit, run.Results));
     }
 
     /// <summary>Run a wave over the given tensors on this rig.</summary>
     public WaveResult RunWave(IReadOnlyList<SlotTensor> tensors, Action<SlotDistribution>? onSlotComplete = null) =>
-        WaveRun.Run(Client, tensors, onSlotComplete: onSlotComplete);
+        WaveRun.Run(Client, RuntimeCompression.Uncompressed, tensors, onSlotComplete: onSlotComplete);
 }

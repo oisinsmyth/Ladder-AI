@@ -33,8 +33,23 @@ public sealed class SubmissionDocument
     /// <b>Absent means the graph was not available</b>, and the blacklist gate then reports NOT CHECKED.
     /// An empty ARRAY is a different statement — "the graph ran and found no conflicts" — and is
     /// honoured as such.
+    ///
+    /// <para><b>A bare name records no PROVENANCE</b>, so a non-empty list here makes X-G's multi-writer
+    /// gate NOT CHECKED. Supply <see cref="ConflictEdges"/> instead to say WHY two blocks conflict; the two
+    /// are combined, so this field remains usable for the edges whose provenance genuinely is unknown.</para>
     /// </summary>
     public List<string>? ComputedConflicts { get; set; }
+
+    /// <summary>
+    /// Conflict edges WITH X-G's provenance: why the two blocks conflict, on which signal, and whether that
+    /// signal is part of the deliverable.
+    ///
+    /// <para><b>This is what turns "0 multi-writer findings" from a sentence into a fact.</b> Without
+    /// provenance the report is empty for a reason that has nothing to do with multi-writers, and X-G's
+    /// whole point is that the packer separating two writers of one deliverable coil is right for testing
+    /// and wrong to do silently.</para>
+    /// </summary>
+    public List<ConflictEdgeDocument>? ConflictEdges { get; set; }
 
     public List<VectorDocument>? Vectors { get; set; }
 
@@ -134,6 +149,31 @@ public sealed class ExpectationDocument
     public SignalNature Nature { get; set; }
     public InstrumentationMode Mode { get; set; }
     public int WindowScans { get; set; }
+
+    /// <summary>
+    /// The value this expectation asserts — contract §2's <c>predicate</c>.
+    ///
+    /// <para><b>The field existed on the checked type and there was no way to supply one</b>, which is the
+    /// same shape as every other hole this component has found: the case a field exists for gets tested,
+    /// and the case where it was ignored does not. Absent is a REFUSAL at the schema gate, never a
+    /// default — an expectation with nothing to compare against cannot fail.</para>
+    /// </summary>
+    public string? Expected { get; set; }
+}
+
+/// <summary>One conflict edge with X-G's provenance. Every field is required; the enums' zero values are unusable.</summary>
+public sealed class ConflictEdgeDocument
+{
+    public string? BlockA { get; set; }
+    public string? BlockB { get; set; }
+
+    /// <summary>Why they conflict. <b>Absent parses as <c>Unstated</c></b>, which makes the X-G gate NOT CHECKED.</summary>
+    public ConflictProvenance Provenance { get; set; } = ConflictProvenance.Unstated;
+
+    public string? Signal { get; set; }
+
+    /// <summary>Whether the signal ships. <b>Absent parses as <c>Unstated</c></b>, which makes the X-G gate NOT CHECKED.</summary>
+    public SignalClass Class { get; set; } = SignalClass.Unstated;
 }
 
 public sealed class BlacklistDocument

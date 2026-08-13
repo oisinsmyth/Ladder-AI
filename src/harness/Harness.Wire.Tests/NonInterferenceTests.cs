@@ -16,7 +16,7 @@ public class NonInterferenceTests
         Enumerable.Range(0, length).Select(_ => new WireVector(
             Array.Empty<ushort>(),
             new InertDeclaration(new Dictionary<int, ushort>()),
-            0, 1, 1)).ToArray());
+            0, 1, new ScanBudget(1, 1))).ToArray());
 
     private static SlotRunResult Result(SlotOutcome outcome, params ushort[] results) =>
         new(outcome, results, 0, 0, 1, 1,
