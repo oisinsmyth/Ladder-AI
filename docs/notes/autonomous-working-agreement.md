@@ -133,6 +133,20 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** A PLAUSIBLE MECHANISM INVENTED TO EXPLAIN A GREEN THAT WAS GREEN BECAUSE NOTHING WAS
+  EXAMINED. *** This is *empty is not clean* appearing in the **explanations** rather than in the
+  checks — and it is how a check keeps its blind spot, because once a green has a reason nobody
+  looks again. Three instances found on 2026-08-13, all pre-existing:
+    • **FI-52** — "a device compile does not clear the inconsistent flag", read as a TIA quirk.
+      It did not clear it **because it never looked at the program.**
+    • **FI-62** — a missed UDT attributed to *"nothing in that corpus instantiated the type"*.
+      Plausible, and not the reason: **that run's device compile was hardware-only and would not
+      have caught the type however many blocks instantiated it.**
+    • **`stage-S1.md`** — *"confirms conclusively"* drawn from a device compile. The observation
+      stands; the inference does not, and the word was withdrawn.
+    ➜ **When you explain a green, ask what the check actually examined before asking why it
+      passed.** A reason attached to an unexamined pass is worse than no reason — it closes the
+      question.
 - *** A GUARD THAT WAS WRITTEN, TESTED AROUND, AND NEVER ACTUALLY EXECUTED. *** This is the most
   reliable failure mode this project has, and on **2026-08-13 it happened three times in one day**:
   `compile`'s exit-code fix sat in source while the Release binary every skill invokes predated it;
