@@ -1612,6 +1612,56 @@ CAP. *** At S=10 scans, the row where the cap bit hardest and where the p99 corr
     width, a 125-register read would have cost tail latency and the saving would have been partly
     repaid **in the exact currency the budgets are denominated in.**
 
+### ✅ THE CONFIRM LOOP IS ARMED AND FENCED — 2026-08-13 (`54b032a`), NOT YET RUN LIVE
+
+Adopted as ADR-0011 and armed today, on the strength of the blind-round-trip table: *** IT IS THE
+ONLY PROOF IN THE TOOLCHAIN WITH AN INDEPENDENT AUTHORITY IN ITS LOOP, AND IT WAS VERIFIED LIVE TO
+CATCH THE `ConstantType` DEFECT THE BYTE-IDENTICAL ROUND TRIP COULD NOT SEE. ***
+
+`-Arm` refuses any project not in `tools/confirm-roundtrip.allowlist`; entries are absolute or
+`repo:`-prefixed, so the committed file is **portable across worktrees** rather than correct on one
+machine. Refusal is **exit 4**, and the fence is the **first thing after the banner** — before the
+binary checks, before any directory is created, before stage 1. `-IsScratchProject` is refused **by
+name** (the `download-plan` shape), so a recorded invocation carrying an override **fails loudly
+rather than silently meaning something else**.
+
+  ➜ *** ALLOWLIST, NEVER DENYLIST — AND THE REASON IS A COUNT: THIS MACHINE CARRIES ROUGHLY NINETEEN
+    REAL SITE `.ap20` PROJECTS IN FOLDERS BESIDE THE SCRATCH ONES. *** A denylist would have to be
+    complete, and would **silently stop being complete** the next time a job folder arrived.
+
+#### How refusal-before-Portal was PROVED rather than approximated
+
+The script's **only** route to Portal is `Start-Process $OpennessCliPath`. The tests hand it a **stub
+`openness-cli`** that appends to a sentinel file, then assert the sentinel **does not exist** — a
+direct observation that the process was never launched. *** AND THE INSTRUMENT IS CONTROLLED: one
+permitted case asserts the sentinel IS written, so its absence elsewhere means something rather than
+possibly meaning the sentinel never worked. *** Disabling the fence turns **9 of 11 red**, six of them
+reporting *"openness-cli WAS launched — Portal would have been contacted."*
+
+  ➜ *** THE ASSERTIONS HAD TO BE REORDERED SO THE LOAD-BEARING CLAIM EVALUATES FIRST. *** Before that,
+    the **exit-code** assertion failed first and *"openness-cli WAS launched"* was never reached —
+    **a test that would have gone red for the wrong reason is a test that would have been debugged in
+    the wrong place.**
+
+> #### 🔍 A GUARD THAT EXPLAINS ITSELF WRONGLY
+>
+> `-Project GenProject1` from the repo root resolves to the project **FOLDER**, which exists — so an
+> existence check alone passes. The fence **still refused**, fail-closed — *** BUT PRINTED THE WRONG
+> REASON. *** And *a guard that explains itself wrongly is how someone concludes it is broken and goes
+> looking for a way around it.* Now requires a leaf file with a `.apNN` extension and **names which of
+> three cases it hit**. Belongs beside *"execute the guard's own advice"*.
+
+**Four things ADR-0011 left under-specified**, each decided and recorded, two of them the owner's to
+confirm: the fence guards **`-Arm` only** (a dry run writes nothing and stays available); *** A BARE
+PROJECT NAME IS NOW UNUSABLE WITH `-Arm` — a breaking change that FALLS OUT OF the ruling rather than
+being stated by it, and the script's own examples used one ***; **junctions are refused rather than
+half-resolved** (PS 5.1 cannot resolve them), so a scratch project reached through one is refused
+until its real path is allowlisted; and the directory case above.
+
+**All three `tools/` files verified ASCII-only and CRLF byte-wise**, both `.ps1` tokenise clean, and
+the reason sits in the file headers so nobody "improves" the punctuation later. **Not run against
+Portal** — the rig lane holds it; the live run is scheduled separately.
+
 ## PHASE 2 — THE WALKING SKELETON
 
 **Cost: the first real chunk. Assumptions retired: A4. First code intended to survive.**
