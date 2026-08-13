@@ -347,10 +347,25 @@ phase 2 with the copy-layer generator.
 > (deferred until real slot widths exist) · the mid-transfer half-loaded case (**no configuration is
 > raised there to hang a throw on**).
 >
-> **The rules this project keeps re-earning**, all in `autonomous-working-agreement.md`: *a guard
-> written, tested around, and never executed* · *a proof is only as strong as the most independent
-> authority in its loop* · *a plausible mechanism invented to explain an unexamined green* · *the case
-> a guard exists for gets tested; the case where it did not run does not.*
+> **WHAT A CLEAN RIG SESSION IS WORTH, BOUNDED HONESTLY:** it takes `OwedOnTheDevice` from **8 to 4**.
+> *** ANYTHING CLAIMING MORE HAS COUNTED SOMETHING TWICE. *** It cannot discharge **F-1's wide-read
+> premise**, **A5**, **the echo latch's necessity**, or **scan-accurate settling** — none of which the
+> deployment touches. Say that before the session, not after somebody reads a green as more than it is.
+>
+> **The rules this project keeps re-earning**, all in `autonomous-working-agreement.md` — **twelve were
+> added on 2026-08-13 alone**, every one from a measured failure rather than a worry. The load-bearing
+> few: *a proof is only as strong as the most independent authority in its loop* · *a guard written,
+> tested around, and never executed* — **and its third shape, a guard nothing can REACH because the
+> thing it checks never misbehaves** · *the case a guard exists for gets tested; the case where it did
+> not run does not* · *a plausible mechanism invented to explain an unexamined green* · ***our own
+> output became the standard it was being judged against*** · *a commit message is a claim, not
+> evidence — including ours* · *an over-firing gate decays into a warning* · *a declaration is a
+> transferred responsibility, not a verification.*
+>
+> **And three about the process rather than the code**, all earned the hard way today: *a spec is
+> validated by someone USING it, not reading it* · *a rule quoted from memory into a brief is a rule
+> half-transmitted* · *an agent's output file says nothing about whether it is alive* — the last two
+> being the orchestrator's own errors, filed under the same standard as everyone else's.
 
 ---
 
