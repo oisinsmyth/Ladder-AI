@@ -1,10 +1,12 @@
 # ADR-0011 — Arm the confirm loop, and fence it to the scratch project
 
-- **Status:** **ACCEPTED — ruled 2026-08-13. NOT YET IMPLEMENTED.** The ruling is recorded here; the
-  enacting change to `tools/confirm-roundtrip.ps1` is **tooling, not docs**, and is deliberately not
-  made by this ADR. Nothing in the script has been touched. Update this status line when the fence
-  lands, and say which mechanism was chosen.
-- **Date:** 2026-08-13.
+- **Status:** **ACCEPTED AND IMPLEMENTED — 2026-08-13 (`54b032a`).** `tools/confirm-roundtrip.ps1` is
+  armed and fenced. The mechanism is recorded under *The fence as built*; four things this ADR left
+  under-specified were decided during implementation and are carried under *What the implementation
+  had to decide* — **two of them are marked for the owner to confirm**, and one place where the
+  implementation **narrowed** this ADR's literal wording is called out explicitly rather than
+  absorbed. The script itself is another lane's file and is not edited from here.
+- **Date:** ruled 2026-08-13; implemented 2026-08-13.
 - **Relates to:** **ADR-0010** (no IR the AI cannot change — this is the gate that decision hands
   capability widening to) · **ADR-0009** (test-rig write access — same shape of ruling: *the gate is
   the TARGET*) · CLAUDE.md **hard rule 5** (the real project is human-gated) · **hard rule 4** (the
@@ -82,6 +84,82 @@ well known to this project:
 **Where the allowlist lives is the implementer's call**, provided it satisfies 1–6 and is visible in
 the repo rather than in someone's shell profile.
 
+## The fence as built — 2026-08-13, `54b032a`
+
+| | |
+|---|---|
+| **Allowlist file** | `tools/confirm-roundtrip.allowlist` — in the repo, not in a shell profile |
+| **Entry forms** | absolute paths, **or `repo:`-prefixed** |
+| **Scope** | **`-Arm` only** — see decision 1 below |
+| **Refusal** | **exit 4** |
+| **Position** | first thing after the banner — **before the binary checks, before any directory is created, before stage 1** |
+| **Override** | `-IsScratchProject` is **refused by name** (the `download-plan` shape) |
+
+**`repo:`-prefixed entries are the detail worth keeping.** A committed allowlist of absolute paths is
+correct on exactly one machine and in exactly one checkout; `repo:` makes the file **portable across
+worktrees** instead of silently wrong in the second one. Given that agents on this project routinely
+work in `.claude/worktrees/`, an allowlist that only resolved in the main checkout would have failed
+closed everywhere else — safe, but useless enough that someone would have edited the fence.
+
+### Why an allowlist, restated as the reason rather than the preference
+
+Requirement 1 gave two abstract arguments. The implementation supplied the concrete one, and it is
+much stronger:
+
+> *** THIS MACHINE CARRIES ROUGHLY NINETEEN REAL SITE `.ap20` PROJECTS IN FOLDERS BESIDE THE
+> SCRATCH ONES. ***
+
+A denylist here is not merely weaker — it is **indefensible**. It would have to be complete, and it
+would stop being complete **the next time a job folder arrived**, silently, with no event to notice.
+
+### How requirement 3 was proved, which is stronger than the usual
+
+Not "we read the code and the check looks early". The script's **only** route to Portal is
+`Start-Process $OpennessCliPath`; the tests hand it a **stub that appends to a sentinel file** and
+then assert the sentinel **does not exist** — a direct observation that no process was ever launched.
+
+*** AND THE INSTRUMENT IS CONTROLLED, WHICH IS THE HALF THAT MAKES IT EVIDENCE: one permitted case
+asserts the sentinel IS written. *** Without that, "the sentinel is absent" would also be what a
+broken stub, a wrong path or a test that never ran looks like — the same *empty is not clean* trap
+this project keeps meeting. Disabling the fence turns **9 of 11** red.
+
+## What the implementation had to decide — four things this ADR left under-specified
+
+Recorded with the decision taken, because an ADR that does not say what its gaps were is an ADR
+someone will re-open by accident.
+
+**1. Scope: the whole script, or `-Arm` only? — CHOSEN: `-Arm` ONLY. *** OWNER'S TO CONFIRM. ***
+*** THIS NARROWS THIS ADR'S LITERAL WORDING, AND THAT IS FLAGGED RATHER THAN ABSORBED. *** The
+Decision section says the script "must REFUSE any project path that is not the scratch project",
+unqualified — but every argument offered for it is about the **mutating** half. A dry run writes
+nothing, contacts nothing and is exactly the reconnaissance someone needs before arming, so fencing
+it buys no safety and removes a use. **Requirement 3 is satisfied *more* strongly this way**, not
+less: the unfenced path is the one that provably cannot reach Portal at all. If the owner intended
+the broader reading it is a one-line change.
+
+**2. *** A BARE PROJECT NAME IS NOW UNUSABLE WITH `-Arm` — A BREAKING CHANGE THAT FALLS OUT OF THE
+RULING RATHER THAN BEING STATED BY IT. *** Requirements 4 and 5 force it: a bare name cannot be
+resolved to a canonical path with confidence, so it cannot be matched against an allowlist. But this
+ADR never says the armed interface changes, and **the script's own examples used a bare name**.
+Recorded here as a consequence of the ruling, so that whoever meets the refusal finds the reason in
+the decision record rather than concluding the script broke.
+
+**3. Junctions: requirement 5 names them, and PowerShell 5.1 cannot resolve them. — CHOSEN: DETECT
+AND REFUSE.** *** OWNER'S TO CONFIRM. *** Requirement 5 assumed resolution was available; on this
+toolchain it is not. Half-resolving would produce a path that is *sometimes* canonical, which is the
+worst of the three options — a fence that is correct except when it isn't. Refusing is strictly safe
+and preserves the requirement's *intent* (a junction cannot walk around the fence) while abandoning
+its *mechanism* (comparing a resolved path). **Consequence, stated because it is a real cost: a
+scratch project reached through a junction is refused until its real path is allowlisted.**
+
+**4. A bare name can resolve to a DIRECTORY, and the fence explained itself wrongly.** `-Project
+GenProject1` hits the project **folder**, which exists — so an existence check alone passes. *** THE
+FENCE REFUSED ANYWAY, WHICH IS FAIL-CLOSED WORKING CORRECTLY, BUT IT PRINTED THE WRONG REASON. ***
+That is worth more than a cosmetic note: *** A GUARD THAT EXPLAINS ITSELF WRONGLY IS HOW SOMEONE
+CONCLUDES IT IS BROKEN AND GOES LOOKING FOR A WAY AROUND IT *** — the failure mode is social, not
+technical, and it ends with the fence disabled by someone who thought they were fixing a bug. Now
+requires a **leaf file with a `.apNN` extension** and **names which of three cases it hit**.
+
 ## Sequencing — one thing must land first
 
 ***THE NORMALIZER / `MemoryLayout` FIX LANDS BEFORE THE LOOP IS RELIED ON.*** Building or trusting the
@@ -121,6 +199,40 @@ with extra steps, and an unattended run either hangs on it or is given a flag to
   a live-job verification, say — that is an owner decision that adds a path to the allowlist, with the
   restore point named. It is not a flag, and it is not this ADR being relaxed.
 
+### What the implementation confirmed, extended, and narrowed — 2026-08-13
+
+*** ONE PLACE WAS NARROWED AND ONE MECHANISM WAS SUBSTITUTED; EVERYTHING ELSE WAS CONFIRMED OR
+STRENGTHENED. *** Recorded in these three buckets so a later reader can tell which parts of this ADR
+are still load-bearing as written.
+
+**Narrowed (needs the owner):**
+- **Scope.** The Decision says "any project path", unqualified; the fence applies to **`-Arm` only**
+  (decision 1). Consistent with every *reason* this ADR gives, inconsistent with its *words*.
+
+**Mechanism substituted, effect preserved:**
+- **Requirement 5** asked for a comparison of the **resolved canonical path** and named junctions as
+  something that must not walk around the fence. PowerShell 5.1 cannot resolve a junction, so the
+  build **detects and refuses** one instead (decision 3). The requirement's intent holds — a junction
+  cannot get past — but its stated mechanism does not exist on this toolchain, and a *legitimate*
+  scratch project behind a junction is now refused. **This ADR's requirement 5 should be read as
+  "must not walk around the fence", not as "must be resolved".**
+
+**Confirmed and strengthened:**
+- **Requirement 1** (allowlist) — the abstract argument was right and the concrete one is far
+  stronger: ~19 real production `.ap20` projects sit beside the scratch ones on this machine.
+- **Requirement 2** (exit code, not a warning) — exit **4**.
+- **Requirement 3** (refuse before Portal) — proved by **direct observation** that no process was
+  launched, with a controlled positive case, rather than by inspection.
+- **Requirement 4** (unresolvable/empty/ambiguous is a refusal) — held, and decision 4 found a case
+  this ADR had not imagined: a bare name resolving to a **directory**, where fail-closed worked but
+  the *explanation* was wrong.
+- **Requirement 6** (no override flag) — went further than asked: `-IsScratchProject` is refused
+  **by name**, so a recorded invocation carrying an override fails loudly rather than silently
+  meaning something else.
+
+**Nothing in the implementation contradicted this ADR's intent.** The two deviations above are a
+narrowing and a substitution, both argued, both recorded, and one of each is the owner's to confirm.
+
 ## Implementation note for whoever edits the script
 
 ***`.ps1` FILES IN THIS REPO ARE ASCII-ONLY AND CRLF.*** Measured 2026-08-12: PowerShell 5.1 reads a
@@ -129,3 +241,9 @@ as a QUOTE DELIMITER***, and the resulting error points at an unrelated line **a
 from the real one. This project's prose uses em dashes constantly, so a script written in the house
 voice is a live hazard. Match `tools/openness-approve-*.ps1`, and leave a comment in the file saying
 why, so nobody "improves" the punctuation later.
+
+✅ **Honoured in the build (2026-08-13): all three files are verified ASCII-only and CRLF *byte-wise*,
+with the reason recorded in their own headers** — so the constraint travels with the files rather than
+living only here, which is what stops the next editor reintroducing it. Verified by inspection of the
+bytes, not by "it looks fine in the editor" — a UTF-8 em dash looks fine in every editor, which is the
+entire problem.
