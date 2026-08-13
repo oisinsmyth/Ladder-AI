@@ -363,6 +363,28 @@ phase 2 with the copy-layer generator.
 > > The 27 objects are **quarantined rather than deleted** — under `loadManifest.image`, including
 > > `image.parserVerdict: "Transferred"`, kept for forensics **where no device question can reach it.**
 > >
+> > ### 📡 THE WIRE IS LIVE — MEASURED 2026-08-13, AND IT CORROBORATES THE CONSTANTS
+> >
+> > **The rig is reached REMOTELY** (owner: a workshop test setup, via the Talk2m tunnel) at
+> > `10.10.10.10:503`, unit 1. So the earlier *"no ordinary physical Ethernet adapter"* reading was a
+> > true statement about the wrong question — **the route out `Talk2m-eCatcher` is the intended path,
+> > not a misconfiguration.** `Ethernet 2` is *"Microsoft Hyper-V Network Adapter #2"*, up at 10 Gbps.
+> >
+> > | question | answer |
+> > |---|---|
+> > | **Can we read the PLC?** | ✅ **YES, now.** fn3 across **registers 0–119**; **120+ returns exception 2** (illegal data address) |
+> > | **Does the PLC accept our writes?** | ✅ **YES, now.** fn6 echoed, fn16 (8 registers) accepted — **no exceptions in either direction** |
+> > | **Does a write STICK?** | ❌ **No — and that is the loaded program, not Modbus.** Every register in the span is rewritten **every scan** (all 20 changed in 1 s, values marching up). **The read-side GENERATOR is still loaded**, so a write is overwritten inside one round trip |
+> >
+> > *** THE RTT CONSTANTS HOLD ON THE PATH ACTUALLY IN USE, WHICH NOBODY HAD CONFIRMED. *** Live:
+> > reads **min 63 / median 72 / max 106 ms**, write fn6 **68 ms**, fn16 ×8 **80 ms** — against the
+> > recorded `RTT_typ 78` / `RTT_p90 102.79`. **The backstop, the observability floor and X-D's
+> > ceilings all rest on those figures, and they were never re-checked after the path changed.**
+> >
+> > **What is NOT shown here:** that the PLC *consumes* what we write. That needs the **checker** build
+> > rather than the generator — and it is already retired as **A1** (3,000 writes × 123 registers,
+> > 0 torn). Today's measurement adds the wire, not the semantics.
+> >
 > > ⚠️ **A RIG PRECONDITION — AND ITS SCOPE, CORRECTED.** *** NO ORDINARY PHYSICAL ETHERNET ADAPTER
 > > APPEARS AMONG THE THREE CONFIGURED PC INTERFACES *** — Hyper-V ×2, PLCSIM ×1, TAP-Windows ×2, all
 > > with empty address collections, **byte-identical across two runs.** 🔴 **BUT THIS IS EVIDENCE ABOUT
