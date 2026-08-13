@@ -3,46 +3,64 @@
 # The DENOMINATOR. Produced from the specification only, before any vector exists, by a third party to
 # the block's author and the vector's author (docs/notes/assertion-enumeration.md; §7 open item 3).
 #
-# ISSUE 4 — 2026-08-13. Re-decomposed against the register at 12 rulings / 8 REQ clauses (commits
-# 74c3794, f1d18e6, 4a36363, 8605d01) and `assertion-enumeration.md` §2.2 as corrected (28bfe7d).
-#   issue 1 = 13   issue 2 = 19   issue 3 = 23   *** ISSUE 4 = 25 ***
+# ISSUE 5 — 2026-08-13. Re-decomposed against the register at 13 rulings / 8 REQ clauses (74c3794,
+# f1d18e6, 4a36363, 8605d01, 29574d0).
+#   issue 1 = 13   issue 2 = 19   issue 3 = 23   issue 4 = 25   *** ISSUE 5 = 27 ***
 # Re-decomposed from the amended register, NOT from a delta. No count was predicted to me.
 #
-# *** THIS ISSUE RE-HASHES NOTHING. 23 texts are byte-identical to issue 3; the 2 new ones are
-# REQ-HBA-008's. That is the first round in which no assertion text moved at all. ***
+# *** RE-HASH SET: ZERO. All 25 stamped texts are byte-identical. The two additions are new IDs, so
+# NEITHER OF THE TWO LIVE VECTOR SETS DANGLES. *** See `citation_cost:`.
 #
 # ---------------------------------------------------------------------------------------------------
-# NO `id:` KEY — BY DESIGN (§3.4). Issue with `normalised_text:`, stamp separately, publish the stamped
-# file. This agent is denied `Bash` deliberately and an ID is a SHA-256. Load with `declaredId = null`.
-#
-# STAMPING FOLLOWS THIS ISSUE. After it, any text edit dangles every citation to the assertion edited.
-# `pre_stamp_final_read:` at the foot of this file is my answer to "should anything be settled first".
+# NO `id:` KEY for the two NEW assertions — §3.4. The 25 existing ones keep the IDs already stamped,
+# because their text has not moved; a stamper must NOT recompute-and-replace an unchanged text into a
+# different ID, and equally must not preserve an ID whose text HAS moved. Neither case arises here.
 # ---------------------------------------------------------------------------------------------------
 
 enumerator: assertion-enumerator
-issue: 4
+issue: 5
 enumerated: 2026-08-13
 register: gen/test-project001/hopper-blockage-alarm/requirements.md
-register_state: "12 rulings (AR-HBA-01…12), 8 REQ clauses, plus the pre-stamp consistency pass and the fourth-collision re-read. All twelve are AGENT rulings, not owner rulings, and each is overturnable."
+register_state: "13 rulings (AR-HBA-01…13), 8 REQ clauses. All thirteen are AGENT rulings, not owner rulings, and each is overturnable."
 register_clause_ids_stable: true
 
 reissue:
-  previous_issue: 3
-  previous_count: 23
-  this_count: 25
-  previous_artifact_was_stamped: false
-  dangling_ids: none
+  previous_issue: 4
+  previous_count: 25
+  this_count: 27
   re_hashes_this_issue: 0
-  where_the_two_came_from: >-
-    Entirely from the new clause REQ-HBA-008. AR-HBA-11 changed no assertion (it amended AR-HBA-05 to
-    state what 005.A5 already asserted — the zero-re-hash outcome that ruling predicted, confirmed here
-    by comparison rather than assumed). AR-HBA-12 ADDED rather than MOVED, because it was written as a
-    general clause instead of a special case inside AR-HBA-10.
-  why_that_is_worth_noticing: >-
-    Three previous rounds moved 6, 6 and 0 texts respectively while adding 6, 4 and 2. This round moved
-    none. A ruling round that only ADDS is a ruling round that costs no citations — and both rulings this
-    time were deliberately shaped that way (AR-HBA-11 chose the wording that matched the existing
-    assertion; AR-HBA-12 chose a general clause over per-case restatements).
+  trigger: >-
+    *** NOT A RULING ROUND — A DECOMPOSITION DISPUTE FROM OUTSIDE THE REGISTER. *** An independent vector
+    author found that no assertion forbade the alarm raising EARLY on an uninterrupted first episode:
+    REQ-HBA-002 is TITLED "No alarm below threshold" but AR-HBA-04 had narrowed its text to the
+    debounced-clear case only, so an under-scaled preset left all 25 assertions TRUE. AR-HBA-13 restores
+    the unconditional limb alongside AR-HBA-04's, both live.
+  where_the_two_came_from:
+    - "REQ-HBA-002 A3 — limb 1's ALARM claim, against the SPECIFIED threshold."
+    - "REQ-HBA-008 A3 — limb 1's INHIBIT claim, which REQ-HBA-008's Text now makes explicit, and which NOTHING ELSE IN THE ENUMERATION CAN CATCH (see its split_defect)."
+  why_my_own_passes_missed_it: >-
+    Recorded plainly rather than excused. Four consistency passes read REQ-HBA-002 and found it
+    consistent, and they were right: *** THE TEXT I DECOMPOSED GENUINELY NO LONGER MADE THE CLAIM. *** A
+    narrowing repair is the dangerous kind — it removes a claim while leaving the title, the clause ID,
+    the cross-references and the assertion count all intact, so every sign that the claim is still there
+    survives. Nothing in a clause-by-clause or a combination read can recover a claim that is simply
+    absent from the text. What found it was somebody trying to WRITE A TEST for the behaviour the title
+    promised — which is the same mechanism that found §2.2's contradiction at issue 1, one layer out.
+  lesson_for_the_method: >-
+    A TITLE IS NOT A CLAIM, AND AN ENUMERATOR CANNOT TREAT IT AS ONE. But a title that no assertion of its
+    clause supports IS a cheap, mechanical smell test — and this enumeration had one for four rounds. It
+    is raised as AMB-17 rather than adopted unilaterally, because inventing assertions from titles is
+    exactly how a denominator stops being spec-derived.
+
+citation_cost:
+  live_vector_sets_citing_the_25_stamped_ids: 2
+  assertions_whose_text_moved: NONE
+  dangled_citations: 0
+  precise_statement: >-
+    Every one of the 25 stamped IDs recomputes from text that is byte-identical to what was stamped. Both
+    vector sets remain valid in full. The two additions are NEW IDs and cannot invalidate an existing
+    citation — an addition can only produce a new UNCLASSIFIED unit, which is the §2.3 event, not a stale
+    citation. *** THE COST OF THIS ROUND IS TWO UNCLASSIFIED UNITS AND NOTHING ELSE. ***
 
 sources_read:
   - CLAUDE.md
@@ -53,17 +71,25 @@ sources_read:
   - src/wave-control/WaveControl/AssertionEnumeration.cs
   - src/wave-control/WaveControl/AssertionIdentity.cs
   - src/wave-control/WaveControl/CoverageClassification.cs
-  - gen/test-project001/hopper-blockage-alarm/requirements.md   # RE-READ IN FULL at issue 4, not cached
+  - gen/test-project001/hopper-blockage-alarm/requirements.md   # RE-READ at issue 5, not cached
 not_read:
-  # Deliberate, re-affirmed at issue 4. Six divergences against the existing block are recorded, ONE OF
-  # THEM A PREDICTED PASS — and a predicted pass is worth exactly nothing if the denominator was written
-  # by someone who had seen the code. The predicted pass is the reading that would be destroyed first.
   - ir/**
   - gen/test-project001/hopper-blockage-alarm/architecture.md
   - gen/test-project001/hopper-blockage-alarm/review-findings.md
   - gen/test-project001/hopper-blockage-alarm/integration.md
   - gen/test-project001/code-structure.md
   - patterns/**
+  - docs/notes/test-environment-build-plan.md           # NEWLY OFF LIMITS — see the disclosure below
+
+disclosure_test_environment_build_plan: >-
+  *** DECLARED BECAUSE THE RULE ARRIVED AFTER I HAD ALREADY TOUCHED THE FILE, AND A DECLARATION NOBODY
+  ASKED FOR IS THE ONLY KIND WORTH HAVING. *** At ISSUE 1, before this file was named off limits, I ran
+  ONE `Grep` against it — pattern `^#{1,3} .*7|^## 7|assertion`, ~60 matched lines — while looking for
+  the "§7" the definition kept citing. I did not open the file, and no matched line carried a block
+  interface name, a UDT member or a network comment; the matches were about the harness, gates, coverage
+  and RTT figures. I have not touched it since issue 1 and will not again. If the coordinator judges even
+  that exposure disqualifying, the honest remedy is a fresh enumerator, not my assurance — and this
+  paragraph exists so that judgement is available to somebody other than me.
 
 signal_provenance:
   Hopper_Level_High:      "register §Tag grounding (DB_Input, Bool, exists)"
@@ -73,36 +99,29 @@ signal_provenance:
   HopperBlockedAlarm:     "register Q-HBA-05 (owner)"
   HopperBlockedInhibit:   "register Q-HBA-05 as named by AR-HBA-01 (AGENT ruling, not owner)"
 
-response_signal_naming_warning: >-
-  *** AR-HBA-01 NAMED `HopperBlockedInhibit` WITHOUT READING THE IMPLEMENTATION, ON PURPOSE. *** A
-  mismatch is a FINDING ABOUT THE BLOCK. A vector expects on the SPEC's name. "Rename the spec to match
-  the block" is not an available resolution.
-
-signal_names_are_not_in_hashed_text: >-
-  Preserved again, including in the two NEW assertions: REQ-HBA-008 is entirely about two named outputs
-  and its assertion text still names neither — "the inhibit/stop demand output" and "the hopper-blockage
-  alarm" in the sentence, `HopperBlockedInhibit` / `HopperBlockedAlarm` in the fields. The Format rule
-  survives its hardest case.
+threshold_reference:
+  ruling: "AR-HBA-13 — limb 1 is written against the SPECIFIED threshold (AR-HBA-03's bounds table), never the implementation's own preset."
+  why_it_decides_everything: >-
+    *** AGAINST THE BLOCK'S OWN PRESET THE CLAIM IS VACUOUSLY TRUE OF EVERY IMPLEMENTATION *** — a T#45S
+    block asserts "at its threshold" and passes. The word **specified** is therefore IN the hashed text of
+    REQ-HBA-002 A3 and REQ-HBA-008 A3, and it is load-bearing rather than decorative. It is the only place
+    in 27 assertions where a single adjective is the difference between an assertion and a tautology.
+  see_also: "AMB-16 — the same question is UNSTATED for the other 22 assertions that mention a threshold, and that is the more general form of the hole the vector author found."
 
 instance_declaration:
-  scope: "class-level for every clause, REQ-HBA-008 included (`instances: []`)"
-  rationale: >-
-    No clause text names a set. Scope is "this one FB only"; one hopper level input, one operator reset,
-    one shredder run-feedback pair, ONE PAIR OF OUTPUTS. REQ-HBA-008 is a relation between two outputs of
-    one instance, not a statement over a set of instances — checked explicitly because a new clause is
-    where an undeclared instance set would first appear.
+  scope: "class-level for every clause (`instances: []`)"
+  rationale: "No clause text names a set. Unchanged across all five issues; AR-HBA-13 touches no instance axis."
   standing_condition: >-
     *** IF THIS FB IS EVER PLACED MORE THAN ONCE, THIS DECLARATION IS WRONG AND MUST BE RE-DECLARED BY AN
-    ENUMERATOR — a re-decomposition event, not something a citation fixes. *** A citation naming an
-    undeclared instance is a FINDING (§4/R4), never a new unit.
+    ENUMERATOR. *** A citation naming an undeclared instance is a FINDING (§4/R4), never a new unit.
 
 denominator:
   clauses: 8
-  assertions: 25
-  coverage_units: 25
+  assertions: 27
+  coverage_units: 27
 
 bounds:
-  persistence_threshold:      "T#60S  (Q-HBA-01, owner)"
+  persistence_threshold:      "T#60S  (Q-HBA-01, owner) — the SPECIFIED value, per AR-HBA-13"
   clear_debounce_filter_time: "T#2S   (NEW-HBA-03, owner)"
 
 clauses:
@@ -112,140 +131,130 @@ clauses:
     title: Continuous-high blockage alarm
     instances: []
     assertions:
-
       - ordinal: A1
         form: When
         text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted"
         normalised_text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted"
-        id: REQ-HBA-001:ab68c1
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The alarm output is never asserted, or is asserted from a condition other than the elapsed
-          persistence window, while the inhibit output still asserts correctly at the same trigger. A2, A3
-          and A4 stay true.
+        split_defect: "The alarm output is never asserted, or is asserted from a condition other than the elapsed persistence window, while the inhibit output still asserts correctly. A2, A3, A4 stay true."
         text_unchanged_since_issue: 2
+        paired_with: "REQ-HBA-002 A3 pins the same boundary from the other side — this one says the alarm DOES come at the threshold, that one says it does not come BEFORE it. Neither implies the other, and until issue 5 only this half existed."
 
       - ordinal: A2
         form: When
         text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the inhibit/stop demand output is asserted"
         normalised_text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the inhibit/stop demand output is asserted"
-        id: REQ-HBA-001:8ea7f6
         response_signal: HopperBlockedInhibit
-        split_defect: >-
-          The inhibit output is left unwritten, or driven from a different condition, while the alarm
-          output asserts correctly. R2 — one trigger, two responses. A1, A3 and A4 stay true.
+        split_defect: "The inhibit output is left unwritten, or driven from a different condition, while the alarm asserts correctly. R2. A1, A3, A4 stay true."
         text_unchanged_since_issue: 2
-        overlap_with_REQ_HBA_008: >-
-          REQ-HBA-008 A1 also fails on a never-written inhibit. The two are not redundant: this one is
-          keyed on the PERSISTENCE TRIGGER (the inhibit is driven from the right condition), 008 A1 on the
-          ALARM (the two outputs agree). A defect driving the inhibit from a wrong condition that happens
-          to match the alarm's value fails this and not 008 A1. §1's test is clause-scoped either way.
 
       - ordinal: A3
         form: When
         text: "WHEN Hopper_Level_High is continuously true for longer than the persistence threshold while neither Shredder_Run_Fwd_FB nor Shredder_Run_Rev_FB is true and no hopper-blockage alarm was previously latched THEN the hopper-blockage alarm is not asserted"
         normalised_text: "WHEN Hopper_Level_High is continuously true for longer than the persistence threshold while neither Shredder_Run_Fwd_FB nor Shredder_Run_Rev_FB is true and no hopper-blockage alarm was previously latched THEN the hopper-blockage alarm is not asserted"
-        id: REQ-HBA-001:0772fa
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The run-state gate on ACCRUAL is absent, so persistence time accrues at standstill and a full
-          hopper at rest earns an alarm it never earned. A1, A2 and A4 stay true.
+        split_defect: "The run-state gate on ACCRUAL is absent, so persistence time accrues at standstill and a full hopper at rest earns an alarm it never earned. A1, A2, A4 stay true."
         rule: "R1 — the trigger's NEGATIVE case."
         text_unchanged_since_issue: 3
-        carries_the_Q_HBA_04_exposure: "See `conditional_on_owner:` — this is the one assertion the Q-HBA-04 reconciliation moves."
+        carries_the_Q_HBA_04_exposure: true
 
       - ordinal: A4
         form: When
         text: "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold"
         normalised_text: "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold"
-        id: REQ-HBA-001:2bdfa7
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          *** THE RESET-ON-STOP DEFECT. *** The elapsed persistence time is DISCARDED on loss of running
-          rather than FROZEN, so an interrupted run never reaches the threshold and a genuinely blocked
-          hopper never alarms. A1 stays true.
+        split_defect: "*** THE RESET-ON-STOP DEFECT. *** Elapsed time DISCARDED on loss of running rather than FROZEN, so an interrupted run never reaches the threshold. A1 stays true."
         text_unchanged_since_issue: 2
-        not_split_further: "No paired inhibit assertion — REQ-HBA-008 now carries the tracking claim once, for every transition. See `why_no_per_case_inhibit_siblings:`."
 
   # =================================================================================================
   REQ-HBA-002:
     title: No alarm below threshold
     instances: []
+    two_limbs: >-
+      AR-HBA-13 restores limb 1 (the unconditional threshold claim) ALONGSIDE AR-HBA-04's limb 2 (the
+      debounced-clear case). *** RESTORATION, NOT REVERSAL — limb 2 stands exactly as written, and A1/A2
+      below are unchanged to the byte. *** A3 is limb 1.
     assertions:
 
       - ordinal: A1
         form: When
         text: "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode"
         normalised_text: "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode"
-        id: REQ-HBA-002:efe6b5
         response_signal: HopperBlockedAlarm
-        split_defect: "The clear is not honoured at all — the accumulator ignores hopper-low entirely — so an episode that visibly cleared still alarms. A2 stays true."
+        split_defect: "The clear is not honoured at all — the accumulator ignores hopper-low entirely — so an episode that visibly cleared still alarms. A2 and A3 stay true (a short preset still honours a clear)."
+        limb: 2
         text_unchanged_since_issue: 2
 
       - ordinal: A2
         form: When
         text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode"
         normalised_text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode"
-        id: REQ-HBA-002:bfda9d
         response_signal: HopperBlockedAlarm
-        split_defect: "The clear debounce is absent, so any glitch to false counts as a clear and prevents the alarm — a blocked hopper with a chattering sensor never alarms. A1 stays true."
+        split_defect: "The clear debounce is absent, so any glitch to false counts as a clear and prevents the alarm. A1 and A3 stay true."
+        limb: 2
         text_unchanged_since_issue: 2
+
+      - ordinal: A3
+        form: When
+        text: "WHEN a first uninterrupted high episode is in progress with no debounced clear and no FaultReset since the accumulated persistence time was last zero THEN the hopper-blockage alarm does not assert at any point before the specified persistence threshold of accumulated time has elapsed"
+        normalised_text: "WHEN a first uninterrupted high episode is in progress with no debounced clear and no FaultReset since the accumulated persistence time was last zero THEN the hopper-blockage alarm does not assert at any point before the specified persistence threshold of accumulated time has elapsed"
+        response_signal: HopperBlockedAlarm
+        limb: 1
+        new_in_issue: 5
+        split_defect: >-
+          *** AN UNDER-SCALED PRESET — SHORTER THAN THE SPECIFIED THRESHOLD — SO THE ALARM ASSERTS EARLY.
+          THE MOST ORDINARY COMMISSIONING ERROR THERE IS, AND IT LEFT ALL 25 PREVIOUS ASSERTIONS TRUE. ***
+          A1 and A2 stay true: a short-preset block still honours a debounced clear and still ignores a
+          glitch, so neither limb-2 assertion moves. Also catches an accumulator that OVER-COUNTS across a
+          run-state pause, since the claim is stated against ACCUMULATED time rather than wall-clock.
+        why_specified_is_in_the_text: >-
+          Load-bearing, not decorative. Against the implementation's own preset the claim is vacuously true
+          of every implementation — a short-preset block asserts "at its threshold" and passes. This is the
+          one place in 27 assertions where a single adjective is the difference between an assertion and a
+          tautology, so it is inside the hashed sentence and not in a field. No NUMBER enters the text, so
+          AR-HBA-03 is untouched.
+        applicability_caveat: "*** DOES THIS BITE INSIDE AR-HBA-10's POST-POWER-CYCLE WINDOW? UNDETERMINED — see AMB-15. *** The trigger is taken verbatim from the clause and the ambiguity is the clause's, not this assertion's."
 
   # =================================================================================================
   REQ-HBA-003:
     title: Momentary clear re-arms the window
     instances: []
-    decomposition_shape: >-
-      A 2x2 over (debounced clear | brief false) x (plant running | plant stopped). Q-HBA-02 gave the
-      debounced/brief axis; AR-HBA-06 the stopped case of the debounced route; AR-HBA-09 the stopped case
-      of the brief route, which had been an outright gap. Each cell has its own isolating defect.
-    premise_relied_on: "AR-HBA-09: the clear-debounce filter runs IRRESPECTIVE of `PlantRunning`. A3 and A4 are unreachable without it."
-    note_on_form: >-
-      The clause asserts an INTERNAL STATE TRANSITION ("discards the accumulated persistence time"), which
-      is not an observable response. All four assertions restate it as the alarm's subsequent TIMING. That
-      restatement is a judgement.
+    decomposition_shape: "A 2x2 over (debounced clear | brief false) x (plant running | plant stopped). Each cell separately ruled, each with its own isolating defect."
+    premise_relied_on: "AR-HBA-09: the clear-debounce filter runs IRRESPECTIVE of `PlantRunning`."
+    note_on_form: "The clause asserts an INTERNAL STATE TRANSITION; all four assertions restate it as the alarm's subsequent TIMING. That restatement is a judgement."
     assertions:
-
       - ordinal: A1
         form: When
         text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
-        id: REQ-HBA-003:607fdf
         response_signal: HopperBlockedAlarm
-        split_defect: "The accumulator is NOT discarded on a qualified clear, so it carries over and a later brief high trips the alarm early. A2, A3 and A4 stay true."
+        split_defect: "The accumulator is NOT discarded on a qualified clear, so a later brief high trips the alarm early. A2, A3, A4 stay true."
         text_unchanged_since_issue: 2
+        see_AMB_16: "Whether this ALSO catches an under-scaled preset depends on whether 'a further full persistence threshold' means the SPECIFIED value. Unstated. That question is AMB-16 and it is the general form of the hole AR-HBA-13 repaired locally."
 
       - ordinal: A2
         form: When
         text: "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated"
-        id: REQ-HBA-003:652dd6
         response_signal: HopperBlockedAlarm
-        split_defect: "The clear debounce is absent, so a single-scan glitch discards the accumulator and a genuinely blocked hopper never alarms. A1, A3 and A4 stay true."
+        split_defect: "The clear debounce is absent, so a single-scan glitch discards the accumulator and a blocked hopper never alarms. A1, A3, A4 stay true."
         text_unchanged_since_issue: 3
 
       - ordinal: A3
         form: When
         text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
-        id: REQ-HBA-003:aa1d87
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The discard is gated on run state, so the freeze preserves a stale nearly-elapsed accumulator
-          across a stop during which the hopper visibly emptied. AR-HBA-06's worked case: 40 s of 60 s,
-          stop, 2 s clear — correct discards to 0, the defect alarms 20 s later. A1, A2 and A4 stay true.
+        split_defect: "The discard is gated on run state, so the freeze preserves a stale accumulator across a stop during which the hopper visibly emptied. AR-HBA-06's 40-of-60 case. A1, A2, A4 stay true."
         text_unchanged_since_issue: 2
+        see_AMB_16: true
 
       - ordinal: A4
         form: When
         text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time while the plant is stopped and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before that brief false has accumulated"
         normalised_text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time while the plant is stopped and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before that brief false has accumulated"
-        id: REQ-HBA-003:09e3a8
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The accumulator is discarded on ANY hopper-low while the plant is stopped — the freeze applied
-          only while the hopper reads high, the scope AR-HBA-06 left and AR-HBA-09 completed. A blocked
-          hopper whose sensor chatters once during a stop loses its whole budget. A1, A2 and A3 stay true.
+        split_defect: "The accumulator is discarded on ANY hopper-low while stopped — the scope AR-HBA-06 left and AR-HBA-09 completed. A1, A2, A3 stay true."
         text_unchanged_since_issue: 3
 
   # =================================================================================================
@@ -253,403 +262,329 @@ clauses:
     title: Alarm latches until reset
     instances: []
     assertions:
-
       - ordinal: A1
         form: Never
         text: "NEVER the hopper-blockage alarm de-asserts unless FaultReset has been asserted since the alarm was raised"
         normalised_text: "NEVER the hopper-blockage alarm de-asserts unless FaultReset has been asserted since the alarm was raised"
-        id: REQ-HBA-004:14c9b6
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          Sole assertion of the clause. NOT split further: a prohibition with no natural trigger, naming
-          one output. Its own defect is a MOMENTARY alarm — the output pulses or self-clears on a timer
-          with the hopper still high ("level-persistent, not a momentary pulse").
+        split_defect: "Sole assertion of the clause. Its own defect is a MOMENTARY alarm — the output pulses or self-clears with the hopper still high."
         text_unchanged_since_issue: 1
-        checked_against_REQ_HBA_008: >-
-          No conflict. REQ-HBA-008 makes the inhibit inherit this latch discipline by tracking; it does not
-          weaken or duplicate the alarm's own prohibition, which is about WHEN the alarm may fall, not
-          about the two outputs agreeing.
+        checked_against_AR_HBA_13: "No interaction. This governs when the alarm may FALL; limb 1 governs when it may first RISE. Disjoint concerns, no overlap, no contradiction."
 
   # =================================================================================================
   REQ-HBA-005:
     title: Reset clears the alarm
     instances: []
-    why_no_per_case_inhibit_siblings: >-
-      *** DELIBERATE, AND IT IS AR-HBA-12'S OWN DESIGN. *** REQ-HBA-005's Text now says AR-HBA-08's
-      by-case observability split "applies to both outputs identically". That is a statement about HOW TO
-      OBSERVE, not a second RESPONSE — the clause states an inhibit response only for the CLEAR case
-      ("clears the latched hopper-blockage alarm and, with it, the inhibit/stop demand"), which is A2.
-      Adding inhibit siblings to A3/A5/A6 would restate REQ-HBA-008's tracking claim once per case, which
-      is exactly what AR-HBA-12 chose a GENERAL clause to avoid ("one general statement makes AR-HBA-10's
-      case fall out with no special-casing"). Enumerating it per case would defeat that ruling and inflate
-      the denominator with assertions that all fail on one defect.
+    why_no_per_case_inhibit_siblings: "AR-HBA-12's design: REQ-HBA-008 carries the tracking claim once, for every transition. Restating it per case would inflate the denominator with assertions that all fail on one defect."
     assertions:
-
       - ordinal: A1
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the hopper-blockage alarm is false when next observed and stays false"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the hopper-blockage alarm is false when next observed and stays false"
-        id: REQ-HBA-005:0463ce
         response_signal: HopperBlockedAlarm
-        split_defect: "The reset path does not reach the alarm output while the inhibit output does clear. A2…A6 stay true."
+        split_defect: "The reset path does not reach the alarm output while the inhibit does clear. A2…A6 stay true."
         text_unchanged_since_issue: 3
-        route_agnostic_by_design: >-
-          The trigger names the STATE (accumulator below threshold), not the ROUTE. AR-HBA-08 names two
-          routes — a debounced clear, or a power cycle — and says both produce the same observable. That
-          choice pays off at REQ-HBA-007: the post-power-cycle reset IS this trigger, so A1/A2 already
-          carry the observable-false requirement for AR-HBA-10's window without a third pair.
 
       - ordinal: A2
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the inhibit/stop demand output is false when next observed and stays false"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the inhibit/stop demand output is false when next observed and stays false"
-        id: REQ-HBA-005:7e39bc
         response_signal: HopperBlockedInhibit
-        split_defect: >-
-          The inhibit output is left asserted after the reset while the alarm clears — a stale stop demand
-          with the annunciation already gone, which no operator action can then clear. R2. A1 and A3…A6
-          stay true.
+        split_defect: "The inhibit is left asserted after the reset while the alarm clears — a stale stop demand no operator action can clear. R2. A1, A3…A6 stay true."
         text_unchanged_since_issue: 3
-        discharges: "REQ-HBA-008's 'an observable and persistent false is REQUIRED once it has cleared', for the inhibit, on both routes to a cleared condition."
 
       - ordinal: A3
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the plant is running and the accumulated persistence time is still at or past the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the plant is running and the accumulated persistence time is still at or past the threshold THEN the hopper-blockage alarm is true when next observed"
-        id: REQ-HBA-005:179eb7
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The reset ZEROES the accumulator, so an operator acknowledging a still-blocked hopper buys a
-          guaranteed quiet threshold's-worth of time. A1, A2, A4, A5 and A6 stay true.
+        split_defect: "The reset ZEROES the accumulator, buying an operator a quiet threshold's-worth of time on a still-blocked hopper. A1, A2, A4, A5, A6 stay true."
         text_unchanged_since_issue: 3
 
       - ordinal: A4
         form: Never
         text: "NEVER the hopper-blockage alarm is held de-asserted by a continuously-true FaultReset while the accumulated persistence time is at or past the threshold"
         normalised_text: "NEVER the hopper-blockage alarm is held de-asserted by a continuously-true FaultReset while the accumulated persistence time is at or past the threshold"
-        id: REQ-HBA-005:6e1e8d
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The reset is LEVEL-sensitive rather than edge-triggered, so a stuck-on or wired-on FaultReset
-          pins the alarm off permanently and silently. A1…A3, A5 and A6 stay true: a PULSE behaves
-          correctly in every one of them, which is why a level defect survives all of them undetected.
+        split_defect: "The reset is LEVEL-sensitive, so a stuck-on FaultReset pins the alarm off permanently and silently. Every sibling behaves correctly on a PULSE, which is why a level defect survives all of them."
         text_unchanged_since_issue: 2
 
       - ordinal: A5
         form: When
         text: "WHEN a rising edge of FaultReset occurs in the same evaluation in which the accumulated persistence time first reaches the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs in the same evaluation in which the accumulated persistence time first reaches the threshold THEN the hopper-blockage alarm is true when next observed"
-        id: REQ-HBA-005:34fd97
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          *** THE RESET CONSUMES THE THRESHOLD CROSSING AND THE ALARM NEVER COMES BACK AT ALL. *** A live
-          fault PERMANENTLY suppressed. A3 stays true and cannot catch it: in A3's scenario the alarm was
-          already latched before the reset, so no crossing is at stake.
+        split_defect: "*** THE RESET CONSUMES THE THRESHOLD CROSSING AND THE ALARM NEVER COMES BACK. *** A live fault permanently suppressed. A3 cannot catch it — its alarm was already latched, so no crossing is at stake."
         text_unchanged_since_issue: 3
-        AR_HBA_11_outcome: >-
-          *** CONFIRMED BY COMPARISON, NOT ASSUMED. *** AR-HBA-11 amended AR-HBA-05's raise-dominance
-          sentence to read "the reset does not consume that crossing: the alarm is asserted when next
-          observed". This text already said that. AMB-12 therefore closes with ZERO re-hashes, exactly as
-          the ruling predicted, and the stale second source is gone rather than merely contradicted.
 
       - ordinal: A6
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the plant is stopped and the accumulated persistence time is at or past the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the plant is stopped and the accumulated persistence time is at or past the threshold THEN the hopper-blockage alarm is true when next observed"
-        id: REQ-HBA-005:e7e0e0
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          *** THE RE-RAISE IS GATED ON `PlantRunning`. *** The sequence stop -> reset, hopper still
-          blocked, accumulator frozen past threshold, CLEARS A LIVE FAULT AND LEAVES IT CLEARED. A1…A5 stay
-          true and none can catch it, because every one of them resets while running.
+        split_defect: "*** THE RE-RAISE IS GATED ON `PlantRunning`. *** stop -> reset on a still-blocked hopper clears a live fault and leaves it cleared. A1…A5 all reset while RUNNING, so none can catch it."
         text_unchanged_since_issue: 3
+        carries_the_Q_HBA_04_exposure: true
 
   # =================================================================================================
   REQ-HBA-006:
     title: Hopper clearing while alarm latched does not clear it
     instances: []
     assertions:
-
       - ordinal: A1
         form: When
         text: "WHEN Hopper_Level_High returns false while the hopper-blockage alarm is latched and FaultReset is not asserted THEN the hopper-blockage alarm remains asserted"
         normalised_text: "WHEN Hopper_Level_High returns false while the hopper-blockage alarm is latched and FaultReset is not asserted THEN the hopper-blockage alarm remains asserted"
-        id: REQ-HBA-006:469954
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          Sole assertion of the clause. NOT split further: one trigger, one response. Its own defect is the
-          alarm FOLLOWING the level rather than latching.
+        split_defect: "Sole assertion of the clause. Its own defect is the alarm FOLLOWING the level rather than latching."
         text_unchanged_since_issue: 1
-        checked_against_REQ_HBA_008: >-
-          Clean. A debounced clear drops the ACCUMULATOR, not the LATCH, so NEITHER output moves — the
-          tracking relation is undisturbed by the very case that most looks like it should disturb it.
 
   # =================================================================================================
   REQ-HBA-007:
     title: Power-up / first-scan state
     instances: []
-    startup: true     # §4.2's SCHEDULING ATTRIBUTE, orthogonal to the bucket. §7's wording reads as a
-                      # fifth bucket and remains UNCONFIRMED (§7 open item 1).
+    startup: true
     assertions:
-
       - ordinal: A1
         form: When
         text: "WHEN the PLC powers up with no hopper-blockage alarm latched THEN a hopper-blockage alarm requires a full persistence threshold of high-and-running time accumulated after power-up"
         normalised_text: "WHEN the PLC powers up with no hopper-blockage alarm latched THEN a hopper-blockage alarm requires a full persistence threshold of high-and-running time accumulated after power-up"
-        id: REQ-HBA-007:4197e0
         response_signal: HopperBlockedAlarm
-        split_defect: "The accumulated persistence time survives the power cycle, so a PLC restarted part-way through a window alarms early — at the extreme, on the first scan. A2…A5 stay true."
+        split_defect: "The accumulated persistence time survives the power cycle, so a PLC restarted mid-window alarms early — at the extreme, on the first scan. A2…A5 stay true."
         text_unchanged_since_issue: 1
+        see_AMB_16: true
 
       - ordinal: A2
         form: When
         text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the hopper-blockage alarm is asserted after power-up"
         normalised_text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the hopper-blockage alarm is asserted after power-up"
-        id: REQ-HBA-007:7edf6c
         response_signal: HopperBlockedAlarm
-        split_defect: "The alarm latch does not survive the power cycle, so a live blockage is silently de-annunciated by a restart. A1 and A3…A5 stay true."
+        split_defect: "The alarm latch does not survive the power cycle, so a live blockage is silently de-annunciated by a restart. A1, A3…A5 stay true."
         text_unchanged_since_issue: 1
 
       - ordinal: A3
         form: When
         text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the inhibit/stop demand output is asserted after power-up"
         normalised_text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the inhibit/stop demand output is asserted after power-up"
-        id: REQ-HBA-007:578675
         response_signal: HopperBlockedInhibit
-        split_defect: >-
-          The inhibit output does not survive the power cycle while the alarm does, so the plant is
-          released to run after a restart with the blockage alarm still annunciated. R2. A1, A2, A4 and A5
-          stay true.
+        split_defect: "The inhibit does not survive the power cycle while the alarm does, so the plant is released to run with the alarm still annunciated. R2. A1, A2, A4, A5 stay true."
         text_unchanged_since_issue: 1
-        overlap_with_REQ_HBA_008: >-
-          REQ-HBA-008 A1 also fails on a retentivity mismatch between the two outputs. Kept: the register
-          states this response in REQ-HBA-007's own Text, and §1's test is clause-scoped. Recorded so the
-          overlap is visible rather than found by a reviewer.
 
       - ordinal: A4
         form: When
         text: "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed"
-        id: REQ-HBA-007:9855c5
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          The accumulator is RETENTIVE, so the power cycle does not zero it, the reset finds it still past
-          threshold, and the alarm does not clear. A1…A3 and A5 stay true. *** THIS IS THE ASSERTION THAT
-          FAILS FIRST IF NEW-HBA-05 IS EVER SETTLED IN A WAY THAT MAKES THE ACCUMULATED TIME RETENTIVE ***
-          — AR-HBA-10 records that dependency and it is worth knowing which assertion carries it.
+        split_defect: "The accumulator is RETENTIVE, so the power cycle does not zero it and the reset finds it still past threshold. *** THE ASSERTION THAT FAILS FIRST IF NEW-HBA-05 IS SETTLED TOWARD A RETENTIVE ACCUMULATOR. ***"
         text_unchanged_since_issue: 3
 
       - ordinal: A5
         form: When
         text: "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time"
         normalised_text: "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time"
-        id: REQ-HBA-007:34dc51
         response_signal: HopperBlockedAlarm
-        split_defect: >-
-          *** THE ALARM GOES AWAY AND NEVER COMES BACK. *** Accrual does not resume after the reset, so the
-          accepted window never closes and the gap AR-HBA-10 accepted BECAUSE IT IS BOUNDED becomes
-          unbounded. A4 stays true: the alarm did clear, which is all A4 claims.
+        split_defect: "*** THE ALARM GOES AWAY AND NEVER COMES BACK *** — accrual does not resume, so AR-HBA-10's bounded window becomes unbounded. A4 stays true: the alarm did clear."
         text_unchanged_since_issue: 3
-        bound_note: "`WITHIN one further persistence threshold` is a bound on the response — R3 keeps it inside this assertion. The value stays in the bounds table (AR-HBA-03)."
-        AMB_13_now_closed_by: >-
-          The inhibit's return inside this window is carried by REQ-HBA-008 A1 — with the alarm asserted
-          again, an inhibit that stays low violates it. AR-HBA-12's general clause makes AR-HBA-10's case
-          fall out with no special-casing, exactly as the ruling intended, so no sixth assertion is needed
-          here and none was invented.
+        one_sided_bound: >-
+          *** NOTE FOR AMB-15. *** This is a WITHIN bound — an upper limit on when the alarm returns. It
+          says nothing about the alarm returning TOO SOON, and a short-preset block satisfies it more
+          easily, not less. Whether REQ-HBA-002 A3 supplies the missing lower bound inside this window
+          depends on how "since the accumulated persistence time was last zero" is read.
 
   # =================================================================================================
   REQ-HBA-008:
     title: The inhibit output tracks the alarm output
     instances: []
-    new_clause_in_issue: 4
-    added_by: "AR-HBA-12 (agent ruling, not owner), closing AMB-13"
     decomposition_reasoning: >-
-      *** DECOMPOSED FROM THE CLAUSE'S SUMMARY SENTENCE, NOT FROM ITS FOUR BULLETS, AND THAT IS THE WHOLE
-      DECISION. *** The clause lists four transitions (asserts on raise / stays asserted while latched /
-      de-asserts on reset / re-asserts on re-raise) and then states the invariant they are instances of:
-      "There is no state in which one output is asserted and the other is not." Each bullet was tested as
-      a candidate and NONE has an isolating defect against the invariant — every defect that breaks a
-      bullet (set-only latch, one-shot pulse, tracks the first raise but not a re-raise, asserts late) is
-      already a state where the two outputs disagree. The INVARIANT, however, splits cleanly into its two
-      DIRECTIONS, and those two do isolate each other. So: 2 assertions, one per direction, and the four
-      bullets are covered as instances rather than enumerated as siblings.
-    reading_taken: >-
-      The bullet "de-asserts when the alarm is cleared by `FaultReset`" reads unconditionally in
-      isolation, but the alarm is only *cleared* when the condition has gone (REQ-HBA-005); when it holds,
-      the alarm re-raises and so does the inhibit. The clause's own summary sentence and its observability
-      paragraph resolve this, so it is a terse bullet rather than a contradiction. The two assertions are
-      taken from the summary sentence, which is the reading that cannot be got wrong.
+      A1/A2 are the two DIRECTIONS of the clause's summary invariant ("no state in which one output is
+      asserted and the other is not"), which is where the four transition bullets are covered as instances.
+      A3 is different in kind and that is the point: it is NOT a tracking claim, and no tracking claim
+      could carry it.
     observability: >-
-      AR-HBA-08's by-case split applies to this output identically (clause Text; the fourth-collision
-      closure). *** BOTH ASSERTIONS ARE SIMULTANEITY CLAIMS, AND THAT IS WHAT MAKES THEM COMPATIBLE WITH
-      THE DON'T-CARE. *** They assert that the two outputs AGREE, never that either takes a particular
-      value at a transient — so a shared momentary drop satisfies both, and no vector citing them is
-      pushed into asserting on the transient AR-HBA-08 removed. This is the collision the register found
-      and closed in place; the enumeration's wording had to not reopen it, and it does not.
+      AR-HBA-08's by-case split applies to this output identically. A1 and A2 are SIMULTANEITY claims, so a
+      shared momentary drop satisfies both and no citing vector is pushed into asserting on the transient.
     assertions:
 
       - ordinal: A1
         form: Never
         text: "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted"
         normalised_text: "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted"
-        id: REQ-HBA-008:d97781
         response_signal: HopperBlockedInhibit
-        also_requires_observation_of: HopperBlockedAlarm      # <- SEE AMB-14: the wire format cannot carry this
-        split_defect: >-
-          The inhibit is a one-shot pulse on the alarm's rising edge, or tracks the first raise but not a
-          re-raise, or is never written at all — any of which leaves the plant free to run while the
-          blockage alarm is annunciated. *** THIS IS THE OPERATIONALLY IMPORTANT DIRECTION: it is the one
-          that lets a blocked plant run. *** A2 stays true throughout — an inhibit stuck low never reads
-          true while the alarm is low.
-        new_in_issue: 4
+        also_requires_observation_of: HopperBlockedAlarm      # AMB-14
+        split_defect: "One-shot pulse, or tracks the first raise but not a re-raise, or never written — the plant runs free while the blockage alarm is annunciated. A2 stays true throughout."
+        text_unchanged_since_issue: 4
 
       - ordinal: A2
         form: Never
         text: "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
         normalised_text: "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
-        id: REQ-HBA-008:741315
         response_signal: HopperBlockedInhibit
-        also_requires_observation_of: HopperBlockedAlarm      # <- SEE AMB-14
-        split_defect: >-
-          The inhibit is a set-only latch: it follows the alarm up and never comes down, so after a
-          `FaultReset` on a cleared blockage the plant stays stopped with nothing annunciated and no
-          operator action able to release it. A1 stays true throughout — an inhibit stuck HIGH never reads
-          false while the alarm is high.
-        new_in_issue: 4
+        also_requires_observation_of: HopperBlockedAlarm      # AMB-14
+        split_defect: "Set-only latch: the inhibit follows the alarm up and never comes down, so the plant stays stopped with nothing annunciated. A1 stays true throughout."
+        text_unchanged_since_issue: 4
 
-  # NOTE ON WORDING, since the coordinator asked directly: *** AR-HBA-12's "VALUE, NOT WIRING"
-  # QUALIFICATION CHANGES NOTHING IN HOW THESE ARE WORDED, AND THE REASON IS THE `response_signal:`
-  # FIELD. *** Both assertions are claims about what `HopperBlockedInhibit` READS, and the field names it,
-  # so a vector must observe that member itself — it cannot satisfy the mechanical check by expecting on
-  # `HopperBlockedAlarm` and arguing the two are "the same". That is precisely the "distinct interface
-  # members, independent routing" property Q-HBA-05 requires, enforced by the field rather than by prose.
-  # No existing inhibit assertion (001.A2, 005.A2, 007.A3) needed rewording either: all three already say
-  # "the inhibit/stop demand output is ..." and carry `HopperBlockedInhibit`.
+      - ordinal: A3
+        form: Never
+        text: "NEVER the inhibit/stop demand output is asserted before the specified persistence threshold of accumulated time has elapsed, on a high episode with no debounced clear and no FaultReset since the accumulated persistence time was last zero"
+        normalised_text: "NEVER the inhibit/stop demand output is asserted before the specified persistence threshold of accumulated time has elapsed, on a high episode with no debounced clear and no FaultReset since the accumulated persistence time was last zero"
+        response_signal: HopperBlockedInhibit
+        new_in_issue: 5
+        provenance: "REQ-HBA-008's Text as amended by AR-HBA-13: 'It holds equally for non-assertion: while REQ-HBA-002 forbids the alarm before the threshold is accumulated, HopperBlockedInhibit is likewise not asserted.'"
+        split_defect: >-
+          *** AN UNDER-SCALED PRESET ASSERTS BOTH OUTPUTS EARLY — AND A1 AND A2 STAY TRUE, BECAUSE THE TWO
+          OUTPUTS STILL AGREE. *** That is the structural point and it is worth stating exactly: a
+          SIMULTANEITY claim is satisfied by a SYNCHRONISED error. The tracking assertions can never catch
+          a defect that moves both outputs together, so REQ-HBA-002 A3 covers the alarm half and this
+          covers the inhibit half, and nothing else in 27 assertions covers either. *** THIS IS THE
+          OPERATIONALLY WORSE HALF: the inhibit is the output that stops the plant, so an early inhibit
+          stops a plant that is not blocked. ***
+        why_a_separate_assertion_rather_than_a_sibling_of_002_A3: >-
+          The register states the alarm claim in REQ-HBA-002's Text and the inhibit claim in REQ-HBA-008's
+          Text. Each clause is decomposed from its own text; putting the inhibit claim under REQ-HBA-002
+          would assert a response that clause does not state.
 
 # ===================================================================================================
-# THE RE-HASH SET — zero this round.
+# THE RE-HASH SET — zero, for the second round running.
 # ===================================================================================================
 text_changed_in_this_issue:
   reworded_so_would_re_hash: []
-  new_in_this_issue:         [REQ-HBA-008.A1, REQ-HBA-008.A2]
-  text_unchanged:            [REQ-HBA-001.A1, REQ-HBA-001.A2, REQ-HBA-001.A3, REQ-HBA-001.A4, REQ-HBA-002.A1, REQ-HBA-002.A2, REQ-HBA-003.A1, REQ-HBA-003.A2, REQ-HBA-003.A3, REQ-HBA-003.A4, REQ-HBA-004.A1, REQ-HBA-005.A1, REQ-HBA-005.A2, REQ-HBA-005.A3, REQ-HBA-005.A4, REQ-HBA-005.A5, REQ-HBA-005.A6, REQ-HBA-006.A1, REQ-HBA-007.A1, REQ-HBA-007.A2, REQ-HBA-007.A3, REQ-HBA-007.A4, REQ-HBA-007.A5]
-  none_removed: "No assertion was removed."
+  new_in_this_issue:         [REQ-HBA-002.A3, REQ-HBA-008.A3]
+  text_unchanged:            "all 25 previously-stamped assertions, byte-identical"
+  none_removed: true
 
 # ===================================================================================================
-# THE FIFTH-COLLISION SEARCH — *** RESULT: NONE FOUND. STATED, NOT INFERRED FROM SILENCE. ***
+# THE COMBINATION CHECK — AR-HBA-13 lands on a clause four rulings already touch.
+# *** RESULT: NO CONTRADICTION. TWO GAPS, BOTH RAISED. ***
 # ===================================================================================================
-fifth_collision_search:
-  method: >-
-    REQ-HBA-008 was read against every other clause and every ruling, in both directions, on the standing
-    evidence that four consecutive rounds each produced a collision invisible clause-by-clause. A new,
-    unexercised, GENERAL clause that reaches every transition in the register is the highest-risk object
-    this register has yet contained, so it was checked against each transition individually rather than
-    as a whole.
-  result: "*** NO FIFTH REQUIREMENT-LEVEL COLLISION. *** The trend holds: 8 -> 3 -> 2 -> 1 -> 0."
-  checked_and_clean:
-    - "REQ-HBA-008 x AR-HBA-08 — the collision the register found and closed in place. Confirmed not reopened: both new assertions are SIMULTANEITY claims, so a shared transient satisfies them and no citing vector is pushed into asserting on the drop."
-    - "REQ-HBA-008 x REQ-HBA-006 — a debounced clear drops the ACCUMULATOR, not the LATCH, so neither output moves. The case that most looks like it should disturb the tracking relation does not."
-    - "REQ-HBA-008 x REQ-HBA-007 power-up — both outputs RETAIN, both survive. A retentivity MISMATCH between them violates 008.A1 and 007.A3 alike; caught twice, contradicted nowhere."
-    - "REQ-HBA-008 x AR-HBA-10's window — the inhibit's return falls out of 008.A1 with no special case, which is exactly what AR-HBA-12 chose a general clause to achieve. AMB-13 is fully closed."
-    - "REQ-HBA-008 x REQ-HBA-004 — the inhibit inherits the latch discipline by tracking; no contradiction, no duplication (004 is about WHEN the alarm may fall, 008 about the two agreeing)."
-    - "REQ-HBA-008 x Q-HBA-05 — 'tracks' is not 'is the same bit'. The `response_signal:` field on both assertions names `HopperBlockedInhibit`, so the independent-routing requirement is enforced mechanically and not merely asserted in prose."
-    - "AR-HBA-11's rewording — checked that 005.A5's text already matched, and that nothing else in the enumeration depended on same-scan sequencing. Zero re-hashes, confirmed by comparison."
-    - "The bounds table and the signal-name property survive their hardest case: REQ-HBA-008 is entirely about two named outputs and names neither in hashed text."
-  what_was_found_instead: >-
-    One item, and it is NOT a collision between rulings — it is a limit in the ENUMERATION FORMAT, exposed
-    by the first RELATIONAL assertion this corpus has produced. Raised as AMB-14, not absorbed. The
-    distinction matters for the trend the coordinator is tracking: the register converged; the artifact
-    format met a case it was not built for.
+combination_check:
+  method: "REQ-HBA-002 as amended read against every clause and all thirteen rulings, both directions, plus the three interactions the register's own re-read closed."
+  contradictions_found: 0
+  clean:
+    - "AR-HBA-13 x REQ-HBA-001 — limb 1 is the exact inverse of 001.A1 and the two pin the same boundary from opposite sides. Until this issue only the upper side existed, which is the whole hole."
+    - "AR-HBA-13 x AR-HBA-04 — restoration, not reversal, confirmed by comparison: 002.A1 and 002.A2 are byte-identical to what was stamped."
+    - "AR-HBA-13 x AR-HBA-07 — limb 1 governs the FIRST raise from a zero accumulator; the re-raise starts from a past-threshold accumulator. Disjoint."
+    - "AR-HBA-13 x REQ-HBA-004 — 004 governs when the alarm may FALL, limb 1 when it may first RISE. Disjoint."
+    - "AR-HBA-13 x NEW-HBA-01 — 'uninterrupted' is defined against ACCUMULATED time, so a run pause does not break the episode. 002.A3 also catches an accumulator that OVER-COUNTS across a pause, which 001.A4 cannot (001.A4 is satisfied by an alarm that came too early)."
+    - "AR-HBA-13 x AR-HBA-03 — limb 1 references the bounds TABLE, never a value. No number in clause text, no number in assertion text, zero re-hashes. Both properties survive."
+    - "AR-HBA-13 x REQ-HBA-008 A1/A2 — checked and NOT clean in the way it first looks: the tracking assertions cannot catch a synchronised early assertion. That is why 008.A3 exists rather than being absorbed."
+  gaps_found: [AMB-15, AMB-16]
 
 # ===================================================================================================
 # AMBIGUITIES
 # ===================================================================================================
-ambiguities_closed_since_issue_3:
-  AMB-12: "CLOSED by AR-HBA-11 — AR-HBA-05 amended, AR-HBA-08 not scoped. Zero re-hashes, confirmed."
-  AMB-13: "CLOSED by AR-HBA-12 — REQ-HBA-008, general rather than case-specific. Produced 008.A1/A2."
+ambiguities_closed_since_issue_4:
+  the_vector_authors_dispute: "CLOSED by AR-HBA-13 — limb 1 restored. Produced 002.A3 and 008.A3."
 
 ambiguities_open:
 
   - id: AMB-14
     severity: medium
-    kind: "A LIMIT IN THE ENUMERATION FORMAT, not a defect in this register."
-    subject: "REQ-HBA-008 A1 and A2 — the first RELATIONAL assertions in the corpus"
+    status: "OPEN, unchanged, still not blocking — it changes no assertion text."
     what: >-
-      `EnumeratedAssertion.ResponseSignal` is a SINGLE string, and the mechanical check that partly closes
-      inflation route 5 is "the cited assertion's response signal appears in the vector's `Expectations`".
-      *** A SIMULTANEITY CLAIM HAS TWO SIGNALS AND BOTH MUST BE OBSERVED FOR THE CITATION TO MEAN
-      ANYTHING. *** As things stand a vector can cite 008.A1, expect on `HopperBlockedInhibit` alone,
-      never observe `HopperBlockedAlarm` at all, and the check passes — while testing nothing about the
-      relation the assertion is entirely about. Recorded on both assertions as `also_requires_observation_of:`,
-      which the wire format cannot carry.
-    why_it_appeared_now: >-
-      Every assertion in issues 1-3 was about ONE signal. REQ-HBA-008 is the register's first claim about
-      a RELATION BETWEEN TWO, so this is the first time the single-string field has been insufficient. It
-      is the same shape as AMB-03 — a check that cannot run — but structural rather than a naming gap.
+      `EnumeratedAssertion.ResponseSignal` is a SINGLE string, but REQ-HBA-008 A1/A2 are SIMULTANEITY
+      claims needing both signals observed. A vector can cite one, expect on `HopperBlockedInhibit` alone,
+      and pass the mechanical check while testing nothing about the relation.
+    would_settle_it: "`ResponseSignal` becomes a set (schema change in `Ladder.Wave` / `EnumerationDocument`), or a ruled convention that relational co-signals are the vector reviewer's judgement."
+    note: "008.A3 is NOT affected — it is a single-signal claim about the inhibit alone."
+
+  - id: AMB-15
+    severity: high
+    kind: "NEW — a combination gap between AR-HBA-13's definition of 'uninterrupted' and AR-HBA-10's window."
+    clause: "REQ-HBA-002 limb 1 x REQ-HBA-007 / AR-HBA-10"
+    what: >-
+      Limb 1's precondition is "no debounced clear and no `FaultReset` **since the accumulated persistence
+      time was last zero**". AR-HBA-10's sequence is: power cycle ZEROES the accumulator, THEN the operator
+      presses `FaultReset`. *** SO THE RESET FALLS AFTER THE ZEROING, AND ON THE NATURAL READING LIMB 1
+      DOES NOT BITE INSIDE THAT WINDOW. *** The register's own consistency re-read concluded these
+      "reinforce", on the grounds that a power cycle "starts a fresh first episode" — but that conclusion
+      needs "since it was last zero" to mean *the most recent instant at which it read zero* (accrual
+      start, after the reset) rather than *the zeroing event* (before the reset). The two readings differ
+      and the clause does not say which.
+    why_it_matters: >-
+      Under the "zeroing event" reading, an under-scaled preset is UNCATCHABLE inside the post-power-cycle
+      window: 007.A5 is a `WITHIN` bound — an UPPER limit — which a short preset satisfies MORE easily,
+      not less, and no assertion supplies a lower bound there. *** THAT IS THE SAME DEFECT CLASS THE
+      VECTOR AUTHOR JUST FOUND, SURVIVING IN ONE SCENARIO. ***
     would_settle_it: >-
-      Either `ResponseSignal` becomes a set (a schema change in `Ladder.Wave` and in
-      `EnumerationDocument`, not a register change), or a convention is ruled that a relational assertion's
-      co-signals are declared elsewhere and checked by the vector reviewer as judgement.
-    *** DOES NOT BLOCK STAMPING ***: >-
-      It changes NO assertion text. Both readings above are satisfied by the texts exactly as written, so
-      settling it after the stamp dangles nothing. That is the reason it is safe to freeze with this open.
+      One clause in AR-HBA-13: whether the "first episode" restarts at the moment ACCRUAL RESUMES from
+      zero (limb 1 bites everywhere, nothing further needed) or at the zeroing EVENT (limb 1 is silent in
+      the window, and the enumeration needs one further assertion per output — denominator 29).
+    what_i_did: >-
+      Took the clause's wording VERBATIM into 002.A3's trigger and recorded the caveat on the assertion.
+      Did NOT pick a reading. If the ruling goes the second way, 002.A3's text does not move — two
+      assertions are ADDED, so the cost is two UNCLASSIFIED units and no dangled citation.
+
+  - id: AMB-16
+    severity: high
+    kind: "NEW — the GENERAL form of the hole AR-HBA-13 repaired locally."
+    clause: "register-wide"
+    what: >-
+      AR-HBA-13 states that limb 1's threshold is the **SPECIFIED** one and not the implementation's
+      preset — and it is the only place in the register that says so. *** TWENTY-TWO OTHER ASSERTIONS SAY
+      "the persistence threshold" OR "a further full persistence threshold" AND THE REGISTER NEVER SAYS
+      WHICH THRESHOLD THOSE MEAN. *** The consequences are not symmetric and that is what makes it
+      urgent: read as the block's own preset, `003.A1`, `003.A3` and `007.A1` become substantially weaker
+      than they look — `003.A1` would otherwise ALSO have caught the under-scaled preset, post-clear.
+      Read as the specified value, they all bite as intended and nothing changes.
+    why_this_is_the_same_shape: >-
+      The hole the vector author found was a claim that READ as covered because its title survived. This
+      is a claim that reads as covered because its REFERENCE POINT is assumed. Both are invisible to a
+      consistency pass, because in both cases the text is internally consistent — it is just not saying
+      what a reader assumes.
+    would_settle_it: >-
+      *** ONE LINE IN THE FORMAT SECTION, AND IT COSTS ZERO RE-HASHES: "the persistence threshold" and
+      "the clear-debounce filter time" ALWAYS mean the SPECIFIED values in AR-HBA-03's table, wherever
+      they appear. *** AR-HBA-03 already implies it ("a vector reads it from this table and says which it
+      used"); making it explicit closes the question for all 27 assertions at once without moving a single
+      sentence. If instead the preset reading is intended anywhere, those assertions must be reworded —
+      and after stamping that dangles every citation to them.
+    recommended: "Settle this one BEFORE the next stamp. It is the cheapest ruling available and it closes the widest hole."
+
+  - id: AMB-17
+    severity: low
+    kind: "A METHOD observation, raised rather than adopted."
+    what: >-
+      This register carried a clause whose TITLE promised a claim its TEXT no longer made, for four
+      enumeration rounds, and no consistency pass could have found it — the text was consistent, it was
+      simply missing a claim. A cheap mechanical smell test exists: *** A CLAUSE TITLE NONE OF WHOSE
+      ASSERTIONS SUPPORTS. *** "No alarm below threshold" against two assertions both conditioned on a
+      debounced clear would have flagged.
+    what_i_did_NOT_do: >-
+      Did not adopt it. An enumerator who derives assertions from TITLES is no longer spec-derived — the
+      title is a label, not a claim, and inventing from it is how a denominator starts including things
+      nobody specified. Offered as a REPORTED SIGNAL alongside the assertions-per-clause ratio, never as a
+      source of assertions.
+    would_settle_it: "A ruling on whether `enumerate-assertions` should report title/assertion mismatch as a signal in the same way it reports the per-clause ratio."
 
 # ===================================================================================================
-# THE Q-HBA-04 EXPOSURE — re-read before the freeze, as advised, and re-priced
+# THE Q-HBA-04 EXPOSURE — re-checked, unchanged
 # ===================================================================================================
 conditional_on_owner:
-  item: "Q-HBA-04's parenthetical 'a full hopper at standstill does not alarm' — an OWNER answer, reconciled by AR-HBA-07 as a statement about ACCRUAL, not about the latch."
-  decomposed_against: "the reconciled (accrual) reading."
-  status_at_issue_4: "UNCHANGED and still standing. Deliberately left by the coordinator; it is an OWNER question and no agent ruling can close it."
-  re_checked_against_REQ_HBA_008: >-
-    *** THE NEW CLAUSE ADDS NO EXPOSURE. *** REQ-HBA-008's assertions are RELATIONAL — they say the two
-    outputs agree, whatever the alarm does. If the owner asserts the strong reading and the alarm's
-    behaviour at standstill inverts, both NEVERs remain true and unchanged. Checked rather than assumed,
-    because a new clause is exactly where a hidden dependency on an open question would appear.
+  item: "Q-HBA-04's 'a full hopper at standstill does not alarm', reconciled by AR-HBA-07 as being about ACCRUAL. An OWNER answer; no agent ruling can close it."
+  re_checked_against_AR_HBA_13: >-
+    NO ADDED EXPOSURE. Limb 1 forbids an EARLY alarm and says nothing about the run state; 002.A3 and
+    008.A3 are unaffected by either reading of Q-HBA-04. Checked because a new assertion is exactly where
+    a hidden dependency on an open question would appear.
   exposure_if_the_owner_asserts_the_strong_reading:
-    - id: REQ-HBA-001.A3
-      change: "Drop 'and no hopper-blockage alarm was previously latched'. RE-HASHES. Still the ONLY assertion whose text the reconciliation moves."
-    - id: REQ-HBA-005.A6
-      change: "INVERTED, not reworded — AR-HBA-07 overturned; the assertion is removed or replaced by its negation."
-    - id: REQ-HBA-004.A1
-      change: "Would need a run-state exception — the independent objection that a latched alarm would have to DROP when the plant stops, contradicting REQ-HBA-004 regardless of any agent ruling."
-  total_exposure: "1 re-hash, 1 inversion, 1 knock-on. Unchanged from issue 3."
+    - {id: REQ-HBA-001.A3, change: "drop the previously-latched precondition. RE-HASHES — and this one now DANGLES TWO LIVE VECTOR SETS."}
+    - {id: REQ-HBA-005.A6, change: "INVERTED, not reworded — AR-HBA-07 overturned."}
+    - {id: REQ-HBA-004.A1, change: "would need a run-state exception — the independent objection that makes the strong reading fail anyway."}
+  total_exposure: "1 re-hash, 1 inversion, 1 knock-on. Unchanged since issue 3 — but the PRICE of the re-hash has gone up, because citations now exist."
 
 # ===================================================================================================
-# PRE-STAMP FINAL READ — my answer to "if anything should be settled before the freeze, name it now"
-# ===================================================================================================
-pre_stamp_final_read:
-  recommendation: "*** STAMP. Nothing open needs to be settled first. ***"
-  reasoning:
-    - "AMB-14 changes no assertion text. Settling it after the stamp dangles nothing — it is a schema or convention question about a FIELD, not about a sentence."
-    - >-
-      The Q-HBA-04 exposure CANNOT be settled first: it needs the owner, and holding the freeze for it
-      would stall the whole loop on an item that has been priced at 1 re-hash, 1 inversion and 1 knock-on
-      and is not growing. Priced exposure that is known is not the same as exposure that is discovered.
-    - >-
-      NEW-HBA-05 is still OPEN and 007.A4 is the assertion that fails first if it is settled toward a
-      retentive accumulator. Also priced, also not blocking, also named at the assertion that carries it —
-      which is the whole point of having recorded it there.
-  what_i_would_NOT_do: >-
-    Do not settle AMB-14 by editing an assertion's text to name both signals. That would put a signal name
-    into a hashed sentence, giving away the property the register's own Format section protects, to fix a
-    problem that lives in a field.
-
-# ===================================================================================================
-# THE GATE'S PROJECTION — `SubmissionDocument.Enumeration`. Emit `forms` and `enumerator` or gates 3e
-# and 3d report NOT CHECKED, which is not a pass. FILL `assertions` AT THE STAMPING STEP (§3.4).
+# THE GATE'S PROJECTION
 # ===================================================================================================
 gate_projection_template:
   clauses: [REQ-HBA-001, REQ-HBA-002, REQ-HBA-003, REQ-HBA-004, REQ-HBA-005, REQ-HBA-006, REQ-HBA-007, REQ-HBA-008]
-  assertions: [REQ-HBA-001:ab68c1, REQ-HBA-001:8ea7f6, REQ-HBA-001:0772fa, REQ-HBA-001:2bdfa7, REQ-HBA-002:efe6b5, REQ-HBA-002:bfda9d, REQ-HBA-003:607fdf, REQ-HBA-003:652dd6, REQ-HBA-003:aa1d87, REQ-HBA-003:09e3a8, REQ-HBA-004:14c9b6, REQ-HBA-005:0463ce, REQ-HBA-005:7e39bc, REQ-HBA-005:179eb7, REQ-HBA-005:6e1e8d, REQ-HBA-005:34fd97, REQ-HBA-005:e7e0e0, REQ-HBA-006:469954, REQ-HBA-007:4197e0, REQ-HBA-007:7edf6c, REQ-HBA-007:578675, REQ-HBA-007:9855c5, REQ-HBA-007:34dc51, REQ-HBA-008:d97781, REQ-HBA-008:741315]
+  assertions: "<25 already-stamped IDs, unchanged + 2 newly computed>"
   forms:
-    # id -> form. Ordinals are DISPLAY ONLY and are NEVER citable (§3.3).
     REQ-HBA-001.A1: When
     REQ-HBA-001.A2: When
     REQ-HBA-001.A3: When
     REQ-HBA-001.A4: When
     REQ-HBA-002.A1: When
     REQ-HBA-002.A2: When
+    REQ-HBA-002.A3: When
     REQ-HBA-003.A1: When
     REQ-HBA-003.A2: When
     REQ-HBA-003.A3: When
@@ -669,21 +604,21 @@ gate_projection_template:
     REQ-HBA-007.A5: When
     REQ-HBA-008.A1: Never
     REQ-HBA-008.A2: Never
+    REQ-HBA-008.A3: Never
   enumerator: assertion-enumerator
 
 ratios:
-  assertions_per_clause: {REQ-HBA-001: 4, REQ-HBA-002: 2, REQ-HBA-003: 4, REQ-HBA-004: 1, REQ-HBA-005: 6, REQ-HBA-006: 1, REQ-HBA-007: 5, REQ-HBA-008: 2}
-  mean: 3.13
+  assertions_per_clause: {REQ-HBA-001: 4, REQ-HBA-002: 3, REQ-HBA-003: 4, REQ-HBA-004: 1, REQ-HBA-005: 6, REQ-HBA-006: 1, REQ-HBA-007: 5, REQ-HBA-008: 3}
+  mean: 3.38
   min: 1
   max: 6
-  forms: {When: 21, Never: 4}
+  forms: {When: 22, Never: 5}
   judged: false
   note: >-
-    No corpus norm exists (§7 open item 4). Reported, never judged. The spread tracks HOW MUCH THE
-    REGISTER SAYS, not how hard each clause is: 004 and 006 are one sentence each and were never amended;
-    005 absorbed five of the twelve rulings. Worth recording for whenever a norm is measured: the `Never`
-    share doubled this round because the register's first RELATIONAL clause decomposes naturally into
-    prohibitions rather than triggers.
+    No corpus norm exists (§7 open item 4). Reported, never judged. Recorded for whenever a norm IS
+    measured: the count grew 13 -> 19 -> 23 -> 25 -> 27 across five issues of ONE register, and every
+    increase came from the specification getting more precise rather than from the enumeration getting
+    more generous. A norm measured against a first-pass register would be measuring the wrong thing.
 
 # ===================================================================================================
 # NOT MINE TO ASSIGN
@@ -693,3 +628,5 @@ buckets_not_assigned_here: >-
   never to the block's author, never to a vector's author, and not to the enumerator either. DEFERRED
   needs an owner and a date. UNCLASSIFIED is never written: it is
   enumerated - (COVERED u OUT-OF-SCOPE u DEFERRED u UNTESTABLE-ON-RIG), computed across two artifacts.
+  *** THE TWO NEW ASSERTIONS ARE UNCLASSIFIED UNTIL SOMEBODY RULES ON THEM — that is §2.3's event, and
+  the gate should fail until it happens. ***
