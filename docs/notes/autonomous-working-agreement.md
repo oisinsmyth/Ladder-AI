@@ -167,6 +167,25 @@ running does not license:
   author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
     ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
       does. A caveat that lives in a lane report has already failed the person it was written for.
+- *** A NARROWING REPAIR: THE EDIT LEAST LIKELY TO BE RE-READ FOR WHAT IT DROPPED. *** Measured
+  2026-08-13. A ruling correctly removed a contradiction from a requirement clause — **and silently
+  removed a claim along with it.** The clause was titled *"No alarm below threshold"*; the reworded
+  text conditioned the claim on a debounced clear, so *** AN UNDER-SCALED PRESET LEFT ALL 25
+  ASSERTIONS TRUE *** — the most ordinary commissioning error there is, invisible to the coverage
+  gate. **The title survived and the content did not**, which is precisely why four consistency passes
+  read it as covered.
+    ➜ *** A REWRITE THAT FIXES A CONTRADICTION GETS CHECKED FOR WHETHER THE CONTRADICTION IS GONE,
+      NEVER FOR WHAT WENT WITH IT. *** After any narrowing edit, ask what the clause claimed
+      **before** and confirm each part still has a home. A heading is not coverage.
+    ➜ **It was found by a VECTOR AUTHOR, not by review** — the design says *the vector author is a
+      second reader by construction*, and this is that mechanism firing rather than being asserted.
+      **An independent consumer of a spec finds what re-reading the spec cannot.**
+- *** A REQUIREMENT THAT REFERENCES THE IMPLEMENTATION'S OWN PARAMETER IS VACUOUS. *** The repair
+  above only bites because it is written against **the SPECIFIED threshold**, never the block's own
+  preset: *** AGAINST ITS OWN PRESET, A `T#45S` BLOCK ASSERTS "AT ITS THRESHOLD" AND PASSES *** — true
+  of every implementation, including every wrong one.
+    ➜ **Ask of any requirement: could the thing under test satisfy this by defining its own terms?**
+      If so it is a tautology in requirement's clothing, and it will read as coverage forever.
 - *** A PROHIBITION LIST IS A DENYLIST, AND A DENYLIST HAS TO BE COMPLETE. *** Measured 2026-08-13, on
   the run the whole milestone turns on. The vector author — whose value rests **entirely** on never
   having seen the implementation — was briefed with a list of forbidden artifacts. **It read none of
