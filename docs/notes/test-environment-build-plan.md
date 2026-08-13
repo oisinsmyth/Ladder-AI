@@ -2435,6 +2435,61 @@ ATTACK MUST ROUTE THROUGH A SECOND PARTY. ***
 > — which undoes most of what the enumeration is for. Open alongside STARTUP's bucket status and where
 > a decomposition dispute is recorded.
 
+### ✅ THE RESULT PACKAGE (DB-8) IS BUILT — content is computed LAST (2026-08-13, `0628666`)
+
+`Harness.Results`, **470 → 524 tests**, six assemblies. It sits **above the wire** — it consumes what a
+run produced and what a submission declared, and opens no socket.
+
+> *** THE VERDICT IS COMPUTED IN A FIXED PRECEDENCE: admissibility → LIVENESS → run outcome → settling
+> → CONTENT. Content is LAST because it is the only one a frozen mirror can satisfy. ***
+
+**Five vocabularies, each protecting a different distinction**, and every one carrying an explicit
+not-conclusive value rather than an absent field:
+
+  - **Verdict** — Pass / Fail / TimedOut / Unsettled / Stale / Refused. **Four of the six say nothing
+    about the block**, so `ConclusiveAboutTheBlock` is a **separate property** — *** OTHERWISE A CALLER
+    REACHES FOR `!= Fail` AND COUNTS FOUR KINDS OF NOTHING AS SUCCESSES. *** All six `WhatToDoNext`
+    strings are asserted **distinct**: if two matched, one state would be decoration.
+  - **Stimulus** — NeverRan / CommandedButDidNotRun / CounterFrozen / CounterAdvancedTooLittle /
+    NotLoaded / **WrongBuildRunning** / NotChecked. The first two are different facts about a *wave*:
+    the plan, versus the copy layer and the start-bool address.
+  - **Assertion** — Held / Disagreed / **NotObserved**. *An unread register is not a passing one.*
+  - **Settling** — Settled / NotSettled / **NotEstablished**.
+  - **Manifest** — Loaded / Absent / **NotAvailable**. §9c's rule as a value, never a silent default.
+
+**The stimulus check looks at NO result content at all, and that is asserted as a property of the
+type** — `StimulusEvidence` carries no value from any result. The headline test feeds four liveness
+failures a register set that agrees in **every position** and asserts `Stale` each time.
+
+  ➜ **"Moved" is not "advanced by the expected amount":** the floor scales with the work done (≥1 scan
+    per round trip issued). The **weak** form was chosen deliberately — the strong one divides by the
+    scan *period*, which is a property of the program under test rather than of the link. The
+    expectation is **required with no default** (D36).
+  ➜ *** ONE CHECK NOT IN THE BRIEF, AND IT IS THE BEST ONE: A VERSION REPORT THAT `Confirmed` A
+    DIFFERENT BUILD. *** It says *"the program is what I asked about"* — **and nothing else asked
+    whether it asked the right question.** The stimulus check's own logic, turned on the instrument.
+
+**The stamp carries F-1's premise as a NAMED per-result caveat**, so *** IF THE RIG'S MEASUREMENT COMES
+BACK AGAINST F-1, THE AFFECTED RESULTS IDENTIFY THEMSELVES. *** Also caveated: an unvalidated model, a
+model naming *no* absences at all, an unavailable manifest, an unread version register.
+
+**18 breaks, each red and reverted byte-for-byte.** Largest: liveness-before-content → **8 red**;
+widening `ConclusiveAboutTheBlock` to `!= Fail` → **6 red**.
+
+#### Five things DB-8 leaves ambiguous, the first of which is a hole
+
+  1. 🔴 *** NOBODY CURRENTLY DECIDES THAT A VALUE SETTLED. *** DB-8 requires the package readable;
+     the contract requires a settling *declaration*; **neither says who evaluates it.** Modelled as a
+     caller-supplied `SettlingState` with `NotEstablished` as the honest third value — but `WaveRun`
+     observes **completion, not settling**. That is exactly the gap between phase 2's finding
+     (*a completion flag is not a settling signal*) and phase 5's package, **unbuilt in both
+     directions.**
+  2. No stated mapping from an **assertion to a signal** — one tag? several? a predicate over history?
+  3. **"every model INVOLVED"** is plural and the package holds one; the aggregation rule is unstated.
+  4. **A vector citing an assertion that later decomposes** (§7a): nothing says what happens to results
+     already returned against the old ID.
+  5. `Refused` is per-vector, so **a submission refused whole** (DB-9 atomicity) has no representation.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
