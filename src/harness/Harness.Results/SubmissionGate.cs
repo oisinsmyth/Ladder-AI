@@ -97,7 +97,9 @@ public static class SubmissionGate
         double floorScans,
         int runtimeCompression,
         ConflictGraph? conflicts,
-        BlockCompressionInputs? compressionInputs = null)
+        BlockCompressionInputs? compressionInputs = null,
+        DeploymentDeclaration? deployment = null,
+        TagMapReach? tagMapReach = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -135,6 +137,7 @@ public static class SubmissionGate
         gates.Add(LivenessPreconditions(vectors, map));
         gates.Add(CompressionCeiling(vectors, floorScans, runtimeCompression));
         gates.Add(CompressionBoundsNotInTheSubmission(vectors, runtimeCompression, floorScans, compressionInputs));
+        gates.Add(MemoryLayout(deployment, tagMapReach));
 
         return new SubmissionReport(gates, vectors.Count);
     }
@@ -846,6 +849,122 @@ public static class SubmissionGate
             + (runtimeCompression > plan.CompMin
                 ? $" *** THIS WAVE RUNS AT comp={runtimeCompression}, ABOVE comp_min. *** It clears the ceiling, and X-D's rule is to take the LEAST compression that meets the budget and bank the remainder as margin — compression is a fidelity risk, and running above comp_min spends that margin for nothing."
                 : string.Empty));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 11 — memory layout (contract §4.5). THE INVARIANT WAS TRUE AND ENFORCED BY NOTHING.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// *** EVERY <c>(area, dbNumber)</c> A TAG MAP CAN REACH MUST BE A DECLARED HARNESS OBJECT. ***
+    ///
+    /// <para><b>The invariant was measured TRUE and enforced by nothing.</b> <c>S7Transport</c> reaches
+    /// any DB through a HAND-WRITTEN JSON tag map, and the write fence cannot catch it because the fence
+    /// is scoped on an AREA NAME drawn from that same map — so it verifies that the caller's claimed area
+    /// matches the tag's, never what KIND of object the area is. Nothing read a deliverable block's data
+    /// only because no tag map in the repository pointed at one.</para>
+    ///
+    /// <para>So the enforceable point is the TAG MAP, and the check is a set-difference against an
+    /// artifact the vector author did not write for this purpose.</para>
+    ///
+    /// <para><b>Four ways to fail, and they are four different facts:</b> a reachable pair nobody
+    /// declared; a row naming a DELIVERABLE block (the invariant broken); a layout that is
+    /// <c>Optimized</c> or unstated (the object is ABSENT on the wire and every read fails at the first
+    /// DATA transfer, which presents as wiring); and a <c>layoutSetAfterImport</c> that is missing or
+    /// names an OLDER import — the layout reverts at EVERY import, so a stale stamp says it was
+    /// re-asserted and has reverted since.</para>
+    /// </summary>
+    private static GateResult MemoryLayout(DeploymentDeclaration? deployment, TagMapReach? reach)
+    {
+        const string name = "11 memory layout (§4.5)";
+
+        if (deployment is null)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "deployment declaration + the tag map's reach",
+                "no `deployment` was declared, so nothing was compared. It is a property of the DOWNLOAD and resubmitting the vector cannot supply it — "
+                + "and ABSENT IS NOT `s7Objects: []`, which is the positive claim that no classic-S7comm path reaches a data block.");
+        }
+
+        var problems = new List<string>();
+        var rows = deployment.S7Objects ?? Array.Empty<S7ObjectDeclaration>();
+
+        // The stamp dates every layout claim, so a declaration with rows and no stamp cannot be checked
+        // at all — the comparison that distinguishes "nobody re-asserted it" from "re-asserted after the
+        // wrong import" has nothing to compare against.
+        if (rows.Count > 0 && string.IsNullOrWhiteSpace(deployment.ImportStamp))
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "deployment.importStamp",
+                $"{rows.Count} s7Object(s) are declared and no `importStamp` is. Every layout claim is DATED against it, so without one a `layoutSetAfterImport` cannot be told from a stale one — "
+                + "and a stale one means the layout was re-asserted against a previous import and has reverted since.");
+        }
+
+        foreach (var row in rows)
+        {
+            var label = $"{row.Area} (DB{row.DbNumber})";
+
+            if (string.IsNullOrWhiteSpace(row.HarnessObject))
+            {
+                problems.Add($"{label}: names no harness object. §4.5's invariant is that every reachable object IS one, so a blank here is the claim not being made rather than being made about nothing.");
+            }
+            else if (reach is not null && reach.DeliverableObjects.Contains(row.HarnessObject))
+            {
+                problems.Add($"{label}: names '{row.HarnessObject}', WHICH SHIPS. *** THAT IS THE INVARIANT BROKEN, NOT A FINDING *** — the harness touches harness-generated objects only, and a classic-S7comm path into a deliverable block means what ships is not what was tested.");
+            }
+
+            switch (row.Layout)
+            {
+                case DeclaredLayout.Standard:
+                case DeclaredLayout.NotApplicable:
+                    break;
+                case DeclaredLayout.Optimized:
+                    problems.Add($"{label}: declares Optimized. Classic S7comm cannot see an optimized block AT ALL — it is not an error, the object is simply ABSENT, and the read fails at the first DATA transfer rather than at connect, which presents as a wiring problem.");
+                    break;
+                default:
+                    problems.Add($"{label}: declares no layout. Absence means \"no opinion\", never a default, and TIA RESOLVES NO OPINION TO OPTIMIZED. Undetermined is not clean.");
+                    break;
+            }
+
+            // NotApplicable objects have no layout to re-assert — a %M region or a tag table — so a stamp
+            // is neither required nor meaningful there.
+            if (row.Layout == DeclaredLayout.NotApplicable)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(row.LayoutSetAfterImport))
+            {
+                problems.Add($"{label}: carries no `layoutSetAfterImport`. NOBODY RE-ASSERTED THE LAYOUT — and the layout reverts at EVERY import, silently, with `drift-check` structurally blind to it in both directions.");
+            }
+            else if (!string.Equals(row.LayoutSetAfterImport, deployment.ImportStamp, StringComparison.Ordinal))
+            {
+                problems.Add($"{label}: was re-asserted after import '{row.LayoutSetAfterImport}' and the current import is '{deployment.ImportStamp}'. RE-ASSERTED AFTER THE WRONG IMPORT — a different fact from nobody having done it, and the reason this field is a stamp rather than a boolean. It has reverted since.");
+            }
+        }
+
+        if (reach?.Reachable is null)
+        {
+            var declared = rows.Count == 0
+                ? "The declaration claims `s7Objects: []` — no classic-S7comm path reaches a data block — and that claim was NOT compared against a tag map."
+                : $"The {rows.Count} declared row(s) were checked for layout and stamp, and NOT compared against what a tag map can actually reach.";
+
+            return new GateResult(name, GateStatus.NotChecked, false, "the tag map's reachable (area, dbNumber) set",
+                declared + " *** THE SET-DIFFERENCE IS THE POINT OF THIS GATE *** — S7Transport reaches any DB through a hand-written map, and the write fence is scoped on an area name from that same map, so it cannot see what KIND of object an area is. "
+                + (problems.Count > 0 ? "Findings on what WAS checked: " + string.Join(" | ", problems) : string.Empty));
+        }
+
+        var declaredReach = rows.Select(r => r.Reach).ToHashSet();
+        var undeclared = reach.Reachable.Where(r => !declaredReach.Contains(r)).ToArray();
+
+        if (undeclared.Length > 0)
+        {
+            problems.Add($"the tag map can reach {string.Join(", ", undeclared.Select(r => r.ToString()).OrderBy(s => s, StringComparer.Ordinal))}, which `s7Objects` does not declare. "
+                + "An undeclared reachable object has no layout claim, so nothing says it is Standard — and an optimized one is ABSENT on the wire rather than wrong on it.");
+        }
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(TagMapReach),
+            problems.Count == 0
+                ? (rows.Count == 0
+                    ? $"the tag map reaches {reach.Reachable.Count} object(s) and `s7Objects` is empty — consistent only because the map reaches nothing addressable, which is the normal mirror-only state (the mirror is %MW bit memory, not a DB)."
+                    : $"every one of the {reach.Reachable.Count} (area, dbNumber) pair(s) the tag map can reach is declared as a harness object, at Standard or NotApplicable, re-asserted after import '{deployment.ImportStamp}'.")
+                : string.Join(" | ", problems));
     }
 
     // -------------------------------------------------------------------------------------------------

@@ -58,7 +58,7 @@ public static class GateCli
             // Evaluate is INSIDE the try: a document that parses as JSON and then names a mode nothing
             // implements is still a document that could not be read, and it must reach the same
             // NOTHING EXAMINED outcome rather than escaping as an unhandled throw.
-            report = Evaluate(document);
+            report = Evaluate(document, readFile);
         }
         catch (Exception ex)
         {
@@ -78,7 +78,7 @@ public static class GateCli
     }
 
     /// <summary>Turn the document into the checked types and run every gate.</summary>
-    public static SubmissionReport Evaluate(SubmissionDocument document)
+    public static SubmissionReport Evaluate(SubmissionDocument document, Func<string, string>? readFile = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -128,7 +128,45 @@ public static class GateCli
             floor,
             Math.Max(1, document.RuntimeCompression),
             ToConflictGraph(document),
-            ToCompressionInputs(document));
+            ToCompressionInputs(document),
+            ToDeployment(document),
+            ToTagMapReach(document, readFile));
+    }
+
+    private static DeploymentDeclaration? ToDeployment(SubmissionDocument document) =>
+        document.Deployment is null
+            ? null
+            : new DeploymentDeclaration(
+                document.Deployment.ImportStamp,
+                (document.Deployment.S7Objects ?? new List<S7ObjectDocument>())
+                    .Select(o => new S7ObjectDeclaration(
+                        o.Area ?? string.Empty, o.DbNumber, o.HarnessObject ?? string.Empty, o.Layout, o.LayoutSetAfterImport))
+                    .ToArray());
+
+    /// <summary>
+    /// The reachable set, <b>COMPUTED FROM THE TAG MAP</b> with the same reader the transport uses.
+    ///
+    /// <para>A map that cannot be read yields <c>null</c>, so gate 11 reports NOT CHECKED rather than
+    /// comparing against an empty set — which would say "the map reaches nothing", the opposite claim.</para>
+    /// </summary>
+    private static TagMapReach ToTagMapReach(SubmissionDocument document, Func<string, string>? readFile)
+    {
+        var deliverables = document.Deployment?.DeliverableObjects ?? new List<string>();
+
+        if (string.IsNullOrWhiteSpace(document.TagMapPath) || readFile is null)
+            return TagMapReach.None with { DeliverableObjects = deliverables.ToHashSet(StringComparer.Ordinal) };
+
+        try
+        {
+            var map = Harness.S7.S7TagMap.FromJson(readFile(document.TagMapPath!));
+            return TagMapReach.Of(map.Tags.Select(t => new S7Reach(t.Area, t.DbNumber)), deliverables);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or Harness.S7.S7ConfigurationException or System.Text.Json.JsonException)
+        {
+            // An unreadable map is NOT an empty one. Gate 11 then says the set-difference could not be
+            // made, which is the honest answer and is not a pass.
+            return TagMapReach.None with { DeliverableObjects = deliverables.ToHashSet(StringComparer.Ordinal) };
+        }
     }
 
     /// <summary>

@@ -23,6 +23,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Harness.Results\Harness.Results.csproj" />
+
+    <!--
+      Harness.S7, for ONE reason: gate 11's set-difference has to be computed FROM THE TAG MAP, not
+      declared. A reachable set the submission stated would be the author vouching for the artifact the
+      gate exists to check them against. `S7TagMap.Load` is the same reader the transport uses, so the
+      gate reads the map the way the thing it is fencing reads it.
+    -->
+    <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
   </ItemGroup>
 
 </Project>

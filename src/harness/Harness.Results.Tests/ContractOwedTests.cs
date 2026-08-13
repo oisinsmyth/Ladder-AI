@@ -53,7 +53,12 @@ public class ContractOwedTests
             floorScans: 9,
             runtimeCompression,
             ConflictGraph.Empty,
-            inputs);
+            inputs,
+
+            // Contract 4.5, and TRUE of these fixtures rather than convenient: the mirror is %MW bit
+            // memory, nothing here generates a data block, and the reachable set really is empty.
+            new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>()),
+            TagMapReach.Of(Array.Empty<S7Reach>()));
 
     private static GateResult Gate(SubmissionReport report, string startsWith) =>
         report.Gates.Single(g => g.Gate.StartsWith(startsWith, StringComparison.Ordinal));

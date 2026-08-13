@@ -31,7 +31,14 @@ public sealed record LoopRequest(
     CopyLayerNaming Naming,
     IReadOnlyList<HarnessObject> ProgramUnderTest,
     RuntimeCompression? RuntimeCompression = null,
-    BlockCompressionInputs? CompressionInputs = null)
+    BlockCompressionInputs? CompressionInputs = null,
+
+    // Contract 4.5. *** THE LOOP CANNOT SUPPLY THESE AND MUST NOT INVENT THEM. *** `s7Objects: []` is a
+    // POSITIVE CLAIM - no classic-S7comm path in this deployment reaches a data block - and the loop
+    // asserting it on the caller's behalf would be the caller-supplied verdict this project has killed
+    // three times. Absent means nobody said, and gate 11 reports NOT CHECKED.
+    DeploymentDeclaration? Deployment = null,
+    TagMapReach? TagMapReach = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -103,7 +110,8 @@ public static class LoopRun
 
         var gate = SubmissionGate.Check(
             request.Vectors, request.Enumeration, request.Fidelity, request.BlockAuthor,
-            mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs);
+            mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs,
+            request.Deployment, request.TagMapReach);
 
         if (gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

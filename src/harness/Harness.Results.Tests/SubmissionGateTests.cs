@@ -79,7 +79,12 @@ public class SubmissionGateTests
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
             floor, runtimeCompression,
             omitConflictGraph ? null : conflicts ?? ConflictGraph.Empty,
-            compressionInputs);
+            compressionInputs,
+
+            // Contract 4.5, and TRUE of these fixtures rather than convenient: the mirror is %MW bit
+            // memory, nothing here generates a data block, and the reachable set really is empty.
+            new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>()),
+            TagMapReach.Of(Array.Empty<S7Reach>()));
 
     /// <summary>
     /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.

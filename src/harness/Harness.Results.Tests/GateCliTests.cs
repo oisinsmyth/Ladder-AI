@@ -25,6 +25,12 @@ public class GateCliTests
                        "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" },
                        "requiredObservations": { "REQ-014:ffcc38": ["Demo_Count"] } },
       "map": { "providedFor": { "Demo_Count": ["Latched"] } },
+      "tagMapPath": "tags.json",
+      "deployment": {
+        "importStamp": "import-A",
+        "s7Objects": [{ "area": "DB_HarnessMarker", "dbNumber": 100, "harnessObject": "DB_HarnessMarker",
+                        "layout": "Standard", "layoutSetAfterImport": "import-A" }]
+      },
       "vectors": [{
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
         "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
@@ -43,10 +49,20 @@ public class GateCliTests
     }
     """;
 
+    /// <summary>
+    /// The tag map gate 11's set-difference is computed FROM. A real one, read by the same reader the
+    /// transport uses — a declared reachable set would be the author vouching for the artifact the gate
+    /// exists to check them against.
+    /// </summary>
+    private const string TagMap = """
+    { "tags": [ { "name": "Marker_Build", "area": "DB_HarnessMarker", "db": 100, "byte": 0, "type": "DInt" } ] }
+    """;
+
     private static (int Exit, string Output) Run(string json, string[]? args = null)
     {
         var writer = new StringWriter();
-        var exit = GateCli.Run(args ?? new[] { "check", "sub.json" }, writer, _ => json);
+        var exit = GateCli.Run(args ?? new[] { "check", "sub.json" }, writer,
+            path => string.Equals(path, "tags.json", StringComparison.Ordinal) ? TagMap : json);
         return (exit, writer.ToString());
     }
 
@@ -187,6 +203,12 @@ public class GateCliTests
           "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
           "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"] },
           "map": { "providedFor": { "Demo_Count": ["Latched"] } },
+          "tagMapPath": "tags.json",
+          "deployment": {
+            "importStamp": "import-A",
+            "s7Objects": [{ "area": "DB_HarnessMarker", "dbNumber": 100, "harnessObject": "DB_HarnessMarker",
+                            "layout": "Standard", "layoutSetAfterImport": "import-A" }]
+          },
           "vectors": [{
             "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
             "clause": "REQ-014", "assertion": "REQ-014:ffcc38",

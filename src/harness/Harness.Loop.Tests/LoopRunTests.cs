@@ -86,7 +86,14 @@ public class LoopRunTests
             new CopyLayerNaming(BlockNumber: 900),
             TrivialBlock.Generate(ProgramBase, blockNumber: 901, defect),
             RuntimeCompression: compression ?? RuntimeCompression.Uncompressed,
-            CompressionInputs: compressionInputs);
+            CompressionInputs: compressionInputs,
+
+            // Contract 4.5, and it is TRUE of this loop rather than convenient: the mirror is %MW bit
+            // memory (spec 6, MirrorGeometry), the copy layer generates no data block, and no tag map is
+            // in play - so no classic-S7comm path reaches one. Declared as the positive claim it is, and
+            // compared against a reachable set that really is empty.
+            Deployment: new DeploymentDeclaration("loop-test-import", Array.Empty<S7ObjectDeclaration>()),
+            TagMapReach: TagMapReach.Of(Array.Empty<S7Reach>()));
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {
