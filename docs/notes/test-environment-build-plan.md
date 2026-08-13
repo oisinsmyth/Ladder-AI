@@ -4127,3 +4127,44 @@ the failure this plan exists to prevent, wearing the costume of good use of time
   interfering pair deliberately and confirm it is caught.
 - **A2 comes back much worse than assumed.** That does not invalidate the design, but it narrows
   slots and re-opens O11 — which is why 0.3 is a desk task and not a phase-4 discovery.
+
+---
+
+## 🔴 DEPLOY SUCCEEDED, RIG NOT YET SERVING — DIAGNOSIS 2026-08-14
+
+**The download LANDED**: exit 0, **45 objects loaded BY NAME** from the load manifest (`source:
+DownloadResultAdapter`, first-hand), `StopModules` and `StartModules` both raised **and answered**,
+transitions `PLC_1 stopped` → `PLC_1 started`.
+
+**Measured after, on the device rather than from TIA's messages:**
+
+| probe | result |
+|---|---|
+| `10.10.10.10:102` ISO-on-TCP | **OPEN**, 72–95 ms, three of three |
+| `10.10.10.10:503` Modbus | *** REFUSED, three of three *** |
+| `:502` negative control | refused — the probe discriminates |
+| **CPU run state** (`PlcGetStatus`, a device read) | *** `Running (8)` *** |
+| order code (SZL) | ok — `6ES7 214-1AG40-0XB0` |
+| `DBRead(38)` | `0x00040000` |
+| **`MBRead` (M memory)** | **`0x00040000` — the same** |
+
+*** SO THERE ARE TWO INDEPENDENT SYMPTOMS, AND NEITHER IS THE DEPLOYMENT. ***
+
+**1. `MB_SERVER` is not listening.** The CPU runs, so OB1 executes and the instruction is called.
+A refused TCP connect means the connection never opened. **The prediction's own §0 named the first
+place to look before any of this ran: `InterfaceId = 64` is a DB *start value*, so the compile is
+not evidence for it.** A wrong local-interface HW identifier fails exactly here.
+
+**2. S7 variable access is refused CPU-WIDE, and it is not our block.** `rig-read`'s own analysis,
+which is better than anything inferred afterwards: DB *and* M memory fail **identically** while SZL
+succeeds — *"an optimized or absent block cannot affect M memory, and would in any case come back as
+a full-length reply carrying an item return code"*. And on `0x00040000` specifically, verified
+against **Sharp7's own IL**: it is set by `if (Length < 25)` **after `RecvIsoPacket()` already
+succeeded**, so *** a well-formed reply arrived that is too short to be a read response — a negative
+acknowledgement from the CPU, not a bad buffer on our side. *** The elapsed times agree: a full
+round trip was **answered**, not rejected locally. This is the signature of **PUT/GET remote access
+being disabled** in the CPU's protection settings, and it is almost certainly **pre-existing** —
+nothing had ever attempted S7 variable access on this rig before today.
+
+**Consequence: symptom 2 blocks diagnosing symptom 1**, because `MB_SERVER`'s `STATUS`/`ERROR`
+outputs live in an instance DB nobody can currently read.
