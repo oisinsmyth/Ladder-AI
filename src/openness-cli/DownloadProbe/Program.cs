@@ -142,6 +142,7 @@ internal static class Program
         log.Line($"target filter  : {arguments.Target ?? "(none given — required only if the PC interface has several)"}");
         log.Line($"log file       : {logPath}");
         log.Line($"policy mode    : {arguments.PolicyMode}{(arguments.Disruptive ? "   *** --disruptive WAS GIVEN ***" : " (--disruptive was NOT given)")}");
+        log.Line($"throw injection: {(arguments.InjectThrow is null ? "(none — no delegate will throw)" : $"*** ARMED: {arguments.InjectThrow.ToString()!.ToUpperInvariant()} DELEGATE WILL THROW ON PURPOSE (experiment 1.7) ***")}");
         log.Blank();
         log.Line("THIS TOOL PERFORMS A REAL DEVICE DOWNLOAD. It is not a dry run and has no dry-run mode.");
         log.Blank();
@@ -149,6 +150,14 @@ internal static class Program
         if (arguments.Disruptive)
         {
             log.Block(DisruptiveBanner);
+            log.Blank();
+        }
+
+        // Printed BEFORE Portal is contacted, so a log that was going to break a download says so at
+        // the top rather than in the wreckage. Same reasoning as the disruptive banner above it.
+        if (arguments.InjectThrow is DelegatePhase phase)
+        {
+            log.Block(InjectionBanner(phase));
             log.Blank();
         }
 
@@ -188,6 +197,54 @@ internal static class Program
             log.Line("      ^^ SHRUNK, NOT EMPTIED. These two destroy BEYOND what the chosen download option");
             log.Line("         entails, so they stay denied here and the download aborts if either is raised.");
         }
+    }
+
+    /// <summary>
+    /// EXPERIMENT 1.7's banner. Phase-specific, because the two throws have very different blast
+    /// radii and a shared warning would understate one of them.
+    ///
+    /// The thing it must accomplish: <b>a log from an injected run must be unmistakable for a defect
+    /// report.</b> Somebody reads these weeks later, and "download failed" is the most believable
+    /// sentence in the file.
+    /// </summary>
+    private static IReadOnlyList<string> InjectionBanner(DelegatePhase phase)
+    {
+        var lines = new List<string>
+        {
+            "################################################################################",
+            "###  *** EXPERIMENT 1.7: THIS RUN WILL BREAK ITS OWN DOWNLOAD ON PURPOSE. *** ###",
+            "###                                                                          ###",
+            "###  A DeliberateProbeInjectionException will be thrown out of the            ###",
+            $"###  {phase.ToString().ToUpperInvariant(),-4} download-configuration delegate, on its FIRST invocation,      ###",
+            "###  immediately after that configuration has been recorded and answered.     ###",
+            "###                                                                          ###",
+            "###  ANY FAILURE THIS RUN REPORTS IS CAUSED BY THIS TOOL. It is not evidence  ###",
+            "###  about the project, the program, or the controller. The log says so again ###",
+            "###  at the point of the throw and again in the verdict.                      ###",
+            "###                                                                          ###",
+            "###  WHAT IS BEING MEASURED: whether Openness propagates, wraps or SWALLOWS   ###",
+            "###  an exception raised inside its own callback. A swallow would mean a      ###",
+            "###  callback cannot refuse a download by failing.                            ###",
+            "###                                                                          ###",
+        };
+
+        if (phase == DelegatePhase.Pre)
+        {
+            lines.Add("###  PRE fires BEFORE ANYTHING TRANSFERS — the least destructive real case.   ###");
+            lines.Add("###  Rehearse it with --to-folder first: that path reaches this same delegate ###");
+            lines.Add("###  with nothing on the wire and no CPU to strand.                           ###");
+        }
+        else
+        {
+            lines.Add("###  *** POST FIRES AFTER THE TRANSFER, AND StartModules IS RAISED IN THE    ###");
+            lines.Add("###      POST DELEGATE — AFTER THE DOWNLOAD HAS ALREADY STOPPED THE MODULES. ###");
+            lines.Add("###      A THROW HERE CAN LEAVE THE CPU STOPPED WITH NO ROUTE TO START IT    ###");
+            lines.Add("###      FROM INSIDE THIS DOWNLOAD. There is no rehearsal for this: the      ###");
+            lines.Add("###      folder overload has no post delegate. BE AT THE MACHINE. ***        ###");
+        }
+
+        lines.Add("################################################################################");
+        return lines;
     }
 
     /// <summary>

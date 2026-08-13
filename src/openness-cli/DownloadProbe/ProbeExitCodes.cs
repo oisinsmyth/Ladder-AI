@@ -78,4 +78,22 @@ internal static class ProbeExitCodes
     /// successful experiment, it is an unexplained one.
     /// </summary>
     internal const int SelectionApplyFailed = 10;
+
+    /// <summary>
+    /// *** A DELIBERATE FAILURE. EXPERIMENT 1.7 RAN. ***
+    ///
+    /// <c>--throw-from-pre-delegate</c>/<c>--throw-from-post-delegate</c> was given, the throw fired,
+    /// and the run recorded what Openness did with it. Its own code so that <b>no script and no
+    /// reader can ever mistake an injected failure for a real one</b> — which is the whole risk this
+    /// feature carries. Never returned unless an injection flag was spelled exactly.
+    /// </summary>
+    internal const int InjectedThrowFired = 11;
+
+    /// <summary>
+    /// An injection was armed and <b>the delegate was never invoked</b>, so the throw never happened.
+    /// Empty is not clean: this is emphatically not a pass, and it is not a failure of the download
+    /// either — the experiment did not run. Distinct from <see cref="InjectedThrowFired"/> because
+    /// the two answer opposite questions about whether anything was learned.
+    /// </summary>
+    internal const int InjectionNeverFired = 12;
 }

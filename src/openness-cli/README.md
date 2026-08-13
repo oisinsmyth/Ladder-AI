@@ -1123,6 +1123,63 @@ Same exception, same text, **zero configurations raised** — which is exactly w
 failing run (`bn-07/33/41/42/54`) recorded. So `--to-folder` **is** a faithful stand-in for the
 download's compile gate, and it is the only one that needs no controller, no network and no CPU.
 
+### Experiment 1.7 — the delegate throw: `--throw-from-pre-delegate` / `--throw-from-post-delegate`
+
+**The capability. Firing it at a device is a separate, owner-present act** (the working agreement puts
+that on the STOP list; building the mechanism is not on it).
+
+Openness hands the tool two callbacks during a download. It is undocumented what happens if one
+**throws** — and that decides whether a callback can refuse a download by failing, which is what the
+whole fail-closed posture assumes.
+
+**Two flags, never one, and not combinable.** They are two experiments with very different blast
+radii: PRE fires before anything transfers; POST fires *after*, and **`StartModules` is raised in the
+POST delegate, after the download has already stopped the modules** — so a throw there can leave the
+CPU stopped with no route to start it from inside that download. A single `--throw` firing from
+whichever delegate came first would give an unattributable result. `--throw` is itself a usage error,
+deliberately, because it is the flag someone would guess.
+
+**Rehearsed on `--to-folder`, and the answer is already in — at zero risk.** The PRE delegate **is**
+reached on the folder path. Measured:
+
+```
+injected from : PRE delegate, invocation #1
+after answering: ConsistentBlocksDownload
+
+*** WHAT OPENNESS DID WITH IT: REPLACEDBYANOTHERFAILURE ***
+    Siemens.Engineering.NonRecoverableException came out and the injected exception is
+    NOWHERE in its inner chain — the API replaced it rather than carrying it
+```
+
+with the surfaced message being, in full: *"Unexpected exception - no exception message available."*
+
+So Openness **neither propagates nor swallows — it replaces.** Two consequences, and they pull in
+opposite directions:
+
+- ✅ **A callback CAN stop a download by throwing.** The download did not proceed. Fail-closed by
+  failing works.
+- 🔴 **The reason is destroyed.** The caller learns nothing about *why* — the same family as the
+  download-compile finding above: the API discards the diagnostic and hands back a sentence that
+  fits every failure there has ever been. **A tool relying on this must log its own reason before
+  throwing**, because nothing downstream will carry it.
+
+**The session survives.** Despite the name `NonRecoverableException`, a subsequent folder download on
+the same Portal session completed normally (`state=Success, errors=0`) and `list` reported 84 blocks,
+0 inconsistent. The exception is non-recoverable to the *call*, not to the session.
+
+**POST cannot be rehearsed anywhere** — the folder overload is `Download(DirectoryInfo,
+DownloadConfigurationDelegate)`, one delegate, the pre one. `--throw-from-post-delegate --to-folder`
+is therefore **refused by name** rather than arming something that can never fire and exiting clean
+having tested nothing.
+
+**Exit codes:** `11` = the throw fired (a *deliberate* failure, its own code so no script or reader
+can mistake it for a real one); `12` = armed and the delegate was never invoked, so nothing was
+learned — emphatically not a pass. The injected exception is its own type
+(`DeliberateProbeInjectionException`), which nothing in Siemens.Engineering can produce, and the log
+says the failure was deliberate in the banner, at the point of the throw, and in the verdict.
+Classification is by **object identity** against the thrown instance — never by reading a state or a
+message string.
+
 ### The controlled reproducer (2026-08-13) — and what each scope said
 
 `DB_Example` is a global DB that `FC_ModbusTCP_Sample` (FC8) reads. Deleting it creates the dangling

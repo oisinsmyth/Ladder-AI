@@ -205,6 +205,7 @@ internal static class ProbeSession
 
         var pre = new ConfigurationRecorder(log, "PRE", arguments.PolicyMode);
         var post = new ConfigurationRecorder(log, "POST", arguments.PolicyMode);
+        var injection = new ThrowInjection(arguments.InjectThrow);
         var downloadRan = false;
 
         var outcome = DownloadDispatch.Dispatch(
@@ -234,7 +235,7 @@ internal static class ProbeSession
                     log.Line("                never a denied selection, even if it is the only one offered.");
                 }
 
-                var result = Invoke(target.Provider, chosen.Node, pre, post, arguments.Options, log);
+                var result = Invoke(target.Provider, chosen.Node, pre, post, arguments.Options, log, injection);
                 result.DownloadTarget = chosen.Label;
                 return result;
             });
@@ -342,12 +343,29 @@ internal static class ProbeSession
         log.Line("clean. This reaches that compile without reaching the controller.");
 
         var pre = new ConfigurationRecorder(log, "PRE", arguments.PolicyMode);
+        var injection = new ThrowInjection(arguments.InjectThrow);
 
         try
         {
             var result = provider.Download(
                 directory,
-                configuration => pre.Record(SiemensConfigurationReader.Read(configuration)));
+                configuration =>
+                {
+                    var recorded = pre.Record(SiemensConfigurationReader.Read(configuration));
+
+                    // THE REHEARSAL ROUTE. This delegate is measurably reached on the folder path —
+                    // a folder run raises ConsistentBlocksDownload and AlarmTextLibrariesDownload
+                    // here — so the whole PRE throw can be exercised with nothing on the wire and no
+                    // CPU to strand. There is no post delegate on this overload, which is why
+                    // --throw-from-post-delegate is refused with --to-folder rather than silently
+                    // arming something that can never fire.
+                    injection.MaybeThrow(DelegatePhase.Pre, recorded.TypeName, log);
+                });
+
+            if (injection.Fired is not null)
+            {
+                return ReportInjection(injection, thrown: null, log, ReportResult(result, log));
+            }
 
             var reported = ReportResult(result, log);
             reported.DevicePath = devicePath;
@@ -361,7 +379,18 @@ internal static class ProbeSession
                 "NOTHING WAS TRANSFERRED TO A DEVICE, BY CONSTRUCTION — this run wrote a download image to a " +
                 "folder. What it proves is about the COMPILE, not about the controller.");
             LogConfigurationSummary(pre, new ConfigurationRecorder(log, "POST", arguments.PolicyMode), log);
+
+            if (injection.IsArmed)
+            {
+                return ReportInjection(injection, thrown: null, log, reported);
+            }
+
             return reported;
+        }
+        catch (Exception ex) when (injection.Fired is not null)
+        {
+            LogConfigurationSummary(pre, new ConfigurationRecorder(log, "POST", arguments.PolicyMode), log);
+            return ReportInjection(injection, ex, log, fallback: null);
         }
         catch (EngineeringTargetInvocationException ex)
         {
@@ -424,17 +453,41 @@ internal static class ProbeSession
         ConfigurationRecorder pre,
         ConfigurationRecorder post,
         DownloadOptionChoice options,
-        ProbeLog log)
+        ProbeLog log,
+        ThrowInjection injection)
     {
         try
         {
             var result = provider.Download(
                 connection,
-                configuration => pre.Record(SiemensConfigurationReader.Read(configuration)),
-                configuration => post.Record(SiemensConfigurationReader.Read(configuration)),
+                configuration =>
+                {
+                    var recorded = pre.Record(SiemensConfigurationReader.Read(configuration));
+                    injection.MaybeThrow(DelegatePhase.Pre, recorded.TypeName, log);
+                },
+                configuration =>
+                {
+                    var recorded = post.Record(SiemensConfigurationReader.Read(configuration));
+                    injection.MaybeThrow(DelegatePhase.Post, recorded.TypeName, log);
+                },
                 SiemensDownloadOptions.ToSiemens(options));
 
+            // Reached AFTER an armed injection fired = the API swallowed it. Classified before the
+            // ordinary result reporting, because "the download completed" means something entirely
+            // different once we know a callback threw and was ignored.
+            if (injection.Fired is not null)
+            {
+                return ReportInjection(injection, thrown: null, log, ReportResult(result, log));
+            }
+
             return ReportResult(result, log);
+        }
+        catch (Exception ex) when (injection.Fired is not null)
+        {
+            // The injection path owns any exception once it has fired: attributing a deliberate
+            // failure to the project or the device is the one outcome this feature must never
+            // produce.
+            return ReportInjection(injection, ex, log, fallback: null);
         }
         catch (EngineeringTargetInvocationException ex)
         {
@@ -456,6 +509,88 @@ internal static class ProbeSession
                 ExceptionText = ex.ToString(),
             };
         }
+    }
+
+    /// <summary>
+    /// EXPERIMENT 1.7's answer, written so that nobody reading this log later can mistake it for a
+    /// defect report. Says "deliberate" in the rule, in the first line and in the verdict.
+    /// </summary>
+    private static ProbeOutcome ReportInjection(
+        ThrowInjection injection, Exception? thrown, ProbeLog log, ProbeOutcome? fallback)
+    {
+        var (outcome, detail) = injection.Classify(thrown);
+
+        // Armed and never invoked. Empty is not clean: this is not a pass, and it is not a failure of
+        // the download either — the experiment simply did not run, and the exit code says so.
+        if (injection.Fired is null)
+        {
+            log.Blank();
+            log.Rule("*** THE INJECTION WAS ARMED AND NEVER FIRED — NOTHING WAS LEARNED ***");
+            log.Line($"--throw-from-{injection.Phase.ToString()!.ToLowerInvariant()}-delegate was given and that delegate was NEVER INVOKED,");
+            log.Line("so no exception was thrown and this run answers nothing about what Openness does with one.");
+            log.Line("This is NOT a clean run of the experiment. Check the configuration summary above:");
+            log.Line("if the delegate raised nothing, there was nothing to throw from.");
+
+            var never = new ProbeOutcome(
+                ProbeExitCodes.InjectionNeverFired,
+                $"INJECTION NEVER FIRED ({injection.Phase} delegate was not invoked). The experiment did not run.");
+            never.Transfer = fallback?.Transfer
+                ?? TransferVerdicts.NoResult("No DownloadResult, and the armed injection never fired.");
+            return never;
+        }
+
+        log.Blank();
+        log.Rule("*** DELIBERATE TEST INJECTION — THE FAILURE BELOW WAS CAUSED BY THIS TOOL ***");
+        log.Line("EXPERIMENT 1.7. A DeliberateProbeInjectionException was thrown out of the");
+        log.Line($"{injection.Fired!.Phase.ToString().ToUpperInvariant()} download-configuration delegate ON PURPOSE. Nothing here is evidence");
+        log.Line("about the project, the program or the controller.");
+        log.Blank();
+        log.Line($"injected from : {injection.Fired.Phase.ToString().ToUpperInvariant()} delegate, invocation #{injection.Fired.Ordinal}");
+        log.Line($"after answering: {injection.Fired.ConfigurationType}");
+        log.Blank();
+        log.Line($"*** WHAT OPENNESS DID WITH IT: {outcome.ToString().ToUpperInvariant()} ***");
+        log.Line($"    {detail}");
+
+        // Classified on OBJECT IDENTITY — is our exception in the chain, at what depth — never on a
+        // state or a message string. A classifier that reads text changes meaning the day Siemens
+        // rewords something, and that lesson is one day old here.
+        log.Blank();
+        log.Line("(Classified by object identity against the exception this tool threw, not by reading");
+        log.Line(" any state or message text.)");
+
+        if (thrown is not null)
+        {
+            log.Blank();
+            ExceptionReport.Write(log, "what came back out of Download, with every inner exception:", thrown);
+            log.Blank();
+            log.Verbatim("full ToString() : ", thrown.ToString());
+        }
+        else
+        {
+            log.Blank();
+            log.Line("Download RETURNED NORMALLY. Its result is reported above — read it knowing that a");
+            log.Line("callback threw during it and the API did not care.");
+        }
+
+        var verdict = $"DELIBERATE INJECTION ({injection.Fired.Phase.ToString().ToUpperInvariant()} delegate): Openness {outcome} it. {detail}";
+        var exitCode = outcome == InjectionOutcome.NeverFired
+            ? ProbeExitCodes.InjectionNeverFired
+            : ProbeExitCodes.InjectedThrowFired;
+
+        var result = new ProbeOutcome(exitCode, verdict)
+        {
+            ExceptionText = thrown?.ToString(),
+        };
+
+        // The transfer question still gets an answer, and it has to be the honest one: on a swallow
+        // the download really did complete, and somebody standing at a rig needs that fact more than
+        // they need the experiment's tidiness.
+        result.Transfer = fallback?.Transfer
+            ?? TransferVerdicts.NoResult(
+                "The download did not return a DownloadResult — this tool threw from inside its own callback, " +
+                "deliberately. Nothing here says whether anything reached the controller.");
+
+        return result;
     }
 
     /// <summary>

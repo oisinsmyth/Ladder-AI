@@ -18,9 +18,11 @@ internal sealed class ProbeArguments
         int connectTimeoutSeconds,
         int openTimeoutSeconds,
         bool disruptive = false,
-        string? toFolder = null)
+        string? toFolder = null,
+        DelegatePhase? injectThrow = null)
     {
         ToFolder = toFolder;
+        InjectThrow = injectThrow;
         ProjectPath = projectPath;
         Options = options;
         Json = json;
@@ -105,6 +107,24 @@ internal sealed class ProbeArguments
     /// </summary>
     internal string? ToFolder { get; }
 
+    /// <summary>
+    /// *** EXPERIMENT 1.7. WHICH DELEGATE THROWS ON PURPOSE, OR NULL — AND NULL IS THE ONLY THING
+    /// THAT CAN ARRIVE HERE WITHOUT SOMEONE TYPING A FLAG. ***
+    ///
+    /// There is no default, no environment variable, no config file and no combination of other
+    /// flags that sets this. Both spellings are bare literals matched by the same ordinal
+    /// <c>switch</c> as every other flag, so <c>--throw</c>, <c>--throw-from-pre-delegate=true</c>
+    /// and <c>--Throw-From-Pre-Delegate</c> all fall through to the unknown-option arm and are
+    /// USAGE ERRORS — never a silent enable and never a silent ignore.
+    ///
+    /// The two phases are separate flags rather than one <c>--throw</c> because they are separate
+    /// experiments with very different blast radii: PRE fires before anything transfers; POST fires
+    /// after, and <c>StartModules</c> is raised in the POST delegate, so a throw there can leave the
+    /// CPU stopped with no route to start it from inside that download. A single flag firing from
+    /// whichever delegate came first would produce an unattributable result.
+    /// </summary>
+    internal DelegatePhase? InjectThrow { get; }
+
     internal SelectionPolicyMode PolicyMode =>
         Disruptive ? SelectionPolicyMode.Disruptive : SelectionPolicyMode.Normal;
 }
@@ -151,6 +171,24 @@ internal static class ProbeArgumentParser
         "                  than one. Not an IP address: the project's address collections are empty.\n" +
         "  --log-dir       where the verbatim configuration log is written. Defaults to\n" +
         "                  %LADDER_PROBE_LOG_DIR% if set, otherwise %TEMP%\\download-probe.\n" +
+        "  --throw-from-pre-delegate / --throw-from-post-delegate\n" +
+        "                  *** EXPERIMENT 1.7: BREAKS THE DOWNLOAD ON PURPOSE. *** Throws a\n" +
+        "                  DeliberateProbeInjectionException out of the named configuration delegate,\n" +
+        "                  on its FIRST invocation, immediately after the configuration has been\n" +
+        "                  recorded and answered — to measure what Openness does with an exception\n" +
+        "                  raised inside its own callback (propagate / wrap / swallow).\n" +
+        "                  TWO FLAGS, NEVER ONE, AND NOT COMBINABLE: they are two experiments.\n" +
+        "                    PRE  fires BEFORE anything transfers. Run this one first. It can be\n" +
+        "                         rehearsed against --to-folder with nothing on the wire.\n" +
+        "                    POST fires AFTER the transfer, and StartModules is raised in the POST\n" +
+        "                         delegate AFTER the download has stopped the modules — so a throw\n" +
+        "                         there can leave the CPU STOPPED with no route to start it from\n" +
+        "                         inside that download. It cannot be rehearsed anywhere: the folder\n" +
+        "                         overload has no post delegate. BE AT THE MACHINE.\n" +
+        "                  Exit 11 = the throw fired (a DELIBERATE failure, its own code so nothing\n" +
+        "                  mistakes it for a real one); 12 = armed and the delegate was never invoked,\n" +
+        "                  so nothing was learned. The log says the failure was deliberate, in those\n" +
+        "                  words, in three places.\n" +
         "  --to-folder     *** NON-DESTRUCTIVE. *** Writes the download IMAGE to a directory via the\n" +
         "                  Download(DirectoryInfo, delegate) overload: no connection, nothing on the\n" +
         "                  wire, no CPU stopped. It exists to reach THE COMPILE A DOWNLOAD RUNS —\n" +
@@ -195,6 +233,8 @@ internal static class ProbeArgumentParser
         var optionsSeen = false;
         var disruptive = false;
         string? toFolder = null;
+        var throwFromPre = false;
+        var throwFromPost = false;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -219,6 +259,17 @@ internal static class ProbeArgumentParser
 
                 case "--json":
                     json = true;
+                    break;
+
+                // EXPERIMENT 1.7. Two flags, never one — see ProbeArguments.InjectThrow. Bare
+                // literals on the same ordinal switch as --disruptive, so no near-miss spelling can
+                // enable either by accident.
+                case "--throw-from-pre-delegate":
+                    throwFromPre = true;
+                    break;
+
+                case "--throw-from-post-delegate":
+                    throwFromPost = true;
                     break;
 
                 case "--to-folder":
@@ -350,13 +401,36 @@ internal static class ProbeArgumentParser
                 "permit and is refused rather than accepted as a no-op.");
         }
 
+        // EXPERIMENT 1.7's refusals. Every one of these would otherwise produce a run whose result
+        // could not be attributed to a delegate — which is the only thing the experiment measures.
+        if (throwFromPre && throwFromPost)
+        {
+            return new ProbeParseResult.Failure(
+                "--throw-from-pre-delegate and --throw-from-post-delegate are TWO DIFFERENT EXPERIMENTS with " +
+                "very different blast radii, and only the first to fire would ever be observed. Run them as two " +
+                "runs with two logs, PRE first — it is the one that fires before anything transfers.");
+        }
+
+        if (throwFromPost && toFolder is not null)
+        {
+            return new ProbeParseResult.Failure(
+                "--throw-from-post-delegate cannot be rehearsed with --to-folder: the folder overload is " +
+                "Download(DirectoryInfo, DownloadConfigurationDelegate) and takes ONE delegate, the pre one. " +
+                "There is no post delegate on that path, so the flag would arm something that can never fire and " +
+                "the run would report a clean exit having tested nothing. Rehearse the PRE throw there instead.");
+        }
+
+        var injectThrow = throwFromPre ? DelegatePhase.Pre
+            : throwFromPost ? DelegatePhase.Post
+            : (DelegatePhase?)null;
+
         var resolvedLogDir = logDir
             ?? (string.IsNullOrWhiteSpace(logDirEnvValue) ? null : logDirEnvValue)
             ?? Path.Combine(tempPath, "download-probe");
 
         return new ProbeParseResult.Success(new ProbeArguments(
             projectPath, options, json, device, pcInterface, target, resolvedLogDir!, connectTimeout, openTimeout,
-            disruptive, toFolder));
+            disruptive, toFolder, injectThrow));
     }
 
     private static bool TryTakeValue(IReadOnlyList<string> args, ref int index, out string? value)
