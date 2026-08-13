@@ -477,6 +477,42 @@ ambiguities_closed_since_issue_4:
 
 ambiguities_open:
 
+  # AMB-18 and AMB-19 were raised by the enumerator's confirm pass and appended by the
+  # orchestrator with a TARGETED edit. The enumerator declined to rewrite this file: its only
+  # file tool was whole-file Write, and rewriting a document holding 27 byte-exact sentences
+  # — 25 of them stamped and cited by two live vector sets — to append two entries risks
+  # drifting a character for zero enumeration benefit. That judgement was right, and it is the
+  # same rule as the "specified" hazard: WHEN IDENTITY IS CONTENT-DERIVED, YOU DO NOT OPEN THE
+  # FILE THAT CARRIES IT UNLESS THE CONTENT ACTUALLY CHANGED.
+
+  - id: AMB-18
+    severity: high
+    status: "RULED by the orchestrator; carried to the register as AR-HBA-18. Notes-level, no text moves."
+    what: >
+      `005.A1`'s "and stays false" states no duration, and with AR-HBA-15's item 4 corrected it is
+      the ONLY thing carrying the floor in that window. `007.A5` cannot help: a WITHIN bound is an
+      UPPER limit, which a SHORT preset satisfies MORE easily rather than less.
+    readings: >
+      (a) until the raise condition is next satisfied; (b) bounded by the vector's observation
+      window; (c) unbounded. (b) is the trap — it makes the requirement's strength a property of
+      the test, so any vector that stops observing early silently weakens the spec.
+    ruled: "(a). A duration that depends on how long a vector happened to watch is not a specification."
+
+  - id: AMB-19
+    severity: high
+    status: "OPEN — a HARNESS fix, not a register one. Does not block stamping and moves no text."
+    what: >
+      A SILENT-STALENESS CHANNEL THAT EXISTS ONLY IN COMBINATION, each ruling being individually
+      correct. AR-HBA-03 says retuning the bounds table re-hashes nothing. AR-HBA-14 makes 22
+      assertions REFER to that table. Therefore a retune changes 22 assertions' TRUTH CONDITIONS
+      while moving ZERO IDs — a vector written against T#60S silently tests the wrong number after
+      a retune, with no dangling ID and no Stale verdict, because staleness keys on assertion IDs
+      and not on bound values.
+    fix: >
+      Outside this artifact and cheap: a vector already states which bound it used, so compare it
+      against the table at submission time and call a mismatch STALE, NOT FAIL. A Fail would blame
+      the block for a retune nobody told the vector about.
+
   - id: AMB-14
     severity: medium
     status: "OPEN, unchanged, still not blocking — it changes no assertion text."
