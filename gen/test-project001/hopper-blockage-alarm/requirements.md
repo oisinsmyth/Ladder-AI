@@ -424,6 +424,14 @@ concrete value — it reads it from this table and says which it used.
 Changing a value in this table is **not** a requirement change and does not re-hash anything. Changing
 which *quantities* exist is.
 
+> **Conformance observation, 2026-08-13 — NOT A SOURCE FOR THIS TABLE.** Both specified values were read
+> back from the scratch controller (`iDB_HopperBlockageMonitor` start values, TIA export):
+> `BlockedTimeThreshold = T#60S`, `ClearDebounceTime = T#2S` — **both match**. Recorded as provenance
+> for the D7 check only. 🔴 **The values in the table above remain owner-sourced (Q-HBA-01, NEW-HBA-03)
+> and must never be re-derived from what the controller happens to hold** — that is the direction of
+> inference AR-HBA-13 exists to keep open, since a claim written against the implementation's own preset
+> is vacuously true of every implementation.
+
 **CHANGED:** Format section (new bullet), REQ-HBA-001/002 Notes, Q-HBA-01, NEW-HBA-03.
 
 ### AR-HBA-04 — REQ-HBA-002 reworded to the debounced reading *(closes AMB-08)*
