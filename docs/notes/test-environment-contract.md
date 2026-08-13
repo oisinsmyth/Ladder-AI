@@ -68,14 +68,16 @@ Vector                        -- one element of the submission's `vectors` array
   clause              `Basis` half one: the specification clause      -- §3
   assertion           `Basis` half two: the assertion ID              -- §3
   assertionForm       When | Never -- the form the ENUMERATION records for it. §3; `Unstated` is REFUSED
-  inputs              tag name -> value            -- what is written before T=0
+  inputs              tag name -> value    -- written before T=0; range-checked against the
+                                              signal's MIRROR ELEMENT, never against a range
+                                              stated here (§2.6)
   startBool           the slot's start bool        -- §6
   expectations        [ { signal, nature, mode, windowScans, expected } ]   -- §4; `expected` is §2.2
   settlingCondition   what makes the observed value FINAL   -- §5. PER VECTOR, not per expectation
   settlingSignals     [ tag ]                               -- §5
   maxDurationScans    in SCANS, with a wall-clock backstop (X-B, §12a derivation 4)
   completionSignal    the block's own done-signal              -- §2.2
-  completionValue     the value on it that means "finished"    -- §2.2
+  completionValue     the value on it that means "finished"    -- §2.2; range from §2.6
   blacklist           [ { block, reason } ]        -- §7, add-only
   compressionFactor   the `comp` this vector's scan counts are stated at  -- §4.4
   assertedBehaviours  [ behaviour ]   -- set-differenced against the model's `represents` (M4)
@@ -176,9 +178,21 @@ else is `TIMED-OUT`.
 
 ```
 completionSignal   tag. The block's own done-signal. REQUIRED; absent is a REFUSAL.
-completionValue    integer 0..65535 (it is compared against ONE result register).
-                   REQUIRED; absent is a REFUSAL. *** THERE IS DELIBERATELY NO DEFAULT OF 1. ***
+completionValue    integer. REQUIRED; absent is a REFUSAL.
+                   *** THERE IS DELIBERATELY NO DEFAULT OF 1. ***
+                   Its admissible RANGE is not stated here: it comes from the completion
+                   signal's own row in the mirror element table -- §2.6.
 ```
+
+> 🔴 ***CORRECTION, 2026-08-13: THIS SECTION SAID `integer 0..65535 (it is compared against ONE result
+> register)`, AND THAT WAS WRONG TWICE.*** It is recorded rather than quietly replaced, because the
+> wrong version was acted on. **(a) The range was UNSIGNED where the element is SIGNED** — a
+> single-register element holds −32768..32767, so `40000` never fit it and `0..65535` admitted values
+> that could not arrive. **(b) It assumed ONE register**, which made a 32-bit completion signal
+> *inexpressible rather than mis-expressed*. **The framing was the real mistake**: a completion signal
+> is not a special kind of thing, it is *just another mirrored element*, and giving it a private range
+> in this document gave it **a second notion of width that could disagree with the mirror's**. §2.6 has
+> the one notion, in one place.
 
 > 🔴 ***THE DEFAULT OF 1 IS REMOVED, AND THIS IS A DECISION AGAINST THE CONVENIENT READING.*** A
 > completion flag reading `1` is nearly universal, which is exactly what makes the default dangerous:
@@ -289,6 +303,11 @@ This is the one table to read before omitting anything. Four treatments, and the
 |---|---|---|
 | an expectation's `expected` (predicate) | **REFUSED** | the check needs it; a pass would say nothing and a fail would lie |
 | `completionValue` / `completionSignal` | **REFUSED** | §2.2 — the same shape, one field over: an unstated value yields `TIMED-OUT` on a healthy block |
+| any `inputs` value, or `completionValue`, **out of its element's range** | **REFUSED BY NAME, never a modulo** | §2.6. The refusal prints *what the value would have become* — `75000` arrives as `9464`, a plausible dwell nobody would question, and every boundary keyed on it fires early |
+| an `inputs` value that is present but **empty** | **REFUSED** | ***zero is a value a block could legitimately be driven with***, so supplying one invents the stimulus |
+| a signal the vector says **nothing about** | **not checked here — legitimate** | leaving an input undriven is the *inert declaration's* business, not the width rule's. Absent ≠ present-and-empty |
+| a mirrored signal's **element type** | **REFUSED** | the table's zero value is `Unstated`; a value cannot be range-checked against a type with no width |
+| a **completion signal wider than one register** | **REFUSED as INEXPRESSIBLE** | §2.6 — comparing it would test the high half and report `TIMED-OUT` forever on a block that finished, and ***a spurious `TIMED-OUT` is worse than a spurious `FAIL` because it is believed*** |
 | `kills` | **REFUSED** | §10 requires mutation and this is the only mechanism for it |
 | a vector's `assertionForm` (i.e. `Unstated`) | **REFUSED** | the vector had one field to fill and left it. *A dropped form fails the same comparison as a wrong one* |
 | `enumeration.enumerator` | ***NOT CHECKED*** | a property of the **enumeration**; reporting it refused sends the author to edit the wrong artifact |
@@ -429,6 +448,95 @@ list.**
 entry produce the same finding. Both are `Stale`, both need a person, and **neither is the block's
 fault** — so the verdict is right in both cases even though the diagnosis is not determined. What it
 must never do is resolve that ambiguity by guessing in the passing direction.
+
+---
+
+### 2.6 ***EVERY VALUE TRAVELS IN A MIRROR ELEMENT, AND THE ELEMENT DECIDES ITS RANGE.*** ADDED 2026-08-13
+
+> *** A COMPLETION SIGNAL IS NOT A SPECIAL KIND OF THING — IT IS JUST ANOTHER MIRRORED ELEMENT. ***
+
+This governs **every** value a vector writes or compares: each entry of `inputs`, and `completionValue`.
+They are all held to one rule, from one table.
+
+#### The type is declared on the SIGNAL, never on the value
+
+***A vector does not give `completionValue` a type, and that is the point.*** The element type belongs to
+the **signal's row in the mirror's element table**, alongside the width, the address form and the rung
+shape the copy layer generates for it.
+
+> **Putting a width anywhere else gives that value a SECOND, PRIVATE NOTION OF WIDTH THAT CAN DISAGREE
+> WITH THE MIRROR'S** — which is the defect shape the element table exists to remove. **One notion of
+> width, one place.** A new element type then inherits its bound from the same row that gives it its
+> width and its rung, so there is no second table of limits to fall out of step with the first.
+
+#### The shape
+
+```
+element type        address form   registers   range
+  Bool                 Bit             1       true | false   (1 / 0 accepted; nothing else is coerced)
+  Int                  Word            1       *** SIGNED 16-BIT ***
+  Time                 DoubleWord      2       signed 32-bit
+```
+
+***The numbers are deliberately not restated here.*** They are derived from the **address form** and are
+read from the element table's own bounds — this document names the derivation and stops, as it does for
+§12a. What an author must take away is the shape, and one fact:
+
+> ⚠️ ***`Int` IS SIGNED. ITS CEILING IS 32 767, NOT 65 535.*** A value of `40000` does not fit an `Int`
+> element and needs a `Time`. **Measured on the deliverable vector set: 81 duration values exceed
+> 65 535 ms**, ten distinct figures between 70 000 and 120 000 — so **32-bit values are the norm in this
+> system, not the exception**, and a design that assumed one register was wrong about the ordinary case.
+
+**An element type nobody stated is unusable, not a default.** The table's zero value is `Unstated`, and
+a value cannot be range-checked against a type with no width.
+
+#### Out of range is a REFUSAL BY NAME, and it says what the value WOULD have become
+
+> *** NO MODULO. ANYWHERE. ***
+
+The refusal names the signal, the value, the declared type, the register count and the range — **and for
+a single-register element it also prints what the value would have arrived as.** That sentence is the
+whole point:
+
+> `75000` through a single-register mapping arrives as ***`9464`***. **That is not an error and not a
+> timeout.** Every boundary keyed on it fires early and the run returns a **plausible-looking `FAIL`
+> against a block that did nothing wrong.** 9 464 ms is a perfectly reasonable dwell, which is precisely
+> why nobody would question it.
+
+***AND THE TWO 32-BIT HAZARDS ARE NOT SYMMETRIC, WHICH IS WHY ONLY ONE OF THEM IS MADE LOUD HERE.*** A
+swapped **word order** announces itself — 75 s becomes about 7 days, the scenario never reaches its
+boundary, and the run `TIMED-OUT` noisily. A truncated **width** passes quietly with the wrong number.
+**The width failure is the dangerous half, so it is the one refused by name**; the order hazard is
+already loud and is left to the rig's calibration step.
+
+#### An absent value refuses. It does not become 0
+
+***Zero is a value a block could legitimately be driven with***, so writing one on the author's behalf
+would be **inventing the stimulus**. Same doctrine as `completionValue`'s removed default of 1, and as
+the missing predicate: a field the runner fills in for you is a fact nobody supplied, arriving later as
+a verdict about the block.
+
+**One exception, and it is not a default:** a signal the vector says *nothing about at all* is not
+checked here. **Leaving an input undriven is a legitimate choice**, and it is the inert declaration's
+business rather than the width rule's. *Absent from the map is a different statement from present and
+empty* — the absent-versus-empty distinction this document uses throughout.
+
+#### 🔴 Current built behaviour: a multi-register completion signal is REFUSED, not compared
+
+The wave compares completion against **one** register holding a 16-bit value, so a completion signal
+whose element is wider **cannot be honoured**. ***The loop refuses it by name rather than comparing
+anyway***, and the reason is a verdict asymmetry worth stating on its own:
+
+> Comparing a 32-bit completion signal against one register tests only its **high half** and reports
+> ***`TIMED-OUT` forever on a block that actually finished***. And *** A SPURIOUS `TIMED-OUT` IS WORSE
+> THAN A SPURIOUS `FAIL`, BECAUSE IT IS BELIEVED *** — a `FAIL` invites an argument with the
+> specification, while a `TIMED-OUT` reads as *the condition simply never occurred* and closes the
+> question.
+
+**So this is INEXPRESSIBLE, not mis-expressed**, and the refusal says so. The remedy is either a
+single-register completion signal or widening the wave's completion comparison to carry an element
+width the way every other mirrored value now does — **owed by the harness, and the contract's rule is
+already the widened one.**
 
 ---
 

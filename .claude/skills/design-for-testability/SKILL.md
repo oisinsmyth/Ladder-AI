@@ -123,6 +123,11 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | an expectation's `expected` (the predicate) | ***REFUSED*** | measured: a null predicate became the literal `<no predicate>`, was compared against the observed value, and produced a **FAIL** — *a vector that never said what right looks like told its author the block was wrong* |
 | `completionValue` / `completionSignal` | ***REFUSED*** | the same shape one field over: an unstated value yields **`TIMED-OUT`** on a healthy block. **Contract §2.2 removed the default of 1** — a near-universal default is what makes the rare `Step = 90` block invisible |
 | `kills` | ***REFUSED*** | §10 requires mutation and this is the only mechanism there is |
+| any `inputs` value or `completionValue` **outside its element's range** | ***REFUSED BY NAME, never a modulo*** | §2.6. The refusal prints *what it would have become*: `75000` arrives as **`9464`** — a plausible dwell nobody questions — and every boundary keyed on it fires early, returning a confident `FAIL` against a correct block. **Measured: 81 duration values in the deliverable set exceed 65 535 ms** |
+| an `inputs` value present but **empty** | ***REFUSED*** | ***zero is a value a block could legitimately be driven with***, so supplying one invents the stimulus |
+| a signal the vector says **nothing about** | **not checked — legitimate** | an undriven input is the *inert declaration's* business. **Absent is not present-and-empty** |
+| a mirrored signal's **element type** | ***REFUSED*** | the table's zero value is `Unstated`; nothing can be range-checked against a type with no width |
+| a **completion signal wider than one register** | ***REFUSED as INEXPRESSIBLE*** | comparing it tests the **high half** and reports `TIMED-OUT` forever on a block that finished — and ***a spurious `TIMED-OUT` is worse than a spurious `FAIL`, because it is believed*** |
 | the conflict graph (both `computedConflicts` and `conflictEdges`) | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
 | provenance on any conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* are the same empty report |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
@@ -193,6 +198,14 @@ REFUSALS when absent, and the completion pair no longer defaults to 1** — the 
 exactly what made the rare block that signals completion with a state number invisible, returning
 `TIMED-OUT` on a healthy block. *A field the runner reads and the contract does not name is a default
 nobody chose.*
+
+⚠️ ***DO NOT CHECK `completionValue` AGAINST A RANGE — CHECK IT AGAINST ITS ELEMENT*** (contract §2.6).
+An earlier version of this gate said `0..65535`, **and that was wrong twice**: the range was *unsigned*
+where a single-register element is **signed** (ceiling 32 767, not 65 535), and it assumed **one**
+register, which made a 32-bit completion signal *inexpressible rather than mis-expressed*. **The framing
+was the mistake** — a completion signal is *just another mirrored element*, and a range written here
+would be a second, private notion of width able to disagree with the mirror's. **One notion of width,
+one place.** The same rule governs every `inputs` value.
 
 ### Gate 2 — authorship (D6)
 Vector author ≠ block author. **A match is a refusal, not a warning** — this is the correlated check
@@ -391,6 +404,12 @@ So for every vector, require and record:
 | **UNSETTLED** | the value never met its settling condition | that the value was wrong — **nothing was legitimately read at all** |
 | ***STALE*** | ***the experiment never ran*** — **or the vector's premise expired** (§2.5) | anything whatsoever about the block |
 | **REFUSED** | the vector was inadmissible | a defect in the block |
+
+> ⚠️ ***A SPURIOUS `TIMED-OUT` IS WORSE THAN A SPURIOUS `FAIL`, BECAUSE IT IS BELIEVED.*** A `FAIL`
+> invites an argument with the specification and someone goes and looks; a `TIMED-OUT` reads as *the
+> condition simply never occurred* and **closes the question**. That asymmetry is why a value that
+> cannot fit its mirror element is **refused** rather than compared (§2.6) — and why a 32-bit completion
+> signal is refused as *inexpressible* rather than compared against its high half.
 
 ### ***`Stale` has TWO ROADS, and they send you to different halves of the system***
 
