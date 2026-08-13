@@ -5,6 +5,13 @@
 author has produced one, and this one was written without reading it. Agreement between them is
 evidence; divergence is where a reader should look.
 
+> **Revision 3 — `slotsInWaveSet` corrected from 6 to 1.** The six slots below all target one FB
+> instance, one stimulus surface and one reset, so under D9 every pair conflicts and the set runs as
+> **six waves of one slot**, not one wave of six. **Nothing derived from the old number moved** — see
+> *"What the slot-count correction cost"*. Two transport facts are also recorded there: the set's hard
+> dependency on the 32-bit command path, and why a first-run `TIMED-OUT` is not a finding about the
+> block.
+>
 > **Revision 2 — against enumeration issue 5 (27 assertions).** Issue 4's 25 vectors are unchanged to
 > the byte: issue 5 re-hashed nothing, so no citation in this file dangled. **Two vectors were added,
 > VB-HBA-026 and VB-HBA-027**, for the two assertions AR-HBA-13 created after this author's
@@ -56,6 +63,9 @@ sufficient one: **it clears when somebody CLASSIFIES all 27**, and for OUT-OF-SC
 UNTESTABLE-ON-RIG that identity is the gate-1 architecture signer, **never a vector author** (§4.3).
 **No bucket is assigned in this file.** What is reported here is the citation count and its residue:
 **27 cited, 0 uncited.**
+
+**The six slots below do NOT run together.** They are six methodologies, and under D9 they mutually
+conflict — see *"What the slot-count correction cost"*. `slotsInWaveSet` is **1**.
 
 | slot | start bool | vectors | family |
 |---|---|---|---|
@@ -151,6 +161,90 @@ VB-HBA-027 is satisfied vacuously by a dead inhibit output.** It is non-vacuous 
 VB-HBA-002 proves that output does assert at the threshold, VB-HBA-024 proves it holds while the alarm
 is up. **A reader who takes VB-HBA-027's green on its own has read it wrongly**, and that is a real
 cost of F-3 rather than a defect in it.
+
+## What the slot-count correction cost
+
+**`slotsInWaveSet` was 6 and is now 1.** It was 6 because there are six methodology slots, and that
+was the wrong question: the field is **how many slots run concurrently**, not how many exist. Every
+vector here targets one FB instance, one `HBA_Stim.*` stimulus surface and one shared
+`DB_Controls.FaultReset`, so **D9's computed disjointness separates every pair of these slots** and the
+wave set is six waves of one slot each. *(Inferred from this submission's own vectors. Not verified
+against `ir/`, which this author is fenced from, and the allowlist is unchanged.)*
+
+### What moved: nothing. Measured, not asserted.
+
+| quantity | at 6 slots | at 1 slot |
+|---|---|---|
+| `slotsPerRead` = `MaxReadRegisters / resultRegistersPerSlot` = 125 / 8 | 15 | 15 |
+| `readsPerCycle` = `ceil(slotsInWaveSet / slotsPerRead)` | `ceil(6/15)` = **1** | `ceil(1/15)` = **1** |
+| **§12a observability floor** = `readsPerCycle × RttP99Ms / ScanPeriodMs` | **8.6 scans** | **8.6 scans** |
+| every gate-10a `comp_max` | 49.79 … 2744 | **identical, all 27** |
+
+**The floor is quantised on ROUND TRIPS, not on slot count.** Six slots at 8 result registers is 48
+registers, which fits inside one Modbus read of 125 — so both figures land at one read per poll cycle.
+The gate's own output before and after the change is byte-identical on gates 5 and 10a, which is the
+evidence rather than the argument.
+
+**No vector's declared scans, window or backstop was chosen on a six-slot assumption.** Every scan
+count in this file is derived from the register's bounds table (`T#60S`, `T#2S`) and the 23.33 ms scan
+period; **none has a term in `slotsInWaveSet`.** And at one slot the floor is exactly one round trip
+and cannot be anything else, whatever `resultRegistersPerSlot` says — so it is now insensitive to that
+field too.
+
+### 🔴 And the direction was the other way round
+
+The instruction to recompute came with the reasoning that *a floor derived from a wider wave than will
+ever run is too permissive, and fails toward reporting a missed assertion as a pass.* **For this
+arithmetic that is inverted, and it is worth more than this submission:**
+
+> `readsPerCycle` is monotonically **non-decreasing** in `slotsInWaveSet`, and the floor is
+> proportional to it. **Over-declaring slots yields a floor that is too HIGH** — sampled windows must
+> be longer to clear it, and gate 10a's sampled ceiling (`window.PlantScans / floor`) gets **lower**.
+
+So over-declaring was the **conservative** error in every place the number is consumed, and correcting
+6 → 1 **relaxes** two gates rather than tightening them — by zero here, because of the quantisation,
+but the sign is the thing to know. **The permissive direction is UNDER-declaring**, which is what a
+submission does naturally by naming the slots it happens to be submitting rather than the wave set they
+will run in. If a future submission is told to "declare the real slot count", that instruction points
+at the dangerous direction.
+
+### One thing the correction does change, and it is about the blacklist
+
+§7's named failure mode is *"defensive over-blacklisting, concurrency collapsing toward serial, and
+nobody noticing because it still works."* **Here the concurrency collapses to serial anyway, and it is
+D9 doing it, not the blacklist.** The 54 entries exclude two *other* blocks and are unaffected — but
+the density concern reads differently once the wave set is known to be serial: **the blacklist is now
+buying nothing on the axis it was priced against**, because there is no co-running slot of this set for
+it to separate. It still matters for `FB_ShredderSequencer` and `FB_PusherControl`, which are not in
+this set at all.
+
+## Two transport facts this set depends on
+
+**1. Nothing here assumes a 16-bit value or one register per stimulus value — and one thing depends
+hard on that being true.** Contract §2 says a vector speaks engineering values and never register
+contents, and every `inputs` entry is a millisecond duration or a profile name, so the set is
+width-agnostic by construction. The dependency is arithmetic: ***81 duration values in this file exceed
+65535 ms*** — ten distinct figures from 70 000 to 120 000, counted rather than estimated. A stimulus
+parameter mapped as a **single 16-bit register would not fail, it would WRAP**: 75 000 ms arrives as
+9 464 ms, every phase boundary lands early, and the vector returns **a confident wrong answer** rather
+than an error. That is the one failure direction this contract exists to refuse, so it is named:
+**these scenarios require the 32-bit two-register command path.**
+
+*One place a 16-bit assumption is structural and is not this author's:* `completionValue` is compared
+against **one** result register and is bounded 0..65535 by the schema, so a completion signal that was
+itself a 32-bit `Time` or `DInt` could not be expressed at all. `HBA_Scenario_Done` = 1 is a Bool and
+is unaffected.
+
+**2. A first-run `TIMED-OUT` against a fresh mirror is plausibly a calibration fault, not a block
+defect.** The word-order transform fails **loudly** in the command direction precisely because every
+duration here is 1 000–120 000 ms: a swapped write arrives as roughly seven days, the stimulus model
+never reaches its next phase boundary, `HBA_Scenario_Done` never rises, and the runner reports
+TIMED-OUT. That is the good failure — X-B keeps TIMED-OUT distinct from FAIL exactly so that an agent
+told only FAIL does not go and fix the wrong thing, **and here the wrong thing would be correct ladder
+logic.** So: **on a TIMED-OUT, check the version register and the round-trip calibration before reading
+anything about the block.** A genuine block defect in this set presents as a FAIL or a latched
+violation, never as the scenario failing to advance — nothing the block does can stop the stimulus
+model reaching its own boundaries.
 
 ## Why almost everything here is SAMPLED, when the skill says prefer LATCHED
 
