@@ -85,8 +85,16 @@ reasoning, or another review's report of the same content — not the tool, not 
 From the repo root, run the S4 tool over every file in scope:
 
 ```
-./src/converter/Converter/bin/Release/net8.0/converter.exe review <files...> --ignore-errors
+./src/converter/Converter/bin/Release/net8.0/converter.exe review <files...> --project ir/<project> --ignore-errors
 ```
+
+*** `--project` IS NOT OPTIONAL, AND OMITTING IT USED TO BE INVISIBLE. *** The cross-file rules —
+**C-118** (interface-UDT Step), **C-122** (dwell-timer PT-home) and **C-125** (timeout fault bit in
+UDT) — need the tag/type registry that `--project` supplies. Without it they do not run, and until
+2026-08-13 they did not *say* they had not run: a stepper block reported `0 finding(s)` and exited
+0 with three of its most relevant rules never executed. They now report as unrun and the command
+**exits 2 = REVIEW INCOMPLETE**. Treat that exit as *"the mechanical pass did not finish"*, never
+as a clean review — re-run with `--project` rather than reaching for `--allow-unchecked`.
 
 Invoke it as a single command (no `cd &&` chaining, no pipes); if the Release binary is missing,
 report the mechanical pass as blocked and get it built — never substitute memory of a previous
