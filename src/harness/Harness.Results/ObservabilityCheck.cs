@@ -117,7 +117,10 @@ public static class ObservabilityCheck
         // SATISFIED BY NEVER HAVING LOOKED, so a poll gap produces a PASS rather than a miss - a false
         // green, which is the worst available direction. It applies whatever the signal's nature: a
         // perfectly persistent forbidden state that appears and clears inside one gap is still unseen.
-        if (form == AssertionForm.Never)
+        // *** AN UNSTATED FORM FAILS CLOSED, BECAUSE IT MIGHT BE A NEVER. *** The alternative - treating
+        // silence as the permissive WHEN - is precisely the silent default that made F-3 enforceable
+        // only against what a vector chose to claim.
+        if (form is AssertionForm.Never or AssertionForm.Unstated)
             modes.Remove(InstrumentationMode.Sampled);
 
         return modes;
@@ -190,10 +193,10 @@ public static class ObservabilityCheck
 
         // F-3's refusal is reported separately from the nature refusal, because the signal may be
         // perfectly readable and it is the SHAPE OF THE CLAIM that sampling cannot support.
-        if (form == AssertionForm.Never && expectation.Mode == InstrumentationMode.Sampled)
+        if (form is AssertionForm.Never or AssertionForm.Unstated && expectation.Mode == InstrumentationMode.Sampled)
         {
             return new ObservabilityFinding(expectation.Signal, ObservabilityOutcome.SampledCannotAnswerANeverAssertion,
-                $"{expectation.Signal} is SAMPLED and the cited assertion is a NEVER. A NEVER assertion PASSES BY HAVING SEEN NOTHING, and a poll gap produces exactly that - so an occurrence inside a gap is MISSED ENTIRELY AND READS AS A PASS. "
+                $"{expectation.Signal} is SAMPLED and the cited assertion is {(form == AssertionForm.Unstated ? "of an UNSTATED form, which is treated as a NEVER because it might be one" : "a NEVER")}. A NEVER assertion PASSES BY HAVING SEEN NOTHING, and a poll gap produces exactly that - so an occurrence inside a gap is MISSED ENTIRELY AND READS AS A PASS. "
                 + "It is rate-dependent, rare and unreproducible: one 2,216 ms outlier per ~2,000 round trips is ~95 scans blind, so a suite passes hundreds of times and misses the one occurrence. "
                 + "And the result package cannot tell the two apart - a sampled assertion that saw nothing is Held, identical to one that saw nothing BECAUSE NOTHING HAPPENED. Latch it (F-3, ruled by the owner 2026-08-13).");
         }

@@ -164,8 +164,18 @@ public static class SubmissionGate
                 problems.Add($"{label}: no Kills. A vector that no credible wrong implementation would fail only measures uptime. (Contract section 2 omits this field; section 10 requires mutation testing and this is the only mechanism for it — raised as a discrepancy, not resolved.)");
         }
 
+        // The completion condition is REPORTED even on a pass, because contract section 2 defines no
+        // completion VALUE at all - it names a signal and stops. A field the contract does not define is
+        // one an author cannot check against anything, so the gate says what it read rather than leaving
+        // the reader to assume the harness's convention of 1.
+        var completions = string.Join(", ", vectors
+            .Select(v => $"{v.CompletionSignal} reads {v.CompletionValue}")
+            .Distinct(StringComparer.Ordinal));
+
         return new GateResult("1 schema", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
-            problems.Count == 0 ? $"{vectors.Count} vector(s), every contract section 2 field present and typed." : string.Join(" | ", problems));
+            problems.Count == 0
+                ? $"{vectors.Count} vector(s), every contract section 2 field present and typed. Completion condition(s): {completions} — section 2 names a completion SIGNAL and states no VALUE, so this is reported rather than assumed."
+                : string.Join(" | ", problems));
     }
 
     // -------------------------------------------------------------------------------------------------
@@ -305,7 +315,17 @@ public static class SubmissionGate
             var enumerated = enumeration.FormOf(v.Basis.AssertionId);
 
             if (enumerated is null)
+            {
                 problems.Add($"{v.Id}: the enumeration carries forms but none for '{v.Basis.AssertionId}', so this citation's form could not be checked. A partially-formed enumeration is not a permissive one.");
+            }
+            else if (enumerated == AssertionForm.Unstated)
+            {
+                problems.Add($"{v.Id}: the enumeration lists '{v.Basis.AssertionId}' with an UNSTATED form. The form is the enumeration's to state, and a blank there is not a WHEN - it is a decomposition that has not been finished. F-3 cannot be enforced against it.");
+            }
+            else if (declared == AssertionForm.Unstated)
+            {
+                problems.Add($"{v.Id}: declares no assertion form. *** A DROPPED FORM FAILS THE SAME COMPARISON AS A WRONG ONE, DELIBERATELY *** - the form decides whether a SAMPLED observation is admissible (F-3), so a field that defaulted to WHEN would hand every author who omitted it the permissive path. The enumeration says '{v.Basis.AssertionId}' is {enumerated}; declare it.");
+            }
             else if (enumerated != declared)
                 problems.Add($"{v.Id}: declares form {declared} and the enumeration says '{v.Basis.AssertionId}' is {enumerated}. The assertion's form is the ENUMERATION's to state; a vector that disagrees with it is asserting something other than what it cites - and if the disagreement is Never-declared-as-When it is F-3's refusal being walked around.");
         }

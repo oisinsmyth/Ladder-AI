@@ -32,20 +32,23 @@ public class LoopRunTests
     private static SubmissionVector Vector(
         int step = 5, int limit = 10, string expected = "10", int settlingScans = 3,
         AssertionForm form = AssertionForm.When, string author = "agent-b",
-        InstrumentationMode mode = InstrumentationMode.Sampled, int window = 20, string? kills = "a ramp that overshoots the limit by one step") =>
+        InstrumentationMode mode = InstrumentationMode.Sampled, int window = 20, string? kills = "a ramp that overshoots the limit by one step",
+        string? completionSignal = null, int completionValue = 1) =>
         new("V-1", "S0", 0, new AgentIdentity(author),
             new Basis("REQ-014", "REQ-014:3f9a1c"),
             new Dictionary<string, string> { [TrivialBlock.StepTag] = step.ToString(), [TrivialBlock.LimitTag] = limit.ToString() },
             TrivialBlock.StartTag,
             new[] { new ObservabilityDeclaration(TrivialBlock.CountTag, SignalNature.PersistentState, mode, window, expected) },
             form,
-            new SettlingDeclaration("count unchanged across 3 consecutive scans", new[] { TrivialBlock.CountTag }, settlingScans),
+            new SettlingDeclaration("count unchanged across 3 consecutive scans",
+                new[] { TrivialBlock.CountTag, TrivialBlock.DoneTag }, settlingScans),
             MaxDurationScans: 20,
+            CompletionValue: completionValue,
             Array.Empty<BlacklistEntry>(),
             CompressionFactor: 1,
-            new[] { "ramp-to-limit" },
-            TrivialBlock.DoneTag,
-            kills);
+            AssertedBehaviours: new[] { "ramp-to-limit" },
+            CompletionSignal: completionSignal ?? TrivialBlock.DoneTag,
+            Kills: kills);
 
     private static LoopRequest Request(
         SubmissionVector? vector = null,
@@ -109,6 +112,24 @@ public class LoopRunTests
         var buggy = Run(Request(defect: TrivialBlockDefect.OffByOneAtTheLimit)).Result;
 
         Assert.NotEqual(clean.Packages[0].Stamp.ProgramVersion, buggy.Packages[0].Stamp.ProgramVersion);
+    }
+
+    [Fact]
+    public void A_COMPLETION_VALUE_OTHER_THAN_1_IS_HONOURED_because_the_contract_states_none()
+    {
+        // *** FOUND BY MUTATION: HARDCODING 1 LEFT THE SUITE GREEN. *** The loop carried the completion
+        // value as data and nothing exercised a value other than 1, so the field and the literal were
+        // indistinguishable - a guard nothing could make fire, for the fifth time in this project.
+        //
+        // Contract section 2 names a completion SIGNAL and never says what value on it means finished.
+        // Here the signal is the COUNT and the value is the limit itself: the ramp is complete when the
+        // count reads 10, and nothing about "1" is involved.
+        var (result, _) = Run(Request(vector: Vector(completionSignal: TrivialBlock.CountTag, completionValue: 10)));
+
+        Assert.Equal(LoopOutcome.Ran, result.Outcome);
+        var package = Assert.Single(result.Packages);
+        Assert.Equal(ResultVerdict.Pass, package.Verdict);
+        Assert.Equal("10", package.Assertions[0].Observed);
     }
 
     // ---------------------------------------------------------------------------------------------

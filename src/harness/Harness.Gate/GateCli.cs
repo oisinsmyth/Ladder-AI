@@ -143,6 +143,7 @@ public static class GateCli
             ? null
             : new SettlingDeclaration(v.SettlingCondition, v.SettlingSignals ?? new List<string>()),
         v.MaxDurationScans,
+        v.CompletionValue,
         (v.Blacklist ?? new List<BlacklistDocument>())
             .Select(b => new BlacklistEntry(b.Block ?? string.Empty, b.Reason ?? string.Empty))
             .ToArray(),

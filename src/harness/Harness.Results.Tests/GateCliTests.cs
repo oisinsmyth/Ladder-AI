@@ -31,6 +31,7 @@ public class GateCliTests
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
         "maxDurationScans": 20,
         "blacklist": [{ "block": "FC_Other", "reason": "shares the plant model" }],
+        "assertionForm": "When",
         "compressionFactor": 1,
         "assertedBehaviours": ["ramp-to-limit"],
         "completionSignal": "Demo_Done",
@@ -137,7 +138,7 @@ public class GateCliTests
             .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 100", StringComparison.Ordinal)
             .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal)
             .Replace("\"REQ-014:3f9a1c\": \"When\"", "\"REQ-014:3f9a1c\": \"Never\"", StringComparison.Ordinal)
-            .Replace("\"compressionFactor\": 1", "\"assertionForm\": \"Never\", \"compressionFactor\": 1", StringComparison.Ordinal);
+            .Replace("\"assertionForm\": \"When\"", "\"assertionForm\": \"Never\"", StringComparison.Ordinal);
 
         var (exit, output) = Run(never);
 
@@ -149,8 +150,85 @@ public class GateCliTests
         // admissible, so the refusal is about the FORM and nothing else.
         Assert.Equal(GateExit.AdmissibleSubjectToJudgement,
             Run(never
-                .Replace("\"assertionForm\": \"Never\", ", string.Empty, StringComparison.Ordinal)
+                .Replace("\"assertionForm\": \"Never\"", "\"assertionForm\": \"When\"", StringComparison.Ordinal)
                 .Replace("\"REQ-014:3f9a1c\": \"Never\"", "\"REQ-014:3f9a1c\": \"When\"", StringComparison.Ordinal)).Exit);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The two fields, END TO END through the document — three lanes hit this independently
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_DOCUMENT_CARRYING_forms_AND_enumerator_MAKES_3d_AND_3e_GENUINELY_CHECKED()
+    {
+        // The checks were built and the DOCUMENT could not carry what they needed, so from the CLI the
+        // independence gate always reported NotChecked and the form cross-check could never fire.
+        var (_, output) = Run(Good);
+
+        Assert.Contains("[CHECKED   ] 3d enumerator independence", output, StringComparison.Ordinal);
+        Assert.Contains("[CHECKED   ] 3e assertion form authority", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_WITHOUT_them_the_same_document_reports_NOT_CHECKED_rather_than_passing()
+    {
+        // The flat projection. Two gates that cannot run, and NOT CHECKED fails closed.
+        var flat = Good
+            .Replace("\"forms\": { \"REQ-014:3f9a1c\": \"When\" }, \"enumerator\": \"agent-c\" },", "},", StringComparison.Ordinal);
+
+        var (exit, output) = Run(flat);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("[NOT CHECKED] 3d enumerator independence", output, StringComparison.Ordinal);
+        Assert.Contains("[NOT CHECKED] 3e assertion form authority", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_ENUMERATOR_WHO_IS_THE_BLOCKS_AUTHOR_IS_REFUSED_THROUGH_THE_DOCUMENT()
+    {
+        var (exit, output) = Run(Good.Replace("\"enumerator\": \"agent-c\"", "\"enumerator\": \"agent-a\"", StringComparison.Ordinal));
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("[REFUSED   ] 3d enumerator independence", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AND_ONE_WHO_IS_A_VECTORS_AUTHOR_IS_TOO()
+    {
+        // The gate compares against BlockAuthor AND every vector's author, normalised.
+        var (exit, output) = Run(Good.Replace("\"enumerator\": \"agent-c\"", "\"enumerator\": \"AGENT-B \"", StringComparison.Ordinal));
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("THIRD party to both authors", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_VECTOR_THAT_OMITS_ITS_FORM_IS_REFUSED_AND_THIS_IS_ITS_OWN_CASE()
+    {
+        // *** THE NOT-DECLARED CASE, TESTED SEPARATELY FROM THE MIS-DECLARED ONE. *** The field used to
+        // default to When on the reasoning that WHEN is checked hardest; the form decides whether a
+        // SAMPLED observation is admissible, so an author who omitted it was handed the permissive path.
+        // The zero value is Unstated and it fails the same comparison a wrong form fails.
+        var omitted = Good.Replace("\"assertionForm\": \"When\",", string.Empty, StringComparison.Ordinal);
+
+        var (exit, output) = Run(omitted);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("declares no assertion form", output, StringComparison.Ordinal);
+        Assert.Contains("A DROPPED FORM FAILS THE SAME COMPARISON AS A WRONG ONE", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_COMPLETION_VALUE_REACHES_THE_GATE_FROM_THE_DOCUMENT_and_the_report_states_it()
+    {
+        // *** ALSO FOUND BY MUTATION. *** The CLI carried the field and nothing in the report mentioned
+        // it, so passing a literal 1 instead of the document's value left every test green. Contract
+        // section 2 defines no completion VALUE, so the gate now says what it read - which is both the
+        // honest treatment of an undefined field and the thing that makes the pass-through checkable.
+        var (_, output) = Run(Good.Replace("\"completionSignal\": \"Demo_Done\"", "\"completionSignal\": \"Demo_Done\", \"completionValue\": 7", StringComparison.Ordinal));
+
+        Assert.Contains("Demo_Done reads 7", output, StringComparison.Ordinal);
+        Assert.Contains("states no VALUE, so this is reported rather than assumed", output, StringComparison.Ordinal);
     }
 
     [Fact]

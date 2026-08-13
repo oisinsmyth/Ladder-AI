@@ -99,12 +99,25 @@ public sealed class VectorDocument
     public List<ExpectationDocument>? Expectations { get; set; }
 
     /// <summary>
-    /// The cited assertion's canonical form. <b>Defaults to <c>When</c> because that is the shape that
-    /// is CHECKED HARDEST</b> — a NEVER assertion loses SAMPLED entirely (F-3), so a document that
-    /// omits the field gets the permissive-looking default and is still gated on everything else. An
-    /// author who means NEVER must say so, and the enumeration is where they get the answer.
+    /// The cited assertion's canonical form.
+    ///
+    /// <para><b>It does NOT default to <c>When</c> any more.</b> It used to, on the reasoning that WHEN
+    /// is the shape checked hardest — but the form decides whether a SAMPLED observation is admissible
+    /// (F-3), so a document that omitted the field was handed the permissive path. The zero value is
+    /// <see cref="AssertionForm.Unstated"/>, which <b>fails the same comparison a WRONG form fails</b>.
+    /// The enumeration is where an author gets the right answer.</para>
     /// </summary>
-    public AssertionForm AssertionForm { get; set; } = AssertionForm.When;
+    public AssertionForm AssertionForm { get; set; } = AssertionForm.Unstated;
+
+    /// <summary>
+    /// The value on the completion signal that means "finished".
+    ///
+    /// <para><b>Contract §2 has no field for this</b> — it names a completion SIGNAL and never says what
+    /// value on it means finished, and the loop was assuming 1. Carrying it as data removes the
+    /// assumption from the code. The default of 1 is stated here as the harness's CONVENTION rather than
+    /// derived from anything, and whether the contract should carry the field is a spec question.</para>
+    /// </summary>
+    public int CompletionValue { get; set; } = 1;
     public string? SettlingCondition { get; set; }
     public List<string>? SettlingSignals { get; set; }
     public int MaxDurationScans { get; set; }

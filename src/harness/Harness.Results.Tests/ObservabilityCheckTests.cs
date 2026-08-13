@@ -139,6 +139,34 @@ public class ObservabilityCheckTests
     }
 
     [Fact]
+    public void AN_UNSTATED_FORM_FAILS_CLOSED_BECAUSE_IT_MIGHT_BE_A_NEVER()
+    {
+        // The zero value. Treating silence as the permissive WHEN is exactly the silent default that made
+        // F-3 enforceable only against what a vector chose to claim.
+        var finding = Evaluate(SignalNature.PersistentState, InstrumentationMode.Sampled, window: 100,
+            map: Map(InstrumentationMode.Sampled), form: AssertionForm.Unstated).Findings[0];
+
+        Assert.Equal(ObservabilityOutcome.SampledCannotAnswerANeverAssertion, finding.Outcome);
+        Assert.Contains("UNSTATED form, which is treated as a NEVER because it might be one", finding.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_sufficiency_table_loses_Sampled_for_an_UNSTATED_form_at_every_nature()
+    {
+        foreach (var nature in Enum.GetValues<SignalNature>())
+            Assert.DoesNotContain(InstrumentationMode.Sampled, ObservabilityCheck.ModesThatCanAnswer(nature, AssertionForm.Unstated));
+    }
+
+    [Fact]
+    public void UNSTATED_IS_THE_ZERO_VALUE_so_a_defaulted_field_can_never_read_as_WHEN()
+    {
+        // The whole mechanism. If When were zero, every omitted field would arrive as the permissive form
+        // and nothing downstream could tell it from a deliberate declaration.
+        Assert.Equal(AssertionForm.Unstated, default(AssertionForm));
+        Assert.NotEqual(AssertionForm.When, default(AssertionForm));
+    }
+
+    [Fact]
     public void The_NEVER_refusal_is_a_DIFFERENT_outcome_from_the_nature_refusal()
     {
         // The signal may be perfectly readable and it is the SHAPE OF THE CLAIM that sampling cannot

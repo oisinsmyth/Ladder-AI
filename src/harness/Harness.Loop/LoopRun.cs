@@ -299,7 +299,9 @@ public static class LoopRun
             values,
             new InertDeclaration(binding.ResultSources.Select((_, i) => (i, (ushort)0)).ToDictionary(x => x.i, x => x.Item2)),
             completionRegister >= 0 ? completionRegister : 0,
-            1,
+            // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
+            // loop inventing a convention contract section 2 does not state.
+            unchecked((ushort)vector.CompletionValue),
             vector.MaxDurationScans);
     }
 

@@ -51,6 +51,20 @@ public enum InstrumentationMode
 /// </summary>
 public enum AssertionForm
 {
+    /// <summary>
+    /// <b>Nothing said what form this is — and it is deliberately the ZERO value.</b>
+    ///
+    /// <para>The form decides whether a SAMPLED observation is admissible (F-3), so a field that
+    /// silently defaulted to <see cref="When"/> would hand every author who omitted it the permissive
+    /// path. Making the default <i>unusable</i> means <b>a DROPPED form fails the same comparison as a
+    /// WRONG one</b>, which is the only arrangement in which "the field was absent" cannot quietly
+    /// become "the field said the convenient thing".</para>
+    ///
+    /// <para>It is treated as fail-closed everywhere it is not refused outright: for sufficiency it
+    /// behaves like <see cref="Never"/>, because an unknown form MIGHT be one.</para>
+    /// </summary>
+    Unstated = 0,
+
     /// <summary><c>WHEN &lt;trigger&gt; THEN &lt;observable response&gt;</c>. A pass requires having SEEN the response.</summary>
     When,
 
@@ -149,8 +163,13 @@ public sealed record SubmissionVector(
     string StartBool,
     IReadOnlyList<ObservabilityDeclaration> Expectations,
     AssertionForm Form,
+    // CompletionValue is below, beside MaxDuration. *** CONTRACT SECTION 2 HAS NO FIELD FOR IT *** -
+    // it names a completion SIGNAL and never says what value on that signal means "finished". The loop
+    // was assuming 1. Carrying it as data removes the assumption from the code; whether the CONTRACT
+    // should state it is a spec question and is not settled here.
     SettlingDeclaration? Settling,
     int MaxDurationScans,
+    int CompletionValue,
     IReadOnlyList<BlacklistEntry> Blacklist,
     int CompressionFactor,
     IReadOnlyCollection<string> AssertedBehaviours,

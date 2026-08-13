@@ -29,6 +29,7 @@ public class SubmissionGateTests
             form,
             settling ?? new SettlingDeclaration("count unchanged across 3 scans", new[] { "Demo_Count" }),
             maxDuration,
+            CompletionValue: 1,
             blacklist ?? new[] { new BlacklistEntry("FC_Other", "shares the plant model instance") },
             comp,
             new[] { "ramp-to-limit" },
@@ -190,6 +191,34 @@ public class SubmissionGateTests
 
         Assert.False(Gate(report, "3e assertion form authority").Passed);
         Assert.Contains("F-3's refusal being walked around", Gate(report, "3e").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_VECTOR_THAT_DECLARES_NO_FORM_IS_REFUSED_AND_IT_IS_ITS_OWN_CASE()
+    {
+        // *** NOT-DECLARED, TESTED SEPARATELY FROM MIS-DECLARED. *** A dropped form fails the same
+        // comparison as a wrong one, deliberately: the form decides whether a SAMPLED observation is
+        // admissible, so a field that defaulted to WHEN handed every author who omitted it the
+        // permissive path.
+        var report = Check(new[] { Vector(form: AssertionForm.Unstated) });
+
+        Assert.False(Gate(report, "3e assertion form authority").Passed);
+        Assert.Contains("declares no assertion form", Gate(report, "3e").Detail, StringComparison.Ordinal);
+        Assert.Contains("A DROPPED FORM FAILS THE SAME COMPARISON AS A WRONG ONE", Gate(report, "3e").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_ENUMERATION_THAT_LISTS_AN_ASSERTION_WITH_NO_FORM_IS_REFUSED_TOO()
+    {
+        // A blank on the enumeration's side is not a WHEN either - it is a decomposition that has not
+        // been finished, and F-3 cannot be enforced against it.
+        var blank = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Unstated }, "agent-c");
+
+        var report = Check(enumeration: blank);
+
+        Assert.False(Gate(report, "3e assertion form authority").Passed);
+        Assert.Contains("has not been finished", Gate(report, "3e").Detail, StringComparison.Ordinal);
     }
 
     [Fact]
