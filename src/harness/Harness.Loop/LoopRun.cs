@@ -289,12 +289,31 @@ public static class LoopRun
         }).ToArray();
     }
 
+    /// <summary>
+    /// Whether the program under test appears in the download's own load manifest.
+    ///
+    /// <para><b>Tag tables are excluded, and that is a correction rather than a convenience.</b> A PLC
+    /// tag table carries no load message: the one measured 19-object manifest from this rig names an
+    /// FC, an FB, its instance DB, OB1, <c>MB_SERVER</c> and nine <c>TCP_MB_*</c> helpers, and no tag
+    /// table. Every program under test the harness has generates one, so a comparison that demanded it
+    /// would report <see cref="ManifestPresence.Absent"/> on every healthy real download — and
+    /// <c>Absent</c> makes every package non-conclusive. It passed unnoticed because the only gateway
+    /// that existed put EVERY object name in its manifest, including the tag table, so the test and
+    /// the device disagreed about what a manifest contains and only the test was ever consulted.</para>
+    ///
+    /// <para><b>An empty downloadable set is <see cref="ManifestPresence.NotAvailable"/>, not
+    /// Loaded.</b> A manifest that was never asked about anything answers nothing.</para>
+    /// </summary>
     private static ManifestPresence ManifestOf(DeploymentOutcome deployment, IReadOnlyList<HarnessObject> programUnderTest)
     {
         if (deployment.Manifest.Count == 0)
             return ManifestPresence.NotAvailable;
 
-        return programUnderTest.All(o => deployment.Manifest.Contains(o.Name))
+        var downloadable = programUnderTest.Where(o => o.Kind != HarnessObjectKind.TagTable).ToArray();
+        if (downloadable.Length == 0)
+            return ManifestPresence.NotAvailable;
+
+        return downloadable.All(o => deployment.Manifest.Contains(o.Name))
             ? ManifestPresence.Loaded
             : ManifestPresence.Absent;
     }

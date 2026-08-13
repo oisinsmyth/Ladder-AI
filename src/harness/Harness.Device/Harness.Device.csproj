@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Device</RootNamespace>
+    <AssemblyName>Harness.Device</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THE REAL IDeviceGateway. Everything else in src/harness is pure arithmetic; this is the one
+    assembly that puts an object on a controller, and it does so by INVOKING THE EXISTING BINARIES
+    rather than by re-implementing what they do.
+
+    WHY SHELL OUT RATHER THAN REFERENCE. `openness-cli` and `download-probe` target net48 because
+    Siemens.Engineering pins them there (docs/notes/openness-quirks.md); this assembly is net8.0 like
+    the rest of the harness. A ProjectReference is therefore impossible in the direction that
+    matters. It is also the direction we WANT impossible: TIA whitelists a caller by
+    (Path, FileHash), so a harness that linked Openness would drag the whole approval cycle onto
+    every harness build.
+
+    THE ONE THING THAT IS LINKED is Ladder.Download (netstandard2.0, no Siemens reference, no
+    network, no Portal). It is linked rather than reimplemented because the load manifest is the
+    evidence the whole deployment verdict keys on, and a second parser for it would be a second
+    opinion that could drift from the one the probe's own tests pin.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\download-feedback\DownloadFeedback\DownloadFeedback.csproj" />
+  </ItemGroup>
+
+</Project>

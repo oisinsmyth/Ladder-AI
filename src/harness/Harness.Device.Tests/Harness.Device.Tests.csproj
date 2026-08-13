@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.Device.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Device\Harness.Device.csproj" />
+  </ItemGroup>
+
+  <!--
+    *** THE RECORDED DOWNLOAD LOGS, FROM src/download-feedback's OWN FIXTURE SET. ***
+
+    They are LINKED rather than copied, and they are named INDIVIDUALLY rather than globbed. Both
+    choices are the same choice: a wildcard that stops matching produces a test suite that quietly
+    tests less, whereas a named file that disappears is an MSBuild error.
+
+    These are the artifacts of real rig downloads — a full 99-object load, a differential 1-object
+    load, an up-to-date run that transferred nothing, and an aborted run with no DownloadResult at
+    all. They are the only INDEPENDENT authority available to this assembly: everything else it can
+    test, it also wrote.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\full-ninety-nine-objects.txt" Link="Fixtures\full-ninety-nine-objects.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\differential-one-object.txt" Link="Fixtures\differential-one-object.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\up-to-date-nothing-transferred.txt" Link="Fixtures\up-to-date-nothing-transferred.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\aborted-no-download-result.txt" Link="Fixtures\aborted-no-download-result.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -68,10 +68,22 @@ internal sealed class SimulatedGateway : IDeviceGateway
 
         _plc = new SimulatedPlc(program);
 
-        var manifest = objects.Select(o => o.Name).Where(n => !OmitFromManifest.Contains(n)).ToHashSet(StringComparer.Ordinal);
+        // *** THE MANIFEST OMITS TAG TABLES, BECAUSE A REAL ONE DOES. ***
+        //
+        // A PLC tag table carries no load message. The one measured 19-object manifest from this rig
+        // names an FC, an FB, its instance DB, OB1, MB_SERVER and nine TCP_MB_* helpers — and no tag
+        // table. This fake used to report every object name it was handed, which made the manifest
+        // comparison in LoopRun agree with a shape no device produces: the check passed here and would
+        // have reported ABSENT on every healthy real download.
+        //
+        // Keeping the fake faithful is what makes that comparison testable at all — revert LoopRun's
+        // tag-table exclusion and these tests go red.
+        var downloadable = objects.Where(o => o.Kind != HarnessObjectKind.TagTable).ToArray();
+        var manifest = downloadable.Select(o => o.Name).Where(n => !OmitFromManifest.Contains(n)).ToHashSet(StringComparer.Ordinal);
 
-        return new DeploymentOutcome(true, manifest.Count == objects.Count, manifest,
-            $"{manifest.Count} of {objects.Count} object(s) parsed and loaded into the interpreter.");
+        return new DeploymentOutcome(true, manifest.Count == downloadable.Length, manifest,
+            $"{manifest.Count} of {downloadable.Length} downloadable object(s) parsed and loaded into the interpreter "
+            + $"({objects.Count - downloadable.Length} tag table(s) carry no load message and are absent from the manifest, as on a real download).");
     }
 
     public IRegisterTransport Open()
