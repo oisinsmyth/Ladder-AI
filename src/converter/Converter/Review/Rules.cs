@@ -59,6 +59,23 @@ public static class Rules
         }
     }
 
+    // C-003 (warn) — the `UDT_` half of the same prefix rule. Named in C-003's own sentence
+    // alongside FB_/FC_/DB_, and checkable against a TYPE file's name with no more machinery than
+    // the DB form above needs.
+    public static IEnumerable<Finding> CheckC003TypePrefix(PlcTypeSource type)
+    {
+        if (!type.Name.StartsWith("UDT_", StringComparison.Ordinal))
+        {
+            yield return new Finding(
+                "C-003",
+                FindingSeverity.Warn,
+                type.Name,
+                null,
+                $"PLC data type name '{type.Name}' does not start with the required 'UDT_' prefix.",
+                $"Rename to 'UDT_{type.Name}' (coordinate with every block whose interface members are typed as it first).");
+        }
+    }
+
     // C-005 (error) — names use letters, digits, and underscore only, starting with a letter.
     // Runs per dot-separated path component (array-index suffixes stripped, %Xn/%Bn/%Wn
     // slice-address components skipped entirely — that's addressing syntax, not a user-chosen
@@ -120,6 +137,271 @@ public static class Rules
     // pass. Char-based to match this file's IsValidIdentifier style (no Regex).
     private static bool IsPascalCaseMember(string name) =>
         name.Length > 0 && char.IsAsciiLetterUpper(name[0]) && name.All(char.IsAsciiLetterOrDigit);
+
+    // C-001 (error) — TAG-TABLE layer, the one place tag NAMES actually live. Two sub-layers, and
+    // every tag lands in exactly one of them (no tag is silently unexamined):
+    //
+    //   (a) PHYSICAL-IO tags — any tag whose LogicalAddress is in the process image (`%I…`/`%Q…`).
+    //       C-001's format is `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` (e.g. `DI3_FCC_RunFb`). The
+    //       equipment token sits in the MIDDLE, so the check is a field split, never a prefix match.
+    //       Two further cross-checks are possible here that a name alone could not give, because the
+    //       ADDRESS is right there next to the name: the direction letter must agree with I-vs-Q,
+    //       and the D/A letter must agree with bit-vs-word width. A `DQ…` tag at an `%I` address is
+    //       not a style question — one of the two is wrong.
+    //   (b) EVERY OTHER tag (`%M` flags, and anything not in the process image) — C-001's
+    //       variables layer: short PascalCase, underscore-free.
+    //
+    // C-007's vendor-default exception is applied HERE rather than left implicit, and is REPORTED as
+    // an Info finding rather than silently skipped: `Clock_0.5Hz` is tolerated, but a reader is told
+    // it was tolerated and why. Physical-IO tags keep their underscores by design — that is layer
+    // (a)'s own format, not an exemption from checking (which is what the pre-2026-08-13 runner
+    // asserted: "no member-naming check applies", for the file kind where the rule most applies).
+    public static IEnumerable<Finding> CheckC001TagNames(PlcTagTableSource table)
+    {
+        foreach (var tag in table.Tags)
+        {
+            var address = ProcessImageAddress.Classify(tag.LogicalAddress);
+
+            if (address is null)
+            {
+                // Layer (b): a flag/memory tag is a variable — short PascalCase, underscore-free.
+                if (IsPascalCaseMember(tag.Name))
+                {
+                    continue;
+                }
+
+                if (IsVendorDefaultTagName(tag.Name))
+                {
+                    yield return new Finding(
+                        "C-001",
+                        FindingSeverity.Info,
+                        table.Name,
+                        null,
+                        $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not PascalCase, but is a TIA vendor-default name — tolerated as-is under C-007, not a defect.",
+                        "No action. C-007 makes vendor-supplied names (the clock/system memory bits) a documented standing exception; renaming one buys nothing and risks confusing it with project content.");
+                    continue;
+                }
+
+                yield return new Finding(
+                    "C-001",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                    $"Rename '{tag.Name}' to short PascalCase without underscores, or — if this really is a physical-IO point — give it a physical-IO address and the `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` name.");
+                continue;
+            }
+
+            // Layer (a): physical IO. Shape first — a name that isn't in the format at all can't be
+            // cross-checked against the address, so that is the only finding for this tag.
+            var shape = PhysicalIoTagName.Parse(tag.Name);
+            if (shape is null)
+            {
+                yield return new Finding(
+                    "C-001",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag '{tag.Name}' is at physical-IO address {tag.LogicalAddress} but does not follow C-001's physical-IO format `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` (e.g. DI3_FCC_RunFb).",
+                    $"Rename to `{(address.IsInput ? (address.IsBit is false ? "AI" : "DI") : (address.IsBit is false ? "AQ" : "DQ"))}<n>_<Equipment>_<Signal>`, using the frozen C-004 equipment identifier verbatim.");
+                continue;
+            }
+
+            if (shape.IsInput != address.IsInput)
+            {
+                yield return new Finding(
+                    "C-001",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag '{tag.Name}' names itself an {(shape.IsInput ? "input" : "output")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, which is a physical {(address.IsInput ? "input" : "output")} — the name and the address disagree.",
+                    $"Fix whichever is wrong: rename the tag to the '{(address.IsInput ? (shape.IsDigital ? "DI" : "AI") : (shape.IsDigital ? "DQ" : "AQ"))}' form, or re-address it.");
+            }
+
+            if (address.IsBit is bool isBit && shape.IsDigital != isBit)
+            {
+                yield return new Finding(
+                    "C-001",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag '{tag.Name}' names itself {(shape.IsDigital ? "digital" : "analog")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, a {(isBit ? "single bit" : "byte/word/dword")} — a digital point is a bit, an analog point is not.",
+                    $"Fix whichever is wrong: rename to the '{(shape.IsInput ? (isBit ? "DI" : "AI") : (isBit ? "DQ" : "AQ"))}' form, or re-address it.");
+            }
+        }
+    }
+
+    // C-005 (error) — TAG-TABLE layer: the table's own name and every tag name. Same charset rule as
+    // everywhere else (letters/digits/underscore, starting with a letter); the LogicalAddress is
+    // deliberately NOT checked (`%I0.0`'s dot is addressing syntax, not a chosen name — the same
+    // exclusion CheckPathCharset already makes for `%Xn` slice components). C-007's vendor-default
+    // exception is REPORTED as Info, never silently applied: `Default tag table` (a space) and
+    // `Clock_0.5Hz` (a dot) are the two named in doc 06 and both are real in the corpus.
+    public static IEnumerable<Finding> CheckC005TagTableCharset(PlcTagTableSource table)
+    {
+        if (!IsValidIdentifier(table.Name))
+        {
+            yield return IsVendorDefaultTableName(table.Name)
+                ? new Finding(
+                    "C-005",
+                    FindingSeverity.Info,
+                    table.Name,
+                    null,
+                    $"Tag table name '{table.Name}' contains characters outside letters/digits/underscore, but is a TIA vendor-supplied name — tolerated as-is under C-007, not a defect.",
+                    "No action. C-007 names this exact case as a documented standing exception to C-005.")
+                : new Finding(
+                    "C-005",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag table name '{table.Name}' contains characters other than letters/digits/underscore, or doesn't start with a letter.",
+                    $"Rename the tag table '{table.Name}' to use only letters, digits, and underscore, starting with a letter.");
+        }
+
+        foreach (var tag in table.Tags)
+        {
+            if (IsValidIdentifier(tag.Name))
+            {
+                continue;
+            }
+
+            yield return IsVendorDefaultTagName(tag.Name)
+                ? new Finding(
+                    "C-005",
+                    FindingSeverity.Info,
+                    table.Name,
+                    null,
+                    $"Tag '{tag.Name}' contains characters outside letters/digits/underscore, but is a TIA vendor-default name — tolerated as-is under C-007, not a defect.",
+                    "No action. C-007 makes the vendor-supplied clock/system memory bits a documented standing exception to C-005.")
+                : new Finding(
+                    "C-005",
+                    FindingSeverity.Error,
+                    table.Name,
+                    null,
+                    $"Tag name '{tag.Name}' contains characters other than letters/digits/underscore, or doesn't start with a letter.",
+                    $"Rename '{tag.Name}' to use only letters, digits, and underscore, starting with a letter.");
+        }
+    }
+
+    // C-406 (error) — TAG-TABLE layer: the declaration form, against a tag's own DataTypeName. A PLC
+    // tag is expected to be an elementary scalar, so this may well never fire — but DataTypeName is a
+    // free string in the IR model, so a TOF_TIME/TONR_TIME here is REPRESENTABLE and therefore worth
+    // actually looking for. Reported as Checked rather than CheckedVacuous for exactly that reason:
+    // "cannot appear" is a claim this codebase can't make about a free-text field.
+    public static IEnumerable<Finding> CheckC406TagDataTypes(PlcTagTableSource table)
+    {
+        foreach (var tag in table.Tags.Where(t => t.DataTypeName is "TONR_TIME" or "TOF_TIME"))
+        {
+            yield return new Finding(
+                "C-406",
+                FindingSeverity.Error,
+                table.Name,
+                null,
+                $"Tag '{tag.Name}' is declared as {tag.DataTypeName} - only TON_TIME is permitted.",
+                "Replace with a TON_TIME instance plus explicit inversion/edge logic per C-406.");
+        }
+    }
+
+    // The TIA vendor-supplied tag names C-007 tolerates: the clock memory byte's bits (`Clock_0.5Hz`
+    // … `Clock_10Hz` — the doc's own example) and the system memory byte's bits. Deliberately a
+    // narrow, enumerated set rather than a loose pattern: a project tag that happens to look like one
+    // must NOT slip through the exception, and TIA's auto-generated `Tag_1` placeholder is
+    // specifically NOT here — an unnamed tag is exactly what a naming review should catch.
+    private static readonly string[] VendorDefaultSystemTagNames =
+        { "FirstScan", "DiagStatusUpdate", "AlwaysTRUE", "AlwaysFALSE" };
+
+    private static bool IsVendorDefaultTagName(string name)
+    {
+        if (VendorDefaultSystemTagNames.Contains(name, StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        if (!name.StartsWith("Clock_", StringComparison.Ordinal) || !name.EndsWith("Hz", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var frequency = name["Clock_".Length..^"Hz".Length];
+        return frequency.Length > 0 && frequency.All(c => char.IsAsciiDigit(c) || c == '.');
+    }
+
+    // `Default tag table` — named verbatim in C-007 as a tolerated vendor name.
+    private static bool IsVendorDefaultTableName(string name) =>
+        string.Equals(name, "Default tag table", StringComparison.Ordinal);
+
+    // A physical-IO address in the process image, decomposed far enough to cross-check a C-001 name
+    // against it. IsBit is NULLABLE on purpose: `%I0.0` is provably a bit and `%IW64` provably isn't,
+    // but a bare `%I5` is neither, and guessing there would manufacture a false finding — a width
+    // that cannot be established simply isn't cross-checked (the direction still is).
+    private sealed record ProcessImageAddress(bool IsInput, bool? IsBit)
+    {
+        public static ProcessImageAddress? Classify(string logicalAddress)
+        {
+            if (logicalAddress.Length < 2 || logicalAddress[0] != '%')
+            {
+                return null;
+            }
+
+            var area = char.ToUpperInvariant(logicalAddress[1]);
+            if (area != 'I' && area != 'Q')
+            {
+                return null;
+            }
+
+            var rest = logicalAddress[2..];
+            if (rest.Length > 0 && char.IsAsciiLetter(rest[0]))
+            {
+                // %IB / %IW / %ID (and any other size letter): a byte/word/dword, never a bit.
+                return new ProcessImageAddress(area == 'I', false);
+            }
+
+            return new ProcessImageAddress(area == 'I', rest.Contains('.') ? true : null);
+        }
+    }
+
+    // A C-001 physical-IO tag name, split into its `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` fields.
+    // Hand-rolled rather than a Regex, matching this file's IsValidIdentifier/IsPascalCaseMember style.
+    private sealed record PhysicalIoTagName(string Prefix, bool IsInput, bool IsDigital)
+    {
+        public static PhysicalIoTagName? Parse(string name)
+        {
+            if (name.Length < 2)
+            {
+                return null;
+            }
+
+            var prefix = name[..2];
+            var isDigital = prefix is "DI" or "DQ";
+            var isAnalog = prefix is "AI" or "AQ";
+            if (!isDigital && !isAnalog)
+            {
+                return null;
+            }
+
+            var i = 2;
+            while (i < name.Length && char.IsAsciiDigit(name[i]))
+            {
+                i++;
+            }
+
+            if (i == 2 || i >= name.Length || name[i] != '_')
+            {
+                return null; // no point number, or no `_` separating it from the equipment token
+            }
+
+            // Equipment and Signal: at least two non-empty underscore-separated fields after the
+            // number. The equipment token is the FIRST of them — it sits in the middle of the name,
+            // which is why this is a field split and not a prefix test.
+            var fields = name[(i + 1)..].Split('_');
+            if (fields.Length < 2 || fields.Any(f => f.Length == 0))
+            {
+                return null;
+            }
+
+            return new PhysicalIoTagName(prefix, prefix[1] == 'I', isDigital);
+        }
+    }
 
     public static IEnumerable<Finding> CheckC005CharsetDbMembers(string ownerName, IReadOnlyList<DbMember> members)
     {
@@ -944,6 +1226,18 @@ public static class Rules
                 "Ensure the phase is a `Step : Int` member of the block's caller-visible interface UDT, referenced through the UDT-typed interface member.");
         }
     }
+
+    // Does this block give C-118 anything to judge? A block that never touches a Step register has
+    // no stepped sequence to place, so C-118 is genuinely NotApplicable to it — with or without a
+    // --project index. A block that DOES reference one, reviewed with no index, is a different
+    // animal: the rule has a subject and was NOT judged. ReviewRunner uses this to tell those two
+    // apart, because reporting both as "not applicable" is how "we did not check" reads as "clean".
+    internal static bool UsesStepRegister(IrBlock block) =>
+        block.Networks.SelectMany(TagReferences.AllTagPaths).Any(HasStepLeaf);
+
+    // Same question for C-122/C-125, whose subject is a step-gated (dwell) timer.
+    internal static bool HasStepGatedTimer(IrBlock block) =>
+        block.Networks.SelectMany(n => n.Timers).Any(t => ExprHasStepGuard(t.In));
 
     // C-119 (error) — SINGLE-FILE. Idle/home is always step 0. Mechanized narrowly: collect the
     // block's step-number set (CollectBlockStepNumbers) and assert 0 is present; a stepped sequence

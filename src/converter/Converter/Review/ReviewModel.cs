@@ -36,9 +36,17 @@ public sealed record Finding(
 //                     specifically; reported separately from Checked so it's never read as "the
 //                     tool verified this and found no problem."
 //   NotApplicable  — this rule has nothing to inspect in this file's own content kind (e.g. a
-//                     C-406 usage-form check against a DB-only file with no networks at all).
-//   Skipped        — not implemented in this phase (Bucket B/C rules, or Bucket-A rules beyond
-//                     Phase 1's 8). Reason is always populated.
+//                     C-406 usage-form check against a DB-only file with no networks at all). The
+//                     Reason must say WHY for this specific rule — a blanket per-file phrase (the
+//                     old "TAGTABLE rule support not implemented in Phase 1", stamped on all 18)
+//                     is how "we did not check" got filed under "nothing to check".
+//   Skipped        — *** THE RULE HAD A SUBJECT HERE AND WAS NOT JUDGED. *** Not implemented for
+//                     this content kind, or an input it needs (a --project index) was not supplied.
+//                     A zero finding count here proves NOTHING. Reason is always populated, and
+//                     `converter review` FAILS CLOSED on it — exit 2, see ReviewOutcome. This is
+//                     deliberately a gate and not a warning: the tag-table version of this status
+//                     was printed on every tag-table review from Phase 1 until 2026-08-13, in a run
+//                     that exited 0, and it was read as a clean review every time.
 // A rule is never silently absent from a report — every rule Phase 1 knows about gets an entry
 // with one of these four statuses for every file reviewed.
 public enum RuleCheckStatus

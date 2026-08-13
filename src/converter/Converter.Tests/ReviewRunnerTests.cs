@@ -213,10 +213,12 @@ public class ReviewRunnerTests : IDisposable
         Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-408" && s.Status == RuleCheckStatus.Checked); // rules ran
     }
 
-    // A UDT (TYPE file) is a member container: only C-001 (member naming) is checked, every other
-    // Phase-1 rule is NotApplicable.
+    // A UDT (TYPE file) is a NAMED, COMMENTED member container. C-001/C-003/C-005/C-201/C-406 all
+    // have subjects in one; the rest genuinely don't. This test used to assert "only C-001, rest
+    // NotApplicable" — the same collapse the tag-table branch had, and four of those seventeen
+    // "not applicable" rules were implementable all along.
     [Fact]
-    public void ReviewFiles_TypeKindFile_ChecksC001OnlyRestNotApplicable()
+    public void ReviewFiles_TypeKindFile_ChecksTheFiveRulesAUdtHasSubjectsFor()
     {
         var udt = new PlcTypeSource("0", "UDT_Test", "A type.", new[]
         {
@@ -230,24 +232,122 @@ public class ReviewRunnerTests : IDisposable
 
         Assert.Equal("UDT_Test", file.BlockName);
         Assert.Contains(file.Findings, f => f.RuleId == "C-001" && f.Description.Contains("Bad_Name"));
-        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-001" && s.Status == RuleCheckStatus.Checked);
-        foreach (var id in AllRuleIds.Where(id => id != "C-001"))
+        foreach (var id in new[] { "C-001", "C-003", "C-005", "C-201", "C-406" })
+        {
+            Assert.Contains(file.RuleStatuses, s => s.RuleId == id && s.Status == RuleCheckStatus.Checked);
+        }
+
+        // This UDT is correctly prefixed and commented, so the two newly-reachable rules that could
+        // fire here find nothing — a conforming fixture, paired with the violating one below.
+        Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-003");
+        Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-201");
+
+        foreach (var id in AllRuleIds.Where(id => id is not ("C-001" or "C-003" or "C-005" or "C-201" or "C-406")))
         {
             Assert.Contains(file.RuleStatuses, s => s.RuleId == id && s.Status == RuleCheckStatus.NotApplicable);
         }
     }
 
-    // C-118 is cross-file: without a --project index the enclosing interface UDT can't be resolved,
-    // so it is recorded NotApplicable (never silently absent) on a block that does use a Step register.
+    // The violating counterpart: an unprefixed, uncommented UDT. Before this change both defects
+    // were invisible — C-003 and C-201 both reported "TYPE rule support: only C-001 … in Phase 1".
     [Fact]
-    public void ReviewFiles_StepBlockNoProjectIndex_C118NotApplicable()
+    public void ReviewFiles_TypeKindFile_UnprefixedUncommented_FlagsC003AndC201()
+    {
+        var udt = new PlcTypeSource("0", "MotorIOSet", Comment: null, Members: new[]
+        {
+            new DbMember("Run", "Bool", Retain: false, StartValue: null),
+        });
+        var path = WriteTempIrFile(TypeIrSerializer.Serialize(udt));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.Contains(file.Findings, f => f.RuleId == "C-003" && f.Description.Contains("UDT_"));
+        Assert.Contains(file.Findings, f => f.RuleId == "C-201");
+    }
+
+    // The invariant that makes the three-way split auditable rather than a matter of trust: every
+    // rule gets EXACTLY ONE status per file, for every content kind — and no two NotApplicable
+    // reasons on one file are the same blanket sentence. A single reason repeated 18 times is
+    // precisely what the tag-table and TYPE branches used to emit.
+    [Theory]
+    [InlineData("tagtable")]
+    [InlineData("type")]
+    [InlineData("db")]
+    public void ReviewFiles_EveryContentKind_OneStatusPerRule_AndNotApplicableReasonsAreRuleSpecific(string kind)
+    {
+        var content = kind switch
+        {
+            "tagtable" => TagTableIrSerializer.Serialize(new PlcTagTableSource("0", "Tags", new[]
+            {
+                new PlcTagSource("1", "DI3_SYS_Start", "Bool", "%I0.0", true, true, true, null),
+            })),
+            "type" => TypeIrSerializer.Serialize(new PlcTypeSource("0", "UDT_Test", "A type.", new[]
+            {
+                new DbMember("Run", "Bool", Retain: false, StartValue: null),
+            })),
+            _ => DbIrSerializer.Serialize(new DbSource("0", "DB_Test", 1, InstanceOfName: null, Comment: "A DB.", Members: Array.Empty<DbMember>())),
+        };
+        var path = WriteTempIrFile(content);
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        foreach (var id in AllRuleIds)
+        {
+            Assert.Single(file.RuleStatuses, s => s.RuleId == id);
+        }
+
+        var notApplicableReasons = file.RuleStatuses
+            .Where(s => s.Status == RuleCheckStatus.NotApplicable)
+            .Select(s => s.Reason)
+            .ToList();
+        Assert.All(notApplicableReasons, r => Assert.False(string.IsNullOrWhiteSpace(r)));
+        Assert.True(
+            notApplicableReasons.Distinct(StringComparer.Ordinal).Count() >= notApplicableReasons.Count / 2,
+            $"{kind}: NotApplicable reasons are near-identical boilerplate ({notApplicableReasons.Count} entries, "
+            + $"{notApplicableReasons.Distinct(StringComparer.Ordinal).Count()} distinct) — a blanket per-file phrase is what hid the tag-table gap");
+    }
+
+    // C-118 is cross-file: without a --project index the enclosing interface UDT can't be resolved.
+    // On a block that DOES use a Step register the rule therefore had a subject and was NOT judged —
+    // Skipped, which gates (exit 2). It used to report NotApplicable, indistinguishable from the
+    // genuine "this block has no stepped sequence" case below.
+    [Fact]
+    public void ReviewFiles_StepBlockNoProjectIndex_C118SkippedAndGates()
     {
         var path = WriteTempIrFile(SerializeSequencerBlock());
 
         var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
         var file = Assert.Single(report.Files);
 
-        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-118" && s.Status == RuleCheckStatus.NotApplicable);
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-118" && s.Status == RuleCheckStatus.Skipped);
+        Assert.Equal(ReviewOutcome.Incomplete, ReviewOutcome.ExitCode(report, allowUnchecked: false));
+    }
+
+    // The other half of that split, and the reason it is safe: a block with no Step register at all
+    // is genuinely NotApplicable with or without an index — it does not gate, so an ordinary review
+    // of ordinary blocks still exits on findings alone.
+    [Fact]
+    public void ReviewFiles_NonStepBlockNoProjectIndex_C118NotApplicableAndDoesNotGate()
+    {
+        var block = new IrBlock("0", "FB", "FB_Plain", 1, "LAD", "A plain block.", new[]
+        {
+            new IrNetwork(1, "Motor start/stop", new[] { new CoilAssignment("Output1", new Expr.TagRef("Sensor1")) }),
+        });
+        var sidecar = new NetworkSidecar(1, "3", Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+        var path = WriteTempIrFile(IrSerializer.SerializeBlock(block, new[] { sidecar }));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        foreach (var id in new[] { "C-118", "C-122", "C-125" })
+        {
+            Assert.Contains(file.RuleStatuses, s => s.RuleId == id && s.Status == RuleCheckStatus.NotApplicable);
+        }
+
+        Assert.Empty(ReviewOutcome.UncheckedRules(report));
+        Assert.Equal(ReviewOutcome.Clean, ReviewOutcome.ExitCode(report, allowUnchecked: false));
     }
 
     // With a --project index resolving the interface UDT (Step : Int inside it), C-118 runs Checked
@@ -284,10 +384,13 @@ public class ReviewRunnerTests : IDisposable
         return IrSerializer.SerializeBlock(block, new[] { sidecar });
     }
 
-    // Physical-IO tags keep their underscores by design, so C-001 must not fire on tag-table
-    // entries - the whole table is NotApplicable.
+    // Physical-IO tags keep their underscores by design — that is C-001's own physical-IO FORMAT,
+    // not an exemption from checking it. This test used to assert the whole table was NotApplicable
+    // (2026-07 wording: "no member-naming check applies"); it now asserts the same conforming tag is
+    // CHECKED and clean, which is the claim that was actually wanted. The violating counterparts
+    // live in ReviewTagTableRulesTests.
     [Fact]
-    public void ReviewFiles_TagTable_C001NotApplicable_UnderscoredTagsNotFlagged()
+    public void ReviewFiles_TagTable_ConformingPhysicalIoTag_C001CheckedAndClean()
     {
         var tags = new PlcTagTableSource("0", "Tags", new[]
         {
@@ -298,7 +401,8 @@ public class ReviewRunnerTests : IDisposable
         var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
         var file = Assert.Single(report.Files);
 
+        Assert.Equal("Tags", file.BlockName);
         Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-001");
-        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-001" && s.Status == RuleCheckStatus.NotApplicable);
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-001" && s.Status == RuleCheckStatus.Checked);
     }
 }

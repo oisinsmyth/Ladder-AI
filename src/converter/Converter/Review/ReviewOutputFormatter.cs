@@ -33,7 +33,10 @@ public static class ReviewOutputFormatter
                     RuleCheckStatus.Checked => $"checked, {status.FindingCount} finding(s)",
                     RuleCheckStatus.CheckedVacuous => "checked, vacuous (cannot fire against current IR capability)",
                     RuleCheckStatus.NotApplicable => $"not applicable ({status.Reason})",
-                    RuleCheckStatus.Skipped => $"skipped ({status.Reason})",
+                    // Deliberately not the word "skipped" alone, and deliberately shouted: this line
+                    // and "checked, clean" were previously a reader's only difference between a rule
+                    // that passed and a rule nobody ran.
+                    RuleCheckStatus.Skipped => $"NOT CHECKED - no result, not a pass ({status.Reason})",
                     _ => status.Status.ToString(),
                 };
                 sb.Append("  ").Append(status.RuleId).Append(": ").Append(statusText).Append('\n');
@@ -65,13 +68,41 @@ public static class ReviewOutputFormatter
 
         sb.Append('\n');
 
+        // Always printed, including the zero — an absent line would itself be ambiguous, and the
+        // whole point of this section is that silence must not be readable as a pass (FI-44's
+        // "empty is not clean", applied to the review's own report).
+        var unchecked_ = ReviewOutcome.UncheckedRules(report);
+        sb.Append("UNCHECKED: ").Append(unchecked_.Count).Append(" rule(s) not judged");
+        if (unchecked_.Count > 0)
+        {
+            sb.Append(" - a zero finding count for these is NOT a pass (exit 2)");
+            foreach (var entry in unchecked_)
+            {
+                sb.Append('\n').Append("  ").Append(entry.RuleId).Append(" in ").Append(entry.FilePath)
+                    .Append(": ").Append(entry.Reason);
+            }
+        }
+
+        sb.Append('\n');
+
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
     public static string FormatJson(ReviewReport report)
     {
+        var uncheckedRules = ReviewOutcome.UncheckedRules(report);
         var payload = new
         {
+            // Hoisted to the top level rather than left to be reassembled from ruleStatuses: a
+            // consumer that has to compute "was anything left unjudged" itself is a consumer that
+            // will not.
+            uncheckedRuleCount = uncheckedRules.Count,
+            uncheckedRules = uncheckedRules.Select(u => new
+            {
+                filePath = u.FilePath,
+                ruleId = u.RuleId,
+                reason = u.Reason,
+            }),
             files = report.Files.Select(f => new
             {
                 filePath = f.FilePath,

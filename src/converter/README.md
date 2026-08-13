@@ -1660,7 +1660,12 @@ Checks, per file:
    (`docs/15-generation-pipeline.md`), mechanized.
 4. **call** — every CALL's callee resolves to a block in the project or batch.
 5. **instanceof** — an instance DB's `INSTANCEOF` target resolves to a block.
-6. **review:C-xxx** — `converter review`'s findings folded in, prefixed by rule.
+6. **review:C-xxx** — `converter review`'s findings folded in, prefixed by rule. Since 2026-08-13
+   this passes the `TagTypeRegistry` preflight had already built (it requires `--project`, so one
+   always existed), which is what makes the cross-file rules C-118/C-122/C-125 run here at all —
+   they had recorded themselves unrunnable on every preflight before that. A rule left **unjudged**
+   is folded in as a `[NOT CHECKED]` finding too: preflight's value is that passing it means
+   something, and "nobody implemented that rule" must not be one of the ways it passes.
 7. **flow-order** (FI-27) — each synthesized network's instruction `<Parts>` must serialize in TIA's
    DFS-from-rail wire-graph order, or a live import rejects it ("the elements must be sorted according
    to the current flow"). The `Normalizer` sorts `<Parts>` before comparing, so *no* equivalence
@@ -2646,6 +2651,91 @@ DB RealDbName
 `DbConverterTests` doubly-nested case **inverted a second time** — it asserted the error before
 FI-56, asserted the collapse after it, and now asserts the expansion is kept. 1010 converter tests
 green (up from 996), golden harness green at 46.
+
+## `review` — the tag table was never reviewed, and the report said "not applicable" (2026-08-13)
+
+`converter review` run against a **tag table** exited 0 while all 18 mechanized rules reported
+`not applicable — TAGTABLE rule support not implemented in Phase 1`. The file was **effectively
+unreviewed** and the exit code and summary were indistinguishable from a clean review — this
+project's recurring failure class (an absence of findings read as a positive result), live in the
+tooling. A tag table is **where tag names live**, which makes it the file kind C-001 applies to
+*most*, not least.
+
+**The three-way split the old wording collapsed.** "Not applicable" was doing three jobs at once,
+and only one of them was true:
+
+| | means | zero findings is | reported as |
+|---|---|---|---|
+| the rule has a subject here and found nothing | a result | **meaningful** | `checked, clean` |
+| the rule has no subject in this content kind | a result | meaningful | `not applicable (<this rule's own reason>)` |
+| the rule has a subject and nobody judged it | **not a result** | **proves nothing** | `NOT CHECKED - no result, not a pass` → **exit 2** |
+
+**Fail-closed, not a warning.** A `Skipped` (NOT CHECKED) status now **gates**: `converter review`
+exits **2 = REVIEW INCOMPLETE**, ahead of exit 1 (error findings), and names what went unjudged on
+stderr. This is deliberate — the offending line *had already been printed on every tag-table review
+since Phase 1*, in a run that exited 0, and it was read as clean every time; a warning that gets
+skimmed is how the defect survived. `--allow-unchecked` is the named escape (FI-71's shape), never
+the default. The report always carries an `UNCHECKED: n rule(s) not judged` line **including when n
+is 0** — an absent line would itself be ambiguous. `preflight` folds unjudged rules in as findings
+for the same reason.
+
+**What is now checked on a tag table** (3 rules), each with a violating *and* a conforming fixture:
+
+- **C-001** — two layers, and every tag lands in exactly one, so no tag is silently unexamined.
+  *Physical-IO* (address in the `%I…`/`%Q…` process image): the `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>`
+  format, checked as a **field split, not a prefix match** — the equipment token sits in the *middle*
+  (`DQ3_PSH_RunPowerPack`). Because the ADDRESS is right there beside the name, two cross-checks a
+  name alone could never give come free: the direction letter must agree with I-vs-Q, and the D/A
+  letter with bit-vs-word width. A width that cannot be established (`%I5`: no size letter, no bit
+  offset) is **not guessed at** — only the direction is checked there.
+  *Everything else* (`%M` flags): C-001's variables layer, short PascalCase, underscore-free.
+- **C-005** — charset over every tag name **and the table's own name**. The `LogicalAddress` is
+  deliberately not checked (`%I0.0`'s dot is addressing syntax, not a chosen name — the same
+  exclusion `CheckPathCharset` already makes for `%Xn` slice components).
+- **C-406** — the declaration form, against a tag's own `DataTypeName`. It may well never fire, but
+  `DataTypeName` is a free string in the IR model, so a `TOF_TIME` here is **representable** and
+  therefore worth looking for. `Checked`, not `CheckedVacuous`: "cannot appear" is not a claim this
+  codebase can make about a free-text field.
+
+**C-007's vendor-default exception is reported, not silently applied.** `Clock_0.5Hz` (a dot) and
+`Default tag table` (a space) are tolerated per C-007 — as **Info** findings naming C-007, so a
+reader is told they were tolerated and why, and the severity keeps them out of the exit gate. The
+exception is a narrow enumerated set (the clock/system memory bits), and TIA's auto-generated
+`Tag_1` placeholder is **deliberately not in it** — an unnamed tag at a physical input is exactly
+what a naming review should catch.
+
+**Two more instances of the same defect, found in passing and fixed with it:**
+
+- **TYPE files** carried the identical blanket stamp (`TYPE rule support: only C-001 … in Phase 1`)
+  over 17 rules. Four were implementable against a UDT all along: **C-003** names `UDT_` in the same
+  breath as `FB_`/`FC_`/`DB_`, **C-005**'s charset applies to a member name wherever it lives,
+  **C-201**'s header-comment half applies to any content kind carrying its own `Comment` (the
+  reasoning already written into `CheckC201HeaderComment` and already applied to DBs), and
+  **C-406**'s declaration form reads members.
+- **`preflight` never passed the reviewer the `TagTypeRegistry` it had already built** — it requires
+  `--project`, so the index was always available — which meant **C-118/C-122/C-125 recorded
+  themselves unrunnable on every preflight this tool has ever done**. One call site away from the
+  tag-table hole. Now passed through, so those three actually run in preflight.
+
+**The `--project` non-run is now split by whether the rule had a subject.** C-118/C-122/C-125 are
+cross-file (FI-09). A block that references no `Step` register has no stepped sequence to place —
+genuinely `not applicable`, with or without an index, and it does not gate. A block that *does* use
+one, reviewed without `--project`, had a subject and was not judged: that is `NOT CHECKED` and it
+gates. Measured on the real `FB_ShredderSequencer`: previously `SUMMARY: 0 finding(s)`, exit 0, with
+three of its most relevant rules silently never run; now exit 2 naming all three, and exit 0 with
+`checked, clean` once `--project` is supplied.
+
+**Corpus impact, stated rather than discovered later.** `ir/test-project001/DefaultTagTable.ir` now
+reports **58 C-001 errors** — every one a real violation (TIA's `Tag_1..Tag_54` placeholders at
+physical addresses, and four `AirStarWord*` comms words at `%IW`/`%QW`). The 38 hand-authored
+`DI…`/`DQ…` tags in the same file are silent, which is the evidence the rule discriminates rather
+than flagging everything. Three of four project UDTs gain a C-201 (no header comment) and one a
+C-003 (no `UDT_` prefix); the most recently authored, `UDT_HopperBlockageIO`, is clean.
+
+59 new tests (`ReviewTagTableRulesTests`, `ReviewOutcomeTests`, plus the runner's own); 1069
+converter tests green, up from 1010. Every implemented rule has a fixture that **violates** it as
+well as one that conforms, and the gate is tested in both directions — a gate only ever exercised
+against input that should trip it has not been tested either.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

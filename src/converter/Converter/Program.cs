@@ -139,7 +139,7 @@ internal static class Program
             Console.Error.WriteLine("       converter to-ir    # keeps the stored SIDECAR by default (safe); --no-sidecar omits it for a block already verified derivable (errors if unsynthesizable)");
             Console.Error.WriteLine("       converter to-xml <file> --synthesize   # force the derive path (errors if a SIDECAR is present)");
             Console.Error.WriteLine("       converter sanitize <file> --map <mapping.json> --out <path>");
-            Console.Error.WriteLine("       converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]   # --project enables cross-file rules (C-118 interface-UDT Step, FI-09)");
+            Console.Error.WriteLine("       converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json] [--allow-unchecked]   # --project enables cross-file rules (C-118 interface-UDT Step, FI-09). Exit 1 = error findings, 2 = REVIEW INCOMPLETE (a rule had a subject here and was not judged; --allow-unchecked accepts that deliberately)");
             Console.Error.WriteLine("       converter digest <file> [<file> ...] [--ignore-errors] [--json]   # compact structural summary of .ir content (FI-15)");
             Console.Error.WriteLine("       converter preflight <file> [<file> ...] --project <ir-dir> [--json]   # static checks before any Portal round trip (FI-13; not the compile gate)");
             Console.Error.WriteLine("       converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]   # classify names against the export (FI-24): EXISTS / PROPOSED (root absent) / MEMBER-NOT-FOUND (root resolves, member absent) / MEMBER-UNCHECKED (member namespace not enumerable); exit 1 if any proposed or member-not-found. --roots-only restores root-level-only classification");
@@ -624,6 +624,7 @@ internal static class Program
         var files = new List<string>();
         var ignoreErrors = false;
         var json = false;
+        var allowUnchecked = false;
         string? projectDir = null;
 
         for (var i = 0; i < args.Length; i++)
@@ -636,6 +637,9 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                case "--allow-unchecked":
+                    allowUnchecked = true;
+                    break;
                 case "--project":
                     projectDir = RequireValue(args, ref i, "--project");
                     break;
@@ -647,7 +651,7 @@ internal static class Program
 
         if (files.Count == 0)
         {
-            Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json]");
+            Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json] [--allow-unchecked]");
             return 1;
         }
 
@@ -679,9 +683,19 @@ internal static class Program
 
         Console.WriteLine(json ? ReviewOutputFormatter.FormatJson(report) : ReviewOutputFormatter.FormatTable(report));
 
-        var hasErrorFindings = report.Files.Any(f => f.Findings.Any(finding => finding.Severity == FindingSeverity.Error));
-        var hasFileErrors = report.Files.Any(f => f.FileError is not null);
-        return hasErrorFindings || hasFileErrors ? 1 : 0;
+        // Exit 2 = REVIEW INCOMPLETE: at least one rule had a subject in one of these files and was
+        // not judged. Named on stderr as well as in the report, because the exit code is what a
+        // caller acts on and the report is what a caller skims. See ReviewOutcome for why this is a
+        // gate rather than a warning.
+        var uncheckedRules = ReviewOutcome.UncheckedRules(report);
+        if (uncheckedRules.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"REVIEW INCOMPLETE: {uncheckedRules.Count} rule(s) were not checked ({string.Join(", ", uncheckedRules.Select(u => $"{u.RuleId} in {Path.GetFileName(u.FilePath)}").Distinct())}). "
+                + "This is not a clean review. Supply what the rule needs (e.g. --project), or pass --allow-unchecked to accept the gap deliberately.");
+        }
+
+        return ReviewOutcome.ExitCode(report, allowUnchecked);
     }
 
     private static int RunDigest(string[] args)

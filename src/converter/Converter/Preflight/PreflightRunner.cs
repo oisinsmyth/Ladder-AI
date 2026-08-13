@@ -76,7 +76,7 @@ public static class PreflightRunner
             return new FilePreflight(path, name, findings);
         }
 
-        AppendReviewFindings(findings, path);
+        AppendReviewFindings(findings, path, tagTypes);
         return new FilePreflight(path, name, findings);
     }
 
@@ -182,9 +182,14 @@ public static class PreflightRunner
         }
     }
 
-    private static void AppendReviewFindings(List<PreflightFinding> findings, string path)
+    // The tagTypes registry is passed through (2026-08-13). Preflight has ALWAYS built one — it
+    // requires --project — and never gave it to the reviewer, so C-118/C-122/C-125 recorded
+    // themselves unrunnable on every preflight this tool has ever done: three cross-file rules,
+    // silently absent from the check that runs before every import. Same defect class as the
+    // tag-table hole this change is about, one call site away from it.
+    private static void AppendReviewFindings(List<PreflightFinding> findings, string path, TagTypeRegistry tagTypes)
     {
-        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: true);
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: true, tagTypes);
         foreach (var file in report.Files)
         {
             foreach (var finding in file.Findings)
@@ -192,6 +197,14 @@ public static class PreflightRunner
                 var location = finding.NetworkNumber is int n ? $"network {n}: " : string.Empty;
                 findings.Add(new PreflightFinding($"review:{finding.RuleId}", $"{location}[{finding.Severity}] {finding.Description}"));
             }
+        }
+
+        // A rule that was not judged is a pre-flight finding in its own right. Preflight is a filter
+        // whose whole value is that passing it means something; "18 rules reported nothing because
+        // nobody implemented them" must not be one of the ways it passes.
+        foreach (var entry in ReviewOutcome.UncheckedRules(report))
+        {
+            findings.Add(new PreflightFinding($"review:{entry.RuleId}", $"[NOT CHECKED] {entry.RuleId} was not judged for this file - {entry.Reason}"));
         }
     }
 }

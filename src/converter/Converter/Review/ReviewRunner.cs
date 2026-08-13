@@ -53,10 +53,7 @@ public static class ReviewRunner
 
         if (text.StartsWith("TAGTABLE ", StringComparison.Ordinal))
         {
-            // Tag-table entries are physical-IO tags, which keep their underscores by design (C-001)
-            // - so no member-naming check applies, and no other Phase-1 rule inspects tag tables.
-            var statuses = AllRuleIds.Select(id => new RuleStatusEntry(id, RuleCheckStatus.NotApplicable, 0, "TAGTABLE rule support not implemented in Phase 1")).ToList();
-            return new FileReviewResult(path, null, Array.Empty<Finding>(), statuses, null);
+            return ReviewTagTable(path, TagTableIrParser.ParseTagTable(text));
         }
 
         // A block .ir may be sidecar-less (e.g. a hand-authored OB committed without one) - review
@@ -88,14 +85,23 @@ public static class ReviewRunner
         Record(statuses, findings, "C-103", RuleCheckStatus.Checked, Rules.CheckC103SetResetPairing(block));
 
         // C-118 is cross-file (FI-09): it resolves the block's interface UDT from the --project
-        // index. Without one it can't run — recorded NotApplicable so it's never silently absent.
+        // index. Without one it can't run — and WHICH non-run this is depends on the block. A block
+        // that never touches a Step register has nothing for C-118 to place, index or no index: that
+        // is NotApplicable and a zero is meaningful. A block that DOES use one has a subject that
+        // went unjudged: that is Skipped, and `converter review` fails closed on it (exit 2) rather
+        // than printing a line a reader will file next to seventeen clean ones. Both used to read
+        // "not applicable" (2026-08-13).
         if (udtIndex is not null)
         {
             Record(statuses, findings, "C-118", RuleCheckStatus.Checked, Rules.CheckC118StepInterfaceUdt(block, udtIndex));
         }
+        else if (Rules.UsesStepRegister(block))
+        {
+            statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.Skipped, 0, "this block USES a Step register but no --project index was supplied, so its interface UDT could not be resolved — the rule had a subject and was not judged"));
+        }
         else
         {
-            statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "C-118 needs --project to resolve the block's interface UDT (cross-file)"));
+            statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "this block references no Step register, so there is no stepped sequence for C-118 to place"));
         }
 
         Record(statuses, findings, "C-121", RuleCheckStatus.Checked, Rules.CheckC121StepTransition(block));
@@ -106,27 +112,36 @@ public static class ReviewRunner
         Record(statuses, findings, "C-120", RuleCheckStatus.Checked, Rules.CheckC120StepsMultipleOfTen(block));
 
         // C-122's PT-home check is cross-file (FI-09) — like C-118 it needs the --project index to
-        // resolve the block's interface UDT. Without one the whole rule is recorded NotApplicable so
-        // it's never silently absent.
+        // resolve the block's interface UDT. Same subject-bearing split: its subject is a step-gated
+        // dwell timer, so a block with none is genuinely NotApplicable and a block with one that
+        // went unjudged is Skipped.
         if (udtIndex is not null)
         {
             Record(statuses, findings, "C-122", RuleCheckStatus.Checked, Rules.CheckC122DwellTimerShape(block, udtIndex));
         }
+        else if (Rules.HasStepGatedTimer(block))
+        {
+            statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.Skipped, 0, "this block HAS a step-gated dwell timer but no --project index was supplied, so its PT home could not be resolved — the rule had a subject and was not judged"));
+        }
         else
         {
-            statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "C-122 PT-home check needs --project to resolve the block's interface UDT (cross-file)"));
+            statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "this block has no step-gated dwell timer, which is C-122's only subject"));
         }
 
         // C-125's fault-bit-home check is cross-file (FI-09) — like C-118/C-122 it needs the
-        // --project index to resolve the block's interface UDT. Without one the whole rule is
-        // recorded NotApplicable so it's never silently absent.
+        // --project index to resolve the block's interface UDT. It shares C-122's subject test (a
+        // timeout-fault bit only exists downstream of a step-gated dwell timer).
         if (udtIndex is not null)
         {
             Record(statuses, findings, "C-125", RuleCheckStatus.Checked, Rules.CheckC125TimeoutFaultInInterfaceUdt(block, udtIndex));
         }
+        else if (Rules.HasStepGatedTimer(block))
+        {
+            statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.Skipped, 0, "this block HAS a step-gated dwell timer whose timeout-fault bit could have a home to check, but no --project index was supplied — the rule had a subject and was not judged"));
+        }
         else
         {
-            statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "C-125 needs --project to resolve the fault bit's interface UDT (cross-file)"));
+            statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "this block has no step-gated dwell timer, so it has no C-122 timeout-fault bit for C-125 to place"));
         }
 
         var headerFindings = Rules.CheckC201HeaderComment(block.Name, block.Comment).ToList();
@@ -195,16 +210,84 @@ public static class ReviewRunner
         var findings = new List<Finding>();
         var statuses = new List<RuleStatusEntry>();
 
-        // A UDT is a member container with no networks: only C-001 (member naming) applies. Every
-        // other Phase-1 rule inspects networks/instructions/prefixes a type doesn't have.
+        // A UDT is a named, commented member container with no networks. Until 2026-08-13 this
+        // branch checked C-001 and stamped the other 17 rules "TYPE rule support: only C-001 …
+        // checked in Phase 1" — the same defect the TAGTABLE branch had, collapsing "this rule has
+        // nothing to inspect here" together with "nobody implemented it". Four of those 17 were
+        // implementable against a type all along, and three were REAL: C-003 names `UDT_` in the same
+        // breath as `FB_`/`FC_`/`DB_`, C-005's charset applies to a member name wherever it lives,
+        // and C-201's header-comment half applies to any content kind carrying its own Comment (the
+        // reasoning already written into CheckC201HeaderComment, and already applied to DBs).
         Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001MemberNames(type.Name, type.Members));
+        Record(statuses, findings, "C-003", RuleCheckStatus.Checked, Rules.CheckC003TypePrefix(type));
+        Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005CharsetDbMembers(type.Name, type.Members));
+        Record(statuses, findings, "C-201", RuleCheckStatus.Checked, Rules.CheckC201HeaderComment(type.Name, type.Comment));
+        Record(statuses, findings, "C-406", RuleCheckStatus.Checked, Rules.CheckC406TimerDeclarations(type.Name, type.Members));
 
-        foreach (var id in AllRuleIds.Where(id => id != "C-001"))
-        {
-            statuses.Add(new RuleStatusEntry(id, RuleCheckStatus.NotApplicable, 0, "TYPE rule support: only C-001 (member naming) checked in Phase 1"));
-        }
+        // The rest genuinely have no subject in a TYPE file — each with its own reason, so a reader
+        // can check the claim instead of taking a blanket phrase on trust.
+        statuses.Add(new RuleStatusEntry("C-102", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-103", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no coils"));
+        statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "C-118 places a Step register relative to a BLOCK's interface UDT; a TYPE file is that UDT, it has no interface of its own"));
+        statuses.Add(new RuleStatusEntry("C-119", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks"));
+        statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no timer calls"));
+        statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no timer calls or coils"));
+        statuses.Add(new RuleStatusEntry("C-301", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks"));
+        statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no comparisons"));
+        statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks writing alarm-word bits"));
 
         return new FileReviewResult(path, type.Name, findings, statuses, null);
+    }
+
+    // A TAG TABLE is where tag NAMES live, which makes it the file kind C-001 applies to MOST, not
+    // least. Until 2026-08-13 this branch reported all 18 rules "not applicable — TAGTABLE rule
+    // support not implemented in Phase 1" and the run exited 0: a tag table was effectively
+    // unreviewed while the summary read exactly like a clean review. The three-way split the old
+    // wording collapsed, restored explicitly here:
+    //   CHECKED       — C-001 (physical-IO format + address cross-check, and the variables layer for
+    //                   flag tags), C-005 (charset, table name included), C-406 (declaration form).
+    //   NOT APPLICABLE— the network/instruction/step/prefix rules, each with its OWN reason.
+    //   SKIPPED       — nothing, now. The status exists and `converter review` fails closed on it
+    //                   (exit 2), so the next unimplemented (kind, rule) pair cannot exit 0 quietly.
+    private static FileReviewResult ReviewTagTable(string path, PlcTagTableSource table)
+    {
+        var findings = new List<Finding>();
+        var statuses = new List<RuleStatusEntry>();
+
+        Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001TagNames(table));
+        Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005TagTableCharset(table));
+        Record(statuses, findings, "C-406", RuleCheckStatus.Checked, Rules.CheckC406TagDataTypes(table));
+
+        // C-003 prescribes FB_/FC_/DB_/UDT_ and the iDB_ instance form. It names no tag-table
+        // prefix — this is a rule that genuinely does not reach this content kind, not one nobody
+        // got to.
+        statuses.Add(new RuleStatusEntry("C-003", RuleCheckStatus.NotApplicable, 0, "C-003 prescribes block/DB/UDT name prefixes and names none for a tag table"));
+
+        // C-301 is the interesting one: a tag table is FULL of absolute addresses, and that is
+        // exactly what it is for. C-301 governs LOGIC reaching past the symbol to the address; the
+        // symbol-to-address mapping is the mechanism that makes symbolic access possible, and there
+        // is no logic in this file at all.
+        statuses.Add(new RuleStatusEntry("C-301", RuleCheckStatus.NotApplicable, 0, "a tag table is the symbol-to-address mapping itself, not logic addressing absolutely — and it has no networks"));
+
+        statuses.Add(new RuleStatusEntry("C-102", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-103", RuleCheckStatus.NotApplicable, 0, "a tag table has no coils"));
+        statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic and no interface UDT"));
+        statuses.Add(new RuleStatusEntry("C-119", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks"));
+        statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "a tag table has no timer calls"));
+        statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "a tag table has no timer calls or coils"));
+        statuses.Add(new RuleStatusEntry("C-201", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks to title, and SW.Tags.PlcTagTable carries no header-comment field at all (per-tag comments are not C-201's subject)"));
+        statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a tag table has no comparisons"));
+        statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks writing alarm-word bits"));
+
+        return new FileReviewResult(path, table.Name, findings, statuses, null);
     }
 
     private static void Record(List<RuleStatusEntry> statuses, List<Finding> findings, string ruleId, RuleCheckStatus status, IEnumerable<Finding> ruleFindings)
