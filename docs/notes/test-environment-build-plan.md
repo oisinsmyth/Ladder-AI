@@ -2089,6 +2089,76 @@ referenced — *** `scratch/harness-phase2/` HAS BEEN REWRITTEN AGAIN SINCE. ***
 `INDISTINGUISHABLE` after the restoring download.** `FC_DemoPeakCoupled` **deleted**, so the defective
 pair cannot run by accident.
 
+### ✅✅ F-1's PREMISE HOLDS — and the CONTROL is what makes the green mean anything (2026-08-13)
+
+*** NO TEAR OBSERVED IN 1,700 READS ***, across four widths, spanning **six slots written by six
+different blocks**:
+
+| slots | registers in one FC03 | reads | torn | distinct generations |
+|---|---|---|---|---|
+| 1 | 21 | 250 | **0** | 250 |
+| 2 | 41 | 250 | **0** | 250 |
+| 3 | 61 | 250 | **0** | 250 |
+| 6 | **121** | 500 | **0** | **500** |
+| 6 (re-verified after restore) | 121 | 200 | **0** | 200 |
+
+**Liveness is as strong as it can be — every single read returned a different generation.** Independent
+cross-check that the tick really is per-scan: the generation advanced **1,848 over ~40 s** against
+**~1,740 scans** at the measured 23 ms.
+
+> #### 🎯 THE CONTROL, AND WHY IT IS THE POINT
+>
+> `0/1,700` alone is a green that could equally mean **the detector never worked.** So a second `Main`
+> calls the server **between slot 2 and slot 3** — same rig, same client, same read, same session, the
+> only difference being one call's position:
+>
+> *** 250 OF 250 TORN. ALL CLASSIFIED ADJACENT — THE GENUINE-TEAR SIGNATURE. AND IT NAMED SLOTS 3, 4
+> AND 5, EXACTLY THE THREE WRITTEN AFTER THE SERVER CALL. ***
+>
+> **The detector does not merely fire, it LOCALISES correctly.** Ordered `0/1,700` against split
+> `250/250` is a clean A/B, and that is the difference between *"a check exists"* and *"a check works"*.
+
+**Three design choices that earn the result:**
+
+  - **Phase 3's pair was refused as material** — the ramp advances but *** THE PEAK BLOCK SETTLES, AND A
+    SETTLED BLOCK PUBLISHING CONSTANTS IS EXACTLY WHAT A VACUOUS CLEAN RESULT IS MADE OF. ***
+  - **Six separate slot blocks**, each stamping the tick into its own twenty registers. **One block
+    writing all 120 would have left open precisely what F-1 assumes.**
+  - **Raw sockets, not a library** — for a *read*-coherence test, a client that split one 121-register
+    FC03 would have **manufactured the exact tear being hunted.**
+
+  ⚠️ **A trap in the lane's own tool, recorded rather than hidden:** on a torn result it prints
+    *"F-1's PREMISE IS FALSE"*, which on the **control** build is **wrong** — the tear is *constructed*,
+    and the tool cannot know which build it is pointed at.
+
+**Limits, stated:** the verdict is *"no tear observed"*, never *"coherent"*; *** IT DOES NOT EXTEND PAST
+125 REGISTERS — beyond the FC03 ceiling F-1 becomes two transactions and this result stops applying
+entirely ***; and mechanically this is a stronger, more realistic replication of 1.4 rather than an
+independent mechanism.
+
+### 🔴 A BLOCK NUMBER IN AN ARTIFACT WAS SILENTLY NOT HONOURED
+
+`FC_HarnessCopyLayer` sits at **FC 903**, while **every artifact that created it declares
+`<Number>900</Number>`** — and *** NOTHING REPORTED THE DISCREPANCY. *** The block works (called by
+name, behaviour verified directly), so phase 2 and 3 results stand.
+
+  ➜ *** IT IS NOT UNIVERSAL, WHICH IS THE MOST USEFUL FACT ABOUT IT: FC 910–916 ALL LANDED AS
+    REQUESTED. *** So the mechanism is **conditional**, and it is **unexplained** — deliberately not
+    inferred from sequence, which this project has a recorded memory of getting wrong.
+  ➜ **A block silently landing at a number other than the one declared is a collision waiting to
+    happen**, and there is precedent: `create-instance-db` once committed a broken `DB0` over block
+    numbering. Under investigation; the fix will not be made by the lane holding Portal.
+
+### ✅ C-001 VERSUS HARNESS INSTRUMENTATION IS A STANDING CONFLICT, NOT A NEW DEFECT
+
+Preflight returned **121 C-001 errors** on the harness tag names. `lad-coder` **ran controls rather
+than assuming**, and `HarnessMirror`, `ModbusSpikeTags` and `DemoUnit` all fail identically. Accepted
+explicitly with the reasoning recorded: *** the `MS_S<k>_R<nn>` scheme is what makes a torn read
+ATTRIBUTABLE TO A SLOT at all. ***
+
+*Also: the tick needed two networks (IR orders `MOVE` before `ADD`), so the generation runs 1…31999 and
+**never publishes 0** — which is right, since 0 is the "never written" sentinel.*
+
 ## PHASE 4 — THE DOWNLOAD LOOP
 
 **Cost: moderate. Mostly PC-side, and mostly already specified.**
