@@ -5,9 +5,16 @@ namespace Harness;
 /// before the assertion can be believed.
 ///
 /// This is not documentation. The runner refuses to run a vector whose observability the transport
-/// cannot support, because the alternative is a green result that means nothing. On an S7-1200 over
-/// a polled transport the observation floor is ~100 ms against a scan of ~10 ms, so a one-scan event
-/// is roughly ten times below anything a sampler can see. No polling rate recovers it.
+/// cannot support, because the alternative is a green result that means nothing.
+///
+/// MEASURED ON THE RIG, 2026-08-12, and the numbers this comment used to carry (~100 ms poll against
+/// a ~10 ms scan, "roughly ten times") were all wrong: the scan is 23.33 ms under load, the Modbus
+/// round trip is 78 ms typical and 173 ms at the p99, and A POLL IS ONE ROUND TRIP - there is no
+/// separate poll period to tune. So a one-scan event sits ~3.3 scans below the sampler typically and
+/// ~7.4 at the p99, with 3.0 the irreducible floor at the fastest median observed. The floor is
+/// SMALLER than was believed, and it is a distribution rather than a number. No polling rate
+/// recovers a one-scan event, which is the part that was right and is why this enum exists.
+/// The single source for these constants is the spec's section 12a; do not re-choose them here.
 /// </summary>
 public enum Observability
 {
