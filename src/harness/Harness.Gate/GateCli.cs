@@ -86,7 +86,9 @@ public static class GateCli
 
         var enumeration = AssertionEnumeration.Of(
             document.Enumeration?.Clauses ?? Enumerable.Empty<string>(),
-            document.Enumeration?.Assertions ?? Enumerable.Empty<string>());
+            document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
+            document.Enumeration?.Forms,
+            document.Enumeration?.Enumerator ?? string.Empty);
 
         var fidelity = document.Model is null
             ? null

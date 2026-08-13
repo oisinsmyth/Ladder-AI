@@ -20,7 +20,8 @@ public class GateCliTests
       "resultRegistersPerSlot": 20,
       "computedConflicts": [],
       "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
-      "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:3f9a1c"] },
+      "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:3f9a1c"],
+                       "forms": { "REQ-014:3f9a1c": "When" }, "enumerator": "agent-c" },
       "map": { "providedFor": { "Demo_Count": ["Latched"] } },
       "vectors": [{
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
@@ -135,6 +136,7 @@ public class GateCliTests
         var never = Good
             .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 100", StringComparison.Ordinal)
             .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal)
+            .Replace("\"REQ-014:3f9a1c\": \"When\"", "\"REQ-014:3f9a1c\": \"Never\"", StringComparison.Ordinal)
             .Replace("\"compressionFactor\": 1", "\"assertionForm\": \"Never\", \"compressionFactor\": 1", StringComparison.Ordinal);
 
         var (exit, output) = Run(never);
@@ -143,8 +145,12 @@ public class GateCliTests
         Assert.Contains("SampledCannotAnswerANeverAssertion", output, StringComparison.Ordinal);
 
         // The same vector as a WHEN is admissible, so the refusal is about the FORM and nothing else.
+        // The same vector as a WHEN - in the vector AND in the enumeration, since they must agree - is
+        // admissible, so the refusal is about the FORM and nothing else.
         Assert.Equal(GateExit.AdmissibleSubjectToJudgement,
-            Run(never.Replace("\"assertionForm\": \"Never\", ", string.Empty, StringComparison.Ordinal)).Exit);
+            Run(never
+                .Replace("\"assertionForm\": \"Never\", ", string.Empty, StringComparison.Ordinal)
+                .Replace("\"REQ-014:3f9a1c\": \"Never\"", "\"REQ-014:3f9a1c\": \"When\"", StringComparison.Ordinal)).Exit);
     }
 
     [Fact]

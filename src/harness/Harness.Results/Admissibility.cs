@@ -27,12 +27,43 @@ public sealed record Basis(string ClauseId, string AssertionId);
 /// <para><b>An EMPTY enumeration is a refusal, not a permissive one.</b> Checking a citation against
 /// nothing admits everything while reading exactly like a check that ran (FI-44).</para>
 /// </summary>
-public sealed record AssertionEnumeration(IReadOnlySet<string> Clauses, IReadOnlySet<string> Assertions)
+/// <param name="Forms">
+/// The canonical FORM of each assertion, where the enumeration carries it. <b>This is what gives F-3 an
+/// authority</b>: the form decides whether a SAMPLED observation is admissible, and while it was
+/// declared by the VECTOR the refusal was enforced against what a vector CLAIMED. An enumeration that
+/// carries forms lets the gate compare the two and refuse the mismatch. <b>Empty is the flat projection
+/// the gate has always read</b> — legal, and the gate then says the check could not be made rather than
+/// that it passed.
+/// </param>
+/// <param name="Enumerator">
+/// Who performed the decomposition. Recorded so independence can be CHECKED rather than assumed: the
+/// enumeration is the coverage denominator, and if the block's author produced it, D6's independence is
+/// lost at the denominator - which undoes most of what citing into it buys.
+/// </param>
+public sealed record AssertionEnumeration(
+    IReadOnlySet<string> Clauses,
+    IReadOnlySet<string> Assertions,
+    IReadOnlyDictionary<string, AssertionForm> Forms,
+    AgentIdentity Enumerator)
 {
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
-    public static AssertionEnumeration Of(IEnumerable<string> clauses, IEnumerable<string> assertions) =>
-        new(clauses.ToHashSet(StringComparer.Ordinal), assertions.ToHashSet(StringComparer.Ordinal));
+    /// <summary>True when the enumeration is the flat projection and carries no forms at all.</summary>
+    public bool CarriesNoForms => Forms.Count == 0;
+
+    /// <summary>The enumeration's own form for an assertion, or null when it does not say.</summary>
+    public AssertionForm? FormOf(string assertionId) =>
+        Forms.TryGetValue(assertionId, out var form) ? form : null;
+
+    public static AssertionEnumeration Of(
+        IEnumerable<string> clauses,
+        IEnumerable<string> assertions,
+        IReadOnlyDictionary<string, AssertionForm>? forms = null,
+        string enumerator = "") =>
+        new(clauses.ToHashSet(StringComparer.Ordinal),
+            assertions.ToHashSet(StringComparer.Ordinal),
+            forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
+            new AgentIdentity(enumerator));
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>
@@ -69,7 +100,13 @@ public sealed record FidelityDeclaration(
 /// </summary>
 /// <param name="Condition">Prose: what makes the value final.</param>
 /// <param name="Signals">The signals the condition names. Checked against the completion signal.</param>
-public sealed record SettlingDeclaration(string Condition, IReadOnlyList<string> Signals);
+/// <param name="UnchangedForScans">
+/// The one settling form this harness can EVALUATE: the observed value must be unchanged across this
+/// many consecutive scans. <b>Zero means the declared condition is prose the runner cannot check</b>,
+/// and the result then carries <c>SettlingState.NotEstablished</c> — which is deliberately not the same
+/// as settled. Whether the declared condition really implies finality is judgement either way.
+/// </param>
+public sealed record SettlingDeclaration(string Condition, IReadOnlyList<string> Signals, int UnchangedForScans = 0);
 
 /// <summary>Why a vector was inadmissible. Each is a different thing for the author to do.</summary>
 public enum RefusalReason

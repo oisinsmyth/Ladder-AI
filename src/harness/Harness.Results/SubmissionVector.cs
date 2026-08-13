@@ -69,7 +69,18 @@ public enum AssertionForm
 /// For <see cref="InstrumentationMode.Sampled"/>: how long the condition is expected to HOLD, in scans,
 /// <b>at the vector's declared compression factor</b>. Zero for the other modes, which are exempt.
 /// </param>
-public sealed record ObservabilityDeclaration(string Signal, SignalNature Nature, InstrumentationMode Mode, int WindowScans);
+/// <param name="Expected">
+/// The value this expectation asserts, as a string. <b>Null means no predicate was declared</b>, which
+/// the schema gate refuses — an expectation with nothing to compare against cannot fail, so its pass
+/// says nothing. Defaulted only so that the many call sites that are ABOUT observability need not
+/// restate it; the gate is what makes the default unusable.
+/// </param>
+public sealed record ObservabilityDeclaration(
+    string Signal,
+    SignalNature Nature,
+    InstrumentationMode Mode,
+    int WindowScans,
+    string? Expected = null);
 
 /// <summary>What the generated copy layer actually provides, per signal (contract §4.3's "the map's observability declarations").</summary>
 /// <remarks>

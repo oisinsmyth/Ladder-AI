@@ -112,10 +112,12 @@ public static class SubmissionGate
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(BasisGate(vectors, enumeration));
+        gates.Add(EnumeratorIndependence(vectors, enumeration, blockAuthor));
+        gates.Add(AssertionFormAuthority(vectors, enumeration));
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
             "whether the cited assertion is a faithful reading of the clause is what the independent author is for. It is recorded, never verified."));
         gates.Add(Fidelity(vectors, fidelity));
-        gates.Add(Observability(vectors, map, floorScans, runtimeCompression));
+        gates.Add(Observability(vectors, enumeration, map, floorScans, runtimeCompression));
         gates.Add(Settling(vectors));
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
@@ -241,11 +243,84 @@ public static class SubmissionGate
             problems.Length == 0 ? "every vector declares a settling condition that is not the completion flag alone." : string.Join(" | ", problems));
     }
 
+    /// <summary>
+    /// The enumeration is the coverage DENOMINATOR, so who produced it decides whether citing into it
+    /// buys anything.
+    ///
+    /// <para><b>If the block's author performed the decomposition, D6's independence is lost at the
+    /// denominator</b> - the same reading that produced the block produced the set of things anyone may
+    /// assert about it, and the vector author's citation stops being a second reading. An UNRECORDED
+    /// enumerator is NOT CHECKED, never a pass: unknown is not independent.</para>
+    /// </summary>
+    private static GateResult EnumeratorIndependence(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, AgentIdentity blockAuthor)
+    {
+        if (!enumeration.Enumerator.IsRecorded)
+        {
+            return new GateResult("3d enumerator independence", GateStatus.NotChecked, false, "the enumeration's own identity field",
+                "the enumeration does not record who produced it, so it cannot be shown independent of the block's author. If the block's author decomposed the requirement, D6's independence is lost AT THE DENOMINATOR and citing into it buys nothing. Unknown is not independent.");
+        }
+
+        var problems = new List<string>();
+
+        if (blockAuthor.IsRecorded && enumeration.Enumerator.SameAs(blockAuthor))
+            problems.Add($"'{enumeration.Enumerator}' both wrote the block and enumerated its assertions. The denominator is then the block author's own reading of the requirement, and a vector citing into it is agreeing with the block by construction.");
+
+        foreach (var v in vectors.Where(v => v.Author.IsRecorded && enumeration.Enumerator.SameAs(v.Author)))
+            problems.Add($"{v.Id}: '{enumeration.Enumerator}' both enumerated the assertions and wrote this vector. The enumeration is meant to be a THIRD party to both authors.");
+
+        return new GateResult("3d enumerator independence", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
+            problems.Count == 0
+                ? $"the enumeration was produced by '{enumeration.Enumerator}', who is neither the block's author nor any vector's."
+                : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// <b>Where F-3 gets its authority.</b>
+    ///
+    /// <para>F-3 refuses a SAMPLED observation of a NEVER assertion, and the form was declared by the
+    /// VECTOR - so the ruling was enforced against what an author claimed, and an author who cited a
+    /// NEVER and declared WHEN took the permissive path. An enumeration that carries the form lets the
+    /// two be compared.</para>
+    ///
+    /// <para><b>An enumeration carrying no forms is NOT CHECKED, not a pass.</b> That is the flat
+    /// projection, and against it the hole is exactly as open as it was - reporting it as verified would
+    /// be the failure this whole gate table exists to prevent.</para>
+    /// </summary>
+    private static GateResult AssertionFormAuthority(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    {
+        if (enumeration.CarriesNoForms)
+        {
+            return new GateResult("3e assertion form authority", GateStatus.NotChecked, false, "per-assertion form in the enumeration",
+                "the enumeration is the flat projection (clause and assertion IDs only) and carries no canonical form, so a vector's declared form was compared against nothing. F-3's refusal of a SAMPLED NEVER is therefore enforced against WHAT THE VECTOR CLAIMS: cite a NEVER, declare WHEN, take the permissive path.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            if (v.Basis is null)
+                continue;
+
+            var declared = v.Form;
+            var enumerated = enumeration.FormOf(v.Basis.AssertionId);
+
+            if (enumerated is null)
+                problems.Add($"{v.Id}: the enumeration carries forms but none for '{v.Basis.AssertionId}', so this citation's form could not be checked. A partially-formed enumeration is not a permissive one.");
+            else if (enumerated != declared)
+                problems.Add($"{v.Id}: declares form {declared} and the enumeration says '{v.Basis.AssertionId}' is {enumerated}. The assertion's form is the ENUMERATION's to state; a vector that disagrees with it is asserting something other than what it cites - and if the disagreement is Never-declared-as-When it is F-3's refusal being walked around.");
+        }
+
+        return new GateResult("3e assertion form authority", GateStatus.Checked, problems.Count == 0, nameof(AssertionEnumeration),
+            problems.Count == 0
+                ? "every citation's declared form matches the enumeration's, so F-3 is enforced against what the assertion IS rather than what the vector claims."
+                : string.Join(" | ", problems));
+    }
+
     // -------------------------------------------------------------------------------------------------
     // 5 — observability, COMPUTED
     // -------------------------------------------------------------------------------------------------
 
-    private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, MirrorObservability map, double floorScans, int runtimeCompression)
+    private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, MirrorObservability map, double floorScans, int runtimeCompression)
     {
         var problems = new List<string>();
 
@@ -261,7 +336,12 @@ public static class SubmissionGate
                 declared = 1;
             }
 
-            var report = ObservabilityCheck.Evaluate(v.Expectations, v.Form, map, floorScans, declared, runtimeCompression);
+            // *** THE FORM COMES FROM THE ENUMERATION WHERE THE ENUMERATION HAS ONE. *** F-3's refusal
+            // keys on the assertion's form, so evaluating it against the VECTOR's declaration would
+            // enforce the ruling against what an author claimed. The mismatch itself is refused by the
+            // form-authority gate; this makes the observability verdict right even so.
+            var form = (v.Basis is not null ? enumeration.FormOf(v.Basis.AssertionId) : null) ?? v.Form;
+            var report = ObservabilityCheck.Evaluate(v.Expectations, form, map, floorScans, declared, runtimeCompression);
             problems.AddRange(report.Refusals.Select(r => $"{v.Id}/{r.Signal}: {r.Outcome} — {r.Detail}"));
         }
 

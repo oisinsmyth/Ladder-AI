@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Loop</RootNamespace>
+    <AssemblyName>Harness.Loop</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    Build-plan 5.3 - the INNER LOOP, and nothing else.
+
+    The pieces existed and nothing drove them in order: allocate the map, gate the submission, generate
+    the copy layer, assert 0.1b, deploy, confirm the build, run the wave, package the results. This is
+    that ordering and the handing-back.
+
+    WHAT IT IS NOT: not the review skills (they exist), not the coordinator (phases 4 and 6), and not a
+    verdict. *** THE LOOP NEVER DECIDES WHETHER A RESULT IS GOOD. *** DB-8 owns that, in a precedence
+    the loop honours rather than re-derives - admissibility, then LIVENESS, then the run outcome, then
+    settling, then CONTENT LAST, because content is the only one a frozen mirror can satisfy.
+
+    Everything device-touching is behind IDeviceGateway, and the default implementation REFUSES rather
+    than pretending: the rig is held by another lane, and a gateway that quietly returned success would
+    manufacture exactly the green this project exists to prevent.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Results\Harness.Results.csproj" />
+  </ItemGroup>
+
+</Project>

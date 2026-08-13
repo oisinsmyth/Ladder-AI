@@ -59,10 +59,25 @@ public sealed class ModelDocument
     public bool ValidatedAgainstPlantData { get; set; }
 }
 
+/// <summary>
+/// The enumeration the gate consumes.
+///
+/// <para><b>The flat projection is legal and is not free.</b> Clauses plus assertions alone is what the
+/// enumeration skill calls its projection, and against it two gates report NOT CHECKED: the assertion's
+/// canonical FORM cannot be compared with what the vector declared (F-3's authority), and the
+/// ENUMERATOR's independence cannot be established. Supplying Forms and Enumerator is what turns those
+/// into checks.</para>
+/// </summary>
 public sealed class EnumerationDocument
 {
     public List<string>? Clauses { get; set; }
     public List<string>? Assertions { get; set; }
+
+    /// <summary>Assertion ID to its canonical form. Absent means the projection, and the form gate is NOT CHECKED.</summary>
+    public Dictionary<string, AssertionForm>? Forms { get; set; }
+
+    /// <summary>Who performed the decomposition. Absent means independence cannot be shown, which is NOT CHECKED.</summary>
+    public string? Enumerator { get; set; }
 }
 
 public sealed class MapDocument

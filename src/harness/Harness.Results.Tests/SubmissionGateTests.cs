@@ -42,10 +42,12 @@ public class SubmissionGateTests
         IReadOnlySet<string>? conflicts = null,
         double floor = 9,
         int runtimeCompression = 1,
-        bool omitConflictGraph = false) =>
+        bool omitConflictGraph = false,
+        AssertionEnumeration? enumeration = null) =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
-            AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" }),
+            enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+                new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "agent-c"),
             FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity(blockAuthor),
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
@@ -155,6 +157,92 @@ public class SubmissionGateTests
     {
         Assert.False(Gate(Check(new[] { Vector(author: "") }), "2 authorship").Passed);
         Assert.False(Gate(Check(blockAuthor: "   "), "2 authorship").Passed);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gates 3d/3e - the enumeration's authority. Two caveats that became CHECKS when the enumeration
+    // gained a producer emitting per-assertion forms and recording who wrote it.
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AN_ENUMERATION_CARRYING_NO_FORMS_LEAVES_F3_ENFORCED_AGAINST_WHAT_THE_VECTOR_CLAIMS()
+    {
+        // The flat projection. Reporting this gate as passed would be exactly the failure the gate table
+        // exists to prevent: the hole is as open as it was, and NOT CHECKED says so.
+        var flat = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" }, null, "agent-c");
+        var report = Check(enumeration: flat);
+
+        var gate = Gate(report, "3e assertion form authority");
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("cite a NEVER, declare WHEN, take the permissive path", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+    }
+
+    [Fact]
+    public void A_VECTOR_DECLARING_A_FORM_THE_ENUMERATION_CONTRADICTS_IS_REFUSED()
+    {
+        // *** F-3's HOLE, CLOSED WHERE THE DATA SUPPORTS IT. *** Cite an assertion the enumeration says
+        // is a NEVER, declare it a WHEN, and the permissive path is no longer available.
+        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Never }, "agent-c");
+
+        var report = Check(new[] { Vector(form: AssertionForm.When) }, enumeration: enumeration);
+
+        Assert.False(Gate(report, "3e assertion form authority").Passed);
+        Assert.Contains("F-3's refusal being walked around", Gate(report, "3e").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_the_OBSERVABILITY_gate_then_uses_the_ENUMERATIONS_form_not_the_vectors()
+    {
+        // Refusing the mismatch is not enough on its own: the observability verdict has to be right too,
+        // or a sampled NEVER would be reported admissible in the same run that refused the mismatch.
+        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Never }, "agent-c");
+
+        var report = Check(
+            new[] { Vector(form: AssertionForm.When, expectations: new[]
+                { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Sampled, 40, "10") }) },
+            map: MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Sampled })),
+            enumeration: enumeration);
+
+        Assert.Contains("SampledCannotAnswerANeverAssertion", Gate(report, "5 observability").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_UNRECORDED_ENUMERATOR_IS_NOT_CHECKED_BECAUSE_UNKNOWN_IS_NOT_INDEPENDENT()
+    {
+        var anonymous = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When });
+
+        var gate = Gate(Check(enumeration: anonymous), "3d enumerator independence");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("lost AT THE DENOMINATOR", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_BLOCKS_AUTHOR_ENUMERATING_ITS_OWN_ASSERTIONS_IS_REFUSED()
+    {
+        // If the block's author decomposed the requirement, the denominator is the block author's own
+        // reading and a vector citing into it is agreeing with the block by construction.
+        var byBlockAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "agent-a");
+
+        Assert.False(Gate(Check(enumeration: byBlockAuthor), "3d enumerator independence").Passed);
+    }
+
+    [Fact]
+    public void SO_IS_THE_VECTORS_AUTHOR_ENUMERATING_THEM()
+    {
+        // Normalised, like D6 itself: a case-and-whitespace variant is not a different agent.
+        var byVectorAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
+            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "AGENT-B ");
+
+        var gate = Gate(Check(enumeration: byVectorAuthor), "3d enumerator independence");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("THIRD party to both authors", gate.Detail, StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------------

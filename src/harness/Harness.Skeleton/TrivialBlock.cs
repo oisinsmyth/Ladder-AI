@@ -23,6 +23,19 @@ public enum TrivialBlockDefect
     /// harness that reddens everything.</para>
     /// </summary>
     OffByOneAtTheLimit,
+
+    /// <summary>
+    /// <b>The ramp never stops.</b> The accumulate rung loses its limit guard entirely, so the count
+    /// climbs for as long as the start command is on while the done flag still latches at the limit.
+    ///
+    /// <para><b>This is "a completion flag is NOT a settling signal" as an artifact.</b> The block says
+    /// it is finished and goes on changing the value it was asked about, so any single observation is a
+    /// snapshot of something still moving - and a harness that compared that snapshot and believed it
+    /// would return a confidently wrong verdict rather than a missed one. It exists because the settling
+    /// check had no build that could make it fire, and <b>a guard nothing can exercise is a guard nobody
+    /// knows works.</b></para>
+    /// </summary>
+    DoneWhileStillRunning,
 }
 
 /// <summary>
@@ -88,6 +101,12 @@ public static class TrivialBlock
         // attributed to anything else.
         var guard = defect == TrivialBlockDefect.OffByOneAtTheLimit ? "<=" : "<";
 
+        // The accumulate rung's condition. The third defect drops the limit test altogether, so the count
+        // keeps climbing while the done flag latches - the value under test never settles.
+        var accumulate = defect == TrivialBlockDefect.DoneWhileStillRunning
+            ? StartTag
+            : $"{StartTag} AND {CountTag} {guard} {LimitTag}";
+
         var table = new StringBuilder();
         table.Append("TAGTABLE DemoUnit\n");
         table.Append("  ROOTID 0\n");
@@ -115,7 +134,7 @@ public static class TrivialBlock
         block.Append($"  MOVE(EN := NOT {StartTag}, IN := 0) => {DoneTag}\n");
         block.Append('\n');
         block.Append("NETWORK 2 \"Add one step to the count each scan until it reaches the limit\"\n");
-        block.Append($"  ADD(EN := {StartTag} AND {CountTag} {guard} {LimitTag}, IN1 := {CountTag}, IN2 := {StepTag}) => {CountTag}\n");
+        block.Append($"  ADD(EN := {accumulate}, IN1 := {CountTag}, IN2 := {StepTag}) => {CountTag}\n");
         block.Append('\n');
         block.Append("NETWORK 3 \"Report done once the count has reached the limit\"\n");
         block.Append($"  MOVE(EN := {StartTag} AND {CountTag} >= {LimitTag}, IN := 1) => {DoneTag}\n");
