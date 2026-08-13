@@ -20,7 +20,7 @@ public class LoopRunTests
     private const int MirrorBase = 4000;
     private const int ProgramBase = 3000;
 
-    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
+    internal static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
 
     // A REAL assertion ID, COMPUTED rather than invented. Gate 3g recomputes every ID from its own
     // normalised text and refuses a mismatch, which is what lets the stamping step (assertion-
@@ -67,7 +67,7 @@ public class LoopRunTests
             CompletionSignal: completionSignal ?? TrivialBlock.DoneTag,
             Kills: kills);
 
-    private static LoopRequest Request(
+    internal static LoopRequest Request(
         SubmissionVector? vector = null,
         AssertionEnumeration? enumeration = null,
         TrivialBlockDefect defect = TrivialBlockDefect.None,
