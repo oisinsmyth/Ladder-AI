@@ -1711,6 +1711,76 @@ All five generated artifacts round-trip `to-xml` → `to-ir --no-sidecar` byte-i
 Release converter. Nothing written into `ir/`; no rig or Portal contact; `NModbusTransport.Connect`
 has never been called.
 
+### ✅✅ PHASE 2 IS VALIDATED ON THE DEVICE — ALL FOUR CELLS, 2026-08-13
+
+| build | vector | count | model | verdict |
+|---|---|---|---|---|
+| GREEN (`<`) | step 5 | **10** | 10 | **GREEN** |
+| GREEN | step 3 | 12 | 12 | GREEN |
+| RED (`<=`) | step 5 | **15** | 10 | **RED** |
+| RED | step 3 | 12 | 12 | *** GREEN — THE DEFECT IS INVISIBLE *** |
+
+Through the real map, copy layer, `MB_SERVER`, `MirrorClient`, `SlotRun` and model — **no
+interpreter.** *** BOTH BUILDS RAN UNDER ONE BYTE-IDENTICAL `Main`, NEVER RE-IMPORTED, SO THE RED
+CANNOT HAVE COME FROM THE CALL STRUCTURE *** — only FC 900/901 changed. Version register corroborated
+(`0x1111` GREEN, `0x2222` RED), and `outcome Completed` on both RED runs: **the run succeeds and the
+*comparison* fails**, which is the distinction the whole result package rests on.
+
+**Every gate HEALTHY on both lines** — `BLOCKS: 76 / TYPES: 33`, `INCONSISTENT: 0`.
+
+### ✅ THE BIT ORDER AND WORD ORDER ARE MEASURED — the `[I]` comes off
+
+*** `BitAddressOf` IS RIGHT, AND THE PLC WAS THE INSTRUMENT, SO THIS IS INDEPENDENT OF THE PREMISE. ***
+Writing `0x0001` ran the block (count 12); `0x0100` did not (count 0). Slot 0's start bool is
+`%M4009.0` — the low byte landing in the **second** `%M` byte. The simulator and `BitAddressOf` had
+agreed *from the same premise*, so their agreement was worth nothing; this is worth something.
+
+**Word order is `HighWordFirst`**, the existing default. `16#00001111` read back as reg0 `0x0000`,
+reg1 `0x1111`, cross-checked on the scan counter (745 versus an absurd 48,824,320).
+
+### 🔴 A CONVERTER DEFECT THAT A BYTE-IDENTICAL ROUND TRIP CANNOT SEE
+
+*** THE CONVERTER EMITS `<ConstantType>Int</ConstantType>` FOR EVERY HEX LITERAL, REGARDLESS OF
+MAGNITUDE OR OF THE DESTINATION'S TYPE. *** A 32-bit build stamp is 32 bits by construction, so
+**every real stamp fails to import** — including §9's own worked `16#A93F2C71`. Isolated cleanly: an
+Int-range literal imports fine and is *still* typed `Int`.
+
+  ➜ *** THE PHASE-2 LANE'S BYTE-IDENTICAL ROUND-TRIP PROOF PASSED, BECAUSE THE WRONG TYPE ROUND-TRIPS
+    FAITHFULLY. *** A round-trip check is structurally blind to any error the round trip **preserves**
+    — the same shape as the Normalizer being blind in exactly the way the converter was wrong. Worth
+    asking what else currently rests on a round-trip proof.
+  ➜ **It is the SECOND instance of one class:** `4090b6f` fixed *"a comparison's literal is typed by
+    MAGNITUDE, not by the compare's own type"*. This is that bug one site along — typed by magnitude
+    rather than by **the destination**. Being fixed as **one general rule**, not a second special case.
+  ➜ The runs used a **declared substituted stamp**, so *** THE 32-BIT CASE REMAINS UNPROVEN ON A
+    DEVICE *** and closing that rides with the fix.
+
+### 🔴 TWO DEFECTS THAT WOULD HAVE FAILED CLEANLY, BELIEVABLY AND WRONGLY
+
+  1. *** `MB_SERVER` POINTED AT THE WRONG MEMORY *** — `P#M1000.0 WORD 209` against the map's `%M4000`.
+     As shipped, **every harness register would have read zero and `VersionCheck` would have reported
+     `Absent`.** Clean, believable, wrong.
+  2. **The set contained no OB1**, so nothing called FC 900/901 at all.
+
+### ⚠️ THE SCRATCH ARTIFACTS WERE A MOVING TARGET — and the hazard bit the lane's own setup first
+
+`scratch/harness-phase2/` is **gitignored**. The files snapshotted for validation had been written at
+10:18 by the *phase-3* lane and encoded a map HEAD does not produce; they have since been **deleted**
+and that directory now holds different blocks entirely. Validation was redone against `src/harness`
+**extracted at HEAD**.
+
+  ➜ *** THE SAME HAZARD HIT THE LANE'S OWN DRIVER: it referenced the other lane's in-progress Debug
+    DLLs and computed vectors ONE REGISTER OFF. *** Caught before the rig — *"I'd have been debugging
+    the PLC."* **Two agents sharing a build output is the collision the one-agent-per-component rule
+    exists to prevent, and a gitignored scratch directory is outside that rule's reach.**
+  ➜ `lad-coder` contradicted its brief **correctly**: `Main` has **nine** networks, not two — seven
+    plant calls — and it kept 1–7 verbatim rather than dropping them.
+
+**Rig: the phase-2 GREEN build, project in sync, CPU `Running (8)`.** Build D deliberately **not**
+restored — leaving the defective RED build would be a trap, and reverting would undo the
+`MB_HOLD_REG` retarget further harness work needs. Build D is one import away and the original server
+pointer was exported before it was touched.
+
 ## PHASE 3 — TWO SLOTS
 
 **Cost: small. Assumptions retired: A5 — and everything multi-agent rests on it.**
