@@ -63,6 +63,12 @@ Same one deviation flagged in the prior scoped run, re-flagged at RFI-Q-HBA-06:
 - **Numeric bounds are not part of assertion identity.** Owner-fixed but commissioning-changeable
   values (the persistence threshold, the clear-debounce filter time) are carried **beside** a
   requirement, never welded into the sentence a downstream assertion hashes — see AR-HBA-03.
+- **Signal names are not part of assertion identity either — preserve this deliberately.** A signal
+  name belongs in an assertion's `response_signal:` field, never inside the hashed sentence. Measured
+  on the AR-HBA-01 round: **naming the previously-unnamed output cost ZERO re-hashes**, because no
+  assertion text contained a signal name to begin with. That is a structural property worth keeping —
+  it means an interface can be named, renamed or corrected without dangling a single citation. An
+  assertion sentence that embeds a signal name gives that property away for the whole register.
 
 ## Tag grounding
 
@@ -121,6 +127,11 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   must accumulate again from scratch after the hopper next goes high. A momentary clear shorter than
   the filter time does not discard it. A debounced clear does not leave a partially-elapsed window
   that would trip on a later brief high.
+  **While the filter time is still running** — the hopper reads false but has not yet been false long
+  enough to be a debounced clear — **nothing is discarded**: the accumulated time is held, and if the
+  plant is also stopped it stays **frozen** (AR-HBA-09). The clear-debounce filter itself runs
+  **irrespective of `PlantRunning`**, which is what allows a debounced clear to be established while
+  the plant is stopped at all.
 - **Class:** alarm
 - **Source:** Request — "stays continuously high"; coordinator instruction that a momentary clear
   re-arms the window; refined by Q-HBA-02 (debounced clear) and NEW-HBA-01 (cumulative, not
@@ -131,6 +142,9 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
 - **Reconciled with NEW-HBA-01 by AR-HBA-06 (agent ruling, not owner).** A debounced clear discards
   the accumulator **whether or not the plant is running** — the discard beats the freeze. See
   AR-HBA-06 for the reasoning.
+- **Sub-filter-time gap closed by AR-HBA-09 (agent ruling, not owner).** AR-HBA-06's narrowed freeze
+  scope left one case uncovered: plant stopped, hopper reading false, filter time not yet elapsed.
+  It **freezes**. See AR-HBA-09.
 
 ### Alarm latch and reset
 
@@ -145,9 +159,19 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
 ### REQ-HBA-005 — Reset clears the alarm
 - **Text:** A **rising edge** of `FaultReset` clears the latched hopper-blockage alarm and, with it,
   the inhibit/stop demand. The clear is **not** a suppression: the alarm condition is re-evaluated
-  immediately afterwards, so if the blockage condition still holds — accumulated persistence time
-  still at or past the threshold — **the alarm re-raises**. A reset therefore cannot hold a live
-  fault off, and holding `FaultReset` on continuously cannot pin the alarm off.
+  immediately afterwards, and **the condition it re-evaluates is the accumulated persistence time
+  alone** — at or past the threshold means **the alarm re-raises**, *whether or not the plant is
+  running* (AR-HBA-07). A reset therefore cannot hold a live fault off, and holding `FaultReset` on
+  continuously cannot pin the alarm off.
+  **What is observable after the reset, by case (AR-HBA-08):**
+  - **The condition still holds** (accumulated time still at or past the threshold) — the alarm is
+    **true** when next observed. Whether it went momentarily false in between is **DON'T-CARE**: the
+    re-raise is immediate, so any drop is a sub-scan transient of no operational consequence, and
+    "never went low" is **not** a failure.
+  - **The condition has cleared** (a debounced clear has discarded the accumulated time, so it is
+    below the threshold) — the alarm goes **false and stays false**, and that false is **REQUIRED to
+    be observable**. Without it "the reset worked" and "the reset did nothing" are indistinguishable,
+    which is the whole point of this clause.
 - **Class:** alarm
 - **Source:** Request — "clear the alarm on FaultReset".
 - **Notes:** `DB_Controls.FaultReset` is the shared operator reset already routed to the
@@ -163,6 +187,12 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
     Consequence, stated so it is testable: resetting while the hopper is still high and the plant
     still running produces an alarm that re-raises essentially at once, **not** one that re-arms
     from zero and stays quiet for another threshold's worth of time.
+- **Re-raise condition fixed by AR-HBA-07 (agent ruling, not owner).** The re-raise keys on the
+  **accumulator alone**, never on `PlantRunning`. So the sequence *stop the plant → reset → hopper
+  still high, accumulator frozen past threshold* **re-raises**. See AR-HBA-07.
+- **Observability of the de-assert fixed by AR-HBA-08 (agent ruling, not owner).** The earlier wording
+  "drops (if at all)" left a vector unable to tell whether "never went low" passes or fails; the Text
+  above now splits it by case. See AR-HBA-08.
 
 ### REQ-HBA-006 — Hopper clearing while alarm latched does not clear it
 - **Text:** `Hopper_Level_High` returning to false while the hopper-blockage alarm is latched does
@@ -241,6 +271,9 @@ Never silently resolved; resolution is a recorded owner answer noted at the ques
   **Scope narrowed by AR-HBA-06 (agent ruling, not owner):** the freeze applies only while the hopper
   is still reading high. A **debounced clear** of `Hopper_Level_High` discards the accumulator even
   when the plant is stopped — the discard beats the freeze. See AR-HBA-06.
+  **Scope completed by AR-HBA-09 (agent ruling, not owner):** the freeze also applies while the hopper
+  reads false but the clear-debounce filter time has **not** yet elapsed — no clear has been
+  established, so there is nothing to discard. See AR-HBA-09.
 - **NEW-HBA-02 — interface style. RESOLVED (owner Gate-1, 2026-07-19): corpus UDT-IO.** The FB
   carries one `IO : "UDT_HopperBlockageIO" RETAIN SETPOINT` per the corpus handshake convention
   (not plain INPUT/OUTPUT sections). New UDT `UDT_HopperBlockageIO` created (additive, in-scope).
@@ -419,3 +452,110 @@ threshold. Plant stops (accumulator freezes at 40 s). Hopper then reads false co
 accumulate again. Under the rejected reading it would have alarmed after 20 s.
 
 **CHANGED:** REQ-HBA-003 Text/Source/Notes, NEW-HBA-01 (scope narrowing).
+
+---
+
+## Second round (2026-08-13) — rulings AR-HBA-07…09
+
+The enumerator re-decomposed against the amended text above and returned **19 assertions**, not the 14
+a delta would have predicted — four of the six first-round rulings changed clause text, and three added
+behaviour that decomposes further (REQ-HBA-005 went 2 → 5, because AR-HBA-05 put three behavioural
+rulings into what had been a one-sentence clause). It **refused to apply a predicted count as a delta**
+and re-decomposed instead, which is why five assertions are not silently missing. Same treatment as the
+first round: agent rulings, not the owner's.
+
+### AR-HBA-07 — the re-raise condition is the accumulator ALONE *(closes AMB-10)*
+
+**RULING:** the condition re-evaluated after a reset is the **accumulated persistence time alone**. It
+is **not** gated on `PlantRunning`. Stop the plant, then reset, hopper still high, accumulator frozen
+past the threshold → **the alarm re-raises.**
+
+**Reasoning.** AR-HBA-05 implied the accumulator; REQ-HBA-001 with Q-HBA-04 implied cumulative
+high-**and-running**. The separating sequence is *stop → reset*, and it is the most likely operator
+sequence there is — an operator who sees an alarm generally stops the plant before acknowledging it.
+Under the run-gated reading that sequence **clears a live fault and leaves it cleared**, which is
+precisely the suppression AR-HBA-05 was written to forbid, arriving through a side door. The objection
+that decided AR-HBA-05 decides this the same way.
+
+**This completes one discipline, and it should be read as one story rather than three compatible
+fragments:**
+
+1. **The accumulator is evidence about the hopper** (AR-HBA-06) — it accrues on high-and-running,
+   freezes on absent evidence, and is discarded only on positive evidence that the hopper cleared.
+2. **`FaultReset` is an acknowledgement, not evidence about the hopper** (AR-HBA-05) — so it may not
+   alter the accumulator.
+3. **Therefore the alarm keys on the evidence, never on the plant's run state** (AR-HBA-07) — the run
+   state gates what the accumulator *accrues*, and nothing else.
+
+`PlantRunning` gates **accrual**. It does not gate **raising**, and it does not gate **re-raising**.
+
+**CHANGED:** REQ-HBA-005 Text + Notes.
+
+### AR-HBA-08 — the de-assert on reset is DON'T-CARE when the condition holds, REQUIRED when it has cleared *(closes AMB-09)*
+
+**RULING:** split by case.
+
+- **Condition still holds** → the momentary drop is **DON'T-CARE**. The observable claim is *the alarm
+  is still true*. "Never went low" is **not** a failure.
+- **Condition has cleared** → an observable **false** is **REQUIRED**, and it must persist.
+
+**Reasoning.** The earlier "drops (if at all)" was unusable by a vector author: it made a passing and a
+failing observation indistinguishable. Requiring the drop to be observable in the first case would be
+worse than useless — under AR-HBA-07 the re-raise is immediate, so the drop is a sub-scan transient,
+and asserting on it would force the assertion into a **Coincidence** requiring the program to record
+scan numbers, to test something with **no operational consequence**. In the second case the opposite
+holds: without an observable false, *"the reset worked"* and *"the reset did nothing"* are the same
+observation, and that distinction is the entire content of REQ-HBA-005.
+
+Both cases are now stated in the clause, so `005.A3` / `005.A5` can be worded as plain
+`PersistentState` assertions rather than one of them being unobservable by construction.
+
+**CHANGED:** REQ-HBA-005 Text (new by-case block) + Notes.
+
+### AR-HBA-09 — below the filter time, the freeze applies *(closes AMB-11)*
+
+**RULING:** plant stopped, hopper reading false, clear-debounce filter time **not** yet elapsed →
+**freeze**. Nothing is discarded.
+
+**Reasoning.** A discard requires a **debounced** clear. Under the filter time no clear has been
+established, so there is nothing to discard, and the freeze is simply what still applies. One word —
+but an uncovered case in a specification is exactly where two good-faith readings diverge silently, so
+it is stated rather than left to be inferred. The enumerator's *"almost certainly freeze"* was the
+right instinct and it was right to refuse to write "almost certainly" into a spec.
+
+**Stated with it, because both AR-HBA-06 and this ruling depend on it:** the clear-debounce filter runs
+**irrespective of `PlantRunning`**. If it did not, a debounced clear could never be established while
+the plant was stopped and AR-HBA-06 would be unreachable.
+
+**CHANGED:** REQ-HBA-003 Text + Notes, NEW-HBA-01 (scope completion).
+
+### Opened by this round — flagged BEFORE the enumeration is stamped
+
+**AR-HBA-07 collides with REQ-HBA-007's power-up split, and I do not think this one is mine to rule.**
+
+REQ-HBA-007 makes the alarm latch **RETAIN** (survives a power cycle) while all transient timing state,
+**including the accumulator**, is **non-retentive** and starts at zero. AR-HBA-07 makes the re-raise key
+on the accumulator alone. Compose them:
+
+> Power cycle with the alarm latched and the hopper genuinely still blocked. The alarm survives —
+> correctly, per REQ-HBA-007. The accumulator does not; it is 0. The operator now presses `FaultReset`.
+> The accumulator is below threshold, so **the alarm clears and does NOT re-raise**, and the hopper is
+> still blocked. A fresh full threshold must accumulate before it alarms again.
+
+That is a **live fault suppressed by a reset** — the exact outcome AR-HBA-05 and AR-HBA-07 both exist to
+forbid — reached without either ruling being violated, because the power cycle destroyed the evidence
+rather than the reset doing it. Both clauses are individually defensible and their conjunction is not.
+
+I am **not ruling it**, for a reason: unlike AMB-07 and AMB-10, the fix is not a choice between two
+readings already present in the register. Every available repair **adds a mechanism** — make the
+accumulator RETAIN (contradicts REQ-HBA-007 and NEW-HBA-06 and changes power-up behaviour), or re-derive
+the blockage condition live at power-up (adds a condition no clause describes), or accept the gap as the
+documented cost of a non-retentive accumulator. That is a design decision affecting a signed REQ, so it
+is the owner's.
+
+**It is genuinely reachable** — any power cycle during a blockage puts the plant in this state — so it
+should be settled rather than left. **Its assertion sits inside REQ-HBA-005 and REQ-HBA-007, both of
+which this round already re-decomposes**, so ruling it now costs far less than ruling it after the
+enumeration is stamped and citations exist.
+
+Nothing else in AR-HBA-07/08/09 opens a further behavioural question that I can find.
