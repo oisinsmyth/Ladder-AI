@@ -40,7 +40,8 @@ phase 2 with the copy-layer generator.
 
 > ### 📍 STANDING STATUS — keep this current; it is the ONE place "where are we" lives
 >
-> *** PHASES 0, 1 AND 2 ARE CLOSED. PHASE 4.3/4.4 BUILT. *** Last updated 2026-08-13.
+> *** PHASES 0, 1 AND 2 ARE CLOSED — PHASE 2 VALIDATED ON THE DEVICE. PHASE 4.3/4.4 BUILT. ***
+> Last updated 2026-08-13.
 >
 > **A1 fully retired** — no tear in 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2,
 > and 1.4 answered with 0 torn reads in 3,000. **Phase 2's exit criterion met**, GREEN/RED shown by
@@ -54,23 +55,22 @@ phase 2 with the copy-layer generator.
 > | A3 `%MW` capacity | ✅ 4096 words, outside work memory |
 > | A7 run-state read | ✅ measured in both CPU states |
 > | A9 memory budget | ✅ scoped to retain-only by ruling |
-> | **A4** block driveable by its own command | ⏳ phase 2 built; **owed on the device** |
+> | ~~**A4**~~ block driveable by its own command | ✅ **RETIRED ON THE DEVICE** — all four exit-criterion cells, no interpreter |
 > | **A5** two slots do not interfere | ⏳ phase 3, in build |
 > | **A6** delegate throw (G4) | 🔴 **UNMEASURED — needs the owner present.** Widest blast radius left |
 > | **A8** structural DB change (G2) | ⏸ deferred by the owner |
 >
-> **Owed on the device, and stated as owed:** phase 2's RED/GREEN through the real copy layer and
-> `MB_SERVER`; the **start-bool bit order** (still `[I]`, and the simulator and `BitAddressOf` agree
-> *from the same premise*, so their agreement is worth nothing); the 32-bit word order.
+> **Owed on the device:** only the **32-bit build stamp**, blocked by a converter defect (every hex
+> literal is typed `Int`) now in fix. The **bit order** and **word order** are measured — `BitAddressOf`
+> is right, word order is `HighWordFirst`, and both `[I]` markers come off.
 >
-> **Adopted by the owner and not yet implemented:** **F-1** (a read may cover several *whole* slots)
-> in `Harness.Map` + `MirrorClient` and in the spec's X-A wording; **the drain ruling** (needs no
-> code).
+> **Adopted and part-implemented:** **F-1** — spec half landed (X-A now says a read never *splits* a
+> slot); **code half queued** for `Harness.Map` + `MirrorClient`. **The drain ruling** needs no code.
 >
-> **Open for the owner:** **A6/1.7**; the **queue/marker joint-consistency** ruling (two files, no
-> shared transaction); **F-5** — specify the tail as p90 + an exceedance rate instead of a p99 point
-> estimate, whose strongest argument is that **it is derivation 4's own idiom generalised**; **F-2**,
-> **F-3**. *(F-4 is closed: nothing argues for capping slot width on timing grounds.)*
+> **Open for the owner:** *** MAY AN AUTHOR CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE? ***
+> (5.1 found the design answers this both ways, and it decides whether design-for-testability is real
+> here); **A6/1.7**; **F-2 + F-6 together**; the **queue/marker joint-consistency** ruling; **F-3**;
+> **F-5**. *(F-4 closed — nothing argues for capping slot width on timing grounds.)*
 >
 > **The rule that has earned its place five times in one day:** *a guard written, tested around, and
 > never executed.* See `autonomous-working-agreement.md`.
