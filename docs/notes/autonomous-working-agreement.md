@@ -123,6 +123,12 @@ running does not license:
       demonstrates self-consistency and nothing else. The checks here that have an outside authority
       are `compare` + `confirm-roundtrip.ps1` (it has been **through TIA**) and the golden harness
       against a real export; the converter round trip, `diff` and `ir-hash` have none.
+    ➜ *** AND THE CHEAPEST VERSION CHECK THERE IS: COMPARE A WORDING IN THE SOURCE AGAINST THE
+      WORDING THE BINARY ACTUALLY PRINTS. *** Measured 2026-08-13, third instance of a stale binary
+      in one day: the source said `object element`, the running binary printed `root element`, and
+      that established the mismatch **in under a minute** — where a timestamp comparison is only
+      circumstantial and a behavioural test is expensive. **Do it first whenever a capability seems
+      missing**, before concluding the feature was never built.
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.

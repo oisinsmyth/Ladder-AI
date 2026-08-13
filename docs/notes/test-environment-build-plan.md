@@ -2894,6 +2894,62 @@ the p90-keyed one that replaces it, so nothing built against 201 becomes wrong, 
     settling, so the contract asks for a declaration the runner does not enforce. *** A GAP INSIDE A
     RULING IS THE KIND THAT GETS READ AS CLOSED. ***
 
+### 🔴 THE RESTORE PATH HAS NEVER WORKED — found because the way back was tested first (2026-08-13, `c29c5c0`)
+
+Experiment **1.7** was dispatched with the owner present. *** IT STOPPED AT STAGE 0, AND THAT IS THE
+RESULT. *** Before anything was broken, the lane was told to test the way back:
+
+    export-all   ->  126 exported, 0 refused, 0 failed, COMPLETE
+    import-all   ->  0 file(s) would be imported, 126 rejected     (exit 13)
+
+*** NOT ONE FILE OF A COMPLETE RESTORE POINT WAS READABLE BY THE TOOL THAT EXISTS TO PUT IT BACK ***
+— reproduced against a previously-taken restore point **and** a freshly taken one. `import-all` is
+documented in CLAUDE.md as *"BULK RESTORE, the other half of export-all"*, and **it had never once been
+run against real `export-all` output.** Every restore point taken this week was unusable.
+
+  ➜ *** THE RESTORE PATH IS THE ONE THING YOU ONLY EXERCISE WHEN SOMETHING HAS ALREADY GONE WRONG ***
+    — which is exactly why nobody had found it, and exactly why testing it *before* the throw was worth
+    more than the throw. Had 1.7 gone straight to the delegate, this would have been discovered with a
+    half-loaded CPU.
+  ➜ **The fail-closed design worked:** exit 13, every rejection named, Portal never contacted on
+    `--dry-run`. *What failed is that it had never been run.*
+  ➜ **Cause:** `import-all` took a **positional** child of `<Document>` — landing on `<DocumentInfo>` —
+    instead of **locating the `SW.*` object**. Single-file `import` consumed structurally identical
+    exports successfully all day, which is what proved the files were fine.
+
+### 🔧 THE SAME STALE-BINARY CLASS, THREE TIMES IN ONE DAY — and a one-minute test for it
+
+After `compile`'s exit-code fix and `timing`'s mirror-restore, the `import-all` fix was **written,
+correct, and not in the binary**: source `14:47:45`, Release `14:38:32` — *** THE FIX WAS 9m13s NEWER
+THAN THE BINARY BUILT TO CARRY IT. ***
+
+> #### *** THE TELL WAS FREE: THE SOURCE STRING SAID `object element`, THE RUNNING BINARY PRINTED `root element`. ***
+>
+> **A wording difference between source and observed output is a version check that costs one grep** —
+> where a timestamp comparison is only circumstantial and a behavioural test is expensive. It settled
+> the question in under a minute, and it now works in reverse: the source documents *"Does not 'read
+> the root element', which is what this used to do"*, so **seeing `root element` in output again means
+> a stale binary.** Recorded in the working agreement.
+
+  ➜ **The lane declined to rebuild**, correctly at the time: the file was uncommitted and nine minutes
+    old, and rebuilding would have compiled another lane's unfinished work into the binary its own
+    Portal session runs on — *the exact hazard that once put its phase-2 vectors one register off.*
+    Rebuilt by the orchestrator once `c29c5c0` landed, scoped to `OpennessCli.csproj` alone because
+    `DownloadProbe/` was still mid-edit.
+
+**What did land and is verified working:** `sanity-check` now prints `DUPLICATE NUMBERS: 0` **and**
+`scope=station (hardware + program)`. One note so it is not read as a regression: the device line moved
+from `Success (errors=0, warnings=0)` to `Warning (errors=0, warnings=2)` **because station scope now
+includes hardware and surfaces the pre-existing warning — same project, wider scope.**
+
+**Wall-clock, the honest half only:** *** `export-all` OF 126 OBJECTS TAKES 44 SECONDS — SO TAKING A
+RESTORE POINT IS NEVER THE REASON TO SKIP ONE. *** The import+compile half is **unmeasured**, and the
+lane refused to turn a compile-rate extrapolation into a recovery-time figure.
+
+**State: bit-for-bit unchanged.** 84 blocks, fingerprint `aea129c5b9d6837d6aeb2b649b261c89`, identical
+to baseline; rig on the F-1 ordered build, `Running (8)` read from the device. Only read-only
+operations and one `--dry-run`, which never contacts Portal.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
