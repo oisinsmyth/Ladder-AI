@@ -167,6 +167,16 @@ running does not license:
   author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
     ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
       does. A caveat that lives in a lane report has already failed the person it was written for.
+- *** WHEN IDENTITY IS CONTENT-DERIVED, REDUNDANCY IS LOAD-BEARING — AND TIDYING IS THE MOST LIKELY
+  FUTURE DAMAGE. *** Measured 2026-08-13, as a hazard caught before it fired. One ruling wrote *"the
+  **specified** threshold"*; a later ruling made that adjective redundant everywhere. **Deleting it
+  would move a hashed sentence, change its ID, and dangle every citation in two independent vector
+  sets — to buy nothing.** The edit is small, obviously correct-looking, and reversible only by
+  restoring the exact bytes.
+    ➜ **In any artifact whose IDs are hashes of its own text, "it reads better" is not free and must
+      be PRICED.** State the cost in citations before touching a character.
+    ➜ Generalises past hashes: *anywhere a downstream reference is derived from content rather than
+      from a stable key, cosmetic edits are breaking changes wearing a harmless costume.*
 - *** A SIMULTANEITY CLAIM IS SATISFIED BY A SYNCHRONISED ERROR. *** Measured 2026-08-13. Two
   assertions said the alarm and the inhibit outputs *never disagree* — a genuine invariant, correctly
   decomposed into both directions. **An under-scaled preset asserts BOTH outputs early, and both
