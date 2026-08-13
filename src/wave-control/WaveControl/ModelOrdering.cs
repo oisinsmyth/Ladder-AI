@@ -40,6 +40,29 @@ namespace Ladder.Wave
 
         /// <summary>Two slots claim to test the same model. Which result belongs to it is undecidable.</summary>
         TwoSlotsTestTheSameModel = 6,
+
+        /// <summary>
+        /// *** X-I READING (b) WAS USED AND THE STOP-ON-FAILED-WAVE-SET GATE IS NOT ESTABLISHED. ***
+        /// A consumer admitted only because its model is tested earlier in the SAME plan depends on the
+        /// run loop refusing to continue after a failed wave set. Without that gate the consumer's
+        /// results would be produced and BELIEVED after its model failed — a wrong answer that looks
+        /// like a result. Owner's ruling, 2026-08-13: (b) is permitted, but fails closed until the gate
+        /// is real.
+        /// </summary>
+        ReadingBRefusedBecauseTheGateIsNotEstablished = 7,
+    }
+
+    /// <summary>Facts about ordering defects, pinned by a test over the whole enum.</summary>
+    public static class OrderingDefects
+    {
+        /// <summary>
+        /// TRUE for every defect except <see cref="OrderingDefect.None"/>. *** THERE IS NO
+        /// INFORMATIONAL DEFECT, AND THERE MUST NOT BE ONE. *** A finding that is reported and does not
+        /// gate is the "a warning is not a gate" shape, which gets skimmed; pinning this over the whole
+        /// enum means a future member has to be classified deliberately rather than added quietly as an
+        /// advisory.
+        /// </summary>
+        public static bool RefusesThePlan(OrderingDefect defect) => defect != OrderingDefect.None;
     }
 
     /// <summary>One thing wrong with a model ordering.</summary>
@@ -68,17 +91,29 @@ namespace Ladder.Wave
     /// <summary>The ordered wave sets, or the reasons there are none.</summary>
     public sealed class ModelOrderingPlan
     {
+        /// <summary>
+        /// *** X-I's OWN RESIDUAL, CARRIED WHERE A READER OF RESULTS MEETS IT RATHER THAN ONLY IN A
+        /// LANE REPORT. *** Emitted by every plan, ordered or refused.
+        /// </summary>
+        public const string FidelityResidual =
+            "X-I RESIDUAL: passing its own tests makes a model faithful to its SPECIFICATION, NOT TO " +
+            "THE PLANT. The sign error, the unit error, the transposed coefficient are caught; THE " +
+            "PHYSICS NOBODY THOUGHT TO INCLUDE IS NOT, and no amount of model testing will ever catch " +
+            "it. M3/M4's fidelity declaration remains the only defence against it.";
+
         internal ModelOrderingPlan(
             IReadOnlyList<WaveSet> orderedWaveSets,
             IReadOnlyList<OrderingFinding> findings,
             IReadOnlyList<ModelReadinessVerdict> readiness,
             bool restsOnABetweenWaveSetGate,
+            RunLoopGateState gateState,
             string summary)
         {
             OrderedWaveSets = orderedWaveSets;
             Findings = findings;
             Readiness = readiness;
             RestsOnABetweenWaveSetGate = restsOnABetweenWaveSetGate;
+            GateState = gateState;
             Summary = summary;
         }
 
@@ -123,6 +158,13 @@ namespace Ladder.Wave
         /// </remarks>
         public bool RestsOnABetweenWaveSetGate { get; }
 
+        /// <summary>
+        /// The state of the run loop's stop-on-failed-wave-set gate, as checked against the run loop in
+        /// use. Only meaningful when <see cref="RestsOnABetweenWaveSetGate"/> is true — a plan that does
+        /// not use reading (b) does not depend on it, and the gate is not a blanket requirement.
+        /// </summary>
+        public RunLoopGateState GateState { get; }
+
         /// <summary>A sentence describing the outcome.</summary>
         public string Summary { get; }
 
@@ -144,12 +186,18 @@ namespace Ladder.Wave
 
             if (RestsOnABetweenWaveSetGate)
             {
-                lines.Add("  🔴 RESTS ON A BETWEEN-WAVE-SET GATE: at least one consumer is admitted only " +
-                          "because its model is tested EARLIER IN THIS PLAN. Wave sets run sequentially, " +
-                          "so if the model's fails the consumer's runs anyway unless the run loop stops. " +
-                          "The spec supports both readings of X-I rule 2 and describes no such gate — " +
-                          "RAISED, not decided.");
+                lines.Add(GateState == RunLoopGateState.Established
+                    ? "  RESTS ON THE BETWEEN-WAVE-SET GATE, WHICH IS ESTABLISHED: at least one consumer " +
+                      "is admitted only because its model is tested EARLIER IN THIS PLAN (X-I reading b). " +
+                      "That is permitted because the run loop is declared to STOP after a failed wave set " +
+                      "— and the declaration is only as good as whoever supplied it."
+                    : "  🔴 REFUSED — RESTS ON A BETWEEN-WAVE-SET GATE THAT IS " + GateState + ": a " +
+                      "consumer is admitted only because its model is tested earlier in THIS plan, and " +
+                      "wave sets run sequentially, so a failed model wave would not stop it. The results " +
+                      "would be produced and BELIEVED after the model failed.");
             }
+
+            lines.Add("  " + FidelityResidual);
 
             return string.Join(Environment.NewLine, lines.ToArray());
         }
@@ -250,10 +298,21 @@ namespace Ladder.Wave
         /// <param name="plan">A colouring from <see cref="WaveSetAdmission.Admit"/>.</param>
         /// <param name="models">The models, with their CURRENT content hashes.</param>
         /// <param name="results">Model results the caller holds. Null means nobody looked.</param>
+        /// <param name="gate">
+        /// The run loop's stop-on-failed-wave-set declaration. *** NULL REFUSES X-I READING (b). ***
+        /// Owner's ruling 2026-08-13: (b) is permitted, but only once the gate demonstrably exists, and
+        /// absence is the refusal. A plan that does not use (b) is unaffected by this.
+        /// </param>
+        /// <param name="runLoopVersionInUse">
+        /// Which run loop will execute this plan, compared against the gate's declaration. A gate
+        /// declared for a different loop is STALE, which is a different fact from having none.
+        /// </param>
         public static ModelOrderingPlan Order(
             WaveSetPlan plan,
             IEnumerable<ModelUnderTest>? models,
-            IEnumerable<ModelTestResult>? results)
+            IEnumerable<ModelTestResult>? results,
+            StopOnFailedWaveSetGate? gate = null,
+            string? runLoopVersionInUse = null)
         {
             if (plan == null)
             {
@@ -275,6 +334,7 @@ namespace Ladder.Wave
                     },
                     new ModelReadinessVerdict[0],
                     false,
+                    RunLoopGateState.NotDeclared,
                     "Nothing to order.");
             }
 
@@ -349,6 +409,7 @@ namespace Ladder.Wave
 
             var readiness = new List<ModelReadinessVerdict>();
             var restsOnGate = false;
+            var gateState = gate == null ? RunLoopGateState.NotDeclared : gate.CheckAgainst(runLoopVersionInUse);
 
             foreach (var modelName in slots
                 .SelectMany(s => s.ModelInstances)
@@ -366,10 +427,16 @@ namespace Ladder.Wave
                     continue;
                 }
 
-                var verdict = ModelReadinessCheck.Check(
-                    model,
-                    results,
-                    testedEarlierInThisPlan: modelSlotColour.ContainsKey(modelName));
+                // *** READING (a) IS TRIED FIRST, AND THAT PRECEDENCE MATTERS. *** A model with a
+                // CURRENT PASSING RESULT satisfies X-I rule 2 outright; an in-plan model slot is then
+                // just re-testing it, and the consumer does not rest on the between-wave-set gate at
+                // all. Checking the plan first would refuse a submission that had both — over-refusing,
+                // and making the gate bite on plans that do not need it. Found by the tests.
+                var byPriorResult = ModelReadinessCheck.Check(model, results);
+
+                var verdict = byPriorResult.Admits || !modelSlotColour.ContainsKey(modelName)
+                    ? byPriorResult
+                    : ModelReadinessCheck.Check(model, results, testedEarlierInThisPlan: true);
 
                 readiness.Add(verdict);
 
@@ -387,6 +454,24 @@ namespace Ladder.Wave
                 }
             }
 
+            // *** THE RULING, APPLIED: (b) FAILS CLOSED UNTIL THE GATE IS REAL. *** Only a plan that
+            // actually uses reading (b) is held to it — the gate is not a blanket requirement, and
+            // making it one would refuse every ordinary plan for a dependency it does not have.
+            if (restsOnGate && !RunLoopGateStates.Establishes(gateState))
+            {
+                findings.Add(new OrderingFinding(
+                    OrderingDefect.ReadingBRefusedBecauseTheGateIsNotEstablished,
+                    gateState.ToString(),
+                    "A consumer is admitted only because its model is tested EARLIER IN THIS PLAN (X-I " +
+                    "reading b), and the run loop's stop-on-failed-wave-set gate is " + gateState +
+                    ". Wave sets run sequentially, so a failed model wave would NOT stop the consumer's " +
+                    "— its results would be produced and BELIEVED after its model failed, which is a " +
+                    "wrong answer that looks like a result rather than a missing check. The gate is the " +
+                    "RUN LOOP's requirement, not admission's: admission can only refuse to admit, it " +
+                    "cannot stop a run already under way. Submit the model in an earlier wave (reading " +
+                    "a), or establish the gate."));
+            }
+
             if (findings.Count > 0)
             {
                 return new ModelOrderingPlan(
@@ -394,6 +479,7 @@ namespace Ladder.Wave
                     findings,
                     readiness,
                     restsOnGate,
+                    gateState,
                     "The wave sets cannot be ordered as they stand.");
             }
 
@@ -402,7 +488,7 @@ namespace Ladder.Wave
 
             if (findings.Count > 0)
             {
-                return new ModelOrderingPlan(new WaveSet[0], findings, readiness, restsOnGate, "No run order exists.");
+                return new ModelOrderingPlan(new WaveSet[0], findings, readiness, restsOnGate, gateState, "No run order exists.");
             }
 
             findings.AddRange(Verify(ordered, slots));
@@ -414,6 +500,7 @@ namespace Ladder.Wave
                     findings,
                     readiness,
                     restsOnGate,
+                    gateState,
                     "The order produced does not satisfy its own inputs. This is a defect in the orderer.");
             }
 
@@ -422,10 +509,8 @@ namespace Ladder.Wave
                 findings,
                 readiness,
                 restsOnGate,
-                "Every model slot runs before the slots depending on it. Note X-I's own residual: " +
-                "passing its own tests makes a model faithful to its SPECIFICATION, not to the plant — " +
-                "the physics nobody thought to include is not catchable this way, and M3/M4's fidelity " +
-                "declaration remains the only defence against it.");
+                gateState,
+                "Every model slot runs before the slots depending on it. " + ModelOrderingPlan.FidelityResidual);
         }
 
         /// <summary>

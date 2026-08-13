@@ -25,6 +25,15 @@ namespace Ladder.Wave.Tests
         private static ModelTestResult Result(bool passed = true, string hash = ModelHash, string name = "M_Vessel") =>
             new ModelTestResult(name, passed, hash, "wave 2026-08-13-001");
 
+        private const string RunLoop = "Harness.Loop 2026-08-13";
+
+        private static StopOnFailedWaveSetGate Gate(string forVersion = RunLoop) =>
+            StopOnFailedWaveSetGate.DeclaredFor(
+                forVersion,
+                "harness lane",
+                "the loop refuses to start wave set n+1 after wave set n reported a failure; covered by " +
+                "a test in Harness.Loop");
+
         private static WaveSetPlan Plan(IEnumerable<TestSlot> slots)
         {
             var list = slots.ToArray();
@@ -405,21 +414,117 @@ namespace Ladder.Wave.Tests
         // =============================================================================================
 
         [Fact]
-        public void A_consumer_admitted_only_because_its_model_is_tested_in_THIS_plan_is_flagged()
+        public void Reading_b_is_REFUSED_when_the_stop_on_failed_wave_set_gate_is_not_established()
         {
-            // *** X-I RULE 2 SUPPORTS TWO READINGS AND THEY DIFFER MATERIALLY. *** "Must pass before any
-            // slot that uses it is ADMITTED" reads as: a passing result must already exist. "Model slots
-            // run in an EARLIER wave set" reads as: they may be submitted together. The second has a
-            // hole — wave sets run sequentially, so a failed model wave does not stop the consumer's
-            // unless the run loop refuses to continue, and nothing in the spec describes that gate.
+            // *** OWNER'S RULING 2026-08-13, AND THIS TEST REPLACES ONE THAT ENCODED THE PRE-RULING
+            // BEHAVIOUR. *** It used to assert that a consumer relying on an in-plan model was ORDERED
+            // and merely flagged. (b) is now permitted only once the gate demonstrably exists: without
+            // it the consumer's results would be produced and BELIEVED after its model failed — a wrong
+            // answer that looks like a result, not a missing check.
             var slots = new[] { ModelSlot("S_model", "M_Vessel"), Consumer("S_block", "M_Vessel") };
 
             var ordering = ModelOrdering.Order(Plan(slots), new[] { Model() }, new ModelTestResult[0]);
 
+            Assert.False(ordering.Ordered);
+            Assert.True(ordering.RestsOnABetweenWaveSetGate);
+            Assert.Equal(RunLoopGateState.NotDeclared, ordering.GateState);
+            Assert.Contains(ordering.Findings, f => f.Defect == OrderingDefect.ReadingBRefusedBecauseTheGateIsNotEstablished);
+            Assert.Contains(ordering.Readiness, r => r.Readiness == ModelReadiness.TestedEarlierInThisPlan);
+        }
+
+        [Fact]
+        public void Reading_b_is_ADMITTED_once_the_gate_is_established()
+        {
+            // *** THE DID-NOT-RUN CASE FOR THE REFUSAL ITSELF. *** Without this the refusal could be
+            // vacuously always-on and no test would notice.
+            var slots = new[] { ModelSlot("S_model", "M_Vessel"), Consumer("S_block", "M_Vessel") };
+
+            var ordering = ModelOrdering.Order(
+                Plan(slots), new[] { Model() }, new ModelTestResult[0], Gate(), RunLoop);
+
             Assert.True(ordering.Ordered);
             Assert.True(ordering.RestsOnABetweenWaveSetGate);
-            Assert.Contains("RESTS ON A BETWEEN-WAVE-SET GATE", ordering.Describe(), StringComparison.Ordinal);
-            Assert.Contains(ordering.Readiness, r => r.Readiness == ModelReadiness.TestedEarlierInThisPlan);
+            Assert.Equal(RunLoopGateState.Established, ordering.GateState);
+            Assert.Contains(ordering.OrderedWaveSets[0].Slots, x => x.Id == "S_model");
+            Assert.Contains("only as good as whoever supplied it", ordering.Describe(), StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void A_gate_declared_for_a_DIFFERENT_run_loop_is_stale_and_still_refuses()
+        {
+            // Two facts, not one: "nobody declared it" and "somebody did the work once and the loop has
+            // moved on". The second is the more dangerous, because it reads as done.
+            var slots = new[] { ModelSlot("S_model", "M_Vessel"), Consumer("S_block", "M_Vessel") };
+
+            var ordering = ModelOrdering.Order(
+                Plan(slots), new[] { Model() }, new ModelTestResult[0], Gate("Harness.Loop 2026-01-01"), RunLoop);
+
+            Assert.False(ordering.Ordered);
+            Assert.Equal(RunLoopGateState.DeclaredForADifferentRunLoop, ordering.GateState);
+        }
+
+        [Fact]
+        public void A_gate_with_no_run_loop_in_use_to_compare_against_is_not_established()
+        {
+            // An unchecked stamp is not a stamp.
+            var slots = new[] { ModelSlot("S_model", "M_Vessel"), Consumer("S_block", "M_Vessel") };
+
+            var ordering = ModelOrdering.Order(Plan(slots), new[] { Model() }, new ModelTestResult[0], Gate(), null);
+
+            Assert.False(ordering.Ordered);
+            Assert.Equal(RunLoopGateState.NotDeclared, ordering.GateState);
+        }
+
+        [Fact]
+        public void A_plan_that_does_not_use_reading_b_is_unaffected_by_the_gate()
+        {
+            // *** THE GATE IS NOT A BLANKET REQUIREMENT. *** Making it one would refuse every ordinary
+            // plan for a dependency it does not have — and a check that refuses everything gets removed.
+            var ordering = ModelOrdering.Order(
+                Plan(new[] { Consumer("S_block", "M_Vessel") }), new[] { Model() }, new[] { Result() });
+
+            Assert.True(ordering.Ordered);
+            Assert.False(ordering.RestsOnABetweenWaveSetGate);
+            Assert.DoesNotContain(ordering.Findings, f => f.Defect == OrderingDefect.ReadingBRefusedBecauseTheGateIsNotEstablished);
+        }
+
+        [Fact]
+        public void A_gate_declaration_must_name_a_loop_an_author_and_how_it_is_known()
+        {
+            // It is the only thing standing between reading (b) and a wrong answer that looks like a
+            // result, so a declaration nobody had to justify is not one.
+            Assert.Throws<ArgumentException>(() => StopOnFailedWaveSetGate.DeclaredFor("  ", "a", "a long enough evidence string"));
+            Assert.Throws<ArgumentException>(() => StopOnFailedWaveSetGate.DeclaredFor("v", "  ", "a long enough evidence string"));
+            Assert.Throws<ArgumentException>(() => StopOnFailedWaveSetGate.DeclaredFor("v", "a", "yes"));
+        }
+
+        [Fact]
+        public void Every_run_loop_gate_state_is_in_exactly_one_bucket()
+        {
+            var establishes = new[] { RunLoopGateState.Established };
+            var refuses = new[] { RunLoopGateState.NotDeclared, RunLoopGateState.DeclaredForADifferentRunLoop };
+
+            Assert.Equal(
+                Enum.GetValues(typeof(RunLoopGateState)).Cast<RunLoopGateState>().OrderBy(g => (int)g).ToArray(),
+                establishes.Concat(refuses).OrderBy(g => (int)g).ToArray());
+
+            Assert.Equal(RunLoopGateState.NotDeclared, default(RunLoopGateState));
+            Assert.False(RunLoopGateStates.Establishes(default(RunLoopGateState)));
+
+            foreach (var state in refuses)
+            {
+                Assert.True(RunLoopGateStates.Refuses(state));
+            }
+        }
+
+        [Fact]
+        public void No_ordering_defect_is_merely_informational()
+        {
+            // A finding that is reported and does not gate is the "a warning is not a gate" shape.
+            foreach (var defect in Enum.GetValues(typeof(OrderingDefect)).Cast<OrderingDefect>())
+            {
+                Assert.Equal(defect != OrderingDefect.None, OrderingDefects.RefusesThePlan(defect));
+            }
         }
 
         [Fact]
@@ -446,8 +551,16 @@ namespace Ladder.Wave.Tests
                 new[] { Model() },
                 new[] { Result() });
 
-            Assert.Contains("faithful to its SPECIFICATION, not to the plant", ordering.Summary, StringComparison.Ordinal);
-            Assert.Contains("fidelity declaration remains the only defence", ordering.Summary, StringComparison.Ordinal);
+            Assert.Contains("faithful to its SPECIFICATION, NOT TO THE PLANT", ordering.Summary, StringComparison.Ordinal);
+            Assert.Contains("PHYSICS NOBODY THOUGHT TO INCLUDE IS NOT", ordering.Summary, StringComparison.Ordinal);
+
+            // *** AND IT REACHES A READER OF RESULTS, NOT ONLY A LANE REPORT. *** Every plan emits it,
+            // ordered or refused, so a caller printing only the outcome cannot drop it.
+            Assert.Contains(ModelOrderingPlan.FidelityResidual, ordering.Describe(), StringComparison.Ordinal);
+
+            var refused = ModelOrdering.Order(Plan(new[] { Consumer("S_x", "M_Absent") }), null, null);
+            Assert.False(refused.Ordered);
+            Assert.Contains(ModelOrderingPlan.FidelityResidual, refused.Describe(), StringComparison.Ordinal);
         }
     }
 }
