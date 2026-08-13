@@ -167,6 +167,18 @@ running does not license:
   author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
     ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
       does. A caveat that lives in a lane report has already failed the person it was written for.
+- *** A SIMULTANEITY CLAIM IS SATISFIED BY A SYNCHRONISED ERROR. *** Measured 2026-08-13. Two
+  assertions said the alarm and the inhibit outputs *never disagree* — a genuine invariant, correctly
+  decomposed into both directions. **An under-scaled preset asserts BOTH outputs early, and both
+  assertions stay true, because the outputs still agree.** The relation held perfectly while the
+  behaviour was wrong.
+    ➜ *** A RELATIONAL ASSERTION IS STRUCTURALLY BLIND TO ANY ERROR ITS OPERANDS SHARE *** — the same
+    shape as *a check that shares its subject's blind spot*, but arrived at from inside a
+    correctly-written requirement rather than from a buggy checker. **Nothing about the decomposition
+    was wrong; the claim simply does not constrain the thing that moved.**
+    ➜ So whenever a clause asserts a relation between signals, **ask separately what pins each
+      operand to something outside the pair.** If the answer is nothing, the relation is load-bearing
+      for consistency and load-bearing for *nothing else*, and it will read as coverage.
 - *** A NARROWING REPAIR: THE EDIT LEAST LIKELY TO BE RE-READ FOR WHAT IT DROPPED. *** Measured
   2026-08-13. A ruling correctly removed a contradiction from a requirement clause — **and silently
   removed a claim along with it.** The clause was titled *"No alarm below threshold"*; the reworded
