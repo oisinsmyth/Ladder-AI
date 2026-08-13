@@ -2372,6 +2372,69 @@ FILE, because a green from a check never shown to go red is not evidence: ***
   ➜ **Left for whoever lands a verifier:** the gate table's row and the `Bash(...)` entry in
     `allowed-tools` **must change together**, or the skill names a command it cannot run.
 
+### ✅ THE ASSERTION ENUMERATION IS DEFINED — and it corrected §7 (2026-08-13, `9dda315`)
+
+`docs/notes/assertion-enumeration.md`. It was blocking: the 5.1 contract requires `Basis` to cite an
+assertion ID *"drawn from the spec-derived enumeration"*, and **the enumeration had no source file** —
+so §3's decorrelating argument rested on **citing into something unreadable**.
+
+> *** AN ASSERTION IS THE SMALLEST STATEMENT ABOUT OBSERVABLE BEHAVIOUR THAT CAN BE FALSIFIED ON ITS
+> OWN *** — there exists a possible defect making it false while every other assertion of the clause
+> stays true.
+
+**Deliberately a test about DEFECTS rather than grammar**, because that rules out *both* failure
+directions with one criterion: too coarse (*"opens when X and closes when Y"* — a wrong contact
+falsifies half of it) and too fine (*"the coil energises"* versus *"stays energised"* — no defect
+separates them).
+
+Two canonical forms — `WHEN <trigger> THEN <response> [WITHIN <bound>]` and `NEVER <forbidden state>`.
+*** THE TEMPLATE IS THE LOAD-BEARING PART: it makes the decomposition rules MECHANICALLY VISIBLE, so
+anything that will not fit the shape is an undecomposed clause *** and most of the hard judgement
+becomes a check. Five rules: split on trigger (**including the negative case, the one most often
+lost**), split on response, **not** on qualifiers (a timing bound *qualifies* a response — "opens
+within 2 s" is one assertion), split on instance, and **never on implementation**.
+
+#### Why two enumerators would agree — answered honestly
+
+*** "SOMETIMES THEY WON'T, AND I DID NOT BUILD THE DESIGN TO DEPEND ON IT." *** The rules are mostly
+syntactic and the falsifiability test is a *procedure* rather than a taste — but the mechanism that
+carries the weight is that **disagreement is made VISIBLE rather than prevented.** The vector author is
+already a second reader by construction (D6), so *** A CITATION THEY CANNOT MAKE IS A DECOMPOSITION
+DISPUTE RAISED AS AN EVENT *** — never resolved by writing prose into `Basis`.
+
+#### ID stability, and the §7 correction it forced
+
+`REQ-014:3f9a1c` — **clause ID plus a content hash, nothing positional.** Inserting a clause above
+shifts nothing; inserting an assertion shifts no sibling. **Editing the text CHANGES the ID
+deliberately**: the old one dangles and prior citations are flagged stale, because *a citation that
+silently survives a rewording was written against words nobody re-read.*
+
+  ➜ *** THIS CORRECTED §7. *** Its sticky key is `(clause hash, assertion index, text hash)` — **the
+    middle term is positional**, so an insertion at index 1 shifts every later index and *** A STORED
+    CLASSIFICATION SILENTLY COMES TO NAME A DIFFERENT ASSERTION. *** Narrower than it looks, since §7
+    uses that key for *stickiness* rather than citation — but **the two must not key on different
+    things**, and that is now recorded in §7 itself.
+
+#### What stops the coverage number being inflated
+
+*** `UNCLASSIFIED = 0` IS ENFORCEABLE BECAUSE IT IS NEVER WRITABLE *** — it is the computed set
+difference, so a forgotten assertion produces **a failed gate rather than a missing tick**. The same
+shape as phase 2's `AddressesExamined`.
+
+Seven inflation routes are tabled with closures **and a residual-risk column** — closure was not
+claimed where there isn't any. Two close cleanly: **a bare percentage is not an available output**
+(all four bucket counts and the oldest deferral age travel with any figure), and padding *lowers* the
+fraction so has no incentive. **The structural reason the rest hold:** coverage is two spec-side counts
+over one vector-side count, *** SO ONLY THE NUMERATOR IS UNDER THE TEST AUTHOR'S CONTROL AND EVERY
+ATTACK MUST ROUTE THROUGH A SECOND PARTY. ***
+
+> #### 🚩 OWNER'S, AND IT SHOULD BE RULED BEFORE THE SKILL'S GATES ARE BUILT
+>
+> §7 says the enumeration is spec-side and complete before any vector exists. *** IT NEVER SAYS BY
+> WHOM. *** And if it is the **block's author**, then **D6's independence is lost at the denominator**
+> — which undoes most of what the enumeration is for. Open alongside STARTUP's bucket status and where
+> a decomposition dispute is recorded.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
