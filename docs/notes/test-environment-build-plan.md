@@ -3001,6 +3001,65 @@ where it occurs: completing a wave writes `wave=none` instead of deleting the fi
     file* — is **argued from Win32 semantics, not demonstrated**. A real demonstration needs a reader
     racing a save, which would be flaky as a unit test.
 
+### ✅ THE ASSERTION ENUMERATION HAS A PRODUCER — agent AND skill (2026-08-13, `e114742`)
+
+The owner ruled that *who* enumerates *"absolutely points at another independent agent and potentially
+a new skill."* Both were built, and the reason **both** were needed is the finding:
+
+> *** A SKILL RUNS IN THE CALLER'S CONTEXT. ONE INVOKED BY THE BLOCK'S AUTHOR ENUMERATES INSIDE THE
+> BLOCK AUTHOR'S REASONING — EXACTLY THE CORRELATED CHECK. INDEPENDENCE IS A PROPERTY OF *WHO RUNS
+> IT*, NOT OF WHAT IT SAYS. ***
+
+So: **`assertion-enumerator`** (the agent — fresh context, which is the only independence mechanism
+this harness actually offers) plus **`enumerate-assertions`** (the procedure).
+
+**How independence is enforced — described honestly as *isolated, not enforced*:**
+
+  - **Structural:** fresh context; *** NO `Bash` IN THE AGENT'S TOOLS *** — it cannot run the converter
+    over a block, take a digest, or read a compile log; and **R5 re-cast as a CONTAMINATION DETECTOR**
+    — implementation vocabulary in assertion text is *the tell that someone read the code*, and it is
+    scannable.
+  - **Instruction-only:** "don't open `ir/`", and the declared file list. **`Read` cannot be
+    path-fenced** by any frontmatter available here.
+
+> #### 🔴 ONE FIELD AND ONE COMPARISON ARE MISSING, AND WITHOUT THEM THE RULING IS UNENFORCEABLE
+>
+> `SubmissionGate.Check` takes a `blockAuthor` **and nothing else**. *** NOTHING RECORDS THE
+> ENUMERATOR'S IDENTITY, SO NO GATE CAN REFUSE AN ENUMERATION WRITTEN BY THE BLOCK'S AUTHOR. *** The
+> artifact records `enumerator:` anyway — **a gate cannot compare identities nobody wrote down.**
+>
+> Fix: add `Enumerator` to `SubmissionDocument`, compare against `BlockAuthor` and **every**
+> `VectorDocument.Author`, refuse on match. `src/harness/`, so another lane's.
+>
+> ➜ **And the limit beneath it is the same G4 gap:** identity comparison is only as strong as
+>   identity, and *** THE GATE'S OWN CODE ALREADY SAYS "WHAT MAKES TWO AGENTS DIFFERENT IS
+>   UNDEFINED." ***
+
+**"The code had moved."** `Harness.Gate/GateCli.cs` **now exists** — it did not when the 5.1 skill was
+written and reported no runnable gate. *** THAT SKILL'S OWN "VERIFY THE VERIFIER" STEP PAID FOR ITSELF
+INSIDE A DAY ***, and the new skill repeats it with this as the worked example.
+
+**Gap #2 confirmed in code:** `VectorDocument.AssertionForm` is **declared by the vector and never
+looked up**, so citing a `NEVER` while declaring `When` takes the permissive path — F-3 is enforced
+against the claim, not the assertion.
+
+**The artifact is deliberately richer than what consumes it.** The gate reads flat strings, which
+**drop the form and the response signal — the two fields that would close those rows** — so the skill
+emits a rich enumeration *plus* the flat projection. `split_defect` is an addition worth keeping:
+*** A TIE-BREAK IS DECIDED BY NAMING THE DEFECT THAT BREAKS ONE HALF AND NOT THE OTHER, so recording it
+lets the next enumerator CHECK the work instead of RE-ARGUING it. ***
+
+  ➜ **Disputes are filed with three things the author would have written anyway** — and *** ADDING AN
+    ASSERTION BECAUSE A VECTOR WANTED IT IS FORBIDDEN: that would define the denominator by what
+    somebody wrote a vector for. ***
+  ➜ **A precondition checked rather than assumed:** §3.2 needs stable clause IDs;
+    `gen/<project>/requirements.md` uses `### REQ-nnn`, so it holds — and the skill **re-checks per
+    run and outputs "not enumerable" rather than a number** where it fails.
+  ➜ **Frontmatter verified for both files** — CRLF-converted first, parsed (skill 800, agent 704, all
+    16 ok), and **negative-tested against the real files**: unquoted `: ` → parse failure, unquoted
+    ` #` → 19 characters silently lost. *** AND CONFIRMED LIVE: the skill registered with its full
+    description intact, which is the stronger check and the one mode 2 would have silently failed. ***
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
