@@ -39,9 +39,9 @@ reading, to be re-checked and not believed:
 | what | where | state |
 |---|---|---|
 | the gate | `Harness.Gate/GateCli.cs`, `Harness.Results/SubmissionGate.cs` | **runnable** |
-| what it reads as the enumeration | `EnumerationDocument { Clauses: string[], Assertions: string[] }` | **two flat string lists — no form, no signal** |
-| assertion form | `AssertionEnumeration.Of(..., forms, ...)` exists; `VectorDocument.AssertionForm` still declared by the vector | **library ready, WIRE FORMAT NOT** — `EnumerationDocument` has no `forms`, so the cross-check cannot fire from the CLI |
-| enumerator identity | `AssertionEnumeration.Enumerator` + `SubmissionGate.EnumeratorIndependence` | **gate EXISTS** *(added 2026-08-13, after this skill first said it did not)* — but `EnumerationDocument` has no `enumerator` field and `GateCli` calls `Of(...)` with two arguments, **so from the CLI it always reports `NotChecked`** |
+| what it reads as the enumeration | `EnumerationDocument { Clauses, Assertions, Forms, Enumerator }` | **`Forms` and `Enumerator` LANDED 2026-08-13** — this row said "two flat string lists" for a few hours and was already wrong. Still **no response signal** |
+| assertion form | gate **`3e assertion form authority`** | **LIVE.** The ENUMERATION is now the authority and the vector's declaration is checked against it. Measured on the built exe: a vector declaring the *wrong* form and one declaring *no* form are **both REFUSED** |
+| enumerator identity | gate **`3d enumerator independence`** | **LIVE, AND REACHABLE.** Measured: `enumerator` = the block's author is **REFUSED**; `"AGENT-B "` against a vector author `agent-b` is **REFUSED** too (the comparison is normalised, so case and trailing space do not slip past); absent is **NOT CHECKED**, never a pass |
 
 **0b. Are the clause IDs stable?** `REQ-014` is an identifier; *"§3.2, fourth paragraph"* is a
 position. If the register addresses clauses positionally, **stop and report "not enumerable"** — the
@@ -129,13 +129,15 @@ deliberately — folding it risks merging two distinct signal names.)*
 
 ## Step 3 — emit the artifact
 
-Write the **full enumeration** as the source of truth, and derive the flat projection the gate reads
-today. Both, because the gate's `EnumerationDocument` is two string lists and would otherwise silently
-discard the form and the signal — the two fields that close real gaps (see Step 5).
+Write the **full enumeration** as the source of truth, and derive the submission block the gate reads.
+***EMIT `enumerator` AND `forms`*** — as of 2026-08-13 `EnumerationDocument` carries both, and gates
+`3d` and `3e` report **NOT CHECKED** without them. Omitting a field is not a smaller submission; it is
+an unjudged one. The response signal is the one field the wire still cannot carry, so keep it in the
+source of truth for the day it can.
 
 ```yaml
 # enumeration source of truth
-enumerator: <agent identity>          # recorded even though nothing compares it yet - see Step 5
+enumerator: <agent identity>          # GATE 3d COMPARES THIS - normalised, so case and trailing space do not slip past
 register: gen/<project>/requirements.md
 clauses:
   REQ-014:
@@ -212,12 +214,12 @@ such) · ***NOT CHECKED*** (no verifier — fails closed, not a pass).
 | IDs unique per clause; identical normalisations are a duplicate | set | **CHECKED** by you |
 | citation names an ID in the enumeration | `SubmissionGate` | **CHECKED** — runnable |
 | citation is not in display-ordinal form | shape | **CHECKED** by you |
-| cited assertion's response signal appears in the vector's `Expectations` | set-difference | ***NOT CHECKED*** — the gate's enumeration is flat strings with no signal |
-| **declared `AssertionForm` matches the enumerated form** | `AssertionEnumeration` accepts `forms` | ***NOT CHECKED FROM THE CLI*** — `EnumerationDocument` carries no `forms`, so the vector's own declaration still stands unopposed and citing a `NEVER` while declaring `When` takes the permissive path |
+| cited assertion's response signal appears in the vector's `Expectations` | set-difference | ***NOT CHECKED*** — `EnumerationDocument` gained `Forms` and `Enumerator` but still carries no response signal. **The last of the three fields, and now the only one** |
+| **declared `AssertionForm` matches the enumerated form** | gate `3e`, against `enumeration.forms` | **CHECKED** *(NOT CHECKED if you omit `forms` — so EMIT IT)*. ***`AssertionForm.Unstated` is now the zero value***: it was `When = 0`, which handed every author who omitted the field the permissive form. A dropped form now fails the same comparison as a wrong one |
 | every assertion in exactly one bucket; `UNCLASSIFIED` = 0 | set difference | ***NOT CHECKED*** — no classification artifact exists |
 | enumeration non-empty | *empty is not clean* | **CHECKED** — the gate refuses an empty enumeration |
 | bucket assigner ≠ block author ≠ vector author | recorded identity | ***NOT CHECKED*** |
-| **enumerator ≠ block author ≠ vector author** | `SubmissionGate.EnumeratorIndependence` — **and it refuses an unrecorded identity rather than passing it** | **gate CHECKED, but ***NOT REACHABLE FROM THE CLI***: no `enumerator` field on the wire, so it always reports `NotChecked`. **Record `enumerator:` anyway** — the day the field lands, every artifact that carried it is already gated |
+| **enumerator ≠ block author ≠ vector author** | gate `3d`, against `enumeration.enumerator` | **CHECKED** *(NOT CHECKED if absent — a property of the enumeration a vector resubmission cannot fix)*. This is the ruling that made you a third party, now mechanical: **emit `enumerator:` on every enumeration** |
 | R5: no implementation vocabulary in assertion text | keyword scan | **CHECKED** by you, against what you can see |
 | decomposition count differs from last time → event | compare | ***NOT CHECKED*** — no stored prior enumeration |
 
@@ -262,14 +264,17 @@ assertions per clause: <n> (min/max/outliers). No corpus norm exists yet - repor
 
 ## What I had to guess — raise these, do not resolve them quietly
 
-1. **The gate's enumeration is two flat string lists.** `EnumerationDocument { Clauses, Assertions }`
-   carries no form, no response signal, no supersedes link. So the artifact above is richer than
-   anything consumes, and I chose to emit both it and the projection. **Whether the gate should learn
-   to read the richer form is the fix for two of the NOT CHECKED rows** and is not my call.
-2. ***Nothing records the enumerator's identity, so independence is isolated but not enforced.***
-   `SubmissionGate.Check` takes a block author only. One field on the submission plus one comparison
-   would close it — see the lane report.
-3. **`AssertionForm` is declared by the vector, not looked up.** That is F-3's hole: cite a `NEVER`,
+1. ***CLOSED 2026-08-13.*** This read "the gate's enumeration is two flat string lists ... whether the
+   gate should learn to read the richer form is not my call". It learned: `EnumerationDocument` now
+   carries `Forms` and `Enumerator`, and gates `3d`/`3e` are live. **The response signal is the one
+   field still not on the wire**, so the set-difference of attack 5 remains NOT CHECKED.
+2. ***CLOSED 2026-08-13.*** This read "nothing records the enumerator's identity, so independence is
+   isolated but not enforced". It is now recorded and compared - an enumerator equal to the block's
+   author, or to any vector's author, is **REFUSED**; absent is **NOT CHECKED**, never a pass.
+3. ***CLOSED 2026-08-13*** - and the fix carried a lesson worth more than the gate. `AssertionForm`'s
+   zero value was `When`, so an omitted field was handed the permissive form: F-3's hole, reappearing
+   one layer up in the wire. It is now `Unstated = 0`, making `default(...)` unusable, so **a dropped
+   form fails the same comparison as a wrong one**. The original wording follows: cite a `NEVER`,
    declare `When`, take the permissive path. Closing it needs the form to live in the enumeration.
 4. **STARTUP: fifth bucket or routing tag?** The definition proposes a scheduling attribute so
    "exactly one bucket" survives; §7 reads as a fifth bucket. Unconfirmed. Treated as an attribute.

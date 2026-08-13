@@ -75,6 +75,8 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 3 | **basis — clause** | resolves to written text | `Admissibility` against `AssertionEnumeration`, populated from the submission's `enumeration` block | **CHECKED** |
 | 3b | **basis — assertion** | ID drawn from the spec-derived enumeration, never free text | same. An empty enumeration is a **refusal** | **CHECKED** |
 | 3c | *is the assertion a faithful reading of the clause?* | — | **nothing, ever** | **JUDGEMENT** |
+| **3d** | **enumerator independence** | the enumeration's author ≠ the block's author and ≠ any vector's author — otherwise D6 is lost **at the denominator** and citing into it buys nothing | `AgentIdentity`, **normalised** — measured: `"AGENT-B "` against a vector author `agent-b` is **REFUSED**, so a case or trailing-space variant does not slip past | **CHECKED** *(NOT CHECKED without `enumeration.enumerator`)* |
+| **3e** | **assertion form authority** | the vector's declared `assertionForm` must match the form the **enumeration** records for the assertion it cites | `AssertionEnumeration` — the enumeration is the authority, so the vector can no longer declare its own form and take the permissive path | **CHECKED** *(NOT CHECKED without `enumeration.forms`)* |
 | 4 | **fidelity (M4)** | asserted behaviours ⊆ the model's `Represents` | `Admissibility` — set difference | **CHECKED** |
 | 5 | **observability** | mode valid; signal in the map; window ≥ §12a derivation 1's floor **at the run-time `comp`**; declared before the generating download | ***`ObservabilityCheck` — A COMPUTATION.*** It was a caller-supplied `bool`; it is now derived from the vector's declared nature+mode, what the MAP provides, and the floor `harness-gate` computes from the wave set | **CHECKED** |
 | 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
@@ -98,6 +100,31 @@ cannot make.
 **`exit 2` is its own code and never 0.** An empty submission, an unreadable document or a mode nothing
 implements is *nothing examined*, and a gate that exits 0 on those is the purest form of the failure
 this skill exists to prevent.
+
+### An absent field is decided per case, and never defaulted
+
+***"THE FIELD WAS ABSENT" MUST NOT QUIETLY BECOME "THE CHECK PASSED" — NOR AUTOMATICALLY "REFUSED".***
+The two are different facts and the gate distinguishes them. Measured on the built exe:
+
+| what is absent | outcome | why that one |
+|---|---|---|
+| `enumeration.enumerator` | ***NOT CHECKED*** | a property of the **enumeration**, which a resubmission of the *vector* cannot fix. Reporting it refused would send an author to edit the wrong artifact |
+| `enumeration.forms` | ***NOT CHECKED*** | same — the flat projection simply carries no forms to be the authority |
+| a vector's `assertionForm` (i.e. `Unstated`) | ***REFUSED*** | the vector had one field to fill and left it |
+| a form for the **cited** assertion, or `Unstated` on either side | ***REFUSED*** | the comparison cannot be made, and an uncomparable form is not a passing one |
+
+> 🔴 ***AND THIS IS WHY `AssertionForm.Unstated` IS THE ZERO VALUE.*** It used to be `When = 0`, so an
+> omitted field was silently handed **the permissive form** — the exact hole 3e exists to close,
+> reappearing one layer up in the wire format. Making the default *unusable* means ***a dropped form
+> fails the same comparison as a wrong one***, which is the only arrangement where "the field was
+> absent" cannot quietly become "the field said the convenient thing". Verified both ways on the exe:
+> a vector declaring **no** form and a vector declaring the **wrong** form are both `REFUSED` at 3e.
+>
+> **So if you tell an author to declare a form, tell them what happens when they do not.** It is not
+> a lint warning; the submission does not proceed.
+
+*The same shape is worth recognising anywhere a default is chosen: `default(T)` on an enum is whatever
+sits at zero, so putting a permissive value there hands it to everyone who omitted the field.*
 
 ### What this means for a report you write today
 
