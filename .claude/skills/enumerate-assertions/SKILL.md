@@ -40,8 +40,8 @@ reading, to be re-checked and not believed:
 |---|---|---|
 | the gate | `Harness.Gate/GateCli.cs`, `Harness.Results/SubmissionGate.cs` | **runnable** |
 | what it reads as the enumeration | `EnumerationDocument { Clauses: string[], Assertions: string[] }` | **two flat string lists — no form, no signal** |
-| assertion form | `VectorDocument.AssertionForm` | ***declared by the VECTOR, not looked up from the enumeration*** |
-| enumerator identity | — | ***does not exist.*** `SubmissionGate.Check` takes a block author only |
+| assertion form | `AssertionEnumeration.Of(..., forms, ...)` exists; `VectorDocument.AssertionForm` still declared by the vector | **library ready, WIRE FORMAT NOT** — `EnumerationDocument` has no `forms`, so the cross-check cannot fire from the CLI |
+| enumerator identity | `AssertionEnumeration.Enumerator` + `SubmissionGate.EnumeratorIndependence` | **gate EXISTS** *(added 2026-08-13, after this skill first said it did not)* — but `EnumerationDocument` has no `enumerator` field and `GateCli` calls `Of(...)` with two arguments, **so from the CLI it always reports `NotChecked`** |
 
 **0b. Are the clause IDs stable?** `REQ-014` is an identifier; *"§3.2, fourth paragraph"* is a
 position. If the register addresses clauses positionally, **stop and report "not enumerable"** — the
@@ -213,11 +213,11 @@ such) · ***NOT CHECKED*** (no verifier — fails closed, not a pass).
 | citation names an ID in the enumeration | `SubmissionGate` | **CHECKED** — runnable |
 | citation is not in display-ordinal form | shape | **CHECKED** by you |
 | cited assertion's response signal appears in the vector's `Expectations` | set-difference | ***NOT CHECKED*** — the gate's enumeration is flat strings with no signal |
-| **declared `AssertionForm` matches the enumerated form** | compare | ***NOT CHECKED*** — the vector declares its own form, so citing a `NEVER` while declaring `When` takes the permissive path |
+| **declared `AssertionForm` matches the enumerated form** | `AssertionEnumeration` accepts `forms` | ***NOT CHECKED FROM THE CLI*** — `EnumerationDocument` carries no `forms`, so the vector's own declaration still stands unopposed and citing a `NEVER` while declaring `When` takes the permissive path |
 | every assertion in exactly one bucket; `UNCLASSIFIED` = 0 | set difference | ***NOT CHECKED*** — no classification artifact exists |
 | enumeration non-empty | *empty is not clean* | **CHECKED** — the gate refuses an empty enumeration |
 | bucket assigner ≠ block author ≠ vector author | recorded identity | ***NOT CHECKED*** |
-| **enumerator ≠ block author ≠ vector author** | recorded identity | ***NOT CHECKED — the identity is not even recorded*** |
+| **enumerator ≠ block author ≠ vector author** | `SubmissionGate.EnumeratorIndependence` — **and it refuses an unrecorded identity rather than passing it** | **gate CHECKED, but ***NOT REACHABLE FROM THE CLI***: no `enumerator` field on the wire, so it always reports `NotChecked`. **Record `enumerator:` anyway** — the day the field lands, every artifact that carried it is already gated |
 | R5: no implementation vocabulary in assertion text | keyword scan | **CHECKED** by you, against what you can see |
 | decomposition count differs from last time → event | compare | ***NOT CHECKED*** — no stored prior enumeration |
 

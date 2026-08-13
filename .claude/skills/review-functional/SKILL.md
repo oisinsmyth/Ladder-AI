@@ -58,8 +58,11 @@ your blindness note and re-derive every verdict from the IR itself, never from a
 - **The full IR corpus** (`ir/<project>/`, every file — blocks, UDTs, DBs, instance DBs, tag
   table), never digests: docs/15's own rule — a digest is never review input. The readable
   content of an `.ir` file is everything **before** the `SIDECAR` line — grep `^SIDECAR` for the
-  split; never reason over sidecar content. If handed SimaticML instead, convert first
-  (`converter to-ir`) into your own scratch area.
+  split; never reason over sidecar content. **If handed SimaticML instead, stop and ask for the
+  `.ir`** — do not convert it yourself. *(Corrected 2026-08-13: this used to say "convert first
+  (`converter to-ir`)", which this skill's `allowed-tools` do not permit — it holds `cross-check` and
+  `trace` only. An instruction an agent cannot execute fails mid-review, and preparing the input is
+  the caller's job.)*
 - `docs/06-lad-conventions.md` — read C-113/C-118 (sequence paradigms) and C-604/C-606 before
   your first finding so you cite current rule text, not memory of it.
 - Regime labels for every block: `generated` or `imported-real` — from the invoker, or

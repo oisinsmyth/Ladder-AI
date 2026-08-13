@@ -66,8 +66,12 @@ reasoning, or another review's report of the same content — not the tool, not 
 
 - **Full IR only** (`.ir` files) — never a `converter digest` summary; digests are orientation
   aids and explicitly not review input (CLAUDE.md). The readable content is everything **before**
-  the `SIDECAR` line — grep `^SIDECAR` for the split; never reason over sidecar content. If
-  handed SimaticML, convert first (`converter to-ir`) into your own scratch area.
+  the `SIDECAR` line — grep `^SIDECAR` for the split; never reason over sidecar content. **If
+  handed SimaticML, stop and ask for the `.ir`** — do not convert it yourself. *(Corrected
+  2026-08-13: this used to say "convert first (`converter to-ir`)", which contradicts this skill's
+  own rule two paragraphs down that **Bash exists here for exactly two read-only commands** — and
+  `to-ir` is not one of them, so the instruction was unexecutable. Preparing the input is the
+  caller's job.)*
 - **The whole project export** (`ir/<project>/` — blocks, UDTs, DBs, tag tables) for the
   cross-block rules. Reviewing a single block is legitimate for the inner loop, but then every
   cross-block rule in Group 2 is reported "not checkable at this scope" rather than silently

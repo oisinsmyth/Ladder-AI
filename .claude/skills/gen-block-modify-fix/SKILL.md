@@ -80,7 +80,12 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
 - **The `converter diff` before/after** of the changed network(s) — plus the **`diff --only` invariance
   result** (exit 0) proving the rest is untouched. This pairing *is* the S7 deliverable.
 - A **one-paragraph intent**: which defect, which REQ/rule it restores, why the change is correct.
-- **preflight** (zero findings) + **compile** evidence (State, error/warning counts).
+- **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
+  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
+  "State, error/warning counts". **`State` is not a verdict** — on a project carrying a permanent
+  hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
+  keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
+  whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
 
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
 runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so

@@ -85,7 +85,12 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   **`diff --only` invariance result (exit 0)** proving the kept skeleton is untouched — that pairing is the
   S7 deliverable.
 - A **one-paragraph intent**: what purpose change, which REQ(s) it delivers, why it's correct.
-- **preflight** (zero findings) + **compile** evidence (State, error/warning counts).
+- **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
+  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
+  "State, error/warning counts". **`State` is not a verdict** — on a project carrying a permanent
+  hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
+  keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
+  whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
 
 Append a `gen/<project>/telemetry.log` line (`gen-block-modify-purpose`) when the project has one (a
 validation corpus has none — note the run in your report instead). Then **stop** — the fresh-context Check

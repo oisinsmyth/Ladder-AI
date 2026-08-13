@@ -52,9 +52,12 @@ From doc 06's preamble — quote it in spirit, apply it literally:
 ## Inputs
 
 - IR files (`.ir`). The readable content is everything **before** the `SIDECAR` line — grep
-  `^SIDECAR` for the split; never reason over sidecar content. If handed SimaticML instead,
-  convert first (`converter to-ir`, see `src/converter/README.md`) — write converted copies to
-  your own scratch area, don't overwrite project files.
+  `^SIDECAR` for the split; never reason over sidecar content. **If handed SimaticML instead, stop
+  and ask for the `.ir`** — do not convert it yourself. *(Corrected 2026-08-13: this used to say
+  "convert first (`converter to-ir`)", which this skill has no permission to do — it holds no `Bash`
+  at all, deliberately. An instruction an agent cannot execute fails at the worst possible moment,
+  mid-review. Preparing the input is the caller's job, and a reviewer that generates its own inputs
+  is a step toward reviewing its own artifacts.)*
 - The block's interface UDT files too — several rules live there, and the iDB is *not* where
   interface comments belong (member comments on a UDT-typed member's inner fields come from the
   UDT's own definition).

@@ -129,7 +129,17 @@ reality into code. Report the gap and stop; don't improvise the DB.
    `converter preflight <files> --project ir/<project>/` — **zero-findings bar** (a consciously
    accepted finding needs the engineer's explicit recorded OK; preflight is a filter *before* the
    compile gate, never a substitute — hard rule 4) → `converter to-xml` → `openness-cli import` to
-   the **scratch** project → `openness-cli compile` → iterate until clean. On any failure, check the
+   the **scratch** project → **`openness-cli sanity-check <project>`** (or per-block
+   `compile --block`/`--type` in dependency order) → iterate until clean. On any failure, check the
+
+   > 🔴 *Corrected 2026-08-13: this step used to say `openness-cli compile`, and **a bare
+   > whole-device compile IS NOT THE GATE** (hard rule 4 / FI-52). A freshly re-imported block is
+   > flagged `IsConsistent=false` and a device-level compile reports `Success, errors=0` **without
+   > clearing that flag** — measured at 19 of 34 blocks uncompiled behind a green device compile, one
+   > of which failed with 8 errors when compiled alone. Report `sanity-check`'s `INCONSISTENT: 0` and
+   > **both** the `BLOCKS:` and `TYPES:` lines: before FI-62 it enumerated blocks only, so a
+   > freshly-imported UDT could sit inconsistent behind `OVERALL: HEALTHY`.*
+
    compile-error-playbook first, verify its hypothesis against the actual error, and harvest any new
    proven error→fix pair back into it. Respect the `agent-tasks/README.md` Portal queue before any
    import/compile against a shared scratch project.
@@ -200,7 +210,12 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
 
 - the **IR diff** (the new block; for a tier-(a) instantiation, the calling network + instance DB);
 - a **one-paragraph intent statement** (what it does, which REQ(s) it implements, which pattern/tier);
-- **preflight evidence** (zero findings) and **compile evidence** (pass, error/warning counts);
+- **preflight evidence** (zero findings) and **compile evidence** — `sanity-check`'s `INCONSISTENT: 0`
+  on **both** the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13:
+  this read "pass, error/warning counts". **Key the verdict on errors, never on warnings or on a
+  compile's `State`** — `compile` stopped failing on a warnings-only state on 2026-08-12, because a
+  project carrying a permanent hardware warning made **every** per-block compile look failed. Report
+  warnings; do not gate on them.)*
 - the tag-status result (all `exists`), and any gap that stopped the run.
 
 Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
