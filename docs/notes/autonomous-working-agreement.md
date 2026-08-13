@@ -190,6 +190,29 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** A POST-HOC CORRECTION ONLY FIXES THE COPY IT REACHES. *** Measured 2026-08-13, and it explains a
+  contradiction that had looked like two unrelated bugs. A probe corrected its transfer verdict
+  **after** the human-readable verdict *sentence* had already been rendered from the un-corrected
+  value — so one field read *"NOTHING WAS TRANSFERRED BY CONSTRUCTION"* while the sentence beside it
+  read ***"YES — THE SOFTWARE WAS LOADED"***, in the same document.
+    ➜ **A value that is fixed up after the fact has as many truths as it has readers.** Push the
+      correction to the **input** — the fix here deleted the override, made the destination a
+      **required parameter**, and rendered all three fields from one verdict, *so forgetting it fails
+      to compile.*
+    ➜ **The tell is a report that disagrees with itself.** When two fields derived from one fact
+      differ, do not fix the wrong one: **ask which of them was computed later.**
+    ➜ Sibling defect, same fix: the verdict had been concluded **from message TEXT** — the absence of
+      a phrase — and folder runs and device runs emit *the same words*. **A property of *which call
+      was made* cannot be recovered from what the call printed.**
+- *** THE TIDY REPRESENTATION RE-CREATED THE FAILURE ONE LAYER DOWN — AND ONLY MEASURING THE CONSUMER
+  FOUND IT. *** Same day: asked to model "an image exists, nothing was transferred" as a distinct
+  positive state, the lane built it — then **measured what the consumer did with it.** The consumer's
+  reader returned false on the shape, **fell through to scraping the log, and named the same 27
+  objects.** *** THE HONEST-LOOKING SHAPE RESTORED THE FALSE POSITIVE ONE LAYER DOWN. ***
+    ➜ **Choosing a representation is not a matter of taste — run the consumer.** "More honest" is a
+      claim about what a reader concludes, and readers have fallbacks.
+    ➜ It also overruled *my* stated preference on evidence, which is the outcome to want from a brief:
+      **a suggestion is an input, not an instruction.**
 - *** A COMPARATOR THAT LEARNS TO EQUATE REPRESENTATIONS STARTS PASSING. *** Measured 2026-08-13, as a
   **deliberate refusal** rather than a defect: a bound comparator treats `T#60S` and `T#1M` as
   **different**, though they are the same interval. It is not a duration parser and must not become
