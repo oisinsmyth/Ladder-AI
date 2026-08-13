@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 
 namespace Harness.Map.Tests;
 
@@ -13,6 +13,12 @@ public class CopyLayerGeneratorTests
 {
     private static readonly CopyLayerNaming Naming = new(BlockNumber: 900);
 
+    /// <summary>
+    /// A fixed stamp, so the golden IR below is stable. Real callers derive it with
+    /// <see cref="BuildStamp.Of"/>; this is the spec's own worked literal (section 9).
+    /// </summary>
+    private static readonly BuildStamp Stamp = new(0xA93F2C71);
+
     private static RegisterMap OneSlot(int vector = 3, int result = 2) =>
         MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
@@ -25,20 +31,21 @@ public class CopyLayerGeneratorTests
         new[] { "DB_Unit.Actual", "DB_Unit.State" });
 
     private static CopyLayerResult Generate(RegisterMap? map = null, SlotBinding? binding = null) =>
-        CopyLayerGenerator.Generate(map ?? OneSlot(), binding ?? Binding(), Naming);
+        CopyLayerGenerator.Generate(map ?? OneSlot(), binding ?? Binding(), Naming, Stamp);
 
     // ---------------------------------------------------------------------------------------------
     // What it generates
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Generates_the_four_networks_the_minimal_layer_is_defined_as()
+    public void Generates_the_five_networks_the_minimal_layer_is_defined_as()
     {
         var plan = Generate().Require();
 
         Assert.Equal(
             new[]
             {
+                CopyLayerNetworkKind.Version,
                 CopyLayerNetworkKind.ScanCounter,
                 CopyLayerNetworkKind.VectorIn,
                 CopyLayerNetworkKind.StartBool,
@@ -46,7 +53,7 @@ public class CopyLayerGeneratorTests
             },
             plan.Networks.Select(n => n.Kind));
 
-        Assert.Equal(new[] { 1, 2, 3, 4 }, plan.Networks.Select(n => n.Number));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, plan.Networks.Select(n => n.Number));
     }
 
     [Fact]
@@ -109,17 +116,20 @@ public class CopyLayerGeneratorTests
               OUTPUT
               CONSTANT
 
-            NETWORK 1 "Free-running scan counter"
+            NETWORK 1 "Program version"
+              MOVE(EN := TRUE, IN := 16#A93F2C71) => HX_ProgramVersion
+
+            NETWORK 2 "Free-running scan counter"
               ADD(EN := TRUE, IN1 := HX_ScanCount, IN2 := 1) => HX_ScanCount
 
-            NETWORK 2 "Vector in - slot S0"
+            NETWORK 3 "Vector in - slot S0"
               MOVE(EN := TRUE, IN := HX_S0_V000) => DB_Unit.Setpoint
               MOVE(EN := TRUE, IN := HX_S0_V001) => DB_Unit.Mode
 
-            NETWORK 3 "Start bool - slot S0"
+            NETWORK 4 "Start bool - slot S0"
               COIL DB_Unit.StartCmd := HX_S0_Start
 
-            NETWORK 4 "Results out - slot S0"
+            NETWORK 5 "Results out - slot S0"
               MOVE(EN := TRUE, IN := DB_Unit.Actual) => HX_S0_R000
               MOVE(EN := TRUE, IN := DB_Unit.State) => HX_S0_R001
 
@@ -137,12 +147,13 @@ public class CopyLayerGeneratorTests
             TAGTABLE HarnessMirror
               ROOTID 0
               TAGS
-                HX_ScanCount 1 : DInt @ %MD4000 ACCESSIBLE VISIBLE WRITABLE COMMENT "Free-running scan counter. Wraps; scan stamps are differences from the start edge."
-                HX_S0_Start 4 : Bool @ %M4005.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Start bool. Its rising edge is the test's T=0."
-                HX_S0_V000 7 : Int @ %MW4006 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
-                HX_S0_V001 A : Int @ %MW4008 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
-                HX_S0_R000 D : Int @ %MW4012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
-                HX_S0_R001 10 : Int @ %MW4014 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
+                HX_ProgramVersion 1 : DWord @ %MD4000 ACCESSIBLE VISIBLE WRITABLE COMMENT "Build stamp of the downloaded IR set. Present only if this code is running."
+                HX_ScanCount 4 : DInt @ %MD4004 ACCESSIBLE VISIBLE WRITABLE COMMENT "Free-running scan counter. Wraps; scan stamps are differences from the start edge."
+                HX_S0_Start 7 : Bool @ %M4009.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Start bool. Its rising edge is the test's T=0."
+                HX_S0_V000 A : Int @ %MW4010 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
+                HX_S0_V001 D : Int @ %MW4012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
+                HX_S0_R000 10 : Int @ %MW4016 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
+                HX_S0_R001 13 : Int @ %MW4018 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
 
             """.ReplaceLineEndings("\n"),
             table.Ir);
@@ -181,7 +192,7 @@ public class CopyLayerGeneratorTests
         Assert.True(plan.NoStartGateAsserted);
         Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.StartBool);
         Assert.DoesNotContain(plan.Tags, t => t.Name.EndsWith("_Start", StringComparison.Ordinal));
-        Assert.Equal(new[] { 1, 2, 3 }, plan.Networks.Select(n => n.Number));
+        Assert.Equal(new[] { 1, 2, 3, 4 }, plan.Networks.Select(n => n.Number));
     }
 
     [Fact]
@@ -199,10 +210,97 @@ public class CopyLayerGeneratorTests
 
         var plan = CopyLayerGenerator.Generate(map,
             new SlotBinding("S0", Array.Empty<string>(), "DB_Unit.StartCmd", new[] { "DB_Unit.Actual" }),
-            Naming).Require();
+            Naming, Stamp).Require();
 
         Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.VectorIn);
         Assert.Contains(plan.Networks, n => n.Kind == CopyLayerNetworkKind.ResultsOut);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 2.6: the version register
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void The_build_stamp_is_a_literal_in_the_code_not_a_value_written_from_outside()
+    {
+        // Section 9: the constant lives IN THE CODE, so it can only be present if that code is running.
+        // A value the client wrote would confirm nothing at all about what the CPU is executing.
+        var block = Generate().Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("MOVE(EN := TRUE, IN := 16#A93F2C71) => HX_ProgramVersion", block, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_version_register_is_a_DWord_across_the_maps_two_reserved_registers()
+    {
+        var map = OneSlot();
+        var plan = Generate(map).Require();
+        var tag = plan.Tags.Single(t => t.Name == "HX_ProgramVersion");
+
+        Assert.Equal("DWord", tag.DataType);
+        Assert.Equal(map.Geometry.DoubleWordAddressOf(map.Version.Register), tag.Address);
+        Assert.Equal(2, map.Version.Length);
+    }
+
+    [Fact]
+    public void A_zero_build_stamp_is_refused_because_unwritten_bit_memory_reads_as_zero()
+    {
+        var result = CopyLayerGenerator.Generate(OneSlot(), Binding(), Naming, default);
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("build stamp is zero", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Excising_a_slot_changes_the_build_stamp_while_leaving_the_map_hash_alone()
+    {
+        // Two properties that look contradictory and are not. The map hash must NOT move — that is what
+        // keeps every client mirror valid across an excision (DB-6). The build stamp MUST, because it
+        // names the IR set actually downloaded and excision changes it: "excision is a REGENERATION
+        // STEP, not 'drop a file from the download list'". Computed at planning time, a stale stamp
+        // makes every post-download check fail and look like a failed download.
+        var map = OneSlot();
+        var excised = map.WithSlotExcised("S0");
+
+        Assert.Equal(map.MapHash, excised.MapHash);
+        Assert.NotEqual(
+            BuildStamp.Of(map, Binding(), Naming).Value,
+            BuildStamp.Of(excised, Binding(), Naming).Value);
+    }
+
+    [Fact]
+    public void The_build_stamp_moves_with_the_program_under_test_and_with_the_binding()
+    {
+        var map = OneSlot();
+        var baseline = BuildStamp.Of(map, Binding(), Naming);
+
+        Assert.NotEqual(baseline.Value, BuildStamp.Of(map, Binding(start: "DB_Unit.Other"), Naming).Value);
+        Assert.NotEqual(baseline.Value, BuildStamp.Of(map, Binding(), Naming, new[]
+        {
+            new HarnessObject("FC_UnderTest", HarnessObjectKind.Block, "BLOCK FC FC_UnderTest\n"),
+        }).Value);
+    }
+
+    [Fact]
+    public void The_build_stamp_is_never_zero()
+    {
+        // Not a probabilistic hope: the derivation walks the digest for a non-zero word and throws if it
+        // finds none, because a zero stamp cannot be told from bit memory that was never written.
+        for (var i = 0; i < 64; i++)
+        {
+            var stamp = BuildStamp.Of(OneSlot(), Binding(start: $"DB_Unit.Start{i}"), Naming);
+            Assert.NotEqual(0u, stamp.Value);
+        }
+    }
+
+    [Fact]
+    public void The_stamps_two_halves_reassemble_into_the_stamp()
+    {
+        var stamp = new BuildStamp(0xA93F2C71);
+
+        Assert.Equal((ushort)0xA93F, stamp.HighWord);
+        Assert.Equal((ushort)0x2C71, stamp.LowWord);
+        Assert.Equal("16#A93F2C71", stamp.Literal);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -216,7 +314,7 @@ public class CopyLayerGeneratorTests
             MirrorGeometry.ForCpu1214C(256, 4000),
             new[] { new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2) })).Require();
 
-        var result = CopyLayerGenerator.Generate(map, Binding(), Naming);
+        var result = CopyLayerGenerator.Generate(map, Binding(), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("phase 3", StringComparison.Ordinal));
@@ -226,7 +324,7 @@ public class CopyLayerGeneratorTests
     public void A_binding_naming_a_slot_the_map_does_not_hold_is_refused()
     {
         var result = CopyLayerGenerator.Generate(OneSlot(),
-            new SlotBinding("S9", new[] { "A" }, null, new[] { "B" }), Naming);
+            new SlotBinding("S9", new[] { "A" }, null, new[] { "B" }), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("not in the map", StringComparison.Ordinal));
@@ -239,7 +337,7 @@ public class CopyLayerGeneratorTests
             MirrorGeometry.ForCpu1214C(256, 4000),
             new[] { new SlotRequest("S0", 1, 1) })).Require();
 
-        var result = CopyLayerGenerator.Generate(narrow, Binding(), Naming);
+        var result = CopyLayerGenerator.Generate(narrow, Binding(), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("vector targets", StringComparison.Ordinal));
@@ -250,7 +348,7 @@ public class CopyLayerGeneratorTests
     public void A_binding_publishing_nothing_is_refused()
     {
         var result = CopyLayerGenerator.Generate(OneSlot(),
-            new SlotBinding("S0", new[] { "A" }, null, Array.Empty<string>()), Naming);
+            new SlotBinding("S0", new[] { "A" }, null, Array.Empty<string>()), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("publishes nothing", StringComparison.Ordinal));
@@ -260,7 +358,7 @@ public class CopyLayerGeneratorTests
     public void A_missing_block_number_is_refused_rather_than_defaulted()
     {
         // Hard rule 3: block numbers are not invented here. X-J reserves a range and the caller allocates.
-        var result = CopyLayerGenerator.Generate(OneSlot(), Binding(), new CopyLayerNaming());
+        var result = CopyLayerGenerator.Generate(OneSlot(), Binding(), new CopyLayerNaming(), Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("block number", StringComparison.Ordinal));
@@ -274,7 +372,7 @@ public class CopyLayerGeneratorTests
             new[] { new SlotRequest("S 0", 2, 2) })).Require();
 
         var result = CopyLayerGenerator.Generate(map,
-            new SlotBinding("S 0", new[] { "A" }, null, new[] { "B" }), Naming);
+            new SlotBinding("S 0", new[] { "A" }, null, new[] { "B" }), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("plain identifier", StringComparison.Ordinal));
@@ -283,7 +381,7 @@ public class CopyLayerGeneratorTests
     [Fact]
     public void A_refused_generation_yields_no_plan_no_objects_and_throws_on_Require()
     {
-        var result = CopyLayerGenerator.Generate(OneSlot(), Binding(), new CopyLayerNaming());
+        var result = CopyLayerGenerator.Generate(OneSlot(), Binding(), new CopyLayerNaming(), Stamp);
 
         Assert.Null(result.Plan);
         Assert.Empty(result.Objects);

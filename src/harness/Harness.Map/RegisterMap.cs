@@ -34,10 +34,18 @@ public sealed record SlotAllocation(
 ///
 /// <para><b>Layout, and each of the three decisions below is forced by something measured:</b></para>
 /// <code>
-///   [ control  ] scan counter (2 registers, a DInt) then the start bools, ceil(N/16) registers
+///   [ control  ] version (2 registers, a 32-bit build stamp), scan counter (2 registers, a DInt),
+///                then the start bools, ceil(N/16) registers
 ///   [ vectors  ] N x VectorRegistersPerSlot, all slots contiguous
 ///   [ results  ] N x ResultRegistersPerSlot, all slots contiguous
 /// </code>
+///
+/// <para><b>0. The version register is FIRST, and that is not cosmetic</b> (§9, DB-6). DB-6 requires
+/// the layout version to be checked "before EVERY transaction batch, not only at connect — a download
+/// can land mid-session". Placing it at register 0, inside the control region, means the check rides on
+/// the poll that was happening anyway: one FC03 returns the build stamp AND the scan counter AND the
+/// start-bool echo. Anywhere else it would be a round trip of its own, and round trips are the only
+/// thing measured to cost.</para>
 ///
 /// <para><b>1. Slots are fixed-size</b> (X-A): every slot gets the widest slot's width, so the client's
 /// bounds check is arithmetic rather than a lookup, and an excised slot leaves a hole rather than
@@ -54,11 +62,12 @@ public sealed record SlotAllocation(
 /// the 125-register cap on <see cref="ResultRegistersPerSlot"/> — refused at derivation time.</para>
 ///
 /// <para><b>What is NOT here, on purpose:</b> no packing of two values into one register, no
-/// multi-slot-per-read, no claims, no coverage, no deferred queue, no version register, no
-/// executed-start-bool echo. Every one of those is width and none of it is proven yet.</para>
+/// multi-slot-per-read, no claims, no coverage, no deferred queue, no executed-start-bool echo. Every
+/// one of those is width and none of it is proven yet.</para>
 /// </summary>
 public sealed record RegisterMap(
     MirrorGeometry Geometry,
+    RegisterRange Version,
     RegisterRange ScanCounter,
     RegisterRange StartBools,
     RegisterRange VectorBlock,
@@ -70,8 +79,20 @@ public sealed record RegisterMap(
     /// <summary>Registers the scan counter occupies. A DInt, so two — and it will wrap; stamps are differences from T=0.</summary>
     public const int ScanCounterRegisters = 2;
 
+    /// <summary>
+    /// Registers the version register occupies. TWO, because it is a <c>%MD</c> and not a <c>%MW</c>.
+    ///
+    /// <para>§9 corrected this by audit: the mechanism is <c>MOVE 16#A93F2C71 -&gt; MD_ProgramVersion</c>,
+    /// eight hex digits, 32 bits. A 16-bit truncation of a build hash would also collide far too easily
+    /// to serve as an identity, which is the job it exists for.</para>
+    /// </summary>
+    public const int VersionRegisters = 2;
+
     /// <summary>Slots whose start bools fit in one holding register.</summary>
     public const int SlotsPerStartRegister = 16;
+
+    /// <summary>The whole control region — version, scan counter and start bools — in ONE FC03.</summary>
+    public RegisterRange Control => new(Version.Register, StartBools.End - Version.Register);
 
     /// <summary>Total registers the map occupies, from register 0.</summary>
     public int TotalRegisters => ResultBlock.End;
@@ -148,6 +169,7 @@ public sealed record RegisterMap(
             var canonical = new StringBuilder();
             canonical.Append("harness-map/1\n");
             canonical.Append($"mem={Geometry.TotalBytes} retain={Geometry.RetentiveBytes} base={Geometry.BaseByte}\n");
+            canonical.Append($"ver={Version.Register}:{Version.Length}\n");
             canonical.Append($"scan={ScanCounter.Register}:{ScanCounter.Length}\n");
             canonical.Append($"start={StartBools.Register}:{StartBools.Length}\n");
             canonical.Append($"vec={VectorBlock.Register}:{VectorBlock.Length}/{VectorRegistersPerSlot}\n");

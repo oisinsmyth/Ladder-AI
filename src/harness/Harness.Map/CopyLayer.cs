@@ -34,6 +34,12 @@ public sealed record SlotBinding(
 /// <summary>What one generated network does. The plan is inspectable before any IR is rendered.</summary>
 public enum CopyLayerNetworkKind
 {
+    /// <summary>
+    /// Publishes the build stamp into the version register (§9). Unconditional, one per program, and a
+    /// LITERAL — the constant lives in the code, so it can only be present if that code is running.
+    /// </summary>
+    Version,
+
     /// <summary>Increments the free-running scan counter. Unconditional, one per program.</summary>
     ScanCounter,
 
@@ -77,6 +83,7 @@ public enum HarnessObjectKind
 public sealed record CopyLayerPlan(
     RegisterMap Map,
     SlotBinding Binding,
+    BuildStamp Stamp,
     IReadOnlyList<MirrorTag> Tags,
     IReadOnlyList<CopyLayerNetwork> Networks,
     bool NoStartGateAsserted)

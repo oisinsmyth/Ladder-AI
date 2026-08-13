@@ -83,7 +83,10 @@ public static class MapAllocator
         if (startRegisters > ModbusLimits.MaxWriteRegisters)
             refusals.Add($"{slots.Count} slots need {startRegisters} start-bool registers, which exceeds the {ModbusLimits.MaxWriteRegisters}-register FC16 limit. The commit must raise every start bool in ONE transaction (X-A); split across two it stops being a commit.");
 
-        var scanCounter = new RegisterRange(0, RegisterMap.ScanCounterRegisters);
+        // Version first (DB-6: checked before every transaction batch, so it must be free to read — it
+        // rides on the control poll rather than costing a round trip of its own).
+        var version = new RegisterRange(0, RegisterMap.VersionRegisters);
+        var scanCounter = new RegisterRange(version.End, RegisterMap.ScanCounterRegisters);
         var startBools = new RegisterRange(scanCounter.End, startRegisters);
         var vectorBlock = new RegisterRange(startBools.End, slots.Count * vectorPerSlot);
         var resultBlock = new RegisterRange(vectorBlock.End, slots.Count * resultPerSlot);
@@ -104,6 +107,7 @@ public static class MapAllocator
 
         var map = new RegisterMap(
             geometry,
+            version,
             scanCounter,
             startBools,
             vectorBlock,

@@ -9,19 +9,29 @@ public sealed record RetentionFinding(string Object, string Detail);
 /// <summary>
 /// The outcome of the non-retentive assertion.
 ///
-/// <para><see cref="Passed"/> requires that something was actually examined. A check that ran over
-/// nothing and found nothing is not a pass, it is a check that did not happen — and it is the result
-/// most likely to be believed, because every field reads as clean.</para>
+/// <para><b>0.1b is TWO rules, and each has its own denominator.</b> The ATTRIBUTE rule (no
+/// <c>RETAIN</c>, and a data block that states its layout) is counted by
+/// <see cref="ObjectsExamined"/>. The ADDRESS rule — the one that covers the mirror, where retention
+/// is not an attribute at all — is counted by <see cref="AddressesExamined"/>, and it is a SEPARATE
+/// count for a reason: an object set carrying no absolute address at all satisfies the attribute rule
+/// completely while the address rule never runs. Every field then reads as clean, which is the result
+/// most likely to be believed.</para>
+///
+/// <para><see cref="Passed"/> therefore requires BOTH counts to be non-zero. There is no flag that
+/// relaxes it: a harness object set that declares no <c>%M</c> address has no mirror, and a
+/// retention check over a program with no mirror has not checked the thing 0.1b exists for.</para>
 /// </summary>
-public sealed record RetentionVerdict(int ObjectsExamined, IReadOnlyList<RetentionFinding> Findings)
+public sealed record RetentionVerdict(int ObjectsExamined, int AddressesExamined, IReadOnlyList<RetentionFinding> Findings)
 {
-    public bool Passed => ObjectsExamined > 0 && Findings.Count == 0;
+    public bool Passed => ObjectsExamined > 0 && AddressesExamined > 0 && Findings.Count == 0;
 
     public string Summary() => Passed
-        ? $"NON-RETENTIVE: {ObjectsExamined} object(s) examined, 0 findings."
+        ? $"NON-RETENTIVE: {ObjectsExamined} object(s) and {AddressesExamined} address(es) examined, 0 findings."
         : ObjectsExamined == 0
             ? "REFUSED: nothing examined. An empty object set is not a clean one."
-            : $"REFUSED: {Findings.Count} finding(s) across {ObjectsExamined} object(s).";
+            : AddressesExamined == 0 && Findings.Count == 0
+                ? $"REFUSED: {ObjectsExamined} object(s) examined but NO ADDRESS was. The attribute rule ran and the address rule did not, so the mirror — the object 0.1b exists for — was never checked."
+                : $"REFUSED: {Findings.Count} finding(s) across {ObjectsExamined} object(s) and {AddressesExamined} address(es).";
 }
 
 /// <summary>
@@ -37,6 +47,28 @@ public sealed record RetentionVerdict(int ObjectsExamined, IReadOnlyList<Retenti
 /// WHOLE object retentive. The finding says so in those terms rather than naming one member, because a
 /// reader who fixes the member and believes the object is now partially retentive has the wrong model.</para>
 ///
+/// <para><b>THE SECOND RULE, AND THE PLAN'S FRAMING DOES NOT COVER IT.</b> Build-plan item 0.1b is
+/// written as though retention were always an ATTRIBUTE — per-tag on optimized blocks, all-or-nothing
+/// on standard ones. <b>A <c>%M</c> tag has no retain attribute in either direction</b>:
+/// <c>ir/SPEC.md</c>'s TAGTABLE grammar has no <c>Remanence</c> concept at all, and <c>%M</c>
+/// retention is set by the CPU's retentive-M range, which is contiguous from MB0. So for the mirror —
+/// the largest harness object and the one 0.1b exists for — <b>non-retentiveness IS THE ADDRESS</b>,
+/// and a checker implementing only the attribute rule passes a mirror sitting on MB0.</para>
+///
+/// <para><b>AND THE ADDRESS RULE MUST NOT BE SATISFIABLE VACUOUSLY.</b> Three ways it was, each
+/// closed here and each negative-tested:</para>
+/// <list type="number">
+/// <item><b>No address anywhere in the set.</b> The attribute rule ran over every object, found
+/// nothing, and the verdict passed — with the address rule never executed.
+/// <see cref="RetentionVerdict.AddressesExamined"/> is now a separate denominator and zero refuses.</item>
+/// <item><b>A declared tag line carrying no parseable address was skipped.</b> Every non-blank line
+/// after <c>TAGS</c> is a DECLARATION and must yield an address; one that does not is a finding, not
+/// a line the scan moves past.</item>
+/// <item><b>Absolute addresses outside a tag table were never looked at.</b> The rule ran on tag
+/// tables alone, so a <c>%M0.0</c> written straight into a rung was invisible to it. Every object is
+/// now scanned.</item>
+/// </list>
+///
 /// <para><b>Three things are refused that are not, strictly, retention findings — each fails closed for
 /// a stated reason:</b></para>
 /// <list type="number">
@@ -45,11 +77,16 @@ public sealed record RetentionVerdict(int ObjectsExamined, IReadOnlyList<Retenti
 /// Optimized, which is invisible on the wire. Undetermined is not clean.</item>
 /// <item>A DB declaring <c>MEMORYLAYOUT Optimized</c>. Same wire consequence, stated rather than
 /// implied.</item>
-/// <item>A mirror tag outside bit memory, or below the retentive window. For <c>%M</c> there is no
-/// per-tag retain flag to inspect — a PLC tag table has no Remanence concept at all — so
-/// <b>non-retentiveness of the mirror IS the address</b>, and checking the address is the only form
-/// this assertion can take there.</item>
+/// <item>A mirror tag outside bit memory, or below the retentive window.</item>
 /// </list>
+///
+/// <para><b>What this still cannot check, and it is the layout half.</b> A re-import silently reverts a
+/// Standard DB to Optimized (the exported <c>.xml</c> carries no <c>MemoryLayout</c> element, so the
+/// import states no opinion and TIA applies the default), and <c>drift-check</c> is structurally blind
+/// to it. So the IR can say <c>Standard</c>, every check here can pass, and the device can be
+/// Optimized. <b>The layout branch needs a device-side leg —</b> <c>openness-cli block-layout --set
+/// Standard --yes</c> after EVERY import, then <c>--expect Standard</c> as the gate. Necessary here,
+/// not sufficient.</para>
 ///
 /// <para><b>No finding is a warning.</b> A check that detects something and only warns gets skimmed;
 /// every finding here makes the verdict refuse.</para>
@@ -61,6 +98,10 @@ public static class RetentionCheck
     private static readonly Regex MemoryAddress =
         new(@"^%M(?<size>[BWDXL]?)(?<byte>\d+)(?:\.(?<bit>\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    /// <summary>Any absolute PLC address, wherever it appears — not only after an <c>@</c> in a tag table.</summary>
+    private static readonly Regex AbsoluteAddress =
+        new(@"(?<![A-Za-z0-9_])%[A-Za-z]{0,2}\d+(?:\.\d+)?", RegexOptions.Compiled);
+
     /// <summary>Run the assertion over every generated harness object.</summary>
     public static RetentionVerdict Check(IEnumerable<HarnessObject> objects, MirrorGeometry geometry)
     {
@@ -68,6 +109,7 @@ public static class RetentionCheck
 
         var findings = new List<RetentionFinding>();
         var examined = 0;
+        var addresses = 0;
 
         foreach (var refusal in geometry.Refusals)
             findings.Add(new RetentionFinding("<mirror geometry>", refusal));
@@ -75,13 +117,14 @@ public static class RetentionCheck
         foreach (var obj in objects ?? Array.Empty<HarnessObject>())
         {
             examined++;
-            CheckObject(obj, geometry, findings);
+            addresses += CheckObject(obj, geometry, findings);
         }
 
-        return new RetentionVerdict(examined, findings);
+        return new RetentionVerdict(examined, addresses, findings);
     }
 
-    private static void CheckObject(HarnessObject obj, MirrorGeometry geometry, List<RetentionFinding> findings)
+    /// <summary>Checks one object and returns how many ADDRESSES it subjected to the address rule.</summary>
+    private static int CheckObject(HarnessObject obj, MirrorGeometry geometry, List<RetentionFinding> findings)
     {
         var name = string.IsNullOrWhiteSpace(obj.Name) ? "<unnamed>" : obj.Name;
         var lines = (obj.Ir ?? string.Empty).Replace("\r\n", "\n").Split('\n');
@@ -95,32 +138,31 @@ public static class RetentionCheck
             // object it has not examined, whatever the count says.
             findings.Add(new RetentionFinding(name,
                 $"could not classify the IR: first line reads '{Truncate(header)}'. An object this check cannot read is an object it has not checked."));
-            return;
+            return 0;
         }
 
         if (declared != obj.Kind)
         {
             findings.Add(new RetentionFinding(name,
                 $"declared as {obj.Kind} but the IR begins '{Truncate(header)}', which is a {declared}."));
-            return;
+            return 0;
         }
 
         switch (obj.Kind)
         {
             case HarnessObjectKind.TagTable:
-                CheckTagTable(name, lines, geometry, findings);
-                break;
+                return CheckTagTable(name, lines, geometry, findings);
 
             case HarnessObjectKind.DataBlock:
                 CheckMemoryLayout(name, lines, findings);
                 CheckRetain(name, lines, findings, allOrNothing: true);
-                break;
+                return CheckInlineAddresses(name, lines, geometry, findings);
 
             default:
                 // A code block's own interface members can carry RETAIN too (an FB's statics live in its
                 // instance DB, and that is retain memory like any other).
                 CheckRetain(name, lines, findings, allOrNothing: false);
-                break;
+                return CheckInlineAddresses(name, lines, geometry, findings);
         }
     }
 
@@ -159,47 +201,104 @@ public static class RetentionCheck
         }
     }
 
-    private static void CheckTagTable(string name, IReadOnlyList<string> lines, MirrorGeometry geometry, List<RetentionFinding> findings)
+    /// <summary>
+    /// The address rule over a tag table, and the counting is the load-bearing part.
+    ///
+    /// <para><b>Every non-blank line after <c>TAGS</c> is a DECLARATION, and must yield an address.</b>
+    /// The earlier form scanned for an <c>@ %addr</c> and moved past anything that did not match — so a
+    /// table of six tags, five of them malformed, examined ONE address and reported a clean pass. A line
+    /// this check cannot read is a line it has not checked, and that is a finding.</para>
+    /// </summary>
+    private static int CheckTagTable(string name, IReadOnlyList<string> lines, MirrorGeometry geometry, List<RetentionFinding> findings)
     {
-        var tags = 0;
+        var declarations = 0;
+        var addresses = 0;
+        var inTags = false;
 
         foreach (var line in lines)
         {
+            var trimmed = line.Trim();
+
+            if (!inTags)
+            {
+                inTags = string.Equals(trimmed, "TAGS", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (trimmed.Length == 0)
+                continue;
+
+            declarations++;
+
             var match = TagAddress.Match(StripComments(line));
             if (!match.Success)
-                continue;
-
-            tags++;
-            var address = match.Groups["addr"].Value;
-            var parsed = MemoryAddress.Match(address);
-
-            if (!parsed.Success)
             {
                 findings.Add(new RetentionFinding(name,
-                    $"tag at '{address}' is not a bit-memory address. Harness mirror tags live in %M and nowhere else — a mirror in a DB is one re-import away from being invisible on the wire."));
+                    $"tag declaration '{Truncate(trimmed)}' carries no '@ <address>'. For %M there is no retain attribute to fall back on — the address IS the assertion — so a declaration whose address cannot be read is one this check has NOT made."));
                 continue;
             }
 
-            var byteAddress = int.Parse(parsed.Groups["byte"].Value, CultureInfo.InvariantCulture);
-            var size = SizeOf(parsed.Groups["size"].Value);
-
-            if (!geometry.IsNonRetentiveAddress(byteAddress))
-            {
-                findings.Add(new RetentionFinding(name,
-                    $"tag at '{address}' is inside the retentive M window (MB0..MB{geometry.RetentiveBytes - 1}). Retentive M starts at MB0 and runs contiguously upward, and there is no per-tag retain flag on a PLC tag to override it — the address IS the assertion."));
-            }
-
-            if (byteAddress + size > geometry.TotalBytes)
-            {
-                findings.Add(new RetentionFinding(name,
-                    $"tag at '{address}' runs past the CPU's {geometry.TotalBytes} bytes of bit memory."));
-            }
+            addresses++;
+            CheckAddress(name, match.Groups["addr"].Value, "tag at", geometry, findings);
         }
 
-        if (tags == 0)
+        if (declarations == 0)
         {
             findings.Add(new RetentionFinding(name,
                 "tag table declares no tags. An empty mirror is not a clean mirror — nothing in it was checked."));
+        }
+
+        return addresses;
+    }
+
+    /// <summary>
+    /// The address rule over an object that is not a tag table.
+    ///
+    /// <para>An absolute address written straight into a rung or a DB member is subject to exactly the
+    /// same rule as one declared in a tag table, and was invisible to this check until it scanned for
+    /// them. Symbolic harness objects contain none, so this normally examines nothing and adds
+    /// nothing — the point is that it CANNOT be bypassed by writing the address somewhere else.</para>
+    /// </summary>
+    private static int CheckInlineAddresses(string name, IReadOnlyList<string> lines, MirrorGeometry geometry, List<RetentionFinding> findings)
+    {
+        var addresses = 0;
+
+        foreach (var line in lines)
+        {
+            foreach (Match match in AbsoluteAddress.Matches(StripComments(line)))
+            {
+                addresses++;
+                CheckAddress(name, match.Value, "absolute address", geometry, findings);
+            }
+        }
+
+        return addresses;
+    }
+
+    private static void CheckAddress(string name, string address, string what, MirrorGeometry geometry, List<RetentionFinding> findings)
+    {
+        var parsed = MemoryAddress.Match(address);
+
+        if (!parsed.Success)
+        {
+            findings.Add(new RetentionFinding(name,
+                $"{what} '{address}' is not a bit-memory address. Harness mirror tags live in %M and nowhere else — a mirror in a DB is one re-import away from being invisible on the wire."));
+            return;
+        }
+
+        var byteAddress = int.Parse(parsed.Groups["byte"].Value, CultureInfo.InvariantCulture);
+        var size = SizeOf(parsed.Groups["size"].Value);
+
+        if (!geometry.IsNonRetentiveAddress(byteAddress))
+        {
+            findings.Add(new RetentionFinding(name,
+                $"{what} '{address}' is inside the retentive M window (MB0..MB{geometry.RetentiveBytes - 1}). Retentive M starts at MB0 and runs contiguously upward, and there is no per-tag retain flag on a PLC tag to override it — the address IS the assertion."));
+        }
+
+        if (byteAddress + size > geometry.TotalBytes)
+        {
+            findings.Add(new RetentionFinding(name,
+                $"{what} '{address}' runs past the CPU's {geometry.TotalBytes} bytes of bit memory."));
         }
     }
 

@@ -29,12 +29,16 @@ public class RetentionCheckTests
         var map = MapAllocator.Allocate(new WaveSetRequest(Rig, new[] { new SlotRequest("S0", 2, 2) })).Require();
         var result = CopyLayerGenerator.Generate(map,
             new SlotBinding("S0", new[] { "DB_Unit.Setpoint" }, "DB_Unit.StartCmd", new[] { "DB_Unit.Actual" }),
-            new CopyLayerNaming(BlockNumber: 900));
+            new CopyLayerNaming(BlockNumber: 900), new BuildStamp(0xA93F2C71));
 
         var verdict = RetentionCheck.Check(result.Objects, Rig);
 
         Assert.True(verdict.Passed, verdict.Summary());
         Assert.Equal(2, verdict.ObjectsExamined);
+
+        // And the ADDRESS rule actually ran over it. Object count alone would have said the same thing
+        // about a set in which no address was ever looked at.
+        Assert.True(verdict.AddressesExamined > 0, verdict.Summary());
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -76,9 +80,12 @@ public class RetentionCheckTests
     {
         // Without this the check would fire on its own documentation, and the first fix anyone applied
         // would be to weaken the scan.
+        // The tag table is here because BOTH rules must have a subject for a pass to mean anything —
+        // a DB-only set examines no address and is refused on that count alone (see the vacuity tests).
         var verdict = RetentionCheck.Check(new[]
         {
             Db("DB DB_Harness\n  ROOTID 0\n  NUMBER 900\n  MEMORYLAYOUT Standard\n  MEMBERS\n    Counter : Int COMMENT \"Deliberately does not RETAIN across a download.\"\n"),
+            CleanTable(),
         }, Rig);
 
         Assert.True(verdict.Passed, verdict.Summary());
@@ -90,6 +97,7 @@ public class RetentionCheckTests
         var verdict = RetentionCheck.Check(new[]
         {
             Db("DB DB_Harness\n  ROOTID 0\n  NUMBER 900\n  MEMORYLAYOUT Standard\n  MEMBERS\n    RETAINED_Count : Int\n    NoRETAIN : Bool\n"),
+            CleanTable(),
         }, Rig);
 
         Assert.True(verdict.Passed, verdict.Summary());
@@ -233,10 +241,86 @@ public class RetentionCheckTests
     }
 
     [Fact]
-    public void Passed_requires_both_something_examined_and_no_findings()
+    public void Passed_requires_something_examined_by_BOTH_rules_and_no_findings()
     {
-        Assert.False(new RetentionVerdict(0, Array.Empty<RetentionFinding>()).Passed);
-        Assert.False(new RetentionVerdict(3, new[] { new RetentionFinding("x", "y") }).Passed);
-        Assert.True(new RetentionVerdict(3, Array.Empty<RetentionFinding>()).Passed);
+        Assert.False(new RetentionVerdict(0, 0, Array.Empty<RetentionFinding>()).Passed);
+        Assert.False(new RetentionVerdict(3, 0, Array.Empty<RetentionFinding>()).Passed);
+        Assert.False(new RetentionVerdict(0, 3, Array.Empty<RetentionFinding>()).Passed);
+        Assert.False(new RetentionVerdict(3, 3, new[] { new RetentionFinding("x", "y") }).Passed);
+        Assert.True(new RetentionVerdict(3, 3, Array.Empty<RetentionFinding>()).Passed);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 0.1b IS TWO RULES, AND THE ADDRESS RULE MUST NOT BE SATISFIABLE VACUOUSLY
+    //
+    // Each of the three below passed the check before this lane. Every one of them reads as clean in
+    // every field: the attribute rule ran, found nothing, and the address rule never executed.
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void An_object_set_carrying_no_address_at_all_is_refused_even_though_the_attribute_rule_is_satisfied()
+    {
+        // The whole object set is attribute-clean: standard layout, no RETAIN, classifiable, non-empty.
+        // What it has no trace of is a MIRROR — so the rule that covers %M never had a subject.
+        var verdict = RetentionCheck.Check(new[]
+        {
+            Db("DB DB_Harness\n  ROOTID 0\n  NUMBER 900\n  MEMORYLAYOUT Standard\n  MEMBERS\n    Counter : Int\n"),
+            new HarnessObject("FC_Harness", HarnessObjectKind.Block,
+                "BLOCK FC FC_Harness\nROOTID 0\nNUMBER 901\nLANGUAGE LAD\n\nINTERFACE\n  INPUT\n"),
+        }, Rig);
+
+        Assert.False(verdict.Passed);
+        Assert.Empty(verdict.Findings);          // nothing is WRONG — that is exactly the trap
+        Assert.Equal(2, verdict.ObjectsExamined);
+        Assert.Equal(0, verdict.AddressesExamined);
+        Assert.Contains("NO ADDRESS was", verdict.Summary(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_declared_tag_carrying_no_readable_address_is_a_finding_not_a_line_the_scan_moves_past()
+    {
+        // Six declarations, one readable address. The old scan examined that one and reported a pass;
+        // the mirror could have sat anywhere.
+        var table = new HarnessObject("HarnessMirror", HarnessObjectKind.TagTable,
+            "TAGTABLE HarnessMirror\n  ROOTID 0\n  TAGS\n"
+            + "    HX_A 1 : Int @ %MW4000 ACCESSIBLE VISIBLE WRITABLE\n"
+            + "    HX_B 4 : Int\n"
+            + "    HX_C 7 : Int\n");
+
+        var verdict = RetentionCheck.Check(new[] { table }, Rig);
+
+        Assert.False(verdict.Passed);
+        Assert.Equal(1, verdict.AddressesExamined);
+        Assert.Equal(2, verdict.Findings.Count);
+        Assert.All(verdict.Findings, f => Assert.Contains("carries no '@ <address>'", f.Detail, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_absolute_address_written_into_a_rung_is_checked_like_any_other()
+    {
+        // Not reachable from the current generator, which is symbolic throughout — and that is why it
+        // needs a test: the rule must hold because it is enforced, not because nobody has written one yet.
+        var verdict = RetentionCheck.Check(new[]
+        {
+            new HarnessObject("FC_Harness", HarnessObjectKind.Block,
+                "BLOCK FC FC_Harness\nROOTID 0\nNUMBER 901\nLANGUAGE LAD\n\nINTERFACE\n  INPUT\n\nNETWORK 1 \"Start\"\n  COIL DB_Unit.StartCmd := %M4.0\n"),
+        }, Rig);
+
+        Assert.False(verdict.Passed);
+        Assert.Equal(1, verdict.AddressesExamined);
+        Assert.Contains(verdict.Findings, f => f.Detail.Contains("retentive M window", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_absolute_address_in_a_rung_that_is_correctly_placed_counts_as_examined_and_passes()
+    {
+        var verdict = RetentionCheck.Check(new[]
+        {
+            new HarnessObject("FC_Harness", HarnessObjectKind.Block,
+                "BLOCK FC FC_Harness\nROOTID 0\nNUMBER 901\nLANGUAGE LAD\n\nINTERFACE\n  INPUT\n\nNETWORK 1 \"Start\"\n  COIL DB_Unit.StartCmd := %M4005.0\n"),
+        }, Rig);
+
+        Assert.True(verdict.Passed, verdict.Summary());
+        Assert.Equal(1, verdict.AddressesExamined);
     }
 }

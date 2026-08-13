@@ -26,16 +26,29 @@ public class MapAllocatorTests
             new SlotRequest("S0", VectorRegisters: 4, ResultRegisters: 8),
             new SlotRequest("S1", VectorRegisters: 2, ResultRegisters: 3))).Require();
 
-        Assert.Equal(new RegisterRange(0, 2), map.ScanCounter);
-        Assert.Equal(new RegisterRange(2, 1), map.StartBools);
+        Assert.Equal(new RegisterRange(0, 2), map.Version);
+        Assert.Equal(new RegisterRange(2, 2), map.ScanCounter);
+        Assert.Equal(new RegisterRange(4, 1), map.StartBools);
 
         // Widest slot in the wave set sets both widths, for every slot (X-A: slots are fixed-size).
         Assert.Equal(4, map.VectorRegistersPerSlot);
         Assert.Equal(8, map.ResultRegistersPerSlot);
 
-        Assert.Equal(new RegisterRange(3, 8), map.VectorBlock);
-        Assert.Equal(new RegisterRange(11, 16), map.ResultBlock);
-        Assert.Equal(27, map.TotalRegisters);
+        Assert.Equal(new RegisterRange(5, 8), map.VectorBlock);
+        Assert.Equal(new RegisterRange(13, 16), map.ResultBlock);
+        Assert.Equal(29, map.TotalRegisters);
+    }
+
+    [Fact]
+    public void The_control_region_is_one_read_covering_version_scan_counter_and_start_bools()
+    {
+        // DB-6 wants the version register checked before EVERY transaction batch. It is free to check
+        // only if it shares the poll the client was making anyway, which means one contiguous region.
+        var map = MapAllocator.Allocate(Wave(new SlotRequest("S0", 4, 8))).Require();
+
+        Assert.Equal(0, map.Control.Register);
+        Assert.Equal(map.StartBools.End, map.Control.End);
+        Assert.Equal(map.Version.Length + map.ScanCounter.Length + map.StartBools.Length, map.Control.Length);
     }
 
     [Fact]

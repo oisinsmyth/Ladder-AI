@@ -42,13 +42,22 @@ public static class CopyLayerGenerator
     private static readonly Regex SafeIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     /// <summary>Generate the copy layer for a single-slot map, or report every reason it cannot be.</summary>
-    public static CopyLayerResult Generate(RegisterMap map, SlotBinding binding, CopyLayerNaming naming)
+    /// <param name="stamp">
+    /// The build stamp to publish into the version register (§9, build-plan item 2.6). Required, with
+    /// no default: a version register carrying a defaulted value confirms nothing, and the failure it
+    /// exists to catch — an aborted or half-applied download — is exactly the one where a plausible
+    /// value is worse than none. Derive it with <see cref="BuildStamp.Of"/>.
+    /// </param>
+    public static CopyLayerResult Generate(RegisterMap map, SlotBinding binding, CopyLayerNaming naming, BuildStamp stamp)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(naming);
 
         var refusals = new List<string>();
+
+        if (stamp.Value == 0)
+            refusals.Add("the build stamp is zero. Unwritten bit memory reads as zero, so a zero stamp confirms against a CPU that never ran the copy layer — the exact half-applied download the version register exists to catch (spec section 9).");
 
         // Phase 2 is one slot, one block, one vector, end to end — narrow and complete rather than broad
         // and partial. A second slot is phase 3, and it exists to retire A5 (two slots do not interfere),
@@ -102,6 +111,10 @@ public static class CopyLayerGenerator
 
         var tags = new List<MirrorTag>
         {
+            new($"{prefix}ProgramVersion", "DWord", geometry.DoubleWordAddressOf(map.Version.Register),
+                geometry.ByteAddressOf(map.Version.Register),
+                "Build stamp of the downloaded IR set. Present only if this code is running."),
+
             new($"{prefix}ScanCount", "DInt", geometry.DoubleWordAddressOf(map.ScanCounter.Register),
                 geometry.ByteAddressOf(map.ScanCounter.Register),
                 "Free-running scan counter. Wraps; scan stamps are differences from the start edge."),
@@ -132,6 +145,10 @@ public static class CopyLayerGenerator
         var networks = new List<CopyLayerNetwork>();
         var number = 1;
 
+        networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.Version,
+            "Program version",
+            new[] { (stamp.Literal, $"{prefix}ProgramVersion") }));
+
         networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ScanCounter,
             "Free-running scan counter",
             new[] { ($"{prefix}ScanCount", $"{prefix}ScanCount") }));
@@ -154,7 +171,7 @@ public static class CopyLayerGenerator
             $"Results out - slot {binding.SlotId}",
             resultSources.Select((s, i) => (s, $"{prefix}{binding.SlotId}_R{i:000}")).ToArray()));
 
-        var plan = new CopyLayerPlan(map, binding, tags, networks, binding.StartCondition is null);
+        var plan = new CopyLayerPlan(map, binding, stamp, tags, networks, binding.StartCondition is null);
 
         var objects = new[]
         {
