@@ -131,6 +131,26 @@ public static class LoopRun
                 + $"{gate.Refused.Count} gate(s) refused, {gate.NotChecked.Count} could not run.");
         }
 
+        // ---- 2b. WIDTH — every value must survive the element declared to carry it -------------------
+        //
+        // 🔴 *** BEFORE ANYTHING IS GENERATED OR DEPLOYED, AND SEPARATE FROM THE GATE. *** A value that
+        // overflows its mirror element does not error on the controller: 75 000 ms in a single register
+        // arrives as 9 464 ms, every boundary keyed on it fires early, and the run returns a plausible
+        // FAIL against a block that did nothing wrong. Measured on the deliverable vector set — 81
+        // duration values exceed 65 535 ms — so this is load-bearing, not defensive.
+        //
+        // The order hazard is already loud (a swapped word makes 75 s read as ~7 days and the scenario
+        // times out); the width hazard is the quiet one, so it is the one that refuses.
+        var tooWide = WidthRefusals(request);
+        if (tooWide.Count > 0)
+        {
+            return new LoopResult(LoopOutcome.NotRepresentable, gate, mapResult.SizeReport, null, null, null, null,
+                Array.Empty<ResultPackage>(), caveats,
+                $"{tooWide.Count} vector value(s) do not fit the mirror element declared to carry them, so no copy layer was "
+                + "generated and nothing was deployed. *** THIS IS A REFUSAL RATHER THAN A TRUNCATION: *** a value silently "
+                + "narrowed produces a confident wrong answer, not an error. " + string.Join(" | ", tooWide));
+        }
+
         // ---- 3. GENERATE ----------------------------------------------------------------------------
         var stamp = BuildStamp.Of(map, request.Bindings, request.Naming, request.ProgramUnderTest);
         var copyLayer = CopyLayerGenerator.Generate(map, request.Bindings, request.Naming, stamp);
@@ -386,6 +406,76 @@ public static class LoopRun
         return slot?.Index ?? throw new ArgumentException($"no slot '{slotId}' in this map.", nameof(slotId));
     }
 
+    /// <summary>
+    /// Every vector value that does not survive its declared element, named.
+    ///
+    /// <para><b>Checked here rather than at the write, because a refusal has to happen BEFORE anything is
+    /// generated or deployed.</b> Catching it at the write would mean the copy layer was built, the
+    /// program downloaded and the CPU loaded before anybody noticed the stimulus could not be expressed.</para>
+    ///
+    /// <para><b>And it covers the COMPLETION VALUE as well as the inputs</b>, since a completion signal is
+    /// just another mirrored element — see the gap named on <see cref="ToWireVector"/>.</para>
+    /// </summary>
+    private static IReadOnlyList<string> WidthRefusals(LoopRequest request)
+    {
+        var refusals = new List<string>();
+
+        foreach (var vector in request.Vectors)
+        {
+            var binding = request.Bindings.FirstOrDefault(b => b.SlotId == vector.Slot);
+            if (binding is null)
+                continue;
+
+            foreach (var refusal in MirrorValueFit.CheckAll(binding.VectorTargets, vector.Inputs))
+                refusals.Add($"vector '{vector.Id}': {refusal}");
+
+            // The completion value travels in the completion signal's own element, so it is held to the
+            // same rule as everything else the mirror carries.
+            var completion = binding.ResultSignal(vector.CompletionSignal);
+            if (completion is not null && vector.CompletionValue is { } expected)
+            {
+                var fit = MirrorValueFit.Check(vector.CompletionSignal, completion.Type, expected.ToString());
+                if (!fit.Fits)
+                    refusals.Add($"vector '{vector.Id}' completion value: {fit.Refusal}");
+            }
+
+            // ⚠️ AND THE GAP ITSELF, REFUSED RATHER THAN MIS-COMPARED. WireVector compares ONE register
+            // against a ushort, so a 32-bit completion signal cannot be expressed at all. Comparing anyway
+            // would test its high half and report TIMED-OUT forever on a block that finished.
+            if (completion is not null && (MirrorElements.For(completion.Type)?.Registers ?? 1) > 1)
+            {
+                refusals.Add(
+                    $"vector '{vector.Id}': completion signal '{vector.CompletionSignal}' is declared {completion.Type}, which occupies "
+                    + $"{MirrorElements.Require(completion.Type).Registers} registers — and completion is compared against ONE register "
+                    + "holding a 16-bit value. *** THIS IS INEXPRESSIBLE, NOT MIS-EXPRESSED. *** Comparing anyway would test the high half "
+                    + "alone and report TIMED-OUT forever on a block that finished. Use a single-register completion signal, or widen "
+                    + "WireVector.CompletionValue to carry an element width the way every other mirrored value now does.");
+            }
+        }
+
+        return refusals;
+    }
+
+    /// <summary>
+    /// ⚠️ <b>KNOWN GAP, ONE FIELD OVER: <c>CompletionValue</c> IS COMPARED AGAINST A SINGLE REGISTER.</b>
+    ///
+    /// <para><c>WireVector.CompletionValue</c> is a <c>ushort</c> and <c>SlotRun</c> compares it against
+    /// <c>results[CompletionRegister]</c> — one register. <b>So a 32-bit completion signal is not
+    /// mis-compared, it is INEXPRESSIBLE</b>: the submission's <c>completionValue</c> is an <c>int?</c>
+    /// bounded 0..65535, which was right for a 16-bit register and wrong for the type system that now
+    /// surrounds it.</para>
+    ///
+    /// <para><b>The fix belongs with the MIRROR GEOMETRY, not the result package</b>, and the reason is
+    /// that a completion signal is not a special kind of thing — <i>it is just another mirrored element</i>.
+    /// It should carry a width like every other one: declared type, width derived from the address form,
+    /// value range-checked by <see cref="MirrorValueFit"/>, and the comparison made across the element's
+    /// full register span rather than its first register. Putting it in the result package instead would
+    /// give completion a second, private notion of width that could disagree with the mirror's.</para>
+    ///
+    /// <para><b>Until then the loop refuses rather than mis-comparing:</b> a completion signal whose
+    /// element is wider than one register cannot be honoured here, and pretending otherwise would compare
+    /// against its high half and report TIMED-OUT forever on a block that finished.</para>
+    /// </summary>
     private static WireVector ToWireVector(SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map, RegisterWordOrder wordOrder)
     {
         var binding = bindings.Single(b => b.SlotId == vector.Slot);
@@ -404,27 +494,32 @@ public static class LoopRun
             if (!vector.Inputs.TryGetValue(target.Tag, out var text))
                 continue;
 
-            var element = MirrorElements.For(target.Type);
+            // ONE parse and ONE range check, shared with the refusal above. A second, laxer parse here is
+            // how a value refused at step 2b could still be written narrowed — so there isn't one.
+            var fit = MirrorValueFit.Check(target.Tag, target.Type, text);
+            if (!fit.Fits)
+            {
+                // Unreachable: step 2b refuses the whole run before any wave is built. A throw rather than
+                // a silent narrowing, because narrowing here is the exact defect being prevented.
+                throw new InvalidOperationException(
+                    $"vector '{vector.Id}' reached the wave with a value that does not fit its mirror element. The width check "
+                    + $"refuses that before generation, so the loop has run a submission it did not admit. {fit.Refusal}");
+            }
 
-            if (element?.Form == MirrorAddressForm.DoubleWord)
+            var element = MirrorElements.Require(target.Type);
+
+            if (element.Form == MirrorAddressForm.DoubleWord)
             {
                 // Same uncalibrated order as the read side. Writing under one order and reading under the
                 // other would cancel out on our own loopback and disagree only against the device — the
                 // exact shape of self-agreement this project distrusts, so both ends take the SAME value.
-                if (int.TryParse(text, out var wide))
-                {
-                    var words = RegisterWords.From32(unchecked((uint)wide), wordOrder);
-                    values[offset] = words[0];
-                    values[offset + 1] = words[1];
-                }
+                var words = RegisterWords.From32(unchecked((uint)(int)fit.Value), wordOrder);
+                values[offset] = words[0];
+                values[offset + 1] = words[1];
             }
-            else if (element?.Form == MirrorAddressForm.Bit)
+            else
             {
-                values[offset] = bool.TryParse(text, out var flag) && flag ? (ushort)1 : (ushort)0;
-            }
-            else if (short.TryParse(text, out var parsed))
-            {
-                values[offset] = unchecked((ushort)parsed);
+                values[offset] = unchecked((ushort)(short)fit.Value);
             }
         }
 

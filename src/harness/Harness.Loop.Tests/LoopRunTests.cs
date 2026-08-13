@@ -541,6 +541,108 @@ public class LoopRunTests
     }
 
     [Fact]
+    public void A_VALUE_TOO_WIDE_FOR_ITS_ELEMENT_STOPS_THE_LOOP_BEFORE_ANYTHING_IS_DEPLOYED()
+    {
+        // *** THE MEASURED CASE. *** 81 duration values in the deliverable vector set exceed 65 535 ms.
+        // Through a single-register mapping 75 000 arrives as 9 464: no error, no timeout, just every
+        // boundary firing early and a confident FAIL against a block that did nothing wrong.
+        var wide = Vector(limit: 10) with
+        {
+            Inputs = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [TrivialBlock.StepTag] = "5",
+                [TrivialBlock.LimitTag] = "75000",
+            },
+        };
+
+        var (result, gateway) = Run(Request(vector: wide));
+
+        Assert.Equal(LoopOutcome.NotRepresentable, result.Outcome);
+
+        // *** BEFORE THE DEVICE. *** Refusing after deployment would mean the CPU was loaded with a
+        // program that could not carry its own stimulus.
+        Assert.Equal(0, gateway.Deployments);
+        Assert.Equal(0, gateway.Opens);
+
+        Assert.Contains("9464", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("REFUSAL RATHER THAN A TRUNCATION", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_the_SAME_value_runs_when_the_element_is_wide_enough_to_carry_it()
+    {
+        // The pair matters: the refusal has to be about the WIDTH, not about the number being large.
+        Assert.True(MirrorValueFit.Check(TrivialBlock.LimitTag, MirrorValueType.Time, "75000").Fits);
+        Assert.False(MirrorValueFit.Check(TrivialBlock.LimitTag, MirrorValueType.Int, "75000").Fits);
+    }
+
+    [Fact]
+    public void A_COMPLETION_SIGNAL_WIDER_THAN_ONE_REGISTER_IS_REFUSED_because_it_is_INEXPRESSIBLE()
+    {
+        // ⚠️ WireVector compares ONE register against a ushort, so a 32-bit completion signal cannot be
+        // expressed at all. Comparing anyway would test its high half and report TIMED-OUT forever on a
+        // block that finished — a spurious TIMED-OUT being worse than a spurious FAIL, because it is
+        // believed. Until completion carries a width like every other mirrored element, this refuses.
+        var binding = new SlotBinding(
+            "S0",
+            MirroredSignal.Ints(TrivialBlock.StepTag, TrivialBlock.LimitTag),
+            TrivialBlock.StartTag,
+            new[] { MirroredSignal.Int(TrivialBlock.CountTag), MirroredSignal.Time(TrivialBlock.DoneTag) });
+
+        var request = Request() with { Bindings = new[] { binding }, Slots = new[] { new SlotRequest("S0", 2, 4) } };
+
+        var (result, gateway) = Run(request);
+
+        Assert.Equal(LoopOutcome.NotRepresentable, result.Outcome);
+        Assert.Equal(0, gateway.Deployments);
+        Assert.Contains("INEXPRESSIBLE, NOT MIS-EXPRESSED", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_OBSERVABILITY_FLOOR_IS_MONOTONIC_IN_SLOT_COUNT_so_OVER_declaring_is_the_SAFE_error()
+    {
+        // 🔴 *** A CORRECTION, PINNED SO IT CANNOT BE MIS-REMEMBERED AGAIN. *** It has been said that
+        // over-declaring the slot count gives a floor that is too PERMISSIVE. It is the opposite:
+        // readsPerCycle is monotonically non-decreasing in slot count and the floor is proportional to it,
+        // so OVER-declaring gives a floor that is too HIGH — the conservative error. *** THE PERMISSIVE
+        // DIRECTION IS UNDER-DECLARING *** — which is what naming the slots you are submitting rather than
+        // the wave set they run in produces.
+        var geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000);
+
+        double previous = 0;
+
+        foreach (var slots in new[] { 1, 2, 3, 6, 12, 24, 48 })
+        {
+            var map = MapAllocator.Allocate(new WaveSetRequest(
+                geometry,
+                Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", 2, 8)).ToArray())).Require();
+
+            var floor = WireTiming.ObservabilityFloorScans(map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Count);
+
+            Assert.True(floor >= previous,
+                $"the floor fell from {previous} to {floor} going to {slots} slot(s). If it can fall, over-declaring the "
+                + "slot count becomes the PERMISSIVE error and the correction recorded here is wrong.");
+
+            previous = floor;
+        }
+
+        // And the measured consequence the wave set actually turned on: 6 slots x 8 result registers is 48,
+        // still inside ONE Modbus read of 125, so the floor is UNCHANGED between 1 slot and 6. The floor is
+        // quantised on ROUND TRIPS, not on slot count — which is why the byte-identical gate output across
+        // that change was correct rather than suspicious.
+        double FloorFor(int slots)
+        {
+            var map = MapAllocator.Allocate(new WaveSetRequest(
+                geometry,
+                Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", 2, 8)).ToArray())).Require();
+
+            return WireTiming.ObservabilityFloorScans(map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Count);
+        }
+
+        Assert.Equal(FloorFor(1), FloorFor(6));
+    }
+
+    [Fact]
     public void THERE_IS_ONE_32_BIT_WORD_ORDER_IN_THIS_SYSTEM_and_it_is_still_UNCALIBRATED()
     {
         // ⚠️ A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so decoding it

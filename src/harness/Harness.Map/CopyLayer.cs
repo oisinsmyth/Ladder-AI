@@ -91,6 +91,25 @@ public sealed record MirrorElement(MirrorValueType Type, string IrDataType, Mirr
 {
     /// <summary>Holding registers this element occupies. Derived from <see cref="Form"/> — never stated twice.</summary>
     public int Registers => Form == MirrorAddressForm.DoubleWord ? 2 : 1;
+
+    /// <summary>Lowest value this element can carry. Bool is 0..1; Int is S7's signed 16-bit; Time is signed 32-bit ms.</summary>
+    public long Minimum => Form switch
+    {
+        MirrorAddressForm.Bit => 0,
+        MirrorAddressForm.Word => short.MinValue,
+        _ => int.MinValue,
+    };
+
+    /// <summary>Highest value this element can carry.</summary>
+    public long Maximum => Form switch
+    {
+        MirrorAddressForm.Bit => 1,
+        MirrorAddressForm.Word => short.MaxValue,
+        _ => int.MaxValue,
+    };
+
+    /// <summary>True when <paramref name="value"/> survives this element intact.</summary>
+    public bool Fits(long value) => value >= Minimum && value <= Maximum;
 }
 
 /// <summary>The supported element types. <b>Everything not here is a refusal that names the signal.</b></summary>

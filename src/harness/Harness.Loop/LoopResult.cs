@@ -19,6 +19,22 @@ public enum LoopOutcome
     /// <summary>The generated harness objects failed the non-retentive assertion (0.1b). Nothing was deployed.</summary>
     NotAssertable,
 
+    /// <summary>
+    /// 🔴 <b>A VECTOR VALUE DOES NOT FIT THE MIRROR ELEMENT DECLARED TO CARRY IT.</b> Nothing was
+    /// generated and nothing was deployed.
+    ///
+    /// <para><b>Its own outcome because the alternative is a confident wrong answer.</b> A duration that
+    /// overflows a single register does not error on the controller — <c>75 000 ms</c> arrives as
+    /// <c>9 464 ms</c>, every boundary keyed on it fires early, and the run comes back FAIL against a
+    /// block that may be perfectly correct. Measured on the deliverable vector set: <b>81 duration values
+    /// exceed 65 535 ms.</b></para>
+    ///
+    /// <para>Note the asymmetry this exists to correct: a swapped 32-bit WORD ORDER announces itself
+    /// (75 s becomes about 7 days and the scenario times out), while a truncated WIDTH passes quietly.
+    /// <b>The quiet one is the one that had to be made loud.</b></para>
+    /// </summary>
+    NotRepresentable,
+
     /// <summary>The deployment did not happen, or the device did not load what it was given.</summary>
     NotDeployed,
 
