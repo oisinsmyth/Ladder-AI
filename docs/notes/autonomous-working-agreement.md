@@ -143,6 +143,18 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** A TEST THAT COULD NOT EXPRESS SUCCESS, AND SO PUNISHED ITS OWN FIX. *** Measured 2026-08-13:
+  four golden-harness guards were staleness checks over **a list of things wrong with the corpus**,
+  written as `[Theory]` + `MemberData` — so **every one fails with `No data found` the moment its
+  list empties**, which is the state the work exists to reach. Two did exactly that when a commit
+  closed the last gap, and the failure looks like a regression rather than an achievement.
+    ➜ *** ASK OF EVERY ENUMERATION: IS THIS A POPULATION, OR A LIST OF THINGS WRONG WITH THE
+      POPULATION? *** **A population must never be empty** — an empty corpus *is* broken, and that
+      is where *empty is not clean* belongs. **A problem list should be trying to become empty**, and
+      a guard over one must be vacuously green when it succeeds.
+    ➜ **This is the boundary of *empty is not clean*, not an exception to it.** The rule earns its
+      keep on *examined-nothing* cases; applied to a defect list it inverts, and punishes exactly the
+      work it was meant to protect.
 - *** A FIXTURE THAT ASSERTED A NUMBER WHICH WAS A PROPERTY OF THE ALGORITHM, NOT OF THE
   REQUIREMENT. *** Measured 2026-08-13: three wave-set fixtures asserted a **wave count** that had
   been guessed at, and failed — a path graph two-colours correctly, and a blacklist edge between an
