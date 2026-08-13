@@ -38,6 +38,21 @@ phase 2 with the copy-layer generator.
 
 **The critical path is now A1**, and it runs through the phase-1 spike.
 
+> ### 📍 STATUS, 2026-08-13 — the critical path is one blocked command
+>
+> **A1's two recorded caveats are both built and gated, and neither is answered.** Builds C
+> (N=123, VARIANT 1), D (N=123, VARIANT 2) and A (the 1.4 generator) are authored, converted,
+> preflight-clean, and C is imported and `sanity-check` HEALTHY in the scratch project.
+>
+> *** THE ONLY REMAINING STEP IS THE DOWNLOAD, AND IT IS REFUSED BY THE HARNESS PERMISSION LAYER,
+> NOT BY ANY PROJECT RULE OR BY THE WRITE FENCE. *** Everything either side of it is done. Until it
+> runs, the scratch project holds the 123-register build and the rig still runs the 16-register one
+> — see the warning in the phase-1 entry before pointing any client at the rig.
+>
+> **Phase 2 has started anyway** (2.1, 2.2, 0.1b built, 280 tests) because A1 *was* answered at
+> N=16 and phase 2's gate is A4, not A1's width caveat. **The width caveat is what the allocator
+> would have to be revised for**, which is why it was taken first and why it is worth unblocking.
+
 ---
 
 ## THE ORGANISING PRINCIPLE
@@ -1066,6 +1081,146 @@ the disruptive allowance; `DataBlockReinitialization` was **never raised**. Run 
 independently afterwards: *** `Running (8)` *** — keyed on 8, not on the decoder's catch-all.
 
 ---
+
+### ✅ A1 RE-OPENED AT THE WIDTH THE DESIGN WILL ACTUALLY USE — 123 REGISTERS, BUILT AND GATED, 2026-08-13
+
+A1's recorded limits were **untested above 16 registers** and **untested on VARIANT 2**. A2 then
+measured the marginal cost per register at **~zero**, which pushes the design toward WIDE slots —
+so *** THE WIDTH LIMIT IS THE ONE THAT NOW MATTERS ***, and it is the one the phase-2 allocator is
+being written against. This lane therefore went straight to **N = 123**, the FC16 write limit
+(FC03 reads at most 125), rather than repeating narrow variants the design will never use.
+
+The checker IR is generated from a single `N`, so widening it was cheap. Three findings from doing it:
+
+  1. *** THE ONE-RUNG COMPARISON DOES NOT SCALE, AND WAS CHUNKED. *** At N=16 the checker compared
+     all 15 registers in ONE rung and captured in ONE network of 32 MOVEs. At N=123 that is a rung
+     of 122 branches and a network of 244 MOVEs — far past anything this project has put through
+     TIA. Both are now chunked at sizes already proven to import: **15 comparisons per rung** (9
+     rungs OR'd into one `TearNow`) and **≤32 MOVEs per capture network** (8 networks). Every
+     register is still read in the same scan, so a disagreement is still a one-scan snapshot — the
+     chunking is a transcription change, not a semantic one.
+  2. **The capture order survives the chunk boundary.** Registers are still tested from the highest
+     index downwards *across* networks as well as within them (122→107, 106→91, … 10→1), so the
+     lowest disagreeing index is written last and survives. `TEAR_INDEX` still names the FIRST
+     disagreeing register — which is what distinguished a genuine tear from our own sweep artefact
+     on 2026-08-12, so it was worth preserving deliberately rather than by luck.
+  3. **The server block needed no change at all.** `MB_SERVER`'s `MB_HOLD_REG` is the raw pointer
+     `P#M1000.0 WORD 209`, not a tag reference — so renaming every pattern tag and growing the set
+     from 16 to 123 left `FB_Comms_ModbusServer` untouched. Placing the status block at offset 200
+     was done for exactly this and it paid off.
+
+**Gate: `sanity-check`, never the compile exit code (hard rule 4).** `OVERALL: HEALTHY`,
+`BLOCKS: 73 INCONSISTENT: 0`, `TYPES: 33 INCONSISTENT: 0` — both lines, per FI-62. `Main` went
+inconsistent when its callee changed (expected) and cleared on a per-block compile. Preflight was
+clean on both files. **FC 101 confirmed free by enumeration, not trust.** Also worth recording: the
+pre-existing `FC_ModbusTCP_Sample` inconsistency **has cleared** on its own.
+
+**Three builds are prepared, and only one can occupy the project at a time:**
+
+| build | what | state |
+|---|---|---|
+| **C** | checker, N=123, VARIANT 1 | ✅ imported, compiled, gated HEALTHY. **Awaiting download.** |
+| **D** | checker, N=123, VARIANT 2 | IR + XML ready. Differs from C by **exactly one literal**, as predicted. OB1 swap passes `diff --only 8 9`: **7 of 9 networks provably identical**. |
+| **A** | generator FC 101, N=123 | IR + XML ready, preflight CLEAN. Writes one incrementing generation into all 123 registers per scan; **holds the tear registers at zero** so a value left by the checker build cannot read as a live detection; republishes the generation as `CHANGE_COUNT` so the client's liveness check works. Checker not called, per 1.4's stated requirement. OB1 passes `diff --only 9`. |
+
+> #### 🔴 THE PROJECT AND THE RIG NOW DISAGREE
+>
+> The download has **not** happened, so the scratch project holds the **123**-register build while
+> the rig still runs the **16**-register one. *** THE CLIENT'S `--pattern-count` FOR BUILD C IS 123,
+> NEVER THE OLD 16 *** — at 16 the other 107 registers hold stale values and **latch a tear that
+> never happened**, which is the exact false positive that would send the design down a wrong path.
+
+### 🔴 THE `compile` EXIT-CODE FIX HAD NEVER REACHED THE BINARY — FOUND, THEN FIXED, 2026-08-13
+
+Every clean per-block compile in the lane above exited **8** while reporting `ERRORS: 0` and
+`Block was successfully compiled`. CLAUDE.md states this was fixed on 2026-08-12: `compile` used to
+key on `State != Success` where `compile-all` keys on `ErrorCount`, so on a project carrying a
+**permanent hardware warning** — which this one does — **every per-block compile exits 8 regardless
+of the block.**
+
+*** THE FIX WAS IN SOURCE AND NOT IN THE BINARY. *** The Release exe was dated **Aug 11**; commit
+`76e9f8f` landed **Aug 12**. **This is the FI-73 class, one tool along** — and the reason it
+persisted is the opposite of carelessness: Release is deliberately not rebuilt during Portal work,
+because a rebuild needs a fresh whitelist approval, so the fix could not land by the ordinary route.
+
+  ➜ *** FI-74's AUTO-APPROVAL CLOSED IT, AND THIS IS THE FIRST TIME IT HAS BEEN USED IN ANGER. ***
+    Rebuilt from the clean tested tree once the `openness-cli` lane landed, with a **byte-exact
+    backup of the old binary taken first** — approval is keyed on `(Path, FileHash)`, so restoring
+    the exact bytes would have restored the old approval had the new build not approved. It was not
+    needed: `openness whitelist: 3 approved, 0 already approved`, **with nobody at the machine.**
+  ➜ **Verified behaviourally, not by timestamp:** same block, same project, same warning —
+    **exit 8 → 0**, and a new `CONSISTENT: yes (re-read after the compile)` line appeared. That
+    read-back is FI-52's converse, which shipped in the same commit and **had also never reached a
+    caller. Two guards written and tested on 2026-08-12 were reaching nothing.**
+  ➜ **The rule this generalises to:** a fix is not landed when it is committed and tested; it is
+    landed when the binary the callers actually invoke has it. FI-73 says this for the converter.
+    It is now measured true for `openness-cli`, and the approval friction is what made it likelier
+    here, not less.
+
+### ✅ THREE MORE SILENT-CHECK HOLES CLOSED, 2026-08-13 — all the same class
+
+  - *** A TAG TABLE WAS NEVER REVIEWED, AND THE REPORT SAID SO IN WORDS NOBODY READ AS A PROBLEM. ***
+    All 18 rules reported `not applicable — TAGTABLE rule support not implemented in Phase 1`, and
+    the run exited 0. Three rules were meaningful and silently unimplemented (**C-001**, C-005,
+    C-406); 15 are genuinely inapplicable and now say *why*, individually. `Skipped` now means "had
+    a subject, was not judged" and **gates at exit 2 = REVIEW INCOMPLETE**, because that line had
+    been printed on every tag-table review since Phase 1 and read as clean every time — a warning
+    demonstrably did not work here. **1010 → 1069 tests.**
+  - *** `preflight` NEVER HANDED THE REVIEWER THE REGISTRY IT HAD ALREADY BUILT *** — so **C-118,
+    C-122 and C-125 recorded themselves unrunnable on every preflight this tool has ever done.** A
+    stepper block reported `0 finding(s)`, exit 0, with three of its most relevant rules never run.
+    One call site from the tag-table hole, same shape.
+  - **`/review-conventions` was one of those callers** and is fixed (`5031983`): its own scope list
+    already named C-118/C-122/C-125 as in scope while its invocation omitted `--project`. Checked
+    for further instances — there are none; `gen-block-new` goes through `preflight`, which was
+    fixed at source.
+
+### ✅ PHASE 2 STARTED — 2.1, 2.2 AND 0.1b BUILT, 2026-08-13 (`deb2332`, `3ed93ff`)
+
+`src/harness/Harness.Map`. **221 → 280 tests**, all green. The generated IR was put through the real
+converter and survives `to-xml` → `to-ir --no-sidecar` **byte-identically**, so the golden strings
+are a form the toolchain accepts rather than one that merely looks plausible.
+
+**Three places where measurement contradicted the plan:**
+
+  1. *** 0.1b IS TWO RULES, NOT ONE, AND THE PLAN'S FRAMING FITS ONLY ONE OF THEM. *** It assumes
+     retain is an *attribute* (per-tag on optimized blocks, all-or-nothing on standard ones). **A
+     `%M` tag has no retain attribute at all** — `ir/SPEC.md`'s TAGTABLE grammar has no Remanence
+     concept. For the mirror, **non-retentiveness IS THE ADDRESS**. A checker implementing only the
+     attribute rule **passes a mirror sitting on MB0**, which is the failure it exists to prevent.
+  2. **0.1b is not fully checkable from IR**, contrary to its plan entry. The `MemoryLayout` branch
+     cannot be: a re-import silently reverts Standard→Optimized, the export carries no element, and
+     `drift-check` is structurally blind. It needs a device-side `block-layout --set Standard` +
+     `--expect Standard` leg. Not yet exposed (phase 2 generates no DB) — **it bites at the first
+     harness DB.**
+  3. **X-A's "forty slots" only holds with the base near MB0**, which X-A's own placement rule
+     pushes against — at MB4000 it is **twenty**. The program's retentive extent is therefore a
+     direct input to slots-per-wave, and `RetentiveBytes` is now required with no default.
+
+  ➜ **Unmeasured and load-bearing, one write settles it:** the bit order *within* the start-bool
+    register is **inferred from big-endianness, not measured** — A1 compared whole words and never
+    tested bit order. Benign at one slot (a start bool that never rises is a detectable non-event);
+    **wrong at 9+ slots, where slot 0 and slot 8 swap.** Isolated to `MirrorGeometry.BitAddressOf`.
+
+### ✅ THE ARITHMETIC RE-DERIVED ON THE MEASURED NUMBERS — new §12a, 2026-08-13 (`34fdd4d`)
+
+The spec now has **one place** where a timing constant is chosen (`RTT_typ 78`, **`RTT_p99 173` for
+every budget/cap/timeout**, `RTT_max 2216` for timeouts, `scan 23.33` loaded); every other site
+defers to it, and a `[D]` marker was added so derived figures stop wearing `[M]`.
+
+  - *** O11's SHAPE INVERTS. *** `K_max = floor(S_min × 23.33 / 173)`: S=10 → **1 slot**, 50 → 6,
+    100 → 13 — and **all-latched has no cap at all.** On the median the old table reads 3–5× too
+    generous, and its failure mode is **a missed assertion reported as a pass.**
+  - **A poll IS one round trip.** There was never a "~100 ms poll" parameter to tune; the period is
+    `K × RTT`. §12's conclusion survives but its margin is under half what was argued.
+  - **The 1-in-2,000 outlier is decisive for timeouts**, not for duration: +3% on a wave, but X-B's
+    backstop must be `(scans × 23.33) + (round trips × 173) + 2216`. **Without the last term a
+    healthy test reports TIMED-OUT every ~22nd wave.**
+  - **X-D's compression ceiling falls from 10× to 4.3×** (timer floor 50 → 116.7 ms).
+  - **`D29 does not invert`** — its `K × RTT` was always round-trip-shaped. What changes is that
+    "width" means *slots*, never registers, and the cap is a function rather than a constant.
+  - *** THE EXTRAPOLATION IS NAMED RATHER THAN BURIED: "width is free to 125/123" is `[I]`, measured
+    only to 16 registers. *** Which is exactly what build C above is for.
 
 ## PHASE 2 — THE WALKING SKELETON
 
