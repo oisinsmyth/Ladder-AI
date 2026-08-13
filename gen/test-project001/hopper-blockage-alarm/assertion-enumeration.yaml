@@ -135,6 +135,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted"
         normalised_text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted"
+        id: REQ-HBA-001:ab68c1
         response_signal: HopperBlockedAlarm
         split_defect: "The alarm output is never asserted, or is asserted from a condition other than the elapsed persistence window, while the inhibit output still asserts correctly. A2, A3, A4 stay true."
         text_unchanged_since_issue: 2
@@ -144,6 +145,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the inhibit/stop demand output is asserted"
         normalised_text: "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the inhibit/stop demand output is asserted"
+        id: REQ-HBA-001:8ea7f6
         response_signal: HopperBlockedInhibit
         split_defect: "The inhibit output is left unwritten, or driven from a different condition, while the alarm asserts correctly. R2. A1, A3, A4 stay true."
         text_unchanged_since_issue: 2
@@ -152,6 +154,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High is continuously true for longer than the persistence threshold while neither Shredder_Run_Fwd_FB nor Shredder_Run_Rev_FB is true and no hopper-blockage alarm was previously latched THEN the hopper-blockage alarm is not asserted"
         normalised_text: "WHEN Hopper_Level_High is continuously true for longer than the persistence threshold while neither Shredder_Run_Fwd_FB nor Shredder_Run_Rev_FB is true and no hopper-blockage alarm was previously latched THEN the hopper-blockage alarm is not asserted"
+        id: REQ-HBA-001:0772fa
         response_signal: HopperBlockedAlarm
         split_defect: "The run-state gate on ACCRUAL is absent, so persistence time accrues at standstill and a full hopper at rest earns an alarm it never earned. A1, A2, A4 stay true."
         rule: "R1 — the trigger's NEGATIVE case."
@@ -162,6 +165,7 @@ clauses:
         form: When
         text: "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold"
         normalised_text: "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold"
+        id: REQ-HBA-001:2bdfa7
         response_signal: HopperBlockedAlarm
         split_defect: "*** THE RESET-ON-STOP DEFECT. *** Elapsed time DISCARDED on loss of running rather than FROZEN, so an interrupted run never reaches the threshold. A1 stays true."
         text_unchanged_since_issue: 2
@@ -180,6 +184,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode"
         normalised_text: "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode"
+        id: REQ-HBA-002:efe6b5
         response_signal: HopperBlockedAlarm
         split_defect: "The clear is not honoured at all — the accumulator ignores hopper-low entirely — so an episode that visibly cleared still alarms. A2 and A3 stay true (a short preset still honours a clear)."
         limb: 2
@@ -189,6 +194,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode"
         normalised_text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode"
+        id: REQ-HBA-002:bfda9d
         response_signal: HopperBlockedAlarm
         split_defect: "The clear debounce is absent, so any glitch to false counts as a clear and prevents the alarm. A1 and A3 stay true."
         limb: 2
@@ -198,6 +204,7 @@ clauses:
         form: When
         text: "WHEN a first uninterrupted high episode is in progress with no debounced clear and no FaultReset since the accumulated persistence time was last zero THEN the hopper-blockage alarm does not assert at any point before the specified persistence threshold of accumulated time has elapsed"
         normalised_text: "WHEN a first uninterrupted high episode is in progress with no debounced clear and no FaultReset since the accumulated persistence time was last zero THEN the hopper-blockage alarm does not assert at any point before the specified persistence threshold of accumulated time has elapsed"
+        id: REQ-HBA-002:feecbe
         response_signal: HopperBlockedAlarm
         limb: 1
         new_in_issue: 5
@@ -227,6 +234,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
+        id: REQ-HBA-003:607fdf
         response_signal: HopperBlockedAlarm
         split_defect: "The accumulator is NOT discarded on a qualified clear, so a later brief high trips the alarm early. A2, A3, A4 stay true."
         text_unchanged_since_issue: 2
@@ -236,6 +244,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated"
+        id: REQ-HBA-003:652dd6
         response_signal: HopperBlockedAlarm
         split_defect: "The clear debounce is absent, so a single-scan glitch discards the accumulator and a blocked hopper never alarms. A1, A3, A4 stay true."
         text_unchanged_since_issue: 3
@@ -244,6 +253,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
         normalised_text: "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated"
+        id: REQ-HBA-003:aa1d87
         response_signal: HopperBlockedAlarm
         split_defect: "The discard is gated on run state, so the freeze preserves a stale accumulator across a stop during which the hopper visibly emptied. AR-HBA-06's 40-of-60 case. A1, A2, A4 stay true."
         text_unchanged_since_issue: 2
@@ -253,6 +263,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time while the plant is stopped and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before that brief false has accumulated"
         normalised_text: "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time while the plant is stopped and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before that brief false has accumulated"
+        id: REQ-HBA-003:09e3a8
         response_signal: HopperBlockedAlarm
         split_defect: "The accumulator is discarded on ANY hopper-low while stopped — the scope AR-HBA-06 left and AR-HBA-09 completed. A1, A2, A3 stay true."
         text_unchanged_since_issue: 3
@@ -266,6 +277,7 @@ clauses:
         form: Never
         text: "NEVER the hopper-blockage alarm de-asserts unless FaultReset has been asserted since the alarm was raised"
         normalised_text: "NEVER the hopper-blockage alarm de-asserts unless FaultReset has been asserted since the alarm was raised"
+        id: REQ-HBA-004:14c9b6
         response_signal: HopperBlockedAlarm
         split_defect: "Sole assertion of the clause. Its own defect is a MOMENTARY alarm — the output pulses or self-clears with the hopper still high."
         text_unchanged_since_issue: 1
@@ -281,6 +293,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the hopper-blockage alarm is false when next observed and stays false"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the hopper-blockage alarm is false when next observed and stays false"
+        id: REQ-HBA-005:0463ce
         response_signal: HopperBlockedAlarm
         split_defect: "The reset path does not reach the alarm output while the inhibit does clear. A2…A6 stay true."
         text_unchanged_since_issue: 3
@@ -289,6 +302,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the inhibit/stop demand output is false when next observed and stays false"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the inhibit/stop demand output is false when next observed and stays false"
+        id: REQ-HBA-005:7e39bc
         response_signal: HopperBlockedInhibit
         split_defect: "The inhibit is left asserted after the reset while the alarm clears — a stale stop demand no operator action can clear. R2. A1, A3…A6 stay true."
         text_unchanged_since_issue: 3
@@ -297,6 +311,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the plant is running and the accumulated persistence time is still at or past the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the plant is running and the accumulated persistence time is still at or past the threshold THEN the hopper-blockage alarm is true when next observed"
+        id: REQ-HBA-005:179eb7
         response_signal: HopperBlockedAlarm
         split_defect: "The reset ZEROES the accumulator, buying an operator a quiet threshold's-worth of time on a still-blocked hopper. A1, A2, A4, A5, A6 stay true."
         text_unchanged_since_issue: 3
@@ -305,6 +320,7 @@ clauses:
         form: Never
         text: "NEVER the hopper-blockage alarm is held de-asserted by a continuously-true FaultReset while the accumulated persistence time is at or past the threshold"
         normalised_text: "NEVER the hopper-blockage alarm is held de-asserted by a continuously-true FaultReset while the accumulated persistence time is at or past the threshold"
+        id: REQ-HBA-005:6e1e8d
         response_signal: HopperBlockedAlarm
         split_defect: "The reset is LEVEL-sensitive, so a stuck-on FaultReset pins the alarm off permanently and silently. Every sibling behaves correctly on a PULSE, which is why a level defect survives all of them."
         text_unchanged_since_issue: 2
@@ -313,6 +329,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs in the same evaluation in which the accumulated persistence time first reaches the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs in the same evaluation in which the accumulated persistence time first reaches the threshold THEN the hopper-blockage alarm is true when next observed"
+        id: REQ-HBA-005:34fd97
         response_signal: HopperBlockedAlarm
         split_defect: "*** THE RESET CONSUMES THE THRESHOLD CROSSING AND THE ALARM NEVER COMES BACK. *** A live fault permanently suppressed. A3 cannot catch it — its alarm was already latched, so no crossing is at stake."
         text_unchanged_since_issue: 3
@@ -321,6 +338,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs while the plant is stopped and the accumulated persistence time is at or past the threshold THEN the hopper-blockage alarm is true when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs while the plant is stopped and the accumulated persistence time is at or past the threshold THEN the hopper-blockage alarm is true when next observed"
+        id: REQ-HBA-005:e7e0e0
         response_signal: HopperBlockedAlarm
         split_defect: "*** THE RE-RAISE IS GATED ON `PlantRunning`. *** stop -> reset on a still-blocked hopper clears a live fault and leaves it cleared. A1…A5 all reset while RUNNING, so none can catch it."
         text_unchanged_since_issue: 3
@@ -335,6 +353,7 @@ clauses:
         form: When
         text: "WHEN Hopper_Level_High returns false while the hopper-blockage alarm is latched and FaultReset is not asserted THEN the hopper-blockage alarm remains asserted"
         normalised_text: "WHEN Hopper_Level_High returns false while the hopper-blockage alarm is latched and FaultReset is not asserted THEN the hopper-blockage alarm remains asserted"
+        id: REQ-HBA-006:469954
         response_signal: HopperBlockedAlarm
         split_defect: "Sole assertion of the clause. Its own defect is the alarm FOLLOWING the level rather than latching."
         text_unchanged_since_issue: 1
@@ -349,6 +368,7 @@ clauses:
         form: When
         text: "WHEN the PLC powers up with no hopper-blockage alarm latched THEN a hopper-blockage alarm requires a full persistence threshold of high-and-running time accumulated after power-up"
         normalised_text: "WHEN the PLC powers up with no hopper-blockage alarm latched THEN a hopper-blockage alarm requires a full persistence threshold of high-and-running time accumulated after power-up"
+        id: REQ-HBA-007:4197e0
         response_signal: HopperBlockedAlarm
         split_defect: "The accumulated persistence time survives the power cycle, so a PLC restarted mid-window alarms early — at the extreme, on the first scan. A2…A5 stay true."
         text_unchanged_since_issue: 1
@@ -358,6 +378,7 @@ clauses:
         form: When
         text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the hopper-blockage alarm is asserted after power-up"
         normalised_text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the hopper-blockage alarm is asserted after power-up"
+        id: REQ-HBA-007:7edf6c
         response_signal: HopperBlockedAlarm
         split_defect: "The alarm latch does not survive the power cycle, so a live blockage is silently de-annunciated by a restart. A1, A3…A5 stay true."
         text_unchanged_since_issue: 1
@@ -366,6 +387,7 @@ clauses:
         form: When
         text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the inhibit/stop demand output is asserted after power-up"
         normalised_text: "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the inhibit/stop demand output is asserted after power-up"
+        id: REQ-HBA-007:578675
         response_signal: HopperBlockedInhibit
         split_defect: "The inhibit does not survive the power cycle while the alarm does, so the plant is released to run with the alarm still annunciated. R2. A1, A2, A4, A5 stay true."
         text_unchanged_since_issue: 1
@@ -374,6 +396,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed"
         normalised_text: "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed"
+        id: REQ-HBA-007:9855c5
         response_signal: HopperBlockedAlarm
         split_defect: "The accumulator is RETENTIVE, so the power cycle does not zero it and the reset finds it still past threshold. *** THE ASSERTION THAT FAILS FIRST IF NEW-HBA-05 IS SETTLED TOWARD A RETENTIVE ACCUMULATOR. ***"
         text_unchanged_since_issue: 3
@@ -382,6 +405,7 @@ clauses:
         form: When
         text: "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time"
         normalised_text: "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time"
+        id: REQ-HBA-007:34dc51
         response_signal: HopperBlockedAlarm
         split_defect: "*** THE ALARM GOES AWAY AND NEVER COMES BACK *** — accrual does not resume, so AR-HBA-10's bounded window becomes unbounded. A4 stays true: the alarm did clear."
         text_unchanged_since_issue: 3
@@ -409,6 +433,7 @@ clauses:
         form: Never
         text: "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted"
         normalised_text: "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted"
+        id: REQ-HBA-008:d97781
         response_signal: HopperBlockedInhibit
         also_requires_observation_of: HopperBlockedAlarm      # AMB-14
         split_defect: "One-shot pulse, or tracks the first raise but not a re-raise, or never written — the plant runs free while the blockage alarm is annunciated. A2 stays true throughout."
@@ -418,6 +443,7 @@ clauses:
         form: Never
         text: "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
         normalised_text: "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
+        id: REQ-HBA-008:741315
         response_signal: HopperBlockedInhibit
         also_requires_observation_of: HopperBlockedAlarm      # AMB-14
         split_defect: "Set-only latch: the inhibit follows the alarm up and never comes down, so the plant stays stopped with nothing annunciated. A1 stays true throughout."
@@ -427,6 +453,7 @@ clauses:
         form: Never
         text: "NEVER the inhibit/stop demand output is asserted before the specified persistence threshold of accumulated time has elapsed, on a high episode with no debounced clear and no FaultReset since the accumulated persistence time was last zero"
         normalised_text: "NEVER the inhibit/stop demand output is asserted before the specified persistence threshold of accumulated time has elapsed, on a high episode with no debounced clear and no FaultReset since the accumulated persistence time was last zero"
+        id: REQ-HBA-008:047ac6
         response_signal: HopperBlockedInhibit
         new_in_issue: 5
         provenance: "REQ-HBA-008's Text as amended by AR-HBA-13: 'It holds equally for non-assertion: while REQ-HBA-002 forbids the alarm before the threshold is accumulated, HopperBlockedInhibit is likewise not asserted.'"
