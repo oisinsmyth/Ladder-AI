@@ -57,16 +57,38 @@ phase 2 with the copy-layer generator.
 >
 > **BUILT:** phase 0–3 complete and device-validated · **phase 4 complete** (feedback parser, the
 > corrected ladder, admission control, the queues, and the marker **merged into one atomic file**) ·
-> **5.1** contract + skill · **5.3** the loop · **PHASE 6 IS COMPLETE BUT FOR 6.5** — **6.1** wave-set
-> admission + slot colouring · **6.2** claims + the reserved range · **6.3** coverage · **6.4** the
-> result package · **6.6** compression · **6.7** cleanup/timeouts/startup/provenance · the verifiers ·
-> the assertion enumerator (**agent + skill**) · **the deployment gateway** (built, *never run*) ·
-> `compile --station` as the gate · the armed confirm loop.
+> **5.1** contract + skill · **5.3** the loop · *** PHASE 6 IS CLOSED *** — **6.1** wave-set admission
+> + slot colouring · **6.2** claims + the reserved range · **6.3** coverage · **6.4** the result
+> package · **6.5** model waves + model-before-consumer ordering · **6.6** compression · **6.7**
+> cleanup/timeouts/startup/provenance · the verifiers · the assertion enumerator (**agent + skill**) ·
+> **the deployment gateway** (built, *never run*) · `compile --station` as the gate · the armed
+> confirm loop · the download fence as an **allowlist**.
 >
-> **IN FLIGHT:** *** 5.2 — THE MILESTONE. *** **Enumeration DONE** — 13 assertions over 7 clauses,
-> re-decomposition to **14** pending the §2.2 correction. Register rulings + block consistency with
-> `lad-coder`; vectors by a **different** agent to follow; then one rig session. Also: the deployment
-> gateway, **6.1**, and the InstanceDB `InOut` fix.
+> **IN FLIGHT:** *** 5.2 IS THE ONLY THING LEFT BEFORE THE RIG. *** **The enumeration has CONVERGED
+> at 25 assertions over 8 clauses** (`13a2533`) and is being **stamped**; vectors by a **different**
+> agent follow; then the one rig session.
+>
+> > ### 📉 THE CONVERGENCE, BECAUSE IT IS THE EVIDENCE THAT THE METHOD WORKS
+> >
+> > Four re-decompositions: **13 → 19 → 23 → 25**. New collisions found per round: *** 8 → 3 → 2 → 1
+> > → 0. *** Every one was **invisible clause-by-clause and visible only in combination**, and one was
+> > created by its own round's new ruling. **The final zero was checked transition-by-transition and
+> > STATED** — *"nobody raised anything"* and *"I looked and there is nothing"* are the same empty
+> > report otherwise, which is this project's oldest lesson pointed at itself.
+> >
+> > **The last round moved zero assertion texts** — 0 reworded, 2 new, 23 unchanged — because both
+> > rulings were deliberately shaped to cost nothing, and the prediction was **confirmed by
+> > comparison rather than assumed**.
+> >
+> > **Across all four rounds, naming signals and numbers cost ZERO re-hashes.** Signal names live in
+> > `response_signal:` and bounds in `bound:`, never in the hashed sentence — and the rule survived
+> > its hardest case: `REQ-HBA-008` is a clause **about two outputs whose hashed text names neither**.
+> >
+> > **AMB-14 is the one open item, and its shape is the point:** *** THE REGISTER CONVERGED; THE
+> > ARTIFACT FORMAT MET A CASE IT WAS NOT BUILT FOR. *** `ResponseSignal` is one string, but a
+> > **simultaneity** claim has two signals — so a vector could cite `008.A1`, expect on the inhibit
+> > alone, and **pass the mechanical check while testing nothing about the relation.** It is a schema
+> > fix, changes no text, and must **not** be closed by naming both signals in the sentence.
 >
 > > **THE CONTRACT NOW SPECIFIES MORE THAN THE CODE DOES, DELIBERATELY AND TEMPORARILY.** §2.3 grew
 > > `blockCompression` + `model.compStable`; §2.4 became the single absent-treatment table. Three gaps
