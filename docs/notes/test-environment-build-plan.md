@@ -99,6 +99,38 @@ phase 2 with the copy-layer generator.
 > > Overturnable at one line. What must follow: the band consumed by `HarnessNumberRange` rather than
 > > hardcoded at a call site, and `claim --allocate` refusing inside it.
 >
+> > ### 📐 `MemoryLayout` — RULED 2026-08-13, BY ME. THE CONTRACT NEVER MENTIONED IT AT ALL.
+> >
+> > `lad-coder` escalated rather than flipping a flag, and was right to: **`FB_HopperBlockageMonitor`
+> > and its iDB are `Optimized`, which makes them INVISIBLE to classic S7comm** — not an error, the
+> > block is simply *absent*, failing at the first data read rather than at connect. The contract was
+> > grepped for `MemoryLayout` / `Optimized` / `S7comm` / `Sharp7`: **no hits.** *** THE ONE PROPERTY
+> > DECIDING WHETHER A PC-SIDE READER CAN SEE THE DATA WAS STATED NOWHERE. *** And `drift-check` is
+> > structurally blind to it, so nothing would ever have reported it.
+> >
+> > **The premise did not survive checking, and that is what makes this cheap.** The escalation asked
+> > *"which object must be Standard?"* — and the answer is **none of the deliverable ones**:
+> >
+> > *** THE HARNESS NEVER TOUCHES A DELIVERABLE BLOCK'S DATA DIRECTLY. IT TOUCHES HARNESS-GENERATED
+> > OBJECTS ONLY, AND THOSE ARE `Standard` BY CONSTRUCTION. ***
+> >
+> > That is already the isolation the whole design rests on — the copy layer exists precisely so a
+> > test never reaches into a block under test — so the layout requirement lands **entirely inside
+> > what the harness generates**, where it can be set at generation time and costs a deliverable
+> > nothing. **The block under test stays `Optimized`, which is the S7-1200 default.**
+> >
+> > Three consequences, all mandatory:
+> >
+> > - **The gateway RE-ASSERTS `--set Standard --yes` after EVERY import, then gates `--expect
+> >   Standard`.** The layout **reverts at import** and the revert is silent. `--expect` only tells
+> >   you it broke; `--set` is what repairs it. Already briefed into the gateway lane.
+> > - **Never gate this with `drift-check`** — the Normalizer ignores the attribute, so it reports
+> >   MATCH in both directions. `--expect` is the only check that can see it.
+> > - 🔴 **VERIFY THE CONSEQUENCE RATHER THAN ASSUMING IT.** `Sharp7Client` has a live
+> >   `WriteArea(S7Area.DB, …)` — so **at least one S7comm DB access exists today**, and if any of them
+> >   targets a deliverable object the invariant above is already violated. *A ruling that the code
+> >   happens to break is a ruling that will be discovered by a failed rig session.*
+>
 > > 🔴 **5.2's INDEPENDENCE IS STRONGER THAN THE DESIGN ASKED FOR, BY ACCIDENT.** D6 wants the block
 > > author and the vector author to be different agents. **The block — `FB_HopperBlockageMonitor` —
 > > was authored under S6 request #1 weeks before the enumeration existed**, so its author could not
@@ -106,6 +138,32 @@ phase 2 with the copy-layer generator.
 > > the loop's **back half** (enumerate → vector → deploy → test → report) against a block with
 > > maximal author independence; the front half (request → block) is separately evidenced by S6.
 > > **Say it that way rather than claiming the whole arc ran in one pass.**
+>
+> > ### 🎯 FOUR DIVERGENCES PREDICTED **BEFORE** THE TEST RUNS — WRITTEN DOWN, NOT CORRECTED
+> >
+> > The register now carries six rulings (`AR-HBA-01…06`, all marked *agent, not owner*). `lad-coder`
+> > compared them against the existing block and **recorded the gaps rather than closing them**, which
+> > is the only thing that makes the run worth doing: *** A DIVERGENCE PREDICTED IN ADVANCE IS A TEST
+> > OF THE LOOP; ONE FIXED QUIETLY BEFOREHAND IS A TEST OF NOTHING. ***
+> >
+> > | | the spec now says | the block does |
+> > |---|---|---|
+> > | **D1** | `HopperBlockedInhibit` | `HopperBlockStopReq` |
+> > | **D2** | accumulator untouched by reset; the alarm re-raises | reset **zeroes** it |
+> > | **D3** | `FaultReset` is **edge**-triggered | **level**-sensitive throughout |
+> > | **D4** | **raise**-dominant | **reset**-dominant |
+> >
+> > **D1 vindicates the abstention.** I chose that name from the requirement's own words *without
+> > looking at the block*, precisely so the name could not be laundered out of the implementation —
+> > and it differs. Had I peeked, the spec would have silently agreed with the code and the check
+> > would have measured nothing.
+> >
+> > **D2–D4 are one divergence with three faces**, and the block says so itself: its NETWORK 5 comment
+> > reads *"a reset requires a fresh full accumulation before re-alarming"* — exactly the branch
+> > AR-HBA-05 rejects. **D3 is the sharpest: a held-on `FaultReset` pins the alarm off indefinitely on
+> > a blocked hopper.** And note that AR-HBA-06 — the collision the enumerator said to chase first —
+> > **the block already conforms to.** Predicting *both* directions is what makes the exercise a
+> > prediction rather than a complaint.
 >
 > > 🔴 **AND THE ENUMERATOR CANNOT COMPUTE ITS OWN IDs.** `assertion-enumerator` has no `Bash` —
 > > fenced deliberately so it cannot run the converter over a block — and an assertion ID is a
