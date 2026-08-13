@@ -1,0 +1,1228 @@
+{
+  "_artifact": "Conformance vector set B - hopper-blockage alarm. Authored INDEPENDENTLY from the specification (requirements.md + assertion-enumeration.yaml) by a vector author who has not read the implementation, the architecture, the review findings, the integration note, or set A. Fields beginning with '_' are authoring notes; the gate's reader ignores unmapped members.",
+  "_companion": "gen/test-project001/hopper-blockage-alarm/conformance-vectors-b.md - the reasoning, the gaps, the escalations and the capability requests this file depends on. Read it before reading a green.",
+
+  "blockAuthor": "lad-coder",
+
+  "runtimeCompression": 1,
+  "_runtimeCompression": "DELIBERATELY 1, AND IT IS NOT LAZINESS. Compressing this block needs its dwell presets declared with a Data/Literal source per contract 2.3, and the presets are a property of the BLOCK, which this author is fenced from reading. An unknown ceiling is not a high one, so the wave runs uncompressed and gate 10b is a real computed pass rather than a NOT CHECKED. Cost: the set as written spends about 40 minutes of plant time. Whoever can declare blockCompression should raise this - the persistence threshold is T#60S, so the timer ceiling will bind long before anything else.",
+
+  "slotsInWaveSet": 6,
+  "resultRegistersPerSlot": 8,
+  "_waveGeometry": "Six slots, one per methodology family below. Both figures feed the section 12a derivation 1 floor, which scales with tensor width; they are declared conservatively (more slots and wider slots both raise the floor) so a floor computed from them is not optimistic. They are the COORDINATOR's numbers, not this author's, and should be replaced with the wave set's actual geometry before the floor is relied on.",
+
+  "model": {
+    "id": "MDL-HopperBlockageStimulus-1",
+    "_status": "*** REQUIRED, NOT YET BUILT. THIS IS A CAPABILITY REQUEST WEARING THE SHAPE OF A DECLARATION. *** Contract 2.1 rules that a submission vector may not be stepped and that dynamic stimulus belongs to a model running in the controller. Every scenario below therefore needs an in-PLC stimulus model, and none exists. Gate 4 will compare each vector's assertedBehaviours against the Represents list underneath - which this author wrote - so gate 4 is at present a declaration checked against itself. It becomes a real check the moment the model's own author owns this block.",
+    "represents": [
+      "hopper-level-high discrete sensor held true for a commanded duration",
+      "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+      "hopper-level-high sensor chatter driven false for a commanded duration shorter than the clear-debounce filter time",
+      "shredder running feedback, forward or reverse, held for a commanded duration",
+      "loss and return of shredder running feedback part-way through a persistence window",
+      "operator fault-reset as a single rising edge at a commanded time",
+      "operator fault-reset held continuously true from before T=0",
+      "operator fault-reset rising edge placed in the scan in which the model's own persistence threshold elapses",
+      "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+    ],
+    "doesNotRepresent": [
+      "hopper level as a continuous measurement - only the discrete high sensor is driven",
+      "material flow, fill rate, bridging or discharge dynamics",
+      "sensor state changes shorter than one PLC scan",
+      "shredder motor dynamics, current, torque or speed",
+      "wiring, IO module and field-device failure modes",
+      "plant behaviour at any compression factor above 1"
+    ],
+    "validatedAgainstPlantData": false,
+    "compStable": 1.0,
+    "_compStable": "1.0 because nothing has established this model behaves at any factor above real time - and an undeclared stability ceiling is not an infinite one. At runtimeCompression 1 this is reported and cannot bind.",
+    "_lastRepresentsEntryIsNotAModelBehaviour": "*** FLAGGED RATHER THAN HIDDEN. *** A model running in the controller cannot represent its own CPU restart; the restart is an X-F disruptive boundary performed by the harness. It is listed in Represents because M4 is a set-difference and the five REQ-HBA-007 vectors must be able to assert against it, and because there is no other artifact in the submission format that declares a RIG capability. If the reviewer prefers, it belongs in a deployment/environment declaration that does not exist yet."
+  },
+
+  "map": {
+    "_status": "*** WRITTEN BY THE VECTOR AUTHOR, WHICH IS THE WEAKNESS TO KNOW ABOUT. *** Contract 4.3 says the map is built by the coordinator from the copy layer it generated, and that the declaration must exist BEFORE the download that generates that copy layer. No copy layer exists for this block, so this is the REQUEST - what the copy layer must publish for these vectors to be observable - and not evidence. Gate 5 checked against it is checked against this author's own claim; it becomes a check when the coordinator replaces it with the generated map.",
+    "_capabilityRequest": "Three things are asked for, and two of them are more than a plain latch. (a) Sampled and Latched on the two block outputs. (b) THE LATCHES MUST BE ARMED BY THE STIMULUS MODEL'S PHASE FLAG (HBA_Stim.Armed), not free-running from T=0 - see the .md, section 'why almost everything here is Sampled'. (c) Four VIOLATION latches, each latching a forbidden STATE computed in the copy layer. All three are copy-layer instrumentation (D13) and none is a change to the block under test (contract 9.1 is not engaged).",
+    "providedFor": {
+      "HopperBlockedAlarm": ["Sampled", "Latched"],
+      "HopperBlockedInhibit": ["Sampled", "Latched"],
+      "HBA_Violation_AlarmFellWithoutReset": ["Latched"],
+      "HBA_Violation_AlarmLowUnderHeldReset": ["Latched"],
+      "HBA_Violation_InhibitLowWhileAlarmHigh": ["Latched"],
+      "HBA_Violation_InhibitHighWhileAlarmLow": ["Latched"]
+    }
+  },
+
+  "enumeration": {
+    "_source": "gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml, issue 4, stamped. 8 clauses, 25 assertions. Transcribed here, not re-derived: a vector author who re-derives the denominator has re-created the correlated check.",
+    "_correction": "The yaml's own gate_projection_template keys `forms:` by DISPLAY ORDINAL (REQ-HBA-001.A1) under a comment that says 'id -> form'. Ordinals are never citable (3.3) and gate 3e looks the form up BY ID, so the template as written makes gate 3e report 'the enumeration carries forms but none for <id>' on all 25 citations. Re-keyed by ID here. Reported as a defect in the enumeration's projection, not fixed in the enumeration by this author.",
+    "enumerator": "assertion-enumerator",
+    "clauses": [
+      "REQ-HBA-001", "REQ-HBA-002", "REQ-HBA-003", "REQ-HBA-004",
+      "REQ-HBA-005", "REQ-HBA-006", "REQ-HBA-007", "REQ-HBA-008"
+    ],
+    "assertions": [
+      "REQ-HBA-001:ab68c1", "REQ-HBA-001:8ea7f6", "REQ-HBA-001:0772fa", "REQ-HBA-001:2bdfa7",
+      "REQ-HBA-002:efe6b5", "REQ-HBA-002:bfda9d",
+      "REQ-HBA-003:607fdf", "REQ-HBA-003:652dd6", "REQ-HBA-003:aa1d87", "REQ-HBA-003:09e3a8",
+      "REQ-HBA-004:14c9b6",
+      "REQ-HBA-005:0463ce", "REQ-HBA-005:7e39bc", "REQ-HBA-005:179eb7", "REQ-HBA-005:6e1e8d",
+      "REQ-HBA-005:34fd97", "REQ-HBA-005:e7e0e0",
+      "REQ-HBA-006:469954",
+      "REQ-HBA-007:4197e0", "REQ-HBA-007:7edf6c", "REQ-HBA-007:578675", "REQ-HBA-007:9855c5",
+      "REQ-HBA-007:34dc51",
+      "REQ-HBA-008:d97781", "REQ-HBA-008:741315"
+    ],
+    "forms": {
+      "REQ-HBA-001:ab68c1": "When",
+      "REQ-HBA-001:8ea7f6": "When",
+      "REQ-HBA-001:0772fa": "When",
+      "REQ-HBA-001:2bdfa7": "When",
+      "REQ-HBA-002:efe6b5": "When",
+      "REQ-HBA-002:bfda9d": "When",
+      "REQ-HBA-003:607fdf": "When",
+      "REQ-HBA-003:652dd6": "When",
+      "REQ-HBA-003:aa1d87": "When",
+      "REQ-HBA-003:09e3a8": "When",
+      "REQ-HBA-004:14c9b6": "Never",
+      "REQ-HBA-005:0463ce": "When",
+      "REQ-HBA-005:7e39bc": "When",
+      "REQ-HBA-005:179eb7": "When",
+      "REQ-HBA-005:6e1e8d": "Never",
+      "REQ-HBA-005:34fd97": "When",
+      "REQ-HBA-005:e7e0e0": "When",
+      "REQ-HBA-006:469954": "When",
+      "REQ-HBA-007:4197e0": "When",
+      "REQ-HBA-007:7edf6c": "When",
+      "REQ-HBA-007:578675": "When",
+      "REQ-HBA-007:9855c5": "When",
+      "REQ-HBA-007:34dc51": "When",
+      "REQ-HBA-008:d97781": "Never",
+      "REQ-HBA-008:741315": "Never"
+    },
+    "normalisedTexts": {
+      "REQ-HBA-001:ab68c1": "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted",
+      "REQ-HBA-001:8ea7f6": "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the inhibit/stop demand output is asserted",
+      "REQ-HBA-001:0772fa": "WHEN Hopper_Level_High is continuously true for longer than the persistence threshold while neither Shredder_Run_Fwd_FB nor Shredder_Run_Rev_FB is true and no hopper-blockage alarm was previously latched THEN the hopper-blockage alarm is not asserted",
+      "REQ-HBA-001:2bdfa7": "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold",
+      "REQ-HBA-002:efe6b5": "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode",
+      "REQ-HBA-002:bfda9d": "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode",
+      "REQ-HBA-003:607fdf": "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated",
+      "REQ-HBA-003:652dd6": "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated",
+      "REQ-HBA-003:aa1d87": "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated",
+      "REQ-HBA-003:09e3a8": "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time while the plant is stopped and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before that brief false has accumulated",
+      "REQ-HBA-004:14c9b6": "NEVER the hopper-blockage alarm de-asserts unless FaultReset has been asserted since the alarm was raised",
+      "REQ-HBA-005:0463ce": "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the hopper-blockage alarm is false when next observed and stays false",
+      "REQ-HBA-005:7e39bc": "WHEN a rising edge of FaultReset occurs while the hopper-blockage alarm is latched and the accumulated persistence time is below the threshold THEN the inhibit/stop demand output is false when next observed and stays false",
+      "REQ-HBA-005:179eb7": "WHEN a rising edge of FaultReset occurs while the plant is running and the accumulated persistence time is still at or past the threshold THEN the hopper-blockage alarm is true when next observed",
+      "REQ-HBA-005:6e1e8d": "NEVER the hopper-blockage alarm is held de-asserted by a continuously-true FaultReset while the accumulated persistence time is at or past the threshold",
+      "REQ-HBA-005:34fd97": "WHEN a rising edge of FaultReset occurs in the same evaluation in which the accumulated persistence time first reaches the threshold THEN the hopper-blockage alarm is true when next observed",
+      "REQ-HBA-005:e7e0e0": "WHEN a rising edge of FaultReset occurs while the plant is stopped and the accumulated persistence time is at or past the threshold THEN the hopper-blockage alarm is true when next observed",
+      "REQ-HBA-006:469954": "WHEN Hopper_Level_High returns false while the hopper-blockage alarm is latched and FaultReset is not asserted THEN the hopper-blockage alarm remains asserted",
+      "REQ-HBA-007:4197e0": "WHEN the PLC powers up with no hopper-blockage alarm latched THEN a hopper-blockage alarm requires a full persistence threshold of high-and-running time accumulated after power-up",
+      "REQ-HBA-007:7edf6c": "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the hopper-blockage alarm is asserted after power-up",
+      "REQ-HBA-007:578675": "WHEN the PLC powers up with the hopper-blockage alarm latched from before the power cycle THEN the inhibit/stop demand output is asserted after power-up",
+      "REQ-HBA-007:9855c5": "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed",
+      "REQ-HBA-007:34dc51": "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time",
+      "REQ-HBA-008:d97781": "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted",
+      "REQ-HBA-008:741315": "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
+    },
+    "_requiredObservationsSource": "response_signal: merged with also_requires_observation_of: per the yaml. AMB-14's two relational assertions are the only ones carrying a second signal, and the wire format the yaml said could not carry it now CAN - EnumerationDocument.RequiredObservations is a list per assertion, and gate 3h consumes it. AMB-14 is closed in the schema; the enumeration should be re-issued emitting it.",
+    "requiredObservations": {
+      "REQ-HBA-001:ab68c1": ["HopperBlockedAlarm"],
+      "REQ-HBA-001:8ea7f6": ["HopperBlockedInhibit"],
+      "REQ-HBA-001:0772fa": ["HopperBlockedAlarm"],
+      "REQ-HBA-001:2bdfa7": ["HopperBlockedAlarm"],
+      "REQ-HBA-002:efe6b5": ["HopperBlockedAlarm"],
+      "REQ-HBA-002:bfda9d": ["HopperBlockedAlarm"],
+      "REQ-HBA-003:607fdf": ["HopperBlockedAlarm"],
+      "REQ-HBA-003:652dd6": ["HopperBlockedAlarm"],
+      "REQ-HBA-003:aa1d87": ["HopperBlockedAlarm"],
+      "REQ-HBA-003:09e3a8": ["HopperBlockedAlarm"],
+      "REQ-HBA-004:14c9b6": ["HopperBlockedAlarm"],
+      "REQ-HBA-005:0463ce": ["HopperBlockedAlarm"],
+      "REQ-HBA-005:7e39bc": ["HopperBlockedInhibit"],
+      "REQ-HBA-005:179eb7": ["HopperBlockedAlarm"],
+      "REQ-HBA-005:6e1e8d": ["HopperBlockedAlarm"],
+      "REQ-HBA-005:34fd97": ["HopperBlockedAlarm"],
+      "REQ-HBA-005:e7e0e0": ["HopperBlockedAlarm"],
+      "REQ-HBA-006:469954": ["HopperBlockedAlarm"],
+      "REQ-HBA-007:4197e0": ["HopperBlockedAlarm"],
+      "REQ-HBA-007:7edf6c": ["HopperBlockedAlarm"],
+      "REQ-HBA-007:578675": ["HopperBlockedInhibit"],
+      "REQ-HBA-007:9855c5": ["HopperBlockedAlarm"],
+      "REQ-HBA-007:34dc51": ["HopperBlockedAlarm"],
+      "REQ-HBA-008:d97781": ["HopperBlockedInhibit", "HopperBlockedAlarm"],
+      "REQ-HBA-008:741315": ["HopperBlockedInhibit", "HopperBlockedAlarm"]
+    }
+  },
+
+  "_conflictGraphOmitted": "*** DELIBERATELY ABSENT, AND THE CONSEQUENCE IS ACCEPTED. *** `computedConflicts` and `conflictEdges` are both omitted, so gates 8 and 8c report NOT CHECKED and this submission is NOT ADMISSIBLE. The graph is D9's computed disjointness over the project reference graph (`converter cross-check --project ir/test-project001`), and this author is fenced from `ir/`. An empty array would have been read as 'the graph ran and found no conflicts' - a claim nobody is entitled to make here - and it would have turned two gates green by typing. Whoever can run cross-check should supply it; nothing else in this submission changes.",
+
+  "_deploymentOmitted": "*** DELIBERATELY ABSENT. *** Gate 11 reports NOT CHECKED. `deployment` is a property of the DOWNLOAD, not of a vector, and absent is NOT the same as `s7Objects: []`, which is the positive claim that no classic-S7comm path reaches a data block. This submission has no download, no importStamp and no tag map, so it can make neither claim. `tagMapPath` is omitted for the same reason - gate 11's set-difference is computed FROM the map, and naming a map this author never read would be vouching for the artifact the gate exists to check against.",
+
+  "vectors": [
+
+    {
+      "id": "VB-HBA-001",
+      "slot": "SLOT-HBA-RAISE",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-001",
+      "assertion": "REQ-HBA-001:ab68c1",
+      "assertionForm": "When",
+      "_scenario": "RAISE_UNINTERRUPTED. Clear-down, then Hopper_Level_High true and Shredder_Run_Fwd_FB true from the start of the scenario, both held for 75 s, no FaultReset. A correct block raises the alarm at 60 s of accrual.",
+      "inputs": {
+        "HBA_Stim.Profile": "RAISE_UNINTERRUPTED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "75000",
+        "HBA_Stim.EndMs": "75000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 429, "expected": "true" }
+      ],
+      "_observability": "Sampled over the last 10 s of the scenario (429 scans at 23.33 ms, ~50x the section 12a floor and ~4.5x the largest poll gap ever measured). A raised alarm is level-persistent and nothing in this scenario can clear it, so one late sample is decisive for occurrence AND for persistence - which is why a one-scan pulse implementation fails here rather than passing a bare latch.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 429 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4073,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives Hopper_Level_High and the shredder running feedbacks, which this block also consumes (register Provenance section, reuse-first result). Running it concurrently means the test's stimulus is driving the plant's own sequencer - coupling through plant-model state that the reference graph does not see, which is precisely what section 7 puts on the blacklist." },
+        { "block": "FB_PusherControl", "reason": "uses hopper-high as an instantaneous auto-mode cycle trigger (register Provenance section), so the stimulus model's hopper profile commands pusher cycles as a side effect. Same plant-model coupling; the reference graph sees a shared READ and does not treat it as a conflict." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "An implementation that never writes HopperBlockedAlarm at all (the inhibit is wired and the alarm coil is missing), or whose persistence timer can never elapse - preset in the wrong units (T#60M for T#60S), the timer's IN never true, or the alarm driven from a condition the scenario never satisfies. Any of those reads false at 75 s of continuous high-and-running. It also kills a momentary-pulse alarm, because the observation is a late sample rather than an occurrence latch. *** IT DOES NOT KILL AN ALARM THAT RAISES EARLY *** - no assertion in the enumeration forbids that; see the decomposition dispute in the .md."
+    },
+
+    {
+      "id": "VB-HBA-002",
+      "slot": "SLOT-HBA-RAISE",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-001",
+      "assertion": "REQ-HBA-001:8ea7f6",
+      "assertionForm": "When",
+      "_scenario": "RAISE_UNINTERRUPTED, identical to VB-HBA-001. Same trigger, the other response - R2's split, and the two must be separate vectors for the same reason they are separate assertions.",
+      "inputs": {
+        "HBA_Stim.Profile": "RAISE_UNINTERRUPTED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "75000",
+        "HBA_Stim.EndMs": "75000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Sampled", "windowScans": 429, "expected": "true" }
+      ],
+      "_observability": "As VB-HBA-001, on the other output. The inhibit is the operationally important half - it is the one that stops the plant - and it is observed on its own member, never inferred from the alarm.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 429 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4073,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives Hopper_Level_High and the shredder running feedbacks, which this block also consumes; plant-model coupling the reference graph does not see." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "An implementation that leaves HopperBlockedInhibit unwritten, or drives it from a different condition than the persistence trigger, while the alarm output asserts correctly. A block wired for annunciation only - the single most likely omission, since Q-HBA-05's second output was unnamed in the register until AR-HBA-01 - passes VB-HBA-001 and fails here."
+    },
+
+    {
+      "id": "VB-HBA-003",
+      "slot": "SLOT-HBA-RAISE",
+      "index": 2,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-001",
+      "assertion": "REQ-HBA-001:0772fa",
+      "assertionForm": "When",
+      "_scenario": "HIGH_AT_STANDSTILL. Clear-down (which also establishes the trigger's 'no hopper-blockage alarm was previously latched' clause), then Hopper_Level_High true for 90 s with BOTH Shredder_Run_Fwd_FB and Shredder_Run_Rev_FB false throughout, no FaultReset. Q-HBA-04: accrual is gated on confirmed-running feedback, so nothing accrues and nothing raises.",
+      "inputs": {
+        "HBA_Stim.Profile": "HIGH_AT_STANDSTILL",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "90000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "10000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 858, "expected": "false" }
+      ],
+      "_observability": "Sampled over the last 20 s. A negative claim read from a single late sample is only decisive because nothing but a FaultReset edge can clear this alarm (REQ-HBA-004), and the scenario drives no reset - so had it ever raised it would still be reading true. *** THAT IS A DEPENDENCY OF THIS VECTOR ON ANOTHER ASSERTION'S BEHAVIOUR, AND IT IS DECLARED RATHER THAN RELIED ON SILENTLY: *** a block that both accrues at standstill AND fails to latch could pass this. VB-HBA-011 is what makes that combination visible.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 858 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model holds both shredder running feedbacks false for 90 s while driving the hopper high; the sequencer reacts to both and would fight the profile." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "The run-state gate on ACCRUAL being absent - the persistence timer enabled by Hopper_Level_High alone. A full hopper at standstill then earns an alarm it never earned, at 60 s, and the sample at 70-90 s reads true. This is the defect an implementer reaches by reading REQ-HBA-001's sentence and not Q-HBA-04, and it is invisible to every other vector in this slot because all of them run the plant."
+    },
+
+    {
+      "id": "VB-HBA-004",
+      "slot": "SLOT-HBA-RAISE",
+      "index": 3,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-001",
+      "assertion": "REQ-HBA-001:2bdfa7",
+      "assertionForm": "When",
+      "_scenario": "PAUSE_AND_RESUME. Clear-down, then: 0-40 s hopper high + running (40 s accrued); 40-70 s both run feedbacks false, hopper STILL HIGH (NEW-HBA-01 freeze, AR-HBA-06 does not apply because the hopper never reads low); 70-105 s running again, hopper still high. Cumulative high-and-running reaches 60 s at t=90 s, so a correct block raises there.",
+      "inputs": {
+        "HBA_Stim.Profile": "PAUSE_AND_RESUME",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "40000",
+        "HBA_Stim.P2Ms": "30000",
+        "HBA_Stim.P3Ms": "35000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "95000",
+        "HBA_Stim.ArmUntilMs": "105000",
+        "HBA_Stim.EndMs": "105000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 429, "expected": "true" }
+      ],
+      "_observability": "Sampled over 95-105 s, which is 5 s after the correct raise and 25 s before the earliest raise a reset-on-stop implementation could manage (t=130 s). The margin either side is 5 s and 25 s against a floor of ~0.2 s.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1501 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5359,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model removes and restores the shredder running feedbacks mid-scenario; the sequencer's own state machine keys on them." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "loss and return of shredder running feedback part-way through a persistence window"
+      ],
+      "kills": "*** THE RESET-ON-STOP DEFECT. *** The accumulated persistence time is DISCARDED on loss of running rather than frozen, so accrual restarts at t=70 s and the threshold is not reached until t=130 s - past the end of the scenario, so the sample reads false. This is the defect the enumeration method document records as the one that survived a merged reading of REQ-HBA-001, and it is the reason 001 has four assertions and not three. VB-HBA-001 stays green against it."
+    },
+
+    {
+      "id": "VB-HBA-005",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-002",
+      "assertion": "REQ-HBA-002:efe6b5",
+      "assertionForm": "When",
+      "_scenario": "DEBOUNCED_CLEAR_BELOW_THRESHOLD. Clear-down, then: 0-50 s hopper high + running (50 s accrued, below the 60 s threshold); 50-90 s hopper LOW, plant still running. The clear is 40 s, far past the 2 s filter, so the accumulator is discarded and nothing further accrues while the hopper is low.",
+      "inputs": {
+        "HBA_Stim.Profile": "DEBOUNCED_CLEAR_BELOW_THRESHOLD",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "50000",
+        "HBA_Stim.P2Ms": "40000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "75000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "false" }
+      ],
+      "_observability": "Sampled over 75-90 s, which is 15 s past the point at which a block ignoring hopper-low would have alarmed (t=60 s). Same latch dependency as VB-HBA-003, declared for the same reason.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1072 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives Hopper_Level_High low for 40 s while the plant runs, which is exactly the condition FB_ShredderSequencer's infeed-restart timer keys on." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "A block whose accumulator ignores hopper-low entirely - a free-running elapsed timer, or one enabled by PlantRunning alone. It reaches 60 s at t=60 s on a hopper that visibly emptied at t=50 s, and the sample reads true. The scenario is deliberately 90 s long so that the wrong implementation has 30 s in which to be caught; a 60 s scenario would have let it pass by arithmetic."
+    },
+
+    {
+      "id": "VB-HBA-006",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-002",
+      "assertion": "REQ-HBA-002:bfda9d",
+      "assertionForm": "When",
+      "_scenario": "CHATTER_BELOW_FILTER. Clear-down, then: 0-50 s hopper high + running; 50-51 s hopper low for 1.0 s only (half the 2 s filter time, so NOT a clear); 51-90 s hopper high + running again. Accrual pauses for the 1 s but is not discarded, so 60 s cumulative is reached at t=61 s.",
+      "inputs": {
+        "HBA_Stim.Profile": "CHATTER_BELOW_FILTER",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "50000",
+        "HBA_Stim.P2Ms": "1000",
+        "HBA_Stim.P3Ms": "39000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "75000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 75-90 s: 14 s after the correct raise, and 21 s before the earliest raise (t=111 s) available to a block with no debounce at all. A 1.0 s chatter is ~43 scans, comfortably longer than one scan, so the model can produce it and the block can see it - a sub-scan glitch is explicitly outside this model's declared representation.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1072 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 1 s hopper-low glitch; the sequencer's infeed-restart timer keys on hopper-not-high and would be perturbed by it." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high sensor chatter driven false for a commanded duration shorter than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "The clear debounce being absent, so ANY transition to false discards the accumulator. A blocked hopper with a chattering sensor then never alarms - the failure Q-HBA-02 was answered to prevent. Note this is the exact inverse of VB-HBA-005's defect: an implementation cannot satisfy both by tuning, only by implementing the filter."
+    },
+
+    {
+      "id": "VB-HBA-007",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 2,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-003",
+      "assertion": "REQ-HBA-003:607fdf",
+      "assertionForm": "When",
+      "_scenario": "REARM_RUNNING. Clear-down, then: 0-50 s hopper high + running (50 s accrued); 50-55 s hopper low for 5 s, plant running (a debounced clear); 55-95 s hopper high + running again. Post-clear accrual is 40 s at the end, so a correct block has NOT raised: the full 60 s must accumulate again.",
+      "inputs": {
+        "HBA_Stim.Profile": "REARM_RUNNING",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "50000",
+        "HBA_Stim.P2Ms": "5000",
+        "HBA_Stim.P3Ms": "40000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "80000",
+        "HBA_Stim.ArmUntilMs": "95000",
+        "HBA_Stim.EndMs": "95000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "false" }
+      ],
+      "_observability": "Sampled over 80-95 s. A block that carried the 50 s over would raise at t=65 s, 15 s before the window opens. The window closes 20 s before the earliest legitimate raise (t=115 s), so the vector cannot fail a correct block by running long.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1715 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4930,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 5 s hopper-low window while running, which is the sequencer's own infeed-restart trigger." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "An accumulator that is PAUSED rather than DISCARDED by a qualified clear - the single most likely near-miss, because pausing is what the same clause requires for a running-loss. It leaves a partially-elapsed window that trips on a later brief high, which is the outcome REQ-HBA-003's last sentence names explicitly. VB-HBA-005 does not catch it: there the hopper never comes back."
+    },
+
+    {
+      "id": "VB-HBA-008",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 3,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-003",
+      "assertion": "REQ-HBA-003:652dd6",
+      "assertionForm": "When",
+      "_scenario": "CHATTER_NEAR_THRESHOLD. Clear-down, then: 0-55 s hopper high + running (55 s accrued, 5 s short); 55-56.5 s hopper low for 1.5 s (below the 2 s filter); 56.5-80 s hopper high + running. The threshold measured from BEFORE the brief clear is reached at t=61.5 s.",
+      "inputs": {
+        "HBA_Stim.Profile": "CHATTER_NEAR_THRESHOLD",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "55000",
+        "HBA_Stim.P2Ms": "1500",
+        "HBA_Stim.P3Ms": "23500",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "80000",
+        "HBA_Stim.EndMs": "80000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 65-80 s. The chatter is placed 5 s short of the threshold on purpose: it is the position at which a discard is most expensive and most visible, and it distinguishes this vector from VB-HBA-006, whose chatter is 10 s short. 1.5 s is 64 scans - unambiguously longer than one scan and unambiguously shorter than the 2 s filter.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1005 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4287,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 1.5 s hopper-low glitch that the sequencer's infeed-restart timer also sees." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high sensor chatter driven false for a commanded duration shorter than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "A single-scan-glitch discard, caught 5 s from the threshold where the cost is greatest: the wrong implementation restarts from zero at t=56.5 s and cannot alarm before t=116.5 s, 36 s past the end of the scenario. It also kills a debounce filter implemented with the wrong comparison (>= vs >) only if the filter time were exactly 1.5 s, which it is not - that boundary is deliberately not tested here, and no assertion in the enumeration asks for it."
+    },
+
+    {
+      "id": "VB-HBA-009",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 4,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-003",
+      "assertion": "REQ-HBA-003:aa1d87",
+      "assertionForm": "When",
+      "_scenario": "AR-HBA-06's WORKED CASE, at scale. Clear-down, then: 0-40 s hopper high + running (40 s accrued of 60); 40 s plant stops, hopper still high (freeze); 45-50 s hopper LOW for 5 s while stopped (a debounced clear - AR-HBA-09 confirms the filter runs irrespective of PlantRunning); 50 s hopper high again; 55 s plant restarts; runs high to 95 s. Post-discard accrual is 40 s, so a correct block has not raised.",
+      "inputs": {
+        "HBA_Stim.Profile": "DISCARD_BEATS_FREEZE",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "40000",
+        "HBA_Stim.P2Ms": "5000",
+        "HBA_Stim.P3Ms": "5000",
+        "HBA_Stim.P4Ms": "5000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "80000",
+        "HBA_Stim.ArmUntilMs": "95000",
+        "HBA_Stim.EndMs": "95000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "false" }
+      ],
+      "_observability": "Sampled over 80-95 s. The register's own worked case predicts the wrong implementation alarms 20 s after the restart, i.e. at t=75 s, 5 s before the window opens. The correct implementation cannot alarm before t=115 s, 20 s after the window closes.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1715 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4930,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model stops and restarts the running feedbacks and drives a hopper-low window inside the stop; the sequencer keys on both." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "loss and return of shredder running feedback part-way through a persistence window"
+      ],
+      "kills": "The discard being gated on run state, so the freeze preserves a stale nearly-elapsed accumulator across a stop during which the hopper visibly emptied. That is the nuisance trip AR-HBA-06 was written to rule out, and it is a defect an implementer arrives at HONESTLY by reading NEW-HBA-01's freeze as a blanket suspension of the accumulator's state machine. VB-HBA-007 cannot catch it - there the plant never stops."
+    },
+
+    {
+      "id": "VB-HBA-010",
+      "slot": "SLOT-HBA-CLEAR",
+      "index": 5,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-003",
+      "assertion": "REQ-HBA-003:09e3a8",
+      "assertionForm": "When",
+      "_scenario": "AR-HBA-09's uncovered case. Clear-down, then: 0-50 s hopper high + running (50 s accrued); 50 s plant stops, hopper still high; 55-56 s hopper LOW for 1.0 s while stopped (below the filter, so NOT a clear - nothing is discarded, the freeze simply continues); 56 s hopper high; 60 s plant restarts; runs high to 90 s. Cumulative reaches 60 s at t=70 s.",
+      "inputs": {
+        "HBA_Stim.Profile": "FREEZE_BELOW_FILTER",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "50000",
+        "HBA_Stim.P2Ms": "5000",
+        "HBA_Stim.P3Ms": "1000",
+        "HBA_Stim.P4Ms": "4000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "75000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Clear",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 75-90 s, 5 s after the correct raise. A block that discards on any hopper-low during a stop cannot alarm before t=120 s, 30 s past the end.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 1286 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model stops and restarts the running feedbacks and drives a 1 s hopper-low glitch inside the stop." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high sensor chatter driven false for a commanded duration shorter than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "loss and return of shredder running feedback part-way through a persistence window"
+      ],
+      "kills": "AR-HBA-09's gap implemented the other way: the discard applied on ANY hopper-low while stopped, so a blocked hopper whose sensor chatters once during a stop loses its whole 50 s budget. It is the natural over-correction after VB-HBA-009's defect is fixed, which is exactly why the two are separate vectors and sit next to each other in this slot."
+    },
+
+    {
+      "id": "VB-HBA-011",
+      "slot": "SLOT-HBA-LATCH",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-004",
+      "assertion": "REQ-HBA-004:14c9b6",
+      "assertionForm": "Never",
+      "_scenario": "LATCH_HOLDS. Clear-down, then: 0-75 s hopper high + running (alarm raises at 60 s); 75-120 s hopper LOW, plant still running, NO FaultReset at any point. Nothing in the scenario is permitted to clear the alarm.",
+      "inputs": {
+        "HBA_Stim.Profile": "LATCH_HOLDS",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.P2Ms": "45000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "120000",
+        "HBA_Stim.EndMs": "120000"
+      },
+      "startBool": "HBA_Start_Latch",
+      "expectations": [
+        { "signal": "HBA_Violation_AlarmFellWithoutReset", "nature": "PersistentState", "mode": "Latched", "windowScans": 2358, "expected": "false" },
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 2358, "expected": "true" }
+      ],
+      "_observability": "*** A NEVER MAY NOT BE SAMPLED (F-3), SO BOTH EXPECTATIONS ARE LATCHED - INCLUDING THE ONE THAT WOULD OTHERWISE BE A SAMPLE. *** The first is a copy-layer VIOLATION latch: it latches the forbidden state itself, a falling edge of HopperBlockedAlarm with no FaultReset rising edge recorded since the alarm was raised. Latching the forbidden state is what the NEVER form means, and it is the only instrument immune to a poll gap - a sampled NEVER passes by having seen nothing. The second latch establishes that the antecedent OCCURRED at all: without it a block that never raises the alarm satisfies the prohibition vacuously and reports green. Both latches are armed from 65 s so the clear-down phase, which does legitimately clear an alarm with a reset, is outside the window.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window closes; a violation latch cannot change once armed and un-set, so its finality follows from the arming window having closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 6001,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 45 s hopper-low window with the plant running, which is the sequencer's infeed-restart condition." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "A MOMENTARY alarm: an output that pulses, or self-clears on a timer, or follows the accumulator down when the accumulator is discarded by the hopper clearing at 75 s. The last of those is the interesting one - it is what an implementation does if the alarm is written as a live comparison (accumulator >= threshold) rather than as a latch, and it passes VB-HBA-001 completely because at 75 s the comparison is still true."
+    },
+
+    {
+      "id": "VB-HBA-012",
+      "slot": "SLOT-HBA-LATCH",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-006",
+      "assertion": "REQ-HBA-006:469954",
+      "assertionForm": "When",
+      "_scenario": "HOPPER_CLEARS_WHILE_LATCHED. Clear-down, then: 0-70 s hopper high + running (alarm at 60 s); 70-100 s hopper LOW (a debounced clear, so the accumulator is discarded), plant running, no FaultReset. The accumulator drops; the latch must not.",
+      "inputs": {
+        "HBA_Stim.Profile": "HOPPER_CLEARS_WHILE_LATCHED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "70000",
+        "HBA_Stim.P2Ms": "30000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "85000",
+        "HBA_Stim.ArmUntilMs": "100000",
+        "HBA_Stim.EndMs": "100000"
+      },
+      "startBool": "HBA_Start_Latch",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 85-100 s, which is 13 s after the clear became debounced (t=72 s) and therefore well past any transient. This is a WHEN assertion and sampling is admissible for persistent state; the prohibition form of the same behaviour is VB-HBA-011, and the two are deliberately instrumented differently so a copy-layer defect in one instrument cannot silence both.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the stimulus model's last commanded transition at least 643 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 30 s hopper-low window with the plant running, which is the sequencer's infeed-restart condition." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "An alarm that FOLLOWS the level rather than latching - the alarm coil driven directly from the persistence comparison, so the hopper clearing drops the annunciation and the stop demand without any operator acknowledgement. Q-HBA-05's inhibit makes this dangerous rather than merely wrong: it releases the plant to run on a hopper that was blocked seconds earlier."
+    },
+
+    {
+      "id": "VB-HBA-013",
+      "slot": "SLOT-HBA-RESET",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:0463ce",
+      "assertionForm": "When",
+      "_scenario": "RESET_CONDITION_CLEARED. Clear-down, then: 0-70 s hopper high + running (alarm at 60 s); 70-110 s hopper LOW, plant running - a debounced clear, so the accumulator is discarded to zero while the latch holds; single FaultReset rising edge at 90 s. The accumulator is below the threshold when the reset arrives, so the alarm must go false and STAY false.",
+      "inputs": {
+        "HBA_Stim.Profile": "RESET_CONDITION_CLEARED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "70000",
+        "HBA_Stim.P2Ms": "40000",
+        "HBA_Stim.ResetAtMs": "90000",
+        "HBA_Stim.ArmAtMs": "95000",
+        "HBA_Stim.ArmUntilMs": "110000",
+        "HBA_Stim.EndMs": "110000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "false" }
+      ],
+      "_observability": "Sampled over 95-110 s - 5 s after the reset edge, then held for 15 s, which is what makes 'and stays false' an observation rather than a hope. AR-HBA-08 makes an observable, persistent false REQUIRED in this case, and it is the only case in the register where a false is required rather than DON'T-CARE, so this window is the whole content of the clause.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the last commanded stimulus transition - the FaultReset falling edge - at least 214 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5573,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives DB_Controls.FaultReset, which is the shared operator reset already routed to the sequencer's own faults (register REQ-HBA-005 Notes). A pulse on it clears their latches too - the clearest genuine conflict in this set." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset, and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time"
+      ],
+      "kills": "A reset path that does not reach the alarm output - the reset wired to the inhibit, or to an internal flag, while the annunciation latch is only ever cleared by a power cycle. It also kills a reset that clears the latch and then immediately re-raises from a STALE accumulator, i.e. a block that does not discard on a debounced clear: that failure appears here as an alarm that never goes false, which is the same observation and a different cause, so a FAIL here must be diagnosed against VB-HBA-005 before the reset logic is touched."
+    },
+
+    {
+      "id": "VB-HBA-014",
+      "slot": "SLOT-HBA-RESET",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:7e39bc",
+      "assertionForm": "When",
+      "_scenario": "RESET_CONDITION_CLEARED, identical to VB-HBA-013. Same trigger, the other response.",
+      "inputs": {
+        "HBA_Stim.Profile": "RESET_CONDITION_CLEARED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "70000",
+        "HBA_Stim.P2Ms": "40000",
+        "HBA_Stim.ResetAtMs": "90000",
+        "HBA_Stim.ArmAtMs": "95000",
+        "HBA_Stim.ArmUntilMs": "110000",
+        "HBA_Stim.EndMs": "110000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "false" }
+      ],
+      "_observability": "As VB-HBA-013, on the other output. Observed on its own member: AR-HBA-12 rules that 'tracks' is about VALUE and the two remain distinct interface members, so an expectation on the alarm could never discharge this.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the last commanded stimulus transition - the FaultReset falling edge - at least 214 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5573,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset, which also clears this block's own fault latches." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset, and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time"
+      ],
+      "kills": "*** THE STALE STOP DEMAND. *** The inhibit output left asserted after the reset while the alarm clears - a plant held stopped with nothing annunciated and no operator action able to release it, because the only clear path has already been used. It is the worst residual state this block can reach and it is invisible to every alarm-side vector."
+    },
+
+    {
+      "id": "VB-HBA-015",
+      "slot": "SLOT-HBA-RESET",
+      "index": 2,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:179eb7",
+      "assertionForm": "When",
+      "_scenario": "RESET_CONDITION_HOLDS_RUNNING. Clear-down, then hopper high + running from 0 to 100 s continuously (alarm at 60 s), single FaultReset rising edge at 80 s. The accumulator is untouched by the reset (AR-HBA-05) and is still past the threshold, so the alarm re-raises.",
+      "inputs": {
+        "HBA_Stim.Profile": "RESET_CONDITION_HOLDS_RUNNING",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "100000",
+        "HBA_Stim.ResetAtMs": "80000",
+        "HBA_Stim.ArmAtMs": "85000",
+        "HBA_Stim.ArmUntilMs": "100000",
+        "HBA_Stim.EndMs": "100000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 85-100 s, opening 5 s after the reset edge. *** THE MOMENTARY DROP AT THE RESET IS NOT OBSERVED, DELIBERATELY. *** AR-HBA-08 rules it DON'T-CARE when the condition still holds, and AR-HBA-11 removed the same-evaluation claim precisely so no assertion turns on it. Asserting on that drop would force a Coincidence, which needs the program to record scan numbers, to test something with no operational consequence.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the last commanded stimulus transition - the FaultReset falling edge - at least 214 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset, which also clears this block's own fault latches." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset, and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time"
+      ],
+      "kills": "A reset that ZEROES the accumulator - the obvious and tidy-looking implementation, and the one AR-HBA-05 rejects by name. The operator who acknowledges a still-blocked hopper then buys a guaranteed quiet 60 s, which inverts the alarm's purpose. The wrong implementation reads false for the whole 85-100 s window; the right one reads true within a scan or two of the reset."
+    },
+
+    {
+      "id": "VB-HBA-016",
+      "slot": "SLOT-HBA-RESET",
+      "index": 3,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:6e1e8d",
+      "assertionForm": "Never",
+      "_scenario": "RESET_HELD_ON. Clear-down, then FaultReset driven TRUE from before T=0 and held true for the whole scenario, with hopper high + running from 0 to 90 s. There is no rising edge during the test, so an edge-triggered reset does nothing and the alarm raises at 60 s and stays.",
+      "inputs": {
+        "HBA_Stim.Profile": "RESET_HELD_ON",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "90000",
+        "HBA_Stim.ResetAtMs": "HOLD",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HBA_Violation_AlarmLowUnderHeldReset", "nature": "PersistentState", "mode": "Latched", "windowScans": 1072, "expected": "false" },
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1072, "expected": "true" }
+      ],
+      "_observability": "A NEVER, so no expectation may be sampled (F-3). The violation latch is armed from 65 s - by which time the accumulator is at or past the threshold BY CONSTRUCTION of the scenario, which is how an assertion about an unobservable internal quantity is made testable without exposing it - and latches (FaultReset true AND HopperBlockedAlarm false). The second latch establishes the alarm did assert, so the prohibition is not satisfied vacuously by a block that never alarms at all.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window closes; a violation latch cannot change once armed and un-set. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model holds the shared DB_Controls.FaultReset true for 90 s, which pins every fault latch in the corpus that uses it. Concurrency here would not merely perturb the sequencer, it would suppress it." },
+        { "block": "FB_PusherControl", "reason": "same held FaultReset, same suppression; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset held continuously true from before T=0"
+      ],
+      "kills": "A LEVEL-sensitive reset. A stuck-on or wired-on FaultReset then pins the alarm off permanently and silently - and silently is the operative word, because every pulse-driven vector in this slot behaves correctly against it. VB-HBA-013, 014, 015, 017 and 018 all pulse the reset and all stay green; only holding it true finds this."
+    },
+
+    {
+      "id": "VB-HBA-017",
+      "slot": "SLOT-HBA-RESET",
+      "index": 4,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:34fd97",
+      "assertionForm": "When",
+      "_scenario": "RESET_AT_THE_CROSSING. Clear-down, then hopper high + running from 0 to 90 s, with a single FaultReset rising edge placed by the stimulus model in the scan in which its OWN 60 s elapses - the model's best available approximation of the block's threshold crossing.",
+      "inputs": {
+        "HBA_Stim.Profile": "RESET_AT_THE_CROSSING",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "90000",
+        "HBA_Stim.ResetAtMs": "COINCIDENT_WITH_THRESHOLD",
+        "HBA_Stim.ArmAtMs": "75000",
+        "HBA_Stim.ArmUntilMs": "90000",
+        "HBA_Stim.EndMs": "90000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 75-90 s. The OBSERVATION is ordinary persistent state - AR-HBA-11's whole point was to reword the raise-dominance claim so that no assertion turns on same-scan sequencing, and this vector honours that: the coincidence is in the STIMULUS, never in the reading. *** THE STIMULUS COINCIDENCE IS APPROXIMATE AND THAT IS DECLARED: *** the model's 60 s and the block's 60 s are two timers, so the edge lands within a scan or two of the crossing rather than exactly on it. If it lands late this vector degenerates into VB-HBA-015's case, which is weaker but not false. Genuinely establishing the coincident case needs the edge swept across crossing-1, crossing, crossing+1 - three positions, which under contract 2.1 means three vectors, and there is one assertion to cite. Raised in the .md rather than resolved.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the last commanded stimulus transition - the FaultReset falling edge - at least 429 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4715,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset, which also clears this block's own fault latches." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset, and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset rising edge placed in the scan in which the model's own persistence threshold elapses"
+      ],
+      "kills": "*** THE RESET CONSUMING THE THRESHOLD CROSSING - A LIVE FAULT PERMANENTLY SUPPRESSED. *** If the raise is an edge-triggered SET and the reset a RESET evaluated after it in the same rung sequence, the one crossing this block will ever get is swallowed and the alarm never returns at all: the accumulator is already past the threshold and never crosses it again. VB-HBA-015 cannot catch it, because there the alarm was already latched before the reset and no crossing was at stake."
+    },
+
+    {
+      "id": "VB-HBA-018",
+      "slot": "SLOT-HBA-RESET",
+      "index": 5,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-005",
+      "assertion": "REQ-HBA-005:e7e0e0",
+      "assertionForm": "When",
+      "_scenario": "STOP_THEN_RESET - AR-HBA-07's separating sequence, and the register says it is the most likely operator sequence there is. Clear-down, then: 0-70 s hopper high + running (alarm at 60 s); 70 s plant stops, hopper STAYS HIGH so the accumulator freezes past the threshold rather than being discarded; FaultReset rising edge at 80 s with the plant still stopped; scenario to 100 s.",
+      "inputs": {
+        "HBA_Stim.Profile": "STOP_THEN_RESET",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "70000",
+        "HBA_Stim.P2Ms": "30000",
+        "HBA_Stim.ResetAtMs": "80000",
+        "HBA_Stim.ArmAtMs": "85000",
+        "HBA_Stim.ArmUntilMs": "100000",
+        "HBA_Stim.EndMs": "100000"
+      },
+      "startBool": "HBA_Start_Reset",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 643, "expected": "true" }
+      ],
+      "_observability": "Sampled over 85-100 s, opening 5 s after the reset edge, with the plant stopped throughout the window. Q-HBA-04's parenthetical - 'a full hopper at standstill does not alarm' - is an OWNER answer and AR-HBA-07 reconciles it as a statement about accrual, not about the latch. *** THIS VECTOR IS THE ONE THAT INVERTS IF THE OWNER MEANT THE STRONGER READING *** (enumeration: 005.A6 is 'INVERTED, not reworded'), so its expected value is the single place in this submission that turns on an open owner question.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the observation window, with the last commanded stimulus transition - the FaultReset falling edge - at least 214 scans earlier. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset and removes the running feedbacks; the sequencer keys on both." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset, and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "loss and return of shredder running feedback part-way through a persistence window",
+        "operator fault-reset as a single rising edge at a commanded time"
+      ],
+      "kills": "A re-raise gated on PlantRunning. The sequence stop, then acknowledge - which is what an operator actually does - then CLEARS A LIVE FAULT AND LEAVES IT CLEARED, with the hopper still blocked and the stop demand released. Every other reset vector in this slot resets while running and none of them can see it. It is also the defect an implementer produces by writing one rung for both the raise and the re-raise, since the raise legitimately IS run-gated."
+    },
+
+    {
+      "id": "VB-HBA-019",
+      "slot": "SLOT-HBA-STARTUP",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-007",
+      "assertion": "REQ-HBA-007:4197e0",
+      "assertionForm": "When",
+      "_scenario": "STARTUP - RIDES AN ALREADY-SCHEDULED DISRUPTIVE BOUNDARY (X-F). Before the boundary: hopper high + running for 40 s with no alarm latched, so the accumulator sits at 40 s of 60. The boundary stops and restarts the CPU. After the restart: hopper high + running for 40 s. A correct block starts the accumulator fresh, so 40 s post-restart is not enough and no alarm appears.",
+      "inputs": {
+        "HBA_Stim.Profile": "STARTUP_NO_ALARM_LATCHED",
+        "HBA_Stim.Precondition": "CLEARDOWN_BEFORE_BOUNDARY",
+        "HBA_Stim.PreBoundaryHighRunningMs": "40000",
+        "HBA_Stim.P1Ms": "40000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "0",
+        "HBA_Stim.ArmUntilMs": "40000",
+        "HBA_Stim.EndMs": "40000"
+      },
+      "startBool": "HBA_Start_Startup",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1715, "expected": "false" }
+      ],
+      "_observability": "LATCHED, and it has to be: X-F says first-scan evidence must be latched in the copy layer and read after reconnect, because THE HARNESS IS DISCONNECTED ACROSS THE DOWNLOAD (D18) and nobody is polling while the first scan happens. StartupSchedule refuses Sampled AND Stamped here. Armed from the first scan after restart for 40 s; the alarm must never appear in it.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after reconnect and after the arming window has closed; the latched evidence itself cannot change once the window is closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 2572,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the hopper and the running feedbacks across a CPU restart; the sequencer's own startup behaviour would be exercised at the same time and its state is not part of this test." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles across the restart." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+      ],
+      "kills": "A RETENTIVE accumulator. The 40 s carried across the power cycle plus 40 s after it reaches 60 s at 20 s post-restart, and the alarm appears inside the armed window - at the extreme, if the whole timer state is retained including an elapsed one, on the first scan. NEW-HBA-05 is still OPEN and its resolution decides whether the block is built this way, so this vector is the one that fails first if it is settled toward retention."
+    },
+
+    {
+      "id": "VB-HBA-020",
+      "slot": "SLOT-HBA-STARTUP",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-007",
+      "assertion": "REQ-HBA-007:7edf6c",
+      "assertionForm": "When",
+      "_scenario": "STARTUP - ALARM LATCHED BEFORE THE BOUNDARY. Before the boundary: hopper high + running long enough to raise and latch the alarm (75 s), no reset. The boundary stops and restarts the CPU. After the restart: hopper low, plant stopped, so nothing can re-earn the alarm - anything observed is the RETAIN latch having survived, not a fresh raise.",
+      "inputs": {
+        "HBA_Stim.Profile": "STARTUP_ALARM_LATCHED",
+        "HBA_Stim.Precondition": "CLEARDOWN_BEFORE_BOUNDARY",
+        "HBA_Stim.PreBoundaryHighRunningMs": "75000",
+        "HBA_Stim.P1Ms": "30000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "0",
+        "HBA_Stim.ArmUntilMs": "30000",
+        "HBA_Stim.EndMs": "30000"
+      },
+      "startBool": "HBA_Start_Startup",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1286, "expected": "true" }
+      ],
+      "_observability": "Latched from the first scan after restart, for the reason in VB-HBA-019. The post-restart conditions are deliberately INERT - hopper low, plant stopped - so that a true reading cannot be explained by anything except survival of the latch.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after reconnect and after the arming window has closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 2144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "its own retentive fault latches cross the same boundary; running it concurrently mixes two retentivity questions in one restart." },
+        { "block": "FB_PusherControl", "reason": "same restart, same mixing of retentivity behaviour; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+      ],
+      "kills": "An alarm latch that does not survive the power cycle - the output declared non-retentive, or cleared in OB100 along with the transient timing state. A live blockage is then silently de-annunciated by a restart and the stop demand released with it, which is the fail-safe direction inverted. NEW-HBA-04 records that the pre-Gate-1 design said exactly this, so it is a defect the specification itself once contained."
+    },
+
+    {
+      "id": "VB-HBA-021",
+      "slot": "SLOT-HBA-STARTUP",
+      "index": 2,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-007",
+      "assertion": "REQ-HBA-007:578675",
+      "assertionForm": "When",
+      "_scenario": "STARTUP_ALARM_LATCHED, identical to VB-HBA-020. Same trigger, the other response.",
+      "inputs": {
+        "HBA_Stim.Profile": "STARTUP_ALARM_LATCHED",
+        "HBA_Stim.Precondition": "CLEARDOWN_BEFORE_BOUNDARY",
+        "HBA_Stim.PreBoundaryHighRunningMs": "75000",
+        "HBA_Stim.P1Ms": "30000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "0",
+        "HBA_Stim.ArmUntilMs": "30000",
+        "HBA_Stim.EndMs": "30000"
+      },
+      "startBool": "HBA_Start_Startup",
+      "expectations": [
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Latched", "windowScans": 1286, "expected": "true" }
+      ],
+      "_observability": "As VB-HBA-020, on the other output.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after reconnect and after the arming window has closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 2144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "its own retentive fault latches cross the same boundary." },
+        { "block": "FB_PusherControl", "reason": "same restart; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+      ],
+      "kills": "*** A RETENTIVITY MISMATCH BETWEEN THE TWO OUTPUTS: the alarm declared RETAIN and the inhibit not. *** The plant is then released to run after a restart with the blockage alarm still annunciated - the one state the pair exists to prevent. It is an easy defect to introduce, because retentivity is declared per member and the two members are separate."
+    },
+
+    {
+      "id": "VB-HBA-022",
+      "slot": "SLOT-HBA-STARTUP",
+      "index": 3,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-007",
+      "assertion": "REQ-HBA-007:9855c5",
+      "assertionForm": "When",
+      "_scenario": "AR-HBA-10's ACCEPTED GAP, first half. Before the boundary: alarm raised and latched (75 s high + running). Restart. After: hopper high + running throughout - the hopper is still genuinely blocked - and a single FaultReset rising edge at 5 s post-restart. The accumulator is zero after the restart, so the reset finds the condition below threshold and the alarm clears.",
+      "inputs": {
+        "HBA_Stim.Profile": "STARTUP_RESET_ON_BLOCKED_HOPPER",
+        "HBA_Stim.Precondition": "CLEARDOWN_BEFORE_BOUNDARY",
+        "HBA_Stim.PreBoundaryHighRunningMs": "75000",
+        "HBA_Stim.P1Ms": "40000",
+        "HBA_Stim.ResetAtMs": "5000",
+        "HBA_Stim.ArmAtMs": "6000",
+        "HBA_Stim.ArmUntilMs": "40000",
+        "HBA_Stim.EndMs": "40000"
+      },
+      "startBool": "HBA_Start_Startup",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1458, "expected": "false" }
+      ],
+      "_observability": "Latched over 6-40 s post-restart, expecting false: the latch is armed after the reset edge and closes 20 s BEFORE the legitimate re-raise at 60 s post-restart, so a correct block leaves it un-set. Reading a required FALSE from a latch is stronger than sampling for it - the latch would have caught a re-raise anywhere in those 34 s, and a sample would only have caught one at the instant of looking.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window has closed, with the FaultReset falling edge at least 43 scans before the window opened. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 2572,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset immediately after a restart, when the sequencer's own retentive faults are also present." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time",
+        "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+      ],
+      "kills": "A RETENTIVE accumulator, from the other side: it survives the power cycle, the reset finds it still past the threshold, and the alarm re-raises at once instead of clearing. *** THIS IS THE ASSERTION THE ENUMERATION NAMES AS THE ONE THAT FAILS FIRST IF NEW-HBA-05 IS SETTLED TOWARD A RETENTIVE ACCUMULATOR *** - so a FAIL here is as likely to be a specification change as a defect, and must be diagnosed against NEW-HBA-05 before the block is touched."
+    },
+
+    {
+      "id": "VB-HBA-023",
+      "slot": "SLOT-HBA-STARTUP",
+      "index": 4,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-007",
+      "assertion": "REQ-HBA-007:34dc51",
+      "assertionForm": "When",
+      "_scenario": "AR-HBA-10's ACCEPTED GAP, second half - the half that makes the gap BOUNDED rather than open. Same profile as VB-HBA-022 but run on: alarm latched before the boundary, restart, hopper high + running throughout, FaultReset edge at 5 s post-restart, then 70 more seconds of high-and-running. The accumulator reaches 60 s at 60 s post-restart, so the alarm must come back.",
+      "inputs": {
+        "HBA_Stim.Profile": "STARTUP_RESET_THEN_REARM",
+        "HBA_Stim.Precondition": "CLEARDOWN_BEFORE_BOUNDARY",
+        "HBA_Stim.PreBoundaryHighRunningMs": "75000",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.ResetAtMs": "5000",
+        "HBA_Stim.ArmAtMs": "6000",
+        "HBA_Stim.ArmUntilMs": "70000",
+        "HBA_Stim.EndMs": "75000"
+      },
+      "startBool": "HBA_Start_Startup",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 2744, "expected": "true" }
+      ],
+      "_observability": "Latched over 6-70 s post-restart, expecting true. The window is one further persistence threshold plus 5 s of margin, which is exactly the bound the clause states - *** AND A LATCH IS THE ONLY INSTRUMENT THAT CAN EXPRESS A 'WITHIN' BOUND IN THIS FORMAT, *** because `expected` is a string compared for equality and carries no notion of a range. The bound becomes the ARMING WINDOW, and the predicate becomes true. Recorded in the .md as a format limitation rather than presented as a design.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window has closed, i.e. over 70-75 s post-restart. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4073,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset immediately after a restart." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time",
+        "CPU stop and restart across an already-scheduled disruptive download boundary, with retentive memory preserved"
+      ],
+      "kills": "*** THE ALARM GOES AWAY AND NEVER COMES BACK. *** Accrual does not resume after a reset - a latch on the accumulator's enable, or an accumulator disarmed until the hopper next goes low - so the window AR-HBA-10 accepted BECAUSE IT IS BOUNDED becomes unbounded, on a hopper that is still blocked. VB-HBA-022 stays green against it: the alarm did clear, which is all VB-HBA-022 claims."
+    },
+
+    {
+      "id": "VB-HBA-024",
+      "slot": "SLOT-HBA-PAIR",
+      "index": 0,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-008",
+      "assertion": "REQ-HBA-008:d97781",
+      "assertionForm": "Never",
+      "_scenario": "PAIR_ALARM_HIGH. Clear-down, then: 0-75 s hopper high + running (alarm and inhibit both raise at 60 s); 75-100 s hopper LOW, plant running, no FaultReset, so both outputs stay latched. The relation is watched across a raise, a hold, and a hopper clear - three transitions in one window.",
+      "inputs": {
+        "HBA_Stim.Profile": "PAIR_ALARM_HIGH",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.P2Ms": "25000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "100000",
+        "HBA_Stim.EndMs": "100000"
+      },
+      "startBool": "HBA_Start_Pair",
+      "expectations": [
+        { "signal": "HBA_Violation_InhibitLowWhileAlarmHigh", "nature": "PersistentState", "mode": "Latched", "windowScans": 1501, "expected": "false" },
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1501, "expected": "true" },
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Latched", "windowScans": 1501, "expected": "true" }
+      ],
+      "_observability": "*** THIS IS AMB-14's CASE AND IT IS ANSWERED IN THE ONLY WAY THAT MEANS ANYTHING. *** The assertion relates two signals, so the vector observes BOTH by name - which is what the enumeration's requiredObservations demands - and adds a third observation that is the relation itself: a copy-layer latch of the forbidden conjunction (alarm asserted AND inhibit reading false). Two independent latches would say each signal went true at some point; only the conjunction latch says they AGREED THROUGHOUT. All three are Latched because the assertion is a NEVER and F-3 refuses sampling for the whole vector. Armed from 65 s so the clear-down is excluded.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window closes; the violation latch cannot change once the window is closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5144,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives a 25 s hopper-low window with the plant running, which is the sequencer's infeed-restart condition." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "An inhibit that is a one-shot pulse on the alarm's rising edge, or that tracks the first raise and not a re-raise, or that is never written at all. *** THIS IS THE OPERATIONALLY IMPORTANT DIRECTION: it is the one that leaves the plant free to run while the blockage alarm is annunciated. *** VB-HBA-002 catches the never-written case at the raise; only the conjunction latch catches an inhibit that drops later, while the alarm stays up."
+    },
+
+    {
+      "id": "VB-HBA-025",
+      "slot": "SLOT-HBA-PAIR",
+      "index": 1,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-008",
+      "assertion": "REQ-HBA-008:741315",
+      "assertionForm": "Never",
+      "_scenario": "PAIR_ALARM_LOW. Clear-down, then: 0-70 s hopper high + running (both outputs raise at 60 s); 70-85 s hopper LOW, plant running - a debounced clear, so the accumulator is discarded while both outputs stay latched; FaultReset rising edge at 90 s, which clears both because the condition has gone; 90-110 s hopper low, plant running. The relation is watched across the clear-down of both outputs, which is where the second direction bites.",
+      "inputs": {
+        "HBA_Stim.Profile": "PAIR_ALARM_LOW",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "70000",
+        "HBA_Stim.P2Ms": "40000",
+        "HBA_Stim.ResetAtMs": "90000",
+        "HBA_Stim.ArmAtMs": "65000",
+        "HBA_Stim.ArmUntilMs": "110000",
+        "HBA_Stim.EndMs": "110000"
+      },
+      "startBool": "HBA_Start_Pair",
+      "expectations": [
+        { "signal": "HBA_Violation_InhibitHighWhileAlarmLow", "nature": "PersistentState", "mode": "Latched", "windowScans": 1929, "expected": "false" },
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 1929, "expected": "true" },
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Latched", "windowScans": 1929, "expected": "true" }
+      ],
+      "_observability": "As VB-HBA-024, in the other direction: the conjunction latched is (inhibit reading true AND alarm not asserted). The two plain latches expect TRUE and are there to establish that both outputs actually went up during the armed window - without them a block that raises neither satisfies this NEVER vacuously, which is precisely how a relational prohibition reports green on a block that does nothing at all.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window closes, i.e. over the last 15 s in which both outputs must be steady and false. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 5573,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives the shared DB_Controls.FaultReset and a 40 s hopper-low window with the plant running." },
+        { "block": "FB_PusherControl", "reason": "shares the same DB_Controls.FaultReset; and hopper-high is its auto-mode cycle trigger." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "hopper-level-high discrete sensor driven false for a commanded duration, longer than the clear-debounce filter time",
+        "shredder running feedback, forward or reverse, held for a commanded duration",
+        "operator fault-reset as a single rising edge at a commanded time"
+      ],
+      "kills": "A SET-ONLY inhibit latch: it follows the alarm up and never comes down. After a FaultReset on a cleared blockage the plant stays stopped with nothing annunciated and no operator action able to release it - the same residual state VB-HBA-014 catches at the reset, caught here as a violation of the relation rather than as a value at one moment, so an inhibit that drops and then re-latches is also caught."
+    }
+  ]
+}
