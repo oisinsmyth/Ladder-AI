@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using OpennessCli;
 using OpennessCli.Cli;
 using OpennessCli.Model;
@@ -627,7 +628,49 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files) => throw new NotSupportedException();
 
-    public BlockInfo CreateInstanceDb(string groupPath, string dbName, string instanceOfName) => throw new NotSupportedException();
+    // ---- create-instance-db ---------------------------------------------------------------------
+    //
+    // Runs the SAME InstanceDbCreation.Run the real gateway binds to, over the same in-memory
+    // RecordingSite the sequencing tests use. Deliberate: a fake that re-described the sequence
+    // would let the sequence drift underneath it, and the sequence — specifically WHEN Save() is
+    // called — IS the defect. <see cref="Project"/>'s block list and save counter together are the
+    // project, so "the failed run changed nothing" can be asserted directly rather than inferred
+    // from an exit code. See InstanceDbCreationTests.
+
+    /// <summary>The in-memory project this command creates into.</summary>
+    public RecordingSite Project { get; } = new();
+
+    /// <summary>
+    /// What TIA's auto-numberer hands back. <b>0 is FI-63's measured value on the first creation
+    /// after a project open</b> — the input that used to produce a committed `DB0`.
+    /// </summary>
+    public int NumberFromAutoNumbering
+    {
+        get => Project.NumberFromAutoNumbering;
+        set => Project.NumberFromAutoNumbering = value;
+    }
+
+    /// <summary>Models `PlcBlock.Delete()` failing, so the rollback cannot complete.</summary>
+    public bool DeleteThrows
+    {
+        get => Project.DeleteThrows;
+        set => Project.DeleteThrows = value;
+    }
+
+    public IReadOnlyList<FakeDb> ProjectBlocks => Project.Blocks;
+
+    public int CreateInstanceDbCalls { get; private set; }
+
+    public BlockInfo CreateInstanceDb(string groupPath, string dbName, string instanceOfName)
+    {
+        CreateInstanceDbCalls++;
+        // Note it does NOT touch this fake's own SaveCalls: on a failure the exception leaves before
+        // any such bridging line could run, which would make the counter read clean for the wrong
+        // reason. Project.SaveCalls is incremented by the code under test itself, so it is honest on
+        // every path — assert on that.
+        var block = InstanceDbCreation.Run(Project, dbName, instanceOfName);
+        return new BlockInfo(block.Name, BlockType.DB, block.Number, "DB", false, $"{groupPath}/{block.Name}", true);
+    }
 
     public IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files) => throw new NotSupportedException();
 

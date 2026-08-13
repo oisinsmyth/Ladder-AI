@@ -3238,41 +3238,45 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var group = FindGroup(_project, groupPath);
 
-        try
+        // The sequence — including WHEN THE PROJECT IS SAVED — lives in InstanceDbCreation, which has
+        // no Portal in it and is unit-tested. This method is now only the binding of that sequence to
+        // the four real Openness calls.
+        //
+        // THERE IS NO `finally { SaveProject(); }` HERE ANY MORE, AND THAT IS THE FIX (2026-08-13).
+        // The old form saved on EVERY exit including the throwing ones, so a create that failed
+        // halfway was committed to disk by the very code reporting it had failed — see
+        // InstanceDbCreation's class comment for the measured sequence. Do not reintroduce a finally
+        // save here: Save() is the only operation in this whole method that touches disk, and the
+        // guarantee `create-instance-db` now makes is that it is reached only on success.
+        var db = InstanceDbCreation.Run(new PlcInstanceDbSite(group, SaveProject), dbName, instanceOfName);
+        return ToBlockInfo(db, groupPath);
+    }
+
+    /// <summary>
+    /// The real Openness binding for <see cref="InstanceDbCreation"/>. Nothing here decides anything —
+    /// each member is one API call — so that everything which IS a decision sits in the tested half.
+    /// </summary>
+    private sealed class PlcInstanceDbSite : IInstanceDbSite<PlcBlock>
+    {
+        private readonly PlcBlockGroup _group;
+        private readonly Action _save;
+
+        public PlcInstanceDbSite(PlcBlockGroup group, Action save)
         {
-            // FI-63, part 1 — the hypothesis. The defect was deterministic on the FIRST creation after
-            // a project open and absent afterwards, and the workaround that unblocked the live job was
-            // to create a throwaway DB first and delete it. What a throwaway does, incidentally, is
-            // force the composition to be enumerated. So enumerate it deliberately: if the auto-numberer
-            // needs the existing numbers materialised before it can pick the next one, this is the whole
-            // fix and the throwaway was that fix by accident.
-            var takenBefore = group.Blocks.Select(b => b.Number).ToList();
-
-            var db = group.Blocks.CreateInstanceDB(dbName, isAutoNumbered: true, 0, instanceOfName);
-
-            // FI-63, part 2 — do not trust it either way. Part 1 is a hypothesis about someone else's
-            // allocator and has not been verified against a live Portal; this half does not depend on it
-            // being right. Read the number back and repair it, because a whole-device compile reports
-            // Success over an invalid-numbered block (FI-52's family) and the defect would ship.
-            if (!BlockNumbering.IsValid(db.Number))
-            {
-                var repaired = BlockNumbering.LowestFree(takenBefore.Concat(group.Blocks.Select(b => b.Number)));
-                db.Number = repaired;
-
-                // Fail loudly rather than returning a block that will pass the device compile and fail
-                // the per-block one much later, which is exactly how this reached a live job.
-                if (!BlockNumbering.IsValid(db.Number))
-                {
-                    throw new InvalidBlockNumberException(dbName, db.Number, repaired);
-                }
-            }
-
-            return ToBlockInfo(db, groupPath);
+            _group = group;
+            _save = save;
         }
-        finally
-        {
-            SaveProject();
-        }
+
+        public IReadOnlyList<int> ExistingNumbers() => _group.Blocks.Select(b => b.Number).ToList();
+
+        public PlcBlock Create(string dbName, string instanceOfName) =>
+            _group.Blocks.CreateInstanceDB(dbName, isAutoNumbered: true, 0, instanceOfName);
+
+        public int NumberOf(PlcBlock block) => block.Number;
+
+        public void Delete(PlcBlock block) => block.Delete();
+
+        public void Save() => _save();
     }
 
     // Returns imported type names, not BlockInfo — a PlcType has no Number/ProgrammingLanguage to

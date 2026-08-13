@@ -1,4 +1,3 @@
-using System;
 using OpennessCli.Openness;
 using Xunit;
 
@@ -12,8 +11,15 @@ namespace OpennessCli.Tests;
 // invalid-numbered block, and only the per-block compile says "has an invalid number 0". The default
 // gate passes and the defect ships.
 //
-// Only the number CHOICE is testable here; priming the composition and reading the number back need a
-// live Portal and are owed a verification run.
+// This file shrank on 2026-08-13, when the RENUMBER REPAIR was retired. `LowestFree` chose the
+// replacement number for that repair; `set_Number` throws under automatic numbering so the repair
+// never once succeeded, and the `finally { SaveProject(); }` it unwound through committed the broken
+// block it had just failed to fix. What replaced it is a refusal that leaves the project unchanged —
+// see `InstanceDbCreationTests`, which is where the FI-63 detection now lives and where it is tested
+// against the project state rather than against a return value.
+//
+// What is left here is the detection rule itself, which is still exactly what decides whether a
+// created block is kept.
 public class BlockNumberingTests
 {
     [Fact]
@@ -23,43 +29,5 @@ public class BlockNumberingTests
         Assert.False(BlockNumbering.IsValid(-1));
         Assert.True(BlockNumbering.IsValid(1));
         Assert.True(BlockNumbering.IsValid(37));
-    }
-
-    [Fact]
-    public void LowestFree_TakesTheGapRatherThanPushingTheNumberingUp()
-    {
-        // Lowest-free, not highest-plus-one: this runs only to repair a block that came back invalid,
-        // so it should slot into a gap the project already has instead of growing the space each time.
-        Assert.Equal(2, BlockNumbering.LowestFree(new[] { 1, 3, 4 }));
-        Assert.Equal(5, BlockNumbering.LowestFree(new[] { 1, 2, 3, 4 }));
-        Assert.Equal(1, BlockNumbering.LowestFree(Array.Empty<int>()));
-    }
-
-    // The broken value is 0, and 0 must never be treated as "taken" — otherwise the repair could
-    // consider the invalid number it is repairing to be an occupied slot.
-    [Fact]
-    public void LowestFree_IgnoresInvalidNumbersInTheTakenSet()
-    {
-        Assert.Equal(1, BlockNumbering.LowestFree(new[] { 0, -5 }));
-        Assert.Equal(2, BlockNumbering.LowestFree(new[] { 0, 1 }));
-    }
-
-    [Fact]
-    public void LowestFree_RespectsAFloorAndNeverReturnsZero()
-    {
-        Assert.Equal(100, BlockNumbering.LowestFree(new[] { 1, 2, 3 }, floor: 100));
-        Assert.Equal(101, BlockNumbering.LowestFree(new[] { 100 }, floor: 100));
-        Assert.Equal(1, BlockNumbering.LowestFree(Array.Empty<int>(), floor: 0));
-        Assert.Equal(1, BlockNumbering.LowestFree(Array.Empty<int>(), floor: -3));
-    }
-
-    [Fact]
-    public void TheFailureMessageNamesWhyAGreenDeviceCompileIsNotEvidence()
-    {
-        var message = new InvalidBlockNumberException("iDB_Sim", 0, 12).Message;
-
-        Assert.Contains("iDB_Sim", message);
-        Assert.Contains("whole-device compile reports Success", message);
-        Assert.Contains("per-block", message);
     }
 }

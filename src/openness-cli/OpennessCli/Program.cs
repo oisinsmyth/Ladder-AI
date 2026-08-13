@@ -1133,7 +1133,17 @@ internal static class Program
         return ExitCodes.Success;
     }
 
-    private static int RunCreateInstanceDb(IOpennessGateway gateway, CreateInstanceDbCommandOptions options, int timeoutOpenSeconds)
+    /// <summary>
+    /// `create-instance-db` — scaffold an instance DB for an already-existing FB.
+    ///
+    /// <c>internal</c> for the same reason <see cref="RunBlockLayout"/> and
+    /// <see cref="RunDownloadPlan"/> are: the property that matters here is observable only against a
+    /// fake gateway. That property is that a run which does NOT return a usable block leaves the
+    /// project unchanged — asserted by the tests as "the fake's block list is back where it started
+    /// and its save counter is still zero", not merely as an exit code. The exit code was never the
+    /// bug; the committed `DB0` was.
+    /// </summary>
+    internal static int RunCreateInstanceDb(IOpennessGateway gateway, CreateInstanceDbCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         var info = gateway.CreateInstanceDb(options.GroupPath, options.DbName, options.InstanceOfName);
@@ -1272,6 +1282,33 @@ public static class ExitCodes
     public const int DownloadPlanIncomplete = 16;
 
     /// <summary>
+    /// A write command failed and <b>the project is unchanged</b> — nothing was saved, and the
+    /// partial mutation was removed from the open session. Earned by `create-instance-db` when the
+    /// new instance DB comes back with an invalid block number (FI-63) or its number cannot be read.
+    ///
+    /// Its own code rather than <see cref="CommandError"/> because nothing was named wrongly and
+    /// re-running with a different argument does not fix it, and rather than
+    /// <see cref="UnexpectedError"/> because it is a modelled, expected outcome with a known
+    /// recovery. What the caller reads off it is the half that matters: <b>there is nothing to clean
+    /// up.</b> Before 2026-08-13 the same condition exited 5 having ALREADY SAVED the broken block,
+    /// so the exit code and the project disagreed about whether anything had happened.
+    /// </summary>
+    public const int ChangeAbandoned = 17;
+
+    /// <summary>
+    /// Same failure as <see cref="ChangeAbandoned"/> with the cleanup half missing: nothing was
+    /// saved, so <b>nothing reached disk</b>, but the partial mutation could not be removed from the
+    /// in-memory project model either.
+    ///
+    /// A separate code because the caller's response differs, which is this table's rule for when to
+    /// split one (cf. <see cref="CompileIncomplete"/>, which does not). On 17 a retry is immediately
+    /// safe. On 18 the open Portal session holds a block that exists nowhere on disk, and if that
+    /// session belongs to a person rather than to this process, the recovery is to close it WITHOUT
+    /// saving — advice that would be actively wrong on a 17.
+    /// </summary>
+    public const int RollbackIncomplete = 18;
+
+    /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).
     ///
     /// CommandError (7) means "you named something that isn't there, or named it ambiguously" — the
@@ -1306,6 +1343,15 @@ public static class ExitCodes
         // Not a naming mistake, but it was already classified this way and the message is actionable
         // (it names the path and points at the quirks note).
         ExportProducedNoFileException => CommandError,
+
+        // `create-instance-db` refused to keep what it made (2026-08-13). Two codes, split on
+        // whether the in-memory session was left clean, because that is the only thing the caller
+        // has to do differently. Order matters: the more specific pattern must come first.
+        // Neither is UnexpectedError — the predecessor of this pair WAS unclassified, and reporting
+        // the single most destructive failure this CLI had as an unmodelled internal fault is the
+        // audit-F-09 defect all over again.
+        InstanceDbCreationAbandonedException { RollbackCompleted: false } => RollbackIncomplete,
+        InstanceDbCreationAbandonedException => ChangeAbandoned,
 
         // Deliberately an internal fault, not a user error. `PerformDownload` is unreachable by
         // design — no argument reaches it and `download-plan` never calls it — so if this ever

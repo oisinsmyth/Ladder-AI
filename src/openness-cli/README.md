@@ -15,7 +15,7 @@ openness-cli delete        <project> --block <name> [--device <name>] --yes    #
 openness-cli block-layout  <project> --block <name> [--expect Standard|Optimized]   # READ-ONLY: optimized vs standard block access. Classic S7comm cannot see an OPTIMIZED block at all; the IR path yields Optimized silently — see below
 openness-cli block-layout  <project> --block <name> --set Standard|Optimized --yes  # DESTROYS THE BLOCK'S RETAINED DATA on the next download. Sets, saves, re-resolves and READS BACK; a mismatch is exit 15, never a pass
 openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware]   # READ-ONLY, DRY-RUN ONLY: what a download WOULD comprise. CANNOT DOWNLOAD — no --yes, no --force, no confirmed form. Granularity is WHOLE-PLC; there is no per-block download — see below
-openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB
+openness-cli create-instance-db <project> --group <device>/<path> --name <name> --instance-of <FBName>   # scaffolding: instance DB for an already-existing FB. A FAILED RUN LEAVES THE PROJECT UNCHANGED (2026-08-13): the save happens only after the new DB's number reads back valid, so no "Created ..." line means nothing reached disk — exit 17, nothing to clean up (18 = not saved either, but the open session was left holding it). It used to save in a `finally` and COMMIT the broken block it had just failed to fix — see below
 openness-cli sanity-check  <project>                                           # is this project's Openness state OK? see below
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
 openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     # READ-ONLY HMI walk: screens, screen items, per-property dynamizations — see below
@@ -95,6 +95,51 @@ openness-cli create-instance-db <project> --group <device>/<path> --name <name> 
 Creates a new instance DB via `PlcBlockComposition.CreateInstanceDB(name, isAutoNumbered: true, 0, instanceOfName)` — confirmed real, 2026-07-14 (`Siemens.Engineering.xml` doc comments, TIA Portal V20 `PublicAPI`). Grounding/scaffolding, not logic generation and not tag/hardware invention (CLAUDE.md hard rule 3): the DB number is always auto-assigned by TIA, never a literal passed in here, and the DB's own content is entirely derived from `instanceOfName`'s existing declaration, nothing authored. Exists for a genuine round-trip gap — an FB imported standalone with no calling context has nowhere for its own multi-instance `Static` members (e.g. `TON_TIME` timers) to resolve their storage, surfacing as `"Missing instance DB"` on compile.
 
 Live-verified, 2026-07-14: created `MotorStarter_Instance` (instance of `MotorStarter`, `SampleProject`'s own cross-project-imported FB2) — `compile --block MotorStarter` went from `"Missing instance DB"` on two networks to `STATE: Success, ERRORS: 0`; a subsequent whole-project `compile` was also `STATE: Success, ERRORS: 0`. First `PlantAutoControl` dependency FB proven to round-trip **and compile** in a target project, not just import cleanly.
+
+**A failed `create-instance-db` now leaves the project unchanged (2026-08-13).** It did not before, and
+that is worth stating as the guarantee rather than as a bug fix, because it is what a caller may rely
+on: if this command does not print a `Created ...` line, **nothing was written to disk** — there is no
+half-made block to find, and a retry is safe. `Project.Save()` is the only operation in the command
+that reaches disk, and it is now called on exactly one path: after the new DB has been created *and*
+its block number has been read back as valid. Every other exit removes the partial block from the open
+session and declines to save.
+
+What that replaces, and why it mattered more than an ordinary failure: the previous version wrapped the
+whole operation in `finally { SaveProject(); }`. On a live job the sequence ran *create (auto-numbered)
+→ DB numbered `0` (FI-63) → the repair sets `db.Number` → **`set_Number` throws** under automatic
+numbering → the exception unwinds → **the `finally` saves**.* The command reported a failure it had
+already committed, leaving a `DB0` that could neither compile nor export, and three delete-and-retry
+cycles did not clear it because each retry recreated it. A repair had turned a recoverable state into a
+hard one.
+
+The renumber repair (FI-63 part 2) is therefore **retired, not hardened** — it is measured to throw on
+the only project it has ever run against, and "mutate further to rescue a mutation that already went
+wrong" is the shape that made the failure destructive. `BlockNumbering.LowestFree`, which chose its
+replacement number, is deleted with it. FI-63 **part 1 is kept**: enumerating the composition before
+creating is read-only, cannot hurt, and is still the best available hypothesis for why the first
+creation after a project open misnumbers.
+
+Two exit codes, and the split is the caller's next move (see the table below): `17` (`ChangeAbandoned`)
+means the partial block was removed and there is nothing to clean up; `18` (`RollbackIncomplete`) means
+nothing reached disk either, but the block could not be removed from the open session — so if that
+session is a person's Portal window, close it **without saving**. The predecessor exception was in no
+`ExitCodes.ForException` clause at all, so this condition used to exit `5`, an internal fault.
+
+The sequencing lives in `OpennessCli/Openness/InstanceDbCreation.cs`, behind a seam with no
+`Siemens.Engineering` in it, for the reason `BlockNumbering` was split out originally: a rule that can
+only be exercised against a live Portal is a rule nobody exercises. `InstanceDbCreationTests` asserts
+on the **project** — the block list and the save count — not on the return value or the exit code,
+because the exit code was never the defect. It also keeps a transcription of the pre-fix sequence and
+runs the same assertions against it, so the guards are demonstrated to detect this defect rather than
+merely to pass in its absence.
+
+**Not implemented, and deliberately: the retry.** FI-63's own workaround was to create a throwaway
+instance DB and delete it before creating the real one. The rollback above performs the first half
+already, so mechanizing it — abandon, then create once more and re-check — is a small step and would
+turn most of these failures into successes. It is not taken because it cannot be verified without a
+live Portal, and an unverified second write on a path that exists to contain a failed first write is
+the same bet that produced the defect. What would settle it: one live run against a scratch project
+observing whether the second create numbers correctly.
 
 ```
 openness-cli sanity-check <project> [--json] [common flags]
@@ -809,6 +854,8 @@ shell should branch on these rather than on stderr text.
 | 14 | `NothingExamined` | The command ran, nothing went wrong, and it examined **nothing** — so its silence says nothing about the project. `compile-all` earns this when no item is flagged inconsistent. It is not a success because of how the gap arises: an item that compiled *with errors* is still flagged *consistent*, and errors do not survive the process, so the run right after a failed one is the one that examines nothing and looks cleanest. `--force` compiles everything |
 | 15 | `LayoutMismatch` | `block-layout`: the block's memory layout is **not** the one asked for — either a `--set` whose read-back after saving disagrees with the request, or a `--expect` assertion that does not hold. Its own code because nothing was named wrongly and re-running with a different argument does not fix it; and never a success-with-a-note, because this failure is invisible everywhere else — an optimized block is not an error to a classic-S7comm reader, it is simply absent, and no compile, `drift-check` or `sanity-check` can see the attribute at all |
 | 16 | `DownloadPlanIncomplete` | `download-plan` ran, nothing went wrong, and it could **not obtain a `DownloadProvider`** from any object in the device's tree — so the report answers none of the questions the command exists to answer, and its calm appearance is not evidence about anything. Same family as 11–14: not a failure (nothing threw, no argument was wrong, re-running changes nothing) and emphatically not a success. Says nothing about whether a download would be *permitted* — that is the write fence's question, which this command never asks |
+| 17 | `ChangeAbandoned` | A write command failed and **the project is unchanged** — nothing was saved, and the partial mutation was removed from the open session. Earned by `create-instance-db` when the new instance DB comes back with an invalid block number (FI-63) or its number cannot be read back at all. Its own code because nothing was named wrongly (so not `7`) and because it is a modelled outcome with a known recovery, not an internal fault (so not `5`). The half a caller reads off it: **there is nothing to clean up, and a retry is safe.** Until 2026-08-13 this same condition exited `5` having already *saved* the broken block, so the exit code and the project disagreed about whether anything had happened |
+| 18 | `RollbackIncomplete` | The `17` failure with its cleanup half missing: nothing was saved, so **nothing reached disk**, but the partial mutation could not be removed from the in-memory project model either. A separate code because the caller's response differs — which is this table's rule for when to split one (cf. `11`, which does not). On `17` a retry is immediately safe; on `18` the open Portal session holds a block that exists nowhere on disk, so if that session belongs to a person rather than to this process, close it **without saving** — advice that would be actively wrong on a `17` |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

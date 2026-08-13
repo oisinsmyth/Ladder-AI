@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 namespace OpennessCli.Openness;
 
 // FI-63. `create-instance-db` gave the FIRST instance DB created after a project open the number 0,
@@ -22,24 +19,11 @@ public static class BlockNumbering
     /// </summary>
     public static bool IsValid(int number) => number > 0;
 
-    /// <summary>
-    /// The lowest free number at or above <paramref name="floor"/>, given what is already taken.
-    ///
-    /// Lowest-free rather than highest-plus-one on purpose: this runs only to repair a block that
-    /// came back invalid, so it should slot into the gap the project already has rather than push the
-    /// numbering space up every time the defect fires. Hard rule 3 is not in play — a block number
-    /// chosen by the tool for a block the tool just created is not an invented address for a plant
-    /// signal, and auto-numbering was already choosing one.
-    /// </summary>
-    public static int LowestFree(IEnumerable<int> taken, int floor = 1)
-    {
-        var used = new HashSet<int>(taken.Where(IsValid));
-        var candidate = floor < 1 ? 1 : floor;
-        while (used.Contains(candidate))
-        {
-            candidate++;
-        }
-
-        return candidate;
-    }
+    // `LowestFree(taken, floor)` lived here until 2026-08-13. It chose the replacement number for the
+    // renumber repair, and the repair is retired: `set_Number` throws under automatic numbering, so
+    // the repair never once succeeded, and the `finally { SaveProject(); }` it unwound through
+    // COMMITTED the broken block it had just failed to fix (see InstanceDbCreation). Deleted rather
+    // than left in place, because a number-allocator sitting next to a check that detects bad numbers
+    // is an invitation to wire them back together, and the seam that must not be recreated is exactly
+    // "mutate further to rescue a mutation that already went wrong".
 }
