@@ -131,6 +131,11 @@ running does not license:
       that established the mismatch **in under a minute** — where a timestamp comparison is only
       circumstantial and a behavioural test is expensive. **Do it first whenever a capability seems
       missing**, before concluding the feature was never built.
+      ⚠️ *** THE STRING MUST BE ONE THE BINARY ACTUALLY EMITS — NOT ONE IN A COMMENT. *** Measured
+      the same day: two of three strings picked from a fresh commit sat in **comments**, so they
+      read ABSENT from the binary and would have been reported as a stale build. *** A FALSE
+      "STALE BINARY" IS THE SAME CLASS OF ERROR AS A FALSE GREEN. *** Pick an interpolated
+      literal from an output path, and confirm it is one before trusting its absence.
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.

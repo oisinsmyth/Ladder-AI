@@ -3136,6 +3136,61 @@ COVERED IT. *** Now in the working agreement as a token held by one lane at a ti
   ➜ **And a design decision paid off:** `import-all` **saves once at the end** and had already
     committed, so *** A PORTAL DEATH AFTER THE IMPORT COSTS THE COMPILE TIME, NOT THE RESTORE. ***
 
+### 🔴 THE SKILLS AUDIT — our own instructions named checks nobody could run (2026-08-13, `a9fc63b`)
+
+14 skills and 2 agents, **checked against the binaries rather than the source.** Nine clean, seven
+corrected. The headline is a single sentence:
+
+> *** `sanity-check` APPEARED IN ZERO SKILLS AND ZERO AGENTS. THE GATE HARD RULE 4 NAMES WAS IN NONE OF
+> THE INSTRUCTIONS MEANT TO ENFORCE IT. ***
+
+**Named something unrunnable — three review skills instructed a conversion none of them may perform.**
+An identical copy-pasted line, *"If handed SimaticML instead, convert first (`converter to-ir`)"*:
+`review-conventions` permits only `review`/`cross-check` **and says so two paragraphs later**;
+`review-functional` permits `cross-check`/`trace`; *** `review-simplicity` HOLDS NO `Bash` AT ALL. ***
+**Conditional, which is why it never bit — and it would have failed mid-review, on the one input that
+triggers it.** Corrected to *stop and ask for the `.ir`* rather than widening three permissions; the
+alternative is flagged for the owner, not taken.
+
+**And `gen-block-new` named the exact command hard rule 4 says is NOT the gate** — the bare device
+compile that reports `Success, errors=0` without clearing a re-imported block's `IsConsistent=false`.
+
+**Falsified by the compile-scope change: all three Build skills.** The docs lane's sweep did not cover
+skills. The modify pair asked for *"compile evidence (**State**, …)"*, `gen-block-new` for *"error/
+**warning** counts"* — and **`State` is not a verdict**: on a project carrying a permanent hardware
+warning it is non-Success on a clean block, which is precisely why `compile` stopped keying on it. All
+three now key on **errors** and report warnings without gating.
+
+> #### 🔍 STALE IN THE OTHER DIRECTION WITHIN HOURS — and the correction found something sharper
+>
+> `enumerate-assertions` had already gone stale: the harness lane added
+> `AssertionEnumeration.Enumerator` and `SubmissionGate.EnumeratorIndependence`, **which refuses an
+> unrecorded identity rather than passing it.** But correcting it exposed *** THE LIBRARY BEING AHEAD OF
+> THE WIRE FORMAT: ***
+>
+>     AssertionEnumeration.Of(clauses, assertions, forms = null, enumerator = "")   <- accepts both
+>     GateCli.cs:87   Of(document.Enumeration?.Clauses, ...Assertions)              <- passes two
+>     EnumerationDocument { Clauses, Assertions }                                   <- carries neither
+>
+> *** SO FROM THE CLI THE INDEPENDENCE GATE ALWAYS REPORTS `NotChecked`, AND THE FORM CROSS-CHECK CAN
+> NEVER FIRE. *** Two fields and two arguments arm both. The skill now says record `enumerator:`
+> anyway, **so the day the field lands, every artifact already carrying it is gated.**
+>
+> `design-for-testability` had gone stale the same way and **the harness lane had already fixed it,
+> table and `allowed-tools` together** — the system working, and why Step 0 says *never trust the
+> table*.
+
+> #### ⚠️ A CORRECTION TO THE STALE-BINARY TECHNIQUE ITSELF
+>
+> *** THE WORDING TEST MUST USE A STRING THE BINARY ACTUALLY EMITS — NOT ONE IN A COMMENT. *** Two of
+> three strings first picked from a fresh commit sat in **comments**, read ABSENT, and **would have
+> been reported as a stale build.** *** A FALSE "STALE BINARY" IS THE SAME CLASS OF ERROR AS A FALSE
+> GREEN. *** Corrected in the working agreement.
+
+**Frontmatter:** seven files CRLF-normalised, all 16 parsed, **0 failures** — plus **live
+re-registration of every edited skill with its description intact**, which is the one thing silent
+truncation cannot fake.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
