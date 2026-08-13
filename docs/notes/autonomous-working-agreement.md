@@ -190,6 +190,25 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** BEFORE BUILDING A SEAM, CHECK WHETHER THE THING ALREADY SHIPS ONE. *** Measured 2026-08-13. A
+  test model needed to drive a block's inputs, and the question was framed as *where to insert it so it
+  overrides the field read* — a real question, with a real cost, and an owner ruling behind it. Then
+  somebody read what actually writes those tags: *** EVERY RUNG ALREADY READ A `Test[]` INJECTION
+  ARRAY, WITH `Test[0]` DISCONNECTING EVERY PHYSICAL TERMINAL. *** The model does not override the map;
+  **it feeds it** — one position earlier, zero scan latency, no second writer, and the contention
+  question *disappears* instead of being answered.
+    ➜ *** USING A SEAM A BLOCK SHIPS WITH IS NOT INSTRUMENTATION — IT IS THE BLOCK BEING USED AS
+      DESIGNED *** , which is a stronger claim than "leaves every shipped block byte-identical".
+    ➜ **The tell was that the ruling optimised a cost rather than removing it.** When a decision is
+      *"which of these two prices do we pay"*, spend ten minutes asking whether the price is real.
+- *** A DIFF THAT COMPARES BY POSITION CANNOT SEE A SHIFT — AND WILL REPORT ONE AS SIX CHANGES. ***
+  Same day: inserting one call at the head of `OB1` made `converter diff` report **six networks
+  touched**. That is what comparing by network *number* does to a renumbering, and it is **not evidence
+  about logic**. The check that settled it was mechanical and different in kind: the four shipped
+  `CALL` statements are **byte-identical and in the same relative order**.
+    ➜ **Know what your invariance tool is keyed on before quoting it as proof of invariance.** A
+      position-keyed diff is exactly the wrong instrument for a positional change, and it fails
+      *loudly* — which is better than the converse, but still not an answer.
 - *** A CONTROL THAT DOES NOT CONTROL FOR THE RIGHT THING IS NOT A CONTROL. *** Measured 2026-08-13,
   twice in one day, on the cheapest check this project has. Probing a binary for a string to prove it
   is the fresh build: the first attempt reported every marker **ABSENT**, *including the control*,
