@@ -2159,6 +2159,60 @@ ATTRIBUTABLE TO A SLOT at all. ***
 *Also: the tick needed two networks (IR orders `MOVE` before `ADD`), so the generation runs 1…31999 and
 **never publishes 0** — which is right, since 0 is the "never written" sentinel.*
 
+### 🔴🔴 `sanity-check` REPORTS HEALTHY ON A DUPLICATE BLOCK NUMBER — the hard-rule-4 gate has a hole
+
+The 903 reassignment **did not reproduce** — re-importing with 900 free put it at 900 and it stayed
+through compile, device compile and download. So the import does **not** ignore a declared number.
+**The condition is a collision**, and testing it directly: an artifact named `FC_HarnessCopyLayer`
+declaring **910**, which `FC_MsTick` already held —
+
+*** TIA ACCEPTED IT AND CREATED TWO BLOCKS AT FC 910. *** And with the duplicate genuinely present:
+
+    import              exit 0   (printing the file's claim)
+    compile --block     exit 0   "successfully compiled"   CONSISTENT: yes
+    device compile               Success, errors=0
+    sanity-check        exit 0   *** OVERALL: HEALTHY   INCONSISTENT: 0 ***
+
+**Hard rule 4 names `sanity-check` as *the* gate, and that gate passes green on a duplicate block
+number.**
+
+  ➜ **One nuance that must not be lost:** `sanity-check` *did* fire once immediately after the
+    colliding import — but as **`INCONSISTENT: 1`**, not as a duplicate — and *** A SINGLE PER-BLOCK
+    COMPILE ERASED IT ***, after which the same check returned HEALTHY with the duplicate still there.
+    **So the one signal that existed was the wrong signal, and transient.** *A check that is only true
+    before you fix something else is not a check.*
+  ➜ The fix is a few lines — group by `(type, number)`, fail on any group > 1 — and is dispatched to
+    the `openness-cli` lane rather than done by the lane holding Portal.
+
+### 🛑 THE SCRATCH PROJECT CANNOT BE DOWNLOADED — unexplained, and it needs a person
+
+Phase 3's restore imported and gated cleanly, then the download failed:
+
+    'Software compiling completed with error.'
+
+*** WHILE EVERY OTHER CHECK IS GREEN: `compile-all --force` reports 117 compiled / 0 errors /
+0 inconsistent, `sanity-check` is HEALTHY on both lines, and a bare device compile says Success,
+0 errors, hardware up-to-date. *** It raises no configuration delegates, so it aborts in **its own
+compile step**.
+
+**Ruled out by measurement, not by reasoning:** retry; `--options Software` rather than the
+differential; delete and re-import of the copy layer; and **resyncing to the exact F-1 configuration
+that downloaded successfully earlier the same day** — still fails.
+
+  ➜ *** THE LAST GOOD DOWNLOAD WAS IMMEDIATELY BEFORE THE FIRST BLOCK-NUMBER RE-IMPORT, AND EVERY
+    DOWNLOAD SINCE HAS FAILED — RECORDED AS TEMPORAL ASSOCIATION, NOT CAUSE. *** No mechanism is
+    known, and this project has a standing memory about exactly that inference.
+  ➜ **What was not tried, because it is outside the tooling and needs a person:** opening the project
+    in TIA Portal and running a full **Compile → Software (rebuild all)**. That is the recommendation.
+  ➜ **Blast radius is bounded:** this is the **scratch** copy, the rig is healthy and running, the real
+    project untouched.
+
+**State:** the rig holds the **F-1 ordered build**, confirmed by a live run rather than inference — 60
+reads, 0 torn, 60 distinct generations, `Running (8)`. The project is **resynced to match the rig**,
+HEALTHY on both lines, no duplicate numbers, copy layer at its declared 900. *With no working download
+the rig cannot be moved, so agreement means moving the project.* **Phase 3 is one import and one
+download away** once downloads work.
+
 ## PHASE 4 — THE DOWNLOAD LOOP
 
 **Cost: moderate. Mostly PC-side, and mostly already specified.**
@@ -2559,6 +2613,49 @@ widening `ConclusiveAboutTheBlock` to `!= Fail` → **6 red**.
   4. **A vector citing an assertion that later decomposes** (§7a): nothing says what happens to results
      already returned against the old ID.
   5. `Refused` is per-vector, so **a submission refused whole** (DB-9 atomicity) has no representation.
+
+### ✅ THE VERIFIERS ARE BUILT — observability is now a COMPUTATION (2026-08-13, `5d4fa62`)
+
+**524 → 579 tests.** *** SEVEN OF THE NINE `NOT CHECKED` ROWS NOW READ `CHECKED` ***, behind a real
+runnable command — `Harness.Gate check <submission.json>` — covering schema, authorship, basis (both
+halves), fidelity, observability, settling, start-bool and blacklist. Exit 0 = **ADMISSIBLE-SUBJECT-TO-
+JUDGEMENT** (there is deliberately **no plain ADMISSIBLE**), 1 = not admissible, **2 = NOTHING EXAMINED
+as its own code**.
+
+**How observability stopped being an argument:** it is derived from three things a caller cannot
+assert — the declared nature+mode against a sufficiency table; *** WHAT THE MAP PROVIDES ***
+(`MirrorObservability.FromMinimalCopyLayer` states phase 2's generator emits **Sampled and nothing
+else**, so a Transient vector is refused *because the copy layer generates no latch*); and §12a's floor,
+computed by the CLI from the wave set. `Admissibility.Check` now takes an `ObservabilityReport` that
+**can only be produced by running the checker**, and `null` fails closed.
+
+  ➜ *** THE HALF THAT WOULD HAVE BEEN MISSED IS THE COMPRESSION RE-CHECK: 20 SCANS AT `comp=1` IS 2 AT
+    `comp=10`. THE DECLARATION IS SOUND WHEN WRITTEN AND VOID WHEN IT RUNS. ***
+
+**The two vector models are reconciled as a MAPPING, not a merge:** `TestVector` is the *runner's*,
+`SubmissionVector` is the *submission's*, and `LegacyVectorAdapter` **fabricates nothing and names
+every gap** — a half-populated vector would otherwise pass the schema gate **on values nobody wrote**.
+The observability vocabularies are two **axes**, related by *sufficiency, not translation*, and the one
+cell not quoted from the contract is marked `[I]` in the source.
+
+  ➜ 🚩 **Stopped on a spec question rather than deciding it:** *** MAY A SUBMISSION VECTOR BE
+    STEPPED? *** §2 is flat, `TestVector` is stepped, and **a second stimulus mid-test has no defined
+    relationship to T=0.** The adapter refuses rather than flattening.
+  ➜ **Agent identity tightened to a normalised comparison** — and what that closes is narrow but real:
+    *** `"Agent-A "` WAS *INDEPENDENT OF* `"agent-a"` UNDER `Ordinal`, SO D6's GATE WAS PASSED BY
+    PRESSING SHIFT. ***
+
+> #### 🔍 MUTATION FOUND A HOLE IN THE FIX ITSELF — and the pattern is now stateable
+>
+> Neutering the **null-observability refusal** left the suite **green**: every test passed a report, so
+> *"the check did not run"* **had no test.** *** THAT IS THE EXACT DEFECT THIS LANE WAS SENT TO FIX,
+> ONE LAYER UP. *** Third such find in four lanes, and the pattern generalises:
+>
+> *** THE CASE A GUARD EXISTS FOR GETS TESTED. THE CASE WHERE THE GUARD ITSELF DID NOT RUN DOES NOT. ***
+
+**Still owed:** nothing has run against a **real** submission, and `computedConflicts` has no producer,
+so every real submission gets **NOT CHECKED** on the blacklist gate — *the correct outcome, not a
+passing one*.
 
 ## PHASE 5 — FIRST REAL VALUE
 

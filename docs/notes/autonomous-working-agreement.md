@@ -141,6 +141,13 @@ running does not license:
       build.* That is a structural property, not a disciplinary one, and it is worth designing for.
     ➜ **Run the guard on the real thing at least once.** Unit tests prove the logic; only the
       device, the binary or the live invocation proves the guard is *reachable*.
+    ➜ *** THE CASE A GUARD EXISTS FOR GETS TESTED. THE CASE WHERE THE GUARD ITSELF DID NOT RUN DOES
+      NOT. *** Found three times in four lanes on 2026-08-13, most sharply when a lane sent to fix
+      *"observability is a caller-supplied bool"* neutered its own null-check and **the suite stayed
+      green** — every test passed a report, so *"the check did not run"* had no test at all. **Write
+      the did-not-run test explicitly**, and prefer a design where the not-run state is
+      unconstructible (`null` fails closed, a required parameter, a separate denominator such as
+      `AddressesExamined`) over one where it merely fails.
     ➜ *** AND EXECUTE THE GUARD'S OWN ADVICE. A REFUSAL MESSAGE IS A SECOND ARTIFACT AND IT IS
       UNTESTED. *** Measured the same day: a client's tear-verdict guard was mutation-tested four
       ways and correct every time, and **the recovery it printed was refused by the guard itself** —
