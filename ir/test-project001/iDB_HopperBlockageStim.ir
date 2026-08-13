@@ -1,0 +1,52 @@
+DB iDB_HopperBlockageStim
+  ROOTID 0
+  NUMBER 9002
+  INSTANCEOF FB_HopperBlockageStim
+  COMMENT "Single instance of the hopper-blockage stimulus model. ModelThreshold carries the persistence threshold the model believes the monitored block uses; it is the model's own number, set here, and is deliberately not read from the block. Every other command member is written by the harness before a run and left at zero here, because a defaulted scenario would run rather than refuse."
+  INPUT
+  OUTPUT
+  MEMBERS
+    Stim : "UDT_HopperBlockageStim"
+      Start : Bool
+      Profile : Int
+      Precondition : Int
+      P1 : Time
+      P2 : Time
+      P3 : Time
+      P4 : Time
+      PreBoundaryHighRunning : Time
+      ArmAt : Time
+      ArmUntil : Time
+      EndAt : Time
+      ResetMode : Int
+      ResetAt : Time
+      ModelThreshold : Time = T#60S
+      Hopper : Bool
+      Run : Bool
+      FaultReset : Bool
+      Armed : Bool
+      ScenarioDone : Bool
+    Running : Bool
+    PreBoundaryDone : Bool RETAIN
+    Shape : Int
+    Offset : Time
+    ScenarioT : Time
+    T1 : Time
+    T2 : Time
+    T3 : Time
+    T4 : Time
+    InCleardown : Bool
+    InPreBoundary : Bool
+    InPreBoundaryWait : Bool
+    InScenario : Bool
+    ClearDownTime : Time
+    ResetPulseWidth : Time
+    ClearResetFrom : Time
+    ClearResetUntil : Time
+    ResetPulseEnd : Time
+    ThresholdPulseEnd : Time
+    RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

@@ -1,0 +1,163 @@
+BLOCK FB FB_HopperBlockageStim
+ROOTID 0
+NUMBER 9002
+LANGUAGE LAD
+TITLE "Hopper-Blockage Stimulus Model"
+COMMENT "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    Stim : "UDT_HopperBlockageStim" COMMENT "Caller interface. The harness copy layer writes the command members and reads the published ones."
+      Start : Bool
+      Profile : Int
+      Precondition : Int
+      P1 : Time
+      P2 : Time
+      P3 : Time
+      P4 : Time
+      PreBoundaryHighRunning : Time
+      ArmAt : Time
+      ArmUntil : Time
+      EndAt : Time
+      ResetMode : Int
+      ResetAt : Time
+      ModelThreshold : Time
+      Hopper : Bool
+      Run : Bool
+      FaultReset : Bool
+      Armed : Bool
+      ScenarioDone : Bool
+    Running : Bool COMMENT "The run is under way: set by Start and held until the scenario reaches EndAt, so dropping Start mid-run cannot truncate a scenario."
+    PreBoundaryDone : Bool RETAIN COMMENT "The pre-boundary phase has completed. RETAIN, and that is the whole mechanism by which the model knows it is running after the CPU restart rather than before it - every other member here is transient and comes back cleared, which is exactly what makes this one readable as the boundary having happened."
+    RunT : Time COMMENT "Time since the run started, copied out of the run timer so every phase compares against a plain value."
+    Shape : Int COMMENT "Timeline shape, the tens digit of Profile."
+    Offset : Time COMMENT "How far into the run the scenario starts: the clear-down length before the boundary, zero after it. There is no clear-down after a restart - one would clear the very latch the startup scenarios exist to observe."
+    ScenarioT : Time COMMENT "Time since the start of the scenario. Every P, Arm and Reset time is measured against this, never against the run timer."
+    T1 : Time COMMENT "End of the first scenario segment."
+    T2 : Time COMMENT "End of the second segment."
+    T3 : Time COMMENT "End of the third segment."
+    T4 : Time COMMENT "End of the fourth segment."
+    InCleardown : Bool COMMENT "The clear-down phase is running."
+    InPreBoundary : Bool COMMENT "The pre-boundary phase is running - hopper high and plant running, spending the monitor's persistence window before the CPU is stopped."
+    InPreBoundaryWait : Bool COMMENT "The pre-boundary phase is finished and the model is holding still, waiting for the CPU to be stopped and restarted. The plant is held stopped so the monitor's window stops advancing and the state the boundary is meant to carry across does not drift while it waits."
+    InScenario : Bool COMMENT "The scenario itself is running."
+    HopperHeldHigh : Bool COMMENT "The shape keeps the hopper high for the whole scenario."
+    HopperClearedMidRun : Bool COMMENT "The shape clears the hopper for its second segment, and the run is inside that segment's complement - true when the hopper should read high."
+    HopperClearedInStop : Bool COMMENT "The shape clears the hopper inside a plant stop, and the run is outside that clear - true when the hopper should read high."
+    RunHeldOn : Bool COMMENT "The shape runs the plant for the whole scenario."
+    RunStoppedMidRun : Bool COMMENT "The shape stops the plant for its second segment, and the run is outside that stop - true when the plant should be running."
+    RunStoppedRoundClear : Bool COMMENT "The shape stops the plant around a hopper clear, and the run is outside that stop - true when the plant should be running."
+    ClearDownReset : Bool COMMENT "The clear-down's own reset pulse is asserted."
+    ScenarioReset : Bool COMMENT "The scenario's commanded reset is asserted, whichever mode asked for it."
+    ClearDownTime : Time COMMENT "Length of the clear-down. Long enough for the monitor's confirmed-clear filter to expire and for a reset pulse to be seen inside it."
+    ResetPulseWidth : Time COMMENT "Width of a commanded reset pulse - many scans wide, so a pulse cannot fall between two scans and be missed."
+    ClearResetFrom : Time COMMENT "When the clear-down's own reset pulse starts, measured from the start of the run."
+    ClearResetUntil : Time COMMENT "When the clear-down's own reset pulse ends."
+    ResetPulseEnd : Time COMMENT "End of the commanded reset pulse under ResetMode 1."
+    ThresholdPulseEnd : Time COMMENT "End of the commanded reset pulse under ResetMode 3."
+    RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+  CONSTANT
+
+NETWORK 1 "Run Latch"
+  COMMENT "Start begins a run and the run holds itself until the scenario reaches its end, so the harness dropping the start bool part-way through cannot truncate a scenario and produce a short run that still looks complete."
+  COIL Running := (Stim.Start OR Running) AND NOT Stim.ScenarioDone
+
+NETWORK 2 "Run Timer"
+  COMMENT "Times the whole run from the start edge. Everything else here is a comparison against this one elapsed time, so there is a single clock and no two phases can disagree about when they are."
+  TON(RunTimer, IN := Running, PT := T#10M)
+
+NETWORK 3 "Elapsed Run Time"
+  COMMENT "Copies the elapsed time out of the timer into a plain value, which is what the phases below compare against."
+  MOVE(EN := TRUE, IN := RunTimer.ET) => RunT
+
+NETWORK 4 "Phase Constants"
+  COMMENT "The model's own fixed times. The clear-down is five seconds - longer than the monitor's confirmed-clear filter, so the hopper reads genuinely clear rather than merely briefly low - and the reset pulse inside it runs from three seconds to four, by which point the filter has already expired and the plant has been stopped since the start."
+  MOVE(EN := TRUE, IN := T#5S) => ClearDownTime
+  MOVE(EN := TRUE, IN := T#500MS) => ResetPulseWidth
+  MOVE(EN := TRUE, IN := T#3S) => ClearResetFrom
+  MOVE(EN := TRUE, IN := T#4S) => ClearResetUntil
+
+NETWORK 5 "Scenario Start Offset"
+  COMMENT "The scenario starts after the clear-down before the boundary, and immediately after it. There is deliberately no clear-down on the far side of a restart: it would assert a reset and clear the latched alarm the startup scenarios exist to find still standing."
+  MOVE(EN := NOT PreBoundaryDone, IN := ClearDownTime) => Offset
+  MOVE(EN := PreBoundaryDone, IN := T#0S) => Offset
+
+NETWORK 6 "Scenario Elapsed Time"
+  COMMENT "Time since the scenario began. Held at zero while the clear-down is still running so a segment boundary cannot be compared against a negative time."
+  MOVE(EN := RunT < Offset, IN := T#0S) => ScenarioT
+  SUB(EN := RunT >= Offset, IN1 := RunT, IN2 := Offset) => ScenarioT
+
+NETWORK 7 "Timeline Shape"
+  COMMENT "The shape is the tens digit of the profile code. A new profile that behaves like an existing one is numbered into the same decade and needs no logic here."
+  DIV(EN := TRUE, IN1 := Stim.Profile, IN2 := 10) => Shape
+
+NETWORK 8 "Segment Boundaries"
+  COMMENT "The four segment ends, accumulated from the commanded durations, so each rung below compares against a single time instead of re-adding the same durations."
+  MOVE(EN := TRUE, IN := Stim.P1) => T1
+  ADD(EN := TRUE, IN1 := T1, IN2 := Stim.P2) => T2
+  ADD(EN := TRUE, IN1 := T2, IN2 := Stim.P3) => T3
+  ADD(EN := TRUE, IN1 := T3, IN2 := Stim.P4) => T4
+
+NETWORK 9 "Phases"
+  COMMENT "Which phase the run is in. The pre-boundary phases exist only before the boundary and only when the precondition asks for them; after the restart the retained flag sends the run straight into the scenario."
+  COIL InCleardown := Running AND RunT < Offset
+  COIL InPreBoundary := Running AND NOT InCleardown AND NOT PreBoundaryDone AND Stim.Precondition = 1 AND ScenarioT < Stim.PreBoundaryHighRunning
+  COIL InPreBoundaryWait := Running AND NOT InCleardown AND NOT PreBoundaryDone AND Stim.Precondition = 1 AND ScenarioT >= Stim.PreBoundaryHighRunning
+  COIL InScenario := Running AND NOT InCleardown AND NOT InPreBoundary AND NOT InPreBoundaryWait AND ScenarioT < Stim.EndAt
+
+NETWORK 10 "Pre-Boundary Complete"
+  COMMENT "Records that the pre-boundary phase has run, before the CPU is stopped. It is the only retained thing here, so after the restart it is the one member that reads differently from a fresh run - which is how the model knows the boundary has happened without being told."
+  SCOIL PreBoundaryDone := InPreBoundaryWait
+
+NETWORK 11 "Hopper Level By Shape"
+  COMMENT "Which shapes want the hopper high, and when. Shapes 1, 2 and 4 never clear it. Shape 3 clears it for its second segment, so it reads high before that segment and after it. Shape 5 clears it for its third segment, inside the plant stop."
+  COIL HopperHeldHigh := Shape = 1 OR Shape = 2 OR Shape = 4
+  COIL HopperClearedMidRun := (ScenarioT < T1 OR ScenarioT >= T2) AND Shape = 3
+  COIL HopperClearedInStop := (ScenarioT < T2 OR ScenarioT >= T3) AND Shape = 5
+
+NETWORK 12 "Running Feedback By Shape"
+  COMMENT "Which shapes want the plant running, and when. Shapes 1 and 3 run throughout; shape 2 never runs, which is what stops the monitor accruing at all. Shape 4 stops the plant for its second segment; shape 5 stops it at the same point but does not restart it until the hopper has been cleared and raised again, which is what makes the clear happen while the plant is stopped."
+  COIL RunHeldOn := Shape = 1 OR Shape = 3
+  COIL RunStoppedMidRun := (ScenarioT < T1 OR ScenarioT >= T2) AND Shape = 4
+  COIL RunStoppedRoundClear := (ScenarioT < T1 OR ScenarioT >= T4) AND Shape = 5
+
+NETWORK 13 "Commanded Hopper Level"
+  COMMENT "The hopper reads high through both pre-boundary phases and whenever the scenario's shape wants it high. Shape 6 appears nowhere here, which is what leaves a restarted CPU with a hopper that is low and therefore nothing that could re-earn an alarm."
+  COIL Stim.Hopper := InPreBoundary OR InPreBoundaryWait OR HopperHeldHigh AND InScenario OR HopperClearedMidRun AND InScenario OR HopperClearedInStop AND InScenario
+
+NETWORK 14 "Commanded Running Feedback"
+  COMMENT "The plant runs through the pre-boundary phase and whenever the scenario's shape wants it running. It is held stopped through the pre-boundary wait so the monitor's window does not creep while the model waits for the CPU to be stopped."
+  COIL Stim.Run := InPreBoundary OR RunHeldOn AND InScenario OR RunStoppedMidRun AND InScenario OR RunStoppedRoundClear AND InScenario
+
+NETWORK 15 "Reset Pulse Windows"
+  COMMENT "The ends of the two commanded reset pulses, so the rungs below compare against a time rather than adding one inside a condition."
+  ADD(EN := TRUE, IN1 := Stim.ResetAt, IN2 := ResetPulseWidth) => ResetPulseEnd
+  ADD(EN := TRUE, IN1 := Stim.ModelThreshold, IN2 := ResetPulseWidth) => ThresholdPulseEnd
+
+NETWORK 16 "Reset Sources"
+  COMMENT "The clear-down always pulses the reset, which is what puts the monitor into a known unalarmed state. Inside the scenario the reset is whatever the mode asks for: never, one pulse at a commanded time, held true throughout so an edge-triggered reset finds no edge to act on, or one pulse when the model's own threshold elapses. Every pulse is many scans wide so it cannot fall between two scans."
+  COIL ClearDownReset := InCleardown AND RunT >= ClearResetFrom AND RunT < ClearResetUntil
+  COIL ScenarioReset := Stim.ResetMode = 2 OR Stim.ResetMode = 1 AND ScenarioT >= Stim.ResetAt AND ScenarioT < ResetPulseEnd OR Stim.ResetMode = 3 AND ScenarioT >= Stim.ModelThreshold AND ScenarioT < ThresholdPulseEnd
+
+NETWORK 17 "Commanded Operator Reset"
+  COMMENT "The reset the monitor sees: the clear-down's pulse, or whatever the scenario's mode asked for while the scenario is running."
+  COIL Stim.FaultReset := ClearDownReset OR ScenarioReset AND InScenario
+
+NETWORK 18 "Observation Window"
+  COMMENT "Published so an observation latch is armed by the model's phase instead of running free from the start of the run. A free-running latch would refill from the clear-down, where the monitor is legitimately being driven, and read true whatever the monitor then did."
+  COIL Stim.Armed := InScenario AND ScenarioT >= Stim.ArmAt AND ScenarioT < Stim.ArmUntil
+
+NETWORK 19 "Scenario Complete"
+  COMMENT "Latched at the end of the scenario, so a harness that was not polling at that instant still sees that the run finished rather than having to infer it from elapsed time. It also drops the run latch, which leaves the hopper low and the plant stopped."
+  SCOIL Stim.ScenarioDone := Running AND NOT InCleardown AND NOT InPreBoundary AND NOT InPreBoundaryWait AND ScenarioT >= Stim.EndAt
+
+NETWORK 20 "Re-Arm For The Next Run"
+  COMMENT "Clears the completion flag once the harness has dropped the start bool, and clears the retained pre-boundary flag once a scenario has completed. Clearing the retained flag here rather than on the start edge is what lets it survive the CPU restart it exists for: a run that has finished its scenario has no further use for it, and the run after that needs a clear-down again."
+  RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running
+  RCOIL PreBoundaryDone := Stim.ScenarioDone

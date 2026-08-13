@@ -1,0 +1,23 @@
+TYPE UDT_HopperBlockageStim
+  ROOTID 0
+  COMMENT "Command and published state of the hopper-blockage stimulus model. The harness writes the command members before a run starts and reads the published ones while it runs; the model drives the three sensor signals the monitored block consumes, so the block sees a plant that behaves to a commanded timeline rather than a real one. Times are durations measured from the start of the scenario, which is the instant the clear-down finishes - not from Start, and not from the boundary. Profile carries a code whose tens digit IS the timeline shape, so the shape is a division rather than a lookup and a new profile joins an existing shape by being numbered into its decade."
+  MEMBERS
+    Start : Bool COMMENT "In (harness): the run's start bool. Its rising edge begins the clear-down; its falling edge does nothing, so a run ends by reaching EndAt and never by the harness dropping this."
+    Profile : Int COMMENT "In (harness): scenario code. The TENS digit is the timeline shape - 1x hold high and running, 2x hold high at standstill, 3x clear the hopper mid-run, 4x stop the plant mid-run, 5x stop the plant and clear the hopper inside the stop, 6x idle. The units digit distinguishes profiles sharing a shape and changes no behaviour."
+    Precondition : Int COMMENT "In (harness): 0 runs the clear-down and goes straight into the scenario; 1 additionally runs a pre-boundary phase that leaves the monitored block part-way through its persistence window, or alarmed, before the CPU is stopped and restarted."
+    P1 : Time COMMENT "In (harness): duration of the first scenario segment - how long the hopper is high and the plant running before anything changes."
+    P2 : Time COMMENT "In (harness): duration of the second segment. On shape 3 the hopper is low for it; on shapes 4 and 5 the plant is stopped from its start."
+    P3 : Time COMMENT "In (harness): duration of the third segment. On shape 3 the hopper is high again for it; on shape 5 the hopper is low for it while the plant is still stopped."
+    P4 : Time COMMENT "In (harness): duration of the fourth segment, used only by shape 5 - the hopper is high again but the plant is still stopped, and the plant restarts at its end."
+    PreBoundaryHighRunning : Time COMMENT "In (harness): how long the hopper is high and the plant running during the pre-boundary phase. Sets how much of the monitored block's persistence window is already spent, or whether it has already alarmed, when the CPU is stopped."
+    ArmAt : Time COMMENT "In (harness): start of the observation window, measured from the start of the scenario."
+    ArmUntil : Time COMMENT "In (harness): end of the observation window. Armed is published between the two so an observation latch can be armed by the model's own phase rather than free-running from the start of the run, which would otherwise catch the clear-down."
+    EndAt : Time COMMENT "In (harness): duration of the whole scenario. At it the model stops driving, publishes ScenarioDone, and leaves the hopper low and the plant stopped."
+    ResetMode : Int COMMENT "In (harness): 0 never asserts the operator reset; 1 pulses it once at ResetAt; 2 holds it true throughout, so there is no rising edge inside the scenario for an edge-triggered reset to find; 3 pulses it once when the model's own ModelThreshold elapses, which is the model's approximation of the instant the monitored block crosses its threshold."
+    ResetAt : Time COMMENT "In (harness): when the reset pulse is asserted under ResetMode 1, measured from the start of the scenario."
+    ModelThreshold : Time COMMENT "Setting: the persistence threshold the model believes the monitored block uses, for ResetMode 3 only. It is the model's own number and is deliberately not read from the block, so a reset placed at the crossing stays a stimulus decision rather than becoming a reading of the thing under test."
+    Hopper : Bool COMMENT "Out: commanded hopper high-level sensor state."
+    Run : Bool COMMENT "Out: commanded shredder running feedback."
+    FaultReset : Bool COMMENT "Out: commanded operator fault reset."
+    Armed : Bool COMMENT "Out: the observation window is open. Published so the copy layer's observation latches are armed by the model's phase and not from the start of the run - without it every latch refills from the clear-down and reads true whatever the monitored block does."
+    ScenarioDone : Bool COMMENT "Out: the scenario has reached EndAt. Latched, so a harness that was not polling at the instant it happened still sees it."
