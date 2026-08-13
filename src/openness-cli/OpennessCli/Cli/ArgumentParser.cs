@@ -95,7 +95,8 @@ public sealed record CompileCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds,
     bool Software = false,
-    bool Station = false);
+    bool Station = false,
+    bool Hardware = false);
 
 public sealed record DeleteCommandOptions(
     string ProjectIdentifier,
@@ -1149,6 +1150,7 @@ public static class ArgumentParser
         string? type = null;
         var software = false;
         var station = false;
+        var hardware = false;
         var json = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -1184,6 +1186,9 @@ public static class ArgumentParser
                     break;
                 case "--station":
                     station = true;
+                    break;
+                case "--hardware":
+                    hardware = true;
                     break;
                 case "--json":
                     json = true;
@@ -1229,17 +1234,20 @@ public static class ArgumentParser
             return new ParseResult.Failure($"--block and --type are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
-        if ((software || station) && (block is not null || type is not null))
+        if ((software || station || hardware) && (block is not null || type is not null))
         {
-            return new ParseResult.Failure($"--software and --station name whole scopes, so neither can be combined with --block or --type.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--software, --station and --hardware name whole scopes, so none of them can be combined with --block or --type.{Environment.NewLine}{Usage}");
         }
 
-        if (software && station)
+        // Three scopes, one at a time. Silently preferring one over another is how a caller ends up
+        // believing it ran a compile it did not run — which is the entire history of this command.
+        var scopeFlags = new[] { software, station, hardware }.Count(f => f);
+        if (scopeFlags > 1)
         {
-            return new ParseResult.Failure($"--software and --station are two different scopes; pick one.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--software, --station and --hardware are three different scopes; pick one.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, type, json, tiaInstall, timeoutConnect, timeoutOpen, software, station));
+        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, type, json, tiaInstall, timeoutConnect, timeoutOpen, software, station, hardware));
     }
 
     private static ParseResult ParseDelete(string[] args)

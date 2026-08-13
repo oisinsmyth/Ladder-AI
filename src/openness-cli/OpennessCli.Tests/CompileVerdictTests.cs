@@ -165,7 +165,7 @@ public class CompileVerdictTests
     {
         var gateway = new FakeGateway
         {
-            DeviceCompileResult = new CompileResult(
+            StationCompileResult = new CompileResult(
                 CompileState.Warning, ErrorCount: 0, WarningCount: 1,
                 Messages: Array.Empty<CompileMessage>()),
             BlocksForEnumeration = new[] { Block("FB_A", consistent: true), Block("FB_B", consistent: true) },
@@ -183,7 +183,7 @@ public class CompileVerdictTests
     {
         var gateway = new FakeGateway
         {
-            DeviceCompileResult = new CompileResult(
+            StationCompileResult = new CompileResult(
                 CompileState.Warning, ErrorCount: 0, WarningCount: 1,
                 Messages: Array.Empty<CompileMessage>()),
             BlocksForEnumeration = new[] { Block("FB_A", consistent: true), Block("FB_B", consistent: false) },
@@ -315,7 +315,7 @@ public class CompileVerdictTests
     {
         var gateway = new FakeGateway
         {
-            DeviceCompileResult = new CompileResult(
+            StationCompileResult = new CompileResult(
                 CompileState.Success, ErrorCount: 0, WarningCount: 0,
                 Messages: Array.Empty<CompileMessage>(),
                 ConsistentAfterCompile: null),
@@ -367,6 +367,12 @@ public class CompileVerdictTests
     private static BlockInfo Block(string name, bool consistent) =>
         new(name, BlockType.FB, 1, "LAD", IsSafety: false, "PLC_1/Program blocks", IsConsistent: consistent);
 
+    /// <summary>
+    /// A bare `compile` — no scope flag. Since 2026-08-13 that dispatches to the STATION scope
+    /// (hardware + program), not the DeviceItem one (hardware only), so the fakes above configure
+    /// <c>StationCompileResult</c>. The verdict rules these tests pin are unchanged by that; what
+    /// changed is which compile the whole-device path actually runs.
+    /// </summary>
     private static CompileCommandOptions DeviceOptions() => new(
         ProjectIdentifier: "C:\\proj\\My.ap20",
         Device: null,

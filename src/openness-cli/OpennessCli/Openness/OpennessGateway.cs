@@ -4176,10 +4176,38 @@ public sealed class OpennessGateway : IOpennessGateway
             .Select(t => new TypeConsistencyIssue(t.Type.Name, t.Path))
             .ToList();
 
+        // THE STATION SCOPE, since 2026-08-13 — hardware AND program. This used to be
+        // CompileDeviceItem, which compiles the HARDWARE ONLY: measured on the JOB9004 scratch project,
+        // `sanity-check` printed `Device compiles: Success (errors=0, warnings=0)` while
+        // FC_ModbusTCP_Sample failed to compile with `Tag "DB_Example".DataStore not defined`. Hard
+        // rule 4 names this command as the gate, so its compile half claiming a program is fine when
+        // it had not looked at one is the most consequential form of the FI-52 family.
         var deviceCompiles = new List<DeviceCompileSummary>();
+        var stationsSeen = new List<Device>();
         foreach (var (item, path) in FindPlcDeviceItems(_project))
         {
-            deviceCompiles.Add(new DeviceCompileSummary(path, CompileDeviceItem(item, path)));
+            // One PLC per station in every project seen so far, but the walk yields ITEMS and the
+            // station compile acts on the DEVICE, so two items sharing a station would otherwise
+            // compile it twice and report it twice.
+            var station = TryReadObject(() => ClimbToDevice(item)) as Device;
+            if (station is not null)
+            {
+                if (stationsSeen.Any(s => s.Equals(station)))
+                {
+                    continue;
+                }
+
+                stationsSeen.Add(station);
+            }
+
+            var compilable = station is null ? null : TryReadObject(() => station.GetService<ICompilable>()) as ICompilable;
+            deviceCompiles.Add(compilable is null
+
+                // Named as a fallback rather than passed off as the station compile. If the station
+                // is unreachable this is the hardware-only compile, and the report must say so —
+                // that is the whole lesson of this fix.
+                ? new DeviceCompileSummary(path, CompileDeviceItem(item, path), "device-item (HARDWARE ONLY — no station compilable was reachable)")
+                : new DeviceCompileSummary(path, RunCompile(compilable), "station (hardware + program)"));
         }
 
         // sanity-check's own device compiles are read-as-diagnostic in intent, but Compile() has

@@ -76,6 +76,13 @@ public class OutputFormatterTests
         Assert.Equal(0, doc.RootElement.GetArrayLength());
     }
 
+    /// <summary>
+    /// What `sanity-check` runs since 2026-08-13. The scope is a required constructor parameter, not
+    /// a defaulted one, so that every construction site has to say which compile it means — the
+    /// failure this replaces was a report that did not disclose it had compiled only the hardware.
+    /// </summary>
+    private const string StationScope = "station (hardware + program)";
+
     private static readonly CompileResult CleanCompile = new(
         CompileState.Success,
         ErrorCount: 0,
@@ -133,7 +140,7 @@ public class OutputFormatterTests
     private static readonly SanityCheckResult HealthyResult = new(
         TotalBlocks: 42,
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile, StationScope) },
         TotalTypes: 7,
         InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
         DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
@@ -144,7 +151,7 @@ public class OutputFormatterTests
         {
             new BlockConsistencyIssue("ControlMain", "S7-1200 G2 station_2/JOB9002_PLC/Control", "LAD"),
         },
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile, StationScope) },
         TotalTypes: 7,
         InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
         DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
@@ -155,7 +162,7 @@ public class OutputFormatterTests
     private static readonly SanityCheckResult InconsistentTypeOnlyResult = new(
         TotalBlocks: 52,
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile) },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile, StationScope) },
         TotalTypes: 7,
         InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Drum", "S7-1200 station_1/PLC_1") },
         DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
@@ -232,7 +239,7 @@ public class OutputFormatterTests
         var result = new SanityCheckResult(
             TotalBlocks: 1,
             InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
-            DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile) },
+            DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile, StationScope) },
             TotalTypes: 0,
             InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
             DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());

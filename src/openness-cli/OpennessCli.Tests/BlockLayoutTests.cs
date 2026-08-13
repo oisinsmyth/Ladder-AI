@@ -712,8 +712,15 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> ImportTagTableFile(string groupPath, string file) => throw new NotSupportedException();
 
-    public CompileResult Compile(string? deviceFilter) =>
-        DeviceCompileResult ?? throw new NotSupportedException();
+    /// <summary>How many times the HARDWARE (device-item) compile was reached — assertable because
+    /// since 2026-08-13 a bare `compile` must NOT reach it.</summary>
+    public int DeviceCompileCalls { get; private set; }
+
+    public CompileResult Compile(string? deviceFilter)
+    {
+        DeviceCompileCalls++;
+        return DeviceCompileResult ?? throw new NotSupportedException();
+    }
 
     /// <summary>What `compile --software` reports. Null = not configured (and so it throws).</summary>
     public CompileResult? SoftwareCompileResult { get; set; }

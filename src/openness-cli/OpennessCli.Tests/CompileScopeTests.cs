@@ -29,13 +29,22 @@ public class CompileScopeTests
     // ---- argument parsing ------------------------------------------------------------------
 
     [Fact]
-    public void Compile_DefaultsToTheDeviceScope()
+    public void Compile_NamesNoScopeByDefault_AndDispatchDecidesIt()
     {
         var result = ArgumentParser.Parse(new[] { "compile", "C:\\proj\\My.ap20" });
 
         var success = Assert.IsType<ParseResult.CompileSuccess>(result);
         Assert.False(success.Options.Software);
         Assert.False(success.Options.Station);
+        Assert.False(success.Options.Hardware);
+    }
+
+    [Fact]
+    public void Compile_HardwareFlag_SelectsTheOldDefaultScope()
+    {
+        var result = ArgumentParser.Parse(new[] { "compile", "C:\\proj\\My.ap20", "--hardware" });
+
+        Assert.True(Assert.IsType<ParseResult.CompileSuccess>(result).Options.Hardware);
     }
 
     [Fact]
@@ -79,7 +88,15 @@ public class CompileScopeTests
         var result = ArgumentParser.Parse(new[] { "compile", "C:\\proj\\My.ap20", "--software", "--station" });
 
         var failure = Assert.IsType<ParseResult.Failure>(result);
-        Assert.Contains("two different scopes", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("three different scopes", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Compile_HardwareWithAnotherScope_IsRefused()
+    {
+        var result = ArgumentParser.Parse(new[] { "compile", "C:\\proj\\My.ap20", "--hardware", "--station" });
+
+        Assert.IsType<ParseResult.Failure>(result);
     }
 
     [Fact]
@@ -94,10 +111,17 @@ public class CompileScopeTests
 
     // ---- dispatch --------------------------------------------------------------------------
 
-    // The bug this guards is not hypothetical: for the whole life of the tool, EVERY scope request
-    // that could be made reached the DeviceItem compilable, because it was the only one asked for.
+    /// <summary>
+    /// *** THE DEFAULT CHANGED ON 2026-08-13, AND THIS IS THE TEST THAT SAYS SO. ***
+    ///
+    /// A bare `compile` used to reach the DeviceItem compilable — the HARDWARE compile. It reported
+    /// `Success, errors=0` on a project whose FC8 failed with `Tag "DB_Example".DataStore not
+    /// defined`, measured. Every caller in the repository invokes a bare `compile` intending a
+    /// program check, so the default is now the station scope: hardware AND program, a superset of
+    /// what it did before.
+    /// </summary>
     [Fact]
-    public void RunCompile_Default_CallsTheDeviceScopeOnly()
+    public void RunCompile_Default_IsNowTheStationScope_NotTheHardwareOne()
     {
         var gateway = new FakeGateway
         {
@@ -107,9 +131,24 @@ public class CompileScopeTests
             BlocksForEnumeration = AllConsistent,
         };
 
-        Program.RunCompile(gateway, Options(software: false, station: false), timeoutOpenSeconds: 1);
+        Program.RunCompile(gateway, Options(), timeoutOpenSeconds: 1);
 
+        Assert.Equal(1, gateway.StationCompileCalls);
         Assert.Equal(0, gateway.SoftwareCompileCalls);
+        Assert.Equal(0, gateway.DeviceCompileCalls);
+    }
+
+    // The old default stays reachable BY NAME. A behaviour that can only be obtained by not asking
+    // for anything is one nobody can reason about — and this one is still the right call when the
+    // question really is about the hardware configuration.
+    [Fact]
+    public void RunCompile_Hardware_CallsTheOldDeviceItemScope()
+    {
+        var gateway = new FakeGateway { DeviceCompileResult = Clean(), BlocksForEnumeration = AllConsistent };
+
+        Program.RunCompile(gateway, Options(hardware: true), timeoutOpenSeconds: 1);
+
+        Assert.Equal(1, gateway.DeviceCompileCalls);
         Assert.Equal(0, gateway.StationCompileCalls);
     }
 
@@ -118,7 +157,7 @@ public class CompileScopeTests
     {
         var gateway = new FakeGateway { SoftwareCompileResult = Clean(), BlocksForEnumeration = AllConsistent };
 
-        Program.RunCompile(gateway, Options(software: true, station: false), timeoutOpenSeconds: 1);
+        Program.RunCompile(gateway, Options(software: true), timeoutOpenSeconds: 1);
 
         Assert.Equal(1, gateway.SoftwareCompileCalls);
         Assert.Equal(0, gateway.StationCompileCalls);
@@ -129,11 +168,71 @@ public class CompileScopeTests
     {
         var gateway = new FakeGateway { StationCompileResult = Clean(), BlocksForEnumeration = AllConsistent };
 
-        Program.RunCompile(gateway, Options(software: false, station: true), timeoutOpenSeconds: 1);
+        Program.RunCompile(gateway, Options(station: true), timeoutOpenSeconds: 1);
 
         Assert.Equal(1, gateway.StationCompileCalls);
         Assert.Equal(0, gateway.SoftwareCompileCalls);
     }
+
+    // ---- sanity-check's compile half -------------------------------------------------------
+
+    /// <summary>
+    /// The verdict must key on ERRORS, never on <c>State</c>. This was survivable while
+    /// `sanity-check` ran the hardware-only compile, which had nothing to warn about. The station
+    /// scope reports the project's real warnings — a hardware-interrupt OB with no trigger, IO absent
+    /// from the configured hardware — so a State-keyed verdict would call a perfectly good project
+    /// unhealthy on every run, for reasons no action of ours can clear.
+    /// </summary>
+    [Fact]
+    public void SanityCheck_WarningStateWithZeroErrors_IsStillHealthy()
+    {
+        var result = Sanity(new CompileResult(
+            CompileState.Warning,
+            ErrorCount: 0,
+            WarningCount: 2,
+            Messages: new[] { new CompileMessage(CompileState.Warning, "Inputs or outputs are used that do not exist", "PLC_1") }));
+
+        Assert.True(result.IsHealthy);
+    }
+
+    // Fail-closed on the count: the compiler's own aggregate and its message tree demonstrably
+    // disagree, so the larger wins. An error present only in the tree must still sink the verdict.
+    [Fact]
+    public void SanityCheck_ErrorInTheMessageTreeOnly_IsNotHealthy()
+    {
+        var result = Sanity(new CompileResult(
+            CompileState.Error,
+            ErrorCount: 0,
+            WarningCount: 0,
+            Messages: new[] { new CompileMessage(CompileState.Error, "Tag \"DB_Example\".DataStore not defined.", "FC8") }));
+
+        Assert.False(result.IsHealthy);
+    }
+
+    // The scope is reported, because the whole failure was a line that did not disclose which
+    // question it had asked.
+    [Fact]
+    public void SanityCheck_Table_NamesTheCompileScope_AndPrintsEveryError()
+    {
+        var result = Sanity(new CompileResult(
+            CompileState.Error,
+            ErrorCount: 1,
+            WarningCount: 0,
+            Messages: new[] { new CompileMessage(CompileState.Error, "Tag \"DB_Example\".DataStore not defined.", "FC8") }));
+
+        var text = OutputFormatter.FormatSanityCheckTable(result);
+
+        Assert.Contains("scope=station (hardware + program)", text, StringComparison.Ordinal);
+        Assert.Contains("DB_Example", text, StringComparison.Ordinal);
+    }
+
+    private static SanityCheckResult Sanity(CompileResult compile) => new(
+        TotalBlocks: 1,
+        InconsistentBlocks: Array.Empty<BlockConsistencyIssue>(),
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", compile, "station (hardware + program)") },
+        TotalTypes: 0,
+        InconsistentTypes: Array.Empty<TypeConsistencyIssue>(),
+        DuplicateNumbers: Array.Empty<DuplicateBlockNumber>());
 
     // The FI-52 backstop must survive the new scopes. A software compile that reports zero errors and
     // leaves a block inconsistent is exactly as incomplete as a device compile that does.
@@ -149,7 +248,7 @@ public class CompileScopeTests
             },
         };
 
-        var exit = Program.RunCompile(gateway, Options(software: true, station: false), timeoutOpenSeconds: 1);
+        var exit = Program.RunCompile(gateway, Options(software: true), timeoutOpenSeconds: 1);
 
         Assert.Equal(ExitCodes.CompileIncomplete, exit);
     }
@@ -231,7 +330,7 @@ public class CompileScopeTests
     private static CompileResult Clean() =>
         new(CompileState.Success, 0, 0, Array.Empty<CompileMessage>());
 
-    private static CompileCommandOptions Options(bool software, bool station) => new(
+    private static CompileCommandOptions Options(bool software = false, bool station = false, bool hardware = false) => new(
         "C:\\proj\\My.ap20",
         Device: null,
         Block: null,
@@ -241,5 +340,6 @@ public class CompileScopeTests
         TimeoutConnectSeconds: 1,
         TimeoutOpenSeconds: 1,
         Software: software,
-        Station: station);
+        Station: station,
+        Hardware: hardware);
 }

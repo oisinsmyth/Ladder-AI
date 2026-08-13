@@ -970,14 +970,29 @@ internal static class Program
     internal static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = (options.Block, options.Type, options.Software, options.Station) switch
+        // *** THE DEFAULT IS THE STATION SCOPE (changed 2026-08-13). ***
+        //
+        // It used to be the DeviceItem scope, which compiles the HARDWARE and nothing else —
+        // measured: its entire message tree is `Hardware configuration`, and it reported
+        // `Success, errors=0` on a project whose FC8 failed with `Tag "DB_Example".DataStore not
+        // defined`. Every caller in this repository invokes a bare `compile` INTENDING a program
+        // check (the lad-coder agent, the gen-block-new skill, docs 03/05/08/11/15, hard rule 4),
+        // and not one of them wanted the hardware-only compile they were getting.
+        //
+        // Station rather than software because it is a SUPERSET of the old behaviour: it still runs
+        // the hardware compile, so nothing that depended on that half loses it, and it is the
+        // nearest equivalent of TIA's `Compile → Hardware and software`. The old scope stays
+        // reachable, by name, as `--hardware` — a default that cannot be asked for by its own name
+        // is a behaviour nobody can reason about.
+        var result = (options.Block, options.Type, options.Software, options.Station, options.Hardware) switch
         {
-            (null, null, false, false) => gateway.Compile(options.Device),
-            (null, null, true, false) => gateway.CompileSoftware(options.Device),
-            (null, null, false, true) => gateway.CompileStation(options.Device),
-            (not null, null, false, false) => gateway.CompileBlock(options.Block, options.Device),
-            (null, not null, false, false) => gateway.CompileType(options.Type, options.Device),
-            _ => throw new InvalidOperationException("--block, --type, --software and --station are mutually exclusive."),
+            (null, null, false, false, false) => gateway.CompileStation(options.Device),
+            (null, null, false, true, false) => gateway.CompileStation(options.Device),
+            (null, null, true, false, false) => gateway.CompileSoftware(options.Device),
+            (null, null, false, false, true) => gateway.Compile(options.Device),
+            (not null, null, false, false, false) => gateway.CompileBlock(options.Block, options.Device),
+            (null, not null, false, false, false) => gateway.CompileType(options.Type, options.Device),
+            _ => throw new InvalidOperationException("--block, --type, --software, --station and --hardware are mutually exclusive."),
         };
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
 

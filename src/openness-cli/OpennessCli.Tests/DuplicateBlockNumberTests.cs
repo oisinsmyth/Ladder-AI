@@ -38,6 +38,9 @@ public class DuplicateBlockNumberTests
     private static BlockInfo Block(string name, BlockType type, int number, string path = Group, bool safety = false) =>
         new(name, type, number, safety ? "F_LAD" : "LAD", safety, path, IsConsistent: true);
 
+    /// <summary>The scope `sanity-check` compiles at since 2026-08-13 — hardware and program.</summary>
+    private const string StationScope = "station (hardware + program)";
+
     private static readonly CompileResult CleanCompile =
         new(CompileState.Success, ErrorCount: 0, WarningCount: 0, Messages: Array.Empty<CompileMessage>());
 
@@ -164,7 +167,7 @@ public class DuplicateBlockNumberTests
     private static readonly SanityCheckResult MeasuredResult = new(
         TotalBlocks: 34,
         InconsistentBlocks: Array.Empty<BlockConsistencyIssue>(),
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile) },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile, StationScope) },
         TotalTypes: 7,
         InconsistentTypes: Array.Empty<TypeConsistencyIssue>(),
         DuplicateNumbers: new[]
@@ -179,7 +182,7 @@ public class DuplicateBlockNumberTests
     private static readonly SanityCheckResult CleanResult = new(
         TotalBlocks: 34,
         InconsistentBlocks: Array.Empty<BlockConsistencyIssue>(),
-        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile) },
+        DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile, StationScope) },
         TotalTypes: 7,
         InconsistentTypes: Array.Empty<TypeConsistencyIssue>(),
         DuplicateNumbers: Array.Empty<DuplicateBlockNumber>());

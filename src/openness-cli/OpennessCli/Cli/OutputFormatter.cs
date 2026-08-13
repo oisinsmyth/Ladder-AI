@@ -1444,12 +1444,32 @@ public static class OutputFormatter
             sb.Append("  -> clear with: openness-cli compile <project> --type <name>\n");
         }
 
+        // The SCOPE is printed on every line, and the error count comes from the message tree rather
+        // than the compiler's own aggregate. Both because of what this line used to be: until
+        // 2026-08-13 it ran the DeviceItem compile, which looks at the HARDWARE only, and printed
+        // `Success (errors=0, warnings=0)` over a program containing a hard compile error. A reader
+        // had no way to tell from the output which question had been asked.
         sb.Append('\n').Append("Device compiles:\n");
         foreach (var device in result.DeviceCompiles)
         {
+            var errors = SanityCheckResult.EffectiveErrors(device.Compile);
             sb.Append("  ").Append(device.DevicePath).Append(": ").Append(device.Compile.State)
-                .Append(" (errors=").Append(device.Compile.ErrorCount)
-                .Append(", warnings=").Append(device.Compile.WarningCount).Append(")\n");
+                .Append(" (errors=").Append(errors)
+                .Append(", warnings=").Append(device.Compile.WarningCount).Append(")")
+                .Append("  scope=").Append(device.Scope).Append('\n');
+            foreach (var message in device.Compile.Messages.Where(m => m.State == CompileState.Error))
+            {
+                sb.Append("      [Error] ").Append(message.Description).Append('\n');
+            }
+        }
+
+        // Named, because "errors=0 but not Success" is the normal state of a real project (a
+        // hardware-interrupt OB with no trigger, IO absent from the configured hardware) and reading
+        // it as a failure is what a verdict keyed on State would have done.
+        if (result.DeviceCompiles.Any(d => d.Compile.State != CompileState.Success && SanityCheckResult.EffectiveErrors(d.Compile) == 0))
+        {
+            sb.Append("  -> a non-Success STATE with errors=0 is a PASS. The verdict keys on errors, never on state:\n")
+                .Append("     one pre-existing hardware warning anywhere in the project makes every compile non-Success.\n");
         }
 
         return sb.ToString().TrimEnd('\n', '\r');
