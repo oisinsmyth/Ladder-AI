@@ -101,10 +101,27 @@ anyway), and the cost asymmetry is one-sided — too high costs a little through
 side. **Confidence is low-to-moderate; more runs is the only thing that firms it up.** Full reasoning:
 `PC-Client-Modbus-Spec-Draft-final.txt` §12a constants block.
 
-> **Not established: that width *caused* the tail to widen.** One of the four full-width runs came in
-> *below* the old figure, and the run-to-run spread (44 ms) exceeds the shift (10–28 ms). The honest
-> statement is "the full-width p99 is higher than the narrow-sweep-derived one", not "width widens the
-> tail". Interleaved narrow/wide runs in one session would settle it.
+> **Measured, and it comes back against the width hypothesis.** This note used to say the causal claim
+> was *not established* and name the experiment that would settle it. That experiment was run —
+> interleaved 16 → 64 → 123 registers, never blocked, **16,200 round trips in one session** — and
+> **no width effect on the tail is detectable**: pooled p99 is highest at width **16** in the read arm
+> (188/164/158) and at width **123** in the write arm (156/152/195), per-run estimates have opposite
+> signs (−47.5 / +51.3 ms) with CIs spanning zero, and all six cells fall in 152–195 ms, bracketing
+> both 173 and 201.
+>
+> **Read the limits with the result.** The design is *not* powered for 28 ms at the p99 (smallest
+> detectable 83 ms read / 145 ms write — a per-run p99 is itself an extreme-value statistic), so this
+> is **not a strong null at the p99**. It rests on the **p90**, which *is* powered (13/21 ms
+> detectable) and gives **+0.5 and +3.4 ms** — a 28 ms width effect at p90 is excluded in both arms.
+> And one fact needs no power argument: at a *single fixed width* within one session, per-run p99
+> ranged **136 → 371 ms** (read w16) and **136 → 562 ms** (write w123).
+>
+> **So `RTT_p99 = 201` is a SESSION figure, not a width figure.** It stands unchanged — session-level
+> variation alone accounts for the 173 → 201 move — but it is **revisited on BREADTH (many sessions,
+> different times of day), not on width.** One session cannot answer how bad the tail gets across days.
+>
+> The body *does* move with width, reproducibly and tinily: median **74.8 → 75.7 ms** from 16 to 123
+> registers, the same **+1.0 ms** in both arms.
 
 `ITransport.Read` is per-tag, so a naive implementation costs one round trip per tag. Re-derived on
 the measured figures (`PC-Client-Modbus-Spec-Draft-final.txt` §12a derivation 6):
@@ -124,18 +141,19 @@ trade is now measured rather than asserted —
 
 | | cost |
 |---|---|
-| widening a read by 123 registers | **~4.9 ms** |
+| widening a read across the full range | **~1.0 ms** (interleaved, better controlled) — **~4.9 ms** (across-session, conservative) |
 | one additional round trip | **78 ms** typical, **201 ms** at the p99 |
 
-— so **batching wins by roughly 16x at the median and 41x at the p99.** Under the old assumption a
-narrow range was a saving; it is worth about 0.04 ms per register saved, against 78–201 ms for every
-extra exchange it forces.
+— so **batching wins by at least 16x at the median and 41x at the p99**, and by ~80x/~200x on the
+better-controlled figure. The conservative number is the one quoted, so nothing turns on which is
+right. Under the old assumption a narrow range was a saving; it is worth hundredths of a millisecond
+per register, against 78–201 ms for every extra exchange it forces.
 
-> ✅ **The earlier `[I]` is retired — measured at 123 registers on 2026-08-13, and it held.** This note
-> used to warn that the zero-cost figure was inferred beyond 16 registers. It is now measured. **But it
-> held for the *mean* and not for the *tail*** — the p99 moved when the width did (see above), so a
-> budget that is both tail-keyed *and* width-maximising should be checked rather than assumed safe.
-> The mean-cost argument for batching is untouched.
+> ✅ **The earlier `[I]` is retired — measured at 123 registers, and it held.** This note used to warn
+> that the zero-cost figure was inferred beyond 16 registers. It is now measured, in both the body and
+> the tail (see the width experiment above), and **the tail caveat this note briefly carried is
+> withdrawn: no width effect on the tail is detectable, so a tail-keyed, width-maximising budget needs
+> no special check. Nothing argues for capping read width on timing grounds.**
 
 **Per-request timeout floor: 3,000 ms** — derived, not chosen. One round trip in 2,000 took 2,216 ms
 [M]; a timeout below that converts a measured, routine tail event into a spurious transport failure
