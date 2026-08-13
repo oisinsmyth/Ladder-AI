@@ -143,6 +143,17 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** A FIXTURE THAT ASSERTED A NUMBER WHICH WAS A PROPERTY OF THE ALGORITHM, NOT OF THE
+  REQUIREMENT. *** Measured 2026-08-13: three wave-set fixtures asserted a **wave count** that had
+  been guessed at, and failed — a path graph two-colours correctly, and a blacklist edge between an
+  already-isolated pair changes nothing. The fix was not to correct the numbers.
+    ➜ *** ASSERT THE INVARIANT, NOT THE COUNT. *** "Do these two slots share a wave set?" is the
+      requirement. "Are there three waves?" is a fact about the current colourer — so it **fails on a
+      better implementation and passes on one that ignores the blacklist entirely.** A test that is
+      wrong in both directions is worse than absent, because it will be *fixed* toward whatever the
+      code does.
+    ➜ Ask of any numeric expectation: **would this still be the right answer if someone improved the
+      algorithm?** If not, the number is the wrong thing to pin.
 - *** OUR OWN OUTPUT BECAME THE STANDARD IT WAS BEING JUDGED AGAINST. *** Measured 2026-08-13, and
   it wore **two faces in one defect** — `converter to-xml` omitted the empty `InOut` section that
   every real TIA instance-DB export declares, which cascaded into **26 spurious differences** and
@@ -225,6 +236,20 @@ running does not license:
       the did-not-run test explicitly**, and prefer a design where the not-run state is
       unconstructible (`null` fails closed, a required parameter, a separate denominator such as
       `AddressesExamined`) over one where it merely fails.
+    ➜ *** AND A THIRD SHAPE: THE GUARD IS WIRED IN, BUT NOTHING CAN REACH IT — BECAUSE THE THING IT
+      CHECKS NEVER MISBEHAVES. *** Measured 2026-08-13: deleting a wave-colourer's independent
+      re-verification left **the entire suite green**, because the colourer never produces a bad
+      colouring, so the check had nothing to fire on. It is not decoration and it is not
+      disconnected — *it is correct, wired, and unfalsifiable in place.*
+      ➜ **Extract it and test it directly** against inputs the producer would never generate. And
+        **test the converse in the same breath** — that a *correct* input produces no finding —
+        without which every other test would pass against a verifier that reported everything.
+      ➜ Distinguish it from the decoration case: ask **"could any input reach this line?"** rather
+        than "is this line called?". The second question answers yes and tells you nothing.
+    ➜ *** COMMIT THE FIX, THEN MUTATE — NEVER THE OTHER WAY ROUND. *** `git checkout` reverting an
+      uncommitted extraction mid-mutation has now bitten twice, and it happens **whenever a mutation
+      and a fix live in the same file**. The restore that undoes the mutation undoes the fix with it,
+      and the re-run then measures the *old* code while appearing to measure the new.
     ➜ *** AND EXECUTE THE GUARD'S OWN ADVICE. A REFUSAL MESSAGE IS A SECOND ARTIFACT AND IT IS
       UNTESTED. *** Measured the same day: a client's tear-verdict guard was mutation-tested four
       ways and correct every time, and **the recovery it printed was refused by the guard itself** —
