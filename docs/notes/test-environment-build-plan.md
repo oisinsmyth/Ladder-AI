@@ -346,9 +346,31 @@ phase 2 with the copy-layer generator.
 > > through the loop today only because the gateway never emits the flag: *** THE ONLY THING
 > > PREVENTING THE MISREAD IS THAT THE FLAG ISN'T EMITTED — THERE IS NO CHECK. ***
 > >
-> > ⚠️ **A NEW RIG PRECONDITION, AND NOBODY GUESSED AT IT:** *** NO ORDINARY PHYSICAL ETHERNET ADAPTER
-> > APPEARS AMONG THE THREE CONFIGURED PC INTERFACES *** — Hyper-V ×2, PLCSIM ×1, TAP-Windows ×2. **The
-> > route to the rig is not established**, and no download can succeed until it is.
+> > ### ✅ RE-RUN AFTER THE FIX — VERIFIED, WITH A DIFFERENTIAL CONTROL
+> >
+> > Both faults are closed and **proved the same way the bug was accused**, which is the standard that
+> > matters. `THE SOFTWARE WAS LOADED` now appears **0 times in 278 log lines**; the log heading reads
+> > **`IMAGE CONTENTS — NOT A LOAD MANIFEST`**; all three fields agree that nothing reached a
+> > controller, and the transfer verdict **argues from the overload** rather than from the old false
+> > reason. Fed to the gateway's own parser: `ManifestAvailable=False`, **`Manifest count = 0`** — so
+> > it did **not** fall through to log-scraping, which was the trap. **The guard fired**, and its
+> > `Detail` is verbatim the branch naming *"a folder download"* that previously could never execute.
+> >
+> > *** AND THE CHECK DISCRIMINATES RATHER THAN ASSERTING WHAT IT SET ITSELF: *** the **same parser at
+> > current HEAD** reads `Transferred` / 27 objects from the **old** report and `Undetermined` / 0 from
+> > the new. The change is in the probe's output, demonstrated, not assumed.
+> >
+> > The 27 objects are **quarantined rather than deleted** — under `loadManifest.image`, including
+> > `image.parserVerdict: "Transferred"`, kept for forensics **where no device question can reach it.**
+> >
+> > ⚠️ **A RIG PRECONDITION — AND ITS SCOPE, CORRECTED.** *** NO ORDINARY PHYSICAL ETHERNET ADAPTER
+> > APPEARS AMONG THE THREE CONFIGURED PC INTERFACES *** — Hyper-V ×2, PLCSIM ×1, TAP-Windows ×2, all
+> > with empty address collections, **byte-identical across two runs.** 🔴 **BUT THIS IS EVIDENCE ABOUT
+> > THE PROJECT'S CONFIGURATION, NOT ABOUT WHICH NICs THE PC PHYSICALLY HAS.** It is a read of
+> > `ConnectionConfiguration` with `probedWithoutConnecting: true`; `GetAccessibleDevices()` is never
+> > called. **Filing it as a hardware-side fact would overstate the measurement** — a live adapter
+> > enumeration is a different check, and nobody has run it. *I had written the looser claim; the lane
+> > that took the measurement declined to let it stand.*
 > >
 > > #### THE GATEWAY — AND ITS OWN LEDGER SAID IT HAD NEVER RUN
 > >

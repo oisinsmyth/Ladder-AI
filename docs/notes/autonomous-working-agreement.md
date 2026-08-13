@@ -190,6 +190,20 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** A CONTROL THAT DOES NOT CONTROL FOR THE RIGHT THING IS NOT A CONTROL. *** Measured 2026-08-13,
+  twice in one day, on the cheapest check this project has. Probing a binary for a string to prove it
+  is the fresh build: the first attempt reported every marker **ABSENT**, *including the control*,
+  because `strings` does not exist on this machine. The second attempt used a positive control that
+  **matched in both ASCII and UTF-16** — so it was landing on a **metadata identifier, not a string
+  literal**, and therefore controlled for nothing the probe was actually measuring. Corrected across
+  both alignments, the two positive controls landed on **different** alignments — *direct evidence
+  that the single-alignment method manufactures absences.*
+    ➜ *** A FALSE "STALE BINARY" IS THE SAME CLASS OF ERROR AS A FALSE GREEN *** — it sends someone to
+      rebuild and re-approve a binary that was already correct, and on this machine that costs a
+      Portal window.
+    ➜ **Run the control through the same path as the measurement**, and ask what would make the
+      control pass while the measurement is broken. A control that cannot fail is the same defect as a
+      test that cannot fail, one level out.
 - *** A POST-HOC CORRECTION ONLY FIXES THE COPY IT REACHES. *** Measured 2026-08-13, and it explains a
   contradiction that had looked like two unrelated bugs. A probe corrected its transfer verdict
   **after** the human-readable verdict *sentence* had already been rendered from the un-corrected
