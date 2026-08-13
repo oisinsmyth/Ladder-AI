@@ -15,9 +15,11 @@ Sources: `docs/notes/openness-quirks.md` (quirks), `docs/notes/stage-gates.md` (
 
 ### "Inconsistent blocks and PLC data types (UDT) cannot be exported"
 - **Where:** `export` after any `import` — the imported block *and its callers* get `IsConsistent = false`.
-- **Cause:** `Import()` flags the block and callers inconsistent regardless of content; device-level `Compile()` reports Success but never clears the flag. Not a content defect.
-- **Fix:** `openness-cli compile --block <name>` (block-level compile clears it in one call). Compile callees before callers.
-- **Source:** quirks "Inconsistent blocks…" (2026-07-10, reconfirmed 2026-07-13).
+- **Cause:** `Import()` flags the block and callers inconsistent regardless of content. Not a content defect.
+- 🔴 **CORRECTED 2026-08-13 — THE REASON RECORDED HERE FOR YEARS WAS WRONG, THOUGH THE FIX WAS RIGHT.** This entry said *"device-level `Compile()` reports Success but never clears the flag"*, which reads like a TIA quirk to be worked around. ***IT DID NOT CLEAR THE FLAG BECAUSE IT NEVER LOOKED AT THE PROGRAM.*** Openness exposes **three** PLC compilers — station (`Device`: hardware **and** program blocks), device item (`DeviceItem`: **hardware only**), and software (`PlcSoftware`: program blocks only) — and `openness-cli compile` reached the **device-item** one. Measured verbatim, same project, minutes apart, with an uncompiled block present: the old `compile` printed only *"Hardware was not compiled"* — **program blocks absent, not "up to date"** — while `compile --software` printed *"FC_ModbusTCP_Sample (FC8): Block was successfully compiled."* ***THAT IS ALSO EXACTLY WHY IT ONCE REPORTED `Success, errors=0` OVER NINETEEN UNCOMPILED BLOCKS*** — the measurement that produced FI-52 in the first place.
+- **What changed as a result:** `compile` now defaults to the **station** scope; the old behaviour is still reachable, **by name**, as `--hardware`. `sanity-check` moved to station too and prints `scope=station (hardware + program)`. **`compile-all` was never affected** — its per-block compiles were always real.
+- **Fix:** `openness-cli compile --block <name>` (block-level compile clears it in one call). Compile callees before callers. **Also now viable and often better: a single `compile --station`, which resolves dependency order in one pass where per-block compiles cannot** — measured on a restored DB and its caller compiling together.
+- **Source:** quirks "Inconsistent blocks…" (2026-07-10, reconfirmed 2026-07-13); scope correction 2026-08-13 (`d36ad20`, `c026eff`).
 
 ### "Block 'X' that is accessed has not been compiled"
 - **Where:** block-level compile of a caller.

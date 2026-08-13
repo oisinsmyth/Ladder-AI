@@ -340,6 +340,9 @@ rehearsal of it:
 - **Method**: edited readable IR → `to-xml --synthesize` (fresh sidecars) → import → block
   compiles (both `Success`, 0 errors; the standing sandbox hardware-IO warning only) →
   whole-device compile **Success, 0 errors, 0 warnings** → re-export → to-ir.
+  *(🔴 2026-08-13: that whole-device figure was a **hardware-only** compile and says nothing about
+  the program — see the correction under "`IsConsistent` staying `true`…" below. **The per-block
+  compiles in the same chain are real**, and they are what actually carries this evidence.)*
 - **Untouched-network invariance, proven not asserted**: pre-fix committed IR vs post-fix
   re-export, readable parts — exactly two hunks per block (the added comment, the changed rung);
   every other network/title/line byte-identical through the full TIA round-trip. The committed
@@ -577,6 +580,12 @@ keeping independent of the project they were found against:
   per-block flag; `compile --block <name>` clears it) held for every block touched across this
   whole run, including one flagged inconsistent from the very first Portal touch and never
   actually edited — a pre-existing condition, not a regression, cleared the same way.
+  > 🔴 **CORRECTION, 2026-08-13:** the parenthesised *reason* above is the one FI-52 recorded and it
+  > was wrong. ***THE DEVICE COMPILE DID NOT CLEAR THE FLAG BECAUSE IT NEVER LOOKED AT THE
+  > PROGRAM*** — `openness-cli compile` reached Openness's hardware-only device-item compiler. The
+  > observed behaviour and the `--block` remedy are unchanged; only the explanation is. `compile`
+  > now defaults to the **station** scope, and `compile --station` additionally resolves dependency
+  > order in one pass, which per-block compiles cannot.
 
 ## Process rule: LAD/IR work moves to a dedicated sub-agent, no exceptions (2026-07-17)
 

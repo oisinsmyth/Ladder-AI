@@ -275,6 +275,7 @@ corpus: a reviewer skill that doesn't independently find the known problems isn'
 | 8b | `audit-artifact`, `gen-integration` formalization | Not built |
 | 8c | **`gen-data-structures`** — a data-structure stage that does not exist in the numbered skill list at all (§ "Stages and skills" has no entry for it). Authors the UDT and DB landscape from the design artifacts: types, blocks, members, data types, **retentivity**, start values; proves it by import + block-level compile + export-back. It is the stage that turns a retentive-data list and an HMI interface definition into objects a project actually contains. | **Not built, and now RUN MANUALLY FIVE TIMES AND COUNTING** (2026-08-05/06, one live greenfield job: an author pass, a rename + restructure pass, then three successive corrections as owner rulings landed). Per the standing convention that a *second* manual run is the trigger to build the skill rather than do it a third time by hand, this is **overdue, not due** — and the run count is itself evidence about the stage: structures get revised every time a ruling lands upstream, so 8c is re-entered far more often than a stage that runs once. Its gate hazard below is therefore paid repeatedly. Both runs were performed to contract by `lad-coder` under hard rule 8, so the contract is already observed rather than hypothetical — what it consumes, what it proves, and the five TIA behaviours it has to design around (`docs/notes/openness-quirks.md`) |
 | 9 | `generate` orchestrator (last — after the stages it orchestrates exist) | Not built |
+| 10 | **The test-environment contract skill** (the design-for-testability stage, phase 5.1 of the harness plan) — the contract a block and its vectors must satisfy to be *executed* on the rig rather than only reviewed | **Contract DRAFTED 2026-08-13** (`docs/notes/test-environment-contract.md`, with its coverage denominator in `docs/notes/assertion-enumeration.md`); **skill deliberately not yet written**. This is the point where the check stage stops being three reviewers and gains a *test* — see `docs/02-roadmap.md` S9 |
 
 **Why 8c is listed out of numeric order:** it was never in the pipeline's own stage table. The
 fifteen numbered stages go from analysis to blocks to integration and silently assume the data
@@ -292,8 +293,8 @@ returned clean on the broken input:
 | Check | Result on input missing a member from 5 of 6 types |
 |---|---|
 | `converter preflight` (whole project) | 0 findings, exit 0 |
-| `openness-cli compile` (whole device) | `Success`, errors 0, warnings 0 |
-| `openness-cli compile` (each block) | `Success`, errors 0, warnings 0 |
+| `openness-cli compile` (whole device) | **errors 0** — *state not decisive*, see the correction below |
+| `openness-cli compile` (each block) | **errors 0** — *state not decisive* |
 | `openness-cli sanity-check` | `HEALTHY`, 0 inconsistent |
 | **member-by-member re-export diff vs the as-built baseline** | **caught it** — showed `+2/-1` where the change was `+2/-0` |
 
@@ -302,6 +303,31 @@ definition object to it. In a structure-only phase there are no consumers yet �
 written against the type — so a missing member is a definition nobody references, which is exactly
 what a compiler is entitled to accept. **The gate is close to vacuous here**, and passing it means
 much less than it means at any other stage.
+
+> 🔴 **CORRECTION, 2026-08-13 — THE TWO COMPILE ROWS ABOVE WERE WRONG AS ACCEPTANCE CRITERIA, AND
+> AS WRITTEN THEY WOULD NOW FAIL ON A HEALTHY PROJECT.** They read *"`Success`, errors 0,
+> warnings 0"*. Two things changed underneath them:
+>
+> 1. ***`openness-cli compile` now defaults to the STATION scope (hardware + program). It used to
+>    compile the HARDWARE ONLY*** — `CompileDeviceItem` reached the device-item compiler, whose
+>    message tree is `Hardware configuration` and nothing else. The station scope surfaces the
+>    project's standing warnings, so **one pre-existing hardware warning anywhere makes every
+>    compile report non-`Success` forever.**
+> 2. Measured live after the change: a healthy project reports ***`Warning (errors=0, warnings=2)`***
+>    while being entirely healthy. `sanity-check`'s own `IsHealthy` had the same defect and was
+>    re-keyed onto the effective **error count**; it now reports `OVERALL: HEALTHY` against that
+>    same `Warning` state.
+>
+> ***SO THE VERDICT KEYS ON `errors 0`, AND THE COMPILE'S STATE IS NOT DECISIVE.*** Warnings are
+> still reported and still worth reading — they are simply not the gate.
+>
+> **Recorded as a correction rather than silently rewritten, because the failure mode matters more
+> than the wording: *a gate criterion that fails on a healthy project gets worked around, and then
+> it protects nothing.*** The same wording in hard rule 4's `CLAUDE.md` command table was corrected
+> the same day.
+>
+> **What the rows above still demonstrate is untouched** — the member-deletion case is about a
+> *vacuous* gate, not a mis-keyed one, and every check listed still missed it.
 
 **The rule this stage carries as a result:** at 8c the real gate is the **sent-vs-returned re-export
 diff against the previous as-built export**, and it must be *mechanical and member-by-member*, not a

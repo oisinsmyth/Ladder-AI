@@ -1163,6 +1163,20 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   them — compiled individually — failed with **8 errors**. A block freshly re-imported through
   Openness's `Import()` carries `IsConsistent=false`, and device-level `Compile()` reports success
   without ever clearing it.
+- 🔴 **THE MECHANISM RECORDED ABOVE WAS WRONG, AND IT IS CORRECTED HERE RATHER THAN REWRITTEN —
+  2026-08-13.** *"Device-level `Compile()` reports success without ever clearing it"* reads as a TIA
+  quirk. ***IT NEVER CLEARED THE FLAG BECAUSE IT NEVER LOOKED AT THE PROGRAM.*** Openness exposes
+  **three** PLC compilers — station (`Device`: hardware **and** program blocks), device item
+  (`DeviceItem`: **hardware only**), software (`PlcSoftware`: program blocks only) — and
+  `openness-cli compile` reached the **device-item** one, so its message tree was
+  `Hardware configuration` and nothing else. ***THAT IS PRECISELY WHY IT REPORTED `Success, errors=0`
+  OVER NINETEEN UNCOMPILED BLOCKS: the blocks were not examined and not claimed to be — they were
+  ABSENT from the output, which nobody read as absence.*** Measured verbatim on the same project
+  minutes apart: the old `compile` printed only *"Hardware was not compiled"* while
+  `compile --software` printed *"FC8: Block was successfully compiled."*
+  **The finding stands, the fix stands, the severity stands — only the explanation was wrong**, and
+  the wrong explanation made this look like an unfixable vendor behaviour rather than a scope bug we
+  owned. `compile` now defaults to **station**; the old scope survives by name as `--hardware`.
 - **Why this one matters more than the others.** Hard rule 4 — *"never present non-compiling logic
   as finished"* — is the project's last line of defence before an engineer sees the work, and its
   instrument could report a clean pass over unexamined blocks. Every "compile gate passed" claim
@@ -1293,6 +1307,17 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Why the compile did not catch it either.** Nothing in that corpus instantiated the type. An
   uninstantiated UDT has nothing to make a device compile fail, so both halves of the gate were
   green simultaneously while the type was inconsistent.
+- 🔴 **THAT EXPLANATION IS ALSO FALSIFIED BY THE 2026-08-13 SCOPE FINDING, AND NOBODY HAD NOTICED —
+  IT IS RECORDED HERE BECAUSE IT IS THE SAME ERROR AS FI-52's, MADE INDEPENDENTLY.** The
+  uninstantiated-type argument is plausible and it was not the reason. ***THE DEVICE COMPILE IN THAT
+  RUN WAS HARDWARE-ONLY, SO IT WOULD NOT HAVE CAUGHT THE TYPE HOWEVER MANY BLOCKS INSTANTIATED IT.***
+  The `Success (errors=0, warnings=0)` quoted above is a **hardware** verdict that was read as a
+  program verdict.
+  **Two things worth keeping from this.** First, FI-62's *finding* is untouched — `sanity-check`
+  really did enumerate blocks only, and fixing that was right. Second, and more useful: ***TWICE NOW,
+  A PLAUSIBLE MECHANISM WAS INVENTED TO EXPLAIN A GREEN THAT WAS ACTUALLY GREEN BECAUSE NOTHING HAD
+  BEEN EXAMINED.*** That is the *empty is not clean* failure appearing in the **explanations** rather
+  than in the checks — and an explanation nobody can falsify is how a check keeps its blind spot.
 - **Built.** `RunSanityCheck` now walks `PlcTypeGroup` alongside blocks, reports a `TYPES:` line
   **always** (including at zero, so a reader can see types were examined rather than silently
   absent), lists any inconsistent type with the `compile --type <name>` line that clears it, and

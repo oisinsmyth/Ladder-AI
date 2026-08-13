@@ -69,6 +69,18 @@ all under `station_2/JOB9002_PLC`, clustered in `Map IO/Simulation` (simulation-
 device compiles report `Success, Errors=0, Warnings=0` at the same time. Confirms conclusively
 this is a real TIA/Openness block-consistency state issue in the scratch project, not a timing
 artifact or something a second compile fixes. Full detail and the clustering hypothesis:
+
+> 🔴 **CORRECTION, 2026-08-13 — THE OBSERVATION STANDS, THE INFERENCE DRAWN FROM IT DOES NOT.**
+> Every `Success, Errors=0, Warnings=0` recorded in this section was a **HARDWARE-ONLY** compile.
+> `openness-cli compile` reached Openness's *device-item* compiler, whose message tree is
+> `Hardware configuration` and nothing else — the program blocks were **absent from the output, not
+> reported as clean.** So *"15 inconsistent while the device compile is green"* is not the paradox
+> it reads as, and it is **not** evidence that TIA holds a contradictory state: the green said
+> nothing whatever about those 15 blocks. The consistency finding itself is unaffected —
+> `sanity-check` read `IsConsistent` directly, which was always a real signal. **What is withdrawn
+> is the word "conclusively"**, and the implication that the two facts were in tension.
+> Scope finding and its measurement: 2026-08-13 (`d36ad20`, `c026eff`); `compile` now defaults to
+> the **station** scope (hardware + program).
 `docs/notes/openness-quirks.md`. Outside what `openness-cli`/the converter can fix from here —
 needs the project owner to check directly in TIA Portal.
 

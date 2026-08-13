@@ -76,6 +76,33 @@ Highest-risk capability: changes to existing logic.
 *Deliverables:* AI generates test sequences (stimulus + expected response per scan) for generated/modified logic; harness drives the simulator and reports pass/fail.
 *Exit:* Every S6/S7 deliverable ships with at least one passing simulated test.
 
+> ### 🔄 STATUS, 2026-08-13 — S9 IS BEING BUILT, AND NOT THE WAY THIS ENTRY DESCRIBES
+>
+> **The entry condition above is superseded and R-07 is no longer on the critical path.** The test
+> environment under construction drives a **real S7-1200 on a bench rig over Modbus TCP** — not a
+> simulator — so *"confirm whether PLCSIM Advanced supports S7-1200"* stopped being the gating
+> question. **The word "simulated" in the deliverable and exit lines should be read as "executed",**
+> and the simulation route survives only as a fallback nobody currently needs. R-07 is not closed;
+> it is **no longer blocking**, which is a different thing and is why it stays in the register.
+>
+> **Design:** `docs/notes/PC-Client-Modbus-Spec-Draft-final.txt` (with `modbus-tcp-client-spec.md`,
+> `modbus-plc-side-contract.md`, `test-environment-contract.md`, `assertion-enumeration.md`).
+> **Live state:** `docs/notes/test-environment-build-plan.md` — that file is the standing record and
+> this entry deliberately does not duplicate it.
+>
+> **Where it has got to:** ***PHASES 0, 1, 2 AND 3 ARE CLOSED AND VALIDATED ON THE DEVICE***, and
+> phase 4.3/4.4 plus the result package are built. Six of the design's unmeasured assumptions are
+> retired — **A1** (`MB_SERVER` write atomicity, at full width and both call orders), **A2**
+> (round-trip rate), **A3** (`%MW` capacity), **A4** (a block driveable by its own command), **A5**
+> (two slots do not interfere) and **A7** (run-state read in both CPU states). **A6** (a delegate
+> throw leaving the CPU untouched) is the widest-blast-radius item still unmeasured and needs the
+> owner present; **A8/G2** is deferred by ruling.
+>
+> ***THE EXIT CRITERION ABOVE IS UNCHANGED AND IS NOT YET MET.*** Phase 2 demonstrated a deliberate
+> defect going RED and its correction going GREEN — *and the same defect shown invisible under a
+> different vector*, so the harness is not one that reddens everything. That is the gate for the
+> machinery, not for the criterion: no S6/S7 deliverable ships with a passing executed test yet.
+
 ## Sequencing rationale
 
 Read before annotate, annotate before review, review before generate, generate before modify, everything before simulate-and-verify. Each stage builds the trust and infrastructure the next depends on. Goal 7 (compile gate) and Goal 11 (safety exclusion) are invariants, not stages.
