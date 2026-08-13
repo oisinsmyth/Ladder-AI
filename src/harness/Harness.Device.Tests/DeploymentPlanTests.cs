@@ -152,29 +152,35 @@ public class DeploymentPlanTests
     // ---- REFUSALS --------------------------------------------------------------------------------
 
     [Fact]
-    public void A_project_that_is_not_the_scratch_copy_yields_NO_STEPS_AT_ALL()
+    public void A_project_NOBODY_ALLOWLISTED_yields_NO_STEPS_AT_ALL()
     {
         var plan = Plan(options: Options(project: @"C:\Jobs\RealProject\RealProject.ap20"));
 
         Assert.False(plan.Planned);
         Assert.Empty(plan.Steps);
-        Assert.Contains(plan.Refusals, r => r.Contains("is not the scratch project", StringComparison.Ordinal));
+        Assert.Contains(plan.Refusals, r => r.Contains("IS NOT AN ALLOWLISTED PROJECT", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// *** THE FENCE IS A LIST OF PATHS, NOT A NAME. *** Every one of these would have satisfied the
+    /// file-name-suffix fence this gateway shipped with, and a convention is something anything can be
+    /// renamed into — on a machine carrying about nineteen private engineering projects beside the scratch
+    /// ones.
+    /// </summary>
     [Theory]
-    [InlineData(@"D:\x\myscratch.ap20")]      // no leading space
-    [InlineData(@"D:\Thing scratch.ap20\inner.ap20")]  // a DIRECTORY that ends in the suffix must not vouch
-    [InlineData(@"D:\x\Thing scratch.ap21")]  // different extension
+    [InlineData(@"D:\Jobs\Site scratch.ap20")]
+    [InlineData(@"D:\Jobs\Anything Scratch.AP20")]
+    [InlineData(@"D:\x\myscratch.ap20")]
     [InlineData("")]
-    public void The_scratch_fence_refuses_the_near_misses(string path)
+    public void A_name_that_LOOKS_like_a_scratch_project_allows_nothing(string path)
     {
-        Assert.False(DeviceGatewayOptions.IsScratchProject(path));
+        Assert.False(ScratchAllowlist.Evaluate(path, ArgumentVocabularyTests.FenceRoot).Allowed);
     }
 
     [Fact]
-    public void The_scratch_fence_accepts_the_real_shape_case_insensitively()
+    public void The_fence_accepts_exactly_what_the_allowlist_names()
     {
-        Assert.True(DeviceGatewayOptions.IsScratchProject(@"D:\Rig\Anything Scratch.AP20"));
+        Assert.True(ScratchAllowlist.Evaluate(ArgumentVocabularyTests.AllowedProject, ArgumentVocabularyTests.FenceRoot).Allowed);
     }
 
     [Fact]

@@ -22,12 +22,23 @@ public class LoopRunTests
 
     private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
 
+    // A REAL assertion ID, COMPUTED rather than invented. Gate 3g recomputes every ID from its own
+    // normalised text and refuses a mismatch, which is what lets the stamping step (assertion-
+    // enumeration.md 3.4) have no independence from the block or vector author. A hand-written six-hex
+    // literal cannot be made to pass that: finding a text hashing to chosen digits is a preimage problem.
+    private const string ClauseId = "REQ-014";
+
+    private const string AssertionText = "WHEN the step is applied THEN the count reaches the limit";
+
+    private static readonly string AssertionIdValue = AssertionId.Compute(ClauseId, AssertionText);
+
     private static AssertionEnumeration Enumeration(AssertionForm form = AssertionForm.When, string enumerator = "agent-c") =>
         AssertionEnumeration.Of(
-            new[] { "REQ-014" },
-            new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = form },
-            enumerator);
+            new[] { ClauseId },
+            new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = form },
+            enumerator,
+            new Dictionary<string, string>(StringComparer.Ordinal) { [AssertionIdValue] = AssertionText });
 
     private static SubmissionVector Vector(
         int step = 5, int limit = 10, string expected = "10", int settlingScans = 3,
@@ -35,7 +46,7 @@ public class LoopRunTests
         InstrumentationMode mode = InstrumentationMode.Sampled, int window = 20, string? kills = "a ramp that overshoots the limit by one step",
         string? completionSignal = null, int completionValue = 1) =>
         new("V-1", "S0", 0, new AgentIdentity(author),
-            new Basis("REQ-014", "REQ-014:3f9a1c"),
+            new Basis(ClauseId, AssertionIdValue),
             new Dictionary<string, string> { [TrivialBlock.StepTag] = step.ToString(), [TrivialBlock.LimitTag] = limit.ToString() },
             TrivialBlock.StartTag,
             new[] { new ObservabilityDeclaration(TrivialBlock.CountTag, SignalNature.PersistentState, mode, window, expected) },
@@ -104,7 +115,7 @@ public class LoopRunTests
         Assert.Equal(ResultVerdict.Fail, package.Verdict);
         Assert.True(package.ConclusiveAboutTheBlock);
         Assert.Contains("NOT AGAINST THE VECTOR", package.WhatToDoNext, StringComparison.Ordinal);
-        Assert.Equal("REQ-014:3f9a1c", package.Assertions[0].AssertionId);
+        Assert.Equal(AssertionIdValue, package.Assertions[0].AssertionId);
         Assert.Equal("15", package.Assertions[0].Observed);
     }
 

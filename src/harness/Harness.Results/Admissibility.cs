@@ -40,30 +40,50 @@ public sealed record Basis(string ClauseId, string AssertionId);
 /// enumeration is the coverage denominator, and if the block's author produced it, D6's independence is
 /// lost at the denominator - which undoes most of what citing into it buys.
 /// </param>
+/// <param name="NormalisedTexts">
+/// Assertion ID to the <c>normalised_text</c> its ID was computed from (§3.4).
+///
+/// <para><b>THIS IS WHAT KEEPS THE STAMPER UNTRUSTED.</b> The enumerator cannot compute a SHA-256 — it is
+/// denied <c>Bash</c> deliberately — so a separate stamping step writes the IDs in. That step needs no
+/// independence from the block or vector author <i>only because the gate recomputes every ID from this
+/// text and refuses a mismatch</i>. Carrying the texts is not decoration: <b>if this is empty the
+/// recomputation cannot run, and the stamper silently becomes an authority it was never designed to
+/// be.</b> The gate therefore reports NOT CHECKED rather than passing.</para>
+/// </param>
 public sealed record AssertionEnumeration(
     IReadOnlySet<string> Clauses,
     IReadOnlySet<string> Assertions,
     IReadOnlyDictionary<string, AssertionForm> Forms,
-    AgentIdentity Enumerator)
+    AgentIdentity Enumerator,
+    IReadOnlyDictionary<string, string>? NormalisedTexts = null)
 {
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
     /// <summary>True when the enumeration is the flat projection and carries no forms at all.</summary>
     public bool CarriesNoForms => Forms.Count == 0;
 
+    /// <summary>True when nothing in this projection can have its ID recomputed.</summary>
+    public bool CarriesNoNormalisedText => NormalisedTexts is null || NormalisedTexts.Count == 0;
+
     /// <summary>The enumeration's own form for an assertion, or null when it does not say.</summary>
     public AssertionForm? FormOf(string assertionId) =>
         Forms.TryGetValue(assertionId, out var form) ? form : null;
+
+    /// <summary>The text an ID was computed from, or null when the projection does not carry it.</summary>
+    public string? NormalisedTextOf(string assertionId) =>
+        NormalisedTexts is not null && NormalisedTexts.TryGetValue(assertionId, out var text) ? text : null;
 
     public static AssertionEnumeration Of(
         IEnumerable<string> clauses,
         IEnumerable<string> assertions,
         IReadOnlyDictionary<string, AssertionForm>? forms = null,
-        string enumerator = "") =>
+        string enumerator = "",
+        IReadOnlyDictionary<string, string>? normalisedTexts = null) =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
-            new AgentIdentity(enumerator));
+            new AgentIdentity(enumerator),
+            normalisedTexts);
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>

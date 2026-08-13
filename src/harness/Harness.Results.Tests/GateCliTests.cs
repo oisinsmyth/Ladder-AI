@@ -20,12 +20,13 @@ public class GateCliTests
       "resultRegistersPerSlot": 20,
       "computedConflicts": [],
       "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
-      "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:3f9a1c"],
-                       "forms": { "REQ-014:3f9a1c": "When" }, "enumerator": "agent-c" },
+      "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"],
+                       "forms": { "REQ-014:ffcc38": "When" }, "enumerator": "agent-c",
+                       "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" } },
       "map": { "providedFor": { "Demo_Count": ["Latched"] } },
       "vectors": [{
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
-        "clause": "REQ-014", "assertion": "REQ-014:3f9a1c",
+        "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
         "startBool": "Demo_Start",
         "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
@@ -137,7 +138,7 @@ public class GateCliTests
         var never = Good
             .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 100", StringComparison.Ordinal)
             .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal)
-            .Replace("\"REQ-014:3f9a1c\": \"When\"", "\"REQ-014:3f9a1c\": \"Never\"", StringComparison.Ordinal)
+            .Replace("\"REQ-014:ffcc38\": \"When\"", "\"REQ-014:ffcc38\": \"Never\"", StringComparison.Ordinal)
             .Replace("\"assertionForm\": \"When\"", "\"assertionForm\": \"Never\"", StringComparison.Ordinal);
 
         var (exit, output) = Run(never);
@@ -151,7 +152,7 @@ public class GateCliTests
         Assert.Equal(GateExit.AdmissibleSubjectToJudgement,
             Run(never
                 .Replace("\"assertionForm\": \"Never\"", "\"assertionForm\": \"When\"", StringComparison.Ordinal)
-                .Replace("\"REQ-014:3f9a1c\": \"Never\"", "\"REQ-014:3f9a1c\": \"When\"", StringComparison.Ordinal)).Exit);
+                .Replace("\"REQ-014:ffcc38\": \"Never\"", "\"REQ-014:ffcc38\": \"When\"", StringComparison.Ordinal)).Exit);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -172,15 +173,81 @@ public class GateCliTests
     [Fact]
     public void And_WITHOUT_them_the_same_document_reports_NOT_CHECKED_rather_than_passing()
     {
-        // The flat projection. Two gates that cannot run, and NOT CHECKED fails closed.
-        var flat = Good
-            .Replace("\"forms\": { \"REQ-014:3f9a1c\": \"When\" }, \"enumerator\": \"agent-c\" },", "},", StringComparison.Ordinal);
+        // The flat projection: clause and assertion IDs, and nothing else. THREE gates cannot run, and
+        // NOT CHECKED fails closed for every one of them.
+        var flat = """
+        {
+          "blockAuthor": "agent-a",
+          "runtimeCompression": 1,
+          "slotsInWaveSet": 1,
+          "resultRegistersPerSlot": 20,
+          "computedConflicts": [],
+          "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
+          "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"] },
+          "map": { "providedFor": { "Demo_Count": ["Latched"] } },
+          "vectors": [{
+            "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
+            "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
+            "startBool": "Demo_Start",
+            "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
+            "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
+            "maxDurationScans": 20,
+            "blacklist": [{ "block": "FC_Other", "reason": "shares the plant model" }],
+            "assertionForm": "When",
+            "completionValue": 1,
+            "compressionFactor": 1,
+            "assertedBehaviours": ["ramp-to-limit"],
+            "completionSignal": "Demo_Done",
+            "kills": "a ramp that overshoots by one step"
+          }]
+        }
+        """;
 
         var (exit, output) = Run(flat);
 
         Assert.Equal(GateExit.NotAdmissible, exit);
         Assert.Contains("[NOT CHECKED] 3d enumerator independence", output, StringComparison.Ordinal);
         Assert.Contains("[NOT CHECKED] 3e assertion form authority", output, StringComparison.Ordinal);
+
+        // *** AND 3g, WHICH IS THE ONE THAT KEEPS THE STAMPER UNTRUSTED. *** Without normalised text no
+        // ID can be recomputed, so a hand-written hex string is indistinguishable from a computed one.
+        Assert.Contains("[NOT CHECKED] 3g assertion IDs recompute", output, StringComparison.Ordinal);
+        Assert.Contains("TAKEN ON TRUST", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// *** AN ID THAT DOES NOT RECOMPUTE IS REFUSED THROUGH THE DOCUMENT. ***
+    ///
+    /// <para>This is the whole reason §3.4 can let the stamper be anybody: a wrong hash is caught. Here
+    /// the text is edited and the ID left alone — the exact "preserved an ID whose text changed" defect
+    /// the stamper refuses to commit, arriving from the other direction.</para>
+    /// </summary>
+    [Fact]
+    public void AN_ID_THAT_DOES_NOT_RECOMPUTE_FROM_ITS_OWN_TEXT_IS_REFUSED()
+    {
+        var edited = Good.Replace(
+            "WHEN the step is applied THEN the count reaches the limit",
+            "WHEN the step is applied THEN the count reaches the limit within the window",
+            StringComparison.Ordinal);
+
+        var (exit, output) = Run(edited);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("DOES NOT RECOMPUTE", output, StringComparison.Ordinal);
+        Assert.Contains("STALE", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>A citation in the display-ordinal form is rejected by SHAPE, not by lookup (§3.3).</summary>
+    [Fact]
+    public void A_CITATION_IN_THE_DISPLAY_ORDINAL_FORM_IS_REJECTED_BY_SHAPE()
+    {
+        var ordinal = Good.Replace("\"assertion\": \"REQ-014:ffcc38\"", "\"assertion\": \"REQ-014.A2\"", StringComparison.Ordinal);
+
+        var (exit, output) = Run(ordinal);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("DISPLAY ORDINAL", output, StringComparison.Ordinal);
+        Assert.Contains("POSITIONAL", output, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -22,6 +22,14 @@ public sealed class GatewayTests : IDisposable
         Directory.CreateDirectory(_root);
         foreach (var name in new[] { "converter.exe", "openness-cli.exe", "download-probe.exe" })
             File.WriteAllText(Path.Combine(_root, name), "not a real binary; the runner is injected.");
+
+        // The write fence is an ALLOWLIST OF FILES, so a test that wants a project allowed has to write
+        // one. That is the point: there is no flag and no environment variable that allows a project.
+        Directory.CreateDirectory(Path.Combine(_root, "tools"));
+        File.WriteAllText(Path.Combine(_root, "CLAUDE.md"), "# fence root marker");
+        File.WriteAllLines(
+            Path.Combine(_root, "tools", ScratchAllowlist.AllowlistFileName),
+            new[] { "repo:Scratch.ap20" });
     }
 
     public void Dispose()
@@ -41,14 +49,15 @@ public sealed class GatewayTests : IDisposable
             ConverterExe: Path.Combine(_root, "converter.exe"),
             OpennessCliExe: Path.Combine(_root, "openness-cli.exe"),
             DownloadProbeExe: Path.Combine(_root, "download-probe.exe"),
-            ProjectPath: Path.Combine(_root, "Harness scratch.ap20"),
+            ProjectPath: Path.Combine(_root, "Scratch.ap20"),
             GroupPath: "PLC1 6ES7 214-1AG40-0XB0/Program blocks",
             PcInterface: "Intel(R) Ethernet Connection",
             DownloadOption: DownloadOption.SoftwareOnlyChanges,
             AllowCpuStop: true,
             ModbusHost: "192.0.2.10",
             StagingDirectory: Path.Combine(_root, "staging"),
-            Device: withDevice ? "PLC1" : null);
+            Device: withDevice ? "PLC1" : null,
+            AllowlistStartDirectory: _root);
 
     private static IReadOnlyList<HarnessObject> Objects() => ArgumentVocabularyTests.Objects();
 
@@ -200,16 +209,19 @@ public sealed class GatewayTests : IDisposable
     }
 
     [Fact]
-    public void A_real_project_is_refused_before_a_single_command_runs()
+    public void A_project_NOBODY_ALLOWLISTED_is_refused_before_a_single_command_runs()
     {
-        var options = Options() with { ProjectPath = Path.Combine(_root, "RealProject.ap20") };
+        // Note the shape of the refused name: it would have SATISFIED the old file-name-suffix fence.
+        // A convention is something anything can be renamed into, and this machine carries about
+        // nineteen private engineering projects beside the scratch ones.
+        var options = Options() with { ProjectPath = Path.Combine(_root, "RealProject scratch.ap20") };
         var runner = new RecordingRunner();
 
         var outcome = new OpennessDeviceGateway(options, runner).Deploy(Objects(), new BuildStamp(1));
 
         Assert.False(outcome.Attempted);
         Assert.Empty(runner.Calls);
-        Assert.Contains("not the scratch project", outcome.Detail, StringComparison.Ordinal);
+        Assert.Contains("IS NOT AN ALLOWLISTED PROJECT", outcome.Detail, StringComparison.Ordinal);
     }
 
     // ---- A DOWNLOAD THAT RAN AND DID NOT LAND ----------------------------------------------------

@@ -88,7 +88,8 @@ public static class GateCli
             document.Enumeration?.Clauses ?? Enumerable.Empty<string>(),
             document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
             document.Enumeration?.Forms,
-            document.Enumeration?.Enumerator ?? string.Empty);
+            document.Enumeration?.Enumerator ?? string.Empty,
+            document.Enumeration?.NormalisedTexts);
 
         var fidelity = document.Model is null
             ? null

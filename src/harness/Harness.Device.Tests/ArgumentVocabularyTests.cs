@@ -77,12 +77,33 @@ public class ArgumentVocabularyTests
     // The plan under test — one representative deployment with a data block, so every step kind fires.
     // ---------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// A temporary repository root carrying an allowlist that names <see cref="AllowedProject"/> and
+    /// nothing else. The fence reads FILES, so a test that wants a project allowed has to write one —
+    /// which is exactly the property the fence exists for.
+    /// </summary>
+    internal static readonly string FenceRoot = CreateFenceRoot();
+
+    internal static readonly string AllowedProject = Path.Combine(FenceRoot, "Scratch", "Scratch.ap20");
+
+    private static string CreateFenceRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "harness-fence-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "tools"));
+        Directory.CreateDirectory(Path.Combine(root, "Scratch"));
+        File.WriteAllText(Path.Combine(root, "CLAUDE.md"), "# fence root marker");
+        File.WriteAllLines(
+            Path.Combine(root, "tools", ScratchAllowlist.AllowlistFileName),
+            new[] { "# the committed allowlist", "repo:Scratch/Scratch.ap20", "", "  # blank and comment lines are skipped", "not-rooted/refused.ap20" });
+        return root;
+    }
+
     internal static DeviceGatewayOptions Options(bool allowCpuStop = true, string? project = null) =>
         new(
             ConverterExe: @"C:\bin\converter.exe",
             OpennessCliExe: @"C:\bin\openness-cli.exe",
             DownloadProbeExe: @"C:\bin\download-probe.exe",
-            ProjectPath: project ?? @"D:\Rig\Harness scratch\Harness scratch.ap20",
+            ProjectPath: project ?? AllowedProject,
             GroupPath: "PLC1 6ES7 214-1AG40-0XB0/Program blocks",
             PcInterface: "Intel(R) Ethernet Connection #2",
             DownloadOption: DownloadOption.SoftwareOnlyChanges,
@@ -91,7 +112,8 @@ public class ArgumentVocabularyTests
             StagingDirectory: @"C:\staging",
             Device: "PLC1",
             TargetInterface: "PROFINET interface_1",
-            IrProjectDirectory: @"C:\repo\ir\test-project001");
+            IrProjectDirectory: @"C:\repo\ir\test-project001",
+            AllowlistStartDirectory: FenceRoot);
 
     internal static IReadOnlyList<HarnessObject> Objects(bool withDataBlock = true)
     {
@@ -320,14 +342,66 @@ public class ArgumentVocabularyTests
         Assert.DoesNotContain(Plan().Steps, s => s.Arguments.Contains("download-plan"));
     }
 
+    /// <summary>
+    /// *** THE GATEWAY'S FENCE AND THE PROBE'S MUST BE THE SAME FENCE. ***
+    ///
+    /// <para>They cannot share code — this assembly is net8.0 and <c>download-probe</c> is net48 — so the
+    /// constants are pinned against that binary's own source. A gateway fence LOOSER than the probe's
+    /// would pass its own guard and then be refused after a full import and compile had already been
+    /// written into a project nobody named; a TIGHTER one would refuse the real scratch project.</para>
+    ///
+    /// <para><b>This test has already earned its keep.</b> The probe's guard was a
+    /// <c>" scratch.ap20"</c> FILE-NAME SUFFIX when this gateway was written, and the openness-cli lane
+    /// replaced it with an allowlist. This is what reported that, rather than the gateway silently
+    /// diverging into a fence that refuses <c>GenProject1.ap20</c> — the actual scratch project.</para>
+    /// </summary>
     [Fact]
-    public void The_gateways_scratch_fence_is_the_same_string_as_the_probes_own_guard()
+    public void The_gateways_fence_uses_the_same_allowlist_files_as_the_probes_own_guard()
     {
-        var guard = ReadSource("src/openness-cli/DownloadProbe/ScratchProjectGuard.cs", "RequiredSuffix");
+        var guard = ReadSource("src/openness-cli/DownloadProbe/ScratchProjectGuard.cs", "ScratchProjectGuard");
 
         Assert.True(
-            guard.Contains("\"" + DeviceGatewayOptions.RequiredProjectSuffix + "\"", StringComparison.Ordinal),
-            $"the gateway fences on '{DeviceGatewayOptions.RequiredProjectSuffix}' and ScratchProjectGuard does not use that literal. "
-            + "A gateway fence LOOSER than the probe's would pass its own guard and then be refused at exit 3 — after a full import and compile had already been written into a real project.");
+            guard.Contains("\"" + ScratchAllowlist.AllowlistFileName + "\"", StringComparison.Ordinal),
+            $"the gateway reads '{ScratchAllowlist.AllowlistFileName}' and ScratchProjectGuard does not name that file. The two fences have diverged, and the gateway is the one that writes FIRST.");
+
+        Assert.True(
+            guard.Contains("\"" + ScratchAllowlist.RepoPrefix + "\"", StringComparison.Ordinal),
+            $"the gateway resolves the '{ScratchAllowlist.RepoPrefix}' entry form and ScratchProjectGuard does not name it.");
+
+        Assert.True(
+            guard.Contains("\"Ladder-AI\"", StringComparison.Ordinal),
+            "the gateway reads the machine-local allowlist under %ProgramData%/Ladder-AI and ScratchProjectGuard does not name that folder. The rig's project path cannot be committed, so it lives there and nowhere else.");
+    }
+
+    /// <summary>
+    /// *** NO ALLOWLIST ANYWHERE IS A REFUSAL. *** An absent fence must never read as an open one — and a
+    /// missing file is exactly the direction that fails permissively if nobody writes this test.
+    /// </summary>
+    [Fact]
+    public void With_no_allowlist_at_all_every_project_is_refused()
+    {
+        var bare = Path.Combine(Path.GetTempPath(), "harness-fence-empty-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(bare);
+        File.WriteAllText(Path.Combine(bare, "CLAUDE.md"), "# marker, and no tools/ allowlist beside it");
+
+        var decision = ScratchAllowlist.Evaluate(Path.Combine(bare, "Anything.ap20"), bare);
+
+        Assert.False(decision.Allowed);
+        Assert.Contains("NO ALLOWLIST ENTRY WAS FOUND", decision.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_bare_relative_allowlist_entry_is_skipped_rather_than_guessed_at()
+    {
+        // ADR-0011 requirement 4: relative to WHAT is exactly the question, and every wrong answer names
+        // a real file. The fixture allowlist carries one, and it must allow nothing.
+        Assert.False(ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "not-rooted", "refused.ap20"), FenceRoot).Allowed);
+    }
+
+    [Fact]
+    public void A_repo_prefixed_entry_resolves_against_the_repository_root()
+    {
+        Assert.True(ScratchAllowlist.Evaluate(AllowedProject, FenceRoot).Allowed);
+        Assert.False(ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "Scratch", "Other.ap20"), FenceRoot).Allowed);
     }
 }

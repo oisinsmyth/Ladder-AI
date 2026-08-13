@@ -8,6 +8,23 @@ namespace Harness.Results.Tests;
 /// </summary>
 public class SubmissionGateTests
 {
+    /// <summary>
+    /// A REAL assertion ID, COMPUTED rather than invented.
+    ///
+    /// <para>It used to be a hand-written six-hex literal — the method document's illustrative example, which is
+    /// not the hash of anything. Gate 3g recomputes every ID from its own normalised text, so an invented
+    /// hex string cannot be made to pass: finding a text that hashes to a chosen six hex digits is a
+    /// preimage problem. That is the gate working, and the fixture is what had to change.</para>
+    /// </summary>
+    private const string ClauseId = "REQ-014";
+
+    private const string AssertionText = "WHEN the step is applied THEN the count reaches the limit";
+
+    private static readonly string AssertionIdValue = AssertionId.Compute(ClauseId, AssertionText);
+
+    private static readonly IReadOnlyDictionary<string, string> Texts =
+        new Dictionary<string, string>(StringComparer.Ordinal) { [AssertionIdValue] = AssertionText };
+
     private static SubmissionVector Vector(
         string id = "V-1",
         string slot = "S0",
@@ -22,7 +39,7 @@ public class SubmissionGateTests
         SettlingDeclaration? settling = null,
         IReadOnlyList<BlacklistEntry>? blacklist = null) =>
         new(id, slot, 0, new AgentIdentity(author),
-            basis ?? new Basis("REQ-014", "REQ-014:3f9a1c"),
+            basis ?? new Basis("REQ-014", AssertionIdValue),
             new Dictionary<string, string> { ["Demo_Step"] = "5" },
             startBool,
             expectations ?? new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10") },
@@ -48,8 +65,8 @@ public class SubmissionGateTests
         BlockCompressionInputs? compressionInputs = null) =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
-            enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-                new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "agent-c"),
+            enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts),
             FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity(blockAuthor),
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
@@ -190,7 +207,7 @@ public class SubmissionGateTests
     {
         // The flat projection. Reporting this gate as passed would be exactly the failure the gate table
         // exists to prevent: the hole is as open as it was, and NOT CHECKED says so.
-        var flat = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" }, null, "agent-c");
+        var flat = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue }, null, "agent-c", Texts);
         var report = Check(enumeration: flat);
 
         var gate = Gate(report, "3e assertion form authority");
@@ -204,8 +221,8 @@ public class SubmissionGateTests
     {
         // *** F-3's HOLE, CLOSED WHERE THE DATA SUPPORTS IT. *** Cite an assertion the enumeration says
         // is a NEVER, declare it a WHEN, and the permissive path is no longer available.
-        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Never }, "agent-c");
+        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts);
 
         var report = Check(new[] { Vector(form: AssertionForm.When) }, enumeration: enumeration);
 
@@ -232,8 +249,8 @@ public class SubmissionGateTests
     {
         // A blank on the enumeration's side is not a WHEN either - it is a decomposition that has not
         // been finished, and F-3 cannot be enforced against it.
-        var blank = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Unstated }, "agent-c");
+        var blank = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Unstated }, "agent-c", Texts);
 
         var report = Check(enumeration: blank);
 
@@ -246,8 +263,8 @@ public class SubmissionGateTests
     {
         // Refusing the mismatch is not enough on its own: the observability verdict has to be right too,
         // or a sampled NEVER would be reported admissible in the same run that refused the mismatch.
-        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.Never }, "agent-c");
+        var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts);
 
         var report = Check(
             new[] { Vector(form: AssertionForm.When, expectations: new[]
@@ -261,8 +278,8 @@ public class SubmissionGateTests
     [Fact]
     public void AN_UNRECORDED_ENUMERATOR_IS_NOT_CHECKED_BECAUSE_UNKNOWN_IS_NOT_INDEPENDENT()
     {
-        var anonymous = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When });
+        var anonymous = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, normalisedTexts: Texts);
 
         var gate = Gate(Check(enumeration: anonymous), "3d enumerator independence");
 
@@ -275,8 +292,8 @@ public class SubmissionGateTests
     {
         // If the block's author decomposed the requirement, the denominator is the block author's own
         // reading and a vector citing into it is agreeing with the block by construction.
-        var byBlockAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "agent-a");
+        var byBlockAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-a", Texts);
 
         Assert.False(Gate(Check(enumeration: byBlockAuthor), "3d enumerator independence").Passed);
     }
@@ -285,8 +302,8 @@ public class SubmissionGateTests
     public void SO_IS_THE_VECTORS_AUTHOR_ENUMERATING_THEM()
     {
         // Normalised, like D6 itself: a case-and-whitespace variant is not a different agent.
-        var byVectorAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { "REQ-014:3f9a1c" },
-            new Dictionary<string, AssertionForm> { ["REQ-014:3f9a1c"] = AssertionForm.When }, "AGENT-B ");
+        var byVectorAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "AGENT-B ", Texts);
 
         var gate = Gate(Check(enumeration: byVectorAuthor), "3d enumerator independence");
 

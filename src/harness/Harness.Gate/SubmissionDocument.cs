@@ -93,6 +93,16 @@ public sealed class EnumerationDocument
 
     /// <summary>Who performed the decomposition. Absent means independence cannot be shown, which is NOT CHECKED.</summary>
     public string? Enumerator { get; set; }
+
+    /// <summary>
+    /// Assertion ID to the <c>normalised_text</c> it was computed from (§3.4).
+    ///
+    /// <para><b>Absent means the stamper's output is taken on trust, and gate 3g says so.</b> §3.4 lets a
+    /// stamper have no independence from the block or the vector author for one reason only — the gate
+    /// recomputes every ID from this text and refuses a mismatch. Omitting it removes that, and the
+    /// omission is exactly what a compromised stamper would emit.</para>
+    /// </summary>
+    public Dictionary<string, string>? NormalisedTexts { get; set; }
 }
 
 public sealed class MapDocument

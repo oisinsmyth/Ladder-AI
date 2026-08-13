@@ -115,6 +115,8 @@ public static class SubmissionGate
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(BasisGate(vectors, enumeration));
+        gates.Add(CitationShape(vectors));
+        gates.Add(IdsRecompute(enumeration));
         gates.Add(EnumeratorIndependence(vectors, enumeration, blockAuthor));
         gates.Add(AssertionFormAuthority(vectors, enumeration));
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
@@ -297,6 +299,115 @@ public static class SubmissionGate
         return new GateResult("3d enumerator independence", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
             problems.Count == 0
                 ? $"the enumeration was produced by '{enumeration.Enumerator}', who is neither the block's author nor any vector's."
+                : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 3f — the citation's SHAPE, and 3g — the IDs recompute (assertion-enumeration.md §3.3, §3.4)
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// *** A `Basis` IN THE DISPLAY-ORDINAL FORM IS REJECTED, MECHANICALLY, BY SHAPE (§3.3). ***
+    ///
+    /// <para>Listings show <c>REQ-014.A2</c> because <c>REQ-014:3f9a1c</c> is unreadable aloud —
+    /// <b>which is exactly why the ordinal is the one people would type.</b> It is positional, so a
+    /// citation in it silently comes to name a different assertion the moment one is inserted above it.
+    /// The rejection is by shape rather than by lookup because a lookup miss reads as "you cited
+    /// something that does not exist", and this is a different error with a different fix.</para>
+    /// </summary>
+    private static GateResult CitationShape(IReadOnlyList<SubmissionVector> vectors)
+    {
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            if (v.Basis is null || string.IsNullOrWhiteSpace(v.Basis.AssertionId))
+                continue;
+
+            if (AssertionId.IsDisplayOrdinalForm(v.Basis.AssertionId))
+            {
+                problems.Add($"{v.Id}: cites '{v.Basis.AssertionId}', which is the DISPLAY ORDINAL. It is display only and is never citable (§3.3): the ordinal is POSITIONAL, so inserting one assertion above it silently makes this citation name a different one. Cite the content-derived ID — <clause>:<six lowercase hex>.");
+            }
+        }
+
+        return new GateResult("3f citation shape", GateStatus.Checked, problems.Count == 0, nameof(AssertionId),
+            problems.Count == 0
+                ? "no vector cites a display ordinal. Citations are content-derived, so none of them is positional."
+                : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// *** THE RECOMPUTATION THAT MAKES THE STAMPER SAFE TO BE ANYBODY (§3.4). ***
+    ///
+    /// <para>The enumerator issues <c>normalised_text:</c> and no <c>id:</c> — it is denied <c>Bash</c>
+    /// on purpose, and an ID is a SHA-256, so the agent responsible for the denominator cannot produce
+    /// the identifiers it is cited by. A separate stamping step writes them in. <b>That step needs no
+    /// independence from the block author or the vector author for exactly one reason: this gate
+    /// recomputes every ID from the text and refuses a mismatch.</b> A wrong hash is caught, and a right
+    /// one is what anybody would have produced.</para>
+    ///
+    /// <para><b>So if this stops running, the stamper becomes trusted, and it was never designed to
+    /// be.</b> An enumeration carrying no normalised text is therefore NOT CHECKED — not a pass. The
+    /// projection that omits the texts is exactly the one a compromised stamper would emit.</para>
+    /// </summary>
+    private static GateResult IdsRecompute(AssertionEnumeration enumeration)
+    {
+        const string name = "3g assertion IDs recompute";
+
+        if (enumeration.CarriesNoNormalisedText)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "normalised_text in the enumeration projection",
+                "the enumeration carries no normalised text, so no ID could be recomputed and the STAMPER'S OUTPUT WAS TAKEN ON TRUST. "
+                + "§3.4 permits a stamper with no independence from the block or vector author ONLY because this recomputation happens; without it "
+                + "a hand-written or altered hex string is indistinguishable from a computed one. Emit `normalisedTexts` alongside `assertions`.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var (id, text) in enumeration.NormalisedTexts!.OrderBy(e => e.Key, StringComparer.Ordinal))
+        {
+            if (!enumeration.Assertions.Contains(id))
+            {
+                problems.Add($"'{id}' has a normalised text but is not in the assertion set. The projection disagrees with itself, and there is no way to tell which half is right.");
+                continue;
+            }
+
+            if (!AssertionId.TryParse(id, out var clauseId, out _))
+            {
+                problems.Add($"'{id}' is not an assertion ID (<clause>:<six lowercase hex>), so nothing can be recomputed for it.");
+                continue;
+            }
+
+            if (!enumeration.Clauses.Contains(clauseId))
+            {
+                problems.Add($"'{id}' names clause '{clauseId}', which is not in the enumeration's clause set. An ID is scoped to its clause, so this one is scoped to nothing.");
+                continue;
+            }
+
+            if (AssertionId.Normalise(text) != text)
+            {
+                problems.Add($"'{id}': the supplied text is not itself normalised (§3.1). Normalising it here would change the ID being checked, so the check is refused rather than made to pass.");
+                continue;
+            }
+
+            var recomputed = AssertionId.Compute(clauseId, text);
+            if (!string.Equals(recomputed, id, StringComparison.Ordinal))
+            {
+                problems.Add($"'{id}' DOES NOT RECOMPUTE — its own normalised text hashes to '{recomputed}'. Either the text was edited without re-stamping (every citation to '{id}' is then STALE, §3.2) or the ID was not computed from this text at all.");
+            }
+        }
+
+        var uncovered = enumeration.Assertions.Where(a => enumeration.NormalisedTextOf(a) is null).ToArray();
+        if (uncovered.Length > 0)
+        {
+            problems.Add($"{uncovered.Length} assertion(s) carry no normalised text and were NOT recomputed: {string.Join(", ", uncovered.OrderBy(a => a, StringComparer.Ordinal).Take(5))}"
+                + (uncovered.Length > 5 ? ", …" : string.Empty)
+                + ". A partially-verifiable enumeration is not a verified one — the unverified ones are exactly where a wrong ID would sit.");
+        }
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionId),
+            problems.Count == 0
+                ? $"all {enumeration.Assertions.Count} assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted."
                 : string.Join(" | ", problems));
     }
 

@@ -66,20 +66,19 @@ public sealed record DeviceGatewayOptions(
     int ModbusPort = 502,
     byte ModbusUnitId = 1,
     int TimeoutConnectSeconds = 180,
-    int TimeoutOpenSeconds = 1800)
+    int TimeoutOpenSeconds = 1800,
+    string? AllowlistStartDirectory = null)
 {
     /// <summary>
-    /// The only project name this gateway will write to.
-    ///
-    /// <para><b>Kept byte-identical to <c>DownloadProbe.ScratchProjectGuard.RequiredSuffix</c></b>,
-    /// and a test asserts that by reading that file — because a gateway whose fence was LOOSER than
-    /// the probe's would pass its own guard and then be refused at exit 3 after a full import and
-    /// compile had already been written into a real project.</para>
-    ///
-    /// <para>The leading space is deliberate: <c>"…\Anything scratch.ap20"</c> passes and
-    /// <c>"…\myscratch.ap20"</c> does not.</para>
+    /// Where the allowlist search starts. <b>A test seam, and NOT an override</b> — it moves where the
+    /// repository root is looked for, exactly as <c>nowMs</c> moves the clock elsewhere in this harness;
+    /// it cannot name a different allowlist file, cannot add an entry, and the machine-local list is read
+    /// regardless. Null is production and means "from where this assembly sits".
     /// </summary>
-    public const string RequiredProjectSuffix = " scratch.ap20";
+    public ScratchAllowlist.Decision AllowlistDecision =>
+        AllowlistStartDirectory is null
+            ? ScratchAllowlist.Evaluate(ProjectPath)
+            : ScratchAllowlist.Evaluate(ProjectPath, AllowlistStartDirectory);
 
     /// <summary>Where the probe's per-run log goes, if the caller did not name a directory.</summary>
     public string ResolvedProbeLogDirectory =>
@@ -113,11 +112,14 @@ public sealed record DeviceGatewayOptions(
             Required(refusals, ModbusHost, nameof(ModbusHost));
             Required(refusals, StagingDirectory, nameof(StagingDirectory));
 
-            if (!string.IsNullOrWhiteSpace(ProjectPath) && !IsScratchProject(ProjectPath))
+            if (!string.IsNullOrWhiteSpace(ProjectPath))
             {
-                refusals.Add(
-                    $"'{ProjectPath}' is not the scratch project: this gateway opens only a project whose FILE NAME ends in '{RequiredProjectSuffix}' (case-insensitive). "
-                    + "It imports, compiles and downloads, so a real project is refused here for the same reason download-probe refuses it — and refused EARLIER, before anything is written.");
+                var decision = AllowlistDecision;
+                if (!decision.Allowed)
+                {
+                    refusals.Add(decision.Reason
+                        + " This gateway imports, compiles and downloads, so a project nobody named is refused here for the same reason download-probe refuses it — and refused EARLIER, before anything is written.");
+                }
             }
 
             if (!AllowCpuStop)
@@ -152,24 +154,8 @@ public sealed record DeviceGatewayOptions(
         .Select(b => $"{b.Item1}: '{b.Item2}' does not exist.")
         .ToArray();
 
-    /// <summary>Same rule as the probe's own guard, applied to the FILE NAME and never the whole path.</summary>
-    public static bool IsScratchProject(string? projectPath)
-    {
-        if (string.IsNullOrWhiteSpace(projectPath))
-            return false;
-
-        try
-        {
-            return Path.GetFileName(projectPath!.Trim())
-                .EndsWith(RequiredProjectSuffix, StringComparison.OrdinalIgnoreCase);
-        }
-        catch (ArgumentException)
-        {
-            // An unusable path is not the scratch project. This guard answers "no" whenever it
-            // cannot answer "yes".
-            return false;
-        }
-    }
+    /// <summary>Same rule as the probe's own guard: an ALLOWLIST of resolved paths, never a name convention.</summary>
+    public static bool IsScratchProject(string? projectPath) => ScratchAllowlist.Evaluate(projectPath).Allowed;
 
     private static void Required(List<string> refusals, string? value, string name)
     {
