@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Map</RootNamespace>
+    <AssemblyName>Harness.Map</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    The coordinator's derivation half: the register map, the copy layer generated from it, and the
+    non-retentive assertion both must satisfy. Pure arithmetic and text — no packages, no project
+    references, no network, no Portal, no Siemens.Engineering.
+
+    That is deliberate and it is what makes phase 2 cheap to verify: every refusal in here is a
+    DESIGN-TIME refusal (X-A: "refused at MAP-DERIVATION time ... a design-time error, never a
+    runtime one"), so the whole component is testable with no device, no rig and no TIA session.
+  -->
+
+</Project>
