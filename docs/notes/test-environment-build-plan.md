@@ -126,10 +126,27 @@ phase 2 with the copy-layer generator.
 > >   you it broke; `--set` is what repairs it. Already briefed into the gateway lane.
 > > - **Never gate this with `drift-check`** — the Normalizer ignores the attribute, so it reports
 > >   MATCH in both directions. `--expect` is the only check that can see it.
-> > - 🔴 **VERIFY THE CONSEQUENCE RATHER THAN ASSUMING IT.** `Sharp7Client` has a live
-> >   `WriteArea(S7Area.DB, …)` — so **at least one S7comm DB access exists today**, and if any of them
-> >   targets a deliverable object the invariant above is already violated. *A ruling that the code
-> >   happens to break is a ruling that will be discovered by a failed rig session.*
+> > **AUDITED, AND THE ANSWER IS WORSE THAN EITHER "HOLDS" OR "BROKEN":** *** THE INVARIANT IS TRUE
+> > TODAY AND ENFORCED BY NOTHING. *** Every classic-S7comm path was read at `f0fb0cb`. The whole wave
+> > — **start bools included** — is **Modbus holding registers only**, so §6's start-bool gate was
+> > never in tension with this and *cannot* be. Nothing reads a deliverable block's data — **but only
+> > because no tag map in the repo points at one.** The mechanism is `S7Transport →
+> > `WriteArea(S7Area.DB, …)`, which reaches **any DB via a hand-written JSON tag map**, and **the
+> > write fence cannot catch it**: the fence is scoped on an *area name* drawn from that same map, so
+> > it compares the caller's claimed area against the tag's and never asks what kind of object it is.
+> >
+> > **AND MY WORDING WAS TOO COARSE — THERE ARE TWO MECHANISMS, NOT ONE.** *"Standard by
+> > construction"* hides the distinction: the **`%MW` mirror is not a data block at all**, so it has
+> > no layout to revert and its guarantee is **the address**; a harness **data block**'s guarantee is
+> > **re-assertion**. That matters operationally — *someone hunting for `--expect Standard` on the
+> > mirror will not find one, and must not read that as a missing check.*
+> >
+> > **Corroboration nobody had gathered in one place:** `MirrorGeometry` already records that
+> > `MB_HOLD_REG` **refuses an optimized DB with `16#818C`** while import, compile and `drift-check`
+> > all stay green, and `RetentionCheck` already refuses a harness DB declaring `Optimized`. **The
+> > contract was the only place it was not written down** — now §4.5, with gate **11**, which the
+> > skill correctly lists as **NOT CHECKED: nothing verifies it** (no gate 11 exists in
+> > `SubmissionGate`). *An honest NOT CHECKED beats a gate number that implies a check.*
 >
 > > 🔴 **5.2's INDEPENDENCE IS STRONGER THAN THE DESIGN ASKED FOR, BY ACCIDENT.** D6 wants the block
 > > author and the vector author to be different agents. **The block — `FB_HopperBlockageMonitor` —
@@ -204,6 +221,32 @@ phase 2 with the copy-layer generator.
 > > **And record the run-state at each step.** A6 taught us the two abort kinds differ in exactly
 > > that, and a session that only records outcomes cannot tell a CPU that kept running from one that
 > > stopped and was recovered.
+> >
+> > #### THE GATEWAY EXISTS NOW — AND ITS OWN LEDGER SAYS IT HAS NEVER RUN
+> >
+> > `Harness.Device` stages IR → `to-xml` → `import-all` → `--set Standard` + `--expect` → `compile-all`
+> > → `sanity-check` → `download-probe` → recover the load manifest. **`Loaded` keys on the manifest
+> > alone, never on `State`.** Operator sequence: `src/harness/Harness.Device/RIG-SESSION.md`.
+> >
+> > **It reported ZERO of the eight `OwedOnTheDevice` items discharged**, and reworded rather than
+> > removed the first two: *item 1's blocker moved from "nothing exists" to "nothing has run".* Proven
+> > = ordering, argument vectors (read out of the **actual parser sources**, scoped to each
+> > subcommand's own `Parse*` method — whole-file matching was insufficient because `--yes` has an arm
+> > under `delete`), exit codes, manifest parse against four **real rig download logs**, the scratch
+> > fence. Fake only = every process execution; `ProcessRunner` **has never executed**.
+> >
+> > **Two more that could not fail, both caught before the rig rather than on it:** *** A TAG TABLE IS
+> > NOT IN A LOAD MANIFEST *** — every program under test carries one, the measured 19-object rig
+> > manifest contains none, so **every package would have returned `NotLoaded` on the first real
+> > download**; it passed only because the fake echoed back every name handed to it. And **a pipe
+> > would have hung forever** — Portal inherits the redirected stdout and `WaitForExit` never returns.
+> >
+> > 🔴 **F1 — A PRECONDITION, NOT A DETAIL: NO PROJECT ON THIS MACHINE PASSES THE PROBE'S SCRATCH
+> > GUARD.** It demands a filename ending `" scratch.ap20"`; `GenProject1.ap20` and
+> > `SampleProject.ap20` both fail → exit 3, nothing contacted. **Ruled: replace it with the ALLOWLIST
+> > pattern ADR-0011 already established**, not a rename. A filename suffix is a *convention* — it
+> > blocks the legitimate project while doing nothing about the ~19 real site `.ap20` files on
+> > this machine, any of which could satisfy it by rename. **Wrong in both directions at once.**
 >
 > **FOR THE OWNER — two open questions, plus six rulings I made so nothing blocked:**
 >
