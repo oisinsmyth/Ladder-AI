@@ -9,6 +9,7 @@ DB iDB_PusherControl
       Step : Int
       Fitted : Bool
       Enable : Bool
+      AutoStartSignal : Bool
       Mode : Int
       HopperHighLevel : Bool
       ManualCycleCmd : Bool

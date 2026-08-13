@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T23:20:25.8190038Z</Created>
+    <Created>2026-08-13T15:18:05.9910389Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -78,6 +78,17 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+    </Member>
+    <Member Name="AutoStartSignal" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">In: C-115 handshake vocabulary (owner ruling 2026-07-17, task 09, resolution 2) - external run permission, caller-asserted, named after the site's real chained-permissive pattern (FB_MotorFwdRevSystem.IO.AutoStartSignal), not doc 06's illustrative name. Unwired by FC_ControlMain for now - no established caller need for this integration; C-115 requires the member regardless. Distinct from Enable above (FB-computed, Fitted AND Mode&lt;&gt;0) - that's this block's own internal readiness gate, not the external permission this member carries.</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="Mode" Datatype="Int">
       <AttributeList>
@@ -252,6 +263,9 @@
         <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Out: this block's C-115 running-equivalent (owner ruling 2026-07-17, task 09 resolution 2) - Step &lt;&gt; 0. Already wired (NETWORK 13); recognized as satisfying C-115's running slot under this block's own established name rather than duplicated under the generic vocabulary.</MultiLanguageText>
+      </Comment>
     </Member>
     <Member Name="Blocked" Datatype="Bool">
       <AttributeList>

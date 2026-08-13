@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T23:20:29.4058233Z</Created>
+    <Created>2026-08-13T15:17:59.9464991Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -76,6 +76,7 @@
       <Sections>
         <Section Name="None">
           <Member Name="CycleStart" Datatype="Bool" />
+          <Member Name="AutoStartSignal" Datatype="Bool" />
           <Member Name="CycleStop" Datatype="Bool" />
           <Member Name="DownstreamRunning" Datatype="Bool" />
           <Member Name="SystemHealthy" Datatype="Bool" />
@@ -1193,54 +1194,102 @@
   <Parts>
     <Access Scope="LocalVariable" UId="21">
       <Symbol>
-        <Component Name="ReversalCount" />
+        <Component Name="IO" />
+        <Component Name="Step" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="22">
       <Symbol>
+        <Component Name="ReversalStepEdgeMem" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="23">
+      <Symbol>
+        <Component Name="ReversalCount" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="24">
+      <Symbol>
         <Component Name="ReversalWindowTimeMS" />
       </Symbol>
     </Access>
-    <Access Scope="LiteralConstant" UId="23">
+    <Access Scope="LiteralConstant" UId="25">
+      <Constant>
+        <ConstantType>Int</ConstantType>
+        <ConstantValue>60</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="LiteralConstant" UId="26">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>0</ConstantValue>
       </Constant>
     </Access>
-    <Part Name="Gt" UId="24">
+    <Part Name="Eq" UId="27">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="TON" Version="1.0" UId="25">
-      <Instance Scope="LocalVariable" UId="26">
+    <Part Name="Contact" UId="28">
+      <Negated Name="operand" />
+    </Part>
+    <Part Name="Not" UId="29" />
+    <Part Name="Gt" UId="30">
+      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    </Part>
+    <Part Name="TON" Version="1.0" UId="31">
+      <Instance Scope="LocalVariable" UId="32">
         <Component Name="ReversalWindowTimer" />
       </Instance>
       <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
     </Part>
   </Parts>
   <Wires>
-    <Wire UId="28">
+    <Wire UId="34">
       <IdentCon UId="21" />
-      <NameCon UId="24" Name="in1" />
+      <NameCon UId="27" Name="in1" />
     </Wire>
-    <Wire UId="29">
-      <IdentCon UId="23" />
-      <NameCon UId="24" Name="in2" />
+    <Wire UId="35">
+      <IdentCon UId="25" />
+      <NameCon UId="27" Name="in2" />
     </Wire>
-    <Wire UId="30">
-      <NameCon UId="24" Name="out" />
-      <NameCon UId="25" Name="IN" />
+    <Wire UId="36">
+      <NameCon UId="27" Name="out" />
+      <NameCon UId="28" Name="in" />
     </Wire>
-    <Wire UId="31">
+    <Wire UId="37">
       <IdentCon UId="22" />
-      <NameCon UId="25" Name="PT" />
+      <NameCon UId="28" Name="operand" />
     </Wire>
-    <Wire UId="32">
-      <NameCon UId="25" Name="ET" />
-      <OpenCon UId="27" />
+    <Wire UId="38">
+      <NameCon UId="28" Name="out" />
+      <NameCon UId="29" Name="in" />
     </Wire>
-    <Wire UId="33">
+    <Wire UId="39">
       <Powerrail />
-      <NameCon UId="24" Name="pre" />
+      <NameCon UId="27" Name="pre" />
+    </Wire>
+    <Wire UId="40">
+      <NameCon UId="29" Name="out" />
+      <NameCon UId="30" Name="pre" />
+    </Wire>
+    <Wire UId="41">
+      <IdentCon UId="23" />
+      <NameCon UId="30" Name="in1" />
+    </Wire>
+    <Wire UId="42">
+      <IdentCon UId="26" />
+      <NameCon UId="30" Name="in2" />
+    </Wire>
+    <Wire UId="43">
+      <NameCon UId="30" Name="out" />
+      <NameCon UId="31" Name="IN" />
+    </Wire>
+    <Wire UId="44">
+      <IdentCon UId="24" />
+      <NameCon UId="31" Name="PT" />
+    </Wire>
+    <Wire UId="45">
+      <NameCon UId="31" Name="ET" />
+      <OpenCon UId="33" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -1252,7 +1301,7 @@
               <MultilingualTextItem ID="F" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text />
+                  <Text>Retriggerable on-delay built from TON+edge (C-406/C-404 - no TONR/TOF exists to do this natively). IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true. Fixed 2026-07-17 (owner ruling, B-5/REQ-028): the prior rung read IN := ReversalCount > 0 alone, a level condition that only ever ran once from the first reversal - a fixed window, not the re-arming one this network's own title always claimed (C-608).</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -1488,7 +1537,7 @@
               <MultilingualTextItem ID="14" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-). Resets on ReversalWindowTimer.Q (the window elapsed with nothing new) or a fault reset - see ReversalCount's own comment for why this is a re-arming window, not a per-cycle count.</Text>
+                  <Text>Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-; ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction). Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset.</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -4613,81 +4662,120 @@
         <Component Name="PreStartSounder" />
       </Symbol>
     </Access>
-    <Access Scope="LiteralConstant" UId="26">
+    <Access Scope="LocalVariable" UId="26">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="Step" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="27">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="InCycle" />
+      </Symbol>
+    </Access>
+    <Access Scope="LiteralConstant" UId="28">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>20</ConstantValue>
       </Constant>
     </Access>
-    <Access Scope="LiteralConstant" UId="27">
+    <Access Scope="LiteralConstant" UId="29">
       <Constant>
         <ConstantType>Int</ConstantType>
         <ConstantValue>10</ConstantValue>
       </Constant>
     </Access>
-    <Part Name="Ge" UId="28">
+    <Access Scope="LiteralConstant" UId="30">
+      <Constant>
+        <ConstantType>Int</ConstantType>
+        <ConstantValue>0</ConstantValue>
+      </Constant>
+    </Access>
+    <Part Name="Ge" UId="31">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Coil" UId="29" />
-    <Part Name="Eq" UId="30">
+    <Part Name="Coil" UId="32" />
+    <Part Name="Eq" UId="33">
       <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
     </Part>
-    <Part Name="Contact" UId="31" />
-    <Part Name="O" UId="32">
+    <Part Name="Contact" UId="34" />
+    <Part Name="O" UId="35">
       <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
     </Part>
-    <Part Name="Coil" UId="33" />
+    <Part Name="Coil" UId="36" />
+    <Part Name="Ne" UId="37">
+      <TemplateValue Name="SrcType" Type="Type">Int</TemplateValue>
+    </Part>
+    <Part Name="Coil" UId="38" />
   </Parts>
   <Wires>
-    <Wire UId="34">
-      <IdentCon UId="21" />
-      <NameCon UId="28" Name="in1" />
-    </Wire>
-    <Wire UId="35">
-      <IdentCon UId="26" />
-      <NameCon UId="28" Name="in2" />
-    </Wire>
-    <Wire UId="36">
-      <NameCon UId="28" Name="out" />
-      <NameCon UId="29" Name="in" />
-    </Wire>
-    <Wire UId="37">
-      <IdentCon UId="22" />
-      <NameCon UId="29" Name="operand" />
-    </Wire>
-    <Wire UId="38">
-      <Powerrail />
-      <NameCon UId="28" Name="pre" />
-      <NameCon UId="30" Name="pre" />
-      <NameCon UId="31" Name="in" />
-    </Wire>
     <Wire UId="39">
-      <IdentCon UId="23" />
-      <NameCon UId="30" Name="in1" />
+      <IdentCon UId="21" />
+      <NameCon UId="31" Name="in1" />
     </Wire>
     <Wire UId="40">
-      <IdentCon UId="27" />
-      <NameCon UId="30" Name="in2" />
+      <IdentCon UId="28" />
+      <NameCon UId="31" Name="in2" />
     </Wire>
     <Wire UId="41">
-      <NameCon UId="30" Name="out" />
-      <NameCon UId="32" Name="in1" />
+      <NameCon UId="31" Name="out" />
+      <NameCon UId="32" Name="in" />
     </Wire>
     <Wire UId="42">
-      <IdentCon UId="24" />
-      <NameCon UId="31" Name="operand" />
+      <IdentCon UId="22" />
+      <NameCon UId="32" Name="operand" />
     </Wire>
     <Wire UId="43">
-      <NameCon UId="31" Name="out" />
-      <NameCon UId="32" Name="in2" />
+      <Powerrail />
+      <NameCon UId="31" Name="pre" />
+      <NameCon UId="33" Name="pre" />
+      <NameCon UId="34" Name="in" />
+      <NameCon UId="37" Name="pre" />
     </Wire>
     <Wire UId="44">
-      <NameCon UId="32" Name="out" />
-      <NameCon UId="33" Name="in" />
+      <IdentCon UId="23" />
+      <NameCon UId="33" Name="in1" />
     </Wire>
     <Wire UId="45">
+      <IdentCon UId="29" />
+      <NameCon UId="33" Name="in2" />
+    </Wire>
+    <Wire UId="46">
+      <NameCon UId="33" Name="out" />
+      <NameCon UId="35" Name="in1" />
+    </Wire>
+    <Wire UId="47">
+      <IdentCon UId="24" />
+      <NameCon UId="34" Name="operand" />
+    </Wire>
+    <Wire UId="48">
+      <NameCon UId="34" Name="out" />
+      <NameCon UId="35" Name="in2" />
+    </Wire>
+    <Wire UId="49">
+      <NameCon UId="35" Name="out" />
+      <NameCon UId="36" Name="in" />
+    </Wire>
+    <Wire UId="50">
       <IdentCon UId="25" />
-      <NameCon UId="33" Name="operand" />
+      <NameCon UId="36" Name="operand" />
+    </Wire>
+    <Wire UId="51">
+      <IdentCon UId="26" />
+      <NameCon UId="37" Name="in1" />
+    </Wire>
+    <Wire UId="52">
+      <IdentCon UId="30" />
+      <NameCon UId="37" Name="in2" />
+    </Wire>
+    <Wire UId="53">
+      <NameCon UId="37" Name="out" />
+      <NameCon UId="38" Name="in" />
+    </Wire>
+    <Wire UId="54">
+      <IdentCon UId="27" />
+      <NameCon UId="38" Name="operand" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>

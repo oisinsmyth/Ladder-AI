@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-16T23:20:27.6628462Z</Created>
+    <Created>2026-08-13T15:18:04.0757231Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -76,6 +76,7 @@
       <Sections>
         <Section Name="None">
           <Member Name="CycleStart" Datatype="Bool" />
+          <Member Name="AutoStartSignal" Datatype="Bool" />
           <Member Name="CycleStop" Datatype="Bool" />
           <Member Name="DownstreamRunning" Datatype="Bool" />
           <Member Name="SystemHealthy" Datatype="Bool" />
