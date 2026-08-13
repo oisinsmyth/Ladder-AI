@@ -1552,6 +1552,66 @@ lesson as §12a's batching derivation, applied to the map rather than to tag rea
     win is a performance change, and it must not quietly become a hole in the coherence guarantee
     that A1 was measured to establish.
 
+### ✅ F-1's SPEC HALF LANDED — and padding a slot is no longer free (2026-08-13, `f1afac9`)
+
+**X-A's rule is now *"a read never SPLITS a slot"*.** The old wording had propagated to **five sites**;
+all rewritten, two historical references kept and marked. The coherence argument is carried *in* the
+new wording rather than left implicit: *** THE HAZARD WAS NEVER TOUCHING TWO SLOTS, IT WAS TOUCHING
+HALF OF ONE *** — so the old rule forbade a **superset** of the real hazard, at a cost in round trips.
+
+*** WRITTEN AS A PROPERTY OF EXPRESSION, NOT AS A CONSTRAINT TO VALIDATE. *** Reads are addressed in
+slot units — `read(first_slot, slot_count)` — and the register range is **derived, never supplied**,
+so there is no parameter in which a partial slot could be named. The spec says outright that this must
+**not** be built as a validator over a register-range read, because `read(start, length)` plus an
+assert *keeps the unsafe call alive and one refactor from being reached*. `MirrorClient` is cited as
+the precedent. Mirrored into the client spec as a new §6a.
+
+**The derivations now carry `R = floor(125/W)` as a parameter:**
+
+    round trips/index = K·ceil(W/123) + P·ceil(K/R) + 1
+    K_max             = R · floor(S_min·scan / RTT_p99)
+
+At §8's shape, **19 → 11 → 9** round trips per index at W = 123 / 25 / 20:
+
+| | was → now | factor |
+|---|---|---|
+| read term alone | 12 → 4 or 2 | **3–6x** |
+| round trips per index | 19 → 11 or 9 | **1.7–2.1x** |
+| wave duration | 74 s → 66 s or 64 s | **11–13%** |
+
+**Diluted by three real things**, and worth knowing so the 5x is not quoted as a slogan: writes and
+commit are untouched; `ceil(K/R)` is a **step**, so 6 slots at R=5 needs *two* reads, not 1.2; and a
+wave is mostly inert-and-test time. *** THE FULL FACTOR LANDS UNDILUTED IN EXACTLY ONE PLACE — O11's
+CAP. *** At S=10 scans, the row where the cap bit hardest and where the p99 correction could not help,
+**a 20-register slot admits six slots where a padded 123-register one admits one.**
+
+  ➜ **What F-1 does NOT change**, stated explicitly in X-A: the write side, A1's guarantee, per-slot
+    coherence, the 125-register ceiling. Also recorded honestly: **A1's evidence is narrower than the
+    design already uses** (16 registers per FC16, one request never split) — a pre-existing gap,
+    neither widened nor closed here.
+  ➜ **F-1 RELOCATES THE BOTTLENECK: writes are now 6 of 9 round trips.** Recorded so the next person
+    hunting wire savings does not look at the read term — and explicitly *not* an invitation to batch
+    writes, which is where A1's guarantee lives.
+
+> #### 🚩 NEW, OWNER'S — F-6: PADDING A SLOT IS NO LONGER FREE
+>
+> X-A's *"the small slots pay nothing for the padding"* was written yesterday and was **true when
+> every slot cost one FC03**. Under F-1 it is **false**: *** ONE WIDE SLOT IN A FIXED-SIZE WAVE SET
+> COLLAPSES `R` FOR EVERY SLOT IN IT. *** So whether DB-13 should group admission **by slot size** is
+> now a live question rather than an optimisation.
+>
+> **F-2 and F-6 are the same conversation — rule them together.** F-2 (DB-13's max-width input is
+> per-set, not the scalar D36 requires) is *strengthened and more urgent*, because the cap now depends
+> on **two** per-set quantities and a scalar input is further from adequate than it was.
+
+  ➜ **F-3** narrows to a purely correctness-shaped decision: its throughput argument is weakened
+    (sampled assertions are R× more affordable), its correctness argument untouched — the 95-scan gap
+    is an **outlier** property, not a read-cycle one.
+  ➜ **F-5** is independent, and F-1 makes its case no harder.
+  ➜ *** F-4 IS WHAT MAKES F-1 SAFE, AND THE TWO SHOULD BE READ AS A PAIR. *** Had the tail grown with
+    width, a 125-register read would have cost tail latency and the saving would have been partly
+    repaid **in the exact currency the budgets are denominated in.**
+
 ## PHASE 2 — THE WALKING SKELETON
 
 **Cost: the first real chunk. Assumptions retired: A4. First code intended to survive.**
