@@ -24,11 +24,14 @@ public class CopyLayerGeneratorTests
             MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
             new[] { new SlotRequest("S0", vector, result) })).Require();
 
-    private static SlotBinding Binding(string? start = "DB_Unit.StartCmd") => new(
+    private static SlotBinding Binding(
+        string? start = "DB_Unit.StartCmd",
+        IReadOnlyList<MirroredSignal>? targets = null,
+        IReadOnlyList<MirroredSignal>? sources = null) => new(
         "S0",
-        new[] { "DB_Unit.Setpoint", "DB_Unit.Mode" },
+        targets ?? MirroredSignal.Ints("DB_Unit.Setpoint", "DB_Unit.Mode"),
         start,
-        new[] { "DB_Unit.Actual", "DB_Unit.State" });
+        sources ?? MirroredSignal.Ints("DB_Unit.Actual", "DB_Unit.State"));
 
     private static CopyLayerResult Generate(RegisterMap? map = null, SlotBinding? binding = null) =>
         CopyLayerGenerator.Generate(map ?? OneSlot(), binding ?? Binding(), Naming, Stamp);
@@ -100,7 +103,7 @@ public class CopyLayerGeneratorTests
     }
 
     [Fact]
-    public void The_generated_block_is_the_IR_the_converter_round_trips()
+    public void The_generated_block_is_this_exact_IR_text()
     {
         var block = Generate().Objects.Single(o => o.Kind == HarnessObjectKind.Block);
 
@@ -123,7 +126,7 @@ public class CopyLayerGeneratorTests
             NETWORK 2 "Free-running scan counter"
               ADD(EN := TRUE, IN1 := HX_ScanCount, IN2 := 1) => HX_ScanCount
 
-            NETWORK 3 "Vector in - slot S0"
+            NETWORK 3 "Vector in - slot S0 - Int"
               MOVE(EN := TRUE, IN := HX_S0_V000) => DB_Unit.Setpoint
               MOVE(EN := TRUE, IN := HX_S0_V001) => DB_Unit.Mode
 
@@ -133,7 +136,7 @@ public class CopyLayerGeneratorTests
             NETWORK 5 "Start echo - slot S0"
               SCOIL HX_S0_Ran := DB_Unit.StartCmd
 
-            NETWORK 6 "Results out - slot S0"
+            NETWORK 6 "Results out - slot S0 - Int"
               MOVE(EN := TRUE, IN := DB_Unit.Actual) => HX_S0_R000
               MOVE(EN := TRUE, IN := DB_Unit.State) => HX_S0_R001
 
@@ -142,7 +145,7 @@ public class CopyLayerGeneratorTests
     }
 
     [Fact]
-    public void The_generated_tag_table_is_the_IR_the_converter_round_trips()
+    public void The_generated_tag_table_is_this_exact_IR_text()
     {
         var table = Generate().Objects.Single(o => o.Kind == HarnessObjectKind.TagTable);
 
@@ -219,7 +222,7 @@ public class CopyLayerGeneratorTests
             new[] { new SlotRequest("S0", 0, 2) })).Require();
 
         var plan = CopyLayerGenerator.Generate(map,
-            new SlotBinding("S0", Array.Empty<string>(), "DB_Unit.StartCmd", new[] { "DB_Unit.Actual" }),
+            new SlotBinding("S0", Array.Empty<MirroredSignal>(), "DB_Unit.StartCmd", MirroredSignal.Ints("DB_Unit.Actual")),
             Naming, Stamp).Require();
 
         Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.VectorIn);
@@ -238,13 +241,13 @@ public class CopyLayerGeneratorTests
         TwoSlots(),
         new[]
         {
-            new SlotBinding("S0", new[] { "DB_A.Setpoint", "DB_A.Mode" }, "DB_A.StartCmd", new[] { "DB_A.Actual", "DB_A.State" }),
-            new SlotBinding("S1", new[] { "DB_B.Level", "DB_B.Trip" }, "DB_B.StartCmd", new[] { "DB_B.Peak", "DB_B.Alarm" }),
+            new SlotBinding("S0", MirroredSignal.Ints("DB_A.Setpoint", "DB_A.Mode"), "DB_A.StartCmd", MirroredSignal.Ints("DB_A.Actual", "DB_A.State")),
+            new SlotBinding("S1", MirroredSignal.Ints("DB_B.Level", "DB_B.Trip"), "DB_B.StartCmd", MirroredSignal.Ints("DB_B.Peak", "DB_B.Alarm")),
         },
         Naming, Stamp);
 
     [Fact]
-    public void The_two_slot_block_is_the_IR_the_converter_round_trips()
+    public void The_two_slot_block_is_this_exact_IR_text()
     {
         var block = TwoSlotLayer().Objects.Single(o => o.Kind == HarnessObjectKind.Block);
 
@@ -267,7 +270,7 @@ public class CopyLayerGeneratorTests
             NETWORK 2 "Free-running scan counter"
               ADD(EN := TRUE, IN1 := HX_ScanCount, IN2 := 1) => HX_ScanCount
 
-            NETWORK 3 "Vector in - slot S0"
+            NETWORK 3 "Vector in - slot S0 - Int"
               MOVE(EN := TRUE, IN := HX_S0_V000) => DB_A.Setpoint
               MOVE(EN := TRUE, IN := HX_S0_V001) => DB_A.Mode
 
@@ -277,11 +280,11 @@ public class CopyLayerGeneratorTests
             NETWORK 5 "Start echo - slot S0"
               SCOIL HX_S0_Ran := DB_A.StartCmd
 
-            NETWORK 6 "Results out - slot S0"
+            NETWORK 6 "Results out - slot S0 - Int"
               MOVE(EN := TRUE, IN := DB_A.Actual) => HX_S0_R000
               MOVE(EN := TRUE, IN := DB_A.State) => HX_S0_R001
 
-            NETWORK 7 "Vector in - slot S1"
+            NETWORK 7 "Vector in - slot S1 - Int"
               MOVE(EN := TRUE, IN := HX_S1_V000) => DB_B.Level
               MOVE(EN := TRUE, IN := HX_S1_V001) => DB_B.Trip
 
@@ -291,7 +294,7 @@ public class CopyLayerGeneratorTests
             NETWORK 9 "Start echo - slot S1"
               SCOIL HX_S1_Ran := DB_B.StartCmd
 
-            NETWORK 10 "Results out - slot S1"
+            NETWORK 10 "Results out - slot S1 - Int"
               MOVE(EN := TRUE, IN := DB_B.Peak) => HX_S1_R000
               MOVE(EN := TRUE, IN := DB_B.Alarm) => HX_S1_R001
 
@@ -346,8 +349,8 @@ public class CopyLayerGeneratorTests
         // Slot ordinals decide addresses, so generating in binding order would let a reordered list
         // produce differently-numbered networks for one map — and the map hash would not move.
         var map = TwoSlots();
-        var s0 = new SlotBinding("S0", new[] { "A.v" }, "A.s", new[] { "A.r" });
-        var s1 = new SlotBinding("S1", new[] { "B.v" }, "B.s", new[] { "B.r" });
+        var s0 = new SlotBinding("S0", MirroredSignal.Ints("A.v"), "A.s", MirroredSignal.Ints("A.r"));
+        var s1 = new SlotBinding("S1", MirroredSignal.Ints("B.v"), "B.s", MirroredSignal.Ints("B.r"));
 
         var forwards = CopyLayerGenerator.Generate(map, new[] { s0, s1 }, Naming, Stamp).Objects;
         var backwards = CopyLayerGenerator.Generate(map, new[] { s1, s0 }, Naming, Stamp).Objects;
@@ -360,7 +363,7 @@ public class CopyLayerGeneratorTests
     public void Two_bindings_for_one_slot_are_refused()
     {
         var map = TwoSlots();
-        var duplicate = new SlotBinding("S0", new[] { "A.v" }, "A.s", new[] { "A.r" });
+        var duplicate = new SlotBinding("S0", MirroredSignal.Ints("A.v"), "A.s", MirroredSignal.Ints("A.r"));
 
         var result = CopyLayerGenerator.Generate(map, new[] { duplicate, duplicate }, Naming, Stamp);
 
@@ -479,7 +482,7 @@ public class CopyLayerGeneratorTests
     public void A_binding_naming_a_slot_the_map_does_not_hold_is_refused()
     {
         var result = CopyLayerGenerator.Generate(OneSlot(),
-            new SlotBinding("S9", new[] { "A" }, null, new[] { "B" }), Naming, Stamp);
+            new SlotBinding("S9", MirroredSignal.Ints("A"), null, MirroredSignal.Ints("B")), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("not in the map", StringComparison.Ordinal));
@@ -503,7 +506,7 @@ public class CopyLayerGeneratorTests
     public void A_binding_publishing_nothing_is_refused()
     {
         var result = CopyLayerGenerator.Generate(OneSlot(),
-            new SlotBinding("S0", new[] { "A" }, null, Array.Empty<string>()), Naming, Stamp);
+            new SlotBinding("S0", MirroredSignal.Ints("A"), null, Array.Empty<MirroredSignal>()), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("publishes nothing", StringComparison.Ordinal));
@@ -527,7 +530,7 @@ public class CopyLayerGeneratorTests
             new[] { new SlotRequest("S 0", 2, 2) })).Require();
 
         var result = CopyLayerGenerator.Generate(map,
-            new SlotBinding("S 0", new[] { "A" }, null, new[] { "B" }), Naming, Stamp);
+            new SlotBinding("S 0", MirroredSignal.Ints("A"), null, MirroredSignal.Ints("B")), Naming, Stamp);
 
         Assert.False(result.Generated);
         Assert.Contains(result.Refusals, r => r.Contains("plain identifier", StringComparison.Ordinal));
@@ -541,5 +544,146 @@ public class CopyLayerGeneratorTests
         Assert.Null(result.Plan);
         Assert.Empty(result.Objects);
         Assert.Throws<InvalidOperationException>(() => result.Require());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Bool mirroring — the defect a live TIA import found, and the refusal that replaces the default
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_BOOL_IS_COPIED_BY_A_COIL_AND_DECLARED_AT_A_BIT_ADDRESS()
+    {
+        // *** THE MEASURED DEFECT. *** Every mirror tag was hard-coded "Int" and every result rendered as
+        // a plain MOVE. TIA answered "Data type Bool is not permitted here." on the first live import —
+        // and every signal both conformance vector sets observe is a Bool, so the copy layer could not
+        // mirror one asserted signal.
+        var result = Generate(binding: Binding(sources: MirroredSignal.Bools("DB_Unit.Alarm", "DB_Unit.StopReq")));
+        var plan = result.Require();
+
+        var tag = plan.Tags.Single(t => t.Name == "HX_S0_R000");
+        Assert.Equal("Bool", tag.DataType);
+        Assert.Matches(@"^%M\d+\.\d+$", tag.Address);
+
+        var ir = result.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+        Assert.Contains("COIL HX_S0_R000 := DB_Unit.Alarm", ir, StringComparison.Ordinal);
+        Assert.DoesNotContain("MOVE(EN := TRUE, IN := DB_Unit.Alarm)", ir, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_BOOL_TAKES_BIT_ZERO_OF_ITS_OWN_REGISTER_so_the_register_index_stays_the_list_index()
+    {
+        // One register carries one value whatever its width. Packing is an explicit non-goal, and the
+        // client's result index IS the offset into the result region — so a Bool sharing a register with
+        // its neighbour would silently break every `IndexOf(signal)` in the loop.
+        var map = OneSlot(result: 3);
+        var plan = Generate(map, Binding(sources: new[]
+        {
+            MirroredSignal.Bool("DB_Unit.Alarm"),
+            MirroredSignal.Int("DB_Unit.Actual"),
+            MirroredSignal.Bool("DB_Unit.StopReq"),
+        })).Require();
+
+        var geometry = map.Geometry;
+        var slot = map.Slots[0];
+
+        Assert.Equal(geometry.BitAddressOf(slot.Result.Register + 0, 0), plan.Tags.Single(t => t.Name == "HX_S0_R000").Address);
+        Assert.Equal(geometry.WordAddressOf(slot.Result.Register + 1), plan.Tags.Single(t => t.Name == "HX_S0_R001").Address);
+        Assert.Equal(geometry.BitAddressOf(slot.Result.Register + 2, 0), plan.Tags.Single(t => t.Name == "HX_S0_R002").Address);
+
+        // Bit 0, the same convention the start bools already use — so there is ONE bit-order question in
+        // this system for the rig to settle, not two.
+        Assert.Equal(geometry.BitAddressOf(slot.StartBoolRegister, slot.StartBitInRegister)[..^1] + "0",
+            geometry.BitAddressOf(slot.StartBoolRegister, 0));
+    }
+
+    [Fact]
+    public void A_MIXED_SLOT_EMITS_ONE_NETWORK_PER_TYPE_with_the_COIL_network_first()
+    {
+        // ir/SPEC.md groups statements within a network by kind in a fixed order and puts COIL before
+        // MOVE. One network per type makes that rule unreachable rather than merely satisfied — and the
+        // networks are still emitted in the legal order, so merging them later would remain legal.
+        var plan = Generate(OneSlot(result: 3), Binding(sources: new[]
+        {
+            MirroredSignal.Bool("DB_Unit.Alarm"),
+            MirroredSignal.Int("DB_Unit.Actual"),
+            MirroredSignal.Bool("DB_Unit.StopReq"),
+        })).Require();
+
+        var results = plan.Networks.Where(n => n.Kind == CopyLayerNetworkKind.ResultsOut).ToArray();
+
+        Assert.Equal(2, results.Length);
+        Assert.EndsWith("- Bool", results[0].Title, StringComparison.Ordinal);
+        Assert.EndsWith("- Int", results[1].Title, StringComparison.Ordinal);
+        Assert.True(results[0].Number < results[1].Number);
+
+        // The register index survives the split: R000 and R002 are the two Bools, R001 the Int.
+        Assert.Equal(new[] { "HX_S0_R000", "HX_S0_R002" }, results[0].Moves.Select(m => m.To));
+        Assert.Equal(new[] { "HX_S0_R001" }, results[1].Moves.Select(m => m.To));
+    }
+
+    [Fact]
+    public void A_BOOL_VECTOR_TARGET_IS_DRIVEN_BY_A_COIL_TOO()
+    {
+        var result = Generate(binding: Binding(targets: new[]
+        {
+            MirroredSignal.Int("DB_Unit.Setpoint"),
+            MirroredSignal.Bool("DB_Unit.Enable"),
+        }));
+
+        var ir = result.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("MOVE(EN := TRUE, IN := HX_S0_V000) => DB_Unit.Setpoint", ir, StringComparison.Ordinal);
+        Assert.Contains("COIL DB_Unit.Enable := HX_S0_V001", ir, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_UNSTATED_TYPE_IS_REFUSED_BY_NAME_AND_NEVER_TREATED_AS_INT()
+    {
+        // *** THE DEFECT WAS A SILENT DEFAULT, SO THE FIX IS A REFUSAL. *** An Unstated signal that
+        // rendered as Int would be indistinguishable from a signal somebody deliberately typed Int, which
+        // is exactly how the original hard-coding survived every test in this file.
+        var result = Generate(binding: Binding(sources: new[] { new MirroredSignal("DB_Unit.Alarm", MirrorValueType.Unstated) }));
+
+        Assert.False(result.Generated);
+        Assert.Empty(result.Objects);
+
+        var refusal = Assert.Single(result.Refusals);
+        Assert.Contains("DB_Unit.Alarm", refusal, StringComparison.Ordinal);
+        Assert.Contains("Unstated", refusal, StringComparison.Ordinal);
+        Assert.Contains("UNSTATED IS A REFUSAL AND NOT A DEFAULT", refusal, StringComparison.Ordinal);
+
+        // The refusal names what IS supported, so the reader has a route rather than only a wall.
+        Assert.Contains("Bool", refusal, StringComparison.Ordinal);
+        Assert.Contains("Int", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_TYPE_OUTSIDE_THE_SUPPORTED_SET_IS_REFUSED_BY_NAME_TOO()
+    {
+        // The next type will be found the same way this one was unless it refuses. `(MirrorValueType)99`
+        // stands for whatever gets added to the enum without being taught to render — the case a
+        // `default:` arm falling through to Int would silently absorb.
+        var result = Generate(binding: Binding(targets: new[] { new MirroredSignal("DB_Unit.Setpoint", (MirrorValueType)99) }));
+
+        Assert.False(result.Generated);
+
+        var refusal = Assert.Single(result.Refusals);
+        Assert.Contains("DB_Unit.Setpoint", refusal, StringComparison.Ordinal);
+        Assert.Contains("vector target", refusal, StringComparison.Ordinal);
+        Assert.Contains("cannot mirror", refusal, StringComparison.Ordinal);
+        Assert.Contains("verifying both against TIA", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RETYPING_A_SIGNAL_CHANGES_THE_BUILD_STAMP_because_it_is_a_different_program()
+    {
+        // The stamp confirms what is RUNNING. A Bool and an Int of the same name are different tags at
+        // different addresses driven by different rungs, so a stamp that could not tell them apart would
+        // confirm the wrong program as loaded.
+        var map = OneSlot();
+        var asInt = BuildStamp.Of(map, Binding(sources: MirroredSignal.Ints("DB_Unit.Alarm")), Naming);
+        var asBool = BuildStamp.Of(map, Binding(sources: MirroredSignal.Bools("DB_Unit.Alarm")), Naming);
+
+        Assert.NotEqual(asInt.Value, asBool.Value);
     }
 }

@@ -28,7 +28,7 @@ public class RetentionCheckTests
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(Rig, new[] { new SlotRequest("S0", 2, 2) })).Require();
         var result = CopyLayerGenerator.Generate(map,
-            new SlotBinding("S0", new[] { "DB_Unit.Setpoint" }, "DB_Unit.StartCmd", new[] { "DB_Unit.Actual" }),
+            new SlotBinding("S0", MirroredSignal.Ints("DB_Unit.Setpoint"), "DB_Unit.StartCmd", MirroredSignal.Ints("DB_Unit.Actual")),
             new CopyLayerNaming(BlockNumber: 900), new BuildStamp(0xA93F2C71));
 
         var verdict = RetentionCheck.Check(result.Objects, Rig);
@@ -39,6 +39,32 @@ public class RetentionCheckTests
         // And the ADDRESS rule actually ran over it. Object count alone would have said the same thing
         // about a set in which no address was ever looked at.
         Assert.True(verdict.AddressesExamined > 0, verdict.Summary());
+    }
+
+    [Fact]
+    public void A_BOOL_RESULT_TAG_IS_EXAMINED_and_not_quietly_skipped_for_wearing_a_bit_address()
+    {
+        // A Bool result declares `%M<byte>.<bit>` where an Int declares `%MW<byte>`. If the audit's
+        // address pattern did not match the dotted form, a whole class of mirror tag would sit OUTSIDE
+        // the retentive-window check while the verdict still read PASSED — a green produced by looking at
+        // less, which is the failure mode this check's own denominator exists to expose.
+        var map = MapAllocator.Allocate(new WaveSetRequest(Rig, new[] { new SlotRequest("S0", 0, 2) })).Require();
+
+        var ints = CopyLayerGenerator.Generate(map,
+            new SlotBinding("S0", Array.Empty<MirroredSignal>(), null, MirroredSignal.Ints("DB_Unit.Actual", "DB_Unit.State")),
+            new CopyLayerNaming(BlockNumber: 900), new BuildStamp(0xA93F2C71));
+
+        var bools = CopyLayerGenerator.Generate(map,
+            new SlotBinding("S0", Array.Empty<MirroredSignal>(), null, MirroredSignal.Bools("DB_Unit.Alarm", "DB_Unit.StopReq")),
+            new CopyLayerNaming(BlockNumber: 900), new BuildStamp(0xA93F2C71));
+
+        var intVerdict = RetentionCheck.Check(ints.Objects, Rig);
+        var boolVerdict = RetentionCheck.Check(bools.Objects, Rig);
+
+        Assert.True(boolVerdict.Passed, boolVerdict.Summary());
+
+        // The same number of addresses, whatever the type. Fewer would mean the Bools went unexamined.
+        Assert.Equal(intVerdict.AddressesExamined, boolVerdict.AddressesExamined);
     }
 
     // ---------------------------------------------------------------------------------------------

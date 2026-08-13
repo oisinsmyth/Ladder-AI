@@ -149,7 +149,10 @@ public static class TrivialBlock
     /// <summary>The copy-layer binding for this block: two vector registers in, two result registers out.</summary>
     public static SlotBinding Binding(string slotId = "S0") => new(
         slotId,
-        new[] { StepTag, LimitTag },
+        // Every one of these is declared Int in this block's own tag table above, so the binding says
+        // Int. It is stated rather than defaulted: a generator that assumed Int is what put an
+        // unmirrorable copy layer on a controller.
+        MirroredSignal.Ints(StepTag, LimitTag),
         StartTag,
-        new[] { CountTag, DoneTag });
+        MirroredSignal.Ints(CountTag, DoneTag));
 }

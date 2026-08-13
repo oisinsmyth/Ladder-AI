@@ -120,9 +120,11 @@ public static class PeakBlock
     /// <summary>The copy-layer binding for this block.</summary>
     public static SlotBinding Binding(string slotId = "S1") => new(
         slotId,
-        new[] { LevelTag, TripTag },
+        // All Int in this block's own tag table — including the alarm, which this skeleton publishes as
+        // an Int 0/1 rather than a Bool. Stated, never assumed.
+        MirroredSignal.Ints(LevelTag, TripTag),
         StartTag,
-        new[] { PeakTag, AlarmTag });
+        MirroredSignal.Ints(PeakTag, AlarmTag));
 }
 
 /// <summary>What the model says the peak block should produce.</summary>

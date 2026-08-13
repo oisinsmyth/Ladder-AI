@@ -1,6 +1,61 @@
 namespace Harness.Map;
 
 /// <summary>
+/// The type of a signal the copy layer mirrors — <b>and it decides the rung shape, not just the tag.</b>
+///
+/// <para>🔴 <b>THIS EXISTS BECAUSE A HARD-CODED <c>"Int"</c> REACHED A CONTROLLER AND TIA REFUSED IT:</b>
+/// <c>Data type Bool is not permitted here.</c> Every result register was declared <c>Int</c> and every
+/// result rendered as a plain <c>MOVE</c>, and <b>a Bool does not move</b> — it is copied by a coil. That
+/// was not a corner: <b>every signal both conformance vector sets observe is a Bool</b>, so the copy
+/// layer could not mirror a single asserted signal.</para>
+///
+/// <para><b><see cref="Unstated"/> is the ZERO VALUE and it is refused by name</b>, following
+/// <c>AssertionForm.Unstated</c> and <c>PresetSource.Unstated</c>. A default of <see cref="Int"/> is
+/// precisely what produced the defect: the case the field exists for gets handled, and the case where
+/// nobody said gets handled the same way and looks identical. There is deliberately no implicit
+/// conversion from a bare tag name.</para>
+/// </summary>
+public enum MirrorValueType
+{
+    /// <summary><b>Nobody said.</b> A refusal that names the signal — never a silent <see cref="Int"/>.</summary>
+    Unstated = 0,
+
+    /// <summary>
+    /// A single bit. Declared <c>Bool</c> at a BIT address inside its own register, and copied by a
+    /// <c>COIL</c>. <b>Occupies a whole register</b> — packing is an explicit non-goal of this generator,
+    /// and one register carrying one value is what keeps the client's register-index arithmetic true.
+    /// </summary>
+    Bool,
+
+    /// <summary>A 16-bit word. Declared <c>Int</c> at a word address, and copied by a <c>MOVE</c>.</summary>
+    Int,
+}
+
+/// <summary>
+/// One signal the copy layer mirrors, <b>with the type it actually is</b>.
+///
+/// <para>The type is carried per signal rather than per slot because a real slot mixes them — the hopper
+/// block publishes two Bools, and a counter-style block publishes Ints. <b>There is no constructor that
+/// takes a name alone</b>: use <see cref="Bool"/> or <see cref="Int"/>, which put the type in the call.</para>
+/// </summary>
+public sealed record MirroredSignal(string Tag, MirrorValueType Type)
+{
+    /// <summary>A Bool signal — mirrored to one bit of its own register, by a coil.</summary>
+    public static MirroredSignal Bool(string tag) => new(tag, MirrorValueType.Bool);
+
+    /// <summary>An Int signal — mirrored to a whole register, by a MOVE.</summary>
+    public static MirroredSignal Int(string tag) => new(tag, MirrorValueType.Int);
+
+    /// <summary>Several Bool signals, in order.</summary>
+    public static IReadOnlyList<MirroredSignal> Bools(params string[] tags) => tags.Select(Bool).ToArray();
+
+    /// <summary>Several Int signals, in order.</summary>
+    public static IReadOnlyList<MirroredSignal> Ints(params string[] tags) => tags.Select(Int).ToArray();
+
+    public override string ToString() => $"{Tag} : {Type}";
+}
+
+/// <summary>
 /// What one slot's registers are wired to in the program under test.
 ///
 /// <para>The coordinator owns this side entirely: per D13 instrumentation is a property of the COPY
@@ -24,12 +79,16 @@ namespace Harness.Map;
 /// added for the purpose, which is scaffolding inside the block under test and exactly what DB-5
 /// forbids: what ships would then not be what was tested.</para>
 /// </param>
-/// <param name="ResultSources">Tags moved OUT into the result registers, in register order.</param>
+/// <param name="ResultSources">
+/// Signals copied OUT into the result registers, in register order — <b>each with its type</b>, which
+/// decides both the mirror tag and the rung shape. One signal occupies one register whatever its width;
+/// packing is an explicit non-goal, and the client's register index is this list's index.
+/// </param>
 public sealed record SlotBinding(
     string SlotId,
-    IReadOnlyList<string> VectorTargets,
+    IReadOnlyList<MirroredSignal> VectorTargets,
     string? StartCondition,
-    IReadOnlyList<string> ResultSources);
+    IReadOnlyList<MirroredSignal> ResultSources);
 
 /// <summary>What one generated network does. The plan is inspectable before any IR is rendered.</summary>
 public enum CopyLayerNetworkKind
@@ -59,12 +118,25 @@ public enum CopyLayerNetworkKind
     ResultsOut,
 }
 
-/// <summary>One generated network: its kind, its title, and every source/destination pair in it.</summary>
+/// <summary>
+/// One copy: where the value comes from, where it goes, and <b>what type it is</b> — which is what
+/// decides whether the rung is a <c>MOVE</c> or a <c>COIL</c>.
+/// </summary>
+public sealed record CopyLayerCopy(string From, string To, MirrorValueType Type);
+
+/// <summary>
+/// One generated network: its kind, its title, and every copy in it.
+///
+/// <para><b>A network holds copies of ONE type.</b> IR groups statements within a network by kind in a
+/// fixed order (<c>ir/SPEC.md</c>: COIL before MOVE), so a mixed slot emits one network per type rather
+/// than one network that has to be ordered correctly. The generator's standing rule — one KIND per
+/// network makes the ordering rule unreachable rather than merely satisfied.</para>
+/// </summary>
 public sealed record CopyLayerNetwork(
     int Number,
     CopyLayerNetworkKind Kind,
     string Title,
-    IReadOnlyList<(string From, string To)> Moves);
+    IReadOnlyList<CopyLayerCopy> Moves);
 
 /// <summary>One artifact the generator emits, as IR text ready to hand to the converter.</summary>
 public sealed record HarnessObject(string Name, HarnessObjectKind Kind, string Ir);

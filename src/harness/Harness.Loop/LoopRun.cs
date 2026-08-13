@@ -102,7 +102,7 @@ public static class LoopRun
 
         // What the copy layer WILL provide, derived from the bindings — available before it is generated,
         // which is what lets the observability gate run before anything is spent.
-        var mirror = MirrorObservability.FromMinimalCopyLayer(request.Bindings.SelectMany(b => b.ResultSources));
+        var mirror = MirrorObservability.FromMinimalCopyLayer(request.Bindings.SelectMany(b => b.ResultSources.Select(s => s.Tag)));
 
         // *** ONE COMPRESSION VALUE, READ ONCE. *** It goes to the gate below and to the wave at step 7,
         // and the local is what makes it impossible for the two to be different numbers.
@@ -224,7 +224,7 @@ public static class LoopRun
                 new VectorDeclaration(vector.Id, vector.Basis, request.Fidelity, vector.Settling,
                     vector.AssertedBehaviours, vector.CompletionSignal, vector.Author, request.BlockAuthor,
                     ObservabilityCheck.Evaluate(vector.Expectations, vector.Form,
-                        MirrorObservability.FromMinimalCopyLayer(binding.ResultSources),
+                        MirrorObservability.FromMinimalCopyLayer(binding.ResultSources.Select(s => s.Tag)),
                         WireTiming.ObservabilityFloorScans(1), vector.CompressionFactor, request.Compression.Factor)),
                 request.Enumeration,
                 run,
@@ -288,7 +288,7 @@ public static class LoopRun
 
         return vector.Expectations.Select(e =>
         {
-            var register = binding.ResultSources.ToList().IndexOf(e.Signal);
+            var register = binding.ResultSources.Select(s => s.Tag).ToList().IndexOf(e.Signal);
             var observed = register >= 0 && register < run.Results.Length
                 ? unchecked((short)run.Results[register]).ToString()
                 : null;
@@ -336,10 +336,10 @@ public static class LoopRun
     {
         var binding = bindings.Single(b => b.SlotId == vector.Slot);
         var values = binding.VectorTargets
-            .Select(t => vector.Inputs.TryGetValue(t, out var v) && short.TryParse(v, out var parsed) ? (ushort)parsed : (ushort)0)
+            .Select(t => vector.Inputs.TryGetValue(t.Tag, out var v) && short.TryParse(v, out var parsed) ? (ushort)parsed : (ushort)0)
             .ToArray();
 
-        var completionRegister = binding.ResultSources.ToList().IndexOf(vector.CompletionSignal);
+        var completionRegister = binding.ResultSources.Select(s => s.Tag).ToList().IndexOf(vector.CompletionSignal);
 
         return new WireVector(
             values,

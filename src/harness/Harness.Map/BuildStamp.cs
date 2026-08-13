@@ -74,11 +74,14 @@ public readonly record struct BuildStamp(uint Value)
         {
             canonical.Append($"slot={binding.SlotId} start={binding.StartCondition ?? "<none>"}\n");
 
-            foreach (var target in binding.VectorTargets ?? Array.Empty<string>())
-                canonical.Append($"v={target}\n");
+            // The TYPE is part of the canonical form. Retyping a signal changes both the mirror tag and
+            // the rung shape, so two bindings differing only in a type are two different programs — and
+            // a stamp that could not tell them apart would confirm the wrong one as running.
+            foreach (var target in binding.VectorTargets ?? Array.Empty<MirroredSignal>())
+                canonical.Append($"v={target.Tag}:{target.Type}\n");
 
-            foreach (var source in binding.ResultSources ?? Array.Empty<string>())
-                canonical.Append($"r={source}\n");
+            foreach (var source in binding.ResultSources ?? Array.Empty<MirroredSignal>())
+                canonical.Append($"r={source.Tag}:{source.Type}\n");
         }
 
         foreach (var obj in (programUnderTest ?? Array.Empty<HarnessObject>()).OrderBy(o => o.Name, StringComparer.Ordinal))

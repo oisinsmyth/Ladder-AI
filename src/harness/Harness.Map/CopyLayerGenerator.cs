@@ -41,6 +41,51 @@ public static class CopyLayerGenerator
 {
     private static readonly Regex SafeIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The types this generator can actually render — <b>the whole supported set, in one place.</b>
+    ///
+    /// <para>Everything else is a refusal naming the signal. It is a set rather than a <c>default:</c>
+    /// arm because a <c>default:</c> that falls through to Int is the defect that reached the rig.</para>
+    /// </summary>
+    private static readonly IReadOnlySet<MirrorValueType> Renderable =
+        new HashSet<MirrorValueType> { MirrorValueType.Bool, MirrorValueType.Int };
+
+    /// <summary>
+    /// The order types are emitted in — <b>Bool before Int, and that is the IR's rule, not a preference.</b>
+    ///
+    /// <para><c>ir/SPEC.md</c>: statements within one network are grouped by kind in a fixed order, and
+    /// <c>COIL</c> comes before <c>MOVE</c>. This generator emits one network per type rather than one
+    /// ordered network, so the rule cannot be broken — but the networks themselves are emitted in the
+    /// same order, so merging them later would still be legal.</para>
+    /// </summary>
+    private static readonly MirrorValueType[] RenderOrder = { MirrorValueType.Bool, MirrorValueType.Int };
+
+    /// <summary>
+    /// The mirror tag for one register, <b>typed and addressed together</b> — the two things the
+    /// hard-coded <c>"Int"</c> got wrong at once.
+    ///
+    /// <para>A Bool takes <b>bit 0 of its own register</b>: the register is not shared, because packing
+    /// is an explicit non-goal and because the client's result index is the register offset. Bit 0 is
+    /// chosen so a client reading the register as a 16-bit word tests <c>value &amp; 1</c> — the same
+    /// convention <see cref="MirrorGeometry.BitAddressOf"/> already applies to the start bools, so
+    /// there is ONE bit-order question in this system and not two.</para>
+    /// </summary>
+    private static MirrorTag MirrorTagFor(string name, MirrorValueType type, MirrorGeometry geometry, int register, string comment) =>
+        type switch
+        {
+            MirrorValueType.Bool => new MirrorTag(name, "Bool", geometry.BitAddressOf(register, 0),
+                geometry.ByteAddressOf(register), comment + " Bool, bit 0 of this register."),
+
+            MirrorValueType.Int => new MirrorTag(name, "Int", geometry.WordAddressOf(register),
+                geometry.ByteAddressOf(register), comment),
+
+            // Unreachable: the refusal pass above rejects anything outside Renderable before this runs.
+            // It throws rather than defaulting because a default here is the original defect.
+            _ => throw new InvalidOperationException(
+                $"mirror tag '{name}' has type {type}, which reached rendering. The type refusal should have stopped this; "
+                + "defaulting to Int is what put an unmirrorable copy layer on a controller."),
+        };
+
     /// <summary>Generate the copy layer for a single-slot map, or report every reason it cannot be.</summary>
     /// <param name="stamp">
     /// The build stamp to publish into the version register (§9, build-plan item 2.6). Required, with
@@ -103,8 +148,8 @@ public static class CopyLayerGenerator
             if (!SafeIdentifier.IsMatch(binding.SlotId ?? string.Empty))
                 refusals.Add($"slot id '{binding.SlotId}' is not a plain identifier, and it is part of every generated tag name.");
 
-            var targets = binding.VectorTargets ?? Array.Empty<string>();
-            var sources = binding.ResultSources ?? Array.Empty<string>();
+            var targets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
+            var sources = binding.ResultSources ?? Array.Empty<MirroredSignal>();
 
             if (sources.Count == 0)
                 refusals.Add($"binding for slot '{binding.SlotId}' wires no result sources. A slot that publishes nothing produces a result region of zeros indistinguishable from a real one.");
@@ -115,10 +160,37 @@ public static class CopyLayerGenerator
             if (slot is not null && sources.Count > slot.Result.Length)
                 refusals.Add($"binding wires {sources.Count} result sources but slot '{binding.SlotId}' was allocated {slot.Result.Length} result registers.");
 
-            foreach (var tag in targets.Concat(sources).Append(binding.StartCondition))
+            foreach (var tag in targets.Concat(sources).Select(s => s?.Tag).Append(binding.StartCondition))
             {
                 if (tag is not null && string.IsNullOrWhiteSpace(tag))
                     refusals.Add($"a bound tag name is blank on slot '{binding.SlotId}'.");
+            }
+
+            // *** THE TYPE IS REFUSED BY NAME, NEVER DEFAULTED. *** A hard-coded "Int" is what put an
+            // unmirrorable copy layer on a controller: every result rendered as a plain MOVE, and TIA
+            // answered "Data type Bool is not permitted here." A signal whose type nobody stated must
+            // stop the generator here rather than reach a rung that cannot be compiled.
+            var typed = targets.Select(s => (Signal: s, Where: "vector target"))
+                .Concat(sources.Select(s => (Signal: s, Where: "result source")))
+                .ToArray();
+
+            foreach (var (signal, where) in typed)
+            {
+                if (signal is null)
+                {
+                    refusals.Add($"a {where} on slot '{binding.SlotId}' is null.");
+                    continue;
+                }
+
+                if (!Renderable.Contains(signal.Type))
+                {
+                    refusals.Add(
+                        $"{where} '{signal.Tag}' on slot '{binding.SlotId}' has type {signal.Type}, which this generator cannot mirror. "
+                        + $"Supported: {string.Join(", ", Renderable.Select(t => t.ToString()))}. "
+                        + (signal.Type == MirrorValueType.Unstated
+                            ? "*** UNSTATED IS A REFUSAL AND NOT A DEFAULT. *** Assuming Int here is exactly the defect this refusal exists to prevent: it renders a plain MOVE, which TIA rejects for a Bool with \"Data type Bool is not permitted here\" — after a full import."
+                            : "Widening this means deciding the TAG TYPE and the RUNG SHAPE together and verifying both against TIA, not adding an enum member."));
+                }
             }
         }
 
@@ -160,18 +232,20 @@ public static class CopyLayerGenerator
                     "Latched: the block's own start condition was seen high. Cleared by the client at inert."));
             }
 
-            for (var i = 0; i < (binding.VectorTargets ?? Array.Empty<string>()).Count; i++)
+            var vectorTargets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
+
+            for (var i = 0; i < vectorTargets.Count; i++)
             {
                 var register = allocation.Vector.Register + i;
-                tags.Add(new($"{prefix}{binding.SlotId}_V{i:000}", "Int", geometry.WordAddressOf(register),
-                    geometry.ByteAddressOf(register), $"Vector register {i}."));
+                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_V{i:000}", vectorTargets[i].Type, geometry, register,
+                    $"Vector register {i}."));
             }
 
             for (var i = 0; i < binding.ResultSources.Count; i++)
             {
                 var register = allocation.Result.Register + i;
-                tags.Add(new($"{prefix}{binding.SlotId}_R{i:000}", "Int", geometry.WordAddressOf(register),
-                    geometry.ByteAddressOf(register), $"Result register {i}."));
+                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_R{i:000}", binding.ResultSources[i].Type, geometry, register,
+                    $"Result register {i}."));
             }
         }
 
@@ -180,28 +254,40 @@ public static class CopyLayerGenerator
 
         networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.Version,
             "Program version",
-            new[] { (stamp.Literal, $"{prefix}ProgramVersion") }));
+            new[] { new CopyLayerCopy(stamp.Literal, $"{prefix}ProgramVersion", MirrorValueType.Int) }));
 
         networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ScanCounter,
             "Free-running scan counter",
-            new[] { ($"{prefix}ScanCount", $"{prefix}ScanCount") }));
+            new[] { new CopyLayerCopy($"{prefix}ScanCount", $"{prefix}ScanCount", MirrorValueType.Int) }));
 
         foreach (var (_, binding) in ordered)
         {
-            var targets = binding.VectorTargets ?? Array.Empty<string>();
+            var targets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
 
-            if (targets.Count > 0)
+            // *** ONE NETWORK PER TYPE, and the register index stays the LIST index. *** Splitting by
+            // type is what keeps the IR's kind-ordering rule (COIL before MOVE) unreachable rather than
+            // merely satisfied; keying the register off the position in the binding's list is what keeps
+            // the client's `IndexOf(signal)` arithmetic true across the split.
+            foreach (var type in RenderOrder)
             {
-                networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.VectorIn,
-                    $"Vector in - slot {binding.SlotId}",
-                    targets.Select((t, i) => ($"{prefix}{binding.SlotId}_V{i:000}", t)).ToArray()));
+                var ofType = targets
+                    .Select((t, i) => (Signal: t, Index: i))
+                    .Where(x => x.Signal.Type == type)
+                    .Select(x => new CopyLayerCopy($"{prefix}{binding.SlotId}_V{x.Index:000}", x.Signal.Tag, type))
+                    .ToArray();
+
+                if (ofType.Length > 0)
+                {
+                    networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.VectorIn,
+                        $"Vector in - slot {binding.SlotId} - {type}", ofType));
+                }
             }
 
             if (binding.StartCondition is not null)
             {
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartBool,
                     $"Start bool - slot {binding.SlotId}",
-                    new[] { ($"{prefix}{binding.SlotId}_Start", binding.StartCondition) }));
+                    new[] { new CopyLayerCopy($"{prefix}{binding.SlotId}_Start", binding.StartCondition, MirrorValueType.Bool) }));
 
                 // X-E. The echo reads the FAR side of the coil above — the block's OWN start condition,
                 // which is what the program actually ran on. Reading back the mirror bit instead would
@@ -212,12 +298,23 @@ public static class CopyLayerGenerator
                 // say the slot never ran — which is exactly the false evidence X-E exists to kill.
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartEcho,
                     $"Start echo - slot {binding.SlotId}",
-                    new[] { ($"{prefix}{binding.SlotId}_Ran", binding.StartCondition) }));
+                    new[] { new CopyLayerCopy($"{prefix}{binding.SlotId}_Ran", binding.StartCondition, MirrorValueType.Bool) }));
             }
 
-            networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultsOut,
-                $"Results out - slot {binding.SlotId}",
-                binding.ResultSources.Select((s, i) => (s, $"{prefix}{binding.SlotId}_R{i:000}")).ToArray()));
+            foreach (var type in RenderOrder)
+            {
+                var ofType = binding.ResultSources
+                    .Select((s, i) => (Signal: s, Index: i))
+                    .Where(x => x.Signal.Type == type)
+                    .Select(x => new CopyLayerCopy(x.Signal.Tag, $"{prefix}{binding.SlotId}_R{x.Index:000}", type))
+                    .ToArray();
+
+                if (ofType.Length > 0)
+                {
+                    networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultsOut,
+                        $"Results out - slot {binding.SlotId} - {type}", ofType));
+                }
+            }
         }
 
         var plan = new CopyLayerPlan(map, ordered.Select(o => o.Binding).ToArray(), stamp, tags, networks,
@@ -298,18 +395,33 @@ public static class CopyLayerGenerator
                     break;
 
                 case CopyLayerNetworkKind.StartBool:
-                    var (bit, condition) = network.Moves[0];
-                    ir.Append($"  COIL {condition} := {bit}\n");
+                    var start = network.Moves[0];
+                    ir.Append($"  COIL {start.To} := {start.From}\n");
                     break;
 
                 case CopyLayerNetworkKind.StartEcho:
-                    var (echo, ran) = network.Moves[0];
-                    ir.Append($"  SCOIL {echo} := {ran}\n");
+                    var echo = network.Moves[0];
+                    ir.Append($"  SCOIL {echo.From} := {echo.To}\n");
                     break;
 
                 default:
-                    foreach (var (from, to) in network.Moves)
-                        ir.Append($"  MOVE(EN := TRUE, IN := {from}) => {to}\n");
+                    // *** THE SHAPE IS DECIDED BY THE TYPE, AND A BOOL DOES NOT MOVE. *** TIA answers a
+                    // `MOVE` with a Bool operand "Data type Bool is not permitted here" — measured, on a
+                    // live import, after the whole convert/import cycle. A Bool is copied by a coil, which
+                    // is what a real TIA export of a Bool-copying block does (see FC_Outputs in the
+                    // committed export corpus, and the test that reads it).
+                    foreach (var copy in network.Moves)
+                    {
+                        ir.Append(copy.Type switch
+                        {
+                            MirrorValueType.Bool => $"  COIL {copy.To} := {copy.From}\n",
+                            MirrorValueType.Int => $"  MOVE(EN := TRUE, IN := {copy.From}) => {copy.To}\n",
+                            _ => throw new InvalidOperationException(
+                                $"copy {copy.From} -> {copy.To} has type {copy.Type}, which reached rendering. "
+                                + "The type refusal should have stopped this; rendering it as a MOVE is the original defect."),
+                        });
+                    }
+
                     break;
             }
         }
