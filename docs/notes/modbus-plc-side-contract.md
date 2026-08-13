@@ -74,9 +74,10 @@ times below anything a sampler can see"* — inherited from the harness (`TestVe
 replacements, re-derived 2026-08-13 in `PC-Client-Modbus-Spec-Draft-final.txt` §12a:
 
 - a poll is **one round trip**, so the poll period is not a chosen parameter — it is `K x RTT` for a
-  `K`-slot read set: **78 ms typical, 173 ms at the p99** [M];
+  `K`-slot read set: **78 ms typical, 201 ms at the p99** [M] (the p99 measured at *full width*,
+  2026-08-13 — a figure of 173 ms derived from a narrow sweep stood here for one day);
 - the scan is **23.33 ms** under load, 22.64 ms idle [M], not ~10 ms;
-- so the floor is **3.3 scans typical and 7.4 at the p99** [D] — not ten. The **irreducible** floor
+- so the floor is **3.3 scans typical and 8.6 at the p99** [D] — not ten. The **irreducible** floor
   is 3 scans: even a poller running flat out at the fastest *median* measured leaves that hole.
 
 **The conclusion is unchanged and the instrumentation below is unchanged: a one-scan event is still

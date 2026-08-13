@@ -36,15 +36,24 @@ refuted its own expectation — §13.
 
 *** WHAT CHANGED AFTER "FINAL" — 2026-08-13, AND THIS IS THE DOCUMENT WORKING AS INTENDED. ***
 Phase 1 measured the wire, and the two constants this design's timing arithmetic rested on were
-both the wrong shape: the round trip (assumed 79-108 ms, actually 71-78 median with a 136-173 p99
-and a 2,216 ms outlier) and the scan (assumed ~10 ms, actually 23.33 ms). *** THE DESIGN DID NOT
+both the wrong shape: the round trip (assumed 79-108 ms, actually 71-78 median with a long tail)
+and the scan (assumed ~10 ms, actually 23.33 ms). *** THE DESIGN DID NOT
 CHANGE. THE ARITHMETIC DID *** — re-derived in full in the new *** §12a ***, which is now the
 ONLY place a timing constant is chosen; §11, §12, §8, D29, D36, O11, X-A, X-B and X-D all defer
-to it. Three consequences that would change a DECISION rather than a number are flagged at the
-foot of §12a (F-1/F-2/F-3) and deliberately NOT applied. A fourth ruling landed the same day:
+to it. FOUR consequences that would change a DECISION rather than a number are flagged at the
+foot of §12a (F-1..F-4) and deliberately NOT applied. A further ruling landed the same day:
 X-C's unreadable-marker case (§16.3). And one figure moved the other way and is worth knowing
-before reading anything about slot sizing: *** MARGINAL COST PER REGISTER IS ZERO — WIDTH IS
-FREE, ROUND TRIPS ARE NOT. ***
+before reading anything about slot sizing: *** WIDTH IS ALL BUT FREE — ~0.040 ms PER REGISTER,
+~6% OF A ROUND TRIP ACROSS A FULL-WIDTH SLOT — AND ROUND TRIPS ARE NOT. ***
+
+*** AND §12a WAS ITSELF CORRECTED WITHIN A DAY OF BEING WRITTEN, WHICH IS WORTH READING BEFORE
+TRUSTING ANY FIGURE IN IT: `RTT_p99` WAS 173 ms AND IS NOW 201 ms. *** The 173 was derived from a
+16-register sweep and applied to full-width slots; a full-width re-measurement put two of four run
+p99s above it. *** NO CONCLUSION CHANGED SHAPE — §12a ends with a SHAPE-OR-MAGNITUDE table saying
+exactly what moved and who must act *** — but three of O11's five worked width rows lost a slot or
+more, so anything holding a baked-in `K_max` is now over-admitting. The tail figure rests on four
+runs and is the weakest constant in the document; it is deliberately set at the WORST observed
+rather than the weighted middle, and §12a argues why.
 
 WHERE THE TOOLING ACTUALLY STANDS, so no section below is read as more or less proven than
 it is. This tooling HAS delivered a program to the CPU — three completed downloads on
@@ -480,13 +489,18 @@ D29. *** TENSOR WIDTH IS BOUNDED ABOVE BY CONFLICT-FREEDOM AND CAPPED BY POLL BA
      so the expression was correct before the measurement and is correct after it. Three
      corrections, none of them a reversal:
 
-       1. *** "WIDTH" MEANS SLOTS, NEVER REGISTERS. *** Marginal cost per register is zero to 16
-          [M] and inferred to the FC03/FC16 limits [I], so `K` is the slot count and slot width
-          `W` enters only as `ceil(W/123)`, which is 1 for every legal slot. *** NARROWING A SLOT
-          BUYS NOTHING. *** Size a slot to what it needs and stop treating width as a saving.
+       1. *** "WIDTH" MEANS SLOTS, NEVER REGISTERS. *** Marginal cost per register is ~0.040 ms
+          on writes and no trend on reads [M at 123 registers, 2026-08-13 — the earlier
+          `[I]` extrapolation from a 1..16 sweep is retired and it HELD], so a full-width slot
+          costs ~4.9 ms more than a one-register slot: *** ~6% OF A ROUND TRIP, AGAINST 100% FOR
+          A SECOND ONE. *** `K` is the slot count and slot width `W` enters only as `ceil(W/123)`,
+          which is 1 for every legal slot. *** NARROWING A SLOT BUYS ABOUT 0.04 ms PER REGISTER
+          AND COSTS A WHOLE ROUND TRIP IF IT FORCES ONE. *** Size a slot to what it needs.
        2. *** THE CAP IS NOT A CONSTANT — IT IS `floor(S_min x scan / RTT_p99)`, *** where
           `S_min` is the shortest declared SAMPLED observation window in the wave set. Worked
-          values in §12a. It is keyed on the p99, never the median.
+          values in §12a. It is keyed on the p99, never the median — and on the p99 measured AT
+          FULL WIDTH (201 ms), not the one derived from the narrow sweep (173 ms), which cost the
+          cap ~14% at `S >= 50` when it was corrected on 2026-08-13.
        3. *** WHEN EVERY OBSERVATION IN THE WAVE SET IS LATCHED, THIS CAP DOES NOT BIND AT
           ALL *** — a latch holds until test start, so there is no window to fit a poll into.
           The tension this clause describes then simply does not arise, and the binding
@@ -1500,18 +1514,19 @@ rounds per test:
 
     round trips per index  =  K x (ceil(W/123) + P) + 1  =  6 x (1 + 2) + 1  =  19      [D]
     per wave               =  19 x 5 indices = 95 round trips
-                           =   7.4 s at RTT_typ 78 ms   /   *** 16.4 s at RTT_p99 173 ms ***  [D]
+                           =   7.4 s at RTT_typ 78 ms   /   *** 19.1 s at RTT_p99 201 ms ***  [D]
 
     row as written above          test half + boundary        + wire (p99)
-    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->    *** ~71 s,  +30% ***
-    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->        ~111 s, +17%
-    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->        ~386 s,  +4%
+    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->    *** ~74 s,  +35% ***
+    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->        ~114 s, +20%
+    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->        ~389 s,  +5%
 
-*** THE CONCLUSIONS OF THIS SECTION ALL SURVIVE — ~71 s is still order-of-a-minute, downloads are
+*** THE CONCLUSIONS OF THIS SECTION ALL SURVIVE — ~74 s is still order-of-a-minute, downloads are
 still not the bottleneck, and the packed-versus-serial ratio is unaffected because the serial case
 pays the same per-test wire cost MORE times. *** What does not survive is quoting ~55 s as the fast
-case: it is ~71 s, and the difference is the wire, which this section had priced at zero. The term
+case: it is ~74 s, and the difference is the wire, which this section had priced at zero. The term
 scales with K, so it grows with exactly the packing this section relies on for its 6x.
+(Figures raised 2026-08-13 with `RTT_p99` 173 -> 201 ms; they read 16.4 s / ~71 s / +30% for one day.)
 
 --------------------------------------------------------------------------------
 9. THE VERSION REGISTER — LOAD-BEARING IN THREE PLACES
@@ -1712,8 +1727,8 @@ automated downloads and a human working ONLINE in the same project are MUTUALLY 
 --------------------------------------------------------------------------------
 
 MODELS (D4, D12). Driving raw values over the wire cannot express time: round trips are
-*** 71-78 ms median and 136-173 ms at the p99 [M, 2026-08-12] against a scan of 23.33 ms [M] ***
-— 3.3 to 7.4 scans per exchange [D, §12a derivation 1] — with one sample in 2,000 at 2,216 ms,
+*** 71-78 ms median and 201 ms at the budgeting p99 [M, full width, 2026-08-13] against a scan of
+23.33 ms [M] *** — 3.3 to 8.6 scans per exchange [D, §12a derivation 1] — with one sample in 2,000 at 2,216 ms,
 which is 95 scans [D]. A PID loop cannot be closed over a VPN at all, and the tail is why: a
 controller that is 95 scans late once every two thousand samples is not a controller.
 (*** THE FIGURE HERE READ "79-108 ms [M] against a scan of ~10 ms" UNTIL 2026-08-13. *** Both
@@ -1828,17 +1843,26 @@ width is not the scarce resource — ROUND TRIPS ARE.** D29 bounds tensor width 
 the assumption that registers cost; they do not, up to the FC03/FC16 limits. Re-derive.
 (Measured over the tunnel, not a LAN.)
 
+*** SHARPENED 2026-08-13 BY A FULL-WIDTH MEASUREMENT, AND THE HEADLINE ABOVE IS NOW SLIGHTLY TOO
+STRONG: THE COST IS ~0.040 ms PER REGISTER ON WRITES, NOT ZERO *** [M, 123 registers]. That is
+~4.9 ms across a full-width slot against a 75-78 ms round trip — so **the conclusion survives by
+about 16x and the phrase "zero" survives only as shorthand.** The same re-measurement moved the
+p99 the design budgets on from 173 to 201 ms, and *** THE TAIL, UNLIKE THE MEDIAN, DID NOT COME
+BACK UNCHANGED FROM THE WIDTH TRANSFER. *** §12a's constants block carries both, with the causal
+question (does width widen the tail?) explicitly left open as flag F-4.
+
 *** RE-DERIVED 2026-08-13 — §12a. *** The three paragraphs above stated the problem and asked for
 the arithmetic; §12a is the arithmetic, and it is the only place in this document where a timing
 constant is chosen. Read it before using any figure below.
 
 *** THE "~100 ms POLL" WAS NEVER A PARAMETER AND MUST STOP BEING WRITTEN AS ONE (2026-08-13). ***
 A poll costs exactly one round trip per slot read, so the poll period is `K x RTT` — set by the
-wire and the tensor width, not chosen. For one slot that is 78 ms typical and 173 ms at the p99,
-which is *** 3.3 to 7.4 scans, and K TIMES THAT for a K-slot tensor *** [D, §12a derivation 1].
+wire and the tensor width, not chosen. For one slot that is 78 ms typical and 201 ms at the p99
+(raised from 173 on 2026-08-13 by a full-width re-measurement — §12a), which is *** 3.3 to 8.6
+scans, and K TIMES THAT for a K-slot tensor *** [D, §12a derivation 1].
 A one-scan event is therefore still structurally invisible to a sampler — the irreducible floor is
 3 scans even for a poller running flat out at the fastest MEDIAN measured — but the margin
-is 3.3-7.4x, not the ten times this section argued from. NO POLLING RATE RECOVERS IT, and no
+is 3.3-8.6x, not the ten times this section argued from. NO POLLING RATE RECOVERS IT, and no
 protocol choice changes it. (The sentence replaced here read *"Polling observes at roughly 100 ms
 against a scan of ~10 ms, so a one-scan event is about ten times below anything a sampler can
 see"* — both constants wrong, and the 100 ms was an assumption that had been re-read as a fact.)
@@ -1871,23 +1895,51 @@ CONSTANT IS CHOSEN. *** Every timing figure elsewhere is either one of the input
 [D] pointing here. A timing figure carrying neither tag is stale and predates 2026-08-13.
 
 *** THE DESIGN DOES NOT CHANGE. THE ARITHMETIC DOES. *** Nothing below reverses a decision.
-Three consequences are flagged as needing the owner rather than being applied, and they are
-collected at the end of this section under WHAT THIS RE-DERIVATION CANNOT DECIDE.
+FOUR consequences are flagged as needing the owner rather than being applied, and they are
+collected at the end of this section under WHAT THIS RE-DERIVATION CANNOT DECIDE — followed by a
+SHAPE-OR-MAGNITUDE table for the lanes building against these constants.
+
+*** CORRECTED THE DAY AFTER IT WAS WRITTEN, 2026-08-13: `RTT_p99` WAS 173 ms AND IS NOW 201 ms. ***
+The 173 came from the 16-register sweep and was being applied to FULL-WIDTH slots; a full-width
+re-measurement put two of four run p99s above it. The median was unaffected. *** NO CONCLUSION IN
+THIS SECTION CHANGED SHAPE — see the SHAPE-OR-MAGNITUDE table at the end for exactly what moved
+and who has to act on it. *** The one claim that did change shape is *"marginal cost per register
+is zero"*, which is now ~0.040 ms/register: measured, negligible, and not zero.
 
 ................................................................................
-THE INPUTS — all [M], on the rig, over the tunnel, 2026-08-12
+THE INPUTS — all [M], on the rig, over the tunnel
 ................................................................................
 
-    RTT median                  71-78 ms      [M]  across the whole sweep, 2,000 samples
+  THE NARROW SWEEP — 2026-08-12, 1 / 4 / 8 / 16 registers, 2,000 samples
+
+    RTT median                  71-78 ms      [M]  across the whole sweep
     RTT p90                     89-115 ms     [M]
-    RTT p99                     136-173 ms    [M]
+    RTT p99                     136-173 ms    [M]  *** SUPERSEDED AS A BUDGETING INPUT — see
+                                                   the full-width block below ***
     RTT max observed            2,216 ms      [M]  ONE sample in 2,000 = 0.05%
     scan period, idle           22.64 ms      [M]  n=101, spread 22.20-23.02
     scan period, under load     23.33 ms      [M]  n=16, spread 23.16-23.39, at 20 full-block
                                                    writes per poll; `MB_SERVER` under traffic
                                                    costs ~+0.7 ms, ~3%
-    marginal cost per register  ZERO          [M]  1, 4, 8 and 16 registers cost the same
-                                                   within noise
+
+  *** THE FULL-WIDTH RE-MEASUREMENT — 2026-08-13, 123 REGISTERS, FOUR RUNS. THIS IS THE
+  BUDGETING BASIS AND IT SUPERSEDES THE p99 ABOVE. ***
+
+    RTT median, full width      75-77 ms      [M]  *** CONFIRMS RTT_typ = 78. Unchanged. ***
+    RTT p99, per run            157 / 201 /   [M]  four runs. *** TWO OF THE FOUR EXCEED THE
+                                168 / 185 ms       173 ms THIS SECTION HAD BEEN BUDGETING ON. ***
+    RTT p99, n-weighted         ~183 ms       [M]  the central estimate. NOT the constant used —
+                                                   see the constants block below
+    marginal cost per register  ~0.040 ms     [M]  ON WRITES; NO TREND ON READS. So a full-width
+                                                   123-register write costs ~4.9 ms more than a
+                                                   1-register one [D] — against a 75-78 ms round
+                                                   trip, ~6%
+
+  *** WHY THE RE-MEASUREMENT HAPPENED, AND IT IS THIS SECTION'S OWN CONVENTION CATCHING ITS OWN
+  ERROR: THE 173 ms p99 WAS DERIVED FROM DATA AT ONE WIDTH AND APPLIED AT ANOTHER. *** The
+  budgets below are for full-width slots; the tail they were keyed on came from a 16-register
+  sweep. The MEDIAN survived that transfer (75-77 against 71-78) and *** THE TAIL DID NOT ***.
+  Exactly the class of hole `[M]`/`[I]`/`[D]` was added to make visible.
 
 *** MEASURED OVER THE TUNNEL, NOT ON A LAN. *** Every number here is a property of the link as
 the harness will actually use it. A LAN figure would be better and would also be a lie.
@@ -1896,24 +1948,74 @@ the harness will actually use it. A LAN figure would be better and would also be
 THE CONSTANTS EVERY DERIVATION BELOW USES, AND WHICH BAND EACH TAKES
 ................................................................................
 
-    RTT_typ  =   78 ms   [D]  the WORST of the median band. *** EXPECTED DURATIONS ONLY. ***
-    RTT_p99  =  173 ms   [D]  the WORST of the p99 band. *** EVERY BUDGET, EVERY CAP, EVERY
-                              WIDTH, EVERY TIMEOUT USES THIS ONE. *** A wave issues hundreds
-                              of round trips, so "one in a hundred" is not a rare event within
-                              a single wave — it is several per wave. A budget keyed on the
-                              median is a budget that is wrong several times per wave.
-    RTT_max  = 2216 ms   [M]  *** TIMEOUTS ONLY, NEVER THROUGHPUT. *** Derivation 4.
+    RTT_typ  =   78 ms   [D]  the WORST of the median band, and the full-width re-measurement
+                              CONFIRMS IT (75-77). *** EXPECTED DURATIONS ONLY. *** Unchanged
+                              2026-08-13.
+    RTT_p99  =  201 ms   [M]  *** THE WORST FULL-WIDTH RUN p99 OBSERVED, NOT THE WEIGHTED
+                              CENTRAL ESTIMATE. Raised from 173 ms on 2026-08-13; the choice of
+                              the worst rather than the middle is argued immediately below and is
+                              deliberate. *** EVERY BUDGET, EVERY CAP, EVERY WIDTH USES THIS ONE.
+                              A wave issues hundreds of round trips, so "one in a hundred" is not
+                              a rare event within a single wave — it is several per wave.
+    RTT_max  = 2216 ms   [M]  *** TIMEOUTS ONLY, NEVER THROUGHPUT. *** Derivation 4. Not
+                              re-measured at full width; unchanged.
     scan     = 23.33 ms  [D]  the LOADED row. The harness always has traffic on it, so idle is
                               the wrong row to budget from — and the difference is only 3%, so
                               taking the pessimistic one costs nothing.
 
-*** THE EXTRAPOLATION, NAMED RATHER THAN BURIED: "SLOT WIDTH IS FREE UP TO FC03's 125 AND
-FC16's 123" IS [I], NOT [M]. *** What was measured is 1, 4, 8 and 16 registers. The inference
-is that a 125-register FC03 response is 259 bytes against 41 for a 16-register one — both a
-single TCP segment, one ack, one `MB_SERVER` service — so nothing in the path changes shape
-between them. It is a good inference, it is load-bearing for derivations 2 and 6, and it is
-still an inference. *** A SWEEP TO 125 COSTS ONE RUN OF THE EXISTING `timing` CLIENT AND WOULD
-RETIRE IT. *** Until then, no figure below may be quoted as measured beyond 16 registers.
+*** WHY RTT_p99 IS SET AT THE WORST OBSERVED (201) AND NOT THE WEIGHTED ESTIMATE (183) — THE
+REASONING IS EXPLICIT BECAUSE PICKING ONE SILENTLY IS THE FAILURE HERE. ***
+
+  1. *** FOUR RUNS IS A THIN BASIS FOR A TAIL STATISTIC, AND THE ARITHMETIC SAYS SO. *** The four
+     run p99s are 157 / 201 / 168 / 185: unweighted mean 177.75, sample SD 19.3, standard error
+     9.7 [D]. So a ~95% upper bound on the MEAN run-p99 is about 197 ms — and *** 201 IS
+     ESSENTIALLY THAT BOUND, arrived at by taking the worst observation. *** Choosing the worst
+     observed is not pessimism piled on top of statistics here; it lands where the statistics land.
+  2. *** THE COST ASYMMETRY IS STARK, AND IT ALL POINTS ONE WAY. *** Setting the p99 too HIGH
+     costs a few slots of tensor width and slightly longer backstops — both cheap, and derivation
+     4 already established that a generous timeout costs nothing because it only elapses on a
+     request that has already failed. Setting it too LOW costs *** A MISSED ASSERTION REPORTED AS
+     A PASS *** (derivation 2), which is a silent wrong answer and the most expensive outcome this
+     design has. *** A BUDGET KEYED ON AN UNCERTAIN TAIL MUST FAIL TOWARD THE PESSIMISTIC SIDE. ***
+  3. *** THE RUN-TO-RUN SPREAD IS BIGGER THAN THE CORRECTION IT IS BEING USED TO MAKE. *** The
+     four p99s span 44 ms; the shift from the old 173 to the new figure is 10-28 ms. So *** THE
+     DOMINANT UNCERTAINTY IS SAMPLING, NOT WIDTH *** — which is also why the next sentence is a
+     caution rather than a conclusion.
+
+  *** CONFIDENCE: LOW-TO-MODERATE, AND IT IS THE WEAKEST CONSTANT IN THIS SECTION. *** It is a
+  1-in-100 statistic estimated from four runs. Treat 201 as a working bound that is fit for
+  budgeting BECAUSE it fails safe, not as a well-determined property of the link. *** WHAT WOULD
+  FIRM IT UP: more runs — the estimate is sampling-limited, so it is more runs and nothing else. ***
+  Until then, no figure derived from RTT_p99 should be quoted to three significant figures.
+
+  *** AND A CAUSAL CLAIM THAT IS *** NOT *** ESTABLISHED, STATED SO NOBODY REPEATS IT AS FACT:
+  THAT THE WIDTH CAUSED THE TAIL TO WIDEN. *** One of the four full-width runs (157 ms) is BELOW
+  the old 173, and the run-to-run spread exceeds the shift. The honest statement is *"the p99 at
+  full width is higher than the figure derived from the narrow sweep"* — a comparison of two
+  measurements — and NOT *"width widens the tail"*, which four runs cannot support. The
+  measurement that would settle it is INTERLEAVED narrow/wide runs in one session, which removes
+  the between-session variation that currently dominates.
+
+*** THE [I] IS RETIRED — 2026-08-13, MEASURED, AND IT HOLDS. *** This block used to warn that
+*"slot width is free up to FC03's 125 and FC16's 123"* was inferred from a 1..16-register sweep and
+that no figure below might be quoted as measured beyond 16 registers. It has now been measured at
+123: *** ~0.040 ms PER REGISTER ON WRITES AND NO TREND ON READS *** [M]. The inference held.
+
+  *** BUT IT HELD FOR THE MEAN AND NOT FOR THE TAIL, AND THAT DISTINCTION IS THE WHOLE FINDING OF
+  2026-08-13. *** "Free" now means, precisely:
+
+      in the MEAN   :  0.040 x 123 = ~4.9 ms on a 75-78 ms round trip = ~6%  [D]
+                       — against 100% for a SECOND round trip. *** THE CONCLUSION "ROUND TRIPS
+                       COST, REGISTERS DO NOT" SURVIVES BY A FACTOR OF ABOUT SIXTEEN. ***
+      in the TAIL   :  *** NOT FREE, AND NOT QUANTIFIED. *** The p99 measured at full width is
+                       higher than the one derived at 16 registers, by 10-28 ms depending on run,
+                       confounded with run-to-run variation (above).
+
+  So: keep sizing slots for what they need and keep preferring one wide read to two narrow ones —
+  that guidance is unchanged and now has a number behind it. What may NOT be said any more is the
+  bare phrase *"marginal cost per register is zero"*: it is ~0.040 ms/register, which is
+  negligible against a round trip and is not zero, and the tail behaviour at width is an open
+  question rather than a measured freebie. See flag F-4.
 
 ................................................................................
 DERIVATION 1 — THE OBSERVABILITY FLOOR, IN SCANS  [D]
@@ -1923,8 +2025,8 @@ A poll is one round trip. There is no separate "poll rate" to choose: the coordi
 slot per FC03 (X-A), serialised on one connection, so a K-slot tensor gives each slot a poll
 period of `K x RTT`. For K=1:
 
-    floor_typ  = RTT_typ / scan = 78  / 23.33 = 3.3 scans      [D]
-    floor_p99  = RTT_p99 / scan = 173 / 23.33 = 7.4 scans      [D]
+    floor_typ  = RTT_typ / scan = 78  / 23.33 = 3.3 scans      [D]  unchanged 2026-08-13
+    floor_p99  = RTT_p99 / scan = 201 / 23.33 = 8.6 scans      [D]  *** was 7.4 at RTT_p99 = 173 ***
     floor_best = 71 / 23.33                    = 3.0 scans      [D]  the FASTEST MEDIAN in the
                                                                      sweep — the irreducible
                                                                      floor for K=1. *** SAID
@@ -1937,15 +2039,21 @@ period of `K x RTT`. For K=1:
                                                                      luckiest exchange possible.
     floor_tail = 2216 / 23.33                  = 95 scans       [D]  once per 2,000 polls
 
-  *** A SAMPLED LEVEL MUST PERSIST FOR 8 SCANS TO BE CAUGHT AT THE p99, AND FOR 95 SCANS TO BE
-  CAUGHT AGAINST THE WORST GAP EVER MEASURED. *** (ceil of floor_p99 and floor_tail.) Multiply
-  both by K for a K-slot tensor.
+  *** A SAMPLED LEVEL MUST PERSIST FOR 9 SCANS TO BE CAUGHT AT THE p99 (was 8 at RTT_p99 = 173),
+  AND FOR 95 SCANS TO BE CAUGHT AGAINST THE WORST GAP EVER MEASURED. *** (ceil of floor_p99 and
+  floor_tail.) Multiply both by K for a K-slot tensor.
 
   §12's CONCLUSION SURVIVES INTACT: a one-scan event is invisible to any sampler, because even a
   poller running flat out at the best round trip on record leaves a 3-scan hole. What does NOT
-  survive is the SIZE of the margin — it is 3.3x typical and 7.4x at the p99, not the "about ten
+  survive is the SIZE of the margin — it is 3.3x typical and 8.6x at the p99, not the "about ten
   times" §12 argued from. *** ANY ARGUMENT THAT SPENT THAT MARGIN AS SLACK MUST BE RE-CHECKED
   RATHER THAN ASSUMED STILL SAFE. ***
+
+  *** THE 2026-08-13 CORRECTION MOVED THIS FIGURE BACK TOWARD THE OLD CLAIM WITHOUT RESTORING IT,
+  AND THAT IS WORTH SAYING PLAINLY: 8.6x IS NOT 10x. *** §12's "about ten times" is still wrong,
+  the margin is still smaller than the design was written against, and nothing that was re-checked
+  after 2026-08-13's first pass needs re-checking again in the other direction — the p99 moved
+  UP, so every conclusion drawn from the smaller margin remains conservative.
 
   AND THE TAIL SAYS SOMETHING §12 COULD NOT: *** A SAMPLED ASSERTION IS NEVER GUARANTEED. ***
   0.05% of poll gaps are ~95 scans wide, so any sampled window under ~2.2 s of plant time carries
@@ -1960,7 +2068,8 @@ DERIVATION 2 — O11: THE MAXIMUM TENSOR WIDTH THE POLL BUDGET SUSTAINS  [D]
 
 *** THE ANSWER'S SHAPE INVERTS: THE CAP IS NOT A NUMBER, IT IS A FUNCTION OF THE OBSERVABILITY
 DECLARATIONS OF THE SLOTS ADMITTED — AND WHEN EVERY OBSERVATION IS LATCHED IT IS NOT BINDING AT
-ALL. *** That is what "marginal cost per register is zero" does to the question.
+ALL. *** That is what a near-zero marginal cost per register (~0.040 ms [M], ~6% of a round trip
+across a full-width slot) does to the question.
 
   THE COST MODEL, per wave index (one column of D26a's tensor), K slots in the wave set, slot
   width W registers, P poll rounds per test:
@@ -1979,16 +2088,26 @@ ALL. *** That is what "marginal cost per register is zero" does to the question.
   window is S scans is observed only if that period fits inside it:
 
       K x RTT_p99  <=  S x scan
-      K_max(S)     =  floor( S x 23.33 / 173 )                   [D]
+      K_max(S)     =  floor( S x 23.33 / 201 )                   [D]  *** 201, RAISED FROM 173
+                                                                      ON 2026-08-13 ***
 
-      S =  10 scans  ->  K_max =  1        S = 100 scans  ->  K_max = 13
-      S =  20 scans  ->  K_max =  2        S = 200 scans  ->  K_max = 26
-      S =  50 scans  ->  K_max =  6
+                        S (scans)     K_max NOW    was, at 173
+                        ---------     ---------    -----------
+                             10           1             1        unchanged
+                             20           2             2        unchanged
+                             50        *** 5 ***        6        *** ONE SLOT LOST ***
+                            100        *** 11 ***      13        *** TWO SLOTS LOST ***
+                            200        *** 23 ***      26        *** THREE SLOTS LOST ***
 
-      (at RTT_typ = 78 ms the same table reads 2 / 5 / 14 / 29 / 59 — which is exactly why the
-       p99 is the row that must be used: keyed on the median, a wave set admits three to five
-       times more slots than the link can actually observe, and the failure is a MISSED
-       ASSERTION REPORTED AS A PASS.)
+      *** THE HAIRCUT IS A UNIFORM 173/201 = 0.86, MADE LUMPY BY THE floor(). *** So the narrow
+      rows — the ones where the cap actually bites hardest — DO NOT MOVE AT ALL, and the wide
+      rows lose about 14%. *** A WAVE SET ALREADY ADMITTED UNDER THE OLD CONSTANT AT S >= 50 IS
+      NOW OVER-ADMITTED AND MUST BE RE-COLOURED, not merely re-costed. ***
+
+      (at RTT_typ = 78 ms the same table reads 2 / 5 / 14 / 29 / 59 — unchanged, since RTT_typ
+       did not move — which is exactly why the p99 is the row that must be used: keyed on the
+       median, a wave set admits four to six times more slots than the link can actually
+       observe, and the failure is a MISSED ASSERTION REPORTED AS A PASS.)
 
       LATCHED assertions: the window is unbounded until cleared at test start, so `S` does not
       exist and *** THE POLL BUDGET IMPOSES NO WIDTH CAP AT ALL. *** The cap then comes from
@@ -2017,21 +2136,25 @@ DERIVATION 3 — THE WIRE TERM §8's WAVE MODEL OMITS  [D]
 
       round trips per index = 6 x (1 + 2) + 1 = 19                       [D, derivation 2]
       per index   : 19 x  78 ms = 1.48 s typical
-                    19 x 173 ms = 3.29 s at the p99
-      per wave    : x 5 indices = 7.4 s typical, *** 16.4 s at the p99 ***
+                    19 x 201 ms = 3.82 s at the p99          (was 3.29 s at 173)
+      per wave    : x 5 indices = 7.4 s typical, *** 19.1 s at the p99 ***   (was 16.4 s)
 
   AGAINST §8's THREE ROWS (each of which is `5 x (inert + test)` plus a ~20 s download boundary):
 
-      inert  2 s, test  5 s :  35 + 20 =  55 s  ->  +16.4 s =  71 s   *** +30% ***
-      inert  5 s, test 10 s :  75 + 20 =  95 s  ->  +16.4 s = 111 s        +17%
-      inert 10 s, test 60 s : 350 + 20 = 370 s  ->  +16.4 s = 386 s         +4%
+      inert  2 s, test  5 s :  35 + 20 =  55 s  ->  +19.1 s =  74 s   *** +35% ***  (was 71 s)
+      inert  5 s, test 10 s :  75 + 20 =  95 s  ->  +19.1 s = 114 s        +20%      (was 111 s)
+      inert 10 s, test 60 s : 350 + 20 = 370 s  ->  +19.1 s = 389 s         +5%      (was 386 s)
 
-  *** "A WAVE IS ORDER-OF-A-MINUTE" SURVIVES — 71 s is still order-of-a-minute — BUT §8's
-  FASTEST ROW IS A THIRD OPTIMISTIC, AND §8's ROWS ARE THE ONES EVERY THROUGHPUT ARGUMENT IN
-  THIS DOCUMENT IS BUILT ON. *** The term scales with K and with P, so it grows with exactly the
-  packing §8 relies on for its 6x. It does not overturn the packed-versus-serial conclusion (the
-  serial case pays the same per-test wire cost and pays it more times), but it must be IN the
-  model rather than assumed away.
+  *** "A WAVE IS ORDER-OF-A-MINUTE" SURVIVES — 74 s is still order-of-a-minute — BUT §8's
+  FASTEST ROW IS MORE THAN A THIRD OPTIMISTIC, AND §8's ROWS ARE THE ONES EVERY THROUGHPUT
+  ARGUMENT IN THIS DOCUMENT IS BUILT ON. *** The term scales with K and with P, so it grows with
+  exactly the packing §8 relies on for its 6x. It does not overturn the packed-versus-serial
+  conclusion (the serial case pays the same per-test wire cost and pays it more times), but it
+  must be IN the model rather than assumed away.
+
+  *** AND THE WRITE HALF NEEDS NO SEPARATE WIDTH TERM, WHICH IT WOULD HAVE DONE UNDER THE OLD
+  CONSTANT: *** RTT_p99 = 201 was measured AT 123 registers, so the ~4.9 ms full-width write cost
+  is already inside it. Budgeting a per-register term on top of it would double-count.
 
 ................................................................................
 DERIVATION 4 — THE 2,216 ms OUTLIER, AND THE TIMEOUT FLOOR IT SETS  [D]
@@ -2046,9 +2169,15 @@ cost when it does".
 
       P(at least one outlier in a wave) = 1 - (1 - 0.0005)^95 = *** 4.6%, about one wave in 22 ***
 
-  WHAT IT COSTS IN DURATION: +2.2 s on a ~71 s wave = +3%. *** NEGLIGIBLE, AND THAT IS THE WHOLE
+  WHAT IT COSTS IN DURATION: +2.2 s on a ~74 s wave = +3%. *** NEGLIGIBLE, AND THAT IS THE WHOLE
   OF ITS THROUGHPUT SIGNIFICANCE. *** It must not be added to RTT_p99, and no budget above
   includes it.
+
+  *** UNAFFECTED BY THE 2026-08-13 p99 CORRECTION, AND DELIBERATELY SO. *** `RTT_max` is a
+  separate measurement from a separate part of the distribution; raising the p99 from 173 to 201
+  does not move it, does not change the 0.05% rate, and *** DOES NOT CHANGE THE 3,000 ms TIMEOUT
+  FLOOR, which is keyed on RTT_max and never on the p99. *** Only the middle term of the backstop
+  below moves.
 
   WHAT IT COSTS IF A TIMEOUT IS SET BELOW IT: *** EVERYTHING. *** A per-request timeout under
   2,216 ms converts a measured, ordinary tail event into a transport failure — at ~1 in 2,000
@@ -2061,8 +2190,8 @@ cost when it does".
       *** RULE [D]: X-B's WALL-CLOCK BACKSTOP IS COMPUTED, NOT GUESSED: ***
 
           backstop = (declared max duration in scans x 23.33 ms)
-                   + (expected round trips for the test x RTT_p99)
-                   + one RTT_max allowance (2,216 ms)
+                   + (expected round trips for the test x RTT_p99)      <- 201 ms, was 173
+                   + one RTT_max allowance (2,216 ms)                   <- unchanged
 
       A backstop computed on RTT_typ, or without the outlier allowance, will fire on a healthy
       test roughly once every 22 waves and report TIMED-OUT — the outcome X-B invented precisely
@@ -2083,13 +2212,20 @@ DERIVATION 5 — X-D's COMPRESSION CONSTANTS  [D]
 X-D's `comp_max` terms carried `~10 ms` for the scan and `~100 ms` for the poll. Both are
 replaced, and *** THE TIMER TERM — THE ONE X-D SAYS OFTEN BINDS FIRST — IS HALVED. ***
 
-    scan_period   ~10 ms   ->   23.33 ms                        [M]
-    poll_period  ~100 ms   ->   K x RTT_p99, >= 173 ms at K=1    [D, derivation 2]
-    timer floor  k x scan, k~5:  50 ms  ->  *** 116.7 ms ***     [D]
+    scan_period   ~10 ms   ->   23.33 ms                        [M]  unchanged 2026-08-13
+    poll_period  ~100 ms   ->   K x RTT_p99, >= 201 ms at K=1    [D, derivation 2]
+                                *** RAISED FROM 173 ON 2026-08-13 — this term tightens by 14% ***
+    timer floor  k x scan, k~5:  50 ms  ->  *** 116.7 ms ***     [D]  *** UNCHANGED — it depends
+                                only on the scan, which did not move ***
 
   WORKED, on X-D's own example — a 500 ms preset:
 
       comp_max(timer) = 500 / 116.7 = *** 4.3x ***   was 500 / 50 = 10x                  [D]
+
+  *** AND THE TERM THIS SECTION SAYS BINDS FIRST IS THE ONE THE 2026-08-13 CORRECTION DID NOT
+  TOUCH. *** The timer bound is a function of the SCAN, and the scan is the best-determined
+  constant in §12a. So the practical compression ceiling on a typical block is unmoved; what
+  tightened by 14% is the SAMPLED-assertion term, which is the term latching removes entirely.
 
   So a block's shortest dwell preset now caps compression at less than half what X-D's arithmetic
   allowed. X-D's verdicts do not flip in the example it works (a 4-hour behaviour in a 60 s budget
@@ -2098,9 +2234,11 @@ replaced, and *** THE TIMER TERM — THE ONE X-D SAYS OFTEN BINDS FIRST — IS H
 
   AND THE LATCHED-VERSUS-SAMPLED SPREAD X-D CALLS A THROUGHPUT LEVER:
 
-      173 / 23.33 = *** 7.4x, not 10x ***  (3.3x at RTT_typ)                             [D]
+      201 / 23.33 = *** 8.6x, not 10x ***  (3.3x at RTT_typ)                             [D]
+                                           (was 7.4x at RTT_p99 = 173)
 
-  Still a real lever, still worth the latch, and about a third smaller than advertised.
+  Still a real lever, still worth the latch, and somewhat smaller than advertised — the
+  2026-08-13 correction moved it back toward X-D's original 10x without reaching it.
 
 ................................................................................
 DERIVATION 6 — WHY BATCHING GOT STRONGER, NOT WEAKER  [D]
@@ -2110,17 +2248,30 @@ DERIVATION 6 — WHY BATCHING GOT STRONGER, NOT WEAKER  [D]
 figures strengthen every part of that argument:
 
     50 tags read individually  : 50 x  78 ms = *** 3.9 s ***  typical                    [D]
-                                 50 x 173 ms = *** 8.7 s ***  at the p99                 [D]
+                                 50 x 201 ms = *** 10.1 s *** at the p99 (was 8.7 s at 173) [D]
                                  plus a 50/2000 = 2.5% chance of eating a 2,216 ms outlier
     the same 50 tags in ONE FC03 (<= 125 registers)
-                               : 1 round trip = 78 ms typical / 173 ms at the p99         [D]
-                                 *** A 50x REDUCTION, AND THE WIDE READ COSTS THE SAME AS
-                                 A NARROW ONE [M to 16 registers, I beyond] ***
-    a scan-counter poll        : 1 round trip — 78 ms typical, 173 ms at the p99          [D]
+                               : 1 round trip = 78 ms typical / 201 ms at the p99         [D]
+                                 *** A 50x REDUCTION *** — and the wide read now has a MEASURED
+                                 price rather than an assumed-free one: see below
+    a scan-counter poll        : 1 round trip — 78 ms typical, 201 ms at the p99          [D]
 
-*** THE MAP SHOULD THEREFORE BE LAID OUT FOR THE WIDEST LEGAL READ, NOT THE SMALLEST SUFFICIENT
-ONE. *** Under the old assumption a narrow slot was a saving; it is not, and treating it as one
-buys nothing while costing round trips — which are the only thing that does cost.
+*** THE MARGIN IS NOW QUANTIFIED RATHER THAN ASSERTED, AND IT IS ENORMOUS (2026-08-13). *** The
+per-register cost is measured: ~0.040 ms on writes, no trend on reads [M]. So the choice between
+one wide transaction and two narrow ones is:
+
+    widening a read by 123 registers  :  ~4.9 ms                                          [D]
+    one additional round trip         :  78 ms typical, 201 ms at the p99                 [D]
+    ------------------------------------------------------------------------------------
+    *** BATCHING WINS BY ROUGHLY 16x AT THE MEDIAN AND 41x AT THE p99. ***                [D]
+
+*** THE MAP SHOULD THEREFORE STILL BE LAID OUT FOR THE WIDEST LEGAL READ, NOT THE SMALLEST
+SUFFICIENT ONE. *** Under the old assumption a narrow range was a saving; it is not — it is worth
+about 0.04 ms per register saved, against 78-201 ms for every extra exchange it forces.
+*** ONE HONEST QUALIFICATION, AND IT IS THE ONLY THING 2026-08-13 TOOK AWAY FROM THIS PARAGRAPH:
+the tail at full width was not free (constants block, flag F-4), so a budget that is BOTH
+tail-keyed AND width-maximising should be checked against F-4 rather than assumed safe. *** The
+mean-cost argument for batching is untouched.
 
 ................................................................................
 WHAT THIS RE-DERIVATION CANNOT DECIDE — THREE FLAGS FOR THE OWNER
@@ -2154,6 +2305,76 @@ conclusion without the ruling.
        shaped signals to latched; making it mandatory for every assertion would close the hole
        entirely, at the cost of the copy-layer memory §12 prices at 32x for scan-stamps. That is
        a correctness-versus-cost trade, which is not the arithmetic's to make.
+       *** STRENGTHENED 2026-08-13: latching also removes the ONE term the p99 correction
+       tightened *** — the sampled-assertion term in X-D and the whole of O11's cap. An
+       all-latched wave set is INDIFFERENT to whether RTT_p99 is 173, 201 or 250, which is a
+       property worth having while the constant is this uncertain.
+
+  F-4. *** IS THE TAIL WIDTH-SENSITIVE, AND IF SO SHOULD SLOT WIDTH BE CAPPED BELOW THE FC03
+       LIMIT? *** NEW 2026-08-13. The per-register cost in the MEAN is measured and negligible
+       (~0.040 ms), so derivation 6's "lay the map out for the widest legal read" stands on the
+       mean. But the p99 measured at 123 registers is higher than the one derived at 16, and
+       every budget in this section is p99-keyed. *** IF that link is real, then width trades
+       throughput against tail latency and the guidance is a policy choice rather than a free
+       win. *** IT IS NOT ESTABLISHED — one of the four full-width runs came in BELOW the old
+       figure and the run-to-run spread exceeds the shift (constants block).
+       *** SO THE FIRST ACTION IS A MEASUREMENT, NOT A POLICY: interleaved narrow/wide runs in
+       one session, which removes the between-session variation that currently dominates. ***
+       Raised as a flag rather than settled because if it IS real it changes map-layout guidance
+       that other lanes are already building against — and because deciding it from four
+       confounded runs is exactly the inference-reported-as-measurement this document forbids.
+
+................................................................................
+SHAPE OR MAGNITUDE? — WHAT THE 2026-08-13 p99 CORRECTION DID AND DID NOT DO
+................................................................................
+
+*** WRITTEN FOR THE LANES BUILDING AGAINST THIS SECTION, BECAUSE "THE CONSTANT MOVED" AND "THE
+CONCLUSION MOVED" NEED DIFFERENT RESPONSES — ONE IS A RECOMPILE, THE OTHER IS A REDESIGN. ***
+
+  *** NO CONCLUSION IN §12a CHANGED SHAPE. EVERY ONE OF THEM IS THE SAME STATEMENT WITH A
+  DIFFERENT NUMBER IN IT. *** Specifically, all of these survive untouched:
+
+    - a one-scan event is invisible to any sampler, and no polling rate recovers it (D1)
+    - round trips cost, registers do not — now by a measured ~16x rather than an assumed
+      infinity (D6, and the constants block)
+    - O11's cap is a FUNCTION of the admitted set's observability mode, and does not bind at all
+      on an all-latched set (D2)
+    - D29 does not invert; "width" means slots (D2)
+    - a wave is order-of-a-minute (D3)
+    - the outlier is negligible to throughput and decisive for timeouts (D4)
+    - use comp_min, never comp_max; the timer term binds first (D5)
+
+  *** ONE CLAIM DID CHANGE SHAPE, AND IT IS A CLAIM RATHER THAN A DECISION: "MARGINAL COST PER
+  REGISTER IS ZERO" IS NOW FALSE AS STATED. *** It is ~0.040 ms/register — negligible, measured,
+  and not zero — and the tail behaviour at width is open (F-4). Anywhere that phrase is used as a
+  premise rather than as shorthand, it must be replaced by the mean/tail split in the constants
+  block.
+
+  *** WHAT MOVED, AND BY HOW MUCH: ***
+
+      floor_p99                    7.4  ->  8.6 scans     persist >= 9 scans, was >= 8
+      K_max at S >= 50             -14%                   6->5, 13->11, 26->23 slots
+      K_max at S = 10 or 20        unchanged              1 and 2 — the rows that bite hardest
+      wire term per wave          16.4  -> 19.1 s
+      §8 fastest row                71  ->   74 s
+      X-B backstop middle term     +16%                   the RTT_p99 term only
+      X-D sampled term             -14%                   tightens
+      X-D timer term               unchanged              *** the one that binds first ***
+      50-tag unbatched sweep       8.7  -> 10.1 s
+      RTT_typ, scan, RTT_max,
+        3,000 ms timeout floor,
+        outlier rate and its
+        4.6%-per-wave exposure     ALL UNCHANGED
+
+  *** WHO MUST ACT, STATED PLAINLY: ***
+    - anything holding RTT_p99 as a NAMED CONSTANT: a one-line change to 201.
+    - *** anything that BAKED A K_max VALUE IN: three of the five worked rows moved, so a
+      hard-coded width table is now wrong and a wave set already admitted at S >= 50 is
+      OVER-ADMITTED. That is re-colouring, not re-costing. ***
+    - anything keying a per-request timeout on RTT_p99 rather than RTT_max: it was already
+      wrong, and the correction does not fix it — the floor is 3,000 ms and comes from RTT_max.
+    - slot-width allocation: no action, UNLESS it derives a poll budget from width, in which
+      case see F-4.
 
 --------------------------------------------------------------------------------
 13. G-7 — MEASURED 2026-08-12. THE EXPECTATION WAS REFUTED.
@@ -2365,10 +2586,12 @@ it being reopened from scratch. What follows is disposition, not open work.
     8. O14 conflict density — the highest-value measurement in the design. Deferred by
        ruling, WITH D36's condition holding meanwhile: author models instanced per test.
     9. O11 maximum tensor width against the poll budget — feeds DB-13's colouring as a cap.
-       *** NARROWED 2026-08-13: the cap is `floor(S_min x 23.33 ms / 173 ms)` [D, §12a
+       *** NARROWED 2026-08-13: the cap is `floor(S_min x 23.33 ms / 201 ms)` [D, §12a
        derivation 2] and only `S_min` — the shortest SAMPLED observation window a real
        submission set declares — is still unmeasured. If sets come back all-latched, this
-       measurement returns "no cap" and DB-13 needs no width input at all. ***
+       measurement returns "no cap" and DB-13 needs no width input at all. *** (The divisor was
+       173 ms for one day; a full-width re-measurement raised it, costing ~14% of the cap at
+       `S >= 50`. §12a's SHAPE-OR-MAGNITUDE table has the moved rows.)
 
 ................................................................................
 15b. THE PLACES A NEW QUESTION IS MOST LIKELY TO APPEAR
@@ -2447,18 +2670,26 @@ all are worth recognising on sight rather than rediscovering:
       HALF REMAINS DEFERRED UNDER D36, AND THE TWO MUST NOT BE CONFUSED. ***
 
           *** max tensor width = floor( S_min x scan / RTT_p99 )                          [D]
-                               = floor( S_min x 23.33 ms / 173 ms )
+                               = floor( S_min x 23.33 ms / 201 ms )
           where S_min is the SHORTEST DECLARED SAMPLED OBSERVATION WINDOW, IN SCANS, among the
           slots admitted to the wave set — and the cap DOES NOT BIND AT ALL when every
           observation in the set is LATCHED. ***
 
-              S =  10 scans -> 1 slot        S = 100 scans -> 13 slots
-              S =  20 scans -> 2 slots       S = 200 scans -> 26 slots
-              S =  50 scans -> 6 slots
+              S =  10 scans -> 1 slot        S = 100 scans -> 11 slots
+              S =  20 scans -> 2 slots       S = 200 scans -> 23 slots
+              S =  50 scans -> 5 slots
+
+      *** THE DIVISOR WAS 173 ms FOR ONE DAY AND THE ROWS ABOVE READ 6 / 13 / 26. *** A
+      full-width re-measurement (four runs, two of them above 173) raised `RTT_p99` to 201 ms on
+      2026-08-13 — see §12a's constants block for why the WORST observed rather than the weighted
+      183 ms, and for the confidence that figure carries. *** THE NARROW ROWS DID NOT MOVE; THE
+      WIDE ONES LOST ~14%. A WAVE SET ALREADY ADMITTED AT S >= 50 UNDER THE OLD DIVISOR IS
+      OVER-ADMITTED AND NEEDS RE-COLOURING, NOT RE-COSTING. ***
 
       *** THE SHAPE OF THE ANSWER INVERTED, WHICH IS THE PART WORTH READING TWICE. *** This
       question was posed as "how many, given the round-trip cost of width" and expected a
-      number. Marginal cost per register being zero [M] means width costs nothing and SLOTS cost
+      number. Marginal cost per register being ~0.040 ms [M] — ~6% of a round trip across a
+      full-width slot — means width costs almost nothing and SLOTS cost
       everything, so the cap is set by the observability MODE of what is admitted, not by the
       size of it. A wave set of latched-only slots has no poll cap; a wave set containing one
       slot with a 10-scan sampled window is capped at ONE SLOT. *** THE CHEAPEST WAY TO RAISE
@@ -2657,12 +2888,17 @@ Slots are FIXED-SIZE, sized to the largest slot in the wave set, so a client's b
 `base + index x slot_size` (DB-6 point 3 becomes arithmetic rather than a check).
 
 *** AND SIZING THEM COSTS NOTHING ON THE WIRE — MEASURED 2026-08-12, DERIVED §12a. *** Marginal
-cost per register is indistinguishable from zero [M to 16 registers, I to the 125/123 limits], so
-a fixed slot sized to the LARGEST member of the wave set is not the compromise it reads as: the
-small slots pay nothing for the padding. *** WHAT COSTS IS THE NUMBER OF SLOTS, because each is
-one FC03. *** Do not narrow a slot to save wire time; there is none to save. The only real ceiling
-on width is the 125-register read itself, and the ceilings on COUNT are the mirror (below) and
-work memory (§16.13).
+cost per register is ~0.040 ms on writes and shows no trend on reads [M at 123 registers,
+2026-08-13], so a fixed slot sized to the LARGEST member of the wave set is not the compromise it
+reads as: the small slots pay ~0.04 ms per padding register, which is noise. *** WHAT COSTS IS THE
+NUMBER OF SLOTS, because each is one FC03 — a full-width slot costs ~4.9 ms more than a
+one-register slot, against 78-201 ms for a second exchange. *** Do not narrow a slot to save wire
+time; there is almost none to save and a narrowing that forces an extra round trip loses by ~16x.
+The only real ceiling on width is the 125-register read itself, and the ceilings on COUNT are the
+mirror (below) and work memory (§16.13). *** ONE OPEN CAVEAT: the p99 measured at full width is
+higher than the one derived from a narrow sweep, and every budget here is p99-keyed — whether
+width CAUSES that is not established (§12a flag F-4). It does not change this paragraph's advice;
+it means the advice is a mean-cost argument, not a tail-cost one. ***
 
 *** ONE CONSEQUENCE OF THAT WHICH IS NOT APPLIED HERE AND IS THE OWNER'S — §12a F-1: *** with
 registers free, packing several WHOLE slots into ONE FC03 read would divide a tensor's poll cost
@@ -2730,7 +2966,8 @@ A backstop is a number that fires on a HEALTHY test if it is set too low, and a 
 is believed precisely because it is meant to be rare:
 
     backstop = (declared max duration in scans x 23.33 ms)          [M, loaded scan]
-             + (expected round trips for the test x 173 ms)         [M, RTT p99]
+             + (expected round trips for the test x 201 ms)         [M, RTT p99 at full width,
+                                                                    raised from 173 on 2026-08-13]
              + 2,216 ms                                             [M, worst RTT in 2,000]
 
 *** THE LAST TERM IS NOT PADDING AND MUST NOT BE TRIMMED. *** One round trip in 2,000 took
@@ -2814,7 +3051,7 @@ handful of rungs.
 Two parts of this design pull directly against each other and neither mentions the other.
 
 §12 establishes that polling observes at one round trip per slot against a 23.33 ms scan, so a
-one-scan event is already 3.3 to 7.4 times below the sampling floor *** (CORRECTED 2026-08-13 —
+one-scan event is already 3.3 to 8.6 times below the sampling floor *** (CORRECTED 2026-08-13 —
 this read "~100 ms against a ~10 ms scan ... about ten times below"; both constants were wrong and
 the replacement is §12a derivation 1) ***. DB-12 requires models to run COMPRESSED so
 long tests are runnable at all. *** BUT COMPRESSION SHORTENS THE REAL-TIME SEPARATION OF THE
@@ -2839,7 +3076,7 @@ RULE IS TAKE THE SAFE MINIMUM. ***
     comp_max = min of:
         per assertion   T_event / scan_period     if LATCHED     (*** 23.33 ms [M] ***)
                         T_event / poll_period     if SAMPLED     (*** K x RTT_p99, and
-                                                                 >= 173 ms even at K=1 [M] ***)
+                                                                 >= 201 ms even at K=1 [M] ***)
         per timer       PT / (k x scan_period)    k ~ 5          (*** so PT must stay above
                                                                  116.7 ms, not 50 ms [D] ***)
         model           comp_stable               declared by the model (M3/M4 already
@@ -2880,7 +3117,7 @@ a block, so this bound frequently bites before observability does.
 
 *** AND THE SPREAD BETWEEN LATCHED AND SAMPLED MAKES OBSERVABILITY A THROUGHPUT LEVER, NOT
 ONLY A CORRECTNESS ONE *** — a latch captures a one-scan event, where a sampled level must
-still be present when the poll arrives. *** THE SPREAD IS 7.4x AT THE p99 AND 3.3x TYPICAL
+still be present when the poll arrives. *** THE SPREAD IS 8.6x AT THE p99 AND 3.3x TYPICAL
 [D, §12a] — NOT THE 10x THIS PARAGRAPH CLAIMED, AND IT SCALES WITH TENSOR WIDTH: at K slots the
 sampled term is K x RTT, so the lever gets LONGER as a wave set gets wider, not shorter. *** The
 same latch also removes the poll-width cap on the wave set entirely (O11, §12a derivation 2),

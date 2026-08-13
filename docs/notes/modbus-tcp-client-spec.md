@@ -80,31 +80,62 @@ and the p90 and understated the tail by ~60%.
 |---|---|
 | round trip, median | **71–78 ms** |
 | round trip, p90 | 89–115 ms |
-| round trip, **p99** | **136–173 ms** ← every budget and timeout keys on this |
+| round trip, p99 — **narrow sweep, 1–16 registers** | 136–173 ms — **superseded as a budgeting figure, see below** |
 | round trip, worst in 2,000 samples | **2,216 ms** (0.05%) |
-| marginal cost per register | **indistinguishable from zero** — 1, 4, 8 and 16 registers cost the same within noise |
+
+**FULL-WIDTH RE-MEASUREMENT, 2026-08-13 — 123 registers, four runs.** The p99 above was derived at
+one width and was being applied at another:
+
+| | measured [M] |
+|---|---|
+| median, full width | **75–77 ms** — confirms the 78 ms working figure, unchanged |
+| p99, per run | **157 / 201 / 168 / 185 ms** — two of four exceed 173 |
+| p99, n-weighted | ~183 ms (central estimate, **not** the constant used) |
+| **p99 used for every budget** | **201 ms** — the *worst observed*, deliberately |
+| marginal cost per register | **~0.040 ms on writes, no trend on reads** — so a full-width write costs ~4.9 ms more than a single-register one, ~6% of a round trip |
+
+**Why the worst observed and not the middle:** four runs is a thin basis for a tail statistic (SD
+19.3 ms, standard error 9.7, so a ~95% upper bound on the mean run-p99 is ≈197 — 201 lands there
+anyway), and the cost asymmetry is one-sided — too high costs a little throughput, too low costs a
+**missed observation reported as a pass**. A budget on an uncertain tail fails toward the pessimistic
+side. **Confidence is low-to-moderate; more runs is the only thing that firms it up.** Full reasoning:
+`PC-Client-Modbus-Spec-Draft-final.txt` §12a constants block.
+
+> **Not established: that width *caused* the tail to widen.** One of the four full-width runs came in
+> *below* the old figure, and the run-to-run spread (44 ms) exceeds the shift (10–28 ms). The honest
+> statement is "the full-width p99 is higher than the narrow-sweep-derived one", not "width widens the
+> tail". Interleaved narrow/wide runs in one session would settle it.
 
 `ITransport.Read` is per-tag, so a naive implementation costs one round trip per tag. Re-derived on
 the measured figures (`PC-Client-Modbus-Spec-Draft-final.txt` §12a derivation 6):
 
-- a 50-tag assertion sweep, one round trip each: **3.9 s** typical, **8.7 s at the p99** — plus a
+- a 50-tag assertion sweep, one round trip each: **3.9 s** typical, **10.1 s at the p99** — plus a
   50/2000 = 2.5% chance that any given sweep eats a 2,216 ms outlier;
-- the same 50 tags inside **one** FC03 (≤125 registers): **one** round trip, 78 ms typical / 173 ms
+- the same 50 tags inside **one** FC03 (≤125 registers): **one** round trip, 78 ms typical / 201 ms
   at the p99 — a **50x** reduction;
-- a scan-counter poll: one round trip, 78 ms typical / 173 ms at the p99.
+- a scan-counter poll: one round trip, 78 ms typical / 201 ms at the p99.
 
 **Therefore `ModbusTransport` reads in blocks and serves tags from a snapshot.** One transaction
 fetches a contiguous register range; individual tag reads decode out of that buffer.
 
-**The zero marginal register cost makes this stronger than it was, and changes how the map should be
-laid out**: a wide read costs what a narrow one costs, so the map is laid out for the *widest legal
-read*, not the smallest sufficient one. Under the old assumption a narrow range was a saving; it is
-not, and treating it as one only buys extra round trips — the sole thing that does cost.
+**The near-zero marginal register cost makes this stronger than it was, and changes how the map should
+be laid out**: the map is laid out for the *widest legal read*, not the smallest sufficient one. The
+trade is now measured rather than asserted —
 
-> ⚠️ **The zero-cost figure is measured to 16 registers and INFERRED to 125.** A 125-register FC03
-> response is 259 bytes against 41 for a 16-register one — one TCP segment either way, so nothing in
-> the path changes shape. Good inference, still an inference; a sweep to 125 costs one run of the
-> existing `timing` client and would retire it. Do not quote it as measured beyond 16.
+| | cost |
+|---|---|
+| widening a read by 123 registers | **~4.9 ms** |
+| one additional round trip | **78 ms** typical, **201 ms** at the p99 |
+
+— so **batching wins by roughly 16x at the median and 41x at the p99.** Under the old assumption a
+narrow range was a saving; it is worth about 0.04 ms per register saved, against 78–201 ms for every
+extra exchange it forces.
+
+> ✅ **The earlier `[I]` is retired — measured at 123 registers on 2026-08-13, and it held.** This note
+> used to warn that the zero-cost figure was inferred beyond 16 registers. It is now measured. **But it
+> held for the *mean* and not for the *tail*** — the p99 moved when the width did (see above), so a
+> budget that is both tail-keyed *and* width-maximising should be checked rather than assumed safe.
+> The mean-cost argument for batching is untouched.
 
 **Per-request timeout floor: 3,000 ms** — derived, not chosen. One round trip in 2,000 took 2,216 ms
 [M]; a timeout below that converts a measured, routine tail event into a spurious transport failure
