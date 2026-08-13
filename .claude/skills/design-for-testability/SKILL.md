@@ -88,6 +88,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
 | **10a** | **time compression — assertion ceiling (X-D)** | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | `TimeCompression`. ***It catches what gate 5 structurally cannot:*** gate 5 exempts LATCHED and STAMPED from the observability floor, correctly — **X-D does not exempt them from the SCAN-PERIOD term.** An event compressed below one scan is not long enough to be latched either, so a latched declaration that clears gate 5 at every factor can still be void at the one being run | **CHECKED** |
 | **10b** | **time compression — timer / model / ratio ceilings (X-D)** | at `runtimeCompression` > 1: the block's timer presets (`PT / (k x scan)` — the term **X-D says often binds first**), the model's `comp_stable`, and the ratio-distortion bound on unscaled literals | `TimeCompression.Plan`, from contract **§2.3**'s `blockCompression` + `model.compStable`. **At `comp` = 1 this is a REAL computed pass** (nothing is scaled, so none of the three can bind). **Above 1 with the inputs absent it is NOT CHECKED and fails closed** | **CHECKED** *(NOT CHECKED without `blockCompression`, above comp 1)* |
+| **11** | **memory layout (§4.5)** | every `(area, dbNumber)` a classic-S7comm path can reach names a **harness-generated** object, declares `Standard` (or `NotApplicable`), and its `layoutSetAfterImport` equals the current `importStamp` | ***NOTHING YET.*** The contract rules it (§4.5, 2026-08-13); `SubmissionGate` has no gate 11 and `SubmissionDocument` has no `deployment` field. **Do not report this as checked because the table lists it** | ***NOT CHECKED*** |
 
 ### The command
 
@@ -125,6 +126,8 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
 | `negligibleFraction` | **NOT DECLARED, never invented** | the spec works an example and never says where "negligible" ends. Above comp 1 this blocks; it is not an exemption |
 | `model.compStable`, above comp 1 | ***REFUSED*** | the plan is asking a model to run at a rate nobody declared |
+| `deployment` (§4.5's layout record) | ***NOT CHECKED*** | a property of the **download**, not of a vector. Absent is **not** the same as `s7Objects: []`, which is a positive claim that no S7comm path reaches a data block |
+| an `s7Objects` row's `layout`, or `layoutSetAfterImport` | ***REFUSED*** | absence means "no opinion" and **TIA resolves no opinion to `Optimized`**, which is invisible on the wire. A stale stamp means it reverted at the last import |
 
 **Contract §2.4 is the single authoritative version of this table** — it covers the document fields this
 one omits, and no gate may invent a treatment that is not in it. The four treatments are different
@@ -282,6 +285,35 @@ under-sizes and a healthy test **`TIMED-OUT`s, and is believed**.
   `comp_min` is 1 passes today with **no `comp_stable` declared at all**. If a submission runs above
   `comp_min`, treat the model ceiling as **NOT CHECKED by hand** whatever the tool printed.
 
+### Gate 11 — memory layout, ***the property that decides whether there is anything to observe at all***
+Gate 5 asks whether a window clears a floor. **This is prior to that and it is binary.**
+
+> ***AN S7-1200 BLOCK DEFAULTS TO `Optimized`, AND AN OPTIMIZED BLOCK IS INVISIBLE TO CLASSIC S7comm —
+> NOT AN ERROR. THE BLOCK IS SIMPLY ABSENT, AND IT FAILS AT THE FIRST *DATA* READ RATHER THAN AT
+> CONNECT.***
+
+**The invariant (contract §4.5, the coordinator's ruling, overturnable at one line):** *the harness
+never touches a deliverable block's data directly — it touches harness-generated objects only.* That is
+the isolation the copy layer already provides, so **the block under test stays `Optimized`, the platform
+default, and a deliverable pays nothing.**
+
+- **Two mechanisms, and conflating them is the mistake to avoid.** The `%MW` mirror — the wave's whole
+  surface, **start bools included** — is **not a data block at all**, so it has no layout to revert;
+  its guarantee is the **address**. A harness *data block* is guaranteed by **re-assertion**. Somebody
+  hunting for `--expect Standard` on the mirror will not find one, and that is not a missing check.
+- ***THE LAYOUT REVERTS AT EVERY IMPORT, SILENTLY*** (the exported `.xml` carries no `MemoryLayout`
+  element, so the import states no opinion). So: `block-layout --set Standard --yes` after **each**
+  import, then `--expect Standard` as the gate. ***`--expect` only tells you it broke; `--set` is what
+  repairs it.***
+- ***NEVER ACCEPT `drift-check` AS THE GATE FOR THIS.*** The `Normalizer` ignores the attribute, so it
+  reports MATCH in **both** directions. A green from a blind check is worse than no check.
+- 🔴 **True today, enforced by nothing.** Audited 2026-08-13: the wave path is Modbus-into-`%M`
+  throughout and cannot break the invariant; the rig marker DB is a harness object declared `Standard`.
+  **But `S7Transport` resolves tags through a HAND-WRITTEN JSON tag map and will address any DB**, and
+  the write fence is scoped on an **area name from that same map** — so it checks that the caller's
+  claimed area matches the tag's, never what *kind of object* it is. **If a submission's transport is
+  that tag map, ask which DBs it names before believing the invariant holds for it.**
+
 ---
 
 ## Step 3 — mutation, not example
@@ -410,3 +442,8 @@ turns on one, escalate rather than picking a reading.
     difference of 1 or 2 sits inside an unspecified off-by-one. **Do not admit an assertion that turns
     on one** until §9.4 says whether a stamp is the scan the copy layer observed it or the scan the
     block did it.
+11. **§4.5's memory-layout invariant is the COORDINATOR'S ruling, not the owner's**, and it is
+    overturnable at one line. It costs a deliverable nothing (the block under test stays `Optimized`),
+    which is why it was taken rather than escalated — **but it is enforced by nothing today**, and the
+    place it would break is a hand-written S7 tag map naming a deliverable block's DB. If a submission
+    reaches a deliverable block over classic S7comm, that is not a vector to fix: **stop and escalate.**

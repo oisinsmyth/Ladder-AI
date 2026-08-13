@@ -302,6 +302,11 @@ This is the one table to read before omitting anything. Four treatments, and the
 | `model.compStable`, at `runtimeCompression` = 1 | **reported, does not gate** | nothing is scaled, so it cannot bind — computed, not assumed |
 | a latched or stamped expectation's `windowScans` | **NOT DECLARED** | legal (exempt from the floor, §4.2) and it still yields no assertion ceiling |
 | a **sampled** expectation's `windowScans` | **REFUSED** | undeclared is not exempt |
+| `deployment` (§4.5) | ***NOT CHECKED*** | a property of the **download**; resubmitting the vector cannot supply it. Absent ≠ `s7Objects: []` |
+| `deployment.s7Objects` = `[]` | **CHECKED — a claim** | *no classic-S7comm path reaches a data block*, which is the normal mirror-only state |
+| an `s7Objects` row's `layout` | **REFUSED** | absence means "no opinion", and TIA resolves no opinion to **Optimized** — which is invisible on the wire. Undetermined is not clean |
+| `layoutSetAfterImport`, or one naming an older `importStamp` | **REFUSED** | the layout reverts at **every** import; a stale stamp says it was re-asserted and has reverted since |
+| an `s7Objects` row naming a **deliverable** block | **REFUSED** | the invariant itself, §4.5. Not a finding — the harness touches harness-generated objects only |
 
 **One field is a genuine default and is named as such: none.** *(`presets: []` is a claim, not a
 default; `runtimeCompression`, `slotsInWaveSet` and `resultRegistersPerSlot` default to 1 as the
@@ -421,6 +426,122 @@ anybody editing the vector.**
 > ***SO A VECTOR DECLARES THE `comp` ITS SCAN COUNTS ARE STATED AT, AND THE RUNNER RE-CHECKS THE
 > FLOOR AT THE `comp` ACTUALLY USED.*** Mechanically checkable, and cheap. Without it the
 > observability check is sound at authoring time and silently void at run time.
+
+### 4.5 ***MEMORY LAYOUT — THE PROPERTY THAT DECIDES WHETHER THERE IS ANYTHING TO OBSERVE AT ALL***
+
+**RULED 2026-08-13. This is the coordinator's ruling, not the owner's, and it is overturnable at one
+line** — the line is the invariant in the box below.
+
+§4.1 says the floor is physical. **This is prior to the floor and it is binary.**
+
+> ***AN S7-1200 BLOCK DEFAULTS TO `MemoryLayout: Optimized`, AND AN OPTIMIZED BLOCK IS INVISIBLE TO
+> CLASSIC S7comm — NOT AN ERROR. THE BLOCK IS SIMPLY ABSENT, AND IT FAILS AT THE FIRST *DATA* READ
+> RATHER THAN AT CONNECT.***
+
+A failure at connect would be diagnosable. A failure at the first data read, on a link that connected
+cleanly, reads as a wiring or addressing fault and sends the reader to the wrong half of the system.
+And **the toolchain cannot see it**: `MemoryLayout` is on the `Normalizer`'s ignore list, so
+`drift-check` reports MATCH in **both directions** and would never surface it.
+
+#### The invariant
+
+> *** THE HARNESS NEVER TOUCHES A DELIVERABLE BLOCK'S DATA DIRECTLY. IT TOUCHES HARNESS-GENERATED
+> OBJECTS ONLY. ***
+
+**This is the isolation the design already rests on** — the copy layer exists precisely so that a test
+never reaches into the block under test — so the requirement lands entirely inside what the harness
+generates, and ***the block under test stays `Optimized`, the platform default, costing a deliverable
+nothing.*** No convention, no IR change, no argument with a block author.
+
+#### The two mechanisms, which are NOT the same and must not be conflated
+
+| harness object | how visibility is guaranteed | can it revert? |
+|---|---|---|
+| **the `%MW` mirror** (the wave's whole surface: start bools, inputs, results) | ***it is not a data block at all.*** Bit memory has no `MemoryLayout` attribute, so there is nothing to revert | **No — structurally** |
+| **a harness DATA BLOCK** (today: the rig marker DB) | declared `Standard`, and **re-asserted on the device after every import** | **Yes, silently, at every import** |
+
+*Somebody looking for `--expect Standard` on the mirror will not find one and must not read that as a
+missing check.* For the mirror the guarantee is **the address**; for a DB it is **the re-assertion**.
+
+#### Two consequences, stated rather than implied
+
+1. ***THE LAYOUT REVERTS AT EVERY IMPORT, SILENTLY.*** The exported `.xml` carries no `MemoryLayout`
+   element, so the import states no opinion and TIA applies the S7-1200 default. It bites on the
+   **second** import. So the sequence is `openness-cli block-layout --set Standard --yes` **after each
+   import**, then `--expect Standard` as the gate. ***`--expect` only tells you it broke; `--set` is
+   what repairs it*** — a check without the repair beside it is a gate that reports the same failure
+   for ever.
+2. ***`drift-check` MUST NEVER BE USED AS THE GATE FOR THIS.*** It is structurally blind to the
+   attribute, in both directions. `--expect Standard` is the only check that can see it. *A green from
+   a blind check is worse than no check, because a green with a reason attached stops being questioned.*
+
+#### What a submission declares
+
+```
+deployment                    OBJECT. A property of the DOWNLOAD, never of a vector.
+  importStamp       string    identifies the import the copy layer was generated by.
+                              Required whenever `s7Objects` is non-empty; every layout claim is
+                              dated against it
+  s7Objects   [ ... ]         EVERY object any classic-S7comm path may reach
+      area                    the area name the transport addresses it by
+      dbNumber                the DB number
+      harnessObject           the HARNESS-GENERATED object this is.
+                              *** A ROW NAMING A DELIVERABLE BLOCK IS A REFUSAL, NOT A FINDING ***
+      layout                  "Standard" | "Optimized" | "NotApplicable"
+      layoutSetAfterImport    the `importStamp` that `--set Standard --yes` followed.
+                              *** NOT A BOOLEAN, DELIBERATELY *** — see below
+```
+
+***`s7Objects: []` is a POSITIVE CLAIM and is the NORMAL, CORRECT state:*** *no classic-S7comm path in
+this deployment reaches any data block.* That is what a mirror-only wave looks like, and it is CHECKED
+as a claim. **An absent `deployment` is a different statement** — nobody said — and is `NOT CHECKED`.
+The same absent-versus-empty distinction the conflict graph and `presets` already use.
+
+**`layoutSetAfterImport` is a stamp and not a boolean, and that is the load-bearing choice.** A bool
+would be a caller-supplied verdict — the exact shape this project has now killed three times
+(`observabilitySupported`, the drain-state bool, the multi-writer report). A stamp can be **compared**:
+if it does not equal the current `importStamp`, the layout was re-asserted against a *previous* import
+and has reverted since. That is a computation, and *"nobody re-asserted it"* and *"it was re-asserted
+after the wrong import"* both fall out of it as distinct facts.
+
+**`layout: "NotApplicable"` is for objects with no layout attribute** — a `%M` region, a tag table.
+`Optimized` is a **REFUSAL**. An absent or unstated `layout` is **also a refusal**, and for the reason
+the IR-side check already gives: *absence means "no opinion", never a default, and TIA resolves no
+opinion to Optimized.* **Undetermined is not clean.**
+
+#### 🔴 Is the invariant true of the code as written? ***TRUE TODAY, AND NOT ENFORCED***
+
+Established by reading `src/harness/` at `f0fb0cb`, because *a ruling the code happens to break is one
+that gets discovered by a failed rig session.* Every classic-S7comm data path in the harness, and what
+each targets:
+
+| path | targets | invariant |
+|---|---|---|
+| `WaveRun` / `SlotRun` / `InertPhase` / `MirrorClient` — the whole wave, ***including the start bools*** | **Modbus holding registers only**, which `MirrorGeometry` places in `%M` bit memory. `BitAddressOf` renders a start bool as `%M<byte>.<bit>` | ✅ **holds structurally** — no data block is involved, so no layout exists to revert |
+| the rig-identity read (`MarkerDbIdentitySource`) | the rig marker DB, a harness-generated object whose layout type declares it **STANDARD** and whose offsets are computed from the standard layout rules | ✅ holds |
+| restore-point capture/restore, and the rig read/write probes | default to the marker DB; **`--db` and `--area` are free-form overrides** | ⚠️ **unconstrained** |
+| ***the symbolic S7 transport*** (`S7Transport` → `WriteArea(S7Area.DB, …)`) | **any DB, resolved through a HAND-WRITTEN JSON tag map**. Its own doc says the DB must have optimized access off and that *"neither of which this code can check"* | 🔴 ***unconstrained — this is the mechanism by which the invariant would be broken*** |
+
+> ***THE START BOOL IS `%M`, NOT A DB.*** §6's gate is therefore not in tension with the invariant, and
+> it cannot be — a mirror in a DB is refused before any of this, by the address rule.
+>
+> ***AND NOTHING READS A DELIVERABLE BLOCK'S DATA TODAY*** — but only because no tag map in the
+> repository points at one. The only tag definitions that exist are test fixtures. **The write fence is
+> scoped on the AREA NAME, which comes from that same hand-written map**, so it verifies that the
+> caller's claimed area matches the tag's — never what *kind of object* the area is. ***The invariant is
+> a true statement about the current configuration and is enforced by nothing.***
+
+**So the enforceable point is nameable, and it is the tag map**: every distinct `(area, dbNumber)` a
+tag map can reach must appear in `deployment.s7Objects` naming a harness object. That is a
+set-difference against an artifact the vector author did not write for this purpose — the same shape as
+M4's fidelity check and `trace`'s guard-containment hop.
+
+**Three parts of the harness already encode this ruling and one is in flight** — the mirror geometry
+(why `%MW` and not a DB, including the `16#818C` refusal an optimized DB returns), the retention check
+(which refuses a harness DB carrying no layout line, or declaring `Optimized`, or a mirror tag outside
+`%M`), the marker DB's declared STANDARD layout, and the deployment plan being built now, which already
+sequences `--set` then `--expect` after every import. ***The contract was the only place it was not
+written down.***
 
 ---
 
@@ -673,6 +794,7 @@ of saying so.
 | **10a assertion ceiling** (X-D) | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | reject, naming the binding signal and the ceiling. **Catches what gate 5 structurally cannot: LATCHED is exempt from the observability floor, never from the scan-period term** |
 | **10b timer / model / ratio ceilings** (X-D) | at `runtimeCompression` > 1, the block's presets, the model's `comp_stable` and the ratio-distortion threshold (§2.3) | reject with `comp_min` **and** `comp_max` shown. Absent inputs are `NOT CHECKED`, never a pass. At `comp` = 1 a real computed pass |
 | **liveness** *(post-run)* | stimulus check present; counter advanced by the expected amount; manifest presence | verdict `STALE`, never `PASS` |
+| **11 memory layout** (§4.5) | every `(area, dbNumber)` a classic-S7comm path can reach names a **harness-generated** object, declares `layout: Standard` (or `NotApplicable`), and carries a `layoutSetAfterImport` equal to the current `importStamp` | ***refuse.*** A deliverable block named here is the invariant broken; `Optimized`, an unstated layout, or a stale stamp each mean the object is **absent on the wire** and every read fails at the first *data* transfer. **Absent `deployment` is `NOT CHECKED`** |
 
 **Two properties of this table, both learned by getting them wrong.** *(a)* **The gate that reports on
 clean input too.** 8c prints its finding line on a clean graph as well, for the same reason F-6's
