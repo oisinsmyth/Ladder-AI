@@ -124,9 +124,33 @@ text: count the triggers, count the responses. R3 removes the largest source of 
 *dishonest* disagreement. On the corpus of clause shapes above, the decomposition is determined.
 
 **2.2 The falsifiability test is a procedure, not an intuition.** Where the rules leave a choice, the
-tie-breaker is concrete: ***name the defect that breaks this half and not the other.*** If you cannot
-name one, it is one assertion. Two enumerators running that procedure on the same clause are doing
-the same work, not exercising the same taste.
+tie-breaker is concrete: ***name the defect that breaks this half and not the other.*** Two
+enumerators running that procedure on the same clause are doing the same work, not exercising the
+same taste.
+
+> 🔴 ***RUN IT ONCE PER CANDIDATE, NOT ONCE PER PAIR — CORRECTED 2026-08-13, ON FIRST LIVE USE.***
+>
+> As originally worded this paragraph ended *"if you cannot name one, it is one assertion"*, which
+> asks the question **in one direction only**. §1 is existential **per assertion**: `A` is an
+> assertion of `C` if some defect falsifies `A` while leaving *every other assertion of `C`* true —
+> so the procedure must be run **for each candidate separately**, and a split is required as soon as
+> **any** candidate has its own isolating defect. The two readings are not equivalent, and the first
+> live enumeration hit the gap: on `REQ-HBA-001` they gave **3 assertions versus 4**.
+>
+> **§1 governs; the split is required.** The worked case is the reason, not the authority: with
+> pause-and-resume folded into one trigger, an implementation that **resets** the accumulated time on
+> loss of running rather than pausing it falsifies the fourth candidate while leaving the
+> uninterrupted-run assertion **true**. That is §1's test passing, so the fourth assertion exists.
+>
+> And the cost of the one-sided reading is exactly the failure this document was written to prevent:
+> the enumerator recorded that under the merged reading ***no assertion isolates the reset-on-stop
+> defect***, so a vector could cite the surviving assertion, exercise an uninterrupted run, and cover
+> it in good faith while never testing the behaviour. **A denominator that quietly absorbs a defect
+> class is a denominator that cannot be missed from** — which is the self-referential coverage §7
+> rules out.
+>
+> Note what found this: **not review of the document, but the first attempt to use it.** The
+> contradiction had been read past by two people.
 
 **2.3 — AND THIS IS THE ONE THAT ACTUALLY MATTERS — *DISAGREEMENT IS MADE VISIBLE RATHER THAN
 PREVENTED*.** An enumeration only its author can reproduce is a correlated check; the fix is not to
