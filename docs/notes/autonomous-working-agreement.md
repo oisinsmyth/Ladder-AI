@@ -190,6 +190,20 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** A COMPARATOR THAT LEARNS TO EQUATE REPRESENTATIONS STARTS PASSING. *** Measured 2026-08-13, as a
+  **deliberate refusal** rather than a defect: a bound comparator treats `T#60S` and `T#1M` as
+  **different**, though they are the same interval. It is not a duration parser and must not become
+  one — *** TEACHING IT TO EQUATE THEM IS EXACTLY HOW A COMPARATOR STARTS PASSING THINGS. *** The same
+  family as *a normalizer that ignores too much is how the `MemoryLayout` hole survived a green*, but
+  arrived at from the other end: here the convenience **is** the failure mode.
+    ➜ **When you decline a convenience for this reason, write the reason beside it** — otherwise the
+      next reader files it as a rough edge and fixes it. Both this and its sibling asymmetry
+      (*lax where laxity fails closed, strict where it would fail open*) carry theirs.
+    ➜ ⚠️ And a live method correction from the same lane: an audit that enumerated gates by grepping
+      `new GateResult("…")` **could not see gates that bind their label to a `const string` first** —
+      three did. **Two earlier audits were right by luck of style.** *An enumeration built on one
+      syntactic form is a denominator with a blind spot;* enumerate both forms, or count from the
+      behaviour instead.
 - *** A NOTE THAT PROTECTS SOMETHING MUST BREAK WHEN THE PROTECTION IS BREACHED — MAKE THE REFERENCE
   SELF-FALSIFYING. *** Measured 2026-08-13, and it reversed the obvious fix. A note existed to stop a
   redundant-looking word being deleted from two assertions, because that word is what makes them
