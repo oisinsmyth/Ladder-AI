@@ -116,7 +116,11 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, stand
                                     # New instructions of this shape are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited
                                     # in lockstep. ✅ **`MB_SERVER` 5.3 IS REGISTERED AND THE IR PATH WORKS — corrected 2026-08-13, owner-flagged.** This line previously read "CHARACTERISED BUT
                                     # DELIBERATELY NOT REGISTERED", which was true until **2026-08-12**, when `MbServer53` was added to `FixedShapeInstructions.cs` on exactly the condition the old note
-                                    # set for it. Verified behaviourally, not by reading the table: the Release converter takes a real `MB_SERVER` IR block to SimaticML, **exit 0, the part emitted**.
+                                    # set for it. ***AND THE `Array[..] of Struct` NEVER APPLIED TO US AT ALL:*** it belongs to the Siemens **sample** block used to characterise the port list, not to
+                                    # anything we author — `MB_HOLD_REG` is an **area pointer over marker memory** (`P#M1000.0 WORD n`), not a reference to an `Array[..] of Int` static, so the
+                                    # structured interface simply never arises. Two statics suffice: an `MB_SERVER` instance and a `TCON_IP_v4`. Proven in `GenProject1` 2026-08-13 — imported, compiled
+                                    # (`errors=0`), and confirmed from **TIA's own re-export** (`Part Name="MB_SERVER" Version="5.3"`, the pointer, `LocalPort 503`), never from an exit code.
+                                    # The converter half was verified behaviourally too, not by reading the table: the Release binary takes a real `MB_SERVER` IR block to SimaticML, **exit 0, part emitted**.
                                     # 🔴 **AND THE STALE LINE COST A WRONG PLAN.** It was read as "MB_SERVER cannot be moved into a project", which stopped a rig deployment a step early — so note the
                                     # distinction it never made: *the converter's registry governs IR → SimaticML ONLY.* `openness-cli export`/`import` produce and consume SimaticML **straight from TIA
                                     # and never touch the converter**, so a converter limitation is NEVER by itself a reason a block cannot reach a project. `MB_SERVER` is a `<Part>`, measured: an InOut
