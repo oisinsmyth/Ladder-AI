@@ -2,15 +2,34 @@ using Harness.Map;
 
 namespace Harness.Wire;
 
-/// <summary>One FC03 over the control region: the build stamp, the scan counter and the start bools.</summary>
+/// <summary>One FC03 over the control region: the build stamp, the scan counter, the start bools and the echo.</summary>
 /// <param name="Version">The build stamp the running program publishes (§9).</param>
 /// <param name="ScanCounter">The free-running scan counter. Wraps; stamps are differences from T=0.</param>
-/// <param name="StartBools">The start-bool registers as read back.</param>
-public sealed record ControlSnapshot(uint Version, long ScanCounter, ushort[] StartBools)
+/// <param name="StartBools">The start-bool registers as read back — what the client COMMANDED.</param>
+/// <param name="StartEcho">
+/// The echo registers — what the program ACTUALLY RAN, latched by the copy layer from each block's own
+/// start condition (X-E). Different fact from <paramref name="StartBools"/>, and only this one is
+/// evidence.
+/// </param>
+public sealed record ControlSnapshot(uint Version, long ScanCounter, ushort[] StartBools, ushort[] StartEcho)
 {
-    /// <summary>Whether slot <paramref name="index"/>'s start bool reads as raised.</summary>
-    public bool StartRaised(int index) =>
-        (StartBools[index / RegisterMap.SlotsPerStartRegister] & (1 << (index % RegisterMap.SlotsPerStartRegister))) != 0;
+    /// <summary>Whether slot <paramref name="index"/>'s start bool reads as raised — the COMMAND.</summary>
+    public bool StartRaised(int index) => BitSet(StartBools, index);
+
+    /// <summary>Whether slot <paramref name="index"/>'s block was seen to run — the EXECUTION.</summary>
+    public bool Executed(int index) => BitSet(StartEcho, index);
+
+    /// <summary>
+    /// Bit <paramref name="index"/> of a per-slot bit region.
+    ///
+    /// <para>The bit's position WITHIN the register value is not in doubt. What is inferred is which
+    /// <c>%M</c> byte carries it, and that inference lives in exactly one place —
+    /// <c>MirrorGeometry.BitAddressOf</c>. Both the command side and the echo side route through it, so
+    /// a correction is one edit; and because they do, a wrong inference makes a commanded slot fail to
+    /// execute rather than a different slot appear to (see <c>CoRunningLog</c>).</para>
+    /// </summary>
+    private static bool BitSet(ushort[] registers, int index) =>
+        (registers[index / RegisterMap.SlotsPerStartRegister] & (1 << (index % RegisterMap.SlotsPerStartRegister))) != 0;
 }
 
 /// <summary>
@@ -64,12 +83,17 @@ public sealed class MirrorClient
         var versionOffset = _map.Version.Register - control.Register;
         var scanOffset = _map.ScanCounter.Register - control.Register;
         var startOffset = _map.StartBools.Register - control.Register;
+        var echoOffset = _map.StartEcho.Register - control.Register;
 
         return new ControlSnapshot(
             RegisterWords.To32(registers[versionOffset], registers[versionOffset + 1], WordOrder),
             unchecked((int)RegisterWords.To32(registers[scanOffset], registers[scanOffset + 1], WordOrder)),
-            registers[startOffset..(startOffset + _map.StartBools.Length)]);
+            registers[startOffset..(startOffset + _map.StartBools.Length)],
+            registers[echoOffset..(echoOffset + _map.StartEcho.Length)]);
     }
+
+    /// <summary>The map this client addresses. Read-only; every address still comes from it.</summary>
+    public RegisterMap Map => _map;
 
     /// <summary>The control region, refusing if the running program is not the one this map describes.</summary>
     public ControlSnapshot ReadControl()
@@ -129,6 +153,13 @@ public sealed class MirrorClient
 
     /// <summary>Lower every start bool. The reset level D33 holds asserted for the whole inert period.</summary>
     public void LowerAllStartBools() => Write(_map.StartBools.Register, new ushort[_map.StartBools.Length]);
+
+    /// <summary>
+    /// Clear every echo latch. D33: "latches are released, and the release must COMPLETE before the
+    /// first scan of the test" — so this happens during inert, while the start bools are low and the
+    /// copy layer's set-coils cannot be firing.
+    /// </summary>
+    public void ClearStartEcho() => Write(_map.StartEcho.Register, new ushort[_map.StartEcho.Length]);
 
     /// <summary>Read one slot's results. ONE FC03, never straddling two slots (X-A).</summary>
     public ushort[] ReadResults(int slotIndex)

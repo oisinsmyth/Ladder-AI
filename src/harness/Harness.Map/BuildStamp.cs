@@ -46,10 +46,18 @@ public readonly record struct BuildStamp(uint Value)
         RegisterMap map,
         SlotBinding binding,
         CopyLayerNaming naming,
+        IEnumerable<HarnessObject>? programUnderTest = null) =>
+        Of(map, new[] { binding }, naming, programUnderTest);
+
+    /// <summary>The same derivation over a wave set of any width.</summary>
+    public static BuildStamp Of(
+        RegisterMap map,
+        IReadOnlyList<SlotBinding> bindings,
+        CopyLayerNaming naming,
         IEnumerable<HarnessObject>? programUnderTest = null)
     {
         ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(naming);
 
         var canonical = new StringBuilder();
@@ -61,13 +69,17 @@ public readonly record struct BuildStamp(uint Value)
             canonical.Append($"excised={slot.SlotId}\n");
 
         canonical.Append($"block={naming.BlockName}/{naming.BlockNumber} table={naming.TagTableName} prefix={naming.TagPrefix}\n");
-        canonical.Append($"slot={binding.SlotId} start={binding.StartCondition ?? "<none>"}\n");
 
-        foreach (var target in binding.VectorTargets ?? Array.Empty<string>())
-            canonical.Append($"v={target}\n");
+        foreach (var binding in bindings)
+        {
+            canonical.Append($"slot={binding.SlotId} start={binding.StartCondition ?? "<none>"}\n");
 
-        foreach (var source in binding.ResultSources ?? Array.Empty<string>())
-            canonical.Append($"r={source}\n");
+            foreach (var target in binding.VectorTargets ?? Array.Empty<string>())
+                canonical.Append($"v={target}\n");
+
+            foreach (var source in binding.ResultSources ?? Array.Empty<string>())
+                canonical.Append($"r={source}\n");
+        }
 
         foreach (var obj in (programUnderTest ?? Array.Empty<HarnessObject>()).OrderBy(o => o.Name, StringComparer.Ordinal))
             canonical.Append($"obj={obj.Kind}:{obj.Name}\n{obj.Ir}\n");

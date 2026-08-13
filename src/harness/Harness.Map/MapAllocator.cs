@@ -88,7 +88,12 @@ public static class MapAllocator
         var version = new RegisterRange(0, RegisterMap.VersionRegisters);
         var scanCounter = new RegisterRange(version.End, RegisterMap.ScanCounterRegisters);
         var startBools = new RegisterRange(scanCounter.End, startRegisters);
-        var vectorBlock = new RegisterRange(startBools.End, slots.Count * vectorPerSlot);
+
+        // The echo (X-E): what the program ACTUALLY ran, published by the copy layer from each block's
+        // own start condition. Same width as the bools and adjacent to them, so the control poll returns
+        // commanded and executed together and the two can be compared without a second round trip.
+        var startEcho = new RegisterRange(startBools.End, startRegisters);
+        var vectorBlock = new RegisterRange(startEcho.End, slots.Count * vectorPerSlot);
         var resultBlock = new RegisterRange(vectorBlock.End, slots.Count * resultPerSlot);
 
         if (resultBlock.End > geometry.AvailableRegisters)
@@ -105,11 +110,15 @@ public static class MapAllocator
             StartBoolRegister: startBools.Register + (i / RegisterMap.SlotsPerStartRegister),
             StartBitInRegister: i % RegisterMap.SlotsPerStartRegister)).ToArray();
 
+        // Constructing the map is itself the disjointness check: RegisterMap refuses to exist with
+        // overlapping regions, so an arithmetic slip above cannot produce a map that allocates cleanly,
+        // hashes stably, and silently aliases two agents onto one register (DB-6).
         var map = new RegisterMap(
             geometry,
             version,
             scanCounter,
             startBools,
+            startEcho,
             vectorBlock,
             resultBlock,
             vectorPerSlot,

@@ -29,27 +29,113 @@ public class MapAllocatorTests
         Assert.Equal(new RegisterRange(0, 2), map.Version);
         Assert.Equal(new RegisterRange(2, 2), map.ScanCounter);
         Assert.Equal(new RegisterRange(4, 1), map.StartBools);
+        Assert.Equal(new RegisterRange(5, 1), map.StartEcho);
 
         // Widest slot in the wave set sets both widths, for every slot (X-A: slots are fixed-size).
         Assert.Equal(4, map.VectorRegistersPerSlot);
         Assert.Equal(8, map.ResultRegistersPerSlot);
 
-        Assert.Equal(new RegisterRange(5, 8), map.VectorBlock);
-        Assert.Equal(new RegisterRange(13, 16), map.ResultBlock);
-        Assert.Equal(29, map.TotalRegisters);
+        Assert.Equal(new RegisterRange(6, 8), map.VectorBlock);
+        Assert.Equal(new RegisterRange(14, 16), map.ResultBlock);
+        Assert.Equal(30, map.TotalRegisters);
     }
 
     [Fact]
-    public void The_control_region_is_one_read_covering_version_scan_counter_and_start_bools()
+    public void The_control_region_is_one_read_covering_version_scan_counter_start_bools_and_the_echo()
     {
-        // DB-6 wants the version register checked before EVERY transaction batch. It is free to check
-        // only if it shares the poll the client was making anyway, which means one contiguous region.
+        // DB-6 wants the version register checked before EVERY transaction batch, and X-E wants the
+        // co-running log built from executed start bools. Both are free only if they share the poll the
+        // client was making anyway, which means one contiguous region.
         var map = MapAllocator.Allocate(Wave(new SlotRequest("S0", 4, 8))).Require();
 
         Assert.Equal(0, map.Control.Register);
-        Assert.Equal(map.StartBools.End, map.Control.End);
-        Assert.Equal(map.Version.Length + map.ScanCounter.Length + map.StartBools.Length, map.Control.Length);
+        Assert.Equal(map.StartEcho.End, map.Control.End);
+        Assert.Equal(
+            map.Version.Length + map.ScanCounter.Length + map.StartBools.Length + map.StartEcho.Length,
+            map.Control.Length);
     }
+
+    [Fact]
+    public void The_echo_is_as_wide_as_the_start_bools_so_every_commanded_slot_has_somewhere_to_answer()
+    {
+        foreach (var count in new[] { 1, 2, 16, 17, 33 })
+        {
+            var map = MapAllocator.Allocate(new WaveSetRequest(Rig(),
+                Enumerable.Range(0, count).Select(i => new SlotRequest($"S{i}", 1, 1)).ToArray())).Require();
+
+            Assert.Equal(map.StartBools.Length, map.StartEcho.Length);
+            Assert.Equal(map.StartBools.End, map.StartEcho.Register);
+        }
+    }
+
+    [Fact]
+    public void Every_region_in_the_map_is_pairwise_disjoint()
+    {
+        // The FIRST way two slots could interfere has nothing to do with the program under test: it is a
+        // map in which one slot's registers overlap another's, so agent A's write lands in agent B's
+        // mirror. DB-6 calls that the one genuine leak in the design and says the protection can be BY
+        // CONSTRUCTION. The layout is contiguous, so overlap is impossible as written — which is exactly
+        // why the allocator checks rather than assumes, and why this walks a range of shapes.
+        foreach (var (slots, vector, result) in new[] { (1, 1, 1), (2, 2, 2), (3, 7, 5), (17, 1, 25), (5, 123, 4) })
+        {
+            var map = MapAllocator.Allocate(new WaveSetRequest(Rig(),
+                Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", vector, result)).ToArray())).Require();
+
+            var windows = map.Regions
+                .Concat(map.Slots.Select(s => ($"{s.SlotId}.v", s.Vector)))
+                .Concat(map.Slots.Select(s => ($"{s.SlotId}.r", s.Result)))
+                .ToArray();
+
+            foreach (var register in Enumerable.Range(0, map.TotalRegisters))
+            {
+                // Each register belongs to exactly one named region, and to at most one slot window.
+                Assert.Equal(1, map.Regions.Count(r => register >= r.Range.Register && register < r.Range.End));
+                Assert.True(map.Slots.Count(s => register >= s.Vector.Register && register < s.Vector.End) <= 1);
+                Assert.True(map.Slots.Count(s => register >= s.Result.Register && register < s.Result.End) <= 1);
+            }
+
+            Assert.NotEmpty(windows);
+        }
+    }
+
+    [Fact]
+    public void A_map_whose_regions_overlap_CANNOT_BE_CONSTRUCTED()
+    {
+        // The check that makes the one above more than a statement about arithmetic that happens to be
+        // right. Two slots aliased onto one register is agent A's write landing in agent B's mirror, and
+        // it would not show up as an error anywhere downstream — so the type refuses to hold one.
+        var good = MapAllocator.Allocate(Wave(new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2))).Require();
+
+        var error = Assert.Throws<ArgumentException>(() => Rebuild(good, startEcho: good.StartBools));
+        Assert.Contains("aliases regions", error.Message, StringComparison.Ordinal);
+        Assert.Contains("start bools", error.Message, StringComparison.Ordinal);
+
+        // And per-slot windows, which is where a real aliasing bug would live.
+        var aliased = good.Slots.Select(s => s with { Result = good.Slots[0].Result }).ToArray();
+        var slotError = Assert.Throws<ArgumentException>(() => Rebuild(good, slots: aliased));
+        Assert.Contains("share registers", slotError.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_slot_window_outside_its_own_block_is_refused_too()
+    {
+        var good = MapAllocator.Allocate(Wave(new SlotRequest("S0", 2, 2))).Require();
+        var stray = good.Slots.Select(s => s with { Vector = new RegisterRange(good.ResultBlock.Register, 2) }).ToArray();
+
+        var error = Assert.Throws<ArgumentException>(() => Rebuild(good, slots: stray));
+        Assert.Contains("is not inside the vector block", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Rebuild a map through its real constructor with one region replaced.
+    ///
+    /// <para>Deliberately NOT a <c>with</c> expression: a record's copy constructor does not re-run the
+    /// validation, so <c>with</c> would produce the aliased map without complaint and this test would be
+    /// asserting nothing.</para>
+    /// </summary>
+    private static RegisterMap Rebuild(RegisterMap map, RegisterRange? startEcho = null, IReadOnlyList<SlotAllocation>? slots = null) =>
+        new(map.Geometry, map.Version, map.ScanCounter, map.StartBools, startEcho ?? map.StartEcho,
+            map.VectorBlock, map.ResultBlock, map.VectorRegistersPerSlot, map.ResultRegistersPerSlot, slots ?? map.Slots);
 
     [Fact]
     public void Slot_addresses_are_base_plus_index_times_slot_size()

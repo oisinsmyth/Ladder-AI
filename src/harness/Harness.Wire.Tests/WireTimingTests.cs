@@ -16,7 +16,7 @@ public class WireTimingTests
         // A wave issues round trips in the hundreds, so "one in a hundred" is several per wave. Keyed on
         // the median, a wave set admits three to five times more slots than the link can observe, and the
         // failure is a MISSED ASSERTION REPORTED AS A PASS.
-        Assert.Equal(173, WireTiming.RttP99Ms);
+        Assert.Equal(201, WireTiming.RttP99Ms);
         Assert.Equal(78, WireTiming.RttTypicalMs);
         Assert.True(WireTiming.RttP99Ms > WireTiming.RttTypicalMs);
     }
@@ -77,6 +77,60 @@ public class WireTimingTests
     // ---------------------------------------------------------------------------------------------
     // The word order, which is configurable BECAUSE it is uncalibrated
     // ---------------------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------------------
+    // Width is not a poll budget, and the arithmetic has to say so mechanically
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Widening_every_slot_leaves_the_round_trip_cost_of_an_index_unchanged()
+    {
+        // Registers appear nowhere in the cost model except inside a ceil that is 1 for every legal slot.
+        // Marginal cost per register is ~0.040 ms — negligible and NOT zero — but nothing derives a poll
+        // budget from it, and a future edit that reintroduced register-thrift fails here.
+        var narrow = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 1, pollRounds: 2);
+        var wide = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 123, pollRounds: 2);
+
+        Assert.Equal(narrow, wide);
+    }
+
+    [Fact]
+    public void Adding_one_slot_raises_the_cost_of_an_index_by_the_poll_rounds_plus_its_own_write()
+    {
+        var four = WireTiming.RoundTripsPerIndex(4, 10, 2);
+        var five = WireTiming.RoundTripsPerIndex(5, 10, 2);
+
+        Assert.Equal(3, five - four);   // one write + two poll reads
+        Assert.Equal(13, four);         // 4 x (1 + 2) + 1, exactly section 12a derivation 2
+    }
+
+    [Fact]
+    public void A_slot_past_the_FC16_limit_costs_a_second_write_and_that_is_the_only_way_width_shows_up()
+    {
+        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 1), WireTiming.RoundTripsPerIndex(1, 1, 1));
+        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 1) + 1, WireTiming.RoundTripsPerIndex(1, 124, 1));
+    }
+
+    [Fact]
+    public void The_marginal_cost_of_a_register_is_recorded_as_negligible_and_NOT_zero()
+    {
+        // The bare phrase "marginal cost per register is zero" may no longer be said: it is ~0.040 ms,
+        // ~6% of a round trip at full width, against 100% for a second round trip.
+        Assert.Equal(0.040, WireTiming.MarginalCostPerRegisterMs);
+
+        var fullWidth = WireTiming.MarginalCostPerRegisterMs * Harness.Map.ModbusLimits.MaxWriteRegisters;
+        Assert.InRange(fullWidth / WireTiming.RttTypicalMs, 0.04, 0.08);
+    }
+
+    [Fact]
+    public void The_observability_floor_scales_with_the_number_of_slots_not_with_their_width()
+    {
+        // 8.6 scans at K=1 (was 7.4 at RTT_p99 = 173), so a sampled level must persist for 9 scans — and
+        // for 9 x K in a K-slot tensor. This is the number a two-slot wave has to respect.
+        Assert.Equal(201 / 23.33, WireTiming.ObservabilityFloorScans(1), 3);
+        Assert.Equal(2 * WireTiming.ObservabilityFloorScans(1), WireTiming.ObservabilityFloorScans(2), 6);
+        Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.ObservabilityFloorScans(0));
+    }
 
     [Fact]
     public void The_two_word_orders_are_inverses_of_each_other()

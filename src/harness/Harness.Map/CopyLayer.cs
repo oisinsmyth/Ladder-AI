@@ -49,6 +49,12 @@ public enum CopyLayerNetworkKind
     /// <summary>Drives the block's start condition from the slot's start bool.</summary>
     StartBool,
 
+    /// <summary>
+    /// Latches the block's OWN start condition back into the echo register (X-E) — what the program
+    /// actually ran, as opposed to what the client commanded.
+    /// </summary>
+    StartEcho,
+
     /// <summary>Moves the block's outputs into the slot's result registers.</summary>
     ResultsOut,
 }
@@ -82,17 +88,29 @@ public enum HarnessObjectKind
 /// </summary>
 public sealed record CopyLayerPlan(
     RegisterMap Map,
-    SlotBinding Binding,
+    IReadOnlyList<SlotBinding> Bindings,
     BuildStamp Stamp,
     IReadOnlyList<MirrorTag> Tags,
     IReadOnlyList<CopyLayerNetwork> Networks,
-    bool NoStartGateAsserted)
+    IReadOnlyList<string> SlotsAssertingNoStartGate)
 {
-    /// <summary>Vector registers actually wired. Registers allocated beyond this are declared by nothing and read by nothing.</summary>
-    public int BoundVectorRegisters => Binding.VectorTargets.Count;
+    /// <summary>The single binding, for a one-slot wave set.</summary>
+    public SlotBinding Binding => Bindings.Count == 1
+        ? Bindings[0]
+        : throw new InvalidOperationException($"this plan covers {Bindings.Count} slots; ask for the one you mean.");
 
-    /// <summary>Result registers actually wired.</summary>
-    public int BoundResultRegisters => Binding.ResultSources.Count;
+    /// <summary>Vector registers actually wired for a slot. Registers beyond this are declared by nothing and read by nothing.</summary>
+    public int BoundVectorRegisters(string slotId) => Bindings.Single(b => b.SlotId == slotId).VectorTargets.Count;
+
+    /// <summary>Result registers actually wired for a slot.</summary>
+    public int BoundResultRegisters(string slotId) => Bindings.Single(b => b.SlotId == slotId).ResultSources.Count;
+
+    /// <summary>
+    /// True when EVERY slot asserts it has no start gate. D37: a null start condition is a CLAIM about
+    /// the block ("this one is purely reactive and is held inert by its input values alone"), never a
+    /// blank, so it is recorded per slot rather than collapsed to one flag.
+    /// </summary>
+    public bool NoStartGateAsserted => SlotsAssertingNoStartGate.Count == Bindings.Count;
 }
 
 /// <summary>One symbolic name in the mirror tag table, with the <c>%M</c> address it sits at.</summary>

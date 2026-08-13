@@ -19,10 +19,36 @@ public static class WireTiming
     public const int RttTypicalMs = 78;
 
     /// <summary>
-    /// Worst of the measured p99 band. <b>Every budget, every cap, every width, every timeout uses this
-    /// one.</b> [D, §12a]
+    /// <b>Every budget, every cap, every width uses this one.</b> [M, §12a]
+    ///
+    /// <para><b>Raised 173 → 201 ms on 2026-08-13.</b> The 173 was derived from a 1..16-register sweep
+    /// and applied to full-width slots; re-measured at 123 registers over four runs the per-run p99s
+    /// were 157 / 201 / 168 / 185, two of them above 173. This is the WORST OBSERVED run p99, not the
+    /// weighted central estimate of 183 — a budget keyed on an uncertain tail must fail toward the
+    /// pessimistic side, because setting it too high costs a few slots of width and setting it too low
+    /// costs a MISSED ASSERTION REPORTED AS A PASS.</para>
+    ///
+    /// <para><b>It is the weakest constant here and §12a says so:</b> a 1-in-100 statistic from four
+    /// runs, sampling-limited. No figure derived from it should be quoted to three significant figures,
+    /// and what would firm it up is more SESSIONS, not more widths.</para>
+    ///
+    /// <para><b>The width provenance was withdrawn.</b> A within-width p99 ranged 136→562 ms in one
+    /// session — an order of magnitude more than the 173→201 move — so "width widens the tail" is NOT
+    /// established and nothing here caps slot width on timing grounds.</para>
     /// </summary>
-    public const int RttP99Ms = 173;
+    public const int RttP99Ms = 201;
+
+    /// <summary>
+    /// Marginal cost of one register, measured at 123 on writes; no trend at all on reads. [M, §12a]
+    ///
+    /// <para><b>It is negligible and it is NOT zero</b>, and the difference is the whole finding of
+    /// 2026-08-13. A full-width 123-register write costs ~4.9 ms more than a one-register write, ~6% of
+    /// a round trip — against 100% for a second round trip. So "round trips cost, registers do not"
+    /// survives by a factor of about sixteen, and the bare phrase "marginal cost per register is zero"
+    /// may no longer be said. <b>This constant exists to be quoted, never to be budgeted from:</b> no
+    /// poll budget in this assembly is derived from slot width, and a test asserts that.</para>
+    /// </summary>
+    public const double MarginalCostPerRegisterMs = 0.040;
 
     /// <summary>
     /// The single 2,216 ms sample in 2,000. <b>Timeouts only, never throughput</b> — it must not be added
@@ -60,5 +86,39 @@ public static class WireTiming
         return (int)Math.Ceiling(declaredScans * ScanPeriodMs)
              + (expectedRoundTrips * RttP99Ms)
              + RttMaxObservedMs;
+    }
+
+    /// <summary>
+    /// Round trips one wave index costs: <c>K x (ceil(W / 123) + P) + 1</c> — K slots, W vector
+    /// registers per slot, P poll rounds per index, plus the one-transaction commit. [D, §12a derivation 2]
+    ///
+    /// <para><b>Registers appear nowhere except inside a <c>ceil</c> that is 1 for every legal slot.</b>
+    /// That is the whole finding: W is free, K is not. Nothing in this assembly derives a poll budget
+    /// from slot width, and a test holds that mechanically — widening every slot must leave this number
+    /// unchanged while adding a slot must raise it.</para>
+    /// </summary>
+    public static int RoundTripsPerIndex(int slots, int vectorRegistersPerSlot, int pollRounds)
+    {
+        if (slots < 0 || vectorRegistersPerSlot < 0 || pollRounds < 0)
+            throw new ArgumentOutOfRangeException(nameof(slots), "a count cannot be negative.");
+
+        var writes = vectorRegistersPerSlot == 0
+            ? 0
+            : (vectorRegistersPerSlot + Harness.Map.ModbusLimits.MaxWriteRegisters - 1) / Harness.Map.ModbusLimits.MaxWriteRegisters;
+
+        return (slots * (writes + pollRounds)) + 1;
+    }
+
+    /// <summary>Observability floor in scans at the p99 for a K-slot tensor: a slot is polled every <c>K x RTT</c>. [D, §12a derivation 1]</summary>
+    /// <remarks>
+    /// 8.6 scans at K=1 (was 7.4 at <c>RTT_p99</c> = 173), so a SAMPLED level must persist for 9 scans to
+    /// be caught — and for <c>9 x K</c> in a K-slot tensor. A latched observation has no such window.
+    /// </remarks>
+    public static double ObservabilityFloorScans(int slots)
+    {
+        if (slots < 1)
+            throw new ArgumentOutOfRangeException(nameof(slots), slots, "a tensor of no slots is not polled at all.");
+
+        return slots * RttP99Ms / ScanPeriodMs;
     }
 }

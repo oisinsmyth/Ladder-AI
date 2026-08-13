@@ -48,10 +48,20 @@ public static class CopyLayerGenerator
     /// exists to catch — an aborted or half-applied download — is exactly the one where a plausible
     /// value is worse than none. Derive it with <see cref="BuildStamp.Of"/>.
     /// </param>
-    public static CopyLayerResult Generate(RegisterMap map, SlotBinding binding, CopyLayerNaming naming, BuildStamp stamp)
+    public static CopyLayerResult Generate(RegisterMap map, SlotBinding binding, CopyLayerNaming naming, BuildStamp stamp) =>
+        Generate(map, new[] { binding }, naming, stamp);
+
+    /// <summary>
+    /// Generate the copy layer for a wave set of any width — one binding per slot, in map order.
+    ///
+    /// <para><b>Phase 3 lifts the one-slot refusal that phase 2 carried.</b> The layer is still minimal
+    /// in every other respect; what it gains is that per-slot networks repeat, and that each slot
+    /// publishes a START ECHO (X-E).</para>
+    /// </summary>
+    public static CopyLayerResult Generate(RegisterMap map, IReadOnlyList<SlotBinding> bindings, CopyLayerNaming naming, BuildStamp stamp)
     {
         ArgumentNullException.ThrowIfNull(map);
-        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(naming);
 
         var refusals = new List<string>();
@@ -59,15 +69,18 @@ public static class CopyLayerGenerator
         if (stamp.Value == 0)
             refusals.Add("the build stamp is zero. Unwritten bit memory reads as zero, so a zero stamp confirms against a CPU that never ran the copy layer — the exact half-applied download the version register exists to catch (spec section 9).");
 
-        // Phase 2 is one slot, one block, one vector, end to end — narrow and complete rather than broad
-        // and partial. A second slot is phase 3, and it exists to retire A5 (two slots do not interfere),
-        // which nothing has yet measured. Generating for two now would look like it worked.
-        if (map.Slots.Count != 1)
-            refusals.Add($"the minimal copy layer generates for exactly ONE slot; this map has {map.Slots.Count}. Multi-slot is phase 3 and it retires assumption A5, which is unmeasured.");
+        // EVERY slot in the map must be bound. A map slot with no binding is a region the client can
+        // address and nothing maintains: its results would read as an unbroken run of zeros
+        // indistinguishable from a real result, and its start bool would drive nothing at all.
+        if (bindings.Count != map.Slots.Count)
+            refusals.Add($"the map holds {map.Slots.Count} slot(s) and {bindings.Count} binding(s) were supplied. Every slot must be bound: an unbound slot is a mirror region nothing maintains, and its zeros are indistinguishable from a result.");
 
-        var slot = map.Slot(binding.SlotId);
-        if (slot is null)
-            refusals.Add($"binding names slot '{binding.SlotId}', which is not in the map.");
+        var bound = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var b in bindings)
+        {
+            if (b.SlotId is not null && !bound.Add(b.SlotId))
+                refusals.Add($"slot '{b.SlotId}' is bound twice. Two bindings for one slot means one of them silently wins.");
+        }
 
         if (naming.BlockNumber <= 0)
             refusals.Add("block number must be supplied and positive. Harness block numbers come from the reserved range the caller allocates from, never from this generator (hard rule 3).");
@@ -81,31 +94,37 @@ public static class CopyLayerGenerator
         if (!SafeIdentifier.IsMatch((naming.TagPrefix ?? string.Empty) + "x"))
             refusals.Add($"tag prefix '{naming.TagPrefix}' would not form a plain identifier.");
 
-        if (!SafeIdentifier.IsMatch(binding.SlotId ?? string.Empty))
-            refusals.Add($"slot id '{binding.SlotId}' is not a plain identifier, and it is part of every generated tag name.");
-
-        var vectorTargets = binding.VectorTargets ?? Array.Empty<string>();
-        var resultSources = binding.ResultSources ?? Array.Empty<string>();
-
-        if (resultSources.Count == 0)
-            refusals.Add("binding wires no result sources. A slot that publishes nothing produces a result region of zeros indistinguishable from a real one.");
-
-        if (slot is not null && vectorTargets.Count > slot.Vector.Length)
-            refusals.Add($"binding wires {vectorTargets.Count} vector targets but slot '{binding.SlotId}' was allocated {slot.Vector.Length} vector registers.");
-
-        if (slot is not null && resultSources.Count > slot.Result.Length)
-            refusals.Add($"binding wires {resultSources.Count} result sources but slot '{binding.SlotId}' was allocated {slot.Result.Length} result registers.");
-
-        foreach (var tag in vectorTargets.Concat(resultSources).Append(binding.StartCondition))
+        foreach (var binding in bindings)
         {
-            if (tag is not null && string.IsNullOrWhiteSpace(tag))
-                refusals.Add("a bound tag name is blank.");
+            var slot = map.Slot(binding.SlotId ?? string.Empty);
+            if (slot is null)
+                refusals.Add($"binding names slot '{binding.SlotId}', which is not in the map.");
+
+            if (!SafeIdentifier.IsMatch(binding.SlotId ?? string.Empty))
+                refusals.Add($"slot id '{binding.SlotId}' is not a plain identifier, and it is part of every generated tag name.");
+
+            var targets = binding.VectorTargets ?? Array.Empty<string>();
+            var sources = binding.ResultSources ?? Array.Empty<string>();
+
+            if (sources.Count == 0)
+                refusals.Add($"binding for slot '{binding.SlotId}' wires no result sources. A slot that publishes nothing produces a result region of zeros indistinguishable from a real one.");
+
+            if (slot is not null && targets.Count > slot.Vector.Length)
+                refusals.Add($"binding wires {targets.Count} vector targets but slot '{binding.SlotId}' was allocated {slot.Vector.Length} vector registers.");
+
+            if (slot is not null && sources.Count > slot.Result.Length)
+                refusals.Add($"binding wires {sources.Count} result sources but slot '{binding.SlotId}' was allocated {slot.Result.Length} result registers.");
+
+            foreach (var tag in targets.Concat(sources).Append(binding.StartCondition))
+            {
+                if (tag is not null && string.IsNullOrWhiteSpace(tag))
+                    refusals.Add($"a bound tag name is blank on slot '{binding.SlotId}'.");
+            }
         }
 
         if (refusals.Count > 0)
             return new CopyLayerResult(null, Array.Empty<HarnessObject>(), refusals);
 
-        var allocation = slot!;
         var geometry = map.Geometry;
         var prefix = naming.TagPrefix;
 
@@ -120,26 +139,40 @@ public static class CopyLayerGenerator
                 "Free-running scan counter. Wraps; scan stamps are differences from the start edge."),
         };
 
-        if (binding.StartCondition is not null)
-        {
-            tags.Add(new($"{prefix}{binding.SlotId}_Start", "Bool",
-                geometry.BitAddressOf(allocation.StartBoolRegister, allocation.StartBitInRegister),
-                geometry.ByteAddressOf(allocation.StartBoolRegister),
-                "Start bool. Its rising edge is the test's T=0."));
-        }
+        // Ordered by the MAP, not by the caller's list: slot ordinals decide addresses, so generating in
+        // binding order would let a reordered list produce differently-numbered networks for one map.
+        var ordered = map.Slots
+            .Select(s => (Slot: s, Binding: bindings.Single(b => b.SlotId == s.SlotId)))
+            .ToArray();
 
-        for (var i = 0; i < vectorTargets.Count; i++)
+        foreach (var (allocation, binding) in ordered)
         {
-            var register = allocation.Vector.Register + i;
-            tags.Add(new($"{prefix}{binding.SlotId}_V{i:000}", "Int", geometry.WordAddressOf(register),
-                geometry.ByteAddressOf(register), $"Vector register {i}."));
-        }
+            if (binding.StartCondition is not null)
+            {
+                tags.Add(new($"{prefix}{binding.SlotId}_Start", "Bool",
+                    geometry.BitAddressOf(allocation.StartBoolRegister, allocation.StartBitInRegister),
+                    geometry.ByteAddressOf(allocation.StartBoolRegister),
+                    "Start bool. Its rising edge is the test's T=0."));
 
-        for (var i = 0; i < resultSources.Count; i++)
-        {
-            var register = allocation.Result.Register + i;
-            tags.Add(new($"{prefix}{binding.SlotId}_R{i:000}", "Int", geometry.WordAddressOf(register),
-                geometry.ByteAddressOf(register), $"Result register {i}."));
+                tags.Add(new($"{prefix}{binding.SlotId}_Ran", "Bool",
+                    geometry.BitAddressOf(map.StartEcho.Register + (allocation.StartBoolRegister - map.StartBools.Register), allocation.StartBitInRegister),
+                    geometry.ByteAddressOf(map.StartEcho.Register + (allocation.StartBoolRegister - map.StartBools.Register)),
+                    "Latched: the block's own start condition was seen high. Cleared by the client at inert."));
+            }
+
+            for (var i = 0; i < (binding.VectorTargets ?? Array.Empty<string>()).Count; i++)
+            {
+                var register = allocation.Vector.Register + i;
+                tags.Add(new($"{prefix}{binding.SlotId}_V{i:000}", "Int", geometry.WordAddressOf(register),
+                    geometry.ByteAddressOf(register), $"Vector register {i}."));
+            }
+
+            for (var i = 0; i < binding.ResultSources.Count; i++)
+            {
+                var register = allocation.Result.Register + i;
+                tags.Add(new($"{prefix}{binding.SlotId}_R{i:000}", "Int", geometry.WordAddressOf(register),
+                    geometry.ByteAddressOf(register), $"Result register {i}."));
+            }
         }
 
         var networks = new List<CopyLayerNetwork>();
@@ -153,25 +186,42 @@ public static class CopyLayerGenerator
             "Free-running scan counter",
             new[] { ($"{prefix}ScanCount", $"{prefix}ScanCount") }));
 
-        if (vectorTargets.Count > 0)
+        foreach (var (_, binding) in ordered)
         {
-            networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.VectorIn,
-                $"Vector in - slot {binding.SlotId}",
-                vectorTargets.Select((t, i) => ($"{prefix}{binding.SlotId}_V{i:000}", t)).ToArray()));
+            var targets = binding.VectorTargets ?? Array.Empty<string>();
+
+            if (targets.Count > 0)
+            {
+                networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.VectorIn,
+                    $"Vector in - slot {binding.SlotId}",
+                    targets.Select((t, i) => ($"{prefix}{binding.SlotId}_V{i:000}", t)).ToArray()));
+            }
+
+            if (binding.StartCondition is not null)
+            {
+                networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartBool,
+                    $"Start bool - slot {binding.SlotId}",
+                    new[] { ($"{prefix}{binding.SlotId}_Start", binding.StartCondition) }));
+
+                // X-E. The echo reads the FAR side of the coil above — the block's OWN start condition,
+                // which is what the program actually ran on. Reading back the mirror bit instead would
+                // only report what the client wrote, which is the plan, and the plan is not evidence.
+                //
+                // LATCHED, because a poll gap is 8.6 scans at the p99 and a short test can start and
+                // finish between two polls. A level echo would then read low at both, and the log would
+                // say the slot never ran — which is exactly the false evidence X-E exists to kill.
+                networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartEcho,
+                    $"Start echo - slot {binding.SlotId}",
+                    new[] { ($"{prefix}{binding.SlotId}_Ran", binding.StartCondition) }));
+            }
+
+            networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultsOut,
+                $"Results out - slot {binding.SlotId}",
+                binding.ResultSources.Select((s, i) => (s, $"{prefix}{binding.SlotId}_R{i:000}")).ToArray()));
         }
 
-        if (binding.StartCondition is not null)
-        {
-            networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartBool,
-                $"Start bool - slot {binding.SlotId}",
-                new[] { ($"{prefix}{binding.SlotId}_Start", binding.StartCondition) }));
-        }
-
-        networks.Add(new CopyLayerNetwork(number, CopyLayerNetworkKind.ResultsOut,
-            $"Results out - slot {binding.SlotId}",
-            resultSources.Select((s, i) => (s, $"{prefix}{binding.SlotId}_R{i:000}")).ToArray()));
-
-        var plan = new CopyLayerPlan(map, binding, stamp, tags, networks, binding.StartCondition is null);
+        var plan = new CopyLayerPlan(map, ordered.Select(o => o.Binding).ToArray(), stamp, tags, networks,
+            ordered.Where(o => o.Binding.StartCondition is null).Select(o => o.Binding.SlotId).ToArray());
 
         var objects = new[]
         {
@@ -250,6 +300,11 @@ public static class CopyLayerGenerator
                 case CopyLayerNetworkKind.StartBool:
                     var (bit, condition) = network.Moves[0];
                     ir.Append($"  COIL {condition} := {bit}\n");
+                    break;
+
+                case CopyLayerNetworkKind.StartEcho:
+                    var (echo, ran) = network.Moves[0];
+                    ir.Append($"  SCOIL {echo} := {ran}\n");
                     break;
 
                 default:

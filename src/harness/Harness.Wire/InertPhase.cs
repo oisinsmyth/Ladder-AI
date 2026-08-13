@@ -22,6 +22,9 @@ public sealed record InertDeclaration(
     IReadOnlyDictionary<int, ushort> ExpectedResults,
     int QuiescenceScans = 1);
 
+/// <summary>One slot's participation in an inert phase: which slot, what values, and what inert means for it.</summary>
+public sealed record SlotInert(int SlotIndex, ushort[] Vector, InertDeclaration Declaration);
+
 /// <summary>Why inert was or was not established. Never a bool on its own.</summary>
 public enum InertOutcome
 {
@@ -88,60 +91,92 @@ public static class InertPhase
     /// The next test's values — written HERE, while nothing is running, because they are what establishes
     /// its start condition.
     /// </param>
-    public static InertReport Establish(MirrorClient client, int slotIndex, ushort[] vector, InertDeclaration declaration, int maxPolls = 200)
+    public static InertReport Establish(MirrorClient client, int slotIndex, ushort[] vector, InertDeclaration declaration, int maxPolls = 200) =>
+        Establish(client, new[] { new SlotInert(slotIndex, vector, declaration) }, maxPolls);
+
+    /// <summary>
+    /// Establish inert for a WHOLE TENSOR at once, and verify every active slot.
+    ///
+    /// <para><b>One inert phase covers every test in the next tensor, and D33 consequence 2 says why that
+    /// is even well-defined:</b> the tests in a tensor are conflict-free, so their start conditions
+    /// CANNOT CONTRADICT. Two tests needing contradictory start states are, by that fact alone, in
+    /// different tensors — so conflict-freedom is not only about interference during a test, it is what
+    /// makes a shared inert phase constructible at all.</para>
+    ///
+    /// <para><b>Slots absent from <paramref name="active"/> are NULL at this index</b> (D26a rule 2) —
+    /// either their tensor is shorter, or they have already exited. No new encoding: their start bool is
+    /// simply not raised, D33's inert holds, and their values are don't-care. They are not verified,
+    /// because there is nothing they are being asked to be at.</para>
+    /// </summary>
+    public static InertReport Establish(MirrorClient client, IReadOnlyList<SlotInert> active, int maxPolls = 200)
     {
         ArgumentNullException.ThrowIfNull(client);
-        ArgumentNullException.ThrowIfNull(vector);
-        ArgumentNullException.ThrowIfNull(declaration);
+        ArgumentNullException.ThrowIfNull(active);
 
-        if (declaration.QuiescenceScans < 1)
+        if (active.Count == 0)
+            throw new ArgumentException("an inert phase with no active slot verifies nothing. An index at which every slot is null should not have been run.", nameof(active));
+
+        foreach (var slot in active)
         {
-            throw new ArgumentOutOfRangeException(nameof(declaration), declaration.QuiescenceScans,
-                "the quiescence check needs at least one scan between its two observations; two reads inside one scan cannot tell a settled value from a changing one.");
+            if (slot.Declaration.QuiescenceScans < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(active), slot.Declaration.QuiescenceScans,
+                    "the quiescence check needs at least one scan between its two observations; two reads inside one scan cannot tell a settled value from a changing one.");
+            }
         }
 
-        // The reset, as a LEVEL held for the whole inert period — not an edge and not a pulse.
+        // The reset, as a LEVEL held for the whole inert period — not an edge and not a pulse. ONE write,
+        // covering every slot: a null slot's bool goes low here too, which is the whole of D26a rule 2.
         client.LowerAllStartBools();
 
+        // D33: latches are released, and the release must COMPLETE before the first scan of the test.
+        // The echo is a latch, so it is cleared here rather than after the commit.
+        client.ClearStartEcho();
+
         // The values that establish the NEXT test's start condition (D33 consequence 1).
-        client.WriteVector(slotIndex, vector);
+        foreach (var slot in active)
+            client.WriteVector(slot.SlotIndex, slot.Vector);
+
+        var quiescence = active.Max(s => s.Declaration.QuiescenceScans);
 
         // Let the program act on them before asking whether it has.
         var start = client.ReadControl().ScanCounter;
-        if (!WaitScans(client, start, declaration.QuiescenceScans, maxPolls, out _))
-            return Stalled(declaration.QuiescenceScans);
+        if (!WaitScans(client, start, quiescence, maxPolls, out _))
+            return Stalled(quiescence);
 
-        // CHECK ONE — start conditions established.
-        var first = client.ReadResults(slotIndex);
-        var wrong = declaration.ExpectedResults
-            .Where(e => e.Key >= first.Length || first[e.Key] != e.Value)
-            .Select(e => e.Key < first.Length
-                ? $"R{e.Key:000} reads {first[e.Key]}, declared {e.Value}"
-                : $"R{e.Key:000} was declared but the slot has only {first.Length} result register(s)")
+        // CHECK ONE — start conditions established, on every active slot.
+        var first = active.ToDictionary(s => s.SlotIndex, s => client.ReadResults(s.SlotIndex));
+
+        var wrong = active.SelectMany(s => s.Declaration.ExpectedResults
+            .Where(e => e.Key >= first[s.SlotIndex].Length || first[s.SlotIndex][e.Key] != e.Value)
+            .Select(e => e.Key < first[s.SlotIndex].Length
+                ? $"slot {s.SlotIndex} R{e.Key:000} reads {first[s.SlotIndex][e.Key]}, declared {e.Value}"
+                : $"slot {s.SlotIndex} R{e.Key:000} was declared but the slot has only {first[s.SlotIndex].Length} result register(s)"))
             .ToArray();
 
         if (wrong.Length > 0)
         {
-            return new InertReport(InertOutcome.StartConditionsWrong, start, first, Array.Empty<ushort>(),
+            return new InertReport(InertOutcome.StartConditionsWrong, start, Flatten(active, first), Array.Empty<ushort>(),
                 "the next test's start conditions are not established: " + string.Join("; ", wrong));
         }
 
         // CHECK TWO — dynamics quiescent. The values are right; are they STILL right, and unchanged?
         var afterFirst = client.ReadControl().ScanCounter;
-        if (!WaitScans(client, afterFirst, declaration.QuiescenceScans, maxPolls, out var scanAtSecondRead))
-            return Stalled(declaration.QuiescenceScans);
+        if (!WaitScans(client, afterFirst, quiescence, maxPolls, out var scanAtSecondRead))
+            return Stalled(quiescence);
 
-        var second = client.ReadResults(slotIndex);
+        var second = active.ToDictionary(s => s.SlotIndex, s => client.ReadResults(s.SlotIndex));
 
-        var moving = Enumerable.Range(0, Math.Min(first.Length, second.Length))
-            .Where(i => first[i] != second[i])
-            .Select(i => $"R{i:000} moved {first[i]} -> {second[i]}")
+        var moving = active.SelectMany(s =>
+            Enumerable.Range(0, Math.Min(first[s.SlotIndex].Length, second[s.SlotIndex].Length))
+                .Where(i => first[s.SlotIndex][i] != second[s.SlotIndex][i])
+                .Select(i => $"slot {s.SlotIndex} R{i:000} moved {first[s.SlotIndex][i]} -> {second[s.SlotIndex][i]}"))
             .ToArray();
 
         if (moving.Length > 0)
         {
-            return new InertReport(InertOutcome.NotQuiescent, scanAtSecondRead, first, second,
-                $"the start values are right and still moving over {declaration.QuiescenceScans} scan(s): " + string.Join("; ", moving)
+            return new InertReport(InertOutcome.NotQuiescent, scanAtSecondRead, Flatten(active, first), Flatten(active, second),
+                $"the start values are right and still moving over {quiescence} scan(s): " + string.Join("; ", moving)
                 + ". A model at the right value while still integrating toward another is not inert.");
         }
 
@@ -151,9 +186,13 @@ public static class InertPhase
         // is precisely the race D37 states the rule against.
         var scanAtVerify = client.ReadControl().ScanCounter;
 
-        return new InertReport(InertOutcome.Established, scanAtVerify, first, second,
-            $"start conditions established and unchanged over {declaration.QuiescenceScans} scan(s).");
+        return new InertReport(InertOutcome.Established, scanAtVerify, Flatten(active, first), Flatten(active, second),
+            $"start conditions established and unchanged over {quiescence} scan(s) on {active.Count} slot(s).");
     }
+
+    /// <summary>Observations in slot order, so a single-slot caller sees exactly its own registers.</summary>
+    private static ushort[] Flatten(IReadOnlyList<SlotInert> active, IReadOnlyDictionary<int, ushort[]> observations) =>
+        active.OrderBy(s => s.SlotIndex).SelectMany(s => observations[s.SlotIndex]).ToArray();
 
     /// <summary>
     /// D37's commit: raise the start bools on a LATER scan than the verify, in ONE transaction. Returns

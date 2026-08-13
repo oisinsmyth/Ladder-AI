@@ -38,7 +38,7 @@ public class CopyLayerGeneratorTests
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Generates_the_five_networks_the_minimal_layer_is_defined_as()
+    public void Generates_the_six_networks_the_minimal_layer_is_defined_as()
     {
         var plan = Generate().Require();
 
@@ -49,11 +49,12 @@ public class CopyLayerGeneratorTests
                 CopyLayerNetworkKind.ScanCounter,
                 CopyLayerNetworkKind.VectorIn,
                 CopyLayerNetworkKind.StartBool,
+                CopyLayerNetworkKind.StartEcho,
                 CopyLayerNetworkKind.ResultsOut,
             },
             plan.Networks.Select(n => n.Kind));
 
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, plan.Networks.Select(n => n.Number));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, plan.Networks.Select(n => n.Number));
     }
 
     [Fact]
@@ -94,8 +95,8 @@ public class CopyLayerGeneratorTests
         // by register number, so the other 6 would be symbols nothing reads and nothing writes.
         var plan = Generate(OneSlot(vector: 8, result: 8)).Require();
 
-        Assert.Equal(2, plan.Tags.Count(t => t.Name.Contains("_V", StringComparison.Ordinal)));
-        Assert.Equal(2, plan.Tags.Count(t => t.Name.Contains("_R", StringComparison.Ordinal)));
+        Assert.Equal(2, plan.Tags.Count(t => t.Name.Contains("_V0", StringComparison.Ordinal)));
+        Assert.Equal(2, plan.Tags.Count(t => t.Name.Contains("_R0", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -129,7 +130,10 @@ public class CopyLayerGeneratorTests
             NETWORK 4 "Start bool - slot S0"
               COIL DB_Unit.StartCmd := HX_S0_Start
 
-            NETWORK 5 "Results out - slot S0"
+            NETWORK 5 "Start echo - slot S0"
+              SCOIL HX_S0_Ran := DB_Unit.StartCmd
+
+            NETWORK 6 "Results out - slot S0"
               MOVE(EN := TRUE, IN := DB_Unit.Actual) => HX_S0_R000
               MOVE(EN := TRUE, IN := DB_Unit.State) => HX_S0_R001
 
@@ -150,10 +154,11 @@ public class CopyLayerGeneratorTests
                 HX_ProgramVersion 1 : DWord @ %MD4000 ACCESSIBLE VISIBLE WRITABLE COMMENT "Build stamp of the downloaded IR set. Present only if this code is running."
                 HX_ScanCount 4 : DInt @ %MD4004 ACCESSIBLE VISIBLE WRITABLE COMMENT "Free-running scan counter. Wraps; scan stamps are differences from the start edge."
                 HX_S0_Start 7 : Bool @ %M4009.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Start bool. Its rising edge is the test's T=0."
-                HX_S0_V000 A : Int @ %MW4010 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
-                HX_S0_V001 D : Int @ %MW4012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
-                HX_S0_R000 10 : Int @ %MW4016 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
-                HX_S0_R001 13 : Int @ %MW4018 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
+                HX_S0_Ran A : Bool @ %M4011.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Latched: the block's own start condition was seen high. Cleared by the client at inert."
+                HX_S0_V000 D : Int @ %MW4012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
+                HX_S0_V001 10 : Int @ %MW4014 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
+                HX_S0_R000 13 : Int @ %MW4018 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
+                HX_S0_R001 16 : Int @ %MW4020 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
 
             """.ReplaceLineEndings("\n"),
             table.Ir);
@@ -193,6 +198,11 @@ public class CopyLayerGeneratorTests
         Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.StartBool);
         Assert.DoesNotContain(plan.Tags, t => t.Name.EndsWith("_Start", StringComparison.Ordinal));
         Assert.Equal(new[] { 1, 2, 3, 4 }, plan.Networks.Select(n => n.Number));
+
+        // No start gate means no echo either: there is no start condition to latch, and a slot that
+        // published a "ran" bit driven by nothing would be exactly the false evidence X-E kills.
+        Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.StartEcho);
+        Assert.DoesNotContain(plan.Tags, t => t.Name.EndsWith("_Ran", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -214,6 +224,148 @@ public class CopyLayerGeneratorTests
 
         Assert.DoesNotContain(plan.Networks, n => n.Kind == CopyLayerNetworkKind.VectorIn);
         Assert.Contains(plan.Networks, n => n.Kind == CopyLayerNetworkKind.ResultsOut);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 3.1: more than one slot
+    // ---------------------------------------------------------------------------------------------
+
+    private static RegisterMap TwoSlots() => MapAllocator.Allocate(new WaveSetRequest(
+        MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+        new[] { new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2) })).Require();
+
+    private static CopyLayerResult TwoSlotLayer() => CopyLayerGenerator.Generate(
+        TwoSlots(),
+        new[]
+        {
+            new SlotBinding("S0", new[] { "DB_A.Setpoint", "DB_A.Mode" }, "DB_A.StartCmd", new[] { "DB_A.Actual", "DB_A.State" }),
+            new SlotBinding("S1", new[] { "DB_B.Level", "DB_B.Trip" }, "DB_B.StartCmd", new[] { "DB_B.Peak", "DB_B.Alarm" }),
+        },
+        Naming, Stamp);
+
+    [Fact]
+    public void The_two_slot_block_is_the_IR_the_converter_round_trips()
+    {
+        var block = TwoSlotLayer().Objects.Single(o => o.Kind == HarnessObjectKind.Block);
+
+        Assert.Equal(
+            """
+            BLOCK FC FC_HarnessCopyLayer
+            ROOTID 0
+            NUMBER 900
+            LANGUAGE LAD
+            TITLE "Harness copy layer"
+
+            INTERFACE
+              INPUT
+              OUTPUT
+              CONSTANT
+
+            NETWORK 1 "Program version"
+              MOVE(EN := TRUE, IN := 16#A93F2C71) => HX_ProgramVersion
+
+            NETWORK 2 "Free-running scan counter"
+              ADD(EN := TRUE, IN1 := HX_ScanCount, IN2 := 1) => HX_ScanCount
+
+            NETWORK 3 "Vector in - slot S0"
+              MOVE(EN := TRUE, IN := HX_S0_V000) => DB_A.Setpoint
+              MOVE(EN := TRUE, IN := HX_S0_V001) => DB_A.Mode
+
+            NETWORK 4 "Start bool - slot S0"
+              COIL DB_A.StartCmd := HX_S0_Start
+
+            NETWORK 5 "Start echo - slot S0"
+              SCOIL HX_S0_Ran := DB_A.StartCmd
+
+            NETWORK 6 "Results out - slot S0"
+              MOVE(EN := TRUE, IN := DB_A.Actual) => HX_S0_R000
+              MOVE(EN := TRUE, IN := DB_A.State) => HX_S0_R001
+
+            NETWORK 7 "Vector in - slot S1"
+              MOVE(EN := TRUE, IN := HX_S1_V000) => DB_B.Level
+              MOVE(EN := TRUE, IN := HX_S1_V001) => DB_B.Trip
+
+            NETWORK 8 "Start bool - slot S1"
+              COIL DB_B.StartCmd := HX_S1_Start
+
+            NETWORK 9 "Start echo - slot S1"
+              SCOIL HX_S1_Ran := DB_B.StartCmd
+
+            NETWORK 10 "Results out - slot S1"
+              MOVE(EN := TRUE, IN := DB_B.Peak) => HX_S1_R000
+              MOVE(EN := TRUE, IN := DB_B.Alarm) => HX_S1_R001
+
+            """.ReplaceLineEndings("\n"),
+            block.Ir);
+    }
+
+    [Fact]
+    public void The_two_slot_tag_table_is_the_IR_the_converter_round_trips()
+    {
+        var table = TwoSlotLayer().Objects.Single(o => o.Kind == HarnessObjectKind.TagTable);
+
+        Assert.Equal(
+            """
+            TAGTABLE HarnessMirror
+              ROOTID 0
+              TAGS
+                HX_ProgramVersion 1 : DWord @ %MD4000 ACCESSIBLE VISIBLE WRITABLE COMMENT "Build stamp of the downloaded IR set. Present only if this code is running."
+                HX_ScanCount 4 : DInt @ %MD4004 ACCESSIBLE VISIBLE WRITABLE COMMENT "Free-running scan counter. Wraps; scan stamps are differences from the start edge."
+                HX_S0_Start 7 : Bool @ %M4009.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Start bool. Its rising edge is the test's T=0."
+                HX_S0_Ran A : Bool @ %M4011.0 ACCESSIBLE VISIBLE WRITABLE COMMENT "Latched: the block's own start condition was seen high. Cleared by the client at inert."
+                HX_S0_V000 D : Int @ %MW4012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
+                HX_S0_V001 10 : Int @ %MW4014 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
+                HX_S0_R000 13 : Int @ %MW4020 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
+                HX_S0_R001 16 : Int @ %MW4022 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
+                HX_S1_Start 19 : Bool @ %M4009.1 ACCESSIBLE VISIBLE WRITABLE COMMENT "Start bool. Its rising edge is the test's T=0."
+                HX_S1_Ran 1C : Bool @ %M4011.1 ACCESSIBLE VISIBLE WRITABLE COMMENT "Latched: the block's own start condition was seen high. Cleared by the client at inert."
+                HX_S1_V000 1F : Int @ %MW4016 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 0."
+                HX_S1_V001 22 : Int @ %MW4018 ACCESSIBLE VISIBLE WRITABLE COMMENT "Vector register 1."
+                HX_S1_R000 25 : Int @ %MW4024 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
+                HX_S1_R001 28 : Int @ %MW4026 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."
+
+            """.ReplaceLineEndings("\n"),
+            table.Ir);
+    }
+
+    [Fact]
+    public void The_two_slots_start_bits_are_different_bits_of_the_same_register()
+    {
+        // At two slots a wrong %M byte in BitAddressOf makes both commanded blocks fail to see their start
+        // condition — a detectable non-event that the co-running log names — rather than one slot starting
+        // another's test. That only becomes possible at nine slots, where bit 0 and bit 8 would swap.
+        var plan = TwoSlotLayer().Require();
+
+        Assert.Equal("%M4009.0", plan.Tags.Single(t => t.Name == "HX_S0_Start").Address);
+        Assert.Equal("%M4009.1", plan.Tags.Single(t => t.Name == "HX_S1_Start").Address);
+    }
+
+    [Fact]
+    public void Networks_are_generated_in_MAP_order_not_in_the_callers_binding_order()
+    {
+        // Slot ordinals decide addresses, so generating in binding order would let a reordered list
+        // produce differently-numbered networks for one map — and the map hash would not move.
+        var map = TwoSlots();
+        var s0 = new SlotBinding("S0", new[] { "A.v" }, "A.s", new[] { "A.r" });
+        var s1 = new SlotBinding("S1", new[] { "B.v" }, "B.s", new[] { "B.r" });
+
+        var forwards = CopyLayerGenerator.Generate(map, new[] { s0, s1 }, Naming, Stamp).Objects;
+        var backwards = CopyLayerGenerator.Generate(map, new[] { s1, s0 }, Naming, Stamp).Objects;
+
+        Assert.Equal(forwards.Single(o => o.Kind == HarnessObjectKind.Block).Ir,
+            backwards.Single(o => o.Kind == HarnessObjectKind.Block).Ir);
+    }
+
+    [Fact]
+    public void Two_bindings_for_one_slot_are_refused()
+    {
+        var map = TwoSlots();
+        var duplicate = new SlotBinding("S0", new[] { "A.v" }, "A.s", new[] { "A.r" });
+
+        var result = CopyLayerGenerator.Generate(map, new[] { duplicate, duplicate }, Naming, Stamp);
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("bound twice", StringComparison.Ordinal));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -308,8 +460,11 @@ public class CopyLayerGeneratorTests
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void A_two_slot_map_is_refused_because_multi_slot_is_phase_3()
+    public void A_map_slot_with_no_binding_is_refused()
     {
+        // Phase 3 lifts phase 2's one-slot refusal, but not the requirement that every slot be bound: an
+        // unbound slot is a mirror region nothing maintains, and its zeros are indistinguishable from a
+        // result.
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(256, 4000),
             new[] { new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2) })).Require();
@@ -317,7 +472,7 @@ public class CopyLayerGeneratorTests
         var result = CopyLayerGenerator.Generate(map, Binding(), Naming, Stamp);
 
         Assert.False(result.Generated);
-        Assert.Contains(result.Refusals, r => r.Contains("phase 3", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("Every slot must be bound", StringComparison.Ordinal));
     }
 
     [Fact]

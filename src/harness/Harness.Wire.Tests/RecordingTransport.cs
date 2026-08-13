@@ -57,6 +57,24 @@ public sealed class RecordingTransport : IRegisterTransport
     public ushort[] StartBoolRegisters =>
         _registers[_map.StartBools.Register..(_map.StartBools.Register + _map.StartBools.Length)];
 
+    public ushort[] StartEchoRegisters =>
+        _registers[_map.StartEcho.Register..(_map.StartEcho.Register + _map.StartEcho.Length)];
+
+    /// <summary>
+    /// Slots whose echo latch will NOT be set even when their start bool is raised — a block that was
+    /// commanded and never ran.
+    /// </summary>
+    public HashSet<int> SuppressEchoFor { get; } = new();
+
+    /// <summary>Slots whose echo latch is set whether or not they were commanded — a block driven by something else.</summary>
+    public HashSet<int> ForceEchoFor { get; } = new();
+
+    /// <summary>
+    /// Model the copy layer's echo: LATCH every commanded slot's bit, and never clear one. Only the
+    /// client clears the latch, and it does so at inert.
+    /// </summary>
+    public bool LatchEcho { get; set; } = true;
+
     public ushort[] ReadHoldingRegisters(int startRegister, int count)
     {
         Advance();
@@ -77,6 +95,20 @@ public sealed class RecordingTransport : IRegisterTransport
         var words = RegisterWords.From32(unchecked((uint)ScanCounter), RegisterWordOrder.HighWordFirst);
         _registers[_map.ScanCounter.Register] = words[0];
         _registers[_map.ScanCounter.Register + 1] = words[1];
+
+        if (LatchEcho && ScansPerTransaction > 0)
+        {
+            for (var i = 0; i < _map.Slots.Count; i++)
+            {
+                var register = i / RegisterMap.SlotsPerStartRegister;
+                var mask = (ushort)(1 << (i % RegisterMap.SlotsPerStartRegister));
+                var commanded = (_registers[_map.StartBools.Register + register] & mask) != 0;
+
+                if ((commanded && !SuppressEchoFor.Contains(i)) || ForceEchoFor.Contains(i))
+                    _registers[_map.StartEcho.Register + register] |= mask;
+            }
+        }
+
         OnTransaction?.Invoke(this);
     }
 

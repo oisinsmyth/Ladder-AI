@@ -43,9 +43,10 @@ public class InertPhaseTests
         Assert.True(report.Established, report.Detail);
 
         var writes = wire.Log.Where(t => t.IsWrite).ToArray();
-        Assert.Equal(2, writes.Length);
-        Assert.Equal(0, writes[0].Values[0]);                     // start bools cleared
-        Assert.Equal(new ushort[] { 5, 10 }, writes[1].Values);   // then the vector
+        Assert.Equal(3, writes.Length);
+        Assert.Equal(0, writes[0].Values[0]);                     // start bools cleared - the reset LEVEL
+        Assert.Equal(0, writes[1].Values[0]);                     // echo latches released (D33)
+        Assert.Equal(new ushort[] { 5, 10 }, writes[2].Values);   // then the vector
     }
 
     [Fact]

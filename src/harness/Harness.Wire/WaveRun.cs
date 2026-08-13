@@ -1,0 +1,211 @@
+using System.Diagnostics;
+
+namespace Harness.Wire;
+
+/// <summary>
+/// One slot's submission: a COLUMN of vectors that differ only in values (D26a).
+///
+/// <para>"Same methodology" means same register layout and same observability declaration — values only.
+/// That is the load-bearing half of D26a rule 1 and it is why the map can be frozen: a slot's layout is
+/// constant across every index, so each index only rewrites values into a fixed shape.</para>
+/// </summary>
+public sealed record SlotTensor(int SlotIndex, IReadOnlyList<WireVector> Vectors)
+{
+    public int Length => Vectors.Count;
+}
+
+/// <summary>One slot's results, distributed when THAT slot finished — not at wave end.</summary>
+/// <param name="CompletedAtIndex">
+/// The wave index at which the slot's own tensor ran out. D26a rule 3: feedback latency is bounded by a
+/// slot's OWN tensor length, not the wave's.
+/// </param>
+/// <param name="CoRunning">Who actually ran alongside it, per index, measured (X-E).</param>
+public sealed record SlotDistribution(
+    int SlotIndex,
+    int CompletedAtIndex,
+    IReadOnlyList<SlotRunResult> Results,
+    IReadOnlyList<(int WaveIndex, IReadOnlyList<int> CoRunners)> CoRunning);
+
+/// <summary>What a whole wave produced.</summary>
+/// <param name="Length">Indices run — MAX tensor length across the slots (D26a), never a colouring decision.</param>
+public sealed record WaveResult(
+    int Length,
+    IReadOnlyList<SlotDistribution> Distributions,
+    CoRunningLog Log,
+    int RoundTrips)
+{
+    public SlotDistribution For(int slotIndex) => Distributions.Single(d => d.SlotIndex == slotIndex);
+}
+
+/// <summary>
+/// Build-plan items 3.4 and 3.5 — the wave: inert, tensor[0], inert, tensor[1], … with slots entering
+/// and leaving on their own tensor lengths.
+///
+/// <para><b>Wave length is MAX TENSOR LENGTH</b> (D26a). Nothing this runner does can change it, and
+/// DB-13's colouring does not set it either — what the conflict graph decides is which slots may SHARE a
+/// wave set, which costs an extra wave rather than a longer one.</para>
+///
+/// <para><b>A slot with no vector at index i is NULL, and null means INERT</b> (D26a rule 2). There is no
+/// new encoding: its start bool is simply not raised at that index, D33's inert holds, and its values are
+/// don't-care. The same mechanism covers an EXCISED slot — allocated and null at every index — which is
+/// why excision needs no re-derivation of the map.</para>
+///
+/// <para><b>A slot exits when its OWN tensor is done</b> (D26a rule 3), and its results are distributed
+/// at that moment rather than batched to wave end. A 3-vector slot in a 6-index wave has its results
+/// after index 2.</para>
+/// </summary>
+public static class WaveRun
+{
+    /// <summary>Run one wave over a set of slot tensors.</summary>
+    /// <param name="onSlotComplete">
+    /// Called the moment a slot's tensor runs out, before the wave continues. This is D26a rule 3's whole
+    /// point: a caller that only reads the returned <see cref="WaveResult"/> has re-batched the feedback
+    /// to wave end, which is the latency the rule exists to remove.
+    /// </param>
+    public static WaveResult Run(
+        MirrorClient client,
+        IReadOnlyList<SlotTensor> tensors,
+        Func<long>? nowMs = null,
+        Action<SlotDistribution>? onSlotComplete = null)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(tensors);
+
+        if (tensors.Count == 0)
+            throw new ArgumentException("a wave over no slots runs nothing. Empty is not clean.", nameof(tensors));
+
+        if (tensors.Any(t => t.Length == 0))
+            throw new ArgumentException("a slot submitted an empty tensor. A slot with nothing to run should not be in the wave set at all — it is not the same thing as a slot that is null at some index.", nameof(tensors));
+
+        if (tensors.Select(t => t.SlotIndex).Distinct().Count() != tensors.Count)
+            throw new ArgumentException("two tensors name the same slot.", nameof(tensors));
+
+        var roundTripsBefore = client.RoundTrips;
+        var stopwatch = Stopwatch.StartNew();
+        nowMs ??= () => stopwatch.ElapsedMilliseconds;
+
+        var log = new CoRunningLog();
+        var collected = tensors.ToDictionary(t => t.SlotIndex, _ => new List<SlotRunResult>());
+        var distributions = new List<SlotDistribution>();
+
+        var length = tensors.Max(t => t.Length);
+
+        for (var index = 0; index < length; index++)
+        {
+            // Active = the slots that still have a vector at THIS index. The rest are null: not
+            // commanded, not verified, values don't-care.
+            var active = tensors.Where(t => index < t.Length).ToArray();
+
+            var inert = InertPhase.Establish(client,
+                active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
+
+            var commanded = active.Select(t => t.SlotIndex).ToArray();
+
+            if (!inert.Established)
+            {
+                foreach (var t in active)
+                {
+                    collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), 0, 0, 0, 0, inert,
+                        "the test never started, which is not a test failure: " + inert.Detail));
+                }
+
+                // D34 alternates inert/test unconditionally, but an inert phase that could not be
+                // ESTABLISHED is O6's residual — a wave-blocking condition rather than a test failure —
+                // and continuing would run every later index from a state nobody verified.
+                log.Record(index, commanded, client.ReadControlUnverified(), client.Map.Slots.Count);
+                break;
+            }
+
+            var startScan = InertPhase.Commit(client, inert, commanded);
+
+            var perIndex = Observe(client, active, index, startScan, inert, nowMs);
+            foreach (var (slotIndex, result) in perIndex)
+                collected[slotIndex].Add(result);
+
+            log.Record(index, commanded, client.ReadControl(), client.Map.Slots.Count);
+
+            // D26a rule 3 — a slot exits when its OWN tensor is done, and its results go out THEN.
+            foreach (var tensor in tensors.Where(t => t.Length == index + 1).OrderBy(t => t.SlotIndex))
+            {
+                var distribution = new SlotDistribution(tensor.SlotIndex, index,
+                    collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
+
+                distributions.Add(distribution);
+                onSlotComplete?.Invoke(distribution);
+            }
+        }
+
+        // Any slot the loop never distributed — because inert failed and the wave stopped — still gets
+        // its results, marked at the index it reached. Silence would read as "no results yet".
+        foreach (var tensor in tensors.Where(t => distributions.All(d => d.SlotIndex != t.SlotIndex)).OrderBy(t => t.SlotIndex))
+        {
+            distributions.Add(new SlotDistribution(tensor.SlotIndex, collected[tensor.SlotIndex].Count - 1,
+                collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex)));
+        }
+
+        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore);
+    }
+
+    /// <summary>
+    /// Poll every active slot until each has completed or the longest backstop has elapsed.
+    ///
+    /// <para><b>One FC03 per slot per poll round, plus one control read</b> — exactly
+    /// <c>RegisterMap.PollRoundTrips</c>, and exactly §12a's cost model. A slot that has completed is not
+    /// polled again in later rounds: it is finished, and re-reading it would cost a round trip to learn
+    /// nothing.</para>
+    /// </summary>
+    private static IReadOnlyList<(int SlotIndex, SlotRunResult Result)> Observe(
+        MirrorClient client,
+        IReadOnlyList<SlotTensor> active,
+        int index,
+        long startScan,
+        InertReport inert,
+        Func<long> nowMs)
+    {
+        var outstanding = active.ToDictionary(t => t.SlotIndex, t => t.Vectors[index]);
+        var done = new List<(int SlotIndex, SlotRunResult Result)>();
+        var polls = 0;
+
+        // The backstop is per index and takes the LONGEST declared duration in the tensor, because the
+        // index costs its longest member. Round trips are counted as (slots + 1) per poll round: registers
+        // appear nowhere in it, which is the point — nothing here is derived from slot width.
+        var backstop = WireTiming.BackstopMs(
+            outstanding.Values.Max(v => v.DeclaredScans),
+            expectedRoundTrips: active.Count + 1);
+
+        var deadline = nowMs() + backstop;
+
+        while (outstanding.Count > 0)
+        {
+            var control = client.ReadControl();
+            polls++;
+
+            foreach (var slotIndex in outstanding.Keys.ToArray())
+            {
+                var vector = outstanding[slotIndex];
+                var results = client.ReadResults(slotIndex);
+
+                if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
+                {
+                    done.Add((slotIndex, new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter,
+                        polls, 0, inert,
+                        $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter - startScan} scan(s) and {polls} poll round(s).")));
+
+                    outstanding.Remove(slotIndex);
+                }
+                else if (nowMs() >= deadline)
+                {
+                    done.Add((slotIndex, new SlotRunResult(SlotOutcome.TimedOut, results, startScan, control.ScanCounter,
+                        polls, 0, inert,
+                        $"the backstop of {backstop} ms elapsed with R{vector.CompletionRegister:000} reading "
+                        + (vector.CompletionRegister < results.Length ? results[vector.CompletionRegister].ToString() : "<outside the slot>")
+                        + $" rather than {vector.CompletionValue}. TIMED-OUT is not FAILED: the condition may simply never have occurred.")));
+
+                    outstanding.Remove(slotIndex);
+                }
+            }
+        }
+
+        return done.OrderBy(d => d.SlotIndex).ToArray();
+    }
+}

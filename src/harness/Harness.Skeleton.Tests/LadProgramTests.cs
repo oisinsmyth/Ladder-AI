@@ -219,8 +219,8 @@ public class LadProgramTests
                      .Where(o => o.Kind == Harness.Map.HarnessObjectKind.Block))
             statements.WithBlock(block.Ir);
 
-        // Copy layer: version, scan counter, 2 vector moves, 1 coil, 2 result moves = 7.
+        // Copy layer: version, scan counter, 2 vector moves, 1 coil, 1 echo set-coil, 2 result moves = 8.
         // Block under test: 2 clearing moves, 1 add, 1 done move = 4.
-        Assert.Equal(11, statements.StatementCount);
+        Assert.Equal(12, statements.StatementCount);
     }
 }

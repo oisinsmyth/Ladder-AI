@@ -35,10 +35,17 @@ public sealed record SlotAllocation(
 /// <para><b>Layout, and each of the three decisions below is forced by something measured:</b></para>
 /// <code>
 ///   [ control  ] version (2 registers, a 32-bit build stamp), scan counter (2 registers, a DInt),
-///                then the start bools, ceil(N/16) registers
+///                the start bools, ceil(N/16) registers, then the START ECHO, ceil(N/16) more
 ///   [ vectors  ] N x VectorRegistersPerSlot, all slots contiguous
 ///   [ results  ] N x ResultRegistersPerSlot, all slots contiguous
 /// </code>
+///
+/// <para><b>0a. The start ECHO is what the program actually ran, and it is not the same fact as the
+/// start bools</b> (X-E). The bools are what the client COMMANDED; the echo is published by the copy
+/// layer from the block's own start condition — the far side of the coil — so it records what the
+/// program saw. X-E asks for the co-running log to be built from executed start bools "NEVER FROM THE
+/// PLAN", because a log generated from the planned slot set names slots that never executed, and §7a's
+/// cause-4 attribution then points at a phantom. It costs one register per sixteen slots.</para>
 ///
 /// <para><b>0. The version register is FIRST, and that is not cosmetic</b> (§9, DB-6). DB-6 requires
 /// the layout version to be checked "before EVERY transaction batch, not only at connect — a download
@@ -70,12 +77,109 @@ public sealed record RegisterMap(
     RegisterRange Version,
     RegisterRange ScanCounter,
     RegisterRange StartBools,
+    RegisterRange StartEcho,
     RegisterRange VectorBlock,
     RegisterRange ResultBlock,
     int VectorRegistersPerSlot,
     int ResultRegistersPerSlot,
     IReadOnlyList<SlotAllocation> Slots)
 {
+    /// <summary>
+    /// <b>A map whose regions overlap cannot be constructed.</b>
+    ///
+    /// <para>This is an interference check, and it is the FIRST one phase 3 needs. Two slots aliased onto
+    /// one register is agent A's write landing in agent B's mirror — DB-6 calls that the one genuine leak
+    /// in the design and says the protection can be BY CONSTRUCTION. The layout the allocator produces is
+    /// contiguous, so an overlap is impossible as written; this exists so that an arithmetic slip cannot
+    /// produce a map that allocates cleanly, hashes stably, and silently aliases two agents.</para>
+    ///
+    /// <para>It THROWS rather than refusing, unlike everything in <c>MapAllocator</c>, and the difference
+    /// is deliberate: a bad wave-set request is a caller's error and gets a refusal, while an overlapping
+    /// map is a defect in the derivation itself and has no caller to report it to.</para>
+    /// </summary>
+    private readonly bool _regionsAreDisjoint =
+        Validated(Version, ScanCounter, StartBools, StartEcho, VectorBlock, ResultBlock, Slots);
+
+    /// <summary>Always true — the map cannot be constructed otherwise. Present so the check cannot be elided.</summary>
+    public bool RegionsAreDisjoint => _regionsAreDisjoint;
+
+    private static bool Validated(
+        RegisterRange version,
+        RegisterRange scanCounter,
+        RegisterRange startBools,
+        RegisterRange startEcho,
+        RegisterRange vectorBlock,
+        RegisterRange resultBlock,
+        IReadOnlyList<SlotAllocation> slots)
+    {
+        var overlaps = RegionOverlaps(version, scanCounter, startBools, startEcho, vectorBlock, resultBlock, slots);
+
+        if (overlaps.Count > 0)
+        {
+            throw new ArgumentException(
+                "this register map aliases regions onto one another:" + Environment.NewLine + "  - "
+                + string.Join(Environment.NewLine + "  - ", overlaps));
+        }
+
+        return true;
+    }
+
+    /// <summary>Every pair of same-level windows that share a register, plus any slot outside its block.</summary>
+    public static IReadOnlyList<string> RegionOverlaps(
+        RegisterRange version,
+        RegisterRange scanCounter,
+        RegisterRange startBools,
+        RegisterRange startEcho,
+        RegisterRange vectorBlock,
+        RegisterRange resultBlock,
+        IReadOnlyList<SlotAllocation> slots)
+    {
+        var refusals = new List<string>();
+
+        Pairwise(new[]
+        {
+            ("version", version), ("scan counter", scanCounter), ("start bools", startBools),
+            ("start echo", startEcho), ("vectors", vectorBlock), ("results", resultBlock),
+        }, refusals);
+
+        Pairwise((slots ?? Array.Empty<SlotAllocation>()).Select(s => ($"slot '{s.SlotId}' vector", s.Vector)).ToArray(), refusals);
+        Pairwise((slots ?? Array.Empty<SlotAllocation>()).Select(s => ($"slot '{s.SlotId}' result", s.Result)).ToArray(), refusals);
+
+        foreach (var slot in slots ?? Array.Empty<SlotAllocation>())
+        {
+            if (!Within(slot.Vector, vectorBlock))
+                refusals.Add($"slot '{slot.SlotId}' vector {slot.Vector} is not inside the vector block {vectorBlock}.");
+
+            if (!Within(slot.Result, resultBlock))
+                refusals.Add($"slot '{slot.SlotId}' result {slot.Result} is not inside the result block {resultBlock}.");
+        }
+
+        return refusals;
+    }
+
+    private static void Pairwise(IReadOnlyList<(string Name, RegisterRange Range)> windows, List<string> refusals)
+    {
+        for (var i = 0; i < windows.Count; i++)
+        {
+            for (var j = i + 1; j < windows.Count; j++)
+            {
+                var (leftName, left) = windows[i];
+                var (rightName, right) = windows[j];
+
+                if (left.Length == 0 || right.Length == 0)
+                    continue;
+
+                if (left.Register < right.End && right.Register < left.End)
+                {
+                    refusals.Add($"{leftName} {left} and {rightName} {right} share registers. Two slots aliased onto one register is agent A's write landing in agent B's mirror — the one genuine leak this design has (DB-6), and it would not show up as an error anywhere downstream.");
+                }
+            }
+        }
+    }
+
+    private static bool Within(RegisterRange inner, RegisterRange outer) =>
+        inner.Length == 0 || (inner.Register >= outer.Register && inner.End <= outer.End);
+
     /// <summary>Registers the scan counter occupies. A DInt, so two — and it will wrap; stamps are differences from T=0.</summary>
     public const int ScanCounterRegisters = 2;
 
@@ -91,8 +195,21 @@ public sealed record RegisterMap(
     /// <summary>Slots whose start bools fit in one holding register.</summary>
     public const int SlotsPerStartRegister = 16;
 
-    /// <summary>The whole control region — version, scan counter and start bools — in ONE FC03.</summary>
-    public RegisterRange Control => new(Version.Register, StartBools.End - Version.Register);
+    /// <summary>The whole control region — version, scan counter, start bools and start echo — in ONE FC03.</summary>
+    public RegisterRange Control => new(Version.Register, StartEcho.End - Version.Register);
+
+    /// <summary>
+    /// Every named region, for the disjointness post-condition. Order is the layout's own.
+    /// </summary>
+    public IReadOnlyList<(string Name, RegisterRange Range)> Regions => new[]
+    {
+        ("version", Version),
+        ("scan counter", ScanCounter),
+        ("start bools", StartBools),
+        ("start echo", StartEcho),
+        ("vectors", VectorBlock),
+        ("results", ResultBlock),
+    };
 
     /// <summary>Total registers the map occupies, from register 0.</summary>
     public int TotalRegisters => ResultBlock.End;
@@ -172,6 +289,7 @@ public sealed record RegisterMap(
             canonical.Append($"ver={Version.Register}:{Version.Length}\n");
             canonical.Append($"scan={ScanCounter.Register}:{ScanCounter.Length}\n");
             canonical.Append($"start={StartBools.Register}:{StartBools.Length}\n");
+            canonical.Append($"echo={StartEcho.Register}:{StartEcho.Length}\n");
             canonical.Append($"vec={VectorBlock.Register}:{VectorBlock.Length}/{VectorRegistersPerSlot}\n");
             canonical.Append($"res={ResultBlock.Register}:{ResultBlock.Length}/{ResultRegistersPerSlot}\n");
             foreach (var slot in Slots)

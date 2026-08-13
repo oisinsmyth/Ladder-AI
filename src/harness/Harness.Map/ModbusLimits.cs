@@ -10,13 +10,21 @@ namespace Harness.Map;
 /// commit is written, so 123 bounds that.</para>
 ///
 /// <para><b>The measurement, and it points the opposite way from the spec's original arithmetic.</b>
-/// Phase 1.2 timed 1, 4, 8 and 16 registers per round trip and they all cost the same within noise —
-/// median 71-78 ms, p99 136-173 ms, independent of width. <b>The marginal cost of a register is
-/// indistinguishable from zero; what costs is the number of round trips.</b> D29 bounds tensor width
-/// by poll bandwidth on the assumption that registers cost, and that assumption is measured false up
-/// to these two ceilings. Re-deriving D29 is not this component's job — but not baking its premise in
-/// IS, so nothing here ever narrows a region to save registers, and the cost this component reports is
-/// counted in ROUND TRIPS (see <c>RegisterMap.PollRoundTrips</c>), never in registers.</para>
+/// Phase 1.2 timed 1, 4, 8 and 16 registers per round trip and they all cost the same within noise;
+/// re-measured at the FULL 123 on 2026-08-13, the marginal cost is <b>~0.040 ms per register on writes
+/// and no trend at all on reads</b>. <b>Negligible, and NOT zero</b> — a full-width write costs ~4.9 ms
+/// more than a one-register write, ~6% of a round trip, against 100% for a second round trip. So "round
+/// trips cost, registers do not" survives by a factor of about sixteen, and D29's premise — that
+/// registers are what bound tensor width — is measured false up to these two ceilings. Re-deriving D29
+/// is not this component's job; not baking its premise in IS, so nothing here ever narrows a region to
+/// save registers, and the cost this component reports is counted in ROUND TRIPS (see
+/// <c>RegisterMap.PollRoundTrips</c>), never in registers.</para>
+///
+/// <para><b>What may no longer be said is the bare phrase "marginal cost per register is zero".</b> The
+/// mean held at full width; the TAIL did not, and its behaviour at width is an open question rather
+/// than a measured freebie — a within-width p99 ranged 136→562 ms in one session, an order of magnitude
+/// more than any width effect looked for. Nothing here caps slot width on timing grounds, and nothing
+/// here derives a poll budget from it either.</para>
 ///
 /// <para>Measured over the tunnel rather than a LAN, which is the deployment that matters, and the
 /// figure would only get flatter on a LAN.</para>

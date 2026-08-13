@@ -55,7 +55,7 @@ public sealed class LadProgram
         RegexOptions.Compiled);
 
     private static readonly Regex CoilLine = new(
-        @"^COIL\s+(?<dest>\S+)\s*:=\s*(?<expr>.+)$",
+        @"^(?<kind>S?)COIL\s+(?<dest>\S+)\s*:=\s*(?<expr>.+)$",
         RegexOptions.Compiled);
 
     private readonly Dictionary<string, TagAddress> _tags = new(StringComparer.Ordinal);
@@ -166,7 +166,11 @@ public sealed class LadProgram
             if (!dest.IsBit)
                 throw new UnsupportedIrException($"'{line}' drives a coil onto a {dest.Width}-byte tag; a coil writes a bit.");
 
-            return new CoilStatement(ParseExpression(coil.Groups["expr"].Value), dest);
+            // A SET coil never clears. That asymmetry is the whole reason the start echo can be trusted:
+            // a level coil would drop back low the moment the block's start condition did, and a test that
+            // began and ended between two polls would read as never having run.
+            return new CoilStatement(ParseExpression(coil.Groups["expr"].Value), dest,
+                SetOnly: coil.Groups["kind"].Value == "S");
         }
 
         throw new UnsupportedIrException(
@@ -476,8 +480,21 @@ public sealed class LadProgram
         }
     }
 
-    private sealed record CoilStatement(Expression Expr, TagAddress Dest) : Statement
+    private sealed record CoilStatement(Expression Expr, TagAddress Dest, bool SetOnly) : Statement
     {
-        public override void Execute(byte[] memory) => LadProgram.Write(memory, Dest, Expr.Evaluate(memory) ? 1 : 0);
+        public override void Execute(byte[] memory)
+        {
+            var value = Expr.Evaluate(memory);
+
+            if (SetOnly)
+            {
+                if (value)
+                    LadProgram.Write(memory, Dest, 1);
+
+                return;
+            }
+
+            LadProgram.Write(memory, Dest, value ? 1 : 0);
+        }
     }
 }
