@@ -202,6 +202,29 @@ running does not license:
     ➜ Same lane, same shape, worth pairing: **the converter is an authority on grammar, not on types**
       — measured, because it converted `MOVE(IN := <Bool>)` at exit 0 while TIA refused it. **Knowing
       exactly what a green from a given tool does NOT cover is what makes the green usable.**
+- *** DO NOT FIT A CHECK TO THE IMPLEMENTATION IT HAPPENS TO BE CHECKING. *** Measured 2026-08-13,
+  and it is the correlated-check rule at its narrowest and hardest to notice. A violation latch needed
+  **two** terms — a live reset *and* a held "reset since the raise" record — because the live term
+  alone misreads a fall *caused by* the pulse, and the held term alone misreads a fall *after* it.
+  *** THE ONE-TERM FORM WOULD HAVE PASSED, BECAUSE THIS PARTICULAR BLOCK HAPPENS TO SATISFY IT *** —
+  and the lane wrote both anyway, on the grounds that **the block's internal timing is not the
+  harness's to assume.**
+    ➜ **A check simplified until it still passes against the current implementation has silently
+      become a change detector.** It will keep passing when the implementation changes in a way the
+      requirement forbids.
+    ➜ Same lane, same instinct: an inequality between two outputs was built as **two latches, not one**
+      — *one could not say which way round it went* — and commented with **what the pair does not
+      constrain**, since both outputs moving together at the wrong moment satisfies it.
+    ➜ And: **clear evidence on the harness DROPPING its start bool, never on the edge.** *A latch
+      cleared on the edge is cleared again by a harness restart mid-run, taking the evidence with it.*
+- *** A SCOPE THAT SUPPRESSES IS ONE STEP FROM A SCOPE THAT HIDES. *** When exempting a class of object
+  from a check, the requirement is never *"stop reporting these"* — it is *** "the checker KNOWS what
+  they are and SAYS SO". *** A counted, labelled, non-gating bucket; **a count of zero is a different
+  fact from an absent section**; and the exemption must be **derived from a property, never declared
+  by a flag** — *a caller assertion is forgotten exactly when it matters.*
+    ➜ **Watch for the class that has no derivable property.** A block has a number; a tag table does
+      not, so it falls back to a name — **and a name is a convention anything can be renamed into.**
+      *An honest "unclassified" beats a rule that turns renaming into a route out of review.*
 - *** NOT ALL FAILURES GET INVESTIGATED — PREFER THE ONE THAT INVITES AN ARGUMENT. *** Named
   2026-08-13 and now the stated reason behind several refusals here: *** A `FAIL` INVITES AN ARGUMENT
   AND SOMEBODY LOOKS. A `TIMED-OUT` READS AS "THE CONDITION NEVER OCCURRED" AND CLOSES THE QUESTION. ***
