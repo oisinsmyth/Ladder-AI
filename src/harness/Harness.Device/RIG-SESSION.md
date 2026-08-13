@@ -43,36 +43,84 @@ src\openness-cli\OpennessCli\bin\Release\net48\openness-cli.exe
 src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe
 ```
 
-### 🔴 TWO PRECONDITIONS THE RELEASE BINARY DOES NOT SATISFY TODAY
+### ✅ THE TWO BINARY PRECONDITIONS ARE SATISFIED (2026-08-13)
 
-**1. `Release\net48\download-probe.exe` IS STALE.** The allowlist fence and the first-class
-`loadManifest` landed on 2026-08-13, and that lane **built Debug only** — `portal-status` reported
-**two Portal sessions in use**, so Release was treated as untouchable. The Release binary therefore
-still carries the old file-name-suffix guard and emits **no `loadManifest`**. It must be rebuilt:
+Both were done in a window where `portal-status` reported **0 processes / 0 orphans / 0 strays**:
+a full `dotnet build -c Release src/openness-cli/openness-cli.sln`, then
+`openness-approve-build.ps1 -Exe` on `download-probe.exe`. Verified by hash —
+**`Entry (11) THIS BUILD`, 1 match, across TIA 17.0 / 19.0 / 20.0.**
 
-```
-openness-cli portal-status                       # must show no lane holding Portal
-dotnet build -c Release src\openness-cli\openness-cli.sln
-```
+So `Release\net48\download-probe.exe` now carries the allowlist fence and emits the first-class
+`loadManifest`, and it is approved.
 
-**2. `download-probe.exe` must then be APPROVED BY HAND.** Its `.csproj` deliberately omits the
-`ApproveForOpenness` post-build target — self-approving the one binary that can transfer a program
-would mean a `dotnet build` silently grants Portal access to it. The per-machine approval setup **has**
-been run, so the `openness-cli` half self-approves; only this one needs the manual call:
+> #### 🔴 IF YOU EVER REDO THIS: **BUILD FIRST, APPROVE SECOND, `-Status` THIRD.**
+>
+> **The order was got wrong the first time and the runbook did not warn about it.** The binary was
+> approved and *then* the solution build was run. **The build changed the file, so the approval
+> instantly became `same path, older hash`** — a stale grant.
+>
+> A stale grant fails **at attach**, in exactly the way the box below describes, so it presents as a
+> wedged Portal rather than as "you approved the wrong file". An operator who approves early gets a
+> refusal that looks like a completely different problem.
+>
+> ```
+> openness-cli portal-status                       # 1. must show no lane holding Portal
+> dotnet build -c Release src\openness-cli\openness-cli.sln          # 2. BUILD FIRST
+> tools\openness-approve-build.ps1 -Exe src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe   # 3. THEN approve
+> tools\openness-approve-build.ps1 -Status         # 4. CONFIRM THE HASH MATCHES, not just the path
+> ```
+>
+> `-Status` must report the entry as **THIS BUILD**. *"N entries, 2 name this exact path, **0 match
+> this file's hash**"* is the stale-grant reading, and it is genuinely unapproved.
 
-```
-tools\openness-approve-build.ps1 -Exe src\openness-cli\DownloadProbe\bin\Release\net48\download-probe.exe
-tools\openness-approve-build.ps1 -Status         # read-only: is it approved RIGHT NOW
-```
+> ⚠️ **APPROVED IS NOT VERIFIED.** The approval tool says so itself: only an **attach** proves the
+> grant works. That attach is step 0 of the session (`openness-cli list`), and it is the first thing
+> that can still go wrong.
 
 > ⚠️ **Until it is approved the first attach either hangs to the connect timeout or throws
 > `EngineeringSecurityException`. BOTH MEAN "NEEDS APPROVAL", NOT "PORTAL IS WEDGED".** That
 > misreading has cost this project an hour before, and an operator discovering it mid-session is
 > exactly the person most likely to make it.
 
-> ⚠️ **After that, do not rebuild `openness-cli` or `download-probe` during the session.** TIA
-> whitelists by `(Path, FileHash)`. `dotnet test src/openness-cli/openness-cli.sln` IS a rebuild.
-> `converter.sln` and `harness.sln` are safe.
+> ⚠️ **DO NOT REBUILD `openness-cli` OR `download-probe` NOW.** TIA whitelists by `(Path, FileHash)`,
+> and the approval above is keyed to **that exact hash** — a rebuild voids it and puts you back in the
+> stale-grant case. `dotnet test src/openness-cli/openness-cli.sln` **IS** a rebuild. `converter.sln`
+> and `harness.sln` are safe.
+
+---
+
+## 0b. THE SESSION AGENDA — AND ITS ORDER IS NOT ARBITRARY
+
+**Full agenda and rationale: `docs/notes/test-environment-build-plan.md`, *"THE SESSION'S ORDER IS
+NOT ARBITRARY — THE DESTRUCTIVE PROBES GO LAST"*.** Not duplicated here; what follows is the shape
+and the one constraint that governs it.
+
+> ### 🔴 THE DESTRUCTIVE PROBES END THE HEALTHY WINDOW, AND THEY DO NOT GIVE IT BACK
+>
+> **A6's POST-abort throw leaves the CPU STOPPED with a recovery download owed — 34 s, measured.**
+> Everything that needs a *healthy, loaded* controller must therefore happen **before the first
+> deliberate abort**, or every repetition costs a recovery cycle and the session becomes
+> download-recover-download.
+
+| # | what | why it sits here |
+|---|---|---|
+| 1 | **Deploy** — §1 below, the loop putting an object on a controller for the first time | everything else needs a loaded CPU |
+| 2 | **5.2's test run** — vectors against the block under test, result package back | the milestone; needs the deployment intact. Fold in the two 6.6/6.7 items — no wave has ever run compressed, and X-D's `k ≈ 5` timer floor is the spec's number rather than a measured one |
+| 3 | **The three named read-only exports** | free while the project is open, and each closes a class with no new test code |
+| 4 | **A6 repetition, both abort kinds** | ⚠️ **DESTRUCTIVE — the first abort ends the healthy window** |
+| 5 | **Does an ORDINARY delegate exception kill Portal?** | same class, and the one that matters operationally: D32's throw-on-unhandled fires in production |
+
+**Steps 1–3 are the healthy window. Step 4 closes it.** Nothing after step 3 should be scheduled on
+the assumption that a loaded controller is still available.
+
+> ### RECORD THE RUN STATE AT EVERY STEP, NOT JUST THE OUTCOME
+>
+> **A6's two abort kinds differ in exactly that**, so a session log that carries only outcomes
+> cannot tell a CPU that kept running from one that stopped and was recovered — and those are the
+> two findings the repetition exists to separate. `download-probe`'s report already carries
+> `cpuRunStateAdvisory` and the feedback parser's `runStateTransitions` / `runStateDisclosed`;
+> **`RunStateDisclosed = false` is "the download said nothing about it", which is a gap and not a
+> reassurance.** Read it back independently after each step rather than inferring it.
 
 ---
 
@@ -195,8 +243,10 @@ the gateway reports that verbatim; **`available: false` is read as "nobody looke
 loaded nothing"**.
 
 *Fallback:* on an older probe build with no `loadManifest`, the gateway parses the embedded `log`
-array through `ProbeLogReader` instead and labels the source accordingly. **Given precondition 1
-above, the Release binary today is that older build.**
+array through `ProbeLogReader` instead and labels the source accordingly. **The Release binary is no
+longer that older build** (§0), so `loadManifest.source` should read `DownloadResultAdapter` —
+**first-hand**. If it reads `ProbeLogReader`, something is running a stale binary and the manifest is
+a re-derivation from a rendering rather than the object itself.
 
 `Loaded` is true only when **both**:
 
@@ -213,6 +263,83 @@ helpers — and no tag table.
 
 `NModbusTransport.Connect(host, port, unitId)`. Refused unless the last deployment was both
 `Attempted` and `Loaded`.
+
+---
+
+## 🔴 STEPS 8 AND 9 — TWO CALIBRATIONS, ONE WRITE EACH, AND THEY MUST COME FIRST
+
+**Do these IMMEDIATELY after the mirror opens and BEFORE anything is concluded from a multi-word
+read.** Both are `OwedOnTheDevice` items, both are settled by a single write, and it would be absurd
+to hold a rig session and not spend the sixty seconds. **A wrong word order silently corrupts every
+32-bit reading taken after it** — the value is not obviously wrong, it is a different plausible
+number.
+
+### Step 8 — THE START-BOOL BIT ORDER. Write `16#0001`.
+
+`MirrorGeometry.BitAddressOf` is the **one `[I]` in that file**, and its own remark says why it
+matters: a Modbus register travels big-endian and an S7 `%MW` is big-endian, so **bit 0 of the
+register value lands in the SECOND byte, not the first** — the counter-intuitive half. Today it
+renders bit `b < 8` as `%M{byte+1}.{b}`.
+
+> ***THE CURRENT AGREEMENT IS WORTH NOTHING, AND THAT IS THE POINT.*** The simulator and
+> `BitAddressOf` agree **from the same premise** — the simulator was written against the same
+> mapping — so every green so far is a textbook correlated check. Only the device is an outside
+> authority. **Discharge this FIRST: several later readings depend on it.**
+
+| step | do | outcome |
+|---|---|---|
+| 8a | Write `16#0001` to slot 0's start-bool register (`MirrorClient.RaiseStartBools` for slot 0 does exactly this when its `StartBitInRegister` is 0) | — |
+| 8b | Poll `ReadControl().Executed(0)` — the **ECHO** (X-E), which is what the PROGRAM saw, not what the client commanded | **`true` ⇒ `BitAddressOf` IS RIGHT.** Mark it `[M]` and change nothing |
+| 8c | Only if 8b stays `false`: lower it, then write `16#0100` and poll the echo again | **`true` here ⇒ THE TWO BYTES SWAP.** `BitAddressOf` becomes `%M{byte}.{b}` for `b < 8` and `%M{byte+1}.{b-8}` for `b ≥ 8` — **and it changes there and NOWHERE ELSE** |
+| 8d | If NEITHER raises the echo | Not a bit-order result. The copy layer's start-bool network is not driving the block at all — a deployment or generation fault, and 8 is unanswered rather than answered negatively |
+
+**Read the ECHO, never the start-bool register.** `ControlSnapshot.StartBools` is what the client
+wrote and reads back identically under either mapping; `StartEcho` is what the block's own start
+condition latched. Only the second can tell the two apart.
+
+### Step 9 — THE 32-BIT WORD ORDER. Read the version register.
+
+`RegisterWordOrder`'s default of `HighWordFirst` is **an inference, not a measurement** — §11 asks
+for exactly one calibration with a known bit pattern. **The pattern is already there**: the copy
+layer publishes the build stamp the gateway computed, so the known value is in hand and this costs
+one read.
+
+`VersionCheck.Confirm` already reports the answer as a distinct outcome — **no new code**:
+
+| `VersionOutcome` | meaning | action |
+|---|---|---|
+| `Confirmed` | the pair reconstructs the expected stamp under `HighWordFirst` | **the default is CORRECT.** Mark it `[M]` |
+| `WordOrderSuspect` | the pair equals the expected stamp **with its two halves swapped** | ***THE ORDER IS `LowWordFirst`.*** Almost certainly the uncalibrated transform and **not** a failed download — set it and re-read |
+| `Absent` | stable at zero | the copy layer is not running. Not a word-order result |
+| `Stale` | stable at a *different* stamp | the download did not land. Not a word-order result |
+| `Unsettled` | never stable | the settling window is longer than allowed, or it is flapping |
+
+**The same transform carries the SCAN COUNTER**, which the liveness check keys on — so an uncalibrated
+order does not merely misreport a version, it makes `ScanAdvance` arithmetic wrong and turns liveness
+into a number nobody can trust. That is why this precedes step 2 of the agenda and not just step 10.
+
+### What this session CAN and CANNOT take off `OwedOnTheDevice`
+
+**Discharged by the session, if it runs:** *deployment itself* (item 1) and *the load manifest*
+(item 2) fall out of a successful step 5–6; **the start-bool bit order** (item 4) and **the 32-bit
+word order** (item 5) are steps 8 and 9 above.
+
+**NOT discharged, and nobody should expect the list to empty:**
+
+- **F-1's premise** — that `MB_SERVER` serves a wide multi-slot read as coherently as a narrow
+  single-slot one. Reasoned, not measured; needs a deliberate multi-slot experiment, not a by-product.
+- **A5, slot non-interference on a 1214C.** What is shown PC-side is that the harness does not itself
+  couple two slots and that a coupling which exists would be caught — not that the CPU does not couple
+  them.
+- **The echo latch's necessity.** The copy layer re-drives the start condition every scan, so within
+  an index a level coil reads identically to the SCOIL. The latch guards a start condition the copy
+  layer does not drive, and **nothing in this session exercises that**.
+- **Scan-accurate settling.** The check compares a recorded value against the value some scans later,
+  which catches a value still moving and **cannot see one that moved and came back**. A stronger
+  check, not a measurement.
+
+**So a clean session takes the list from 8 to 4.** Anything that claims more has counted something
+twice.
 
 ---
 
@@ -257,13 +384,15 @@ the harness generates today it fires zero times. That is a guard that could sile
 
 Recommended order, cheapest refusal first:
 
-0. **The two preconditions in §0**: a Release rebuild of `openness-cli.sln` while no lane holds
-   Portal, then `openness-approve-build.ps1 -Exe` for `download-probe.exe`. And **one line in
-   `%ProgramData%\Ladder-AI\download-probe.allowlist`, written by the owner**, naming the rig
-   project's absolute path.
+0. **The one precondition still open**: ⚠️ **one line in
+   `%ProgramData%\Ladder-AI\download-probe.allowlist`, written by the OWNER**, naming the rig
+   project's absolute path. *(The two BINARY preconditions are done — see §0. Do not rebuild:
+   the approval is keyed to that exact hash.)*
 1. `openness-cli portal-status` — no lane holds Portal.
-2. `tools\openness-approve-build.ps1 -Status` — is `download-probe.exe` approved *right now*.
-3. `openness-cli list %P%` — copy the `Path` column for `--group`.
+2. `tools\openness-approve-build.ps1 -Status` — the entry must read **THIS BUILD**, matching the
+   hash and not merely the path.
+3. `openness-cli list %P%` — copy the `Path` column for `--group`. **This is the first real attach,
+   and it is what actually proves the approval** — approved is not verified.
 4. `openness-cli download-plan %P% --json > plan.json` — read the exact `--pc-interface` string.
    **Read-only and incapable of downloading**; an IL test asserts it.
 5. `download-probe %P% --options SoftwareOnlyChanges --to-folder %S%\image --json`
@@ -271,7 +400,8 @@ Recommended order, cheapest refusal first:
    nothing on the wire, no CPU stopped, and it reaches *the compile a download runs*, which is
    measurably not the compile `--block` / device / `compile-all` / `sanity-check` run. If this
    fails, step 5 of the real sequence would have failed on the wire.
-6. Then the full sequence, once, with the operator at the machine.
+6. Then the full sequence, once, with the operator at the machine — followed **immediately** by the
+   two calibrations (steps 8 and 9), then the agenda in §0b, **destructive probes last**.
 
 > ⚠️ **Redirect, never pipe.** `openness-cli` and `download-probe` launch Portal as a child that
 > inherits their standard handles, so a pipe outlives the command and the read never returns. The
