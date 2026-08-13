@@ -338,8 +338,13 @@ public static class LoopRun
             new InertDeclaration(binding.ResultSources.Select((_, i) => (i, (ushort)0)).ToDictionary(x => x.i, x => x.Item2)),
             completionRegister >= 0 ? completionRegister : 0,
             // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
-            // loop inventing a convention contract section 2 does not state.
-            unchecked((ushort)vector.CompletionValue),
+            // loop inventing a convention contract section 2 does not state — and then a DEFAULT of 1 on
+            // the field, which was the same invention one layer up. Unreachable by construction: the
+            // schema gate refuses a null before any wave is generated, so a throw here would mean the
+            // loop had run an inadmissible submission.
+            unchecked((ushort)(vector.CompletionValue
+                ?? throw new InvalidOperationException(
+                    $"vector '{vector.Id}' reached the wave with no completion value. The schema gate refuses that, so the loop has run a submission it did not admit."))),
             // *** THE DURATION CARRIES ITS OWN comp. *** The declaration is in scans at the AUTHOR's
             // factor, and the wave re-expresses it at the factor it runs — see ScanBudget. The schema gate
             // has already refused a MaxDuration below 1, so the construction cannot throw here.

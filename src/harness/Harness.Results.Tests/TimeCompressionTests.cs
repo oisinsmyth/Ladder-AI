@@ -27,9 +27,10 @@ public class TimeCompressionTests
         int slotsPerPollCycle = 1,
         IReadOnlyList<TimerPreset>? presets = null,
         double? modelCompStable = 100,
-        double? negligibleFraction = 0.01) =>
+        double? negligibleFraction = 0.01,
+        int runtime = 1) =>
         new(plantMs, budgetMs, expectations ?? new[] { Sampled(20) }, declared, slotsPerPollCycle,
-            presets ?? Array.Empty<TimerPreset>(), modelCompStable, negligibleFraction);
+            presets ?? Array.Empty<TimerPreset>(), modelCompStable, negligibleFraction, runtime);
 
     private static double Floor => WireTiming.ObservabilityFloorScans(1);
 

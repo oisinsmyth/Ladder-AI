@@ -127,7 +127,36 @@ public static class GateCli
             map,
             floor,
             Math.Max(1, document.RuntimeCompression),
-            ToConflictGraph(document));
+            ToConflictGraph(document),
+            ToCompressionInputs(document));
+    }
+
+    /// <summary>
+    /// X-D's block-level ceilings, off the document.
+    ///
+    /// <para><b><c>SubmissionGate.Check</c> has always taken these and <c>Evaluate</c> never passed
+    /// them</b>, so gate 10b reported NOT CHECKED from the CLI even for a submission that could have
+    /// answered it — the same shape as <c>forms</c> and <c>enumerator</c> before them. <c>compStable</c>
+    /// comes from the MODEL because it is the model author's number.</para>
+    ///
+    /// <para>Null only when the document says nothing at all. An object present but incomplete is passed
+    /// through so the gate can name the missing field, rather than being flattened to "absent".</para>
+    /// </summary>
+    private static BlockCompressionInputs? ToCompressionInputs(SubmissionDocument document)
+    {
+        if (document.BlockCompression is null && document.Model?.CompStable is null)
+            return null;
+
+        var block = document.BlockCompression;
+
+        return new BlockCompressionInputs(
+            block?.PlantMs,
+            block?.BudgetMs,
+            (block?.Presets ?? new List<TimerPresetDocument>())
+                .Select(p => new TimerPreset(p.Name ?? string.Empty, p.PresetMs, p.Source))
+                .ToArray(),
+            document.Model?.CompStable,
+            block?.NegligibleFraction);
     }
 
     /// <summary>

@@ -163,13 +163,15 @@ public sealed record SubmissionVector(
     string StartBool,
     IReadOnlyList<ObservabilityDeclaration> Expectations,
     AssertionForm Form,
-    // CompletionValue is below, beside MaxDuration. *** CONTRACT SECTION 2 HAS NO FIELD FOR IT *** -
-    // it names a completion SIGNAL and never says what value on that signal means "finished". The loop
-    // was assuming 1. Carrying it as data removes the assumption from the code; whether the CONTRACT
-    // should state it is a spec question and is not settled here.
+    // CompletionValue is below, beside MaxDuration. *** IT HAS NO DEFAULT, AND THAT IS A DEFECT FIX
+    // RATHER THAN A TIGHTENING. *** SlotRun compares a result register against it and reports TIMED-OUT
+    // otherwise, so a default of 1 meant a block signalling completion with a STATE NUMBER was compared
+    // against a value nobody stated - and a healthy block read as never having finished. Exactly the
+    // missing-predicate defect, one field over: the case the field exists for gets tested, and the case
+    // where it was ignored does not. Null is REFUSED at the schema gate.
     SettlingDeclaration? Settling,
     int MaxDurationScans,
-    int CompletionValue,
+    int? CompletionValue,
     IReadOnlyList<BlacklistEntry> Blacklist,
     int CompressionFactor,
     IReadOnlyCollection<string> AssertedBehaviours,

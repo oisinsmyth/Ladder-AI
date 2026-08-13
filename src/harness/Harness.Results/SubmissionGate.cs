@@ -176,6 +176,23 @@ public static class SubmissionGate
                 problems.Add($"{label}: expectation '{e.Signal}' declares no expected value. An expectation with nothing to compare against cannot fail, so its pass says nothing — and it does not become an error, it becomes a spurious disagreement against a placeholder.");
             }
 
+            // *** THE COMPLETION VALUE. *** SlotRun compares a result register against it and reports
+            // TIMED-OUT otherwise, so a default of 1 was a LIVE SILENT-WRONG-ANSWER defect: a block
+            // signalling completion with a state number was compared against a value nobody stated, and a
+            // HEALTHY block came back as never having finished. The author is then told the block is
+            // wrong when what is wrong is that nobody said what "finished" looks like — the same shape as
+            // the missing predicate, one field over.
+            if (v.CompletionValue is null)
+            {
+                problems.Add($"{label}: declares no completion VALUE for '{v.CompletionSignal}'. It used to default to 1, which is the harness's convention and not the block's: SlotRun compares a result register against this and reports TIMED-OUT otherwise, so a block that signals completion with a state number reads as never having finished. There is no fail-safe default, so it is required.");
+            }
+            else if (v.CompletionValue is < 0 or > 65535)
+            {
+                // The wave casts it with `unchecked((ushort))`, so anything outside the range silently
+                // becomes a different number — and the vector would then wait for a value it never named.
+                problems.Add($"{label}: completion value {v.CompletionValue} is outside 0..65535. The wave casts it to a holding register with an UNCHECKED conversion, so it would silently become a different value and the vector would wait for a number nobody wrote.");
+            }
+
             // Kills is in the code and absent from contract section 2's format. Section 10 requires
             // mutation testing and this is the only mechanism for it that exists, so it is required here
             // and the discrepancy is raised rather than silently resolved.
@@ -188,13 +205,19 @@ public static class SubmissionGate
         // one an author cannot check against anything, so the gate says what it read rather than leaving
         // the reader to assume the harness's convention of 1.
         var completions = string.Join(", ", vectors
-            .Select(v => $"{v.CompletionSignal} reads {v.CompletionValue}")
+            .Select(v => $"{v.CompletionSignal} reads {v.CompletionValue?.ToString() ?? "<NOT STATED>"}")
             .Distinct(StringComparer.Ordinal));
 
+        // The completion condition is printed on BOTH branches. A report that appears only on good news
+        // teaches a reader that its absence means everything was fine — and this is the field whose
+        // silent default made a healthy block read as never having finished.
+        var completionNote = $" Completion condition(s): {completions} — contract section 2 names a completion SIGNAL and states no VALUE, so this is reported rather than assumed.";
+
         return new GateResult("1 schema", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
-            problems.Count == 0
-                ? $"{vectors.Count} vector(s), every contract section 2 field present and typed. Completion condition(s): {completions} — section 2 names a completion SIGNAL and states no VALUE, so this is reported rather than assumed."
-                : string.Join(" | ", problems));
+            (problems.Count == 0
+                ? $"{vectors.Count} vector(s), every contract section 2 field present and typed."
+                : string.Join(" | ", problems))
+            + completionNote);
     }
 
     // -------------------------------------------------------------------------------------------------
@@ -781,14 +804,29 @@ public static class SubmissionGate
             return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.NotChecked, false, "TimeCompression.Plan, via BlockCompressionInputs",
                 $"this wave runs at comp={runtimeCompression} with declared factor(s) {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))}, so compression IS being applied — and three of X-D's four ceilings were compared against nothing. "
                 + $"No timer presets were supplied (the term X-D says OFTEN BINDS FIRST: PT / (k x scan), floor {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset caps at {500 / TimeCompression.TimerFloorMs:0.0}x), no model comp_stable, and no negligible-fraction threshold for the ratio-distortion bound. "
-                + "Supply them as BlockCompressionInputs. An unknown ceiling is not a high one.");
+                + "Supply them as `blockCompression` (with `model.compStable`). An unknown ceiling is not a high one.");
+        }
+
+        // *** AN INCOMPLETE OBJECT IS NOT CHECKED, NAMING THE FIELD — never a throw. *** PlantMs and
+        // BudgetMs used to be non-nullable, so an omitted pair arrived as 0, Plan threw, and the CLI
+        // reported the whole DOCUMENT unreadable (NOTHING EXAMINED). Both fail closed; only the diagnosis
+        // was wrong, and it sent the reader looking at the wrong thing.
+        if (inputs.Missing.Count > 0)
+        {
+            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.NotChecked, false, "TimeCompression.Plan, via BlockCompressionInputs",
+                $"this wave runs at comp={runtimeCompression}, so compression IS being applied, and the block compression inputs are incomplete: "
+                + string.Join(" | ", inputs.Missing)
+                + ". The rest of the submission is fine; these fields are what is missing.");
         }
 
         var plan = TimeCompression.Plan(
-            new CompressionRequest(inputs.PlantMs, inputs.BudgetMs,
+            new CompressionRequest(inputs.PlantMs!.Value, inputs.BudgetMs!.Value,
                 vectors.SelectMany(v => v.Expectations).ToArray(),
                 declaredFactors.Max(), Math.Max(1, (int)Math.Round(floorScans * Harness.Wire.WireTiming.ScanPeriodMs / Harness.Wire.WireTiming.RttP99Ms)),
-                inputs.Presets, inputs.ModelCompStable, inputs.NegligibleFraction),
+                inputs.Presets, inputs.ModelCompStable, inputs.NegligibleFraction,
+                // *** THE RUNTIME FACTOR REACHES THE ARITHMETIC. *** Without it, Plan's own branches keyed
+                // on comp_min and a wave at comp=8 with comp_min=1 was told nothing was being scaled.
+                runtimeCompression),
             floorScans);
 
         if (!plan.Runnable)

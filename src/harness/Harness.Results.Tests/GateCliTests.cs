@@ -34,6 +34,7 @@ public class GateCliTests
         "maxDurationScans": 20,
         "blacklist": [{ "block": "FC_Other", "reason": "shares the plant model" }],
         "assertionForm": "When",
+        "completionValue": 1,
         "compressionFactor": 1,
         "assertedBehaviours": ["ramp-to-limit"],
         "completionSignal": "Demo_Done",

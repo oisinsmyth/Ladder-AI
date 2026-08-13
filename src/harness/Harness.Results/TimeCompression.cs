@@ -129,6 +129,20 @@ public sealed record TimerPreset(string Name, double PresetMs, PresetSource Sour
 /// default, and a plan that does not state one reports the bound <see cref="CompressionBoundState.NotDeclared"/>
 /// rather than quietly picking a number and calling it derived.
 /// </param>
+/// <param name="RuntimeCompression">
+/// *** THE FACTOR THE WAVE ACTUALLY RUNS AT, AND THE ONE THE CONTRACT RULES ON. ***
+///
+/// <para>Required, because without it this arithmetic asked the wrong question. Every "is anything being
+/// scaled?" branch below used to key on <c>comp_min</c> — which is derived from
+/// <c>T_plant / T_budget</c> and says what the plan NEEDS, not what the wave DOES. <b>A wave at
+/// <c>runtimeCompression = 8</c> whose budget happens to give <c>comp_min = 1</c> therefore passed with no
+/// <c>comp_stable</c> declared at all</b>: the model was being driven at 8x and the plan reported that
+/// nothing was being scaled.</para>
+///
+/// <para>The branches now key on <c>max(comp_min, runtime)</c>. Taking the maximum rather than the runtime
+/// alone can only make the check stricter — a plan needing 240x is still asking a model to run at 240x
+/// even if somebody set the wave to 1.</para>
+/// </param>
 public sealed record CompressionRequest(
     double PlantMs,
     double BudgetMs,
@@ -137,7 +151,8 @@ public sealed record CompressionRequest(
     int SlotsPerPollCycle,
     IReadOnlyList<TimerPreset> Presets,
     double? ModelCompStable,
-    double? NegligibleFraction);
+    double? NegligibleFraction,
+    int RuntimeCompression);
 
 /// <summary>
 /// The three X-D ceilings that are properties of the BLOCK and the MODEL rather than of the vectors —
@@ -150,11 +165,37 @@ public sealed record CompressionRequest(
 /// <param name="PlantMs">How long the behaviour under test takes in the plant, for <c>comp_min</c>.</param>
 /// <param name="BudgetMs">How long the wave may spend on it.</param>
 public sealed record BlockCompressionInputs(
-    double PlantMs,
-    double BudgetMs,
+    double? PlantMs,
+    double? BudgetMs,
     IReadOnlyList<TimerPreset> Presets,
     double? ModelCompStable,
-    double? NegligibleFraction);
+    double? NegligibleFraction)
+{
+    /// <summary>
+    /// Fields that are missing, or empty. <b>An incomplete object must reach gate 10b as INCOMPLETE.</b>
+    ///
+    /// <para><c>PlantMs</c> and <c>BudgetMs</c> used to be non-nullable doubles, so an omitted pair
+    /// arrived as <c>0</c>, <see cref="TimeCompression.MinimumFor"/> threw, and the CLI caught it as an
+    /// unreadable document — <b>NOTHING EXAMINED</b>. Both directions fail closed, so nothing was ever
+    /// admitted wrongly; what was wrong is the DIAGNOSIS. The operator was told the document could not be
+    /// read when the document was fine and one number was missing.</para>
+    /// </summary>
+    public IReadOnlyList<string> Missing
+    {
+        get
+        {
+            var missing = new List<string>();
+
+            if (PlantMs is not { } plant || double.IsNaN(plant) || plant <= 0)
+                missing.Add("plantMs (how long the behaviour takes in the plant) — comp_min is T_plant / T_budget and cannot be formed without it");
+
+            if (BudgetMs is not { } budget || double.IsNaN(budget) || budget <= 0)
+                missing.Add("budgetMs (how long the wave may spend on it) — a budget of zero admits no test, and dividing by it would report an infinite comp_min as though it were a number");
+
+            return missing;
+        }
+    }
+}
 
 /// <summary>
 /// The whole X-D verdict. <b>There is no member that recommends <c>comp_max</c>.</b>
@@ -295,6 +336,14 @@ public static class TimeCompression
         ArgumentNullException.ThrowIfNull(request.Presets);
 
         var compMin = MinimumFor(request.PlantMs, request.BudgetMs);
+
+        // *** WHAT IS ACTUALLY BEING SCALED. *** comp_min says what the plan NEEDS; the runtime factor
+        // says what the wave DOES. Keying the "is anything compressed?" branches on comp_min alone let a
+        // wave at runtime=8 with comp_min=1 report that nothing was being scaled — and pass with no
+        // comp_stable declared, while the model was driven at 8x. The maximum can only tighten.
+        var applied = Math.Max(compMin, Math.Max(1, request.RuntimeCompression));
+        var appliedBy = applied > compMin ? $"the wave runs at comp={request.RuntimeCompression}" : $"comp_min is {compMin:0.##}x";
+
         var bounds = new List<CompressionBound>();
 
         // ---- per assertion ---------------------------------------------------------------------------
@@ -389,9 +438,9 @@ public static class TimeCompression
         else
         {
             bounds.Add(CompressionBound.NotDeclared(CompressionBoundKind.Model, "<model>",
-                compMin > 1
-                    ? $"comp_min is {compMin:0.##}x and the model declares no comp_stable, so nothing establishes that it behaves at the factor this plan needs. An undeclared stability ceiling is not an infinite one."
-                    : "the model declares no comp_stable. comp_min is 1, so nothing is being scaled and this ceiling cannot bind — it is reported rather than silently omitted, because an absent line reads as a check that passed."));
+                applied > 1
+                    ? $"{appliedBy}, so the model IS being driven at a factor, and it declares no comp_stable — nothing establishes that it behaves there. An undeclared stability ceiling is not an infinite one. *** THIS BRANCH USED TO KEY ON comp_min ALONE, so a wave at comp=8 whose budget gave comp_min=1 reported that nothing was being scaled and passed with no comp_stable at all. ***"
+                    : "the model declares no comp_stable. Neither comp_min nor the runtime factor exceeds 1, so nothing is being scaled and this ceiling cannot bind — it is reported rather than silently omitted, because an absent line reads as a check that passed."));
         }
 
         // ---- the verdict --------------------------------------------------------------------------------
@@ -401,10 +450,10 @@ public static class TimeCompression
         // A ceiling that could not be computed only blocks the plan when compression is actually being
         // applied. At comp_min = 1 nothing is scaled and no ceiling of X-D's can bind, so an uncomputed one
         // is honest bookkeeping rather than a refusal.
-        if (compMin > 1 && missing.Length > 0)
+        if (applied > 1 && missing.Length > 0)
         {
             return new CompressionPlan(CompressionOutcome.NotComputable, compMin, double.NaN, CompressionBoundKind.Unstated, bounds,
-                $"comp_min is {compMin:0.##}x, so compression IS being applied, and {missing.Length} ceiling(s) could not be computed: "
+                $"{appliedBy}, so compression IS being applied, and {missing.Length} ceiling(s) could not be computed: "
                 + string.Join(" | ", missing.Select(b => $"{b.Kind}/{b.Subject} — {b.Detail}"))
                 + " An unknown ceiling is not a high one, so this is not runnable.");
         }

@@ -51,6 +51,16 @@ public sealed class SubmissionDocument
     /// </summary>
     public List<ConflictEdgeDocument>? ConflictEdges { get; set; }
 
+    /// <summary>
+    /// X-D's three BLOCK-level ceilings — the inputs contract §2 gives an author nowhere to state.
+    ///
+    /// <para><b>The checks were built and the document could not carry what they needed</b>, so gate 10b
+    /// reported NOT CHECKED even for a submission that could have answered it. That is the same shape as
+    /// <c>forms</c> and <c>enumerator</c> before them: a gate whose refusal names a remedy nobody can
+    /// supply is a dead end wearing the costume of a build list.</para>
+    /// </summary>
+    public BlockCompressionDocument? BlockCompression { get; set; }
+
     public List<VectorDocument>? Vectors { get; set; }
 
     public static SubmissionDocument Read(string json) =>
@@ -72,6 +82,59 @@ public sealed class ModelDocument
     public List<string>? Represents { get; set; }
     public List<string>? DoesNotRepresent { get; set; }
     public bool ValidatedAgainstPlantData { get; set; }
+
+    /// <summary>
+    /// The model's declared <c>comp_stable</c> (M3/M4) — the factor its author states it behaves at.
+    ///
+    /// <para><b>It lives on the MODEL because it is the model author's number</b>, and it is nullable
+    /// because an undeclared stability ceiling is not an infinite one. When compression is being applied
+    /// and this is absent, X-D's model bound is <c>NOT DECLARED</c> and the plan is not runnable.</para>
+    /// </summary>
+    public double? CompStable { get; set; }
+}
+
+/// <summary>
+/// The block-level compression inputs. <b>Every one is nullable</b>, so an incomplete object reaches the
+/// gate as INCOMPLETE.
+/// </summary>
+/// <remarks>
+/// <c>PlantMs</c> and <c>BudgetMs</c> being nullable is a DIAGNOSTIC correction rather than a hole being
+/// closed: as non-nullable doubles an omitted pair arrived as <c>0</c>, <c>TimeCompression.MinimumFor</c>
+/// threw, and <c>GateCli</c> caught it as an unreadable document — <b>exit 2, NOTHING EXAMINED</b>. Both
+/// fail closed, so nothing was ever admitted wrongly; what was wrong is that the operator was told the
+/// document could not be read when the document was fine and one field was missing. Now it is
+/// <b>exit 1, NOT CHECKED</b>, which names the field.
+/// </remarks>
+public sealed class BlockCompressionDocument
+{
+    /// <summary>How long the behaviour under test takes in the plant, for <c>comp_min</c>.</summary>
+    public double? PlantMs { get; set; }
+
+    /// <summary>How long the wave may spend on it.</summary>
+    public double? BudgetMs { get; set; }
+
+    /// <summary>The block's dwell presets, each declared DATA or LITERAL. <b>Unstated is refused, never guessed</b>.</summary>
+    public List<TimerPresetDocument>? Presets { get; set; }
+
+    /// <summary>
+    /// The ratio-distortion threshold. The specification works an example and never says where
+    /// "negligible" ends, so this has no default and its absence makes that bound <c>NOT DECLARED</c>.
+    /// </summary>
+    public double? NegligibleFraction { get; set; }
+}
+
+/// <summary>One dwell preset. <b><c>Source</c> absent parses as <c>Unstated</c>, which is refused.</b></summary>
+/// <remarks>
+/// The two real answers push in OPPOSITE directions — a DATA preset lowers the timer ceiling, a LITERAL
+/// one lowers the ratio-distortion ceiling — so there is no fail-safe guess available.
+/// </remarks>
+public sealed class TimerPresetDocument
+{
+    public string? Name { get; set; }
+
+    public double PresetMs { get; set; }
+
+    public PresetSource Source { get; set; } = PresetSource.Unstated;
 }
 
 /// <summary>
@@ -149,12 +212,16 @@ public sealed class VectorDocument
     /// <summary>
     /// The value on the completion signal that means "finished".
     ///
-    /// <para><b>Contract §2 has no field for this</b> — it names a completion SIGNAL and never says what
-    /// value on it means finished, and the loop was assuming 1. Carrying it as data removes the
-    /// assumption from the code. The default of 1 is stated here as the harness's CONVENTION rather than
-    /// derived from anything, and whether the contract should carry the field is a spec question.</para>
+    /// <para>*** THE DEFAULT OF 1 IS GONE, AND IT WAS A LIVE DEFECT. *** <c>SlotRun</c> compares a result
+    /// register against this and reports <c>TIMED-OUT</c> otherwise, so a block signalling completion with
+    /// a STATE NUMBER was compared against a value nobody stated — and a <b>healthy block read as never
+    /// having finished</b>. 1 is the harness's convention, not the block's, and a field that supplies the
+    /// answer nobody gave is the missing-predicate defect one field over.</para>
+    ///
+    /// <para>Absent is a REFUSAL at the schema gate, and so is anything outside 0..65535 — the wave casts
+    /// it to a holding register with an unchecked conversion.</para>
     /// </summary>
-    public int CompletionValue { get; set; } = 1;
+    public int? CompletionValue { get; set; }
     public string? SettlingCondition { get; set; }
     public List<string>? SettlingSignals { get; set; }
     public int MaxDurationScans { get; set; }
