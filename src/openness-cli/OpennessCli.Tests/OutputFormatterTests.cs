@@ -135,7 +135,8 @@ public class OutputFormatterTests
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
         DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
         TotalTypes: 7,
-        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
+        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
+        DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
 
     private static readonly SanityCheckResult UnhealthyResult = new(
         TotalBlocks: 42,
@@ -145,7 +146,8 @@ public class OutputFormatterTests
         },
         DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 G2 station_2/JOB9002_PLC", CleanCompile) },
         TotalTypes: 7,
-        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
+        InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
+        DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
 
     // FI-62: the exact live shape — every block consistent, every device compile clean, and one
     // UDT inconsistent. This MUST be unhealthy; before the fix it reported HEALTHY and the first
@@ -155,7 +157,8 @@ public class OutputFormatterTests
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
         DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile) },
         TotalTypes: 7,
-        InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Drum", "S7-1200 station_1/PLC_1") });
+        InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Drum", "S7-1200 station_1/PLC_1") },
+        DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
 
     [Fact]
     public void SanityCheckResult_Unhealthy_WhenOnlyATypeIsInconsistent()
@@ -231,7 +234,8 @@ public class OutputFormatterTests
             InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
             DeviceCompiles: new[] { new DeviceCompileSummary("device", FailedCompile) },
             TotalTypes: 0,
-            InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>());
+            InconsistentTypes: System.Array.Empty<TypeConsistencyIssue>(),
+            DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
 
         Assert.False(result.IsHealthy);
     }

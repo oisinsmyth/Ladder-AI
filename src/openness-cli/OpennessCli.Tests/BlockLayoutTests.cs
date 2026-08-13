@@ -539,8 +539,18 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public int CompileHmiCalls { get; private set; }
 
-    /// <summary>What <see cref="EnumerateBlocks"/> reports — the FI-52 device-level backstop reads it.</summary>
+    /// <summary>
+    /// What <see cref="EnumerateBlocks"/> reports — the FI-52 device-level backstop reads it, and so
+    /// does the post-write duplicate-number scan on the import path.
+    ///
+    /// <b>It can express two blocks holding one number</b>, which is the whole point: this list is
+    /// just a list, so the state TIA accepted on 2026-08-13 (two blocks at FC 910) is expressible
+    /// here, and nothing in this fake normalises it away.
+    /// </summary>
     public IReadOnlyList<BlockInfo>? BlocksForEnumeration { get; set; }
+
+    /// <summary>How many times the block enumeration was walked — so "this path did NOT scan" is assertable.</summary>
+    public int EnumerateBlocksCalls { get; private set; }
 
     public string? LastCompiledBlock { get; private set; }
 
@@ -572,8 +582,11 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses() => throw new NotSupportedException();
 
-    public IReadOnlyList<BlockInfo> EnumerateBlocks() =>
-        BlocksForEnumeration ?? throw new NotSupportedException();
+    public IReadOnlyList<BlockInfo> EnumerateBlocks()
+    {
+        EnumerateBlocksCalls++;
+        return BlocksForEnumeration ?? throw new NotSupportedException();
+    }
 
     public IReadOnlyList<TagTableInfo> EnumerateTagTables() => throw new NotSupportedException();
 
@@ -624,9 +637,25 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public void ExportTagTable(string tagTableName, string? deviceFilter, string outPath) => throw new NotSupportedException();
 
-    public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files) => throw new NotSupportedException();
+    // ---- import ---------------------------------------------------------------------------------
+    //
+    // Configured, not stubbed, for this file's usual reason: a member handing back a default empty
+    // result would let an import test pass without an import having been described at all.
 
-    public IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files) => throw new NotSupportedException();
+    /// <summary>What `import` reports as having gone in. Null = not configured (and so it throws).</summary>
+    public IReadOnlyList<BlockInfo>? ImportedBlocks { get; set; }
+
+    /// <summary>What `import --type` reports. Null = not configured (and so it throws).</summary>
+    public IReadOnlyList<string>? ImportedTypes { get; set; }
+
+    /// <summary>Per-file import results for `import-all`, keyed on the file path. Missing key = throws.</summary>
+    public Dictionary<string, IReadOnlyList<BlockInfo>> ImportedBlockFiles { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files) =>
+        ImportedBlocks ?? throw new NotSupportedException("Test did not configure an import result.");
+
+    public IReadOnlyList<string> ImportTypes(string groupPath, IReadOnlyList<string> files) =>
+        ImportedTypes ?? throw new NotSupportedException("Test did not configure a type-import result.");
 
     // ---- create-instance-db ---------------------------------------------------------------------
     //
@@ -674,7 +703,10 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> ImportTagTables(string groupPath, IReadOnlyList<string> files) => throw new NotSupportedException();
 
-    public IReadOnlyList<BlockInfo> ImportBlockFile(string groupPath, string file) => throw new NotSupportedException();
+    public IReadOnlyList<BlockInfo> ImportBlockFile(string groupPath, string file) =>
+        ImportedBlockFiles.TryGetValue(file, out var blocks)
+            ? blocks
+            : throw new NotSupportedException($"Test did not configure an import result for '{file}'.");
 
     public IReadOnlyList<string> ImportTypeFile(string groupPath, string file) => throw new NotSupportedException();
 
@@ -697,5 +729,9 @@ internal sealed class FakeGateway : IOpennessGateway
         return TypeCompileResult ?? throw new NotSupportedException();
     }
 
-    public SanityCheckResult RunSanityCheck() => throw new NotSupportedException();
+    /// <summary>What `sanity-check` reports. Null = not configured (and so it throws).</summary>
+    public SanityCheckResult? SanityResult { get; set; }
+
+    public SanityCheckResult RunSanityCheck() =>
+        SanityResult ?? throw new NotSupportedException("Test did not configure a sanity-check result.");
 }

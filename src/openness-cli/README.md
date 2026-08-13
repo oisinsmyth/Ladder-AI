@@ -164,16 +164,61 @@ this directly and fast:
    `PlcType` carries no `ProgrammingLanguage` at all, so there is nothing for the F-prefix
    classifier to check. The `TYPES:` line is printed **always**, including at zero, so a reader can
    see that types were actually examined rather than silently absent.
-4. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
+4. Groups those blocks by **(device, block type, number)** and reports every group larger than one —
+   **duplicate block numbers** (2026-08-13, see below). The `DUPLICATE NUMBERS:` count is printed
+   **always**, including at zero, for the same reason the `TYPES:` line is: a count that appears only
+   when it is non-zero cannot be told apart from a check that does not exist.
+5. Compiles **every** PLC device found in the project (not just one — `compile` requires you to
    disambiguate with `--device` if there's more than one PLC; `sanity-check` checks them all).
 
-Exit code 0 only if every block is consistent, **every PLC data type is consistent**, and every
-device compiles clean; non-zero otherwise, with the inconsistent blocks, the inconsistent types
+Exit code 0 only if every block is consistent, **every PLC data type is consistent**, **no two blocks
+share a number**, and every device compiles clean; non-zero otherwise, with the inconsistent blocks,
+the inconsistent types
 (each with the `compile --type <name>` line that clears it) and per-device compile results listed. A device
 compiling clean does **not** imply its blocks are all consistent — confirmed for real,
 2026-07-10: `docs/notes/openness-quirks.md` has a live example where every device compiled
 `Success` while 15 blocks stayed flagged inconsistent. Run this any time something in the
 export/import/compile chain is behaving oddly, before assuming it's a converter/CLI bug.
+
+#### Duplicate block numbers (2026-08-13)
+
+**`sanity-check` used to report `OVERALL: HEALTHY` on a project containing two blocks with the same
+number.** Measured on the device: an artifact named `FC_HarnessCopyLayer` declaring
+`<Number>910</Number>` was imported into a project where `FC_MsTick` already held 910. **TIA accepted
+it and created two blocks at FC 910.** Every gate in the chain then passed:
+
+| step | result |
+|------|--------|
+| `import` | exit **0**, printing the file's claim |
+| per-block `compile` | exit **0**, *"successfully compiled"*, `CONSISTENT: yes` |
+| device compile | `Success, errors=0` |
+| `sanity-check` | **`OVERALL: HEALTHY`, `INCONSISTENT: 0`, exit 0** |
+
+Hard rule 4 names `sanity-check` as *the* gate, so this was a hole in the gate itself — the
+FI-52/FI-62 family once more, a check reporting a clean result over a question it never asked. With
+one extra twist that made it worse than either: `sanity-check` **did** fire once immediately after the
+colliding import, but as **`INCONSISTENT: 1`** — the wrong signal, about the wrong property — and **a
+single per-block compile erased it**, after which the same check returned `HEALTHY` with the duplicate
+still present. *A signal that is only true until you fix something else is not a check.*
+
+The grouping key is **(device, block type, number)**, and all three parts are load-bearing:
+
+- **device**, because block numbers are scoped to a PLC. Two PLCs in one project may each
+  legitimately hold an FC 910, and `EnumerateBlocks` walks every device — grouping without it would
+  fail a correct project. It is read as the first segment of the block's `Path`, which is the device
+  name by construction.
+- **block type**, because FC/FB/OB/DB are separate number spaces. An FC 910 and a DB 910 are not a
+  collision.
+- Groups spanning **different block groups on one device** *are* collisions — one device is one
+  number space, and a collision hidden by a folder is the easiest kind to create by accident.
+
+The report names the device, the type, the number, and **every block holding it** — "there is a
+duplicate somewhere" is not actionable — plus what does not clear it (nothing this tool runs) and what
+does (delete or renumber one of them, then re-import). Safety blocks are included in the scan and
+flagged `[SAFETY]`: nothing is read beyond what `list` already prints for one, and excluding them
+would put a hole in the check that exists *because* holes in this gate ship defects.
+
+Exit code **19**, deliberately not `9` — see the exit-code table.
 
 ```
 openness-cli portal-status [--json] [--tia-install <dir>]
@@ -856,6 +901,7 @@ shell should branch on these rather than on stderr text.
 | 16 | `DownloadPlanIncomplete` | `download-plan` ran, nothing went wrong, and it could **not obtain a `DownloadProvider`** from any object in the device's tree — so the report answers none of the questions the command exists to answer, and its calm appearance is not evidence about anything. Same family as 11–14: not a failure (nothing threw, no argument was wrong, re-running changes nothing) and emphatically not a success. Says nothing about whether a download would be *permitted* — that is the write fence's question, which this command never asks |
 | 17 | `ChangeAbandoned` | A write command failed and **the project is unchanged** — nothing was saved, and the partial mutation was removed from the open session. Earned by `create-instance-db` when the new instance DB comes back with an invalid block number (FI-63) or its number cannot be read back at all. Its own code because nothing was named wrongly (so not `7`) and because it is a modelled outcome with a known recovery, not an internal fault (so not `5`). The half a caller reads off it: **there is nothing to clean up, and a retry is safe.** Until 2026-08-13 this same condition exited `5` having already *saved* the broken block, so the exit code and the project disagreed about whether anything had happened |
 | 18 | `RollbackIncomplete` | The `17` failure with its cleanup half missing: nothing was saved, so **nothing reached disk**, but the partial mutation could not be removed from the in-memory project model either. A separate code because the caller's response differs — which is this table's rule for when to split one (cf. `11`, which does not). On `17` a retry is immediately safe; on `18` the open Portal session holds a block that exists nowhere on disk, so if that session belongs to a person rather than to this process, close it **without saving** — advice that would be actively wrong on a `17` |
+| 19 | `DuplicateBlockNumber` | The project contains **two or more blocks holding the same number** on one device (2026-08-13). Earned by `sanity-check`, and by `import`/`import-all` when the project holds a collision after the files went in. **Not `9`, and that separation is the whole point:** `9` means "something is inconsistent or a device failed to compile", and the measured project was *perfectly consistent and compiled clean* while holding two blocks at FC 910 — folding this into `9` would put a real defect behind a code whose documented remedy (compile the listed blocks) is exactly what **erased the only signal there was**. Not `7` either: nothing was named wrongly and re-running with a different argument does not fix it. **It outranks every other non-zero verdict here** (`9`, `13`) — those either clear themselves on the next pass or announce themselves again, and a duplicate does neither; both reports are printed in full regardless, so the ranking hides nothing. On the import path it does **not** mean the import failed: the files went in and were saved, and the message says so |
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

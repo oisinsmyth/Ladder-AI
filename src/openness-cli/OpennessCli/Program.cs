@@ -567,7 +567,7 @@ internal static class Program
         return result.IsComplete ? ExitCodes.Success : ExitCodes.ExportIncomplete;
     }
 
-    private static int RunImport(IOpennessGateway gateway, ImportCommandOptions options, int timeoutOpenSeconds)
+    internal static int RunImport(IOpennessGateway gateway, ImportCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         if (options.AsType)
@@ -577,22 +577,68 @@ internal static class Program
             {
                 Console.WriteLine(name);
             }
+
+            // Types and tag tables carry no number, so there is nothing here to collide. Returning
+            // early rather than running an EnumerateBlocks that could not find anything this command
+            // caused: a check that cannot fail on this path would only be there to look thorough.
+            return ExitCodes.Success;
         }
-        else if (options.AsTagTable)
+
+        if (options.AsTagTable)
         {
             var importedTagTables = gateway.ImportTagTables(options.GroupPath, options.Files);
             foreach (var name in importedTagTables)
             {
                 Console.WriteLine(name);
             }
-        }
-        else
-        {
-            var imported = gateway.ImportBlocks(options.GroupPath, options.Files);
-            Console.WriteLine(OutputFormatter.FormatTable(imported));
+
+            return ExitCodes.Success;
         }
 
-        return ExitCodes.Success;
+        var imported = gateway.ImportBlocks(options.GroupPath, options.Files);
+        Console.WriteLine(OutputFormatter.FormatTable(imported));
+        return ReportDuplicateBlockNumbersAfterWrite(
+            gateway, imported.Select(b => b.Name).ToList(), "imported and SAVED");
+    }
+
+    /// <summary>
+    /// The post-write duplicate-number scan (2026-08-13).
+    ///
+    /// <b>Why this is a post-condition and not a refusal.</b> Refusing before the write would mean
+    /// deciding from the FILE that its number is already taken, and that check is wrong in the common
+    /// case: the overwhelmingly normal thing `import` does is put back a block that is already in the
+    /// project, whose number is therefore already held — by itself. A guard that fires on the
+    /// commonest correct operation is a guard people learn to route around, and then it protects
+    /// nothing. The honest question is not "is this number taken" but "does the project now hold two
+    /// blocks at one number", and only the project can answer it, only afterwards.
+    ///
+    /// <b>Why it does not roll back.</b> `import` has no delete-what-I-just-wrote path, and adding
+    /// one on a failure path is precisely the seam FI-63 closed when the renumber repair was retired
+    /// — mutating further to rescue a mutation that already went wrong. The collision may also be
+    /// older than this command. So it reports, exactly, and stops.
+    ///
+    /// <b>Why it is nevertheless a non-zero exit and not a warning.</b> The measured chain was import
+    /// exit 0 -> compile exit 0 -> sanity-check exit 0, and a warning inside a green chain is a
+    /// warning that gets skimmed. The output states plainly that the files DID go in, so the non-zero
+    /// code can never be read as "nothing was imported".
+    /// </summary>
+    private static int ReportDuplicateBlockNumbersAfterWrite(
+        IOpennessGateway gateway, IReadOnlyList<string> justWritten, string whatHappened)
+    {
+        var duplicates = Model.DuplicateBlockNumberFinder.Find(gateway.EnumerateBlocks());
+        if (duplicates.Count == 0)
+        {
+            return ExitCodes.Success;
+        }
+
+        Console.Error.WriteLine();
+        Console.Error.WriteLine(
+            $"The files above were {whatHappened} — this exit code is NOT a failed import. What it reports is " +
+            "that the project now holds more than one block at the same number, which TIA accepts silently and " +
+            "no compile or consistency check will ever mention:");
+        Console.Error.WriteLine();
+        Console.Error.Write(OutputFormatter.FormatDuplicateBlockNumbers(duplicates, justWritten));
+        return ExitCodes.DuplicateBlockNumber;
     }
 
     private static int RunImportAllDryRun(ImportAllCommandOptions options)
@@ -614,7 +660,7 @@ internal static class Program
     /// than the last. It stops when a pass imports nothing, at which point the remaining failures
     /// are real ones and their last error is the honest one to report.
     /// </summary>
-    private static int RunImportAll(IOpennessGateway gateway, ImportAllCommandOptions options, int timeoutOpenSeconds)
+    internal static int RunImportAll(IOpennessGateway gateway, ImportAllCommandOptions options, int timeoutOpenSeconds)
     {
         var plan = ImportAllPlanner.Build(options.Paths);
         var entries = new List<Model.ImportAllEntry>();
@@ -721,6 +767,20 @@ internal static class Program
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatImportAllJson(result)
             : OutputFormatter.FormatImportAllTable(result));
+
+        // Same post-write scan the single-file path runs, for the same reason, and ranked above
+        // ImportIncomplete: 13's remedy is to work out why a file did not land and import again,
+        // which on a duplicate adds a third block rather than fixing anything. A restore is exactly
+        // where this bites — the dump can legitimately contain two files claiming one number, and
+        // nothing between here and the controller would ever say so.
+        var duplicateVerdict = ReportDuplicateBlockNumbersAfterWrite(
+            gateway,
+            entries.Where(e => e.Outcome == Model.ImportAllOutcome.Imported).Select(e => e.Name).ToList(),
+            "imported and SAVED");
+        if (duplicateVerdict != ExitCodes.Success)
+        {
+            return duplicateVerdict;
+        }
 
         // Deliberately NOT a compile gate, and it does not pretend to be one: every block that goes
         // in through Import() is flagged inconsistent, and clearing that is `sanity-check`'s job
@@ -1151,11 +1211,20 @@ internal static class Program
         return ExitCodes.Success;
     }
 
-    private static int RunSanityCheck(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
+    internal static int RunSanityCheck(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         var result = gateway.RunSanityCheck();
         Console.WriteLine(options.Json ? OutputFormatter.FormatSanityCheckJson(result) : OutputFormatter.FormatSanityCheckTable(result));
+
+        // Checked BEFORE the health verdict, not folded into it. 9's documented remedy is "compile
+        // the listed blocks", and on a duplicate that is the move which DESTROYS the only symptom
+        // while leaving the defect — measured 2026-08-13. See ExitCodes.DuplicateBlockNumber.
+        if (result.DuplicateNumbers.Count > 0)
+        {
+            return ExitCodes.DuplicateBlockNumber;
+        }
+
         return result.IsHealthy ? ExitCodes.Success : ExitCodes.SanityCheckFailed;
     }
 
@@ -1307,6 +1376,30 @@ public static class ExitCodes
     /// saving — advice that would be actively wrong on a 17.
     /// </summary>
     public const int RollbackIncomplete = 18;
+
+    /// <summary>
+    /// The project contains <b>two or more blocks holding the same number</b> on one device
+    /// (2026-08-13). Earned by `sanity-check`, and by `import` when the project holds a collision
+    /// after the files went in.
+    ///
+    /// It is NOT <see cref="SanityCheckFailed"/>, and that separation is the whole point. 9 means
+    /// "something is inconsistent or a device failed to compile", and the measured project was
+    /// <b>perfectly consistent and compiled clean</b> while holding two blocks at FC 910 — so folding
+    /// this into 9 would put a real defect behind a code whose documented remedy (compile the listed
+    /// blocks) is exactly what ERASES the only signal there was. Measured: the colliding import made
+    /// `sanity-check` report <c>INCONSISTENT: 1</c>, one per-block compile cleared it, and the check
+    /// returned HEALTHY with the duplicate still present.
+    ///
+    /// It is not <see cref="CommandError"/> either: nothing was named wrongly and re-running with a
+    /// different argument does not fix it. The fix is destructive — delete or renumber one of the
+    /// blocks — which is why this tool reports and never repairs.
+    ///
+    /// <b>It outranks every other non-error verdict here.</b> When a run could return this or a
+    /// 9/13, it returns this: every other verdict either clears itself on the next pass or announces
+    /// itself again, and a duplicate does neither. Both reports are printed in full regardless, so
+    /// ranking the codes hides nothing.
+    /// </summary>
+    public const int DuplicateBlockNumber = 19;
 
     /// <summary>
     /// Which exit code an escaping exception earns (2026-08-05, audit F-09).

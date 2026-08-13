@@ -2,9 +2,10 @@ using Xunit;
 
 // Test classes in this assembly run ONE AT A TIME.
 //
-// Not a performance concession and not caution — a correctness requirement. Two test classes here
-// capture stdout/stderr by swapping `Console.Out`/`Console.Error` (BlockLayoutTests and
-// DownloadPlanTests, each around a `Program.Run*` call), and those are PROCESS-GLOBAL. xUnit runs
+// Not a performance concession and not caution — a correctness requirement. Several test classes
+// here capture stdout/stderr by swapping `Console.Out`/`Console.Error` (BlockLayoutTests,
+// DownloadPlanTests and DuplicateBlockNumberTests, each around a `Program.Run*` call), and those are
+// PROCESS-GLOBAL. xUnit runs
 // test classes in parallel by default, so with two of them installing and restoring writers
 // concurrently, one class's `finally` restores the writer it captured while the other's was
 // installed — and the other test's output goes to a writer nobody reads.

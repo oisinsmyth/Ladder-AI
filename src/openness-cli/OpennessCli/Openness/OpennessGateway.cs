@@ -3871,8 +3871,16 @@ public sealed class OpennessGateway : IOpennessGateway
         // save once at the end so that side effect doesn't silently evaporate either.
         SaveProject();
 
+        // 2026-08-13. Computed from the SAME enumeration the consistency half above reads, so it
+        // costs nothing extra and cannot disagree with it about what is in the project. It has to be
+        // asked separately because consistency and duplication are unrelated properties: the measured
+        // project held two blocks at FC 910 while every one of them was consistent and every device
+        // compiled clean. See DuplicateBlockNumber's own comment for the full measurement.
+        var duplicateNumbers = DuplicateBlockNumberFinder.Find(blocks);
+
         return new SanityCheckResult(
-            blocks.Count, inconsistentBlocks, deviceCompiles, types.Count, inconsistentTypes);
+            blocks.Count, inconsistentBlocks, deviceCompiles, types.Count, inconsistentTypes,
+            duplicateNumbers);
     }
 
     private static ModelCompileState MapCompileState(CompilerResultState state) => state switch

@@ -28,17 +28,30 @@ public sealed record TypeConsistencyIssue(string Name, string Path);
 
 public sealed record DeviceCompileSummary(string DevicePath, CompileResult Compile);
 
+/// <param name="DuplicateNumbers">
+/// Blocks sharing one number on one device (2026-08-13). Deliberately a REQUIRED positional
+/// parameter with no default: a default would let a future construction site omit it and get a
+/// result that silently claims nothing was found, which is the exact shape of the hole this closes.
+/// </param>
 public sealed record SanityCheckResult(
     int TotalBlocks,
     IReadOnlyList<BlockConsistencyIssue> InconsistentBlocks,
     IReadOnlyList<DeviceCompileSummary> DeviceCompiles,
     int TotalTypes,
-    IReadOnlyList<TypeConsistencyIssue> InconsistentTypes)
+    IReadOnlyList<TypeConsistencyIssue> InconsistentTypes,
+    IReadOnlyList<DuplicateBlockNumber> DuplicateNumbers)
 {
     // Types count toward health exactly as blocks do — the whole point of FI-62 is that an
     // inconsistent type must not pass a gate that calls itself HEALTHY.
+    //
+    // And so do duplicate block numbers (2026-08-13). They are the sharpest case yet for why this
+    // property must not be a synonym for "everything is consistent": the measured project WAS fully
+    // consistent and DID compile clean while holding two blocks at FC 910. Consistency and
+    // compilation are the two questions this check used to ask, and both of them answer "fine" on a
+    // project that has been silently broken.
     public bool IsHealthy =>
         InconsistentBlocks.Count == 0
         && InconsistentTypes.Count == 0
+        && DuplicateNumbers.Count == 0
         && DeviceCompiles.All(d => d.Compile.State == CompileState.Success);
 }

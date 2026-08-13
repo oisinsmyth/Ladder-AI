@@ -1387,12 +1387,26 @@ public static class OutputFormatter
     {
         var sb = new StringBuilder();
         sb.Append("OVERALL: ").Append(result.IsHealthy ? "HEALTHY" : "ISSUES FOUND").Append('\n');
-        sb.Append("BLOCKS: ").Append(result.TotalBlocks).Append("  INCONSISTENT: ").Append(result.InconsistentBlocks.Count).Append('\n');
+        sb.Append("BLOCKS: ").Append(result.TotalBlocks)
+            .Append("  INCONSISTENT: ").Append(result.InconsistentBlocks.Count)
+            // Printed ALWAYS, including at zero, for FI-62's reason applied to a new question: a
+            // reader has to be able to see that duplicate numbers were examined. A count that only
+            // appears when it is non-zero is indistinguishable from a check that does not exist —
+            // and this check's whole history is that its absence looked exactly like a pass.
+            .Append("  DUPLICATE NUMBERS: ").Append(result.DuplicateNumbers.Count).Append('\n');
 
         // FI-62: types get their own line, always printed even at zero. A reader who has only ever
         // seen BLOCKS/INCONSISTENT needs to see that types were actually looked at — a silent
         // absence is what let an inconsistent UDT pass a HEALTHY gate in the first place.
         sb.Append("TYPES: ").Append(result.TotalTypes).Append("  INCONSISTENT: ").Append(result.InconsistentTypes.Count).Append('\n');
+
+        // First, ahead of the consistency lists, because it is the finding that outranks them. An
+        // inconsistent block announces itself again on the next read; a duplicate number does not,
+        // and the remedy for one is not the remedy for the other.
+        if (result.DuplicateNumbers.Count > 0)
+        {
+            sb.Append('\n').Append(FormatDuplicateBlockNumbers(result.DuplicateNumbers, Array.Empty<string>()));
+        }
 
         if (result.InconsistentBlocks.Count > 0)
         {
@@ -1441,6 +1455,63 @@ public static class OutputFormatter
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
+    /// <summary>
+    /// The duplicate-number report, shared verbatim by `sanity-check` and by the post-write scan on
+    /// the import path. One renderer rather than two, because the two must not be able to describe
+    /// the same project differently — and because "there is a duplicate somewhere" is not actionable:
+    /// what a reader needs is the type, the number, and EVERY block holding it.
+    /// </summary>
+    /// <param name="justWritten">
+    /// Names written by the command that is reporting (empty for `sanity-check`, which wrote
+    /// nothing). A group containing one of these is marked, so an operator can tell "the import I
+    /// just ran collided" from "this project was already broken before I touched it" — two different
+    /// situations with two different next moves.
+    /// </param>
+    public static string FormatDuplicateBlockNumbers(
+        IReadOnlyList<DuplicateBlockNumber> duplicates, IReadOnlyList<string> justWritten)
+    {
+        var written = new HashSet<string>(justWritten, StringComparer.Ordinal);
+        var sb = new StringBuilder();
+
+        sb.Append("DUPLICATE BLOCK NUMBERS: ").Append(duplicates.Count)
+            .Append(duplicates.Count == 1 ? " collision\n" : " collisions\n");
+
+        foreach (var duplicate in duplicates)
+        {
+            sb.Append("  ").Append(duplicate.Device).Append(": ")
+                .Append(duplicate.Type).Append(' ').Append(duplicate.Number)
+                .Append(" is held by ").Append(duplicate.Blocks.Count).Append(" blocks:\n");
+
+            foreach (var block in duplicate.Blocks)
+            {
+                sb.Append("      ").Append(block.Name)
+                    .Append("  (").Append(block.Path).Append(", ").Append(block.Language).Append(')');
+                if (block.IsSafety)
+                {
+                    sb.Append("  [SAFETY]");
+                }
+
+                if (written.Contains(block.Name))
+                {
+                    sb.Append("  <- written by this command");
+                }
+
+                sb.Append('\n');
+            }
+        }
+
+        // Both halves are load-bearing. The first says why no other output has mentioned this; the
+        // second says what to do, because nothing this tool runs automatically will clear it.
+        sb.Append("  -> TIA ACCEPTS THIS. Measured: a colliding import exited 0, the per-block compile reported\n")
+            .Append("     \"successfully compiled\" with CONSISTENT: yes, and the device compile reported Success,\n")
+            .Append("     errors=0. Consistency and compilation do not answer this question.\n");
+        sb.Append("  -> nothing here clears it, and re-running will not. Delete or renumber one of the blocks\n")
+            .Append("     (`openness-cli delete <project> --block <name> --yes`, or renumber in TIA Portal), then\n")
+            .Append("     re-import and re-run this check.\n");
+
+        return sb.ToString();
+    }
+
     public static string FormatSanityCheckJson(SanityCheckResult result)
     {
         var payload = new
@@ -1450,6 +1521,13 @@ public static class OutputFormatter
             inconsistentBlocks = result.InconsistentBlocks.Select(b => new { name = b.Name, path = b.Path, language = b.Language }),
             totalTypes = result.TotalTypes,
             inconsistentTypes = result.InconsistentTypes.Select(t => new { name = t.Name, path = t.Path }),
+            duplicateBlockNumbers = result.DuplicateNumbers.Select(d => new
+            {
+                device = d.Device,
+                type = d.Type.ToString(),
+                number = d.Number,
+                blocks = d.Blocks.Select(b => new { name = b.Name, path = b.Path, language = b.Language, isSafety = b.IsSafety }),
+            }),
             deviceCompiles = result.DeviceCompiles.Select(d => new
             {
                 device = d.DevicePath,
