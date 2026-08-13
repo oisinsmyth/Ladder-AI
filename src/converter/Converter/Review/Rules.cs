@@ -160,74 +160,88 @@ public static class Rules
     {
         foreach (var tag in table.Tags)
         {
-            var address = ProcessImageAddress.Classify(tag.LogicalAddress);
-
-            if (address is null)
+            foreach (var finding in CheckC001TagName(table.Name, tag))
             {
-                // Layer (b): a flag/memory tag is a variable — short PascalCase, underscore-free.
-                if (IsPascalCaseMember(tag.Name))
-                {
-                    continue;
-                }
+                yield return finding;
+            }
+        }
+    }
 
-                if (IsVendorDefaultTagName(tag.Name))
-                {
-                    yield return new Finding(
-                        "C-001",
-                        FindingSeverity.Info,
-                        table.Name,
-                        null,
-                        $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not PascalCase, but is a TIA vendor-default name — tolerated as-is under C-007, not a defect.",
-                        "No action. C-007 makes vendor-supplied names (the clock/system memory bits) a documented standing exception; renaming one buys nothing and risks confusing it with project content.");
-                    continue;
-                }
+    // Per-tag half of CheckC001TagNames, split out 2026-08-13 so a caller can attribute a finding to
+    // the TAG it is about. The table-level method above is the same loop and is unchanged in
+    // behaviour — this is a granularity split, not a rule change. It exists because the harness-scope
+    // classifier (HarnessScope) is per-TAG, not per-table: a tag table has no number, so the table's
+    // NAME is the only table-level property available and a name is exactly what must not be
+    // load-bearing here. Deciding per tag is what makes "rename the table" worth nothing.
+    public static IEnumerable<Finding> CheckC001TagName(string tableName, PlcTagSource tag)
+    {
+        var address = ProcessImageAddress.Classify(tag.LogicalAddress);
 
-                yield return new Finding(
-                    "C-001",
-                    FindingSeverity.Error,
-                    table.Name,
-                    null,
-                    $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
-                    $"Rename '{tag.Name}' to short PascalCase without underscores, or — if this really is a physical-IO point — give it a physical-IO address and the `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` name.");
-                continue;
+        if (address is null)
+        {
+            // Layer (b): a flag/memory tag is a variable — short PascalCase, underscore-free.
+            if (IsPascalCaseMember(tag.Name))
+            {
+                yield break;
             }
 
-            // Layer (a): physical IO. Shape first — a name that isn't in the format at all can't be
-            // cross-checked against the address, so that is the only finding for this tag.
-            var shape = PhysicalIoTagName.Parse(tag.Name);
-            if (shape is null)
+            if (IsVendorDefaultTagName(tag.Name))
             {
                 yield return new Finding(
                     "C-001",
-                    FindingSeverity.Error,
-                    table.Name,
+                    FindingSeverity.Info,
+                    tableName,
                     null,
-                    $"Tag '{tag.Name}' is at physical-IO address {tag.LogicalAddress} but does not follow C-001's physical-IO format `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` (e.g. DI3_FCC_RunFb).",
-                    $"Rename to `{(address.IsInput ? (address.IsBit is false ? "AI" : "DI") : (address.IsBit is false ? "AQ" : "DQ"))}<n>_<Equipment>_<Signal>`, using the frozen C-004 equipment identifier verbatim.");
-                continue;
+                    $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not PascalCase, but is a TIA vendor-default name — tolerated as-is under C-007, not a defect.",
+                    "No action. C-007 makes vendor-supplied names (the clock/system memory bits) a documented standing exception; renaming one buys nothing and risks confusing it with project content.");
+                yield break;
             }
 
-            if (shape.IsInput != address.IsInput)
-            {
-                yield return new Finding(
-                    "C-001",
-                    FindingSeverity.Error,
-                    table.Name,
-                    null,
-                    $"Tag '{tag.Name}' names itself an {(shape.IsInput ? "input" : "output")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, which is a physical {(address.IsInput ? "input" : "output")} — the name and the address disagree.",
-                    $"Fix whichever is wrong: rename the tag to the '{(address.IsInput ? (shape.IsDigital ? "DI" : "AI") : (shape.IsDigital ? "DQ" : "AQ"))}' form, or re-address it.");
-            }
+            yield return new Finding(
+                "C-001",
+                FindingSeverity.Error,
+                tableName,
+                null,
+                $"Tag '{tag.Name}' ({tag.LogicalAddress}) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                $"Rename '{tag.Name}' to short PascalCase without underscores, or — if this really is a physical-IO point — give it a physical-IO address and the `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` name.");
+            yield break;
+        }
 
-            if (address.IsBit is bool isBit && shape.IsDigital != isBit)
-            {
-                yield return new Finding(
-                    "C-001",
-                    FindingSeverity.Error,
-                    table.Name,
-                    null,
-                    $"Tag '{tag.Name}' names itself {(shape.IsDigital ? "digital" : "analog")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, a {(isBit ? "single bit" : "byte/word/dword")} — a digital point is a bit, an analog point is not.",
-                    $"Fix whichever is wrong: rename to the '{(shape.IsInput ? (isBit ? "DI" : "AI") : (isBit ? "DQ" : "AQ"))}' form, or re-address it.");
-            }
+        // Layer (a): physical IO. Shape first — a name that isn't in the format at all can't be
+        // cross-checked against the address, so that is the only finding for this tag.
+        var shape = PhysicalIoTagName.Parse(tag.Name);
+        if (shape is null)
+        {
+            yield return new Finding(
+                "C-001",
+                FindingSeverity.Error,
+                tableName,
+                null,
+                $"Tag '{tag.Name}' is at physical-IO address {tag.LogicalAddress} but does not follow C-001's physical-IO format `<DI|DQ|AI|AQ><n>_<Equipment>_<Signal>` (e.g. DI3_FCC_RunFb).",
+                $"Rename to `{(address.IsInput ? (address.IsBit is false ? "AI" : "DI") : (address.IsBit is false ? "AQ" : "DQ"))}<n>_<Equipment>_<Signal>`, using the frozen C-004 equipment identifier verbatim.");
+            yield break;
+        }
+
+        if (shape.IsInput != address.IsInput)
+        {
+            yield return new Finding(
+                "C-001",
+                FindingSeverity.Error,
+                tableName,
+                null,
+                $"Tag '{tag.Name}' names itself an {(shape.IsInput ? "input" : "output")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, which is a physical {(address.IsInput ? "input" : "output")} — the name and the address disagree.",
+                $"Fix whichever is wrong: rename the tag to the '{(address.IsInput ? (shape.IsDigital ? "DI" : "AI") : (shape.IsDigital ? "DQ" : "AQ"))}' form, or re-address it.");
+        }
+
+        if (address.IsBit is bool isBit && shape.IsDigital != isBit)
+        {
+            yield return new Finding(
+                "C-001",
+                FindingSeverity.Error,
+                tableName,
+                null,
+                $"Tag '{tag.Name}' names itself {(shape.IsDigital ? "digital" : "analog")} ('{shape.Prefix}') but is addressed at {tag.LogicalAddress}, a {(isBit ? "single bit" : "byte/word/dword")} — a digital point is a bit, an analog point is not.",
+                $"Fix whichever is wrong: rename to the '{(shape.IsInput ? (isBit ? "DI" : "AI") : (isBit ? "DQ" : "AQ"))}' form, or re-address it.");
         }
     }
 

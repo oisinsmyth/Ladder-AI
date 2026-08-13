@@ -670,10 +670,19 @@ internal static class Program
             udtIndex = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(projectDir, "*.ir"));
         }
 
+        // The harness scope's corpus: the batch itself PLUS --project when given. The batch alone is
+        // deliberately enough — reviewing a generated tag table together with the generated copy
+        // layer that drives it is exactly how the harness invokes this — and --project widens it to
+        // the whole export, which is the stronger question because it can see a PLANT reference the
+        // batch omitted. There is no `--harness` flag and no way to assert a classification: see
+        // HarnessScope for why a caller assertion was rejected outright.
+        var harnessScope = HarnessScope.Build(
+            projectDir is null ? files : files.Concat(Directory.EnumerateFiles(projectDir, "*.ir")));
+
         ReviewReport report;
         try
         {
-            report = ReviewRunner.ReviewFiles(files, ignoreErrors, udtIndex);
+            report = ReviewRunner.ReviewFiles(files, ignoreErrors, udtIndex, harnessScope);
         }
         catch (ReviewFileException ex)
         {

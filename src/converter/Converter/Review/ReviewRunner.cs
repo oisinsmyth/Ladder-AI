@@ -13,15 +13,28 @@ public static class ReviewRunner
     // udtIndex (optional) resolves cross-file references — today only C-118's interface-UDT Step
     // (FI-09), built from `--project` when supplied. Null means the caller ran `review` without
     // `--project`: C-118 can't resolve the enclosing UDT and is recorded NotApplicable per file.
-    public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors, TagTypeRegistry? udtIndex = null)
+    // *** THE TWO RULES THE HARNESS SCOPE MAY TOUCH, AND NO OTHERS. *** Owner ruling 2026-08-13
+    // scopes the harness exemption to doc 06's NAMING conventions. C-103 was named explicitly as
+    // staying a finding — it is behaviour, not naming, and it was recorded rather than silenced. A
+    // future rule joins this set only by being added here on purpose.
+    private static readonly string[] HarnessScopedRuleIds = { "C-001", "C-201" };
+
+    // harnessScope (optional) supplies the DERIVED classification of reviewed content as
+    // harness-generated or plant. *** ITS DEFAULT IS THE CONSERVATIVE ONE AND THAT IS DELIBERATE: ***
+    // with no scope, blocks and DBs still classify from their own NUMBER (which is in the file being
+    // reviewed), and no TAG can be classified at all — so a caller that forgets to build one gets the
+    // full pre-2026-08-13 finding set, never a bypass. See HarnessScope for why there is no
+    // `--harness` flag and why a tag table's NAME is never consulted.
+    public static ReviewReport ReviewFiles(IReadOnlyList<string> paths, bool ignoreErrors, TagTypeRegistry? udtIndex = null, HarnessScope? harnessScope = null)
     {
+        var scope = harnessScope ?? HarnessScope.Empty;
         var results = new List<FileReviewResult>();
 
         foreach (var path in paths)
         {
             try
             {
-                results.Add(ReviewFile(path, udtIndex));
+                results.Add(ReviewFile(path, udtIndex, scope));
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
             {
@@ -37,7 +50,7 @@ public static class ReviewRunner
         return new ReviewReport(results);
     }
 
-    private static FileReviewResult ReviewFile(string path, TagTypeRegistry? udtIndex)
+    private static FileReviewResult ReviewFile(string path, TagTypeRegistry? udtIndex, HarnessScope scope)
     {
         var text = File.ReadAllText(path);
 
@@ -53,7 +66,7 @@ public static class ReviewRunner
 
         if (text.StartsWith("TAGTABLE ", StringComparison.Ordinal))
         {
-            return ReviewTagTable(path, TagTableIrParser.ParseTagTable(text));
+            return ReviewTagTable(path, TagTableIrParser.ParseTagTable(text), scope);
         }
 
         // A block .ir may be sidecar-less (e.g. a hand-authored OB committed without one) - review
@@ -165,8 +178,53 @@ public static class ReviewRunner
         Record(statuses, findings, "C-401", RuleCheckStatus.CheckedVacuous, Rules.CheckC401NoCounters(block));
         Record(statuses, findings, "C-404", RuleCheckStatus.CheckedVacuous, Rules.CheckC404NoBuiltInEdgeInstructions(block));
 
-        return new FileReviewResult(path, block.Name, findings, statuses, null);
+        return Partition(path, block.Name, findings, statuses, HarnessScope.ClassifyBlock(block));
     }
+
+    // Split a file's findings into the ones that GATE and the ones reported under the harness bucket.
+    //
+    // *** THIS IS THE ONLY PLACE ANYTHING IS EXEMPTED, AND IT DROPS NOTHING. *** Every finding the
+    // rules produced still exists, still printed, still counted — the harness ones simply live in a
+    // list that ReviewOutcome does not read. Two properties worth keeping true:
+    //   • ONLY a Harness verdict moves anything. Plant and Unclassified are identical here, on
+    //     purpose: "I could not tell" must behave exactly like "plant", and differ only in the
+    //     report's words (HarnessVerdict.Basis).
+    //   • ONLY HarnessScopedRuleIds move. A rule outside that set is untouched no matter what the
+    //     verdict says, so a classifier gone wrong cannot silence C-103 or anything else.
+    private static FileReviewResult Partition(
+        string path,
+        string? name,
+        IReadOnlyList<Finding> findings,
+        IReadOnlyList<RuleStatusEntry> statuses,
+        HarnessVerdict verdict)
+    {
+        if (verdict.Class != HarnessClass.Harness)
+        {
+            return new FileReviewResult(path, name, findings, statuses, null, verdict);
+        }
+
+        var scoped = findings.Where(f => HarnessScopedRuleIds.Contains(f.RuleId)).ToList();
+        var gating = findings.Where(f => !HarnessScopedRuleIds.Contains(f.RuleId)).ToList();
+        // *** FindingCount KEEPS ITS ONE MEANING EVERYWHERE: THE FINDINGS THAT GATE. *** The exempted
+        // count goes in Reason. Overloading the same field with two meanings depending on status is
+        // how a reader — and ReviewFiles_EveryCheckedStatusCountEqualsItsOwnPrintedFindings — would
+        // start disagreeing with the list printed beneath it.
+        var restated = statuses
+            .Select(s => HarnessScopedRuleIds.Contains(s.RuleId) && s.Status == RuleCheckStatus.Checked
+                ? s with
+                {
+                    Status = RuleCheckStatus.CheckedHarnessScope,
+                    FindingCount = gating.Count(f => f.RuleId == s.RuleId),
+                    Reason = HarnessScopeReason(scoped.Count(f => f.RuleId == s.RuleId)),
+                }
+                : s)
+            .ToList();
+
+        return new FileReviewResult(path, name, gating, restated, null, verdict, scoped);
+    }
+
+    private static string HarnessScopeReason(int exempted) =>
+        $"{exempted} further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant";
 
     private static FileReviewResult ReviewDb(string path, DbSource db)
     {
@@ -202,7 +260,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
 
-        return new FileReviewResult(path, db.Name, findings, statuses, null);
+        return Partition(path, db.Name, findings, statuses, HarnessScope.ClassifyDb(db));
     }
 
     private static FileReviewResult ReviewType(string path, PlcTypeSource type)
@@ -240,7 +298,9 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no comparisons"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks writing alarm-word bits"));
 
-        return new FileReviewResult(path, type.Name, findings, statuses, null);
+        // Always Unclassified — a UDT has no number and no referrer relation. Reported rather than
+        // left blank, so a reader sees that the question was asked and answered "cannot tell".
+        return Partition(path, type.Name, findings, statuses, HarnessScope.ClassifyType(type));
     }
 
     // A TAG TABLE is where tag NAMES live, which makes it the file kind C-001 applies to MOST, not
@@ -253,12 +313,49 @@ public static class ReviewRunner
     //   NOT APPLICABLE— the network/instruction/step/prefix rules, each with its OWN reason.
     //   SKIPPED       — nothing, now. The status exists and `converter review` fails closed on it
     //                   (exit 2), so the next unimplemented (kind, rule) pair cannot exit 0 quietly.
-    private static FileReviewResult ReviewTagTable(string path, PlcTagTableSource table)
+    private static FileReviewResult ReviewTagTable(string path, PlcTagTableSource table, HarnessScope scope)
     {
         var findings = new List<Finding>();
+        var harnessScoped = new List<Finding>();
         var statuses = new List<RuleStatusEntry>();
 
-        Record(statuses, findings, "C-001", RuleCheckStatus.Checked, Rules.CheckC001TagNames(table));
+        // *** C-001 IS CLASSIFIED PER TAG, NOT PER TABLE — AND THE TABLE'S NAME IS NEVER READ. ***
+        // A tag table carries no number, so the only table-level property available is its NAME, and
+        // a name is exactly what anything can be renamed into: were the exemption decided at table
+        // level, "rename a plant tag table to HarnessMirror" would be a route out of review. Each tag
+        // is instead classified by the blocks that reference it (HarnessScope), so laundering a plant
+        // tag means moving every reference to it into blocks numbered inside the reserved band —
+        // which breaks the plant program, where a rename costs nothing. A tag nobody references, or
+        // one reviewed without its referrers in the corpus, is UNCLASSIFIED and its findings gate.
+        var tagStatus = RuleCheckStatus.Checked;
+        foreach (var tag in table.Tags)
+        {
+            var tagFindings = Rules.CheckC001TagName(table.Name, tag).ToList();
+            if (scope.ClassifyTag(tag.Name).Class == HarnessClass.Harness)
+            {
+                harnessScoped.AddRange(tagFindings);
+                if (tagFindings.Count > 0)
+                {
+                    tagStatus = RuleCheckStatus.CheckedHarnessScope;
+                }
+            }
+            else
+            {
+                findings.AddRange(tagFindings);
+            }
+        }
+
+        // A MIXED table reports CheckedHarnessScope with the GATING count, exactly as a block does:
+        // the status line names the findings that gate, its reason names the ones that do not, and
+        // the bucket below prints them. Neither number is hidden.
+        statuses.Add(new RuleStatusEntry(
+            "C-001",
+            tagStatus,
+            findings.Count(f => f.RuleId == "C-001"),
+            tagStatus == RuleCheckStatus.CheckedHarnessScope
+                ? HarnessScopeReason(harnessScoped.Count(f => f.RuleId == "C-001"))
+                : null));
+
         Record(statuses, findings, "C-005", RuleCheckStatus.Checked, Rules.CheckC005TagTableCharset(table));
         Record(statuses, findings, "C-406", RuleCheckStatus.Checked, Rules.CheckC406TagDataTypes(table));
 
@@ -287,7 +384,9 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a tag table has no comparisons"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks writing alarm-word bits"));
 
-        return new FileReviewResult(path, table.Name, findings, statuses, null);
+        // NOT routed through Partition: the partition already happened per tag above, and re-running
+        // it at file level on a mixed table would move findings that were deliberately kept gating.
+        return new FileReviewResult(path, table.Name, findings, statuses, null, scope.ClassifyTagTable(table), harnessScoped);
     }
 
     private static void Record(List<RuleStatusEntry> statuses, List<Finding> findings, string ruleId, RuleCheckStatus status, IEnumerable<Finding> ruleFindings)

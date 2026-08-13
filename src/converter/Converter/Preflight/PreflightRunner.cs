@@ -29,12 +29,18 @@ public static class PreflightRunner
         var callees = Program.BuildCalleeRegistry(paths, projectDir);
         var tagTypes = Program.BuildTagTypeRegistry(paths, projectDir);
 
-        var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes)).ToList();
+        // The harness scope is built over the batch AND the project export together, so a tag's
+        // referrers are looked for in the whole corpus rather than only in the files being flown.
+        // Preflight is a filter before the compile gate; a generated harness object drawing 20+
+        // naming findings here is exactly the noise that gets a filter switched off.
+        var harnessScope = HarnessScope.Build(paths.Concat(Directory.EnumerateFiles(projectDir, "*.ir")));
+
+        var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes, harnessScope)).ToList();
         return new PreflightReport(files, index.Warnings);
     }
 
     private static FilePreflight PreflightFile(
-        string path, ProjectIndex index, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
+        string path, ProjectIndex index, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes, HarnessScope harnessScope)
     {
         var findings = new List<PreflightFinding>();
         string? name = null;
@@ -76,7 +82,7 @@ public static class PreflightRunner
             return new FilePreflight(path, name, findings);
         }
 
-        AppendReviewFindings(findings, path, tagTypes);
+        AppendReviewFindings(findings, path, tagTypes, harnessScope);
         return new FilePreflight(path, name, findings);
     }
 
@@ -192,15 +198,43 @@ public static class PreflightRunner
     // themselves unrunnable on every preflight this tool has ever done: three cross-file rules,
     // silently absent from the check that runs before every import. Same defect class as the
     // tag-table hole this change is about, one call site away from it.
-    private static void AppendReviewFindings(List<PreflightFinding> findings, string path, TagTypeRegistry tagTypes)
+    private static void AppendReviewFindings(List<PreflightFinding> findings, string path, TagTypeRegistry tagTypes, HarnessScope harnessScope)
     {
-        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: true, tagTypes);
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: true, tagTypes, harnessScope);
         foreach (var file in report.Files)
         {
             foreach (var finding in file.Findings)
             {
                 var location = finding.NetworkNumber is int n ? $"network {n}: " : string.Empty;
                 findings.Add(new PreflightFinding($"review:{finding.RuleId}", $"{location}[{finding.Severity}] {finding.Description}"));
+            }
+
+            // Reported, not dropped — and under a check name that says plainly it does not gate.
+            // *** A SUPPRESSION NOBODY CAN SEE IS ONE STEP FROM A SUPPRESSION THAT HIDES ***, which
+            // is the reason these are printed at all rather than filtered out upstream. The one-line
+            // summary is emitted even at zero, for the same reason the report's own HARNESS-SCOPE
+            // line is: a count of zero is a different fact from an absent line.
+            // Announced when something was actually exempted, or when the file was classified as
+            // harness at all. A plant file's verdict is NOT repeated per file here — pre-flight runs
+            // over whole batches and a line per file would be pure noise — but the run-level count is
+            // printed unconditionally including the zero (PreflightOutputFormatter), so "nothing was
+            // exempted" and "the classifier never ran" are still distinguishable. The full per-file
+            // verdict, plant ones included, is on `converter review`'s SCOPE line.
+            if (file.Harness is { } verdict && (verdict.Class == HarnessClass.Harness || file.HarnessScopedFindings.Count > 0))
+            {
+                findings.Add(new PreflightFinding(
+                    "review:harness-scope",
+                    $"{verdict.Class}: {verdict.Basis}. {file.HarnessScopedFindings.Count} C-001/C-201 finding(s) reported without gating.",
+                    Gates: false));
+            }
+
+            foreach (var finding in file.HarnessScopedFindings)
+            {
+                var location = finding.NetworkNumber is int n ? $"network {n}: " : string.Empty;
+                findings.Add(new PreflightFinding(
+                    "review:harness-scope",
+                    $"{location}{finding.RuleId} [{finding.Severity}] {finding.Description}",
+                    Gates: false));
             }
         }
 

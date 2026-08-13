@@ -47,14 +47,25 @@ public sealed record Finding(
 //                     deliberately a gate and not a warning: the tag-table version of this status
 //                     was printed on every tag-table review from Phase 1 until 2026-08-13, in a run
 //                     that exited 0, and it was read as a clean review every time.
+//   CheckedHarnessScope
+//                  — *** THE RULE RAN, IT PRODUCED FINDINGS, AND THOSE FINDINGS DO NOT GATE ***
+//                     because this file's content is HARNESS-GENERATED (HarnessScope) and doc 06's
+//                     naming conventions govern content authored for the plant. Only C-001 and C-201
+//                     can ever carry this status — a harness object is exempt from a NAMING
+//                     convention, never from behaving correctly, so C-103 and everything else gates
+//                     exactly as before. The findings are still PRINTED, under their own labelled
+//                     bucket, with the derivation that classified the object: a suppression nobody
+//                     can see is one step from a suppression that hides, and the whole reason this
+//                     status is not simply "skip the rule".
 // A rule is never silently absent from a report — every rule Phase 1 knows about gets an entry
-// with one of these four statuses for every file reviewed.
+// with one of these five statuses for every file reviewed.
 public enum RuleCheckStatus
 {
     Checked,
     CheckedVacuous,
     NotApplicable,
     Skipped,
+    CheckedHarnessScope,
 }
 
 public sealed record RuleStatusEntry(string RuleId, RuleCheckStatus Status, int FindingCount, string? Reason);
@@ -66,12 +77,25 @@ public sealed record RuleStatusEntry(string RuleId, RuleCheckStatus Status, int 
 // was never reviewed, not reviewed-and-clean. Kept as its own explicit field rather than folding
 // into RuleStatuses, since a parse failure isn't about any one rule, it's about not having
 // reachable content to check any rule against at all.
+// Harness/HarnessScopedFindings (2026-08-13) are additive and default to the conservative reading:
+// a result constructed without them is UNCLASSIFIED with nothing exempted, which is exactly the
+// pre-change behaviour. *** THE DEFAULT MUST NEVER BE "harness". *** HarnessScopedFindings are
+// findings that WERE produced and are reported without gating; they are deliberately a separate
+// list rather than a flag on Finding, so that every existing consumer of Findings (ReviewOutcome's
+// exit code, PreflightRunner, the formatters) keeps its meaning of "this gates" without being
+// edited to filter — an omitted filter is how an exemption becomes silent.
 public sealed record FileReviewResult(
     string FilePath,
     string? BlockName,
     IReadOnlyList<Finding> Findings,
     IReadOnlyList<RuleStatusEntry> RuleStatuses,
-    string? FileError);
+    string? FileError,
+    HarnessVerdict? Harness = null,
+    IReadOnlyList<Finding>? HarnessScopedFindings = null)
+{
+    public IReadOnlyList<Finding> HarnessScopedFindings { get; init; } =
+        HarnessScopedFindings ?? Array.Empty<Finding>();
+}
 
 public sealed record ReviewReport(IReadOnlyList<FileReviewResult> Files);
 
