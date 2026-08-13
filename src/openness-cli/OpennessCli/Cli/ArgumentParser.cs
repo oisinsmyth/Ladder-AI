@@ -93,7 +93,9 @@ public sealed record CompileCommandOptions(
     bool Json,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
-    int TimeoutOpenSeconds);
+    int TimeoutOpenSeconds,
+    bool Software = false,
+    bool Station = false);
 
 public sealed record DeleteCommandOptions(
     string ProjectIdentifier,
@@ -293,6 +295,8 @@ public abstract record ParseResult
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
 
+    public sealed record CompileScopesSuccess(ListOptions Options) : ParseResult;
+
     public sealed record PortalStatusSuccess(PortalStatusOptions Options) : ParseResult;
 
     public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
@@ -410,6 +414,8 @@ public static class ArgumentParser
         "    Calls EVERY Export* overload on the type - including ExportAsDocuments when GetSupportedExportFormats() is EMPTY - and reports each binding and outcome.\n" +
         "    An empty format list has been treated as a gate since P10 and has never been TESTED as one. An empty advertisement is not a refusal. A throw here is a RESULT.\n" +
         "  openness-cli sanity-check  <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli compile-scopes <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    READ-ONLY. Every object that answers GetService<ICompilable>(), and which of them are the SAME compiler. Compiles nothing.\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
         "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
@@ -484,6 +490,7 @@ public static class ArgumentParser
         ParseResult.DownloadPlanSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.CompileScopesSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -517,6 +524,7 @@ public static class ArgumentParser
         ParseResult.DownloadPlanSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.CompileScopesSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
@@ -552,6 +560,7 @@ public static class ArgumentParser
             "download-plan" => ParseDownloadPlan(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
+            "compile-scopes" => ParseCompileScopes(args),
             "portal-status" => ParsePortalStatus(args),
             "hmi" => ParseHmi(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
@@ -570,7 +579,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -638,6 +647,15 @@ public static class ArgumentParser
         // every device in the project), so reuse its parsing directly rather than duplicating it.
         var result = ParseList(args);
         return result is ParseResult.ListSuccess success ? new ParseResult.SanityCheckSuccess(success.Options) : result;
+    }
+
+    private static ParseResult ParseCompileScopes(string[] args)
+    {
+        // Same flag shape as `list` (project + --json + common flags). --device is accepted through
+        // the same positional/flag path as the rest, but is deliberately NOT required: the survey's
+        // whole job is to show every scope there is, and a filter that hid one would defeat it.
+        var result = ParseList(args);
+        return result is ParseResult.ListSuccess success ? new ParseResult.CompileScopesSuccess(success.Options) : result;
     }
 
     private static ParseResult ParsePortalStatus(string[] args)
@@ -1129,6 +1147,8 @@ public static class ArgumentParser
         string? device = null;
         string? block = null;
         string? type = null;
+        var software = false;
+        var station = false;
         var json = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -1158,6 +1178,12 @@ public static class ArgumentParser
                         return new ParseResult.Failure(typeErr);
                     }
 
+                    break;
+                case "--software":
+                    software = true;
+                    break;
+                case "--station":
+                    station = true;
                     break;
                 case "--json":
                     json = true;
@@ -1203,7 +1229,17 @@ public static class ArgumentParser
             return new ParseResult.Failure($"--block and --type are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, type, json, tiaInstall, timeoutConnect, timeoutOpen));
+        if ((software || station) && (block is not null || type is not null))
+        {
+            return new ParseResult.Failure($"--software and --station name whole scopes, so neither can be combined with --block or --type.{Environment.NewLine}{Usage}");
+        }
+
+        if (software && station)
+        {
+            return new ParseResult.Failure($"--software and --station are two different scopes; pick one.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.CompileSuccess(new CompileCommandOptions(projectIdentifier, device, block, type, json, tiaInstall, timeoutConnect, timeoutOpen, software, station));
     }
 
     private static ParseResult ParseDelete(string[] args)

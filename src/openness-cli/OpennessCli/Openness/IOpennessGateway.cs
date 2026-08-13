@@ -264,6 +264,32 @@ public interface IOpennessGateway : IDisposable
     CompileResult Compile(string? deviceFilter);
 
     /// <summary>
+    /// Compiles at the <c>PlcSoftware</c> scope — the object that holds the program — rather than at
+    /// the <c>DeviceItem</c> scope <see cref="Compile"/> reaches first.
+    ///
+    /// These are two different objects. <see cref="Compile"/> asks the device item for its
+    /// <c>ICompilable</c> and only falls back to the software when the device item has none, which on
+    /// an S7-1200 it never does — so before this existed, NOTHING in this repository had ever invoked
+    /// the software-scope compile. Whether it finds anything the device scope misses is the question
+    /// <c>compile-scopes</c> and this member exist to answer; the answer is measured and recorded in
+    /// src/openness-cli/README.md, not assumed here.
+    /// </summary>
+    CompileResult CompileSoftware(string? deviceFilter);
+
+    /// <summary>
+    /// Compiles at the <c>Device</c> (station) scope — the outermost of the three, and the only one
+    /// that covers hardware AND software in one call. <see cref="Compile"/>'s DeviceItem scope and
+    /// <see cref="CompileSoftware"/>'s PlcSoftware scope are each HALF of it.
+    /// </summary>
+    CompileResult CompileStation(string? deviceFilter);
+
+    /// <summary>
+    /// Read-only: every object in the project model that answers <c>GetService&lt;ICompilable&gt;()</c>,
+    /// and which of those answers are the SAME object. Compiles nothing.
+    /// </summary>
+    CompileScopeSurvey SurveyCompileScopes(string? deviceFilter);
+
+    /// <summary>
     /// Resolves the named block exactly like <see cref="ExportBlock"/>/<see cref="CompileBlock"/>
     /// (same <paramref name="deviceFilter"/> disambiguation, same safety refusal), then — only
     /// when <paramref name="confirm"/> is <c>true</c> — deletes it via <c>PlcBlock.Delete()</c>.

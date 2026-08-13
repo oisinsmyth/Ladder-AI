@@ -187,6 +187,11 @@ internal static class ProbeSession
             };
         }
 
+        if (arguments.ToFolder is not null)
+        {
+            return DownloadToFolder(target.Provider, target.DevicePath, arguments, log);
+        }
+
         var candidates = ReadConnectionTargets(target.Provider, log);
 
         if (arguments.Disruptive)
@@ -299,6 +304,105 @@ internal static class ProbeSession
         }
 
         return outcome;
+    }
+
+    /// <summary>
+    /// *** THE COMPILE THE DOWNLOAD RUNS, WITHOUT THE DOWNLOAD. ***
+    ///
+    /// Calls <c>DownloadProvider.Download(DirectoryInfo, DownloadConfigurationDelegate)</c> — the
+    /// folder overload. No connection is passed and none is opened; nothing goes on the wire and no
+    /// CPU is stopped, so the scratch-rig fence is not in play here at all.
+    ///
+    /// It exists because a download COMPILES FIRST, and that compile is demonstrably not any of the
+    /// four this repository already runs: on 2026-08-13 the per-block compile, the device compile,
+    /// <c>compile-all --force</c> and <c>sanity-check</c> all reported clean while the download's
+    /// own compile failed with *"The following blocks could not be compiled: FC_ModbusTCP_Sample
+    /// [FC8]"*. Until this mode existed, reaching that compile at all meant writing to a controller.
+    ///
+    /// THE EXCEPTION IS THE PRODUCT. On failure Openness throws with a one-sentence message that
+    /// omits the block entirely, so everything obtainable is dumped verbatim — every detail message,
+    /// every inner exception — rather than summarised. If the block-level detail is anywhere in this
+    /// object, this is where it shows up; if it is nowhere, this is the evidence for saying so.
+    /// </summary>
+    private static ProbeOutcome DownloadToFolder(
+        DownloadProvider provider, string? devicePath, ProbeArguments arguments, ProbeLog log)
+    {
+        var directory = new System.IO.DirectoryInfo(arguments.ToFolder!);
+
+        log.Blank();
+        log.Rule("DOWNLOAD TO FOLDER — NON-DESTRUCTIVE (no device, no wire, no CPU stop)");
+        log.Line($"device        : {devicePath}");
+        log.Line($"folder        : {directory.FullName}");
+        log.Line($"options       : (the folder overload takes NO DownloadOptions — '{arguments.Options}' does not apply here)");
+        log.Line($"policy        : {arguments.PolicyMode}");
+        log.Line("overload      : Download(DirectoryInfo, DownloadConfigurationDelegate) — one callback, not two.");
+        log.Blank();
+        log.Line("WHY THIS RUN EXISTS: a download COMPILES the program before it transfers anything, and that");
+        log.Line("compile has been measured to FAIL on a project where every compile this repo runs reported");
+        log.Line("clean. This reaches that compile without reaching the controller.");
+
+        var pre = new ConfigurationRecorder(log, "PRE", arguments.PolicyMode);
+
+        try
+        {
+            var result = provider.Download(
+                directory,
+                configuration => pre.Record(SiemensConfigurationReader.Read(configuration)));
+
+            var reported = ReportResult(result, log);
+            reported.DevicePath = devicePath;
+            reported.ProviderFound = true;
+            reported.DownloadTarget = directory.FullName;
+            reported.PreDownloadConfigurations = pre.Recorded;
+
+            // The transfer verdict this path needs is not the wire one. Nothing was transferred by
+            // construction, and saying so keeps a folder run from ever being read as a device write.
+            reported.Transfer = TransferVerdicts.NoResult(
+                "NOTHING WAS TRANSFERRED TO A DEVICE, BY CONSTRUCTION — this run wrote a download image to a " +
+                "folder. What it proves is about the COMPILE, not about the controller.");
+            LogConfigurationSummary(pre, new ConfigurationRecorder(log, "POST", arguments.PolicyMode), log);
+            return reported;
+        }
+        catch (EngineeringTargetInvocationException ex)
+        {
+            log.Blank();
+            log.Rule("*** FOLDER DOWNLOAD THREW — AND THIS IS THE INTERESTING CASE ***");
+            log.Line("A folder download stops the CPU of nothing and touches no network. So a throw here is");
+            log.Line("almost certainly the COMPILE refusing, which is exactly what this mode was built to catch.");
+            ExceptionReport.Write(log, "the failure, with every detail message:", ex);
+            log.Blank();
+            log.Verbatim("full ToString() : ", ex.ToString());
+            log.Blank();
+            log.Line("READ THE ABOVE FOR A BLOCK NAME. If the message names no block, then the block-level detail");
+            log.Line("TIA shows in its own Info -> Compile tab is NOT in this exception, and no amount of dumping");
+            log.Line("will produce it — that is a finding about the API, and it is the one to report.");
+            LogConfigurationSummary(pre, new ConfigurationRecorder(log, "POST", arguments.PolicyMode), log);
+
+            return new ProbeOutcome(ProbeExitCodes.UnexpectedError, ExceptionReport.Summarise(ex))
+            {
+                DevicePath = devicePath,
+                ProviderFound = true,
+                DownloadTarget = directory.FullName,
+                ExceptionText = ex.ToString(),
+                PreDownloadConfigurations = pre.Recorded,
+                Transfer = TransferVerdicts.NoResult("Nothing was transferred to a device: this was a folder run, and it threw."),
+            };
+        }
+        catch (Exception ex)
+        {
+            log.Blank();
+            log.Rule("FOLDER DOWNLOAD FAILED");
+            ExceptionReport.Write(log, "the failure, with every inner exception:", ex);
+            log.Blank();
+            log.Verbatim("full ToString() : ", ex.ToString());
+            return new ProbeOutcome(ProbeExitCodes.UnexpectedError, ExceptionReport.Summarise(ex))
+            {
+                DevicePath = devicePath,
+                ProviderFound = true,
+                ExceptionText = ex.ToString(),
+                Transfer = TransferVerdicts.NoResult("Nothing was transferred to a device: this was a folder run, and it threw."),
+            };
+        }
     }
 
     /// <summary>

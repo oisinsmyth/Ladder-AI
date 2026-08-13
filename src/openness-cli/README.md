@@ -9,7 +9,12 @@ openness-cli list          <project> [--tagtables]                            # 
 openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>   # block/UDT/tag table → SimaticML (refuses safety blocks)
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
 openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--dry-run]   # bulk restore: classifies each file itself, imports tag tables → types → blocks, retries to a fixpoint
-openness-cli compile       <project> [--device <name>] [--block <name> | --type <name>]   # diagnostics; non-zero exit on error
+openness-cli compile       <project> [--device <name>] [--block <name> | --type <name> | --software | --station]   # diagnostics; non-zero exit on error.
+                                    # 🔴 THE DEFAULT (device-item) SCOPE COMPILES *HARDWARE ONLY* — measured 2026-08-13, its whole message tree is "Hardware configuration". --software is the PROGRAM
+                                    # (never once invoked before this date: the fallback that would have reached it is dead code on an S7-1200) and --station is BOTH, the nearest thing to TIA's
+                                    # `Compile → Hardware and software`. This is the real mechanism behind FI-52. Every scope is a DELTA compile; Openness exposes no rebuild-all
+openness-cli compile-scopes <project> [--json]                                # READ-ONLY: every object answering GetService<ICompilable>(), which of them are the SAME compiler, and each one's
+                                    # attributes/invocations. Compiles nothing. Built because four checks disagreed with a download and the first question was structural: how many compiles are there?
 openness-cli compile-all   <project> [--device <name>] [--force]              # compiles every INCONSISTENT type and block (or every one, with --force) in one session — the bulk half of the gate (FI-52)
 openness-cli delete        <project> --block <name> [--device <name>] --yes    # deletes a block (refuses safety; --yes required)
 openness-cli block-layout  <project> --block <name> [--expect Standard|Optimized]   # READ-ONLY: optimized vs standard block access. Classic S7comm cannot see an OPTIMIZED block at all; the IR path yields Optimized silently — see below
@@ -69,10 +74,12 @@ openness-cli import <project> --group <device>/<path> <file> [<file> ...] [commo
 `--type` imports the given file(s) as PLC data types (into the `Types` composition at `--group`'s path) instead of blocks (`Blocks`) — needed first when a block's own `import` would otherwise fail with `Data type "<name>" is unknown`. Live-verified, 2026-07-14: importing a sanitized `TypeDOL` UDT this way into `SampleProject`, then retrying a block import that depended on it, made the "unknown data type" error disappear — `docs/notes/stage-gates.md` ("S1 item 26") has the full story.
 
 ```
-openness-cli compile <project> [--device <device>] [--block <name>] [--json] [common flags]
+openness-cli compile <project> [--device <device>] [--block <name> | --type <name> | --software | --station] [--json] [common flags]
 ```
 
-Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — whole-program compile. With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-10 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`.
+🔴 **Read "🔴 THERE ARE THREE PLC COMPILE SCOPES" below before trusting a bare `compile` as a program check.** The sentence immediately following this one described the default scope as a *"whole-program compile"* from 2026-07-10 until 2026-08-13, and it was wrong: that scope's entire message tree is `Hardware configuration`. `--software` is the program; `--station` is both.
+
+Without `--block`: wraps `ICompilable.Compile()` found via the PLC's own `DeviceItem` (not `PlcSoftware`) — **the HARDWARE compile, despite the name this document used to give it.** With `--block <name>`: compiles that one block via its own `ICompilable` service (`PlcBlock.GetService<ICompilable>()`) — same safety refusal and `--device` disambiguation as `export`. **These are not equivalent for clearing `IsConsistent`** after an `import`: device-level compile reports `Success` but does not clear a freshly-imported block's `IsConsistent` flag; block-level compile does. Confirmed live, 2026-07-10 — full story in `docs/notes/openness-quirks.md`. Structured output either way: `State`/`ErrorCount`/`WarningCount` plus each diagnostic message's `State`/`Description`/`Path`.
 
 **The verdict keys on the ERROR COUNT, never on `State` (2026-08-12).** It used to exit non-zero whenever `State != Success`, and that is wrong for the same reason `compile-all` has keyed on `ErrorCount` since it was written: **a project carrying a pre-existing hardware warning returns a non-`Success` state on a perfectly clean block.** Measured live — a scratch project with a permanent *"Inputs or outputs are used that do not exist in the configured hardware"* warning made **every** per-block compile exit `8` with `errors: 0`, regardless of the block, so a caller branching on the exit code read every clean compile as a failure and would reasonably stop. `State` and the warning count are still **reported** — "compiled with warnings" and "compiled clean" are different facts and the output still says which, adding a `PASSED WITH WARNINGS` line when the state is not `Success`. Only the exit code changed. The count itself is fail-closed: the larger of the compiler's own `ErrorCount` and the number of `Error` messages in its message tree, because those two can disagree and the table already prints a `NOTE` saying the aggregates are unreliable when they do.
 
@@ -902,6 +909,121 @@ shell should branch on these rather than on stderr text.
 | 17 | `ChangeAbandoned` | A write command failed and **the project is unchanged** — nothing was saved, and the partial mutation was removed from the open session. Earned by `create-instance-db` when the new instance DB comes back with an invalid block number (FI-63) or its number cannot be read back at all. Its own code because nothing was named wrongly (so not `7`) and because it is a modelled outcome with a known recovery, not an internal fault (so not `5`). The half a caller reads off it: **there is nothing to clean up, and a retry is safe.** Until 2026-08-13 this same condition exited `5` having already *saved* the broken block, so the exit code and the project disagreed about whether anything had happened |
 | 18 | `RollbackIncomplete` | The `17` failure with its cleanup half missing: nothing was saved, so **nothing reached disk**, but the partial mutation could not be removed from the in-memory project model either. A separate code because the caller's response differs — which is this table's rule for when to split one (cf. `11`, which does not). On `17` a retry is immediately safe; on `18` the open Portal session holds a block that exists nowhere on disk, so if that session belongs to a person rather than to this process, close it **without saving** — advice that would be actively wrong on a `17` |
 | 19 | `DuplicateBlockNumber` | The project contains **two or more blocks holding the same number** on one device (2026-08-13). Earned by `sanity-check`, and by `import`/`import-all` when the project holds a collision after the files went in. **Not `9`, and that separation is the whole point:** `9` means "something is inconsistent or a device failed to compile", and the measured project was *perfectly consistent and compiled clean* while holding two blocks at FC 910 — folding this into `9` would put a real defect behind a code whose documented remedy (compile the listed blocks) is exactly what **erased the only signal there was**. Not `7` either: nothing was named wrongly and re-running with a different argument does not fix it. **It outranks every other non-zero verdict here** (`9`, `13`) — those either clear themselves on the next pass or announce themselves again, and a duplicate does neither; both reports are printed in full regardless, so the ranking hides nothing. On the import path it does **not** mean the import failed: the files went in and were saved, and the message says so |
+
+### 🔴 THERE ARE THREE PLC COMPILE SCOPES, AND `compile` HAS ALWAYS USED THE ONE THAT COMPILES *HARDWARE* (2026-08-13)
+
+**Measured, on the JOB9004 scratch project, with `openness-cli compile-scopes`.** Openness exposes
+`ICompilable` on five objects, and the three PLC ones are three *different* compilers — not one
+compiler reached three ways:
+
+| scope | how it is reached | what its message tree actually contains |
+|---|---|---|
+| **station** | `Device.GetService<ICompilable>()` | `Hardware configuration` **and** `Program blocks` — both halves |
+| **device item** | `DeviceItem.GetService<ICompilable>()` | `Hardware configuration` **only** |
+| **software** | `PlcSoftware.GetService<ICompilable>()` | `Program blocks` **only** |
+
+`CompileDeviceItem` asks the **device item** first and falls back to `PlcSoftware` only when the
+device item has none. On an S7-1200 the device item always has one, so **that fallback is dead code
+and the software-scope compile had never once been invoked from this repository.** Verbatim, from a
+plain `openness-cli compile` on a project with an uncompiled block sitting in it:
+
+```
+STATE: Success   ERRORS: 0  WARNINGS: 0
+[Information] PLC_1:
+[Information]   Hardware configuration:
+[Information]     Hardware was not compiled. The configuration is up-to-date.
+[Success]     Compiling finished (errors: 0; warnings: 0)
+```
+
+Nothing about program blocks. Not "up to date" — *absent*. And immediately afterwards,
+`compile --software` on the same project, unchanged:
+
+```
+[Success] Program blocks:
+[Success]   FC_ModbusTCP_Sample (FC8): Block was successfully compiled.
+```
+
+**This is the real mechanism behind FI-52.** That finding was recorded as *"device-level compile
+does not clear the inconsistent flag"*, which is true and reads like a TIA quirk. It is not a quirk:
+the device-level compile **does not look at the program at all**, so of course it clears nothing and
+of course it can report `Success, errors=0` over nineteen uncompiled blocks. The same correction
+applies to `sanity-check`, whose `Device compiles:` line runs this same hardware-only compile — its
+value is entirely in the `INCONSISTENT:` enumeration, and its compile half was never a program check.
+
+Added, therefore: `compile --software`, `compile --station`, and the read-only `compile-scopes`
+survey that produced the table above. **`compile --station` is the closest thing Openness has to
+TIA's `Compile → Hardware and software`, and is the scope to prefer** when one call has to cover the
+whole device.
+
+### There is no "rebuild all" through Openness, and that is measured (2026-08-13)
+
+`ICompilable.Compile()` takes **no arguments**. `compile-scopes` also dumps each compiler object's
+`GetAttributeInfos()` and `GetInvocationInfos()`, because a name-based attribute or a parameterised
+invocation are the only two other places a knob could hide. On every one of the five compilers:
+
+```
+attributes : (none — measured, not assumed)
+invocations: Compile()
+```
+
+So **every Openness compile is a delta compile** — an unchanged program reports *"No block was
+compiled. All blocks are up-to-date."* TIA's GUI plainly distinguishes `Compile → Software` from
+`Compile → Software (rebuild all)`, and **only the second exists in the GUI.** When a download fails
+with *"An internal consistency error has occurred. Please compile the program in this CPU again"*,
+the recovery that is known to work is the GUI rebuild-all, and **no `openness-cli` invocation is
+known to substitute for it.** `compile-all --force` is not it either: it forces *which items* are
+visited, not *how* each one is compiled.
+
+### The download runs a compile that none of ours ran, and its exception does not name the block
+
+Measured 2026-08-13: `compile --block`, the device compile, `compile-all --force` and `sanity-check`
+**all reported clean** while a device download failed. TIA's own Info → Compile tab said:
+
+```
+An internal consistency error has occurred. Please compile the program in this CPU again.
+The following blocks could not be compiled: FC_ModbusTCP_Sample [FC8];
+```
+
+The Openness exception for that same failure carries, in total:
+
+```
+Siemens.Engineering.EngineeringTargetInvocationException
+  Error when calling method 'Download' of type '...DownloadProvider'.
+  An error has occured during download: 'Software compiling completed with error.'
+  openness detail messages (1): (the same sentence again)
+```
+
+**The block name is not in the exception.** `download-probe` already walks the detail-message list
+and prints it verbatim, so this is not a reporting gap — the API genuinely does not carry it. There
+is also **no `DownloadResult` on the throw path**, so there is no result object to interrogate.
+
+Nor is it on disk. Checked: the project's own `Logs/` folder (empty), every
+`%APPDATA%\Siemens\Automation\Portal V20\OnlineService\*.log` (all **0 bytes**), the Openness
+telemetry under `%PROGRAMDATA%\Siemens\Automation\TelemetryConnector` (logs API **call names** only —
+`objectName`/`methodName`, no results), and TIA's ETW diagnostic trace
+`%PROGRAMDATA%\Siemens\ETWEventCollector\TIA_ADiag_*.etl` (8 MB of UTF-16 internal engineering
+events; it contains the block's *name* from the search indexer, and **zero** occurrences of
+`successfully compiled`, `Compiling finished`, `could not be compiled`, `errors:` or `warnings:`).
+
+**So the route to the block-level detail is not to decode the failure — it is to run the compile
+that finds it before the download does.** The software/station scopes report per-block messages
+(`FC_ModbusTCP_Sample (FC8): Block was successfully compiled.`), which is precisely the granularity
+the exception lacks.
+
+### `download-probe --to-folder` — the download's own compile, without the download
+
+`DownloadProvider` has a second overload, `Download(DirectoryInfo, DownloadConfigurationDelegate)`,
+which writes hardware and software to a **folder**. No connection, nothing on the wire, no CPU
+stopped, no rig involved. Measured to raise the **same `ConsistentBlocksDownload` configuration** the
+device download raises, and to return the same shape of `DownloadResult` — so it reaches the
+download's own compile path while touching no controller.
+
+**What it is not: a reproducer for the specific FC8 failure.** That failure's message —
+*"compile the program in this **CPU** again"* — is about the delta between the offline program and
+what the controller already holds, and a folder has no controller to differ from. In the state
+measured here, the folder run and a real device download **both succeeded**. Treat `--to-folder` as
+what it is: a compile-and-package check that costs nothing and needs no rig, not a substitute for a
+download attempt.
 
 ### `compile` is not a whole-program gate on its own (FI-52, 2026-08-07)
 

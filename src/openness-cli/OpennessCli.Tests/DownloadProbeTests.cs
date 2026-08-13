@@ -115,6 +115,78 @@ public class DownloadProbeTests
     public void ARefusalAndAnApplyFailure_DoNotShareAnExitCode() =>
         Assert.NotEqual(ProbeExitCodes.AbortedByUnhandledConfiguration, ProbeExitCodes.SelectionApplyFailed);
 
+    // ---- --to-folder: the non-destructive mode ---------------------------------------------------
+
+    /// <summary>
+    /// <c>--to-folder</c> uses <c>Download(DirectoryInfo, delegate)</c> — hardware and software
+    /// written to a directory, no connection, nothing on the wire, no CPU stopped. It exists to reach
+    /// THE COMPILE A DOWNLOAD RUNS, which is measurably not the compile any of `compile --block`, the
+    /// device compile, `compile-all --force` or `sanity-check` runs (2026-08-13: all four clean, the
+    /// download's own compile failed naming a block).
+    ///
+    /// The tests below are all about ONE property: a run is unambiguously either the folder mode or
+    /// the device mode. Accepting a device-path flag alongside <c>--to-folder</c> and ignoring it
+    /// would produce an invocation that reads like the safe one and is not.
+    /// </summary>
+    [Fact]
+    public void ToFolder_IsAccepted_AndCarriesTheDirectory()
+    {
+        var result = ProbeArgumentParser.Parse(
+            new[] { ScratchProject, "--options", "Software", "--to-folder", @"C:\out\image" },
+            null,
+            Path.GetTempPath());
+
+        var success = Assert.IsType<ProbeParseResult.Success>(result);
+        Assert.Equal(@"C:\out\image", success.Arguments.ToFolder);
+    }
+
+    [Fact]
+    public void ToFolder_DefaultsToNull_SoTheDeviceModeIsUnchanged()
+    {
+        var result = ProbeArgumentParser.Parse(
+            new[] { ScratchProject, "--options", "Software" }, null, Path.GetTempPath());
+
+        Assert.Null(Assert.IsType<ProbeParseResult.Success>(result).Arguments.ToFolder);
+    }
+
+    [Theory]
+    [InlineData("--pc-interface", "Some Adapter")]
+    [InlineData("--target", "1 X1")]
+    public void ToFolder_WithADeviceFlag_IsRefused_NotIgnored(string flag, string value)
+    {
+        var result = ProbeArgumentParser.Parse(
+            new[] { ScratchProject, "--options", "Software", "--to-folder", @"C:\out", flag, value },
+            null,
+            Path.GetTempPath());
+
+        var failure = Assert.IsType<ProbeParseResult.Failure>(result);
+        Assert.Contains("--to-folder", failure.Message, StringComparison.Ordinal);
+    }
+
+    // --disruptive permits selections that stop a CPU. There is no CPU in a directory, so accepting
+    // it here would be accepting a dangerous-looking flag as a no-op — and a reader who saw it
+    // accepted once would reasonably expect it to mean something.
+    [Fact]
+    public void ToFolder_WithDisruptive_IsRefused()
+    {
+        var result = ProbeArgumentParser.Parse(
+            new[] { ScratchProject, "--options", "Software", "--to-folder", @"C:\out", "--disruptive" },
+            null,
+            Path.GetTempPath());
+
+        var failure = Assert.IsType<ProbeParseResult.Failure>(result);
+        Assert.Contains("--disruptive", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToFolder_WithoutAValue_IsRefused()
+    {
+        var result = ProbeArgumentParser.Parse(
+            new[] { ScratchProject, "--options", "Software", "--to-folder" }, null, Path.GetTempPath());
+
+        Assert.IsType<ProbeParseResult.Failure>(result);
+    }
+
     // ---- --options: required, literal, never numeric --------------------------------------------
 
     [Fact]

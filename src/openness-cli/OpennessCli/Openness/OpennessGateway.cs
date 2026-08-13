@@ -3500,6 +3500,322 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    /// <summary>
+    /// The software-scope compile — see <see cref="IOpennessGateway.CompileSoftware"/>.
+    ///
+    /// Deliberately does NOT fall back to the device item when the software has no compilable of its
+    /// own: the whole point of this member is that it compiles a DIFFERENT object from
+    /// <see cref="Compile"/>, and a silent fallback would make it return the device compile's result
+    /// under the software compile's name — which is exactly the class of confusion this
+    /// investigation started from.
+    /// </summary>
+    public CompileResult CompileSoftware(string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CompileSoftware)}.");
+        }
+
+        var candidates = FindPlcDeviceItems(_project).ToList();
+        if (deviceFilter is not null)
+        {
+            candidates = candidates.Where(c => c.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (candidates.Count != 1)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        var (item, path) = (candidates[0].Item, candidates[0].Path);
+        if (item.GetService<SoftwareContainer>()?.Software is not PlcSoftware software)
+        {
+            throw new InvalidOperationException($"Device '{path}' carries no PlcSoftware.");
+        }
+
+        var compilable = software.GetService<ICompilable>()
+            ?? throw new InvalidOperationException(
+                $"PlcSoftware '{software.Name}' on '{path}' exposes no ICompilable service, so there is no " +
+                "software-scope compile to run. This is a fact worth recording, not a bug: it would mean the " +
+                "device-item scope is the only one there is.");
+
+        var result = RunCompile(compilable);
+        SaveProject();
+        return result;
+    }
+
+    /// <summary>The station-scope compile — see <see cref="IOpennessGateway.CompileStation"/>.</summary>
+    public CompileResult CompileStation(string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CompileStation)}.");
+        }
+
+        var candidates = FindPlcDeviceItems(_project).ToList();
+        if (deviceFilter is not null)
+        {
+            candidates = candidates.Where(c => c.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (candidates.Count != 1)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        // Climb to the Device that owns the PLC device item. FindPlcDeviceItems yields the
+        // software-bearing ITEM; its station is what `Compile → Hardware and software` acts on.
+        var station = TryReadObject(() => ClimbToDevice(candidates[0].Item)) as Device
+            ?? throw new InvalidOperationException(
+                $"Could not reach the owning Device (station) from '{candidates[0].Path}'.");
+
+        var compilable = station.GetService<ICompilable>()
+            ?? throw new InvalidOperationException($"Device (station) '{station.Name}' exposes no ICompilable service.");
+
+        var result = RunCompile(compilable);
+        SaveProject();
+        return result;
+    }
+
+    private static Device? ClimbToDevice(DeviceItem item)
+    {
+        for (IEngineeringObject? current = item; current is not null; current = TryReadObject(() => current.Parent) as IEngineeringObject)
+        {
+            if (current is Device device)
+            {
+                return device;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Read-only survey of every compile entry point — see
+    /// <see cref="IOpennessGateway.SurveyCompileScopes"/>. Nothing here calls <c>Compile()</c>.
+    /// </summary>
+    public CompileScopeSurvey SurveyCompileScopes(string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(SurveyCompileScopes)}.");
+        }
+
+        var found = new List<(string Label, ICompilable? Compilable, string OwnerType, string? Error)>();
+        Ask("Project", _project);
+
+        foreach (Device device in _project.Devices)
+        {
+            var deviceLabel = $"Device '{device.Name}'";
+            if (deviceFilter is null || deviceLabel.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0
+                || DeviceSubtreeMatches(device, deviceFilter))
+            {
+                Ask(deviceLabel, device);
+                foreach (DeviceItem item in device.DeviceItems)
+                {
+                    WalkCompileScopes(item, deviceLabel);
+                }
+            }
+        }
+
+        // Identity groups. Two routes to the SAME compiler is a non-finding; two DIFFERENT compilers
+        // is the finding, because a gate that runs one of them says nothing about the other.
+        var groups = new List<ICompilable>();
+        var scopes = new List<CompileScope>();
+        foreach (var (label, compilable, ownerType, error) in found)
+        {
+            if (compilable is null)
+            {
+                scopes.Add(new CompileScope(
+                    label, ownerType, false, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), error));
+                continue;
+            }
+
+            var group = groups.FindIndex(g => SameCompiler(g, compilable));
+            if (group < 0)
+            {
+                groups.Add(compilable);
+                group = groups.Count - 1;
+            }
+
+            var (parentType, parentName) = DescribeCompilableParent(compilable);
+            scopes.Add(new CompileScope(
+                label, ownerType, true, compilable.GetType().FullName, parentType, parentName, group + 1,
+                DescribeCompilerAttributes(compilable), DescribeCompilerInvocations(compilable), error));
+        }
+
+        return new CompileScopeSurvey(scopes, groups.Count);
+
+        void Ask(string label, object owner)
+        {
+            var ownerType = owner.GetType().FullName ?? owner.GetType().Name;
+            if (owner is not IEngineeringServiceProvider provider)
+            {
+                found.Add((label, null, ownerType, "not an IEngineeringServiceProvider — it can never supply one"));
+                return;
+            }
+
+            try
+            {
+                found.Add((label, provider.GetService<ICompilable>(), ownerType, null));
+            }
+            catch (Exception ex)
+            {
+                found.Add((label, null, ownerType, $"{ex.GetType().Name}: {ex.Message}"));
+            }
+        }
+
+        void WalkCompileScopes(DeviceItem item, string parentLabel)
+        {
+            var label = $"{parentLabel}/{item.Name}";
+            Ask(label, item);
+
+            var software = TryReadObject(() => item.GetService<SoftwareContainer>()?.Software);
+            if (software is not null)
+            {
+                Ask($"{label} -> {software.GetType().Name}", software);
+            }
+
+            foreach (DeviceItem child in item.DeviceItems)
+            {
+                WalkCompileScopes(child, label);
+            }
+        }
+    }
+
+    private static bool DeviceSubtreeMatches(Device device, string deviceFilter)
+    {
+        // The filter is matched against the same path shape FindPlcDeviceItems produces
+        // (`<device>/<item>`), so a filter naming the ITEM must not exclude its own device.
+        foreach (DeviceItem item in device.DeviceItems)
+        {
+            if (SubtreeMatches(item, $"Device '{device.Name}'"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+
+        bool SubtreeMatches(DeviceItem item, string parentLabel)
+        {
+            var label = $"{parentLabel}/{item.Name}";
+            if (label.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            foreach (DeviceItem child in item.DeviceItems)
+            {
+                if (SubtreeMatches(child, label))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    // ReferenceEquals is not enough: Openness hands out a fresh wrapper per GetService call, so two
+    // calls on the SAME object already fail it. Equals is the API's own identity, and a throw from it
+    // is treated as "not the same" — reporting two compilers where there is one overstates the
+    // finding, and understating it is the failure mode that matters here.
+    private static bool SameCompiler(ICompilable a, ICompilable b)
+    {
+        try
+        {
+            return a.Equals(b);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The compiler object's name-based attributes. <c>ICompilable.Compile()</c> takes no arguments,
+    /// so this is one of only two places a "rebuild all" could be expressible at all — and TIA's own
+    /// GUI plainly has that distinction (Compile → Software vs Software (rebuild all)), so whether
+    /// Openness exposes it is a question with real consequences rather than API trivia.
+    /// </summary>
+    private static IReadOnlyList<string> DescribeCompilerAttributes(ICompilable compilable)
+    {
+        if (compilable is not IEngineeringObject eo)
+        {
+            return new[] { "(not an IEngineeringObject — cannot be asked)" };
+        }
+
+        try
+        {
+            var infos = eo.GetAttributeInfos();
+            return infos.Count == 0
+                ? Array.Empty<string>()
+                : infos.Select(i => $"{i.Name} : {i.GetType().Name}").ToList();
+        }
+        catch (Exception ex)
+        {
+            return new[] { $"(GetAttributeInfos threw: {ex.GetType().Name}: {ex.Message})" };
+        }
+    }
+
+    /// <summary>The other place a parameterised compile could live — see <see cref="DescribeCompilerAttributes"/>.</summary>
+    private static IReadOnlyList<string> DescribeCompilerInvocations(ICompilable compilable)
+    {
+        if (compilable is not IEngineeringObject eo)
+        {
+            return new[] { "(not an IEngineeringObject — cannot be asked)" };
+        }
+
+        try
+        {
+            var infos = eo.GetInvocationInfos();
+            return infos.Count == 0
+                ? Array.Empty<string>()
+                : infos.Select(DescribeInvocation).ToList();
+        }
+        catch (Exception ex)
+        {
+            return new[] { $"(GetInvocationInfos threw: {ex.GetType().Name}: {ex.Message})" };
+        }
+    }
+
+    private static string DescribeInvocation(EngineeringInvocationInfo info)
+    {
+        var parameters = TryReadObject(() => info.ParameterInfos) as System.Collections.IEnumerable;
+        var rendered = new List<string>();
+        if (parameters is not null)
+        {
+            foreach (var p in parameters)
+            {
+                rendered.Add(p?.ToString() ?? "?");
+            }
+        }
+
+        return $"{info.Name}({string.Join(", ", rendered)})";
+    }
+
+    private static (string? Type, string? Name) DescribeCompilableParent(ICompilable compilable)
+    {
+        // The compilable's Parent is what says WHICH SCOPE it compiles — two providers with
+        // different parents are two different compiles even when the CLR types match.
+        var parent = TryReadObject(() => (compilable as IEngineeringObject)?.Parent);
+        if (parent is null)
+        {
+            return (null, null);
+        }
+
+        var name = parent switch
+        {
+            DeviceItem di => TryRead(() => di.Name),
+            Device d => TryRead(() => d.Name),
+            Software sw => TryRead(() => sw.Name),
+            _ => null,
+        };
+
+        return (parent.GetType().FullName, name);
+    }
+
     private static CompileResult CompileDeviceItem(DeviceItem deviceItem, string path)
     {
         var compilable = deviceItem.GetService<ICompilable>();

@@ -715,6 +715,36 @@ internal sealed class FakeGateway : IOpennessGateway
     public CompileResult Compile(string? deviceFilter) =>
         DeviceCompileResult ?? throw new NotSupportedException();
 
+    /// <summary>What `compile --software` reports. Null = not configured (and so it throws).</summary>
+    public CompileResult? SoftwareCompileResult { get; set; }
+
+    public int SoftwareCompileCalls { get; private set; }
+
+    public CompileResult CompileSoftware(string? deviceFilter)
+    {
+        SoftwareCompileCalls++;
+        return SoftwareCompileResult
+            ?? throw new NotSupportedException("Test did not configure a software-scope compile result.");
+    }
+
+    /// <summary>What `compile --station` reports. Null = not configured (and so it throws).</summary>
+    public CompileResult? StationCompileResult { get; set; }
+
+    public int StationCompileCalls { get; private set; }
+
+    public CompileResult CompileStation(string? deviceFilter)
+    {
+        StationCompileCalls++;
+        return StationCompileResult
+            ?? throw new NotSupportedException("Test did not configure a station-scope compile result.");
+    }
+
+    public CompileScopeSurvey SurveyCompileScopes(string? deviceFilter) =>
+        ScopeSurvey ?? throw new NotSupportedException("Test did not configure a compile-scope survey.");
+
+    /// <summary>What `compile-scopes` reports. Null = not configured (and so it throws).</summary>
+    public CompileScopeSurvey? ScopeSurvey { get; set; }
+
     public BlockInfo DeleteBlock(string blockName, string? deviceFilter, bool confirm) => throw new NotSupportedException();
 
     public CompileResult CompileBlock(string blockName, string? deviceFilter)

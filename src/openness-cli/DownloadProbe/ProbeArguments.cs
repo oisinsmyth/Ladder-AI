@@ -17,8 +17,10 @@ internal sealed class ProbeArguments
         string logDirectory,
         int connectTimeoutSeconds,
         int openTimeoutSeconds,
-        bool disruptive = false)
+        bool disruptive = false,
+        string? toFolder = null)
     {
+        ToFolder = toFolder;
         ProjectPath = projectPath;
         Options = options;
         Json = json;
@@ -83,6 +85,26 @@ internal sealed class ProbeArguments
     /// </summary>
     internal bool Disruptive { get; }
 
+    /// <summary>
+    /// *** THE NON-DESTRUCTIVE HALF OF THIS TOOL, AND THE ONLY ONE THAT TOUCHES NO DEVICE. ***
+    /// <c>DownloadProvider.Download(DirectoryInfo, DownloadConfigurationDelegate)</c> — Openness's
+    /// second download overload, which writes hardware and software to a FOLDER instead of a
+    /// controller. No connection, no PC interface, no target, no CPU stop, nothing on the wire.
+    ///
+    /// It exists here for one reason: **a download runs its own compile first, and that compile is
+    /// not the one any of our compiles run.** Measured 2026-08-13 — `compile --block`, the device
+    /// compile, `compile-all --force` and `sanity-check` all reported clean while the download's
+    /// internal compile failed and named a block. Folder-download reaches THAT compile without
+    /// reaching the controller, so the check that was previously only available by writing to a live
+    /// PLC becomes available offline.
+    ///
+    /// Whether the compile it runs is the SAME one is a measured claim, not an assumed one — see the
+    /// evidence recorded in src/openness-cli/README.md. Mutually exclusive with the device path: a
+    /// run either writes to a folder or attempts a controller, never both, so no invocation can be
+    /// misread as the safe one.
+    /// </summary>
+    internal string? ToFolder { get; }
+
     internal SelectionPolicyMode PolicyMode =>
         Disruptive ? SelectionPolicyMode.Disruptive : SelectionPolicyMode.Normal;
 }
@@ -129,6 +151,14 @@ internal static class ProbeArgumentParser
         "                  than one. Not an IP address: the project's address collections are empty.\n" +
         "  --log-dir       where the verbatim configuration log is written. Defaults to\n" +
         "                  %LADDER_PROBE_LOG_DIR% if set, otherwise %TEMP%\\download-probe.\n" +
+        "  --to-folder     *** NON-DESTRUCTIVE. *** Writes the download IMAGE to a directory via the\n" +
+        "                  Download(DirectoryInfo, delegate) overload: no connection, nothing on the\n" +
+        "                  wire, no CPU stopped. It exists to reach THE COMPILE A DOWNLOAD RUNS —\n" +
+        "                  measurably not the same compile as --block / device / compile-all /\n" +
+        "                  sanity-check, all four of which reported clean while a download's own\n" +
+        "                  compile failed naming a block. Refuses --pc-interface, --target and\n" +
+        "                  --disruptive: those belong to the device path, and a run must never be\n" +
+        "                  ambiguous about which of the two it was.\n" +
         "  --json          a machine-readable report on stdout; the verbatim log then goes to the\n" +
         "                  file and to stderr, so stdout stays parseable.\n" +
         "  --disruptive    *** LETS THE DOWNLOAD ACTUALLY COMPLETE, BY STOPPING THE CPU. *** R8's\n" +
@@ -164,6 +194,7 @@ internal static class ProbeArgumentParser
         var openTimeout = 900;
         var optionsSeen = false;
         var disruptive = false;
+        string? toFolder = null;
 
         for (var i = 0; i < args.Count; i++)
         {
@@ -188,6 +219,16 @@ internal static class ProbeArgumentParser
 
                 case "--json":
                     json = true;
+                    break;
+
+                case "--to-folder":
+                    if (!TryTakeValue(args, ref i, out toFolder) || toFolder!.Length == 0)
+                    {
+                        return new ProbeParseResult.Failure(
+                            "--to-folder requires a directory to write the download image into. It is the " +
+                            "NON-DESTRUCTIVE mode: nothing is put on the wire and no CPU is stopped.");
+                    }
+
                     break;
 
                 // The ONLY place in this program that can set the disruptive mode. Bare literal,
@@ -292,13 +333,30 @@ internal static class ProbeArgumentParser
             return new ProbeParseResult.Failure(DownloadOptionChoices.DescribeRejection(optionsText));
         }
 
+        // Refused rather than ignored. The two modes write to different places, and a run that
+        // silently dropped one of the flags would be exactly the invocation someone reads as
+        // "this one was the safe one".
+        if (toFolder is not null && (pcInterface is not null || target is not null))
+        {
+            return new ProbeParseResult.Failure(
+                "--to-folder writes a download image to a directory and contacts no device, so it cannot " +
+                "be combined with --pc-interface or --target. Drop those, or drop --to-folder.");
+        }
+
+        if (toFolder is not null && disruptive)
+        {
+            return new ProbeParseResult.Failure(
+                "--to-folder cannot stop a CPU — there is no CPU in it — so --disruptive has nothing to " +
+                "permit and is refused rather than accepted as a no-op.");
+        }
+
         var resolvedLogDir = logDir
             ?? (string.IsNullOrWhiteSpace(logDirEnvValue) ? null : logDirEnvValue)
             ?? Path.Combine(tempPath, "download-probe");
 
         return new ProbeParseResult.Success(new ProbeArguments(
             projectPath, options, json, device, pcInterface, target, resolvedLogDir!, connectTimeout, openTimeout,
-            disruptive));
+            disruptive, toFolder));
     }
 
     private static bool TryTakeValue(IReadOnlyList<string> args, ref int index, out string? value)

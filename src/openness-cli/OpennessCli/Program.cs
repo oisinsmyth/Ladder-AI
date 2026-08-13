@@ -153,6 +153,8 @@ internal static class Program
                     return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
+                case ParseResult.CompileScopesSuccess compileScopes:
+                    return RunCompileScopes(gateway, compileScopes.Options, timeoutOpenSeconds);
                 case ParseResult.HmiSuccess hmi:
                     return RunHmi(gateway, hmi.Options, timeoutOpenSeconds);
                 case ParseResult.HmiCreateScreenSuccess hmiCreate:
@@ -968,12 +970,14 @@ internal static class Program
     internal static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        var result = (options.Block, options.Type) switch
+        var result = (options.Block, options.Type, options.Software, options.Station) switch
         {
-            (null, null) => gateway.Compile(options.Device),
-            (not null, null) => gateway.CompileBlock(options.Block, options.Device),
-            (null, not null) => gateway.CompileType(options.Type, options.Device),
-            _ => throw new InvalidOperationException("--block and --type are mutually exclusive."),
+            (null, null, false, false) => gateway.Compile(options.Device),
+            (null, null, true, false) => gateway.CompileSoftware(options.Device),
+            (null, null, false, true) => gateway.CompileStation(options.Device),
+            (not null, null, false, false) => gateway.CompileBlock(options.Block, options.Device),
+            (null, not null, false, false) => gateway.CompileType(options.Type, options.Device),
+            _ => throw new InvalidOperationException("--block, --type, --software and --station are mutually exclusive."),
         };
         Console.WriteLine(options.Json ? OutputFormatter.FormatCompileJson(result) : OutputFormatter.FormatCompileTable(result));
 
@@ -1226,6 +1230,23 @@ internal static class Program
         }
 
         return result.IsHealthy ? ExitCodes.Success : ExitCodes.SanityCheckFailed;
+    }
+
+    /// <summary>
+    /// Read-only. Reports every compile entry point and how many DISTINCT compilers they resolve to.
+    ///
+    /// Always exits 0: this is a description of the API surface, not a gate. Whether having more than
+    /// one distinct compiler is a PROBLEM depends on what the extra one finds, and that question is
+    /// answered by running it (`compile --software`), never by counting.
+    /// </summary>
+    internal static int RunCompileScopes(IOpennessGateway gateway, ListOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var survey = gateway.SurveyCompileScopes(deviceFilter: null);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatCompileScopesJson(survey)
+            : OutputFormatter.FormatCompileScopesTable(survey));
+        return ExitCodes.Success;
     }
 
     private static int RunPortalStatus(IOpennessGateway gateway, PortalStatusOptions options)

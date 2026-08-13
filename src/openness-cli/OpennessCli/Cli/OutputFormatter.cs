@@ -1512,6 +1512,89 @@ public static class OutputFormatter
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The survey's whole payload is the IDENTITY column, so the table leads with it. A reader
+    /// scanning this needs one number — how many distinct compilers — and then which routes reach
+    /// which; the CLR type names are supporting evidence and sit underneath.
+    /// </summary>
+    public static string FormatCompileScopesTable(CompileScopeSurvey survey)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"DISTINCT COMPILERS: {survey.DistinctCompilers}   ENTRY POINTS OFFERING ONE: ")
+            .Append(survey.Scopes.Count(s => s.HasCompilable))
+            .Append($"   OBJECTS ASKED: {survey.Scopes.Count}\n");
+        sb.Append("READ-ONLY: nothing was compiled.\n\n");
+
+        var width = Math.Max(5, survey.Scopes.Max(s => s.Label.Length));
+        sb.Append("GROUP  ").Append("SCOPE".PadRight(width)).Append("  COMPILER / WHY NOT\n");
+        sb.Append("-----  ").Append(new string('-', width)).Append("  ------------------\n");
+        foreach (var scope in survey.Scopes)
+        {
+            var group = scope.IdentityGroup is int g ? $"#{g}".PadRight(5) : "  -  ";
+            var right = scope.HasCompilable
+                ? $"{Short(scope.CompilableType)} (Parent: {Short(scope.ParentType)}{(scope.ParentName is null ? string.Empty : $" '{scope.ParentName}'")})"
+                : scope.Error ?? "no ICompilable service";
+            sb.Append(group).Append("  ").Append(scope.Label.PadRight(width)).Append("  ").Append(right).Append('\n');
+            if (!scope.HasCompilable)
+            {
+                continue;
+            }
+
+            // Printed even when empty, and labelled as a measurement. Compile() takes no arguments,
+            // so an empty list here is the evidence that a rebuild-all cannot be REQUESTED through
+            // this object — which is a finding, not an absence of one.
+            sb.Append("       ").Append("attributes : ")
+                .Append(scope.Attributes.Count == 0 ? "(none — measured, not assumed)" : string.Join(", ", scope.Attributes)).Append('\n');
+            sb.Append("       ").Append("invocations: ")
+                .Append(scope.Invocations.Count == 0 ? "(none — measured, not assumed)" : string.Join(", ", scope.Invocations)).Append('\n');
+        }
+
+        sb.Append('\n');
+        if (survey.DistinctCompilers <= 1)
+        {
+            sb.Append("Every route reaches the SAME compiler, so there is no scope this tool could be missing.\n");
+            return sb.ToString();
+        }
+
+        // The point of the whole command. Stated as a question to answer, not as a defect: a second
+        // compiler is only a gap if it finds something the first does not, and counting cannot say.
+        sb.Append($"*** {survey.DistinctCompilers} DIFFERENT COMPILERS. Same GROUP = same object reached two ways; different\n")
+            .Append("    GROUPS = different compiles. `openness-cli compile` uses the DeviceItem's, and reaches\n")
+            .Append("    the PlcSoftware's only if the DeviceItem has none — which, where both exist, is never.\n")
+            .Append("    Whether the other one finds anything this one misses is answered by RUNNING it\n")
+            .Append("    (`openness-cli compile <project> --software`), never by this table. ***\n");
+        return sb.ToString();
+
+        static string Short(string? clrType) => clrType is null
+            ? "(none)"
+            : clrType.Substring(clrType.LastIndexOf('.') + 1);
+    }
+
+    public static string FormatCompileScopesJson(CompileScopeSurvey survey)
+    {
+        var payload = new
+        {
+            distinctCompilers = survey.DistinctCompilers,
+            objectsAsked = survey.Scopes.Count,
+            entryPoints = survey.Scopes.Count(s => s.HasCompilable),
+            scopes = survey.Scopes.Select(s => new
+            {
+                label = s.Label,
+                ownerType = s.OwnerType,
+                hasCompilable = s.HasCompilable,
+                compilableType = s.CompilableType,
+                parentType = s.ParentType,
+                parentName = s.ParentName,
+                identityGroup = s.IdentityGroup,
+                attributes = s.Attributes,
+                invocations = s.Invocations,
+                error = s.Error,
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatSanityCheckJson(SanityCheckResult result)
     {
         var payload = new
