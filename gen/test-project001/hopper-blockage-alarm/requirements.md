@@ -168,16 +168,17 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
     **true** when next observed. Whether it went momentarily false in between is **DON'T-CARE**: the
     re-raise is immediate, so any drop is a sub-scan transient of no operational consequence, and
     "never went low" is **not** a failure.
-  - **The condition has cleared** (a debounced clear has discarded the accumulated time, so it is
-    below the threshold) — the alarm goes **false and stays false**, and that false is **REQUIRED to
-    be observable**. Without it "the reset worked" and "the reset did nothing" are indistinguishable,
-    which is the whole point of this clause.
+  - **The condition has cleared** (the accumulated time is below the threshold — whether because a
+    debounced clear discarded it, **or because a power cycle did**, AR-HBA-10) — the alarm goes
+    **false and stays false**, and that false is **REQUIRED to be observable**. Without it "the reset
+    worked" and "the reset did nothing" are indistinguishable, which is the whole point of this clause.
 - **Class:** alarm
 - **Source:** Request — "clear the alarm on FaultReset".
 - **Notes:** `DB_Controls.FaultReset` is the shared operator reset already routed to the
   sequencer/pusher/motor faults in the corpus (`FC_ControlMain`); this FB uses the same signal.
   `FaultReset` does **not** touch the accumulated persistence time (AR-HBA-05) — the accumulator is
-  governed only by hopper-level evidence and run state (REQ-HBA-003, NEW-HBA-01, AR-HBA-06).
+  governed only by hopper-level evidence, run state, and power-up (REQ-HBA-003, NEW-HBA-01, AR-HBA-06,
+  AR-HBA-09, and REQ-HBA-007/AR-HBA-10 for the power-cycle discard).
 - **Determined by AR-HBA-05 (agent ruling, not owner)** on three points the request left silent:
   - **Edge, not level.** The reset acts on the rising edge of `FaultReset`. A held-on reset does not
     keep the alarm cleared.
@@ -210,6 +211,13 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   **latched hopper-blockage alarm does survive** the power cycle (it is a genuine fault requiring
   operator acknowledgement) and is cleared only by `FaultReset`; `HopperBlockedInhibit`
   correspondingly persists until acknowledged.
+  **Accepted consequence, stated rather than repaired (AR-HBA-10):** because the alarm survives and the
+  accumulated persistence time does not, a `FaultReset` after a power cycle finds the accumulator at
+  zero. **When `FaultReset` is asserted after a power cycle while the hopper is still blocked, the
+  alarm clears and does not immediately re-raise; it re-raises WITHIN one further persistence threshold
+  of accumulated high-and-running time.** The window this opens is bounded by that same threshold and
+  closes with no further operator action. This is the accepted cost of a non-retentive accumulator, not
+  an oversight — see AR-HBA-10.
 - **Class:** alarm
 - **Source:** Request (derived edge case). **Revised at Gate-1 (NEW-HBA-04, owner 2026-07-19)** to
   align with doc 06 **C-124**'s explicit carve-out and **C-128**'s actual scope. C-128 forbids
@@ -223,6 +231,11 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   from a C-128 misreading; corrected here. The alarm/stop-demand outputs are RETAIN; the timers,
   the debounce, the cumulative budget, and the qualifier latch are non-retentive (reset at power-up
   by non-retentivity — NEW-HBA-06, no OB100 edit).
+- **Power-cycle/reset interaction ruled by AR-HBA-10 (agent ruling, not owner).** The gap is **accepted
+  and stated**, with no mechanism added. It is bounded by the persistence threshold and self-clearing.
+  **Depends on the accumulator remaining non-retentive** (this clause's Notes, NEW-HBA-06): if
+  NEW-HBA-05 is ever settled in a way that makes the accumulated time retentive, AR-HBA-10 must be
+  revisited. See AR-HBA-10.
 - **Bookkeeping closed by AR-HBA-02 (agent ruling, not owner).** NEW-HBA-04 was listed OPEN while the
   revision it proposed was already present in this clause's Text. That was a contradiction about
   *whether a signed REQ had changed*, not about behaviour. NEW-HBA-04 is now RESOLVED; this clause's
@@ -414,9 +427,15 @@ exactly what decides whether a reset can suppress a live fault.
   above, arriving by a side door.
 
 **Testable consequence, stated so a vector can be written against it:** with the hopper high, the plant
-running, and the alarm latched, a pulse on `FaultReset` yields an alarm that drops (if at all) for
-essentially one evaluation and is asserted again — **not** an alarm that stays clear for another
-threshold period.
+running, and the alarm latched, a pulse on `FaultReset` yields an alarm that **is asserted when next
+observed** — **not** one that stays clear for another threshold period.
+
+> **Superseded wording, corrected 2026-08-13 by the pre-stamp consistency pass.** This paragraph
+> originally read "drops (if at all) for essentially one evaluation and is asserted again". That is the
+> exact phrasing **AR-HBA-08 ruled unusable by a vector author**, and leaving it here would have left
+> the unusable form still standing in the rulings section after the clause text had been fixed — a
+> second, stale source for the same assertion. The observable claim is *the alarm is true*; whether it
+> dropped in between is DON'T-CARE per AR-HBA-08.
 
 **CHANGED:** REQ-HBA-005 Text + Notes.
 
@@ -489,6 +508,18 @@ fragments:**
 
 `PlantRunning` gates **accrual**. It does not gate **raising**, and it does not gate **re-raising**.
 
+**Reconciled against Q-HBA-04, which is an OWNER answer and therefore outranks this ruling.** Q-HBA-04
+says the window "accumulates only while the shredder/plant is actually running (**a full hopper at
+standstill does not alarm**)". Read literally, that parenthetical could be taken to mean the alarm is
+never *asserted* at standstill, which AR-HBA-07 would contradict. **It is read here as a statement about
+accrual, not about the latch** — and Q-HBA-04's own first clause is explicitly about accumulation, so a
+standstill hopper still never *causes* an alarm: no accrual happens, the threshold is never reached, and
+nothing raises. AR-HBA-07 only concerns an alarm **already earned while running** and then acknowledged
+at standstill. **Note also that the two can never diverge on the first raise:** the accumulator can only
+reach the threshold while running, so the first raise always occurs while running, and AR-HBA-07 creates
+no first-raise/re-raise asymmetry. If the owner intended the stronger reading — that the alarm is
+suppressed at standstill — that overturns AR-HBA-07, and the owner's reading wins.
+
 **CHANGED:** REQ-HBA-005 Text + Notes.
 
 ### AR-HBA-08 — the de-assert on reset is DON'T-CARE when the condition holds, REQUIRED when it has cleared *(closes AMB-09)*
@@ -497,7 +528,9 @@ fragments:**
 
 - **Condition still holds** → the momentary drop is **DON'T-CARE**. The observable claim is *the alarm
   is still true*. "Never went low" is **not** a failure.
-- **Condition has cleared** → an observable **false** is **REQUIRED**, and it must persist.
+- **Condition has cleared** → an observable **false** is **REQUIRED**, and it must persist. "Cleared"
+  means the accumulated time is below the threshold, by **either** route that puts it there: a debounced
+  clear (REQ-HBA-003) or a power cycle (REQ-HBA-007, AR-HBA-10). Both produce the same observable.
 
 **Reasoning.** The earlier "drops (if at all)" was unusable by a vector author: it made a passing and a
 failing observation indistinguishable. Requiring the drop to be observable in the first case would be
@@ -529,33 +562,78 @@ the plant was stopped and AR-HBA-06 would be unreachable.
 
 **CHANGED:** REQ-HBA-003 Text + Notes, NEW-HBA-01 (scope completion).
 
-### Opened by this round — flagged BEFORE the enumeration is stamped
+### AR-HBA-10 — the power-cycle / reset gap is ACCEPTED and STATED, with no mechanism added
 
-**AR-HBA-07 collides with REQ-HBA-007's power-up split, and I do not think this one is mine to rule.**
+**RULING:** **accept the gap and state it explicitly in the clause text. Add no mechanism.**
 
-REQ-HBA-007 makes the alarm latch **RETAIN** (survives a power cycle) while all transient timing state,
-**including the accumulator**, is **non-retentive** and starts at zero. AR-HBA-07 makes the re-raise key
-on the accumulator alone. Compose them:
+**The gap.** REQ-HBA-007 makes the alarm latch RETAIN (survives a power cycle) while all transient
+timing state, **including the accumulator**, is non-retentive and starts at zero. AR-HBA-07 makes the
+re-raise key on the accumulator alone. Composed:
 
 > Power cycle with the alarm latched and the hopper genuinely still blocked. The alarm survives —
-> correctly, per REQ-HBA-007. The accumulator does not; it is 0. The operator now presses `FaultReset`.
-> The accumulator is below threshold, so **the alarm clears and does NOT re-raise**, and the hopper is
-> still blocked. A fresh full threshold must accumulate before it alarms again.
+> correctly. The accumulator does not; it is 0. The operator presses `FaultReset`. The accumulator is
+> below threshold, so **the alarm clears and does not immediately re-raise**, on a still-blocked hopper.
 
-That is a **live fault suppressed by a reset** — the exact outcome AR-HBA-05 and AR-HBA-07 both exist to
-forbid — reached without either ruling being violated, because the power cycle destroyed the evidence
-rather than the reset doing it. Both clauses are individually defensible and their conjunction is not.
+**Reasoning — recorded in full, because a bare "accepted" reads as an oversight:**
 
-I am **not ruling it**, for a reason: unlike AMB-07 and AMB-10, the fix is not a choice between two
-readings already present in the register. Every available repair **adds a mechanism** — make the
-accumulator RETAIN (contradicts REQ-HBA-007 and NEW-HBA-06 and changes power-up behaviour), or re-derive
-the blockage condition live at power-up (adds a condition no clause describes), or accept the gap as the
-documented cost of a non-retentive accumulator. That is a design decision affecting a signed REQ, so it
-is the owner's.
+1. **The exposure is bounded and self-clearing.** After the reset, accrual resumes and the alarm
+   re-raises through *the same threshold that raised it the first time*. What AR-HBA-05 and AR-HBA-07
+   forbid is a reset **permanently** suppressing a live fault. A bounded window that closes by itself,
+   following a deliberate operator acknowledgement, is ordinary alarm practice and is **different in
+   kind** — not a weaker version of the same thing.
+2. **The power cycle created the exposure; the reset only reveals it — and REQ-HBA-007 already signed
+   for it.** A non-retentive accumulator means *any* power cycle grants a fresh window on a still-blocked
+   hopper, reset or no reset. That is REQ-HBA-007's stated design, not a consequence of AR-HBA-07.
+3. **Both repairs cost more than the gap.** Retaining the accumulator contradicts a signed REQ *and* is
+   independently wrong — accumulated *running* time carried across a power cycle asserts something about
+   a plant state **nobody observed while the CPU was off**. Re-deriving the condition live at power-up
+   invents a condition no clause describes, which is how a spec grows a mechanism that cannot be tested
+   against anything.
 
-**It is genuinely reachable** — any power cycle during a blockage puts the plant in this state — so it
-should be settled rather than left. **Its assertion sits inside REQ-HBA-005 and REQ-HBA-007, both of
-which this round already re-decomposes**, so ruling it now costs far less than ruling it after the
-enumeration is stamped and citations exist.
+**The honest residue, stated because it is real.** Without the reset, the latch holds and the inhibit
+stays active. So the reset **does** open a window that would not otherwise exist. It is accepted
+**because it is bounded by the threshold and closes automatically** — not because it is nothing.
 
-Nothing else in AR-HBA-07/08/09 opens a further behavioural question that I can find.
+**Made assertable rather than left as a note.** REQ-HBA-007's Text now carries it as a `WHEN … THEN …
+WITHIN` with the bound explicit, so a vector can test that the alarm **does come back** and not merely
+that it went away. If the bound were left implicit the enumerator would have to raise it again.
+
+**Dependency.** AR-HBA-10 rests on the accumulator being **non-retentive** (REQ-HBA-007 Notes,
+NEW-HBA-06). **NEW-HBA-05 is still OPEN**; if it is ever settled in a way that makes the accumulated
+time retentive, this ruling must be revisited.
+
+**CHANGED:** REQ-HBA-007 Text + Notes, REQ-HBA-005 Notes, AR-HBA-08 (both case definitions generalised
+to name the power-cycle route).
+
+---
+
+## Pre-stamp consistency pass (2026-08-13)
+
+The whole register was read **once, end to end, as a single document**, specifically for interactions
+between the ten rulings — the failure mode being that both collisions found so far (AMB-10, and the
+AR-HBA-10 gap) were **invisible clause-by-clause and only appeared when rulings were combined**.
+
+**Result: four items found, all resolved above. No unresolved inconsistency remains.**
+
+| # | finding | disposition |
+|---|---|---|
+| 1 | **AR-HBA-05's "testable consequence" still read "drops (if at all)"** — the exact wording AR-HBA-08 ruled unusable. The *clause* had been fixed; the *ruling* still carried the old form, leaving a second, stale source for the same assertion | **Fixed** — rewritten, with the supersession noted in place |
+| 2 | **AR-HBA-08's "condition has cleared" named only the debounced-clear route.** AR-HBA-10 adds a second route to the same state (power cycle), which would have read as uncovered | **Fixed** — both case definitions generalised |
+| 3 | **Q-HBA-04's parenthetical** ("a full hopper at standstill does not alarm") could be read literally as contradicting AR-HBA-07 | **Reconciled in AR-HBA-07**, and flagged: Q-HBA-04 is an **owner** answer and outranks the ruling if the stronger reading was meant |
+| 4 | **AR-HBA-10 depends on an OPEN item** — NEW-HBA-05's mechanism choice, via accumulator retentivity | **Recorded** as an explicit dependency at both AR-HBA-10 and REQ-HBA-007 |
+
+**Checked and found consistent** (stated rather than assumed):
+
+- **The latch's discipline is coherent across REQ-HBA-004 / 006 / AR-HBA-05 / 07.** Set when the
+  accumulator reaches the threshold; cleared **only** by a `FaultReset` edge; re-set immediately if the
+  accumulator is still at or past the threshold. A debounced clear drops the accumulator but **not** the
+  latch, which is exactly REQ-HBA-006.
+- **No first-raise / re-raise asymmetry.** The accumulator can only reach the threshold while running,
+  so the first raise always occurs while running; AR-HBA-07's ungated re-raise therefore never diverges
+  from REQ-HBA-001's raise.
+- **The accumulator has exactly four governors and they do not overlap:** accrue (high-and-running),
+  freeze (AR-HBA-06/09), discard (debounced clear), zero (power cycle, AR-HBA-10). `FaultReset` is
+  deliberately **not** among them (AR-HBA-05).
+- **AR-HBA-01/02/03 are structural, not behavioural**, and interact with nothing above.
+- **The bounds table and the signal-name property** (AR-HBA-03, Format) remain true after AR-HBA-07…10:
+  no ruling put a number or a signal name into a clause sentence.
