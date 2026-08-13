@@ -1658,6 +1658,29 @@ being stated by it, and the script's own examples used one ***; **junctions are 
 half-resolved** (PS 5.1 cannot resolve them), so a scratch project reached through one is refused
 until its real path is allowlisted; and the directory case above.
 
+> #### 📐 THE ADR WAS CONTRADICTED IN TWO PLACES, AND BOTH ARE RECORDED AS SUCH (`f8592e0`)
+>
+> ADR-0011 is now **ACCEPTED AND IMPLEMENTED**, with a CONFIRMED / EXTENDED / **NARROWED** table
+> sorting its six original requirements — so a later reader can tell at a glance which parts are still
+> load-bearing *as written*.
+>
+>   1. *** SCOPE WAS NARROWED. *** The Decision section says the script must refuse any non-scratch
+>      project, **unqualified**; the fence applies to `-Arm` only. That is consistent with every
+>      **reason** the ADR gives and inconsistent with its **words** — recorded as a narrowing rather
+>      than absorbed into the prose, because absorbing it would have quietly rewritten the ruling.
+>   2. *** REQUIREMENT 5's MECHANISM WAS SUBSTITUTED. *** It asked for the *resolved canonical path* to
+>      be compared and named junctions as something that must not walk around the fence — but **PS 5.1
+>      cannot resolve a junction**, so the build detects and refuses instead. The ADR now says
+>      requirement 5 must be read as *"must not walk around the fence"*, **not** *"must be resolved"*,
+>      and records the cost: a legitimate scratch project behind a junction is refused until its real
+>      path is allowlisted.
+>
+>   ➜ **Requirement 6 went further than asked:** "no override flag" became refusal **by name**.
+>   ➜ And the `repo:` prefix is recorded **with its reason**: an absolute-only committed allowlist is
+>     correct in **exactly one checkout**, and agents here routinely work in `.claude/worktrees/` — so
+>     it would have failed closed everywhere else. *** SAFE, AND USELESS ENOUGH THAT SOMEONE WOULD
+>     EVENTUALLY HAVE EDITED THE FENCE. ***
+
 **All three `tools/` files verified ASCII-only and CRLF byte-wise**, both `.ps1` tokenise clean, and
 the reason sits in the file headers so nobody "improves" the punctuation later. **Not run against
 Portal** — the rig lane holds it; the live run is scheduled separately.
