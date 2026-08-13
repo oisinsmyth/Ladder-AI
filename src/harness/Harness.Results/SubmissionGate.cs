@@ -117,6 +117,7 @@ public static class SubmissionGate
         gates.Add(BasisGate(vectors, enumeration));
         gates.Add(CitationShape(vectors));
         gates.Add(IdsRecompute(enumeration));
+        gates.Add(RequiredObservations(vectors, enumeration));
         gates.Add(EnumeratorIndependence(vectors, enumeration, blockAuthor));
         gates.Add(AssertionFormAuthority(vectors, enumeration));
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
@@ -408,6 +409,75 @@ public static class SubmissionGate
         return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionId),
             problems.Count == 0
                 ? $"all {enumeration.Assertions.Count} assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted."
+                : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// *** AMB-14: EVERY SIGNAL A CITATION DEPENDS ON, NOT JUST ONE. ***
+    ///
+    /// <para>The mechanical check was <i>"the response signal appears in <c>Expectations</c>"</i>, and a
+    /// response signal was a SINGLE STRING. <b>A simultaneity claim has two signals, and both must be
+    /// observed for the citation to mean anything.</b> A vector could cite a relational assertion, expect
+    /// on one output alone, never observe the other, and pass — <b>while nothing about the RELATION was
+    /// tested</b>. That is a check reporting on a claim it did not examine, which is the shape this whole
+    /// gate table exists to refuse.</para>
+    ///
+    /// <para><b>An enumeration that declares none is NOT CHECKED, not a pass</b> — same treatment as the
+    /// forms map and the normalised texts, and for the same reason: against a projection that carries
+    /// nothing, the hole is exactly as open as it was.</para>
+    ///
+    /// <para><b>This is a FIELD, and it must stay one.</b> No hashed assertion text in this format
+    /// contains a signal name or a numeric bound, which is why four re-issues cost zero re-hashes when an
+    /// output was renamed. Closing AMB-14 by editing an assertion's text to name both signals would give
+    /// that property away to fix something that lives beside the sentence.</para>
+    /// </summary>
+    private static GateResult RequiredObservations(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    {
+        const string name = "3h required observations (AMB-14)";
+
+        if (enumeration.CarriesNoRequiredObservations)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "response_signal + also_requires_observation_of in the enumeration",
+                "the enumeration declares no required observations, so no citation was checked against the signals it depends on. "
+                + "A RELATIONAL assertion is the case that matters: cite one, expect on one of its two outputs, never observe the other, and the relation is untested while everything reports green.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            if (v.Basis is null || string.IsNullOrWhiteSpace(v.Basis.AssertionId))
+                continue;
+
+            var required = enumeration.RequiredObservationsOf(v.Basis.AssertionId);
+
+            if (required is null)
+            {
+                problems.Add($"{v.Id}: the enumeration declares required observations but none for '{v.Basis.AssertionId}', so this citation was checked against nothing. A partially-declared enumeration is not a permissive one.");
+                continue;
+            }
+
+            if (required.Count == 0)
+            {
+                problems.Add($"{v.Id}: '{v.Basis.AssertionId}' declares an EMPTY set of required observations. An assertion whose response nobody named cannot have a vector shown to observe it — empty is not clean.");
+                continue;
+            }
+
+            var observed = v.Expectations.Select(e => e.Signal).ToHashSet(StringComparer.Ordinal);
+            var missing = required.Where(s => !observed.Contains(s)).ToArray();
+
+            if (missing.Length > 0)
+            {
+                problems.Add($"{v.Id}: cites '{v.Basis.AssertionId}', which depends on {string.Join(", ", required.OrderBy(s => s, StringComparer.Ordinal))}, and declares no expectation on {string.Join(", ", missing.OrderBy(s => s, StringComparer.Ordinal))}. "
+                    + (required.Count > 1
+                        ? "*** THIS IS AMB-14's CASE. *** The assertion relates these signals, so observing one of them tests neither the other nor the relation, and a pass here would say nothing about what was cited."
+                        : "The assertion's response is that signal; a vector that never observes it cannot have tested the assertion it cites."));
+            }
+        }
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionEnumeration),
+            problems.Count == 0
+                ? $"every citation observes EVERY signal its assertion depends on, across {vectors.Count(v => v.Basis is not null)} cited vector(s)."
                 : string.Join(" | ", problems));
     }
 

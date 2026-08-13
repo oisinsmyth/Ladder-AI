@@ -25,6 +25,13 @@ public class SubmissionGateTests
     private static readonly IReadOnlyDictionary<string, string> Texts =
         new Dictionary<string, string>(StringComparer.Ordinal) { [AssertionIdValue] = AssertionText };
 
+    /// <summary>AMB-14: every signal a citation of this assertion depends on. The default vector observes it.</summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> Observations =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { "Demo_Count" },
+        };
+
     private static SubmissionVector Vector(
         string id = "V-1",
         string slot = "S0",
@@ -66,7 +73,7 @@ public class SubmissionGateTests
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts),
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations),
             FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity(blockAuthor),
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
@@ -202,12 +209,102 @@ public class SubmissionGateTests
     // gained a producer emitting per-assertion forms and recording who wrote it.
     // ---------------------------------------------------------------------------------------------
 
+    // ---------------------------------------------------------------------------------------------
+    // Gate 3h — AMB-14: every signal a citation depends on, not just one
+    // ---------------------------------------------------------------------------------------------
+
+    private static AssertionEnumeration Relational(params string[] signals) =>
+        AssertionEnumeration.Of(new[] { ClauseId }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When },
+            "agent-c", Texts,
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                [AssertionIdValue] = new HashSet<string>(signals, StringComparer.Ordinal),
+            });
+
+    /// <summary>
+    /// *** AMB-14's CASE. *** A simultaneity claim names two signals. A vector observing ONE of them, and
+    /// never the other, tests neither the second nor the RELATION — and the old single-string check passed
+    /// it, reporting green on a claim it had not examined.
+    /// </summary>
+    [Fact]
+    public void A_RELATIONAL_ASSERTION_OBSERVED_ON_ONE_OF_ITS_TWO_SIGNALS_IS_REFUSED()
+    {
+        var report = Check(enumeration: Relational("Demo_Count", "Demo_Inhibit"));
+
+        var gate = Gate(report, "3h required observations");
+        Assert.False(gate.Passed);
+        Assert.Contains("Demo_Inhibit", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("AMB-14's CASE", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+    }
+
+    [Fact]
+    public void And_the_SAME_vector_observing_BOTH_signals_is_admitted()
+    {
+        var both = new[]
+        {
+            Vector(expectations: new[]
+            {
+                new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10"),
+                new ObservabilityDeclaration("Demo_Inhibit", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "1"),
+            }),
+        };
+
+        var report = Check(both,
+            map: MirrorObservability.Of(
+                ("Demo_Count", new[] { InstrumentationMode.Latched }),
+                ("Demo_Inhibit", new[] { InstrumentationMode.Latched })),
+            enumeration: Relational("Demo_Count", "Demo_Inhibit"));
+
+        Assert.True(Gate(report, "3h required observations").Passed);
+        Assert.Equal(SubmissionVerdict.AdmissibleSubjectToJudgement, report.Verdict);
+    }
+
+    [Fact]
+    public void AN_ENUMERATION_DECLARING_NO_REQUIRED_OBSERVATIONS_IS_NOT_CHECKED_RATHER_THAN_PASSING()
+    {
+        var silent = AssertionEnumeration.Of(new[] { ClauseId }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts);
+
+        var gate = Gate(Check(enumeration: silent), "3h required observations");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("RELATIONAL assertion is the case that matters", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_PARTIALLY_DECLARED_ENUMERATION_IS_NOT_A_PERMISSIVE_ONE()
+    {
+        // Observations declared, but for a different assertion than the one cited.
+        var elsewhere = AssertionEnumeration.Of(new[] { ClauseId }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts,
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                ["REQ-014:000000"] = new HashSet<string>(StringComparer.Ordinal) { "Demo_Count" },
+            });
+
+        var gate = Gate(Check(enumeration: elsewhere), "3h required observations");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("checked against nothing", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_EMPTY_REQUIRED_OBSERVATION_SET_IS_REFUSED_BECAUSE_EMPTY_IS_NOT_CLEAN()
+    {
+        var gate = Gate(Check(enumeration: Relational()), "3h required observations");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("EMPTY set", gate.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AN_ENUMERATION_CARRYING_NO_FORMS_LEAVES_F3_ENFORCED_AGAINST_WHAT_THE_VECTOR_CLAIMS()
     {
         // The flat projection. Reporting this gate as passed would be exactly the failure the gate table
         // exists to prevent: the hole is as open as it was, and NOT CHECKED says so.
-        var flat = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue }, null, "agent-c", Texts);
+        var flat = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue }, null, "agent-c", Texts, Observations);
         var report = Check(enumeration: flat);
 
         var gate = Gate(report, "3e assertion form authority");
@@ -222,7 +319,7 @@ public class SubmissionGateTests
         // *** F-3's HOLE, CLOSED WHERE THE DATA SUPPORTS IT. *** Cite an assertion the enumeration says
         // is a NEVER, declare it a WHEN, and the permissive path is no longer available.
         var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts, Observations);
 
         var report = Check(new[] { Vector(form: AssertionForm.When) }, enumeration: enumeration);
 
@@ -250,7 +347,7 @@ public class SubmissionGateTests
         // A blank on the enumeration's side is not a WHEN either - it is a decomposition that has not
         // been finished, and F-3 cannot be enforced against it.
         var blank = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Unstated }, "agent-c", Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Unstated }, "agent-c", Texts, Observations);
 
         var report = Check(enumeration: blank);
 
@@ -264,7 +361,7 @@ public class SubmissionGateTests
         // Refusing the mismatch is not enough on its own: the observability verdict has to be right too,
         // or a sampled NEVER would be reported admissible in the same run that refused the mismatch.
         var enumeration = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.Never }, "agent-c", Texts, Observations);
 
         var report = Check(
             new[] { Vector(form: AssertionForm.When, expectations: new[]
@@ -279,7 +376,7 @@ public class SubmissionGateTests
     public void AN_UNRECORDED_ENUMERATOR_IS_NOT_CHECKED_BECAUSE_UNKNOWN_IS_NOT_INDEPENDENT()
     {
         var anonymous = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, normalisedTexts: Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, normalisedTexts: Texts, requiredObservations: Observations);
 
         var gate = Gate(Check(enumeration: anonymous), "3d enumerator independence");
 
@@ -293,7 +390,7 @@ public class SubmissionGateTests
         // If the block's author decomposed the requirement, the denominator is the block author's own
         // reading and a vector citing into it is agreeing with the block by construction.
         var byBlockAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-a", Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-a", Texts, Observations);
 
         Assert.False(Gate(Check(enumeration: byBlockAuthor), "3d enumerator independence").Passed);
     }
@@ -303,7 +400,7 @@ public class SubmissionGateTests
     {
         // Normalised, like D6 itself: a case-and-whitespace variant is not a different agent.
         var byVectorAuthor = AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "AGENT-B ", Texts);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "AGENT-B ", Texts, Observations);
 
         var gate = Gate(Check(enumeration: byVectorAuthor), "3d enumerator independence");
 

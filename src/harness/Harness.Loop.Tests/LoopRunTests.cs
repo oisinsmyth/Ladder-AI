@@ -38,7 +38,13 @@ public class LoopRunTests
             new[] { AssertionIdValue },
             new Dictionary<string, AssertionForm> { [AssertionIdValue] = form },
             enumerator,
-            new Dictionary<string, string>(StringComparer.Ordinal) { [AssertionIdValue] = AssertionText });
+            new Dictionary<string, string>(StringComparer.Ordinal) { [AssertionIdValue] = AssertionText },
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                // AMB-14: every signal a citation of this assertion depends on. One here, and the
+                // vector observes it.
+                [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { TrivialBlock.CountTag },
+            });
 
     private static SubmissionVector Vector(
         int step = 5, int limit = 10, string expected = "10", int settlingScans = 3,

@@ -89,7 +89,11 @@ public static class GateCli
             document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
             document.Enumeration?.Forms,
             document.Enumeration?.Enumerator ?? string.Empty,
-            document.Enumeration?.NormalisedTexts);
+            document.Enumeration?.NormalisedTexts,
+            document.Enumeration?.RequiredObservations?.ToDictionary(
+                e => e.Key,
+                e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
+                StringComparer.Ordinal));
 
         var fidelity = document.Model is null
             ? null

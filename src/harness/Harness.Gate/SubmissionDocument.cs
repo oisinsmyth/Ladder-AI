@@ -103,6 +103,18 @@ public sealed class EnumerationDocument
     /// omission is exactly what a compromised stamper would emit.</para>
     /// </summary>
     public Dictionary<string, string>? NormalisedTexts { get; set; }
+
+    /// <summary>
+    /// Assertion ID to <b>every signal a citation of it depends on</b> — the enumeration's
+    /// <c>response_signal:</c> and its <c>also_requires_observation_of:</c>, merged.
+    ///
+    /// <para><b>AMB-14.</b> It was a single string, and a simultaneity claim has two signals: a vector
+    /// citing one could expect on one output alone, never observe the other, and pass with the relation
+    /// untested. A LIST, not a second scalar, because the next relational assertion may name three.</para>
+    ///
+    /// <para>Absent means gate 3h is NOT CHECKED — not a pass.</para>
+    /// </summary>
+    public Dictionary<string, List<string>>? RequiredObservations { get; set; }
 }
 
 public sealed class MapDocument

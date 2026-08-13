@@ -50,12 +50,29 @@ public sealed record Basis(string ClauseId, string AssertionId);
 /// recomputation cannot run, and the stamper silently becomes an authority it was never designed to
 /// be.</b> The gate therefore reports NOT CHECKED rather than passing.</para>
 /// </param>
+/// <param name="RequiredObservations">
+/// Assertion ID to <b>every signal a citation of it depends on</b> — the enumeration's
+/// <c>response_signal:</c> AND its <c>also_requires_observation_of:</c>, merged into one set.
+///
+/// <para><b>AMB-14, and it is a SCHEMA gap rather than a spec one.</b> The mechanical check was "the
+/// response signal appears in <c>Expectations</c>", and a response signal was a SINGLE STRING. <b>A
+/// simultaneity claim has two signals and both must be observed for the citation to mean anything</b> —
+/// so a vector could cite a relational assertion, expect on one output alone, never observe the other,
+/// and the check would pass while nothing about the RELATION was tested.</para>
+///
+/// <para><b>It is a set here and not a second scalar</b> because the next relational assertion may name
+/// three. And it is carried in a FIELD rather than fixed by editing the assertion's text: no hashed
+/// sentence in this format contains a signal name or a numeric bound, which is what has made four
+/// re-issues cost zero re-hashes when an output was renamed. Naming both signals in the text to close
+/// this would give that property away to fix something that lives in a field.</para>
+/// </param>
 public sealed record AssertionEnumeration(
     IReadOnlySet<string> Clauses,
     IReadOnlySet<string> Assertions,
     IReadOnlyDictionary<string, AssertionForm> Forms,
     AgentIdentity Enumerator,
-    IReadOnlyDictionary<string, string>? NormalisedTexts = null)
+    IReadOnlyDictionary<string, string>? NormalisedTexts = null,
+    IReadOnlyDictionary<string, IReadOnlySet<string>>? RequiredObservations = null)
 {
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
@@ -73,17 +90,26 @@ public sealed record AssertionEnumeration(
     public string? NormalisedTextOf(string assertionId) =>
         NormalisedTexts is not null && NormalisedTexts.TryGetValue(assertionId, out var text) ? text : null;
 
+    /// <summary>True when no assertion declares the signals a citation of it depends on.</summary>
+    public bool CarriesNoRequiredObservations => RequiredObservations is null || RequiredObservations.Count == 0;
+
+    /// <summary>Every signal a citation of this assertion must observe, or null when the projection does not say.</summary>
+    public IReadOnlySet<string>? RequiredObservationsOf(string assertionId) =>
+        RequiredObservations is not null && RequiredObservations.TryGetValue(assertionId, out var signals) ? signals : null;
+
     public static AssertionEnumeration Of(
         IEnumerable<string> clauses,
         IEnumerable<string> assertions,
         IReadOnlyDictionary<string, AssertionForm>? forms = null,
         string enumerator = "",
-        IReadOnlyDictionary<string, string>? normalisedTexts = null) =>
+        IReadOnlyDictionary<string, string>? normalisedTexts = null,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null) =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
             new AgentIdentity(enumerator),
-            normalisedTexts);
+            normalisedTexts,
+            requiredObservations);
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>

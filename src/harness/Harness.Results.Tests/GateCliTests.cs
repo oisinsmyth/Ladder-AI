@@ -22,7 +22,8 @@ public class GateCliTests
       "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
       "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"],
                        "forms": { "REQ-014:ffcc38": "When" }, "enumerator": "agent-c",
-                       "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" } },
+                       "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" },
+                       "requiredObservations": { "REQ-014:ffcc38": ["Demo_Count"] } },
       "map": { "providedFor": { "Demo_Count": ["Latched"] } },
       "vectors": [{
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
