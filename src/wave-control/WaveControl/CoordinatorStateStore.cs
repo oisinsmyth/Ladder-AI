@@ -262,6 +262,22 @@ namespace Ladder.Wave
         /// <summary>Where the state lives.</summary>
         public string StatePath { get; }
 
+        /// <summary>
+        /// TEST SEAM — invoked with the temporary file's path after it has been written and flushed,
+        /// and BEFORE it is renamed over the destination.
+        /// </summary>
+        /// <remarks>
+        /// *** THIS EXISTS BECAUSE THE CENTRAL GUARANTEE OF THIS CLASS WAS OTHERWISE UNTESTABLE, AND A
+        /// MUTATION PROVED IT. *** Replacing the whole temp-then-rename with a plain in-place write left
+        /// the entire suite GREEN: the debris check and the failed-publish check both pass under an
+        /// in-place write, because a locked destination fails at OPEN and so leaves the old file
+        /// untouched either way. Nothing observed the one thing that matters — that at the moment
+        /// before publication the NEW state is already complete somewhere else while the destination
+        /// still holds the PREVIOUS whole state. This seam makes exactly that observable, and it is the
+        /// difference between an argued guarantee and a demonstrated one.
+        /// </remarks>
+        internal Action<string>? OnTemporaryWritten { get; set; }
+
         /// <summary>The identity this store writes into the wave section and compares found ones against.</summary>
         public CoordinatorIdentity Identity => _identity;
 
@@ -377,6 +393,12 @@ namespace Ladder.Wave
 
                     // The ORDER is the point: the content is durable BEFORE the rename publishes it.
                     stream.Flush(flushToDisk: true);
+                }
+
+                var seam = OnTemporaryWritten;
+                if (seam != null)
+                {
+                    seam(temporaryPath);
                 }
 
                 Publish(temporaryPath);

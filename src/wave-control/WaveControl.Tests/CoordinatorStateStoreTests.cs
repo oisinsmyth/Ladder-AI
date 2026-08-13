@@ -893,6 +893,52 @@ namespace Ladder.Wave.Tests
         }
 
         [Fact]
+        public void The_NEW_state_is_complete_elsewhere_while_the_destination_still_holds_the_PREVIOUS_whole_state()
+        {
+            // *** THE TEST THAT ACTUALLY DEMONSTRATES ATOMICITY, ADDED BECAUSE A MUTATION PROVED THE
+            // OTHERS DO NOT. *** Replacing the whole temp-then-rename with a plain in-place write left
+            // every other test in this file GREEN — the debris check and the failed-publish check both
+            // pass under an in-place write, because a locked destination fails at OPEN and leaves the
+            // old file untouched either way. Neither observed the ordering, which is the entire
+            // guarantee: at the instant before publication the new state is ALREADY COMPLETE somewhere
+            // else, and the destination is STILL the previous whole state. There is no moment at which
+            // the destination is half of either.
+            using (var dir = new TempDirectory())
+            {
+                var store = CoordinatorStateStore.InDirectory(dir.Path);
+                store.Save(SampleMarker(store.Identity), PopulatedQueues(Started));
+
+                var previous = File.ReadAllText(store.StatePath);
+                string? newStateBeforePublication = null;
+                string? destinationDuringTheSave = null;
+                var seamFired = false;
+
+                store.OnTemporaryWritten = temporaryPath =>
+                {
+                    seamFired = true;
+                    newStateBeforePublication = File.ReadAllText(temporaryPath);
+                    destinationDuringTheSave = File.ReadAllText(store.StatePath);
+                };
+
+                store.Save(null, new WaveQueues());
+
+                Assert.True(seamFired, "The save never wrote a separate file before publishing it.");
+
+                // The new state was already whole — terminator and all — before anything was published.
+                Assert.EndsWith("end\n", newStateBeforePublication!, StringComparison.Ordinal);
+                Assert.Contains("wave=none", newStateBeforePublication!, StringComparison.Ordinal);
+                Assert.Contains("entries=0", newStateBeforePublication!, StringComparison.Ordinal);
+
+                // And the destination was still byte-for-byte the previous whole state.
+                Assert.Equal(previous, destinationDuringTheSave);
+
+                // Afterwards, the destination is the new state and nothing else remains.
+                Assert.Contains("entries=0", File.ReadAllText(store.StatePath), StringComparison.Ordinal);
+                Assert.Empty(Directory.GetFiles(dir.Path, "*.tmp-*"));
+            }
+        }
+
+        [Fact]
         public void A_failed_publish_leaves_the_PREVIOUS_whole_state_readable_and_no_debris()
         {
             // *** THE POINT OF THE TEMP-THEN-RENAME. *** A save that cannot complete must not damage
