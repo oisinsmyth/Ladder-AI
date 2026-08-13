@@ -27,7 +27,9 @@ public class SynthesisParityTests
         "CommsProcessData",
         "AlarmWords",
         "EquipmentStatus",
-        "NodeStatusAlarms",
+        // NodeStatusAlarms was here until 2026-08-13 — moved to KnownIncompleteAnswerKey below. It is
+        // NOT a synthesis gap (which is what everything outside KnownGreen otherwise means), and
+        // mislabelling it as one is precisely the flattening this project has just been bitten by.
         "PerimeterSafetyAlarms",
         "DB_Timers",
         "ThresholdAlarms",
@@ -52,6 +54,20 @@ public class SynthesisParityTests
         "HandAuthorSplitsMerges",
     };
 
+    /// <summary>
+    /// Blocks that fail parity because their committed EXPORT is not a faithful TIA artifact — the
+    /// answer key is wrong, not the synthesis. Deliberately not expressed as "absent from KnownGreen":
+    /// that bucket means "a synthesis gap we have not closed yet", and a block filed under the wrong
+    /// reason is a block nobody goes back to.
+    ///
+    /// Asserted in both directions — an entry that starts passing turns the suite red so it gets moved
+    /// into <see cref="KnownGreen"/>, where it becomes a hard guard again.
+    /// </summary>
+    private static readonly Dictionary<string, string> KnownIncompleteAnswerKey = new(StringComparer.Ordinal)
+    {
+        ["NodeStatusAlarms"] = "committed export is a trimmed 2026-07-10 seed artifact carrying no <Interface>; sole difference is that element (measured with `converter compare`). Clears on a fresh export — see CommittedBlocksRoundTripTests.KnownIncompleteAnswerKeys.",
+    };
+
     [Fact]
     public void ReferenceCorpus_SynthesisMatchesRealExport()
     {
@@ -73,5 +89,17 @@ public class SynthesisParityTests
 
         Assert.True(regressions.Count == 0,
             "Synthesis-parity regressions in KnownGreen blocks:\n" + string.Join("\n", regressions) + "\n\n" + matrix);
+
+        // Staleness, the other direction: a block filed as "the answer key is incomplete" that now
+        // passes has had its export refreshed, and must be promoted into KnownGreen — otherwise the
+        // set quietly becomes a list of excuses nobody rechecks.
+        var recovered = results
+            .Where(r => KnownIncompleteAnswerKey.ContainsKey(r.Block) && r.Pass)
+            .Select(r => r.Block)
+            .ToList();
+
+        Assert.True(recovered.Count == 0,
+            $"[{string.Join(", ", recovered)}] reach parity now but are still listed in " +
+            "KnownIncompleteAnswerKey. Move them into KnownGreen so they become hard guards again.\n\n" + matrix);
     }
 }

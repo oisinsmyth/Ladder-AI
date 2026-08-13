@@ -98,16 +98,38 @@ public class NormalizerTests
     }
 
     [Fact]
-    public void AreSemanticallyEquivalent_CodeBlockInterface_IsStripped()
+    public void AreSemanticallyEquivalent_CodeBlockInterface_IsCompared()
     {
-        // Confirmed real, 2026-07-10: BlockSourceParser.RequireDefaultInterface already
-        // hard-errors upstream if a code block's Interface is anything but the standard
-        // parameterless-FC boilerplate, so by the time a document reaches here it's known-inert
-        // — safe to strip, same as it's always been.
+        // INVERTED 2026-08-13 (converter `ae62f76`, "an interface is compared, not discarded").
+        //
+        // This test used to assert the opposite, justified by "BlockSourceParser.RequireDefaultInterface
+        // already hard-errors upstream if a code block's Interface is anything but the standard
+        // parameterless-FC boilerplate, so by the time a document reaches here it's known-inert".
+        // *** THAT GUARD WAS REMOVED ON 2026-07-12 *** when FC/FB parameter interfaces landed, and the
+        // justification went on being quoted for a month after the thing it cited had gone. The two
+        // classes that fell through the structural "has a Static Section?" test were an FC with
+        // parameters and a UDT (whose interface IS its entire definition) — measured by
+        // BlockInterfaceFidelityTests, which found real, uncatalogued drift sitting behind it.
+        //
+        // Kept here as this suite's own guard on the contract it depends on. Converter.Tests'
+        // NormalizerInterfaceTests is the fuller suite; this is the one that fails if the harness's
+        // assumption about its own instrument stops holding.
         var a = XDocument.Parse("<SW.Blocks.FC><AttributeList><Interface><Sections><Section Name=\"Input\"/></Sections></Interface></AttributeList></SW.Blocks.FC>");
         var b = XDocument.Parse("<SW.Blocks.FC><AttributeList><Interface><Sections><Section Name=\"Output\"/></Sections></Interface></AttributeList></SW.Blocks.FC>");
 
-        Assert.True(Normalizer.AreSemanticallyEquivalent(a, b));
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
+    }
+
+    [Fact]
+    public void AreSemanticallyEquivalent_UdtInterface_IsCompared()
+    {
+        // The sharper half of the same fix. A UDT's interface is <Section Name="None"> — no Static
+        // section — so under the old structural test the whole type definition was discarded and a
+        // UDT compared equal to any other UDT with the same name.
+        var a = XDocument.Parse("<SW.Types.PlcStruct><AttributeList><Interface><Sections><Section Name=\"None\"><Member Name=\"Step\" Datatype=\"Int\"/></Section></Sections></Interface></AttributeList></SW.Types.PlcStruct>");
+        var b = XDocument.Parse("<SW.Types.PlcStruct><AttributeList><Interface><Sections><Section Name=\"None\"><Member Name=\"Step\" Datatype=\"Bool\"/></Section></Sections></Interface></AttributeList></SW.Types.PlcStruct>");
+
+        Assert.False(Normalizer.AreSemanticallyEquivalent(a, b));
     }
 
     [Fact]

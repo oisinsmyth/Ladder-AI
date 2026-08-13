@@ -46,6 +46,30 @@ public class CommittedBlocksRoundTripTests
     };
 
     /// <summary>
+    /// Blocks whose committed export is NOT A FAITHFUL TIA ARTIFACT, so the divergence is in the answer
+    /// key rather than in our synthesis. A THIRD category, distinct from both of the ones this project
+    /// already had — it is neither "a fix landed in the .ir and was never re-exported" (the D-7 deferred
+    /// class) nor "drift nobody had noticed" — and keeping it separate matters, because a flat list of
+    /// tolerated names is exactly what let two real UDT drifts sit invisible (see
+    /// <see cref="BlockInterfaceFidelityTests"/>).
+    ///
+    /// Asserted in BOTH directions: an entry here must STILL diverge, so a fresh export silently
+    /// closing the gap turns the suite red and tells you to delist it.
+    /// </summary>
+    private static readonly Dictionary<string, string> KnownIncompleteAnswerKeys = new(StringComparer.Ordinal)
+    {
+        // Surfaced 2026-08-13 by converter `ae62f76` (an Interface is compared, not discarded).
+        // NodeStatusAlarms is one of four 2026-07-10 seed artifacts committed with their TIA scaffolding
+        // trimmed — they carry no <DocumentInfo> either. On this one, an FC, the <Interface> went with
+        // the trim: the export has NO Interface element at all, while any regenerated FC emits the
+        // standard boilerplate (a real TIA FC export carries one — see simatic-ml/reference/ScaleValue.xml).
+        // MEASURED: `converter compare` localises exactly ONE difference, ELEMENT-ADDED at
+        // /Document/SW.Blocks.FC/AttributeList/Interface. Nothing about the logic diverges.
+        // OUR OUTPUT IS RIGHT AND THE ANSWER KEY IS INCOMPLETE. To clear: re-export the block from TIA.
+        ["NodeStatusAlarms"] = "committed export is a trimmed 2026-07-10 seed artifact with no <Interface>; the sole difference is that element, and it is an ADDITION of TIA's own defaults.",
+    };
+
+    /// <summary>
     /// Every committed readable-only `BLOCK` .ir, paired with whether its export exists. One case per
     /// block either way, so the run output lists the whole population rather than only the checkable
     /// part of it.
@@ -108,10 +132,21 @@ public class CommittedBlocksRoundTripTests
 
         var result = SynthesisParityRunner.Run(block, irDir, xmlDir, workDir);
 
+        if (KnownIncompleteAnswerKeys.TryGetValue(block, out var reason))
+        {
+            Assert.False(result.Pass,
+                $"{block} is listed in KnownIncompleteAnswerKeys ({reason}) but now round-trips equivalent " +
+                "to its export. Remove the entry — the answer key has been refreshed and the block is " +
+                "guarded by the assertion below now.");
+            return;
+        }
+
         Assert.True(result.Pass,
             $"{block} is committed readable-only but does not round-trip equivalent to its export — " +
             $"[{result.Stage}] {result.Detail}. Either restore its stored sidecar (converter to-ir --no-sidecar " +
-            "would refuse) or close the synthesis gap that makes it diverge.");
+            "would refuse) or close the synthesis gap that makes it diverge. If instead the EXPORT is at " +
+            "fault (not a faithful TIA artifact), that is KnownIncompleteAnswerKeys — and say which, " +
+            "because a flat list of tolerated names is what let two real UDT drifts sit invisible.");
     }
 
     /// <summary>

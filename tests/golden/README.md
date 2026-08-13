@@ -238,10 +238,9 @@ byte-exact re-derivation is the guard on the marker grammar (`SynthesisParityTes
   be non-derivable), and blocks with a committed frozen answer key (guarded by
   `FrozenAnswerKeyRoundTripTests` instead, since their exports have drifted).
 - `ExportDriftDetectorTests` — runs `converter drift-check` per project and asserts the drifted set
-  equals a documented baseline: empty for `reference`, six known-drift blocks for `test-project001`
-  (`DB_Settings`, `FB_PusherControl`, `FB_ShredderSequencer` and their three instance DBs — the
-  consciously-deferred D-7 re-export, `docs/notes/deferred-items.md`). A *new* name appearing there
-  means a block drifted unexpectedly; investigate rather than extend the baseline.
+  equals a documented baseline. A *new* name appearing there means a block drifted unexpectedly;
+  investigate rather than extend the baseline. **The baseline stopped being a flat `string[]` on
+  2026-08-13** — see "A drift baseline has to say *why*" below.
 
 The live-cycle checks (`ReferenceProjectRoundTrip`, `SynthesizerLiveCheck`) remain manual-run `static`
 classes needing a Portal session, not `[Fact]`s — same convention as `RoundTripRunner.RunFull`.
@@ -335,3 +334,33 @@ defaults it" pattern. `ElementsWithVolatileId` (Wire/Access/Part/Call/Instance/O
 the `Wires`/`Parts` ordering rules are **load-bearing on recorded live evidence** — TIA reassigns those
 UIds unprompted — and the one place order *is* meaningful, a wire's first endpoint, is already exempt and
 guarded raw by `WireEndpointDirectionTests`.
+
+## A drift baseline has to say *why* (2026-08-13)
+
+`ExportDriftDetectorTests`' baseline used to be a flat `string[]` of block names. *** THAT FLATNESS IS
+WHY TWO REAL UDT DRIFTS SAT INVISIBLE. *** A list that cannot record why a name is on it cannot tell
+*"we looked at this and decided to live with it"* apart from *"this turned up and nobody has ruled on
+it"* — and once the second kind is written in the same shape as the first, it stops being a question and
+becomes furniture. Entries now carry a `DriftDisposition`:
+
+| disposition | meaning | gates? |
+|---|---|---|
+| `Deferred` | looked at, consciously accepted; clears on a re-export (the D-7 six) | no |
+| `IncompleteExport` | the committed **export** is not a faithful TIA artifact, so the answer key is wrong and our output is right (`NodeStatusAlarms`) | no |
+| `RepairInProgress` | an owner ruling **exists** and the repair is **not finished** | **YES** |
+
+`RepairInProgress` is the state the flat list could not express, and it is a hard gate
+(`NoKnownDrift_IsAnUnfinishedRepair`) because a decided-but-unfinished repair is exactly what quietly
+becomes a permanent baseline entry. Its passing branch is demonstrated, not assumed — re-filing the
+entries as `Deferred` turns the suite green, so the gate is not red by construction.
+
+The same distinction was added to `CommittedBlocksRoundTripTests.KnownIncompleteAnswerKeys` and
+`SynthesisParityTests.KnownIncompleteAnswerKey`: a block that fails parity because **its export is
+incomplete** is not a synthesis gap, and filing it as one (by simply leaving it out of `KnownGreen`)
+puts it in a bucket nobody revisits. Both are asserted in *both* directions — an entry that starts
+passing turns the suite red and tells you to promote it back to a hard guard.
+
+**What triggered all of this**: converter `ae62f76` made an `<Interface>` compared rather than
+discarded, and the drifted set immediately grew by three. Until that fix `drift-check` reported `MATCH`
+on **any** UDT no matter what had changed, because a UDT's interface *is* its whole definition and the
+Normalizer discarded any interface with no `Static` section.
