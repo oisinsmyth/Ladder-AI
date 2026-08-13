@@ -133,7 +133,17 @@ public sealed class HarnessScope
     public static HarnessScope Build(IEnumerable<string> paths)
     {
         var scope = new HarnessScope();
-        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p, StringComparer.Ordinal))
+
+        // Canonicalised before de-duplication: the batch arrives as the caller typed it
+        // (`ir/proj/x.ir`) and --project enumeration yields the platform form (`ir\proj\x.ir`), so a
+        // plain string Distinct reads the same file twice and CorpusDescription then reports double
+        // the files that exist. Harmless to the verdicts — reading a file twice is idempotent — but
+        // the corpus line is evidence a reader is meant to check, and a number that is wrong for a
+        // knowable reason is worse than no number.
+        foreach (var path in paths
+                     .Select(p => { try { return Path.GetFullPath(p); } catch (ArgumentException) { return p; } })
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(p => p, StringComparer.Ordinal))
         {
             scope.AddFile(path);
         }

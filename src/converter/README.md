@@ -2816,6 +2816,102 @@ converter tests green, up from 1010. Every implemented rule has a fixture that *
 well as one that conforms, and the gate is tested in both directions — a gate only ever exercised
 against input that should trip it has not been tested either.
 
+## `review` — harness scope: the reviewer knows a harness object when it sees one (2026-08-13)
+
+A generated test-harness copy layer drew **24 × C-001 plus C-201 on every run**. The owner ruled
+that doc 06's naming conventions govern PLC program content **authored for the plant**, and a
+harness-generated object is neither plant nor hand-authored — so those findings were correct
+against the letter of the rule and **wrong about their subject**.
+
+*** THE REQUIREMENT WAS NEVER "SUPPRESS 21 FINDINGS", AND BOTH FAILURE DIRECTIONS ARE LIVE. ***
+Twenty standing findings a run is how a reviewer learns to skim — *an over-firing gate decays into
+a warning* — and a **silent exemption is indistinguishable from a correct pass**, which is this
+repository's most-repeated defect. So nothing is dropped: the findings are **reported**, in a
+counted, labelled, non-gating bucket, beside the derivation that classified the object.
+
+### Derived, never declared
+
+*** THERE IS NO `--harness` FLAG AND NO IR FIELD. *** A caller assertion is forgotten exactly when
+it matters, and *a declaration is a transferred responsibility, not a verification*.
+
+| content | derivation | if it cannot be decided |
+|---|---|---|
+| FC / FB / DB | **number inside the reserved band 9000–9999**, independently per number space (declared `docs/notes/test-environment-build-plan.md`) — structural, in the file's own IR, and not a name | — |
+| **OB** | **excluded**: an OB's number is fixed by its **event class**, so the band cannot read one in *either* direction (OB80 is a harness object the band would call plant) | `Unclassified` — findings gate |
+| **tag** | ⚠️ see below — **per tag**, from the blocks that reference it | `Unclassified` — findings gate |
+| UDT | none exists: no number, and no referrer relation of this kind | `Unclassified` — findings gate |
+
+`Unclassified` behaves **exactly** like `Plant` for gating and differs only in what the report
+*says*. That is the point: *"this is plant content"* and *"no derivable property could tell me"* are
+different facts, and collapsing them is how a classifier that **silently stopped running** would
+look identical to one that examined everything and found no harness objects.
+
+### ⚠️ The tag table was the hard case, and the honest answer is not to read its name
+
+A tag table **has no number**, so its only table-level property is its **NAME** — and a name is
+exactly what anything can be renamed into. *** SO THE TABLE'S NAME IS NEVER READ, AND NEITHER IS AN
+`HX_` PREFIX. *** Classification is **per tag**, from the one derived property available: the set of
+blocks that reference the tag, each of which is classified by the number band.
+
+- **Harness** only when the tag has **at least one referrer** and **every** referrer is a harness
+  block.
+- **Any plant referrer ⇒ Plant.** One plant reader or writer makes a tag plant content.
+- **No referrer at all, an unclassifiable referrer, or any unparseable corpus file ⇒ Unclassified.**
+  The last is the **partial-corpus fence**: an unread file could hold the plant reference that
+  changes the answer, so a partial corpus **refuses rather than mis-classifies** — *a comparison
+  that could not be made must not be reported as one that came out negative*.
+- A block's **own interface member names** are excluded from its references, so a harness block's
+  input `Start` cannot vouch for an identically-named plant tag.
+
+Laundering a plant tag therefore means **moving every reference to it into blocks numbered
+9000–9999**, which breaks the plant program — where a rename costs nothing. Measured on the real
+corpus: renaming the harness table to `PlantProcessTags` left it `HARNESS-GENERATED` (24/24), and
+renaming the plant `DefaultTagTable` to `HarnessMirror` exempted **nothing** (0 harness / 41 plant /
+60 unclassified, all 60 findings gating). Adding **one plant block that reads the same `HX_` tags**
+collapsed the harness table to `0 harness / 24 plant` on the spot.
+
+The corpus is the review batch **plus `--project`** when supplied — so reviewing a generated tag
+table together with the copy layer that drives it is enough, and `--project` widens it to the whole
+export, which is the stronger question because it can see a plant reference the batch omitted. The
+corpus that answered is printed with the verdict.
+
+### Scope, and what still gates
+
+**C-001 and C-201 only.** `C-103` stays a finding on the harness copy layer — it is *behaviour, not
+naming*, and it was recorded rather than silenced. A rule outside the scoped set is untouched no
+matter what the verdict says, so a classifier gone wrong cannot silence anything else.
+
+### The report says so, on every file
+
+- `SCOPE:` — verdict **and its basis**, on **every file including plant ones**. This is what makes a
+  broken derivation visible: a scope that only announces itself when it exempts something has an
+  **invisible failure mode**.
+- `HARNESS-SCOPE (reported, NOT gating - n finding(s))` — the findings themselves, printed.
+- `HARNESS-SCOPE: n finding(s) … across m harness-generated object(s); k object(s) could not be
+  classified` — the run total, **always printed including the zeros**: *a count of zero is a
+  different fact from an absent section*.
+- A new `RuleCheckStatus.CheckedHarnessScope` reads `checked, n gating finding(s) - <n> further
+  finding(s) reported under HARNESS-SCOPE and NOT gated`. `FindingCount` keeps its single meaning
+  everywhere — **the findings that gate** — so the status line never disagrees with the list printed
+  beneath it.
+- `preflight` folds them in under `review:harness-scope` with `Gates: false`. **`PreflightFinding.Gates`
+  defaults to `true`**, so a future check is gating unless someone said otherwise — a non-gating
+  default would install *"a warning is not a gate"* at the type level.
+
+**Fail-closed by construction.** The scope parameter's default is `HarnessScope.Empty`, under which
+blocks still classify from their own number but **no tag can be classified at all** — so a caller
+that forgets to build one gets the full pre-change finding set, never a bypass.
+
+**Mutation-tested in four directions**, on the committed fix: band never matches (9 red, including
+every harness case), **band always matches — the dangerous direction — (11 red**, including the
+laundering test and the plant-block did-not-run test), tags classified by `HX_` name prefix (5 red,
+including the laundering test), and scope crept to include C-103 (1 red). 25 new tests
+(`HarnessScopeTests`); 1145 → 1170 converter tests green.
+
+*** THE DID-NOT-RUN TEST IS THE LOAD-BEARING ONE: *** `PlantBlock_SameDefects_StillDrawsItsC201FindingThroughTheSamePath`
+reviews the *same block with the same defect and one number changed*. Without it, a classifier that
+called everything harness would leave every other assertion in the file green.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.
