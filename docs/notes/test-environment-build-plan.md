@@ -1461,6 +1461,57 @@ spanning zero. All six cells fall in 152–195, **bracketing both 173 and 201.**
     what defeated a 16,200-round-trip experiment. Persuasive, and deliberately **not adopted**: it
     changes how every budget in §12a is expressed.
 
+### 🎯 OWNER RULINGS, 2026-08-13 — F-1 ADOPTED, AND DB-4's TWENTY DOES NOT BIND THE DRAIN
+
+Both were flagged for the owner rather than decided, and both are now **adopted**.
+
+#### ✅ ADOPTED — DB-4's twenty does not apply to the drain
+
+The reasoning stands as the phase-4 lane put it, and the part worth keeping is that *** IT IS
+SETTLED BY A MEASUREMENT ALREADY IN THE SPEC RATHER THAN BY INFERENCE. *** DB-4's own mechanism is
+integration **"in one program cycle"** — DB-3 names it in Siemens' notation, `RUN (<21)`, and the
+hazard is a program running as a **mixture of old and new blocks**. The drain's download stops the
+CPU, so **there is no executing program for the rule to protect**; and §9a already records a full
+download that loaded **99 objects**, predicted count matching manifest count exactly — *a run that
+could not have happened if the limit bound full downloads*.
+
+  ➜ **The alternative reading is not merely unnecessary, it is incoherent with D25:** *"download
+    everything"* and *"download at most twenty objects"* cannot both hold on a 99-object project.
+  ➜ **Replaced by a positive check that is already specified**, not by a precautionary rule: compare
+    `download-plan`'s predicted count against §9c's load-manifest count (1 vs 1 and 99 vs 99 on the
+    measured runs). **What would nail it down:** one full download of a project materially larger
+    than 99 objects, same comparison.
+  ➜ **Costs no code change** — the planner is `WaveBoundaryBatchPlanner` and the drain path never
+    calls it. *Rejecting* the ruling would have required writing a new planner.
+
+#### ✅ ADOPTED — F-1: one FC03 may cover several WHOLE slots
+
+*** X-A's RULE CHANGES FROM "A READ NEVER STRADDLES A SLOT" TO "A READ NEVER **SPLITS** A SLOT". ***
+The coherence argument that motivated the original wording survives intact — what must never happen
+is a read returning *part* of a slot, and a read covering several **entire** slots does not do that.
+
+**Why it is worth the change:** with per-register cost measured at ~0.040 ms (~6% of a round trip)
+and **round trips the scarce resource**, a slot narrower than the FC03 limit wastes most of a read.
+Reading several whole slots in one FC03 is a **5x-class win on narrow slots** — and it is the same
+lesson as §12a's batching derivation, applied to the map rather than to tag reads.
+
+**What it touches, and the order to do it in:**
+
+  1. **The spec** — X-A's wording, and any clause that phrases the rule as "straddles". §12a's
+     round-trip budgets get *cheaper*, not dearer, so no budget breaks; the derivations that count
+     round trips per wave need re-running with slots-per-read as a parameter rather than 1.
+  2. **The map allocator** (`Harness.Map`) — result regions are already laid out contiguously as
+     `[vectors N×W][results N×R]`, so this is **additive rather than a re-layout**: what is needed is
+     the rule that a read is expressed in whole slots and the arithmetic for how many fit in 125.
+  3. **`MirrorClient`** — it already exposes slot indices rather than registers, which is exactly the
+     abstraction this needs; it gains a multi-slot read that cannot express a partial one.
+
+  ➜ *** THE PROPERTY TO PRESERVE IS THAT A SPLIT READ REMAINS UNEXPRESSIBLE, NOT MERELY REJECTED. ***
+    `MirrorClient` was deliberately built so a write outside the region is *unaddressable* rather
+    than caught by a check someone could skip. The multi-slot read must be built the same way — the
+    win is a performance change, and it must not quietly become a hole in the coherence guarantee
+    that A1 was measured to establish.
+
 ## PHASE 2 — THE WALKING SKELETON
 
 **Cost: the first real chunk. Assumptions retired: A4. First code intended to survive.**
