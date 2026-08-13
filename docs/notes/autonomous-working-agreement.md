@@ -143,6 +143,28 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** AN OVER-FIRING GATE DECAYS INTO A WARNING — WHICH IS THE RULE ABOVE, RUNNING BACKWARDS. ***
+  *A warning is not a gate* says fail closed on the path that reaches production. Its complement,
+  measured 2026-08-13: a gate built correctly but asked in the **wrong order** refused submissions
+  that **did not depend on it at all** — a model-ordering check tested *"is a model slot present?"*
+  before *"is there already a passing result?"*, so a submission carrying **both** was refused for
+  want of a gate it never needed. Three existing tests caught it.
+    ➜ *** CONSERVATIVE IS NOT THE SAME AS CORRECT. *** A gate that fires on cases outside its scope
+      is **noise, and noise gets switched off** — after which the cases it *was* right about go
+      through unchecked. The two failure directions are not symmetric in appearance but they end in
+      the same place.
+    ➜ **So test the unaffected case as deliberately as the refused one.** *"A plan that does not use
+      this route is untouched"* matters as much as *"the route without its precondition is refused"*.
+      A gate refusing every ordinary submission is removed within a week — and it will be removed by
+      someone who is right to.
+- *** A DECLARATION IS A TRANSFERRED RESPONSIBILITY, NOT A VERIFICATION. *** The stamp trick — carry
+  *what it was established against* rather than a bare `bool`, so *"nobody did it"* and *"did it
+  against a different version"* come out as distinct facts — has been applied four times here and is
+  the right default. **But it has a ceiling worth stating in the code, not only in a report:** a
+  component that cannot execute the thing it is asking about can make absence a refusal, demand an
+  author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
+    ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
+      does. A caveat that lives in a lane report has already failed the person it was written for.
 - *** A COMMIT MESSAGE IS A CLAIM, NOT EVIDENCE — INCLUDING OURS. *** Measured 2026-08-13: commit
   `f12bf1a` states *"re-export diffed byte-identical"*. **The re-export never landed.** A stale block
   comment then sat in the controller for a month behind green checks, and the record that would have
