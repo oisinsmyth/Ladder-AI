@@ -18,7 +18,8 @@ namespace Ladder.Wave
             string reason,
             string evidence,
             string? answeredSelection,
-            UnknownReason? unknownReason)
+            UnknownReason? unknownReason,
+            DelegateStage raisedIn)
         {
             Configuration = configuration;
             Class = classification;
@@ -27,6 +28,7 @@ namespace Ladder.Wave
             Evidence = evidence;
             AnsweredSelection = answeredSelection;
             UnknownReason = unknownReason;
+            RaisedIn = raisedIn;
         }
 
         /// <summary>The configuration that was classified.</summary>
@@ -49,8 +51,31 @@ namespace Ladder.Wave
             }
         }
 
-        /// <summary>Which rung of D32's ladder this verdict sends the caller to.</summary>
+        /// <summary>
+        /// Which rung of D32's ladder this verdict sends the caller to. *** PER ENTRY SINCE
+        /// 2026-08-13, NOT PER CLASS *** — see <see cref="ClassAEntry.Rung"/>.
+        /// </summary>
         public LadderRung NextRung { get; }
+
+        /// <summary>Which delegate raises this configuration; <see cref="DelegateStage.Unknown"/> for B and C.</summary>
+        public DelegateStage RaisedIn { get; }
+
+        /// <summary>What a policy throw on it leaves the controller in [M 2026-08-13].</summary>
+        public AbortAftermath Aftermath => AbortAftermathTable.For(RaisedIn);
+
+        /// <summary>
+        /// TRUE when refusing this configuration leaves the CPU STOPPED, so whatever comes next must
+        /// carry a start step. Only a POST-delegate entry does.
+        /// </summary>
+        public bool AbortLeavesTheCpuStopped => Aftermath == AbortAftermath.CpuLeftStoppedWithACompleteProgram;
+
+        /// <summary>
+        /// FALSE when this verdict's rung rests on an aftermath nobody has measured. Nothing here
+        /// currently produces it — Class A entries must name a stage, and B/C never reach a rung whose
+        /// correctness depends on one — but a caller may check rather than assume.
+        /// </summary>
+        public bool RungRestsOnAMeasuredAftermath =>
+            Class != ConfigurationClass.RefusedOnlyBecauseNonDisruptive || AbortAftermathTable.IsMeasured(RaisedIn);
 
         /// <summary>
         /// TRUE ONLY FOR CLASS A. The single question the ladder's step 6 turns on: would spending a
@@ -59,7 +84,16 @@ namespace Ladder.Wave
         /// download has a LARGER delta than a differential so it raises MORE configurations, never
         /// fewer.
         /// </summary>
-        public bool DisruptiveDownloadWouldResolveIt => Class == ConfigurationClass.RefusedOnlyBecauseNonDisruptive;
+        /// <remarks>
+        /// *** NARROWED 2026-08-13: A POST-DELEGATE CLASS A ENTRY IS EXCLUDED. *** For those the
+        /// transfer has already happened and the CPU is already stopped, so a fresh disruptive download
+        /// does not "resolve" anything the current one could not — the rung is to answer it where it
+        /// was raised. Leaving this true for POST entries is exactly the circularity D32's own defect
+        /// note flagged.
+        /// </remarks>
+        public bool DisruptiveDownloadWouldResolveIt =>
+            Class == ConfigurationClass.RefusedOnlyBecauseNonDisruptive &&
+            NextRung == LadderRung.Step6DisruptiveFullDownload;
 
         /// <summary>
         /// The selection a disruptive download would answer, for Class A. Null for B and C — there
@@ -111,13 +145,14 @@ namespace Ladder.Wave
             return new ConfigurationVerdict(
                 configuration,
                 ConfigurationClass.RefusedOnlyBecauseNonDisruptive,
-                LadderRung.Step6DisruptiveFullDownload,
+                entry.Rung,
                 "Refused only because the wave loop is non-disruptive; " + DescribeOptions(entry.EntailedBy) +
                 " already entails it (" + entry.Entailment + "). A disruptive full download ANSWERS it with '" +
                 entry.AnsweredSelection + "'.",
-                entry.Evidence,
+                entry.Evidence + " | aftermath: " + AbortAftermathTable.EvidenceFor(entry.RaisedIn),
                 entry.AnsweredSelection,
-                null);
+                null,
+                entry.RaisedIn);
         }
 
         internal static ConfigurationVerdict ClassB(RaisedConfiguration configuration, ClassBEntry entry)
@@ -132,7 +167,8 @@ namespace Ladder.Wave
                 "buys nothing and costs a CPU stop.",
                 entry.Evidence,
                 null,
-                null);
+                null,
+                DelegateStage.Unknown);
         }
 
         internal static ConfigurationVerdict ClassC(RaisedConfiguration configuration, UnknownReason reason, string detail)
@@ -146,7 +182,8 @@ namespace Ladder.Wave
                 "configurations, never fewer — escalating cannot make it go away.",
                 "D32 caveat 3, Class C",
                 null,
-                reason);
+                reason,
+                DelegateStage.Unknown);
         }
 
         private static string DescribeOptions(DownloadOption options)

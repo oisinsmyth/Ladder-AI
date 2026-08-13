@@ -73,6 +73,13 @@ namespace Ladder.Wave
         /// <param name="entailedBy">Which download option(s) already entail the consequence.</param>
         /// <param name="entailment">What that option entails, and why answering adds nothing to it.</param>
         /// <param name="evidence">Where the claim comes from — [M] measured, [R] researched, plus a locator.</param>
+        /// <param name="raisedIn">
+        /// WHICH DELEGATE raises it. *** REQUIRED SINCE 2026-08-13, AND IT IS WHAT MAKES THE RUNG
+        /// PER-ENTRY. *** D32 gives one rung per CLASS; that rung is true for a PRE-transfer abort
+        /// (which leaves the CPU running) and false for a POST-transfer one (which leaves it stopped
+        /// with a complete program). An entry that cannot say which delegate raises it cannot have a
+        /// rung derived for it, and Class A is the only class that spends anything.
+        /// </param>
         /// <exception cref="ArgumentException">
         /// Thrown when any of the above is missing, blank, or (for <paramref name="entailment"/>)
         /// too short to be an argument. This exception IS the guard; do not soften it.
@@ -83,7 +90,8 @@ namespace Ladder.Wave
             IEnumerable<string> recognisedSelections,
             DownloadOption entailedBy,
             string entailment,
-            string evidence)
+            string evidence,
+            DelegateStage raisedIn)
         {
             ConfigurationName = Required(configurationName, nameof(configurationName));
             AnsweredSelection = Required(answeredSelection, nameof(answeredSelection));
@@ -142,8 +150,21 @@ namespace Ladder.Wave
                     nameof(recognisedSelections));
             }
 
+            if (raisedIn == DelegateStage.Unknown)
+            {
+                throw new ArgumentException(
+                    "A Class A entry must name WHICH DELEGATE raises the configuration. Since the " +
+                    "2026-08-13 measurement the rung is derived from it: a PRE-transfer abort leaves the " +
+                    "CPU RUNNING and D32's 'spend a disruptive download' rung is sound, while a " +
+                    "POST-transfer abort leaves it STOPPED with a complete program and that rung is " +
+                    "false. An entry that will not say which cannot be given either. (" +
+                    configurationName + ")",
+                    nameof(raisedIn));
+            }
+
             RecognisedSelections = selections.ToArray();
             EntailedBy = entailedBy;
+            RaisedIn = raisedIn;
         }
 
         /// <summary>The Openness configuration type name, e.g. <c>StopModules</c>.</summary>
@@ -163,6 +184,36 @@ namespace Ladder.Wave
 
         /// <summary>Where the claim comes from — [M] measured, [R] researched, plus a locator.</summary>
         public string Evidence { get; }
+
+        /// <summary>Which delegate raises it — the fact the per-entry rung is derived from.</summary>
+        public DelegateStage RaisedIn { get; }
+
+        /// <summary>What a policy throw on this configuration leaves the controller in [M 2026-08-13].</summary>
+        public AbortAftermath Aftermath => AbortAftermathTable.For(RaisedIn);
+
+        /// <summary>
+        /// *** THE PER-ENTRY RUNG. *** D32 gives one rung per class; this derives one per ENTRY, from
+        /// the stage that raises it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>PRE-transfer</b> — the abort leaves the CPU RUNNING and the project unchanged, so nothing
+        /// has been spent and D32's step 6 is exactly right: a disruptive download ANSWERS the
+        /// configuration rather than hoping it does not appear.
+        /// </para>
+        /// <para>
+        /// <b>POST-transfer</b> — *** "GO TO STEP 6" IS CIRCULAR HERE. *** The configuration is raised
+        /// after the transfer, which means the download already happened and already stopped the CPU;
+        /// fetching a fresh disruptive download to answer it would be fetching the thing we are already
+        /// inside. Refusing it does not call for a NEW download — it calls for answering it WITHIN THE
+        /// CURRENT ONE, or the CPU is left stopped. That was flagged when the classifier was built and
+        /// is now measured.
+        /// </para>
+        /// </remarks>
+        public LadderRung Rung =>
+            RaisedIn == DelegateStage.PostTransfer
+                ? LadderRung.AnswerWithinTheCurrentDownload
+                : LadderRung.Step6DisruptiveFullDownload;
 
         /// <summary>True when every offered selection is one this entry recognises.</summary>
         internal bool RecognisesShape(IReadOnlyList<string> offeredSelections)

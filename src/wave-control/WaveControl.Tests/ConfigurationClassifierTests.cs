@@ -23,10 +23,28 @@ namespace Ladder.Wave.Tests
 
             Assert.Equal(ConfigurationClass.RefusedOnlyBecauseNonDisruptive, verdict.Class);
             Assert.Equal('A', verdict.ClassLetter);
-            Assert.Equal(LadderRung.Step6DisruptiveFullDownload, verdict.NextRung);
-            Assert.True(verdict.DisruptiveDownloadWouldResolveIt);
             Assert.Equal(expectedAnswer, verdict.AnsweredSelection);
             Assert.Null(verdict.UnknownReason);
+        }
+
+        [Theory]
+        [InlineData("StopModules", "StopAll", DelegateStage.PreTransfer, LadderRung.Step6DisruptiveFullDownload, true)]
+        [InlineData("DataBlockReinitialization", "StopPlcAndReinitialize", DelegateStage.PreTransfer, LadderRung.Step6DisruptiveFullDownload, true)]
+        [InlineData("StartModules", "StartModule", DelegateStage.PostTransfer, LadderRung.AnswerWithinTheCurrentDownload, false)]
+        public void The_rung_is_PER_ENTRY_and_a_POST_delegate_entry_does_not_go_to_step_6(
+            string name, string selection, DelegateStage expectedStage, LadderRung expectedRung, bool disruptiveWouldResolve)
+        {
+            // *** THIS TEST REPLACES ONE THAT PINNED D32 AS WRITTEN. *** Until 2026-08-13 all three
+            // entries asserted Step6DisruptiveFullDownload, because D32 gives one rung per CLASS. The
+            // measurement showed that rung is true for a PRE-delegate abort (CPU left Running) and FALSE
+            // for a POST one (CPU left NotRunning, holding a complete program) — so "go to step 6" is
+            // circular for StartModules, which is raised only because the download ALREADY stopped the
+            // CPU.
+            var verdict = ConfigurationClassifier.Classify(name, "NoAction", selection);
+
+            Assert.Equal(expectedStage, verdict.RaisedIn);
+            Assert.Equal(expectedRung, verdict.NextRung);
+            Assert.Equal(disruptiveWouldResolve, verdict.DisruptiveDownloadWouldResolveIt);
         }
 
         [Fact]
@@ -172,7 +190,8 @@ namespace Ladder.Wave.Tests
                     recognisedSelections: new[] { "ProceedAnyway" },
                     entailedBy: DownloadOption.Software,
                     entailment: "it seemed fine when we looked at it on the day",
-                    evidence: "TODO"),
+                    evidence: "TODO",
+                    raisedIn: DelegateStage.PreTransfer),
             };
 
             Assert.ThrowsAny<XunitException>(
@@ -184,7 +203,7 @@ namespace Ladder.Wave.Tests
         {
             var ex = Assert.Throws<ArgumentException>(() => new ClassAEntry(
                 "Whatever", "Sel", new[] { "Sel" }, DownloadOption.None,
-                "a perfectly well written entailment that names nothing", "[M] somewhere"));
+                "a perfectly well written entailment that names nothing", "[M] somewhere", DelegateStage.PreTransfer));
 
             Assert.Equal("entailedBy", ex.ParamName);
         }
@@ -196,7 +215,7 @@ namespace Ladder.Wave.Tests
         public void A_class_A_entry_cannot_be_built_without_stating_what_the_option_entails(string entailment)
         {
             var ex = Assert.Throws<ArgumentException>(() => new ClassAEntry(
-                "Whatever", "Sel", new[] { "Sel" }, DownloadOption.Software, entailment, "[M] somewhere"));
+                "Whatever", "Sel", new[] { "Sel" }, DownloadOption.Software, entailment, "[M] somewhere", DelegateStage.PreTransfer));
 
             Assert.Equal("entailment", ex.ParamName);
         }
@@ -206,7 +225,7 @@ namespace Ladder.Wave.Tests
         {
             var ex = Assert.Throws<ArgumentException>(() => new ClassAEntry(
                 "Whatever", "Sel", new[] { "Sel" }, DownloadOption.Software,
-                "a perfectly well written entailment for the Software download", "  "));
+                "a perfectly well written entailment for the Software download", "  ", DelegateStage.PreTransfer));
 
             Assert.Equal("evidence", ex.ParamName);
         }
@@ -216,7 +235,7 @@ namespace Ladder.Wave.Tests
         {
             Assert.Throws<ArgumentException>(() => new ClassAEntry(
                 "Whatever", "StopAll", new[] { "NoAction" }, DownloadOption.Software,
-                "a perfectly well written entailment for the Software download", "[M] somewhere"));
+                "a perfectly well written entailment for the Software download", "[M] somewhere", DelegateStage.PreTransfer));
         }
 
         // --- REPORTABILITY -------------------------------------------------------------------------

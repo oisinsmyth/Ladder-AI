@@ -64,7 +64,8 @@ namespace Ladder.Wave
                     "a full Software or Hardware download loads the whole program and the CPU must be " +
                     "stopped to accept it; TIA rejects NoAction on this configuration outright, so the " +
                     "stop is not a consequence of answering but of choosing the option",
-                evidence: "[M] 2026-08-12 spec R8/O3 — full and hardware downloads both raised StopModules and both rejected NoAction"),
+                evidence: "[M] 2026-08-12 spec R8/O3 — full and hardware downloads both raised StopModules and both rejected NoAction",
+                raisedIn: DelegateStage.PreTransfer),
 
             new ClassAEntry(
                 configurationName: "DataBlockReinitialization",
@@ -75,7 +76,8 @@ namespace Ladder.Wave
                     "a full Software download resets data values including retentive ones anyway, so " +
                     "reinitialising the restructured data blocks costs nothing the chosen option had " +
                     "not already spent",
-                evidence: "[R] spec R4/R8 — Software (all) resets values including retentive; [M] 2026-08-12 the configuration is raised when a download restructures a DB"),
+                evidence: "[R] spec R4/R8 — Software (all) resets values including retentive; [M] 2026-08-12 the configuration is raised when a download restructures a DB",
+                raisedIn: DelegateStage.PreTransfer),
 
             new ClassAEntry(
                 configurationName: "StartModules",
@@ -86,7 +88,8 @@ namespace Ladder.Wave
                     "it is raised in the POST delegate only when the download stopped the modules, so " +
                     "it is the return leg of a stop the option already entailed; leaving it unanswered " +
                     "would stop the CPU and then decline to start it again",
-                evidence: "[M] 2026-08-12 spec O3 — StartModule applied and read back; device reported 'stopped.' then 'started.', no human required"),
+                evidence: "[M] 2026-08-12 spec O3 — StartModule applied and read back; device reported 'stopped.' then 'started.', no human required; [M] 2026-08-13 a POST throw here leaves the CPU NotRunning (4) with a COMPLETE program",
+                raisedIn: DelegateStage.PostTransfer),
         };
 
         /// <summary>

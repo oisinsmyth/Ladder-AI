@@ -23,7 +23,8 @@ namespace Ladder.Wave.Tests
             recognisedSelections: new[] { "WhateverItOffered" },
             entailedBy: DownloadOption.Software,
             entailment: "a fabricated entailment, existing only so this mutant can build a wrong verdict",
-            evidence: "[MUTANT] not a real source");
+            evidence: "[MUTANT] not a real source",
+            raisedIn: DelegateStage.PreTransfer);
 
         /// <summary>Classifies exactly as the real one does, except that the unknown branch returns Class A.</summary>
         public static ConfigurationVerdict UnknownIsClassA(RaisedConfiguration configuration)

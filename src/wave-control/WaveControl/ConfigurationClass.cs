@@ -65,9 +65,34 @@ namespace Ladder.Wave
 
         /// <summary>
         /// Step 6 — a disruptive FULL download (D25/R8), never a differential. Reachable for Class A
-        /// alone.
+        /// alone, and *** ONLY for an entry raised in the PRE delegate ***, where the abort leaves the
+        /// CPU running and the project unchanged so nothing has yet been spent.
         /// </summary>
         Step6DisruptiveFullDownload = 1,
+
+        /// <summary>
+        /// Step 5 — EXCISE the attributable block from the wave set, route it to the deferred queue
+        /// (D23) and re-download without it. An ordinary boundary; no disruption is spent. The only
+        /// rung that makes progress cheaply.
+        /// </summary>
+        Step5ExciseAndRedownload = 2,
+
+        /// <summary>
+        /// *** ANSWER IT WITHIN THE CURRENT DOWNLOAD. *** For a Class A entry raised in the POST
+        /// delegate, where "go to step 6" is CIRCULAR — the transfer has already happened and the CPU
+        /// is already stopped, so fetching a fresh disruptive download to answer the configuration
+        /// would be fetching the thing we are already inside. Refusing it leaves the CPU stopped.
+        /// </summary>
+        AnswerWithinTheCurrentDownload = 3,
+
+        /// <summary>
+        /// *** A DISRUPTIVE DOWNLOAD, AND IT MUST CARRY A START STEP. *** For an abort that landed
+        /// AFTER the transfer: the CPU is stopped holding a complete program [M 2026-08-13], so the
+        /// next download is not merely "the one that answers the configuration" — it is the one that
+        /// raises <c>StartModules</c> in POST and answers it, returning the CPU to Running. Measured at
+        /// 34 s with no owner present.
+        /// </summary>
+        RecoveryDownloadThatStartsTheCpu = 4,
     }
 
     /// <summary>
