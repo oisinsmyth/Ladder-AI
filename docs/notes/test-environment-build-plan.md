@@ -238,6 +238,14 @@ phase 2 with the copy-layer generator.
 > > **the block already conforms to.** Predicting *both* directions is what makes the exercise a
 > > prediction rather than a complaint.
 >
+> > ### 📌 WHICH VECTOR SET IS THE DELIVERABLE — RULED, SO NOBODY HAS TO GUESS LATER
+> >
+> > **Set B is the live set and grows to 27. Set A is FROZEN AT 25 as the comparison artifact.**
+> > A was contaminated and now knows more than it did, so extending it buys *weaker* evidence for a
+> > full agent run — **the comparison's value was in two authors reaching the same answer without
+> > contact, and that measurement is already taken.** Freezing A preserves it; extending A would
+> > quietly replace evidence with a second opinion.
+> >
 > > ### ✅ TWO INDEPENDENT VECTOR SETS — 24 OF 25 EXPECTATIONS IDENTICAL
 > >
 > > Author A was **contaminated** (it read this very document — see the marker at the top) and
