@@ -167,6 +167,30 @@ running does not license:
   author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
     ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
       does. A caveat that lives in a lane report has already failed the person it was written for.
+- *** A PROHIBITION LIST IS A DENYLIST, AND A DENYLIST HAS TO BE COMPLETE. *** Measured 2026-08-13, on
+  the run the whole milestone turns on. The vector author — whose value rests **entirely** on never
+  having seen the implementation — was briefed with a list of forbidden artifacts. **It read none of
+  them, and was contaminated anyway**, through a document nobody had thought to forbid:
+  *** `test-environment-build-plan.md`, THE ORCHESTRATOR'S OWN RUNNING RECORD, WHICH QUOTES THE
+  BLOCK'S INTERFACE NAMES AND ONE OF ITS NETWORK COMMENTS. *** The same correction had been made to
+  the download fence **that same day**, for the same reason, and was not carried across.
+    ➜ *** BRIEF INPUTS AS AN ALLOWLIST: "these four files and nothing else in the repository." ***
+      A denylist requires the briefer to have thought of every leak; an allowlist requires only that
+      they know what the work needs. **And when the agent wants a fifth file, it stops and asks —
+      which is the event you wanted.**
+    ➜ **Any document that QUOTES an implementation becomes a contamination channel for everyone who
+      must not see it** — including running records, lane reports and status summaries written for an
+      entirely different reader. **Mark such documents at the top**, because the person who must not
+      read them cannot know from the filename.
+    ➜ **And grade the disclosure, not just the leak.** This author disclosed unprompted, put it first,
+      and *refused to say which of its vectors corresponded to the divergences* — which kept a fresh
+      re-derivation clean. **That is the behaviour to want when a fence fails**, and it is worth more
+      than a fence that never gets tested.
+    ➜ **What a mechanical check CAN and CANNOT settle here.** Checkable and clean: 1:1 coverage of the
+      denominator, no invented citations, spec names used throughout, distinct authorship. **Not
+      checkable: whether an individual expectation was derived or nudged.** *When the unfalsifiable
+      part is the part that matters, re-derive independently and compare* — the divergence between two
+      authors is the only evidence available, and it costs one agent run.
 - *** A COMMIT MESSAGE IS A CLAIM, NOT EVIDENCE — INCLUDING OURS. *** Measured 2026-08-13: commit
   `f12bf1a` states *"re-export diffed byte-identical"*. **The re-export never landed.** A stale block
   comment then sat in the controller for a month behind green checks, and the record that would have

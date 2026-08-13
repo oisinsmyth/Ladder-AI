@@ -1,5 +1,13 @@
 # TEST ENVIRONMENT — BUILD PLAN
 
+> 🔴 ***THIS DOCUMENT QUOTES THE IMPLEMENTATION. A VECTOR AUTHOR, A REVIEWER, OR ANY AGENT WHOSE VALUE
+> DEPENDS ON NOT HAVING SEEN A BLOCK MUST NOT READ IT.*** It records predicted spec-vs-block
+> divergences by name, including interface members and network-comment text, because that is what a
+> running record is for. **On 2026-08-13 it contaminated the 5.2 vector author** — who had been given
+> a list of forbidden artifacts, read none of them, and was caught by this file instead, which nobody
+> had thought to forbid. *That is why briefs now specify inputs as an **allowlist**.* The marker is
+> here because **the person who must not read a document cannot tell that from its filename.**
+
 Source of truth for the design: `PC-Client-Modbus-Spec-Draft-final.txt`. This document does not
 restate it. It answers one question: **in what order do we build this so that no significant
 body of code is written on an assumption that later turns out to be wrong?**
