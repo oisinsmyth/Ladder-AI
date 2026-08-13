@@ -5,12 +5,20 @@
 author has produced one, and this one was written without reading it. Agreement between them is
 evidence; divergence is where a reader should look.
 
+> **Revision 2 — against enumeration issue 5 (27 assertions).** Issue 4's 25 vectors are unchanged to
+> the byte: issue 5 re-hashed nothing, so no citation in this file dangled. **Two vectors were added,
+> VB-HBA-026 and VB-HBA-027**, for the two assertions AR-HBA-13 created after this author's
+> decomposition dispute was upheld. **Every vector also now declares the bound it was written against**
+> — a gate that did not exist when revision 1 was submitted. Both changes are described in their own
+> sections below.
+
 ## What was read, and what was not
 
 **Read, in full:**
 
 - `gen/test-project001/hopper-blockage-alarm/requirements.md`
-- `gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml`
+- `gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml` (issue 4, then **re-read at
+  issue 5** — not cached, because a re-issue is exactly where a cached read goes wrong)
 - `docs/notes/test-environment-contract.md`
 - `docs/notes/assertion-enumeration.md`
 - `.claude/skills/design-for-testability/SKILL.md`
@@ -21,8 +29,13 @@ sends the reader into `src/harness/` and outranks the skill's own gate table:
 `Harness.Results/Admissibility.cs`, `Harness.Results/ObservabilityCheck.cs`,
 `Harness.Results/SubmissionVector.cs`, `Harness.Results/StartupTests.cs`,
 `Harness.Wire/WireTiming.cs` (`ObservabilityFloorScans`, `ScanPeriodMs`),
-`WaveControl/AssertionIdentity.cs`. These are the harness's own checkers and constants — none of them
-says anything about the block under test.
+`WaveControl/AssertionIdentity.cs`, and at revision 2 `Harness.Results/BoundsCurrency.cs`. These are
+the harness's own checkers and constants — none of them says anything about the block under test.
+
+***AND STEP 0 EARNED ITS KEEP A SECOND TIME.*** Between revision 1 and revision 2 the harness grew a
+gate — **3i, bounds currency** — and a submission that re-ran on a remembered gate list would have
+reported a green it no longer had. Re-verifying against `src/harness/` is what caught it, and it is
+why the wire schema is re-read on every submission rather than trusted from the last one.
 
 **NOT read, deliberately:** the implementation (`ir/`), `simatic-ml/`, `architecture.md`,
 `review-findings.md`, `integration.md`, `code-structure.md`, `patterns/`,
@@ -32,23 +45,112 @@ check.**
 
 ## The shape of the set
 
-**25 vectors, one per enumerated assertion. `UNCLASSIFIED = 0` on the citation axis: every one of the
-enumeration's 25 assertion IDs is cited exactly once, and no vector cites anything else.**
+**27 vectors, one per enumerated assertion: every one of the enumeration's 27 assertion IDs is cited
+exactly once, and no vector cites anything else.**
+
+🔴 **AND THE WORD FOR WHAT THIS DOES IS NOT "COVERAGE".** `UNCLASSIFIED` is a **computed set
+difference** — `enumerated − (COVERED ∪ OUT-OF-SCOPE ∪ DEFERRED ∪ UNTESTABLE-ON-RIG)` — and nobody
+ever writes it. Issue 5 added two assertions, so the residual stood at **27 − 25 = 2 and the coverage
+gate was correctly failing.** These two vectors are a necessary condition for it to clear, not a
+sufficient one: **it clears when somebody CLASSIFIES all 27**, and for OUT-OF-SCOPE and
+UNTESTABLE-ON-RIG that identity is the gate-1 architecture signer, **never a vector author** (§4.3).
+**No bucket is assigned in this file.** What is reported here is the citation count and its residue:
+**27 cited, 0 uncited.**
 
 | slot | start bool | vectors | family |
 |---|---|---|---|
-| `SLOT-HBA-RAISE` | `HBA_Start_Raise` | VB-HBA-001…004 | raise, the two outputs, standstill, pause-and-resume |
+| `SLOT-HBA-RAISE` | `HBA_Start_Raise` | VB-HBA-001…004, **026, 027** | raise, the two outputs, standstill, pause-and-resume, **and the threshold's lower pin** |
 | `SLOT-HBA-CLEAR` | `HBA_Start_Clear` | VB-HBA-005…010 | debounce and re-arm, running and stopped |
 | `SLOT-HBA-LATCH` | `HBA_Start_Latch` | VB-HBA-011…012 | the latch holds |
 | `SLOT-HBA-RESET` | `HBA_Start_Reset` | VB-HBA-013…018 | reset, re-raise, held reset, coincident reset, stopped reset |
 | `SLOT-HBA-STARTUP` | `HBA_Start_Startup` | VB-HBA-019…023 | power-up / X-F disruptive boundary |
 | `SLOT-HBA-PAIR` | `HBA_Start_Pair` | VB-HBA-024…025 | the two outputs agree, both directions |
 
-**Bucket counts are NOT assigned here.** OUT-OF-SCOPE and UNTESTABLE-ON-RIG belong to whoever signs
-off the architecture at gate 1 (§4.3) — never the block's author, never a vector's author. What this
-set reports is the citation count and the residue: **25 cited, 0 uncited, 0 assertions this author
-could not write a vector for.** Whether all 25 are *runnable* turns on the capability requests below,
-and that is a different question from whether they are *written*.
+**0 assertions this author could not write a vector for.** Whether all 27 are *runnable* turns on the
+capability requests below, and that is a different question from whether they are *written*.
+
+## The threshold, pinned from both sides — VB-HBA-026 and VB-HBA-027
+
+**These two exist because a dispute this set raised was upheld.** REQ-HBA-002 was *titled* "No alarm
+below threshold" while AR-HBA-04 had narrowed its text to the debounced-clear case, so **an
+under-scaled preset left all 25 earlier assertions true.** AR-HBA-13 restored the unconditional limb
+as `REQ-HBA-002:feecbe` (the alarm) and `REQ-HBA-008:047ac6` (the stop demand).
+
+### Why they are two vectors and not one
+
+The stimulus is identical — `RAISE_UNINTERRUPTED`, the same profile VB-HBA-001 and VB-HBA-002 already
+run — which is exactly what makes merging them tempting and wrong.
+
+> ***AN UNDER-SCALED PRESET ASSERTS BOTH OUTPUTS EARLY, AND REQ-HBA-008's TWO TRACKING ASSERTIONS STAY
+> TRUE, BECAUSE THE OUTPUTS STILL AGREE. A SIMULTANEITY CLAIM IS SATISFIED BY A SYNCHRONISED ERROR.***
+
+So VB-HBA-024 and VB-HBA-025 are green throughout against a block that raises both outputs at 45 s,
+and a single vector watching only the alarm would leave **the operationally worse half** untested: the
+inhibit is the output that stops the plant, so an early inhibit stops a plant that is **not** blocked.
+AMB-14 does not apply to either — both are single-signal claims — so there is no co-signal to fold in
+and no excuse for one vector.
+
+### ***Was the "specified vs the block's own preset" distinction expressible? YES — and at revision 1 it would have been only half-expressible***
+
+Two separate questions, and they got two different answers.
+
+**1. Can the vector be written against the specified value? Yes, mechanically, and it always could
+be.** The armed window is computed from **AR-HBA-03's bounds table** — `T#60S`, which at the loaded
+scan period of 23.33 ms is 2572 scans — and closes at **58 s = 2486 scans**, two seconds below it. The
+block's preset is not read, is not known to this author, and appears nowhere in either vector. A block
+whose effective threshold is 45 s asserts inside the armed window and the latch reads `true`.
+**Sensitivity, stated rather than implied: this catches any effective threshold shorter than 58 s — an
+under-scale of more than 3.3% — and a preset between 58 s and 60 s escapes on the margin.** The 2 s is
+scan jitter plus the copy layer running one scan ahead of the block (§9.4).
+
+**2. Can the vector DECLARE that it used the specified value, so that the claim is falsifiable on that
+axis? At revision 1, NO — and it is exactly the finding this section was going to carry.** A bare
+integer in `windowScans` has no provenance: nothing bound it to the bounds table, and nothing would
+have failed if a later author "fixed" a failing vector by sliding the window out to match the block —
+**silently converting the assertion back into the tautology the word *specified* exists to prevent,
+with every gate still green.**
+
+✅ ***AT REVISION 2 IT IS EXPRESSIBLE, BECAUSE THE HARNESS BUILT THE FIELD: `enumeration.bounds` plus a
+per-vector `boundsUsed`, compared by gate 3i.*** That is AMB-19's fix, and the comparison is
+**deliberately asymmetric** — bound *names* matched case-insensitively (a wrong name yields a refusal,
+so leniency can only turn a refusal into a real comparison) and bound *values* compared ordinally with
+case preserved (leniency there would turn a real difference into a pass). It is not a duration parser:
+`T#60S` and `T#1M` are reported as different, on the stated ground that *teaching it to equate them
+would mean teaching it to equate things.*
+
+**All 27 vectors now declare it, not just the two new ones** — `NotDeclared` fails closed, and a
+vector that never records the number it was written against can never be found stale. Gate 3i reports:
+*every one of 27 vectors states the bound it was written against, and every one matches the
+enumeration's current table.* **A retune of `T#60S` now refuses this submission instead of silently
+changing what it tests.**
+
+**One residue, and it is small:** the enumeration's `bounds:` table carries provenance prose beside
+the value (`T#60S  (Q-HBA-01, owner) — the SPECIFIED value, per AR-HBA-13`) and the field wants the
+bare `T#60S`, so a human extraction stands between the two. That is the same trust `normalisedTexts`
+already rests on, and it fails in the safe direction: a mis-transcription surfaces as a loud STALE
+naming both strings, never as a silent pass.
+
+### The other side of the pin
+
+**An over-scaled preset was exactly as invisible as an under-scaled one**, and it is caught by a
+vector that was already there: **VB-HBA-001**'s scenario ends at 75 s and its 65–75 s sample expects
+`true`, so any effective threshold longer than 75 s reads `false` and fails. That number came from the
+register's table too. So the boundary is now pinned from below by VB-HBA-026/027 and from above by
+VB-HBA-001/002 — **and no number in any of the four came from the block.**
+
+### What F-3 costs VB-HBA-027, declared rather than glossed
+
+VB-HBA-026 cites a `WHEN`, so it carries **two** expectations: a latch over 1–58 s expecting `false`
+*and* a sample over 65–75 s expecting `true`. The second is a **positive control** and is not
+decoration — without it, a block whose alarm output is dead passes the prohibition trivially and the
+vector measures uptime.
+
+VB-HBA-027 cites a `NEVER`, so **F-3 refuses sampling for the whole vector** and a second latch on the
+same signal would need a second arming window the copy layer does not provide. **So in isolation
+VB-HBA-027 is satisfied vacuously by a dead inhibit output.** It is non-vacuous *as a set* —
+VB-HBA-002 proves that output does assert at the threshold, VB-HBA-024 proves it holds while the alarm
+is up. **A reader who takes VB-HBA-027's green on its own has read it wrongly**, and that is a real
+cost of F-3 rather than a defect in it.
 
 ## Why almost everything here is SAMPLED, when the skill says prefer LATCHED
 
@@ -119,13 +221,13 @@ with itself.
 
 `dotnet run --project src/harness/Harness.Gate -- check gen/test-project001/hopper-blockage-alarm/conformance-vectors-b.json`
 
-**`VERDICT: NOT ADMISSIBLE` — exit 1. 25 vectors examined, 21 gates run.** That is the correct
+**`VERDICT: NOT ADMISSIBLE` — exit 1. 27 vectors examined, 22 gates run.** That is the correct
 outcome and it was not avoidable by anything a vector author could write:
 
 | outcome | gates |
 |---|---|
-| **CHECKED and passed** (15) | 1 schema · 2 authorship (D6) · 3 basis · 3d enumerator independence · 3e form authority · 3f citation shape · 3g IDs recompute · 3h required observations (AMB-14) · 4 fidelity · 5 observability · 6 settling · 7 start bool · 9 liveness preconditions · 10a assertion ceiling · 10b timer/model/ratio ceilings |
-| **JUDGEMENT** (3) | 3c faithful reading · 6b settling sufficiency · 8b blacklist breadth (density **50 entries across 25 vectors** — see below) |
+| **CHECKED and passed** (16) | 1 schema · 2 authorship (D6) · 3 basis · 3d enumerator independence · 3e form authority · 3f citation shape · 3g IDs recompute · 3h required observations (AMB-14) · **3i bounds currency (AMB-19)** · 4 fidelity · 5 observability · 6 settling · 7 start bool · 9 liveness preconditions · 10a assertion ceiling · 10b timer/model/ratio ceilings |
+| **JUDGEMENT** (3) | 3c faithful reading · 6b settling sufficiency · 8b blacklist breadth (density **54 entries across 27 vectors** — see below) |
 | ***NOT CHECKED*** (3) | **8 blacklist** and **8c multi-writer provenance** — both need D9's computed conflict graph, i.e. `converter cross-check --project ir/test-project001`, and this author is fenced from `ir/`. **11 memory layout** — needs a `deployment` declaration and a tag map, both properties of a DOWNLOAD that has not happened. |
 
 ***THE THREE NOT-CHECKED GATES WERE NOT FAKED, AND THE TEMPTATION WAS REAL AND SPECIFIC.*** Writing
@@ -135,10 +237,14 @@ make. Likewise `"s7Objects": []` is the positive claim that no classic-S7comm pa
 block, and this submission cannot make it either. **Absent and empty are different facts and the gate
 keeps them apart; this file does too.**
 
-**One refusal was hit and fixed, and it is reported rather than hidden:** the first run exited **2,
-NOTHING EXAMINED** — a documentation note placed inside `enumeration.requiredObservations` broke the
-`Dictionary<string, List<string>>` deserialisation, and the CLI correctly reported the whole document
-unreadable rather than skipping the field. The note was moved beside the map, not deleted.
+**Two refusals were hit and fixed across the two revisions, and both are reported rather than hidden.**
+*(a)* Revision 1's first run exited **2, NOTHING EXAMINED** — a documentation note placed inside
+`enumeration.requiredObservations` broke the `Dictionary<string, List<string>>` deserialisation, and
+the CLI correctly reported the whole document unreadable rather than skipping the field. The note was
+moved beside the map, not deleted. *(b)* Revision 2's first run reported **3i NOT CHECKED** on all 27
+vectors — the gate did not exist when revision 1 was written, and neither `enumeration.bounds` nor any
+`boundsUsed` was present. **Supplying them was not a workaround: it is the declaration the enumerator
+asked for**, and it turned a NOT CHECKED into a CHECKED by adding a fact, not by relaxing anything.
 
 ### Blacklist density: 50 entries, and it is a real judgement call
 
@@ -154,10 +260,17 @@ case the entries are redundant (harmless, since the blacklist can only add). Nam
 *every slot testing it*, which here is the whole set. **If the coordinator's graph already carries
 them, drop all 50 entries; nothing else changes.**
 
-## The decomposition dispute
+## The decomposition dispute — ✅ RAISED AT REVISION 1, UPHELD AS AR-HBA-13, CLOSED AT REVISION 2
 
 > ***NO ASSERTION IN THE ENUMERATION FORBIDS THE ALARM RAISING **EARLY** ON AN UNINTERRUPTED FIRST
 > EPISODE.***
+
+**Outcome: the enumeration re-issued at 27** — REQ-HBA-002's limb 1 restored alongside AR-HBA-04's
+limb 2, both live, **with zero re-hashes**, so no citation in this file dangled. The two new
+assertions are covered by VB-HBA-026 and VB-HBA-027 above. The record of the original dispute is kept
+below unchanged, because *how* it was found is the part worth keeping: **what found it was somebody
+trying to WRITE A TEST for the behaviour the title promised**, and no consistency pass could have —
+the text was internally consistent, it was simply missing a claim.
 
 REQ-HBA-001's assertions all say what happens **at or after** the threshold. REQ-HBA-002 is titled
 *"No alarm below threshold"* — but after AR-HBA-04's rewording its **text** conditions the whole claim
@@ -318,6 +431,9 @@ they isolate:
 | the stale stop demand: inhibit left asserted after the alarm clears | VB-HBA-014 |
 | the alarm clearing and never coming back after a post-power-cycle reset | VB-HBA-023 |
 | a retentivity mismatch between the two outputs | VB-HBA-021 |
+| **an under-scaled preset raising the alarm early** — the most ordinary commissioning error there is | **VB-HBA-026** |
+| **the same under-scaled preset asserting the STOP DEMAND early, which no tracking assertion can ever catch** | **VB-HBA-027** |
+| an over-scaled preset — as invisible as an under-scaled one under the old reading | VB-HBA-001 (upper pin) |
 
 ## Escalations
 
@@ -338,16 +454,34 @@ they isolate:
    graph, when supplied, reports a multi-writer finding on `HopperBlockedAlarm` or
    `HopperBlockedInhibit`, X-G's treatment is *reported, not refused* — **and whether it should instead
    be a hard refusal is an open owner question.** Flagged, not settled.
-4. **D6 is satisfied by a string comparison.** `vector-author-b-5.2` ≠ `lad-coder` ≠
+4. 🔴 **AMB-15 sits directly under VB-HBA-022 and VB-HBA-023, and it is UNSETTLED.** Limb 1's
+   precondition is *"no `FaultReset` since the accumulated persistence time was last zero"*, and
+   AR-HBA-10's sequence zeroes the accumulator and *then* takes a reset — so on the "zeroing event"
+   reading limb 1 does **not** bite inside the post-power-cycle window, and an under-scaled preset is
+   **uncatchable there**: `007.A5` is a `WITHIN` bound, an UPPER limit, which a short preset satisfies
+   *more* easily. **VB-HBA-026 and VB-HBA-027 do not reach into that window** — their scenario is an
+   ordinary first episode, deliberately, because the trigger they cite is ambiguous there and a vector
+   should not resolve a clause's ambiguity by choosing a scenario. If AMB-15 is ruled the "zeroing
+   event" way, the enumeration needs one further assertion per output (denominator 29) and this set
+   needs two more vectors.
+5. **AMB-16 is the general form of the dispute I raised, and it is still open.** AR-HBA-13 says limb 1
+   means the **specified** threshold; **22 other assertions say "the persistence threshold" and nothing
+   says which threshold those mean.** Every vector in this file was written against the specified value
+   and now declares it (gate 3i), so **this set has already taken the reading AMB-16 recommends** — but
+   it took it as an author's choice, not on a ruling. If the preset reading is intended anywhere, those
+   assertions must be reworded and every citation to them dangles.
+6. **D6 is satisfied by a string comparison.** `vector-author-b-5.2` ≠ `lad-coder` ≠
    `assertion-enumerator`, normalised. What actually *makes* two agents different is undefined
    anywhere. This set was written from the specification alone, which is the substance the string is
    standing in for.
 
 ## How to read a green from this set — and what it will not license
 
-A PASS here says **these 25 assertions held, under a model that does not yet exist, at a fidelity its
-author has not yet declared, at comp = 1.** It says nothing about the block raising early (no assertion
-covers it), nothing about the settling of any observed value (`NotEstablished`, by schema), and nothing
-about the co-running slice being benign. **And `STALE` is the verdict to watch for**: every vector here
+A PASS here says **these 27 assertions held, under a model that does not yet exist, at a fidelity its
+author has not yet declared, at comp = 1, against the bounds table as it stood when the submission was
+made.** It says nothing about the settling of any observed value (`NotEstablished`, by schema), nothing
+about the co-running slice being benign, and — until AMB-15 is ruled — nothing about an under-scaled
+preset *inside AR-HBA-10's post-power-cycle window*, which is the one place the early-raise defect may
+still survive. **And `STALE` is the verdict to watch for**: every vector here
 runs a scenario tens of seconds long, and a mirror nothing ever wrote to is perfectly self-consistent.
 Read the verdict, not the exit code.

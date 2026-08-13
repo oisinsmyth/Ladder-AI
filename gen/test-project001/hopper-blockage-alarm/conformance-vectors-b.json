@@ -53,16 +53,22 @@
   },
 
   "enumeration": {
-    "_source": "gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml, issue 4, stamped. 8 clauses, 25 assertions. Transcribed here, not re-derived: a vector author who re-derives the denominator has re-created the correlated check.",
-    "_correction": "The yaml's own gate_projection_template keys `forms:` by DISPLAY ORDINAL (REQ-HBA-001.A1) under a comment that says 'id -> form'. Ordinals are never citable (3.3) and gate 3e looks the form up BY ID, so the template as written makes gate 3e report 'the enumeration carries forms but none for <id>' on all 25 citations. Re-keyed by ID here. Reported as a defect in the enumeration's projection, not fixed in the enumeration by this author.",
+    "_source": "gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml, ISSUE 5, stamped. 8 clauses, 27 assertions. Transcribed here, not re-derived: a vector author who re-derives the denominator has re-created the correlated check.",
+    "_issue5": "Issue 5 added REQ-HBA-002:feecbe and REQ-HBA-008:047ac6 (AR-HBA-13, restoring REQ-HBA-002's limb 1 after this author's decomposition dispute was upheld) and re-hashed NOTHING - all 25 previously stamped texts are byte-identical, so no citation in this file dangled. Both new IDs were independently recomputed from their normalised text before being cited: SHA-256, first 6 hex, clause-scoped, 2 checked 0 mismatches. Covered by VB-HBA-026 and VB-HBA-027.",
+    "_correction": "STILL PRESENT AT ISSUE 5, so this is a repeat finding rather than a one-off: the yaml's gate_projection_template keys `forms:` by DISPLAY ORDINAL (REQ-HBA-001.A1) under a comment that says 'id -> form'. Ordinals are never citable (3.3) and gate 3e looks the form up BY ID, so the template as written makes gate 3e report 'the enumeration carries forms but none for <id>' on all 27 citations. Re-keyed by ID here. Reported as a defect in the enumeration's projection, not fixed in the enumeration by this author.",
     "enumerator": "assertion-enumerator",
+    "_boundsSource": "Transcribed from the enumeration's `bounds:` table at issue 5, as BARE VALUES: the yaml writes `T#60S  (Q-HBA-01, owner) - the SPECIFIED value, per AR-HBA-13` and this field wants `T#60S`. The extraction is a transcription and is trusted exactly as far as `normalisedTexts` is - a mis-transcription surfaces as a loud STALE naming both strings, never as a silent pass. *** THESE ARE THE NUMBERS EVERY VECTOR IN THIS FILE WAS WRITTEN AGAINST, AND NO VECTOR HERE WAS WRITTEN AGAINST THE BLOCK'S OWN PRESET. ***",
+    "bounds": {
+      "persistence_threshold": "T#60S",
+      "clear_debounce_filter_time": "T#2S"
+    },
     "clauses": [
       "REQ-HBA-001", "REQ-HBA-002", "REQ-HBA-003", "REQ-HBA-004",
       "REQ-HBA-005", "REQ-HBA-006", "REQ-HBA-007", "REQ-HBA-008"
     ],
     "assertions": [
       "REQ-HBA-001:ab68c1", "REQ-HBA-001:8ea7f6", "REQ-HBA-001:0772fa", "REQ-HBA-001:2bdfa7",
-      "REQ-HBA-002:efe6b5", "REQ-HBA-002:bfda9d",
+      "REQ-HBA-002:efe6b5", "REQ-HBA-002:bfda9d", "REQ-HBA-002:feecbe",
       "REQ-HBA-003:607fdf", "REQ-HBA-003:652dd6", "REQ-HBA-003:aa1d87", "REQ-HBA-003:09e3a8",
       "REQ-HBA-004:14c9b6",
       "REQ-HBA-005:0463ce", "REQ-HBA-005:7e39bc", "REQ-HBA-005:179eb7", "REQ-HBA-005:6e1e8d",
@@ -70,7 +76,7 @@
       "REQ-HBA-006:469954",
       "REQ-HBA-007:4197e0", "REQ-HBA-007:7edf6c", "REQ-HBA-007:578675", "REQ-HBA-007:9855c5",
       "REQ-HBA-007:34dc51",
-      "REQ-HBA-008:d97781", "REQ-HBA-008:741315"
+      "REQ-HBA-008:d97781", "REQ-HBA-008:741315", "REQ-HBA-008:047ac6"
     ],
     "forms": {
       "REQ-HBA-001:ab68c1": "When",
@@ -79,6 +85,7 @@
       "REQ-HBA-001:2bdfa7": "When",
       "REQ-HBA-002:efe6b5": "When",
       "REQ-HBA-002:bfda9d": "When",
+      "REQ-HBA-002:feecbe": "When",
       "REQ-HBA-003:607fdf": "When",
       "REQ-HBA-003:652dd6": "When",
       "REQ-HBA-003:aa1d87": "When",
@@ -97,7 +104,8 @@
       "REQ-HBA-007:9855c5": "When",
       "REQ-HBA-007:34dc51": "When",
       "REQ-HBA-008:d97781": "Never",
-      "REQ-HBA-008:741315": "Never"
+      "REQ-HBA-008:741315": "Never",
+      "REQ-HBA-008:047ac6": "Never"
     },
     "normalisedTexts": {
       "REQ-HBA-001:ab68c1": "WHEN Hopper_Level_High has been continuously true and the plant has run continuously for the persistence threshold time THEN the hopper-blockage alarm is asserted",
@@ -106,6 +114,7 @@
       "REQ-HBA-001:2bdfa7": "WHEN the plant's running feedback is lost part-way through the persistence window and later returns with Hopper_Level_High still continuously true THEN the hopper-blockage alarm is asserted once the cumulative high-and-running time reaches the persistence threshold",
       "REQ-HBA-002:efe6b5": "WHEN Hopper_Level_High goes false and stays continuously false for at least the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is not raised for that high episode",
       "REQ-HBA-002:bfda9d": "WHEN Hopper_Level_High reads false for less than the clear-debounce filter time before the accumulated persistence time reaches the threshold THEN the hopper-blockage alarm is still raised for that high episode",
+      "REQ-HBA-002:feecbe": "WHEN a first uninterrupted high episode is in progress with no debounced clear and no FaultReset since the accumulated persistence time was last zero THEN the hopper-blockage alarm does not assert at any point before the specified persistence threshold of accumulated time has elapsed",
       "REQ-HBA-003:607fdf": "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated",
       "REQ-HBA-003:652dd6": "WHEN Hopper_Level_High goes false for less than the clear-debounce filter time while the plant is running and then returns true THEN the hopper-blockage alarm is asserted once the persistence threshold measured from before the brief clear has accumulated",
       "REQ-HBA-003:aa1d87": "WHEN Hopper_Level_High goes false for at least the clear-debounce filter time while the plant is stopped and the plant then restarts with the hopper high THEN the hopper-blockage alarm is not asserted until a further full persistence threshold of high-and-running time has accumulated",
@@ -124,7 +133,8 @@
       "REQ-HBA-007:9855c5": "WHEN a rising edge of FaultReset occurs after a power cycle while the hopper is still blocked THEN the hopper-blockage alarm is false when next observed",
       "REQ-HBA-007:34dc51": "WHEN a rising edge of FaultReset after a power cycle clears the hopper-blockage alarm while the hopper remains blocked and the plant runs THEN the hopper-blockage alarm is asserted again WITHIN one further persistence threshold of accumulated high-and-running time",
       "REQ-HBA-008:d97781": "NEVER the inhibit/stop demand output reads false while the hopper-blockage alarm is asserted",
-      "REQ-HBA-008:741315": "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted"
+      "REQ-HBA-008:741315": "NEVER the inhibit/stop demand output reads true while the hopper-blockage alarm is not asserted",
+      "REQ-HBA-008:047ac6": "NEVER the inhibit/stop demand output is asserted before the specified persistence threshold of accumulated time has elapsed, on a high episode with no debounced clear and no FaultReset since the accumulated persistence time was last zero"
     },
     "_requiredObservationsSource": "response_signal: merged with also_requires_observation_of: per the yaml. AMB-14's two relational assertions are the only ones carrying a second signal, and the wire format the yaml said could not carry it now CAN - EnumerationDocument.RequiredObservations is a list per assertion, and gate 3h consumes it. AMB-14 is closed in the schema; the enumeration should be re-issued emitting it.",
     "requiredObservations": {
@@ -134,6 +144,7 @@
       "REQ-HBA-001:2bdfa7": ["HopperBlockedAlarm"],
       "REQ-HBA-002:efe6b5": ["HopperBlockedAlarm"],
       "REQ-HBA-002:bfda9d": ["HopperBlockedAlarm"],
+      "REQ-HBA-002:feecbe": ["HopperBlockedAlarm"],
       "REQ-HBA-003:607fdf": ["HopperBlockedAlarm"],
       "REQ-HBA-003:652dd6": ["HopperBlockedAlarm"],
       "REQ-HBA-003:aa1d87": ["HopperBlockedAlarm"],
@@ -152,7 +163,8 @@
       "REQ-HBA-007:9855c5": ["HopperBlockedAlarm"],
       "REQ-HBA-007:34dc51": ["HopperBlockedAlarm"],
       "REQ-HBA-008:d97781": ["HopperBlockedInhibit", "HopperBlockedAlarm"],
-      "REQ-HBA-008:741315": ["HopperBlockedInhibit", "HopperBlockedAlarm"]
+      "REQ-HBA-008:741315": ["HopperBlockedInhibit", "HopperBlockedAlarm"],
+      "REQ-HBA-008:047ac6": ["HopperBlockedInhibit"]
     }
   },
 
@@ -164,6 +176,7 @@
 
     {
       "id": "VB-HBA-001",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RAISE",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -204,6 +217,7 @@
 
     {
       "id": "VB-HBA-002",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RAISE",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -244,6 +258,7 @@
 
     {
       "id": "VB-HBA-003",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RAISE",
       "index": 2,
       "author": "vector-author-b-5.2",
@@ -284,6 +299,7 @@
 
     {
       "id": "VB-HBA-004",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RAISE",
       "index": 3,
       "author": "vector-author-b-5.2",
@@ -327,6 +343,7 @@
 
     {
       "id": "VB-HBA-005",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -369,6 +386,7 @@
 
     {
       "id": "VB-HBA-006",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -412,6 +430,7 @@
 
     {
       "id": "VB-HBA-007",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 2,
       "author": "vector-author-b-5.2",
@@ -455,6 +474,7 @@
 
     {
       "id": "VB-HBA-008",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 3,
       "author": "vector-author-b-5.2",
@@ -498,6 +518,7 @@
 
     {
       "id": "VB-HBA-009",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 4,
       "author": "vector-author-b-5.2",
@@ -543,6 +564,7 @@
 
     {
       "id": "VB-HBA-010",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-CLEAR",
       "index": 5,
       "author": "vector-author-b-5.2",
@@ -588,6 +610,7 @@
 
     {
       "id": "VB-HBA-011",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-LATCH",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -631,6 +654,7 @@
 
     {
       "id": "VB-HBA-012",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-LATCH",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -673,6 +697,7 @@
 
     {
       "id": "VB-HBA-013",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-RESET",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -716,6 +741,7 @@
 
     {
       "id": "VB-HBA-014",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-RESET",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -759,6 +785,7 @@
 
     {
       "id": "VB-HBA-015",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RESET",
       "index": 2,
       "author": "vector-author-b-5.2",
@@ -800,6 +827,7 @@
 
     {
       "id": "VB-HBA-016",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RESET",
       "index": 3,
       "author": "vector-author-b-5.2",
@@ -842,6 +870,7 @@
 
     {
       "id": "VB-HBA-017",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RESET",
       "index": 4,
       "author": "vector-author-b-5.2",
@@ -883,6 +912,7 @@
 
     {
       "id": "VB-HBA-018",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-RESET",
       "index": 5,
       "author": "vector-author-b-5.2",
@@ -926,6 +956,7 @@
 
     {
       "id": "VB-HBA-019",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-STARTUP",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -968,6 +999,7 @@
 
     {
       "id": "VB-HBA-020",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-STARTUP",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -1010,6 +1042,7 @@
 
     {
       "id": "VB-HBA-021",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-STARTUP",
       "index": 2,
       "author": "vector-author-b-5.2",
@@ -1052,6 +1085,7 @@
 
     {
       "id": "VB-HBA-022",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-STARTUP",
       "index": 3,
       "author": "vector-author-b-5.2",
@@ -1095,6 +1129,7 @@
 
     {
       "id": "VB-HBA-023",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
       "slot": "SLOT-HBA-STARTUP",
       "index": 4,
       "author": "vector-author-b-5.2",
@@ -1138,6 +1173,7 @@
 
     {
       "id": "VB-HBA-024",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-PAIR",
       "index": 0,
       "author": "vector-author-b-5.2",
@@ -1182,6 +1218,7 @@
 
     {
       "id": "VB-HBA-025",
+      "boundsUsed": { "persistence_threshold": "T#60S", "clear_debounce_filter_time": "T#2S" },
       "slot": "SLOT-HBA-PAIR",
       "index": 1,
       "author": "vector-author-b-5.2",
@@ -1223,6 +1260,93 @@
         "operator fault-reset as a single rising edge at a commanded time"
       ],
       "kills": "A SET-ONLY inhibit latch: it follows the alarm up and never comes down. After a FaultReset on a cleared blockage the plant stays stopped with nothing annunciated and no operator action able to release it - the same residual state VB-HBA-014 catches at the reset, caught here as a violation of the relation rather than as a value at one moment, so an inhibit that drops and then re-latches is also caught."
+    },
+
+    {
+      "id": "VB-HBA-026",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
+      "slot": "SLOT-HBA-RAISE",
+      "index": 4,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-002",
+      "assertion": "REQ-HBA-002:feecbe",
+      "assertionForm": "When",
+      "_addedAt": "Enumeration issue 5. This assertion exists because this author's decomposition dispute was upheld as AR-HBA-13 — REQ-HBA-002 was TITLED 'No alarm below threshold' while AR-HBA-04 had narrowed its text to the debounced-clear case, so an under-scaled preset left all 25 earlier assertions true. This vector is limb 1's alarm half. VB-HBA-027 is the inhibit half and *** THE TWO ARE DELIBERATELY NOT MERGED ***: see its note.",
+      "_scenario": "RAISE_UNINTERRUPTED - byte-for-byte the profile VB-HBA-001 and VB-HBA-002 run, which is the point: the same stimulus, a different question asked of it. Clear-down (which establishes 'no FaultReset since the accumulated persistence time was last zero' and starts the first uninterrupted episode), then Hopper_Level_High true and Shredder_Run_Fwd_FB true, both held for 75 s, no reset and no hopper-low at any point. Accumulated time therefore equals elapsed time from the episode start, which is what lets a wall-clock arming window express a claim about ACCUMULATED time.",
+      "_boundUsed": "*** THE PERSISTENCE THRESHOLD IS TAKEN FROM AR-HBA-03's BOUNDS TABLE: T#60S (Q-HBA-01, owner), which at the loaded scan period of 23.33 ms is 2572 scans. THE BLOCK'S OWN PRESET IS NOT READ, NOT KNOWN TO THIS AUTHOR, AND DOES NOT APPEAR ANYWHERE IN THIS VECTOR. *** The armed window closes at 58 s = 2486 scans, i.e. 2 s (86 scans) BELOW the specified threshold, and that 2 s is margin for scan jitter and for the copy layer running one scan ahead of the block (contract 9.4). Sensitivity that follows, stated rather than implied: this vector catches any effective threshold SHORTER THAN 58 s - an under-scale of more than 3.3% - and a preset between 58 s and 60 s escapes it. *** AND THE FIELD YOU ARE READING IS INVISIBLE TO THE GATE: see the finding on AMB-19 in the .md. ***",
+      "inputs": {
+        "HBA_Stim.Profile": "RAISE_UNINTERRUPTED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "1000",
+        "HBA_Stim.ArmUntilMs": "58000",
+        "HBA_Stim.EndMs": "75000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Latched", "windowScans": 2443, "expected": "false" },
+        { "signal": "HopperBlockedAlarm", "nature": "PersistentState", "mode": "Sampled", "windowScans": 429, "expected": "true" }
+      ],
+      "_observability": "*** THE LATCH IS THE INSTRUMENT AND NOTHING ELSE WOULD DO. *** The claim is 'does not assert AT ANY POINT before the threshold', and a sample answers only 'was it true when we looked' - a block asserting at 45 s and a block asserting at 60 s look identical to any sample taken outside the moment. A latch armed over 1-58 s catches an assertion anywhere in those 57 s and cannot fall in a poll gap. The assertion is a WHEN, so Latched is admissible and so is the second expectation. THE SECOND EXPECTATION IS A POSITIVE CONTROL AND IS NOT DECORATION: without it a block whose alarm output is dead passes this prohibition trivially, and the vector would be measuring uptime. It samples 65-75 s expecting true, so the vector reads as one statement - not before 58 s, but yes by 65 s - which is the threshold pinned from both sides inside one test. Arming starts at 1 s so the clear-down, which legitimately clears an alarm with a reset, is outside the window.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) ending at the close of the sampled window, with the stimulus model's last commanded transition at least 2443 scans earlier; the latched evidence cannot change once its arming window has closed at 58 s. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4073,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives Hopper_Level_High and the shredder running feedbacks, which this block also consumes (register Provenance section, reuse-first result); plant-model coupling the reference graph does not see." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "*** AN UNDER-SCALED PERSISTENCE PRESET - THE MOST ORDINARY COMMISSIONING ERROR THERE IS, AND IT LEFT ALL 25 EARLIER ASSERTIONS TRUE. *** T#45S where T#60S was specified, T#6S from a dropped zero, or a preset held in the wrong time base: the alarm asserts inside the armed window and the latch reads true. It equally kills an accumulator that OVER-COUNTS - one that keeps accruing across a run-state pause, or double-increments - because the claim is stated against ACCUMULATED time and the scenario makes accumulated time equal to elapsed time. Not killed, and said out loud: a preset between 58 s and 60 s, which the 2 s margin buys. The other side of the boundary - an OVER-scaled preset, exactly as invisible under the old reading - is killed by VB-HBA-001, whose scenario ends at 75 s and whose 65-75 s sample reads false against any threshold longer than 75 s. Both numbers come from the register's table; neither comes from the block."
+    },
+
+    {
+      "id": "VB-HBA-027",
+      "boundsUsed": { "persistence_threshold": "T#60S" },
+      "slot": "SLOT-HBA-RAISE",
+      "index": 5,
+      "author": "vector-author-b-5.2",
+      "clause": "REQ-HBA-008",
+      "assertion": "REQ-HBA-008:047ac6",
+      "assertionForm": "Never",
+      "_notMergedWithVB026": "*** THESE TWO ARE NOT ONE VECTOR, AND THE SHARED STIMULUS IS PRECISELY WHY IT WOULD BE TEMPTING. *** An under-scaled preset asserts BOTH outputs early, and REQ-HBA-008's two tracking assertions stay TRUE throughout, because the outputs still AGREE - a simultaneity claim is satisfied by a synchronised error. So VB-HBA-024 and VB-HBA-025 are green against a block that raises both outputs at 45 s, and nothing in the enumeration covers the inhibit half except this assertion. A single vector observing only the alarm would leave THE OPERATIONALLY WORSE HALF untested: the inhibit is the output that stops the plant, so an early inhibit stops a plant that is not blocked. AMB-14 does not apply to either of them - both are single-signal claims - so there is no co-signal to fold in and no excuse for one vector.",
+      "_scenario": "RAISE_UNINTERRUPTED, the same profile and the same arming as VB-HBA-026. Identical stimulus, different output observed.",
+      "_boundUsed": "*** AR-HBA-03's BOUNDS TABLE: persistence threshold T#60S (Q-HBA-01, owner) = 2572 scans at 23.33 ms. THE BLOCK'S OWN PRESET IS NOT READ AND APPEARS NOWHERE IN THIS VECTOR. *** Armed window closes at 58 s = 2486 scans, 2 s below the specified threshold as margin. Catches any effective threshold shorter than 58 s; a preset between 58 s and 60 s escapes. Same invisibility to the gate as VB-HBA-026 - see the AMB-19 finding in the .md.",
+      "inputs": {
+        "HBA_Stim.Profile": "RAISE_UNINTERRUPTED",
+        "HBA_Stim.Precondition": "CLEARDOWN",
+        "HBA_Stim.P1Ms": "75000",
+        "HBA_Stim.ResetAtMs": "-1",
+        "HBA_Stim.ArmAtMs": "1000",
+        "HBA_Stim.ArmUntilMs": "58000",
+        "HBA_Stim.EndMs": "75000"
+      },
+      "startBool": "HBA_Start_Raise",
+      "expectations": [
+        { "signal": "HopperBlockedInhibit", "nature": "PersistentState", "mode": "Latched", "windowScans": 2443, "expected": "false" }
+      ],
+      "_observability": "A NEVER, so no expectation may be sampled (F-3) - and a latch is what this claim wants anyway: an assertion anywhere in the armed 1-58 s window sets it, and a latch cannot fall in a poll gap. *** AND F-3 COSTS THIS VECTOR ITS POSITIVE CONTROL, WHICH IS DECLARED RATHER THAN GLOSSED. *** VB-HBA-026 can carry a sampled 'yes by 65 s' beside its latched 'no before 58 s' because it cites a WHEN; this vector cannot, because sampling is refused for the whole vector once the form is Never, and a second latch on the same signal in the same vector would need a second arming window the copy layer does not provide. So IN ISOLATION this vector is satisfied vacuously by a dead inhibit output. It is non-vacuous AS A SET: VB-HBA-002 proves the same output does assert at the threshold, and VB-HBA-024 proves it holds while the alarm is up. A reader who takes this vector's green on its own has read it wrongly.",
+      "settlingCondition": "HopperBlockedAlarm and HopperBlockedInhibit both unchanged across 43 consecutive observed scans (1.0 s at comp=1) after the arming window closes at 58 s; the latched evidence cannot change once that window is closed. The completion flag is deliberately NOT part of this condition.",
+      "settlingSignals": ["HopperBlockedAlarm", "HopperBlockedInhibit"],
+      "maxDurationScans": 4073,
+      "completionSignal": "HBA_Scenario_Done",
+      "completionValue": 1,
+      "blacklist": [
+        { "block": "FB_ShredderSequencer", "reason": "the stimulus model drives Hopper_Level_High and the shredder running feedbacks, which this block also consumes; plant-model coupling the reference graph does not see." },
+        { "block": "FB_PusherControl", "reason": "hopper-high is its auto-mode cycle trigger, so the stimulus profile commands pusher cycles as a side effect." }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "hopper-level-high discrete sensor held true for a commanded duration",
+        "shredder running feedback, forward or reverse, held for a commanded duration"
+      ],
+      "kills": "*** THE SAME UNDER-SCALED PRESET, ON THE HALF THAT STOPS THE PLANT. *** A block whose effective threshold is shorter than the specified one asserts the stop demand early, inhibiting a plant that is not blocked - and *** NO TRACKING ASSERTION CAN EVER CATCH IT, because the two outputs move together and therefore never disagree. *** VB-HBA-024 and VB-HBA-025 stay green throughout. VB-HBA-026 stays green too, since it observes the alarm and this defect could in principle be confined to the inhibit's own driving condition. This is the only vector in the set that fails on an early stop demand."
     }
   ]
 }
