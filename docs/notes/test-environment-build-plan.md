@@ -1613,6 +1613,75 @@ D32's and blocked.
     queues, so **a coordinator crash loses the deferred queue.** No format was invented for it,
     deliberately. This sits beside X-C's existing unreadable-marker case rather than inside it.
 
+### ✅ THE DEFERRED QUEUE IS PERSISTED — and the reload check had to become ASYMMETRIC (2026-08-13, `2d3a0dd`)
+
+`WaveQueueFormat` + `WaveQueueStore` + `QueueRehydrator`, **140 → 168 tests**, 9 mutations each
+restored byte-for-byte. The gap it closes: X-C's marker records the *wave*, not the queues, so a
+coordinator crash lost work that had **already passed the gate** — and nothing would have noticed. It
+simply never happens.
+
+**Absent ≠ unreadable ≠ empty, carried structurally rather than by discipline:**
+`QueueRestoreState.Unreadable` is the **zero value**; the file is **never deleted**, so an empty queue
+is a file declaring zero entries and *"no file"* keeps meaning *"nobody ever wrote one here"*;
+`Queues` is **null, not empty**, for both non-restored states; and the only way onward from "no file"
+is `AcceptNoPersistedState(result, reason)`, which **requires a reason and refuses to be called over a
+file that exists.**
+
+  ➜ **Two truncation detectors, because one is not enough.** A sentinel catches a torn write. The
+    **declared `entries=` count** catches what a sentinel cannot: *** A FILE THAT PARSES PERFECTLY BUT
+    CARRIES FEWER ENTRIES THAN WERE WRITTEN. *** A queue file's content is a *count of things*, so a
+    short read looks exactly like a shorter queue — and a shorter queue is admitted work that silently
+    never happens.
+  ➜ **The gate is re-run, not re-implemented.** Every entry is rebuilt with the **current** hash and
+    passed back through `AdmissionController.Admit`. A hash that cannot be determined now is a
+    refusal; **nothing falls back to the persisted hash.** `PersistedQueueEntry` is a *different type*
+    from `QueuedSubmission`, so "read from disk" and "admitted" cannot be the same state.
+
+> #### 🔬 THE FINDING THE TESTS PRODUCED — a symmetric check was the wrong shape
+>
+> The first build required the re-derived queue to **equal** the persisted one. That **rejected every
+> excised entry on reload**: D32 step 5 excises a *RUN-class* submission *into* the deferred queue, so
+> re-routing correctly gives the "wrong" answer.
+>
+> The check is now **asymmetric**, and the asymmetry is the safety argument: deferred → routes-RUN is
+> permitted **only** for an entry flagged excised (worst case, it waits a boundary it needn't) —
+> whereas *** RUN → routes-DEFERRED IS ALWAYS REJECTED, because that is a STOP-class change about to
+> stop the CPU mid-wave. *** `Excised` is an explicit persisted flag rather than a substring match on
+> the reason, and a missing `excised=` is `Unreadable`, never defaulted to false.
+
+  ➜ 🔴 **NAMED, NOT BUILT: the queue file and the X-C marker are two files with no shared
+    transaction.** Each fails safe alone; they are **not jointly consistent**, and no ordering rule is
+    specified. Worth a ruling before the coordinator writes both in one loop.
+
+### 📐 RULED: DB-4's TWENTY DOES NOT APPLY TO THE DRAIN — settled by a measurement, not by inference
+
+DB-4 states its own mechanism: more than 20 objects cannot be integrated consistently **"in one
+program cycle"** — DB-3 names it in Siemens' own notation, **`RUN (<21)`**, and the hazard is a program
+running as a *mixture of old and new blocks*.
+
+*** THE DRAIN'S DOWNLOAD STOPS THE CPU (D25 full download; R8 measured `StopModules` raised and
+`NoAction` inapplicable), SO THERE IS NO EXECUTING PROGRAM FOR THE RULE TO PROTECT. *** And §9a
+already records a **full download that loaded 99 objects**, predicted count matching manifest count
+exactly — **that run could not have happened if the limit bound full downloads.**
+
+So the alternative reading is not merely unnecessary, it is **incoherent with D25**: *"download
+everything"* and *"download at most twenty objects"* cannot both hold on a 99-object project.
+
+  ➜ **Replaced with a positive check that is already specified** rather than a precautionary batching
+    rule: compare `download-plan`'s predicted count against §9c's load-manifest count (1 vs 1 and 99
+    vs 99 on the measured runs). **What would nail it down:** one full download of a project
+    materially larger than 99 objects, same comparison.
+  ➜ **Adopting it needs no code change** — the planner is named `WaveBoundaryBatchPlanner` and the
+    drain path never calls it. **Rejecting it would require writing a new planner.**
+
+### ✅ `RTT_p99` 173 → 201 TOUCHES NO BUILT PHASE-4 CODE — checked, not assumed
+
+The spec lane flagged that anything holding a baked-in `K_max` would be over-admitting at S ≥ 50.
+**Verified by grep against `src/wave-control/`: zero occurrences of any timing figure, `K_max`, `p99`
+or `RTT`.** The lane chose no timing constant at all, so nothing built needs revisiting. `K_max` is
+consumed by DB-13's slot colouring, which is 6.1 and not yet written — **the correction lands before
+the code that would have used it**, which is the whole point of retiring assumptions in phase order.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
