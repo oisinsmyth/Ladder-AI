@@ -2794,6 +2794,56 @@ download's compile path** (verified: it raises the same `ConsistentBlocksDownloa
     flagged deliberately, because that binary is designed *not* to self-approve so that someone
     notices.
 
+### ✅ THE REPRODUCER SETTLES IT — `--station` IS THE GATE, MEASURED (2026-08-13, `c026eff`)
+
+Owner ruling: **`--station` is the gate.** Built, and the reproducer (delete `DB_Example`, which FC8
+reads, recreating the dangling reference) makes the ruling **measured rather than reasoned**:
+
+| check | verdict on the broken program |
+|---|---|
+| `compile` (old default, now `--hardware`) | `Success, ERRORS: 0` — *** SAYS NOTHING *** |
+| `compile --software` | `[Error] FC_ModbusTCP_Sample (FC8): Network 1: Tag "DB_Example".DataStore not defined.` |
+| `compile --station` | the same error **plus** the hardware tree |
+| `compile --block FC_ModbusTCP_Sample` | the same error, `CONSISTENT: NO` |
+| `sanity-check` (old) | `ISSUES FOUND` via consistency — **but its compile line still read `Success`** |
+| `compile-all --force` | 116 compiled, **1 with errors**, 1 inconsistent |
+| `--to-folder` and the device download | **both threw, identically** |
+
+*** OUR COMPILE NOW GIVES BETTER TEXT THAN TIA's OWN MESSAGE: it names the NETWORK and the TAG, where
+TIA's download message named only the block. ***
+
+> #### ⚠️ THE HONEST LIMIT, AND IT IS NOT SMALL
+>
+> **The original failure had the per-block compile reporting *clean*.** Here the per-block compile
+> reports the error. *** SO THIS REPRODUCES *A* DEFECT THE HARDWARE-ONLY GATE MISSED — NOT THE CLASS
+> WHERE EVERY PER-ITEM COMPILE PASSES AND ONLY THE DOWNLOAD'S COMPILE FAILS. *** `--station` is **not**
+> proven against that class. **`--to-folder` is, by construction** — it reaches the download's own
+> compile path with nothing on the wire.
+
+  ➜ **The lane corrected itself visibly:** it had called `--to-folder` *"not a reproducer"* after
+    trying it on a **healthy** project — *generalising from an absence*. On a broken one it throws the
+    same exception, the same text, **zero configurations raised**, matching every original failing run.
+  ➜ **Recoverable through Openness, for this class, completely:** re-import `DB_Example`, then **one**
+    `compile --station` compiled the restored DB *and* FC8 together — *** THE SCOPE RESOLVES DEPENDENCY
+    ORDER, WHICH PER-BLOCK COMPILES CANNOT. *** No GUI. That does not overturn *"no rebuild-all
+    exists"*; it says **a source-level defect never needed one.**
+
+**Implemented:** default → station; the old scope kept reachable **by name** as `--hardware`;
+`sanity-check` → station, its report now printing `scope=station (hardware + program)` and every
+`[Error]`. **615 tests.**
+
+  ➜ 🔴 *** AND THE SCOPE CHANGE FORCED A SECOND FIX THAT WOULD HAVE BEEN CATASTROPHIC QUIETLY: ***
+    `IsHealthy` keyed on `CompileState.Success`, **which only ever survived because the hardware
+    compile had nothing to warn about.** The station scope surfaces the project's standing warnings —
+    so on `State` this check would have marked a healthy project **unhealthy on every run, forever.**
+    Re-keyed onto the effective **error count**, verified live: `OVERALL: HEALTHY` with
+    `Warning (errors=0, warnings=2)`.
+  ➜ 🔴 **One doc row is now wrong and must be fixed:** `docs/15-generation-pipeline.md:295` requires
+    `compile (whole device)` → `Success, errors 0, warnings 0`. **Under station scope a healthy project
+    legitimately reports `Warning, errors 0, warnings 2`** — *** AS WRITTEN, THAT ROW NOW FAILS ON A
+    HEALTHY PROJECT. *** It must read *errors 0, state not decisive*. Hard rule 4's Commands table had
+    the same wording and **is corrected in `CLAUDE.md`**.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
