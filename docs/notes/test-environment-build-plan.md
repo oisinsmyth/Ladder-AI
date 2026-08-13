@@ -40,7 +40,7 @@ phase 2 with the copy-layer generator.
 
 > ### 📍 STANDING STATUS — keep this current; it is the ONE place "where are we" lives
 >
-> *** PHASES 0, 1 AND 2 ARE CLOSED — PHASE 2 VALIDATED ON THE DEVICE. PHASE 4.3/4.4 BUILT. ***
+> *** PHASES 0, 1, 2 AND 3 ARE CLOSED — ALL VALIDATED ON THE DEVICE. PHASE 4.3/4.4 BUILT. ***
 > Last updated 2026-08-13.
 >
 > **A1 fully retired** — no tear in 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2,
@@ -56,7 +56,7 @@ phase 2 with the copy-layer generator.
 > | A7 run-state read | ✅ measured in both CPU states |
 > | A9 memory budget | ✅ scoped to retain-only by ruling |
 > | ~~**A4**~~ block driveable by its own command | ✅ **RETIRED ON THE DEVICE** — all four exit-criterion cells, no interpreter |
-> | **A5** two slots do not interfere | ⏳ phase 3, in build |
+> | ~~**A5**~~ two slots do not interfere | ✅ **RETIRED ON THE DEVICE** — two *different* blocks, disjoint indistinguishable, coupled caught |
 > | **A6** delegate throw (G4) | 🔴 **UNMEASURED — needs the owner present.** Widest blast radius left |
 > | **A8** structural DB change (G2) | ⏸ deferred by the owner |
 >
@@ -1952,6 +1952,69 @@ arithmetic. `R` pinned to 1 fires 12 tests.
     has been run at.
   ➜ `MaxTensorWidth` is **reported, never enforced** — D36's deferral stands because `S_min` has never
     been observed.
+
+### ✅✅ A5 IS RETIRED — PHASE 3 IS CLOSED, ON THE DEVICE (2026-08-13)
+
+Two **different** blocks — a ramp and a peak-hold, different arithmetic, different completion signal,
+different scan profile — in two slots, through the real map, copy layer and `MB_SERVER`:
+
+    DISJOINT   INDISTINGUISHABLE: 6 result sets compared, no divergence
+    COUPLED    INTERFERENCE: 3 divergences across 6 comparisons   slot 0 solo [10,1] vs concurrent [12,1]
+
+*** THE 12 WAS PREDICTED BEFOREHAND FROM THE CALL ORDER AND THE DEVICE PRODUCED 12 *** — a prediction,
+not a post-hoc explanation. (The ramp accumulates 5; the coupled rung adds level 7 into the same
+accumulator that scan; the ramp's own guard then blocks further accumulation.)
+
+**And the property that makes the RED mean anything survived to hardware:** slot 0's **solo** arm read
+`[10,1]` — the *correct* answer — inside the **coupled** build. The coupling really is gated on the
+second block's start condition, so it exists only when both slots are active. Slot 1 was unaffected
+throughout: **the interference is directional, as it should be.**
+
+> #### 🔴 THE INTERMITTENT FORM — and its limit, stated rather than banked
+>
+> 25 repeats per build, one distinct result set each, and **elapsed scans varied 6→10 across repeats**,
+> so *the poll phase demonstrably moved while the results did not* — which is the spread the PC-side
+> harness structurally cannot produce.
+>
+> *** BUT THIS PAIR HAS NO INTERMITTENT MECHANISM IN IT. *** The coupled rung is deliberately one-shot,
+> precisely so the numbers would not depend on poll rate. **So what is shown is absence of poll-phase
+> dependence in a pair designed not to have any** — weaker than the run count suggests.
+>
+>   ➜ Testing it properly needs a **continuous** coupling, which is a new artifact. The lane declined
+>     to invent one, and the reasoning is the project's own: *** "changing the coupling to prove a
+>     point about the coupling is the fixer reviewing its own fix." *** The artifact goes to a
+>     different lane, which keeps the separation intact.
+
+**Two retired as a bonus:**
+
+  - *** THE 32-BIT BUILD STAMP WORKS, WITH NO SUBSTITUTION ANYWHERE. *** The converter fix landed and
+    behaves better than specified — it **refuses by name** rather than guessing, and `--project`
+    resolves the destination to `<ConstantType>DWord</ConstantType>`. Both real derived stamps
+    (`16#4A3FD40A`, `16#89DDC28E`) ran on the device and read back `Confirmed`.
+  - **The echo latch is exercised and comes off the unexercised list.** The distinguishing condition is
+    the moment *after* the start bool drops: the echo held across **six consecutive reads** and only
+    `ClearStartEcho()` cleared it. **That is an `SCOIL`, not a level `COIL`, measured.**
+
+#### Contradictions worth keeping
+
+  - *** `lad-coder` CORRECTED THE LANE'S OWN FAILURE-MODE REASONING AND WAS RIGHT. *** A `WORD 10`
+    window would **not** have hidden slot 1: it covers registers 0–9, so slot 1's *vectors* fall
+    **inside** and **all four result registers fall outside**. *"Vectors write fine, every result reads
+    zero"* — **worse** than predicted, because **half the loop looks alive.**
+  - **The echo register shifted the map:** phase 2's vectors sat at `%MW4010`, phase 3's at `%MW4012`.
+    Regenerating from the pinned commit handled it; **reusing phase 2's mirror would have silently
+    mis-addressed every vector.**
+  - Both peak variants are FC 902, so switching builds needs a `delete` first — stated plainly:
+    **unlike phase 2 these two builds do NOT share one `Main`.** Proven to differ by exactly one line
+    of emitted XML, but **one notch weaker than phase 2's byte-identical OB1**, and said so.
+
+**Process fix applied and it earned itself immediately:** everything built from
+`git archive 0c3cb93`, SHA recorded in the lane's own directory, the live tree and its `bin/` never
+referenced — *** `scratch/harness-phase2/` HAS BEEN REWRITTEN AGAIN SINCE. ***
+
+**Rig: the phase-3 DISJOINT build, `Running (8)`, `sanity-check` HEALTHY on both lines, verified
+`INDISTINGUISHABLE` after the restoring download.** `FC_DemoPeakCoupled` **deleted**, so the defective
+pair cannot run by accident.
 
 ## PHASE 4 — THE DOWNLOAD LOOP
 
