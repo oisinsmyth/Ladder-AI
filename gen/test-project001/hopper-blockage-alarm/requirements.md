@@ -73,6 +73,16 @@ Same one deviation flagged in the prior scoped run, re-flagged at RFI-Q-HBA-06:
   references the implementation's own parameter is VACUOUS — the thing under test satisfies it by
   defining its own terms. *** Same defect as the narrowing repair (AR-HBA-13), reached from the other
   side: one drops a claim while looking intact, the other keeps the claim and empties it.
+- 🔴 **Cite assertions by BEHAVIOUR, never by ordinal; and ordinals are APPEND-ONLY (AR-HBA-19/20).**
+  Prose in this register refers to an assertion by **what it asserts** ("the reset coincident with the
+  threshold crossing"), never by an ordinal like `005.A5`. A behaviour phrase carries no ordinal, hash
+  or signal name and is therefore stable under re-decomposition **by construction**; an ordinal is
+  stable only for as long as nobody inserts. Correspondingly: **assertion ordinals are assigned
+  append-only — a re-decomposition never reorders within a clause — and the reading order of a clause's
+  text implies NOTHING about its assertions' ordinals.** `REQ-HBA-002` is the live example and **must
+  not be "tidied"**: it states limb 1 **first** but limb 1 is `002.A3`, appended so earlier ordinals
+  would not shift. Renumbering to match the prose would retarget every citation while moving no text
+  and firing no gate.
 - **Signal names are not part of assertion identity either — preserve this deliberately.** A signal
   name belongs in an assertion's `response_signal:` field, never inside the hashed sentence. Measured
   on the AR-HBA-01 round: **naming the previously-unnamed output cost ZERO re-hashes**, because no
@@ -228,7 +238,7 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
 - **"Stays false" is defined by AR-HBA-18 (agent ruling, not owner).** In this clause's "condition has
   cleared" case, **"and stays false" means "stays false UNTIL THE RAISE CONDITION IS NEXT SATISFIED"** —
   not "for as long as the vector happens to observe", and not "forever". This is the **floor** in the
-  post-power-cycle window: `007.A5` is a `WITHIN` bound, i.e. an **upper** limit, which a **short**
+  post-power-cycle window: **the bounded return of the alarm after a post-power-cycle reset** is a `WITHIN` bound, i.e. an **upper** limit, which a **short**
   preset satisfies **more** easily rather than less, so nothing else there supplies a lower bound. A
   duration that depends on how long a test watched is not a specification — it would make the
   requirement's strength a property of the test. No clause text changes; this fixes the referent of
@@ -613,8 +623,11 @@ scan numbers, to test something with **no operational consequence**. In the seco
 holds: without an observable false, *"the reset worked"* and *"the reset did nothing"* are the same
 observation, and that distinction is the entire content of REQ-HBA-005.
 
-Both cases are now stated in the clause, so `005.A3` / `005.A5` can be worded as plain
+Both cases are now stated in the clause, so **the re-raise after a reset with the condition still
+holding** and **the reset coincident with the threshold crossing** can be worded as plain
 `PersistentState` assertions rather than one of them being unobservable by construction.
+*(De-cited by AR-HBA-19. The first phrase deliberately covers **both** the running and the stopped
+re-raise — which is what this ruling always meant, and what the ordinal it replaced no longer reached.)*
 
 **CHANGED:** REQ-HBA-005 Text (new by-case block) + Notes.
 
@@ -687,8 +700,9 @@ combination-only collision. Same treatment: agent rulings, not the owner's.
 
 ### AR-HBA-11 — AR-HBA-05's same-evaluation claim is reworded as an observable *(closes AMB-12)*
 
-**RULING:** amend AR-HBA-05's sentence to state what `005.A5` already asserts. **Do NOT scope
-AR-HBA-08.** Zero re-hashes.
+**RULING:** amend AR-HBA-05's sentence to state what **the assertion that a reset coincident with the
+threshold crossing does not consume it, so the alarm returns** already asserts. **Do NOT scope
+AR-HBA-08.** Zero re-hashes. *(De-cited by AR-HBA-19.)*
 
 **The collision.** AR-HBA-05 said the alarm *"ends **that evaluation** asserted"*; AR-HBA-08 rules the
 momentary drop DON'T-CARE. Since an assertion must be falsifiable, **no assertion can carry AR-HBA-05's
@@ -699,9 +713,10 @@ enumeration cannot cover. Each ruling reads correctly alone; the collision exist
 
 1. **It was an implementation detail phrased as a requirement.** "Ends that evaluation asserted" is a
    claim about **internal same-scan sequencing**. Its **operational** content is carried in full by
-   `005.A5` — *a reset coincident with the threshold crossing does not consume it, and the alarm
+   *a reset coincident with the threshold crossing does not consume it, and the alarm
    returns* — which is falsifiable, observable as ordinary persistent state, and is the thing anyone
-   actually cares about.
+   actually cares about. *(Ordinal deleted by AR-HBA-19: the italic description was already the
+   de-cited form, so removing it leaves the argument reading unchanged.)*
 2. **The alternative buys a `Coincidence` sibling** — an assertion requiring **the program to record
    scan numbers** — in order to test a consequence that is **already covered**.
 3. 🔴 **And it would rest on an OPEN owner question.** Whether an author may *create* an observable
@@ -821,7 +836,7 @@ moving one. **All three rulings below are likewise additive: no clause `Text` is
 
 Its structural finding, which justifies the second new assertion and is worth stating plainly:
 
-> *** An under-scaled preset asserts BOTH outputs early, and `008.A1`/`A2` stay TRUE — because the two
+> *** An under-scaled preset asserts BOTH outputs early, and **the two directions of the output-tracking invariant** stay TRUE — because the two
 > outputs still AGREE. A simultaneity claim is satisfied by a SYNCHRONISED ERROR. ***
 
 REQ-HBA-008's amendment (AR-HBA-12, extended by AR-HBA-13) is what made the inhibit half nameable at
@@ -835,7 +850,7 @@ value the block happens to hold.**
 
 **Reasoning.** AR-HBA-13 was **the only place the register said "specified"**. Twenty-two other
 assertions say *"the persistence threshold"* and nothing said whose. Read as the block's own preset,
-several are far weaker than they look — the enumerator notes that **`003.A1` would otherwise also have
+several are far weaker than they look — the enumerator notes that **the post-clear re-accumulation while the plant is running** would otherwise also have
 caught the under-scaled preset, post-clear**, and silently did not. One line **strengthens twenty-two
 assertions without moving a character**, so the cost is zero re-hashes.
 
@@ -863,7 +878,8 @@ limb 1 applies to the accrual that follows.
 **Why that reading.** After a power cycle the accumulator accrues from zero, and that **is** a first
 uninterrupted episode by any ordinary reading. The alternative leaves an under-scaled preset invisible
 in **exactly the post-power-cycle case** — the one AR-HBA-10 itself identified as risky — reopening the
-hole AR-HBA-13 closed, one scenario over. It also matters that **`007.A5` is a `WITHIN` bound, i.e. an
+hole AR-HBA-13 closed, one scenario over. It also matters that **the bounded return of the alarm after a
+post-power-cycle reset is a `WITHIN` bound, i.e. an
 upper limit, which a SHORT preset satisfies more easily rather than less**; nothing else there supplies
 a lower bound, so without limb 1 biting, that window has no floor at all.
 
@@ -921,11 +937,11 @@ AR-HBA-14 touches every clause at once, which is the profile of an edit that int
    was last zero".
 4. **AR-HBA-15 × AR-HBA-05.** Because a `FaultReset` does **not** zero the accumulator (AR-HBA-05), a
    reset *mid-episode* does break limb 1's precondition and limb 1 steps aside. **That leaves no hole:**
-   the case is covered by **`005.A1` / `005.A2`**.
+   the case is covered by **the reset that clears once the condition has gone** (and the stop demand with it).
    > 🔴 **Corrected by AR-HBA-17.** This originally read *"AR-HBA-07 governs that case"*. **It does
-   > not.** AR-HBA-07 lives in `005.A3` / `005.A6`, and **both are triggered by the accumulator being at
+   > not.** AR-HBA-07 lives in **the two re-raise assertions, running and stopped**, and **both are triggered by the accumulator being at
    > or past the threshold** — whereas a mid-episode reset is by definition **below** threshold, which is
-   > `005.A1` / `005.A2`'s case. The conclusion (limb 1 steps aside, no hole) was and remains correct;
+   > **the reset that clears once the condition has gone** is its case. The conclusion (limb 1 steps aside, no hole) was and remains correct;
    > only the guard named was wrong. See AR-HBA-17 for why a wrong pointer is worse than a missing one.
 
 **Checked and found clean:** AR-HBA-14 strengthens rather than alters AR-HBA-03 (it pins the *referent*
@@ -944,13 +960,13 @@ below reads the reasoning rather than the rulings.
 
 ### AR-HBA-17 — AR-HBA-15's item 4 named the wrong guard *(closes the enumerator's combination finding)*
 
-**RULING:** correct item 4 to name **`005.A1` / `005.A2`**. The conclusion stands — limb 1 does step
+**RULING:** correct item 4 to name **the reset that clears once the condition has gone** (and the stop demand with it). The conclusion stands — limb 1 does step
 aside and there is no hole — but the guard that actually covers the case is the one to name.
 
 **The error.** Item 4 said that when a `FaultReset` arrives **after accrual has begun** (say 10 s of
-60 s), *"AR-HBA-07 governs that case."* ***It does not.*** AR-HBA-07 lives in `005.A3` and `005.A6`, and
+60 s), *"AR-HBA-07 governs that case."* ***It does not.*** AR-HBA-07 lives in **the two re-raise assertions, running and stopped**, and
 **both are triggered by the accumulator being at or past the threshold.** A mid-episode reset is by
-definition **below** threshold — `005.A1` / `005.A2`'s case.
+definition **below** threshold — **the reset that clears once the condition has gone** is its case.
 
 **Why this is worse than a cross-reference slip:**
 
@@ -975,8 +991,7 @@ claims to rely on is a different operation from reading it**, and only the forme
 **RULING:** **"stays false until the raise condition is next satisfied."** Settled as a **notes-level
 definition**, not a rewording.
 
-**Reasoning.** With item 4 corrected, the floor in that window is carried by **`005.A1`'s "and stays
-false" and nothing else** — `007.A5` is a `WITHIN` bound, an **upper** limit, which a **short** preset
+**Reasoning.** With item 4 corrected, the floor in that window is carried by **the clearing reset's persistence claim** and nothing else — **the bounded return of the alarm after a post-power-cycle reset** is a `WITHIN` bound, an **upper** limit, which a **short** preset
 satisfies **more** easily rather than less. Three readings were available:
 
 | reading | verdict |
@@ -990,40 +1005,121 @@ requirement's strength a property of the test.** That is the same objection as A
 whose terms are supplied by the thing being measured — one level out, with the *test* rather than the
 *implementation* supplying them.
 
-🔴 **Settled as a definition and not a rewording, deliberately.** `005.A1` is **stamped and cited by two
+🔴 **Settled as a definition and not a rewording, deliberately.** **The clearing reset's persistence claim** is **stamped and cited by two
 vector sets**: a rewording dangles both, a definition costs **zero**. AR-HBA-15 was settled the same way
 for the same reason, and this is now the established route for fixing a *referent* after stamping.
 
 **CHANGED:** REQ-HBA-005 Notes (definition). **No clause text.**
 
-### Combination re-read of the REASONING — one class found, and it is not yet closed
+### Combination re-read of the REASONING — a defect class found, and CLOSED in the seventh round
 
 Read the ruling **prose** this round, not the rulings, and specifically every **assertion-ID citation**
-in it — the operation that caught AR-HBA-17.
+in it — the operation that caught AR-HBA-17. **Six existed.** Three were current; three were `005.A*`
+citations from earlier rounds, never re-verified as the count went 13 → 19 → 23 → 25 → 27.
 
-**Six such citations exist. Three are current** (`008.A1`/`A2`, `003.A1`, `007.A5` — all carried in from
-the round that ruled them). ⚠️ **Three are `005.A*` citations written in EARLIER rounds and have not been
-re-verified against any later decomposition:**
+**Referred to the enumerator rather than guessed at** — assertion identity is its authority, and
+inventing a correction here would have been the wrong-pointer defect committed while fixing it.
 
-| where | citation | status |
-|---|---|---|
-| AR-HBA-08's closing line | ``005.A3`` / ``005.A5`` | written when the count was 19; **unverified at 27** |
-| AR-HBA-11's `RULING:` line | ``005.A5`` | written at 23; **unverified at 27** |
-| AR-HBA-11's reasoning point 1 | ``005.A5`` | same |
+> ✅ **RESOLVED, and the resolution is the finding.** The enumerator confirmed **all three were still
+> correct** — and that *"every addition across all eight clauses in five issues was an **append**. No
+> ordinal has ever shifted. **They survived because nothing ever inserted, not because anything
+> checked them.**"* Every ordinal in this register has since been **de-cited** (AR-HBA-19) and the
+> append-only discipline they were silently relying on has been **written down** (AR-HBA-20).
 
-**This is a defect CLASS, not three typos: an assertion-ID citation inside a ruling's reasoning goes
-stale silently every time the decomposition grows.** The count has gone 13 → 19 → 23 → 25 → 27, and
-nothing re-checks these on the way past. AR-HBA-17 is the first instance to be caught; **these three are
-the same shape and are NOT being guessed at here.** `005.A3` is at least *plausible* for AR-HBA-08 (its
-"condition still holds" case is the at/past-threshold one, which this round's brief confirms `005.A3`
-is), but `005.A5` cannot be checked from the register alone.
+## Seventh round (2026-08-13) — rulings AR-HBA-19…20
 
-> **Referred to the enumerator, which is the authority on assertion identity** — not resolved here, and
-> deliberately not "corrected" by inference. Either it confirms the three, or they should be **de-cited
-> in favour of naming the behaviour** rather than the ID. **AR-HBA-11's is the one that matters**: its
-> entire argument is *"`005.A5` already carries it"*, so if that ID is wrong the ruling's justification
-> points at nothing — the exact failure AR-HBA-17 describes, sitting in the ruling that was written to
-> make an assertion testable.
+### AR-HBA-19 — every ordinal citation is replaced by a behaviour phrase
+
+**RULING:** de-cite **every** assertion-ordinal citation in this register, using the enumerator's
+substitution table **verbatim**. Assertion identity is the enumerator's; the register does not
+paraphrase it.
+
+**Nothing in the enumeration moves.** No assertion text changes, no re-hash, no dangled citation — the
+edits are entirely to *this register's prose*.
+
+**Why a behaviour phrase is the stable form.** It carries **no ordinal, no hash and no signal name**, so
+it is stable under re-decomposition **by construction** — where an ordinal is stable only for as long as
+nobody inserts.
+
+🔴 **One substitution is a strict improvement, not merely a stabilisation.** AR-HBA-08's `005.A3`: at
+the third issue the re-raise **split** into a running case and a stopped case. AR-HBA-08's DON'T-CARE
+covers **both**, but the ordinal named only **one of them** — *narrowed silently, without ever becoming
+wrong.*
+
+> *** A RE-VERIFICATION THAT ONLY ASKS "DOES THIS ORDINAL STILL EXIST?" WOULD PASS IT. ***
+
+The behaviour phrase — *the re-raise after a reset with the condition still holding* — re-widens to
+both, repairing a narrowing that no existence check could have detected. **That is the narrowing repair
+(AR-HBA-13) reappearing in a citation rather than in a clause.**
+
+**And the cheapest instance of the ruling was already present.** AR-HBA-11's reasoning **already
+contained its own de-cited form** — the behaviour description sat in italics immediately after the
+ordinal — so deleting the ordinal left the argument reading unchanged. The enumerator's observation is
+worth keeping: *** the de-cited form is what people write naturally when they are actually thinking
+about the behaviour. *** The ordinal is what gets added afterwards, to look precise.
+
+**CHANGED:** ten citations across AR-HBA-08, AR-HBA-11, AR-HBA-14, AR-HBA-15, AR-HBA-17, AR-HBA-18 and
+the fifth-round intro. **No clause text, no assertion text.**
+
+### AR-HBA-20 — assertion ordering within a clause is APPEND-ONLY
+
+**RULING:** ordinals are assigned **append-only**. A re-decomposition **never reorders** existing
+assertions within a clause. **The reading order of a clause's text carries no implication whatever about
+its assertions' ordinals.**
+
+**The fourth member of the defect family, and the sharpest:**
+
+> *** A CORRECTNESS PROPERTY, CORRECTLY STATED, THAT MAKES AN UNSAFE OPERATION LOOK SAFE — BECAUSE THE
+> PROPERTY DOES NOT COVER THE THING THAT ACTUALLY DEPENDS ON IT. ***
+
+`assertion-enumeration.md` §3.2 guarantees an ID depends on **nothing positional**. That is true and
+load-bearing — but it *reads* as *"order does not matter"*, and order **does** matter, to every ordinal
+written in prose. So an enumerator may reorder within a clause and **no ID moves, no text moves, no gate
+fires, and every ordinal citation silently retargets.** *The guarantee that makes the ID scheme sound is
+exactly what makes the reorder look free.*
+
+**The exposure was real, not theoretical:** the enumerator followed append-only for five issues **to
+keep its re-hash reports small**. No rule required it. It is written down nowhere. Every ordinal
+citation in this register survived on that unstated habit.
+
+🔴 **And the temptation is LIVE in this register right now — do not tidy it.**
+
+> **REQ-HBA-002 states limb 1 FIRST in its text, but limb 1 is `002.A3`** — appended so that `002.A1`
+> and `002.A2` would not shift. **The ordinal order therefore disagrees with the clause's own reading
+> order, which looks exactly like an untidiness worth fixing.** It is not. Renumbering to match the
+> prose would retarget every citation to that clause while moving no text and firing no gate.
+> **Same treatment as the "specified" hazard, and for the same reason: *costless at the moment you do
+> it*.**
+
+**Note the interaction with AR-HBA-19, which is what makes the pair worth having:** once **no prose
+depends on an ordinal**, reordering genuinely *is* free and this rule stops being load-bearing.
+De-citing is what earns the freedom the §3.2 guarantee appeared to promise. Until every artifact that
+cites this enumeration is de-cited, append-only is the thing holding it up.
+
+**CHANGED:** this entry, plus the Format section's referencing rule. **No clause text.**
+
+### Combination read — a rule ABOUT the register's own referencing
+
+A new kind of edit for this register, so read for what it interacts with rather than what it says.
+
+1. **AR-HBA-19 × AR-HBA-17.** AR-HBA-17 corrected a pointer *to another ordinal*; AR-HBA-19 removes the
+   category. **The correction survives de-citing** because it was a claim about *which behaviour*
+   governs, not about which number — re-checked, and the corrected item 4 now names the behaviour
+   directly. **De-citing does not erase the AR-HBA-17 finding; it removes the mechanism that produced
+   it.**
+2. **AR-HBA-19 × AR-HBA-14/18's residual `002.A3` / `008.A3`.** The "specified" hazard note names those
+   two **to identify assertions whose wording must be preserved** — an *identifying* use, not a
+   *citing* one, and the enumerator supplied **no substitution** for them. **Left as ordinals and
+   flagged here**: they are the register's only remaining positional references and they are therefore
+   the only place AR-HBA-20's discipline is still doing real work. If those two are ever de-cited, this
+   register stops depending on ordinals entirely.
+3. **AR-HBA-20 × REQ-HBA-002's structure.** Recorded above as the live case. Worth noting that the
+   append-only discipline and AR-HBA-13's *"restoration, not reversal"* pull the same way: limb 1 is
+   both **stated first** and **appended last**, and *both* facts are deliberate.
+
+**Checked and found clean:** no substitution altered a ruling's conclusion — each replaced a reference,
+not an argument; AR-HBA-19 introduces no new claim about behaviour, so the count stays **27**; and
+neither ruling touches a clause `Text`.
 
 **Checked and found clean:** AR-HBA-18's definition does not disturb AR-HBA-08's by-case split (it
 supplies a duration to the "cleared" case, which that split leaves open); it does not interact with
