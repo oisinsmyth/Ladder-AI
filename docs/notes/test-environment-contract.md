@@ -80,6 +80,7 @@ Vector                        -- one element of the submission's `vectors` array
   compressionFactor   the `comp` this vector's scan counts are stated at  -- §4.4
   assertedBehaviours  [ behaviour ]   -- set-differenced against the model's `represents` (M4)
   kills               the wrong implementation this vector would catch    -- §2.2
+  boundsUsed          bound name -> the value THIS VECTOR WAS WRITTEN AGAINST   -- §2.5, AMB-19
 
 Submission                    -- the top-level object the vectors are submitted inside
   blockAuthor         agent identity, for D6
@@ -87,7 +88,8 @@ Submission                    -- the top-level object the vectors are submitted 
   slotsInWaveSet          \__ feed §12a derivation 1's floor, which scales with tensor width
   resultRegistersPerSlot  /
   model               { id, represents, doesNotRepresent, validatedAgainstPlantData, compStable }
-  enumeration         { clauses, assertions, forms, enumerator }   -- §3
+  enumeration         { clauses, assertions, forms, enumerator,      -- §3
+                        normalisedTexts, requiredObservations, bounds }   -- §2.5 and §10's 3g/3h/3i
   map                 { providedFor: signal -> [ modes ] }         -- §4.3
   computedConflicts   [ block ]        -- D9's graph as bare names, carrying NO provenance
   conflictEdges       [ { blockA, blockB, provenance, signal, class } ]   -- X-G, provenanced
@@ -307,6 +309,12 @@ This is the one table to read before omitting anything. Four treatments, and the
 | an `s7Objects` row's `layout` | **REFUSED** | absence means "no opinion", and TIA resolves no opinion to **Optimized** — which is invisible on the wire. Undetermined is not clean |
 | `layoutSetAfterImport`, or one naming an older `importStamp` | **REFUSED** | the layout reverts at **every** import; a stale stamp says it was re-asserted and has reverted since |
 | an `s7Objects` row naming a **deliverable** block | **REFUSED** | the invariant itself, §4.5. Not a finding — the harness touches harness-generated objects only |
+| a vector's `boundsUsed` (§2.5) | ***NOT CHECKED*** | ***this is the AMB-19 hole itself, not a formality*** — a vector that records no bound **can never be found stale by anything**, so it survives a retune with every gate green. It keeps this status even beside a provably stale sibling |
+| `enumeration.bounds` | ***NOT CHECKED*** | a property of the **enumeration**; an absent table is not an agreeing one |
+| a declared bound that **differs** from the table | **REFUSED, reported as `STALE`** | ***never `FAIL`*** — the block may be perfectly correct and the vector predates a retune. §2.5 |
+| a declared bound the table does **not contain** | **REFUSED, reported as `Unknown`** | a disagreement about which bounds *exist*, whose repair precedes any question about a value — so it outranks `Stale` |
+| `enumeration.normalisedTexts` | ***NOT CHECKED*** | the stamper's output is then taken on trust, and **the omission is exactly what a compromised stamper would emit** |
+| `enumeration.requiredObservations` | ***NOT CHECKED*** | a relational assertion's second signal goes unobserved and the relation is untested while everything reports green (AMB-14) |
 
 **One field is a genuine default and is named as such: none.** *(`presets: []` is a claim, not a
 default; `runtimeCompression`, `slotsInWaveSet` and `resultRegistersPerSlot` default to 1 as the
@@ -320,6 +328,107 @@ Both fail closed and neither is a pass, so the gap between them is between **two
 the diagnostic is worse than it should be, and the fix is the document's own stated rule: *every field
 nullable on the way in, so a missing one reaches the gate as MISSING rather than as a default.* Owed by
 the harness.
+
+---
+
+### 2.5 `boundsUsed` — ***WHICH NUMBER THIS VECTOR WAS WRITTEN AGAINST.*** ADDED 2026-08-13 (AMB-19)
+
+**REQUIRED FOR ADMISSIBILITY.** A vector that omits it is not admitted.
+
+> ***THE HOLE THIS CLOSES IS MADE ENTIRELY OUT OF CORRECT DECISIONS, WHICH IS WHY IT SURVIVED.***
+
+Two rulings, each right on its own:
+
+1. **No hashed assertion text contains a numeric bound.** That is what makes a re-issue of an
+   enumeration cost zero re-hashes when an output is renamed, and it is what lets a clause refer to a
+   bounds **table** rather than to a value.
+2. **Retuning the table therefore re-hashes nothing.** Also correct — no assertion's *text* changed.
+
+Put them together:
+
+> *** A RETUNE CHANGES THE TRUTH CONDITIONS OF EVERY ASSERTION THAT REFERS TO THE TABLE WHILE MOVING
+> ZERO ASSERTION IDs. *** On the hopper enumeration that is 22 of 27. **A vector written against
+> `T#60S` goes on passing after the bound becomes `T#90S`** — no citation dangles, nothing recomputes
+> wrong, and no `Stale` fires, because staleness keys on assertion IDs and not on bound values. *The
+> vector tests the wrong number and every mechanical check agrees it is fine.*
+
+**The fix is one comparison, and it lives outside the register:** the vector states which bound it was
+written against, and submission compares that against the table.
+
+```
+Vector
+  boundsUsed        bound name -> the value THIS VECTOR WAS WRITTEN AGAINST
+                    e.g. { "persistence_threshold": "T#60S" }
+
+enumeration
+  bounds            bound name -> the value the specification CURRENTLY STATES
+                    e.g. { "persistence_threshold": "T#60S" }
+```
+
+***Carry the BARE VALUE on both sides.*** The enumeration's YAML writes provenance prose beside the
+number — `"T#60S  (Q-HBA-01, owner) — the SPECIFIED value"` — and these fields want `"T#60S"`. A
+mis-transcription then surfaces as a **loud STALE naming both strings**, never as a silent pass.
+
+#### 🔴 A mismatch is `STALE`, and it is NEVER `FAIL`
+
+**A `FAIL` says the block disagreed with the specification.** Here the block may be perfectly correct
+and the vector simply predates a retune nobody told it about. ***Reporting that as a disagreement would
+send an agent to edit correct logic*** — which is the missing-predicate defect (§2.2) exactly one field
+over: a fact nobody supplied, surfacing as a verdict about the block.
+
+The refusal ends ***"Do NOT edit the block on the strength of this finding"***, and a test asserts that
+sentence. **It is load-bearing text, not decoration.**
+
+#### It outranks BOTH its neighbours in the result package, and each precedence is separately argued
+
+| it comes before | because |
+|---|---|
+| **admissibility** (`Refused`) | `Refused` reads as ***the author broke a rule***, and this author broke none — the number moved underneath them. And there is no useful sense in which a well-formed test of the wrong number is "admissible" |
+| **content** (`Fail`/`Pass`) | ***a retuned bound is `Stale` even when an assertion disagreed***, because a disagreement measured against the wrong number is not evidence of anything |
+
+#### Two roads to `Stale`, and they need two different instructions
+
+| road | it is a … | what to do |
+|---|---|---|
+| a frozen mirror / no stimulus | ***RIG*** problem | the experiment never ran; nothing here says anything about the block |
+| an expired premise (`boundsUsed`) | ***VECTOR*** problem | re-read the vector against the current table and re-submit. **Do not touch the block** |
+
+**They are not collapsed into one sentence**, deliberately: telling somebody *"the experiment never ran"*
+when it was the premise that expired sends them to the wrong half of the system entirely.
+
+#### The comparison rule is ASYMMETRIC ON PURPOSE — say why, or somebody will "fix" it
+
+> ***LAX WHERE LAXITY FAILS CLOSED. STRICT WHERE LAXITY WOULD FAIL OPEN.***
+
+- **A bound's NAME is compared case-insensitively.** Getting a name wrong yields a **refusal**, so a
+  lenient match there can only ever turn a refusal into a real comparison. Laxity fails closed.
+- **A bound's VALUE is compared ordinally, case preserved.** A lenient match here would turn a real
+  difference into a ***PASS*** — the one direction this check may never move in.
+
+***And it is deliberately NOT a duration parser: `T#60S` and `T#1M` are the same interval and it reports
+them as different.*** Teaching it to equate them means teaching it to equate things, which is how a
+comparator starts passing. The report prints both strings, so **the cost of the strictness is a human
+reading two values; the cost of the leniency would be a silent green.**
+
+#### The four states, and only one is a pass
+
+| state | means | is it a pass? |
+|---|---|---|
+| **Current** | every declared bound matches the table — *and the pass NAMES the values it checked* | ✅ the only one |
+| **Stale** | a declared bound differs from the table's current value | ❌ refuses. **Not the block's fault** |
+| **Unknown** | a declared bound names nothing in the table — *a disagreement about which bounds EXIST*, not about a value. Its repair comes first, so it **outranks Stale** | ❌ refuses. Not the block's fault |
+| **NotDeclared** / **NoTable** | the vector said nothing, or the enumeration supplied no table | ❌ ***NOT CHECKED*** |
+
+***`NotDeclared` KEEPS ITS OWN STATUS EVEN BESIDE A PROVABLY STALE SIBLING.*** A submission containing
+both is reported as **NOT CHECKED**, with the stale ones named separately underneath — because
+*"we compared and refused"* must never be allowed to hide *"and these we could not compare at all."*
+Both refuse, so nothing is admitted either way; **only the report differs, and the report is the build
+list.**
+
+**What it cannot tell apart, stated rather than hidden:** a genuine retune and a mis-transcribed table
+entry produce the same finding. Both are `Stale`, both need a person, and **neither is the block's
+fault** — so the verdict is right in both cases even though the diagnosis is not determined. What it
+must never do is resolve that ambiguity by guessing in the passing direction.
 
 ---
 
@@ -659,8 +768,13 @@ and manifest presence.
 | **FAIL** | an assertion was observed and disagreed | the vector is right. **Fix the block against the SPECIFICATION, not against the vector** (§2.4) |
 | **TIMED-OUT** | the condition never occurred within `MaxDuration` | the wrong thing happened. X-B keeps these distinct precisely because an agent told only FAIL will go and fix the wrong thing |
 | **UNSETTLED** | the value never met its settling condition | the value was wrong — **nothing was legitimately read at all** |
-| ***STALE*** | ***the experiment never ran*** | anything whatsoever about the block |
+| ***STALE*** | ***the experiment never ran*** — **or the vector's premise expired** (§2.5) | anything whatsoever about the block |
 | **REFUSED** | the vector was inadmissible (observability, fidelity, authorship, basis) | a defect in the block |
+
+***`STALE` HAS TWO ROADS AND THEY NEED DIFFERENT INSTRUCTIONS*** (§2.5). A frozen mirror is a **RIG**
+problem — the experiment never ran. An out-of-date `boundsUsed` is a **VECTOR** problem — the experiment
+ran fine and measured the wrong number. **Read which one the result names before acting**, and in
+neither case edit the block.
 
 ### 8.2 ***`Stale` must be unmistakable, and here is why it is hard***
 
@@ -785,6 +899,10 @@ of saying so.
 | **schema** | all §2 fields present and typed; `MaxDuration` non-empty | reject, naming the field |
 | **authorship** | vector author ≠ block author (D6) | ***refuse.*** Not a warning — this is the correlated check the pipeline exists to prevent |
 | **basis** | clause resolves to written text; assertion ID is in the spec-derived enumeration | reject, naming which half failed |
+| **3f citation shape** | the citation is the content-derived ID, never the **display ordinal** | reject. An ordinal is POSITIONAL, so inserting one assertion above it silently makes the citation name a different one |
+| **3g assertion IDs recompute** | every ID re-hashes from the `normalisedTexts` it claims to come from | reject. ***This recomputation is the ONLY reason a stamper is permitted to have no independence*** — without it a hand-written hex string is indistinguishable from a computed one. Absent texts are `NOT CHECKED` |
+| **3h required observations** (AMB-14) | every signal the cited assertion depends on appears in this vector's `Expectations` | reject, naming the unobserved signals. A relational assertion has more than one, and observing one tests neither the other nor the relation |
+| **3i bounds currency** (AMB-19, §2.5) | each `boundsUsed` value matches `enumeration.bounds` | ***refuse, reported as `STALE` and never `FAIL`***, ending *"Do NOT edit the block on the strength of this finding"*. A vector declaring no bound is `NOT CHECKED` **and keeps that status beside a stale sibling** |
 | **fidelity** | every asserted behaviour ∈ the model's fidelity declaration (M4) | reject with both sets shown |
 | **observability** | mode valid; signal in the map; window ≥ §12a's floor **at the run-time `comp`**; declaration predates the generating download | ***refuse the vector*** — §2.6's own rule |
 | **settling** | declaration exists; **is not the completion flag alone** | reject, citing phase 2's `Done`-at-10-ramps-to-15 |

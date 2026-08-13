@@ -77,6 +77,10 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 3c | *is the assertion a faithful reading of the clause?* | — | **nothing, ever** | **JUDGEMENT** |
 | **3d** | **enumerator independence** | the enumeration's author ≠ the block's author and ≠ any vector's author — otherwise D6 is lost **at the denominator** and citing into it buys nothing | `AgentIdentity`, **normalised** — measured: `"AGENT-B "` against a vector author `agent-b` is **REFUSED**, so a case or trailing-space variant does not slip past | **CHECKED** *(NOT CHECKED without `enumeration.enumerator`)* |
 | **3e** | **assertion form authority** | the vector's declared `assertionForm` must match the form the **enumeration** records for the assertion it cites | `AssertionEnumeration` — the enumeration is the authority, so the vector can no longer declare its own form and take the permissive path | **CHECKED** *(NOT CHECKED without `enumeration.forms`)* |
+| **3f** | **citation shape** | the citation is the content-derived ID (`<clause>:<six lowercase hex>`), **never the display ordinal** | `AssertionId`. An ordinal is **POSITIONAL** — inserting one assertion above it silently makes the citation name a different one | **CHECKED** |
+| **3g** | **assertion IDs recompute** | every ID re-hashes from the `normalisedTexts` it claims to come from | `AssertionId.Compute`. ***This recomputation is the ONLY reason the stamper is permitted to have no independence from the block or vector author*** — without it a hand-written or altered hex string is indistinguishable from a computed one, **and the omission is exactly what a compromised stamper would emit** | **CHECKED** *(NOT CHECKED without `enumeration.normalisedTexts`)* |
+| **3h** | **required observations (AMB-14)** | every signal the cited assertion depends on appears in this vector's `Expectations` | `AssertionEnumeration.RequiredObservationsOf` — set difference. **A relational assertion names more than one**: expect on one output, never observe the other, and the relation is untested while everything reports green | **CHECKED** *(NOT CHECKED without `enumeration.requiredObservations`)* |
+| **3i** | **bounds currency (AMB-19)** — contract **§2.5** | each vector's `boundsUsed` value matches `enumeration.bounds` | `BoundsCurrencyCheck`. ***A mismatch REFUSES and is reported as `STALE`, NEVER `FAIL`***; a vector declaring no bound is **NOT CHECKED and keeps that status beside a stale sibling** | **CHECKED** *(NOT CHECKED without `boundsUsed` or `enumeration.bounds`)* |
 | 4 | **fidelity (M4)** | asserted behaviours ⊆ the model's `Represents` | `Admissibility` — set difference | **CHECKED** |
 | 5 | **observability** | mode valid; signal in the map; window ≥ §12a derivation 1's floor **at the run-time `comp`**; declared before the generating download | ***`ObservabilityCheck` — A COMPUTATION.*** It was a caller-supplied `bool`; it is now derived from the vector's declared nature+mode, what the MAP provides, and the floor `harness-gate` computes from the wave set | **CHECKED** |
 | 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
@@ -88,7 +92,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
 | **10a** | **time compression — assertion ceiling (X-D)** | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | `TimeCompression`. ***It catches what gate 5 structurally cannot:*** gate 5 exempts LATCHED and STAMPED from the observability floor, correctly — **X-D does not exempt them from the SCAN-PERIOD term.** An event compressed below one scan is not long enough to be latched either, so a latched declaration that clears gate 5 at every factor can still be void at the one being run | **CHECKED** |
 | **10b** | **time compression — timer / model / ratio ceilings (X-D)** | at `runtimeCompression` > 1: the block's timer presets (`PT / (k x scan)` — the term **X-D says often binds first**), the model's `comp_stable`, and the ratio-distortion bound on unscaled literals | `TimeCompression.Plan`, from contract **§2.3**'s `blockCompression` + `model.compStable`. **At `comp` = 1 this is a REAL computed pass** (nothing is scaled, so none of the three can bind). **Above 1 with the inputs absent it is NOT CHECKED and fails closed** | **CHECKED** *(NOT CHECKED without `blockCompression`, above comp 1)* |
-| **11** | **memory layout (§4.5)** | every `(area, dbNumber)` a classic-S7comm path can reach names a **harness-generated** object, declares `Standard` (or `NotApplicable`), and its `layoutSetAfterImport` equals the current `importStamp` | ***NOTHING YET.*** The contract rules it (§4.5, 2026-08-13); `SubmissionGate` has no gate 11 and `SubmissionDocument` has no `deployment` field. **Do not report this as checked because the table lists it** | ***NOT CHECKED*** |
+| **11** | **memory layout (§4.5)** | every `(area, dbNumber)` a classic-S7comm path can reach names a **harness-generated** object, declares `Standard` (or `NotApplicable`), and its `layoutSetAfterImport` equals the current `importStamp` | `SubmissionGate.MemoryLayout` against the deployment declaration **and the tag map's reach** — so a row naming an object that SHIPS is ***the invariant broken, not a finding***. An unstated layout is refused: absence means "no opinion" and **TIA resolves no opinion to Optimized** | **CHECKED** *(NOT CHECKED without `deployment`, or without an `importStamp` beside a non-empty `s7Objects`)* |
 
 ### The command
 
@@ -128,6 +132,12 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | `model.compStable`, above comp 1 | ***REFUSED*** | the plan is asking a model to run at a rate nobody declared |
 | `deployment` (§4.5's layout record) | ***NOT CHECKED*** | a property of the **download**, not of a vector. Absent is **not** the same as `s7Objects: []`, which is a positive claim that no S7comm path reaches a data block |
 | an `s7Objects` row's `layout`, or `layoutSetAfterImport` | ***REFUSED*** | absence means "no opinion" and **TIA resolves no opinion to `Optimized`**, which is invisible on the wire. A stale stamp means it reverted at the last import |
+| a vector's `boundsUsed` (§2.5) | ***NOT CHECKED*** | ***this is the AMB-19 hole itself, not a formality*** — a vector that records no bound **cannot be found stale by anything**, so it survives a retune with every gate green. **It keeps this status even beside a provably stale sibling**: *"we compared and refused"* must not hide *"and these we could not compare at all"* |
+| `enumeration.bounds` | ***NOT CHECKED*** | an absent table is not an agreeing one |
+| a declared bound that **differs** from the table | **REFUSED, reported `STALE`** | ***never `FAIL`.*** The block may be correct and the vector predates a retune |
+| a declared bound the table does **not contain** | **REFUSED, reported `Unknown`** | a disagreement about which bounds *exist*; its repair precedes any question about a value, so it outranks `Stale` |
+| `enumeration.normalisedTexts` | ***NOT CHECKED*** | the stamper's output is taken on trust — **and the omission is exactly what a compromised stamper would emit** |
+| `enumeration.requiredObservations` | ***NOT CHECKED*** | a relational assertion's second signal goes unobserved and the relation is untested while everything reports green |
 
 **Contract §2.4 is the single authoritative version of this table** — it covers the document fields this
 one omits, and no gate may invent a treatment that is not in it. The four treatments are different
@@ -171,7 +181,7 @@ Every field of contract §2 present, in the wire spelling the runner reads: `id`
 `author`, `clause`, `assertion`, `assertionForm`, `inputs`, `startBool`,
 `expectations[{signal, nature, mode, windowScans, expected}]`, `settlingCondition` +
 `settlingSignals` (**per vector, not per expectation**), `maxDurationScans`, `completionSignal`,
-`completionValue`, `blacklist`, `compressionFactor`, `assertedBehaviours`, `kills`.
+`completionValue`, `blacklist`, `compressionFactor`, `assertedBehaviours`, `kills`, `boundsUsed`.
 
 **`MaxDuration` is not a formality** — X-B makes it the per-test timeout and DB-13 needs it for wave
 length, so a vector without one can neither be packed nor bounded. Its wall-clock backstop is
@@ -195,6 +205,41 @@ A clause alone is *admissible and nearly worthless*. The clause says where the r
 half** — two readings of one clause produce two *visibly different* assertions instead of two greens.
 The assertion must be an **ID cited from the spec-derived enumeration**. An author who *writes* an
 assertion rather than *citing* one has re-created the correlated check with extra steps.
+
+### Gate 3i — bounds currency, ***the hole made entirely out of correct decisions***
+Contract **§2.5**. Two rulings, each right on its own: **no hashed assertion text contains a numeric
+bound** (which is what makes a re-issue cost zero re-hashes), and **retuning the bounds table therefore
+re-hashes nothing.** Together:
+
+> *** A RETUNE CHANGES THE TRUTH CONDITIONS OF EVERY ASSERTION REFERRING TO THE TABLE WHILE MOVING ZERO
+> IDs *** — 22 of 27 on the hopper enumeration. A vector written against `T#60S` goes on passing after
+> the bound becomes `T#90S`: nothing dangles, nothing recomputes wrong, and no `Stale` fires, because
+> staleness keys on assertion **IDs** and not on bound **values**.
+
+- **`boundsUsed` is REQUIRED for admissibility.** `{ "persistence_threshold": "T#60S" }` on the vector,
+  compared against `enumeration.bounds`. **Carry the bare value** — the enumeration's YAML wraps the
+  number in provenance prose; a mis-transcription then shows up as a loud STALE naming both strings.
+- 🔴 ***A MISMATCH IS `STALE` AND NEVER `FAIL`.*** A `FAIL` says the block disagreed with the
+  specification; here the block may be perfectly correct and the vector predates a retune nobody told it
+  about. The refusal ends ***"Do NOT edit the block on the strength of this finding"*** and a test
+  asserts that sentence — **it is load-bearing text.** Same defect as the missing predicate, one field
+  over: a fact nobody supplied, surfacing as a verdict about the block.
+- **It outranks both neighbours in the result package.** Before **admissibility**, because `Refused`
+  reads as *the author broke a rule* and this author broke none. Before **content**, because ***a
+  retuned bound is `Stale` even when an assertion disagreed*** — a disagreement measured against the
+  wrong number is not evidence.
+- **A vector stating no bound is NOT CHECKED, and keeps that status beside a provably stale sibling.**
+  Both refuse, so nothing is admitted either way; only the report differs — and *"we compared and
+  refused"* must not hide *"and these we could not compare at all."*
+- **`Unknown` (a bound the table does not contain) outranks `Stale`**: a broken reference has to be
+  repaired before any question about its value can be asked.
+- ***The comparison is ASYMMETRIC on purpose — say so, or somebody will "fix" it.*** The bound's **name**
+  is case-insensitive because a wrong name yields a refusal, so laxity there **fails closed**. The
+  bound's **value** is ordinal and case-preserving because laxity there would turn a real difference into
+  a ***pass***. And it is deliberately **not a duration parser**: `T#60S` and `T#1M` are the same
+  interval and it reports them as different — *teaching it to equate them is how a comparator starts
+  passing.* The cost of the strictness is a human reading two values; the cost of the leniency is a
+  silent green.
 
 ### Gate 4 — fidelity (M4)
 Set-difference: every asserted behaviour must be in the model's `Represents`. A model that claims
@@ -344,8 +389,19 @@ So for every vector, require and record:
 | **FAIL** | an assertion was observed and disagreed | that the vector is right. ***Fix the block against the SPECIFICATION, not against the vector*** |
 | **TIMED-OUT** | the condition never occurred within `MaxDuration` | the wrong thing happened. Kept distinct because an agent told only FAIL goes and fixes the wrong thing |
 | **UNSETTLED** | the value never met its settling condition | that the value was wrong — **nothing was legitimately read at all** |
-| ***STALE*** | ***the experiment never ran*** | anything whatsoever about the block |
+| ***STALE*** | ***the experiment never ran*** — **or the vector's premise expired** (§2.5) | anything whatsoever about the block |
 | **REFUSED** | the vector was inadmissible | a defect in the block |
+
+### ***`Stale` has TWO ROADS, and they send you to different halves of the system***
+
+| road | it is a … | what to do |
+|---|---|---|
+| frozen mirror / no stimulus confirmed | ***RIG*** problem | the experiment never ran. Nothing here is evidence about anything |
+| an out-of-date `boundsUsed` (AMB-19) | ***VECTOR*** problem | the experiment ran fine and **measured the wrong number**. Re-read the vector against the current bounds table and re-submit |
+
+**In neither case do you edit the block** — and telling somebody *"the experiment never ran"* when it
+was the premise that expired sends them to the wrong place entirely. **Read which road the result
+names.**
 
 ### `Stale` is the one that will fool you
 
@@ -415,8 +471,11 @@ turns on one, escalate rather than picking a reading.
 3. ✅ **RESOLVED 2026-08-13 — `kills` is now in contract §2 (§2.2), REQUIRED, and absent is a refusal.**
    So are `expected`, `completionSignal` and `completionValue`, all four of which the runner consumed
    while §2 named none of them. **Contract §2.3 adds `blockCompression` + `model.compStable`**, without
-   which the compressed path was permanently NOT CHECKED. *If a submission predates these, it will fail
-   the schema gate for a good reason — do not tell the author the tool is wrong.*
+   which the compressed path was permanently NOT CHECKED. **§2.5 adds `boundsUsed`, required for
+   admissibility.** *If a submission predates any of these it will be refused for a good reason — do not
+   tell the author the tool is wrong.* ⚠️ **Expect this**: a vector set that names its bound in **prose
+   only** carries no `boundsUsed` and is **NOT CHECKED at 3i**. The repair is to declare the field, not
+   to argue that the number was written down somewhere.
 4. **"Agent identity" is undefined.** D6 turns on vector author ≠ block author, and the code compares
    two strings with `StringComparison.Ordinal`. What makes two agents different — session, model,
    worktree? **Ordinal equality on an unspecified string is a gate that is passed by typing a different
@@ -444,6 +503,8 @@ turns on one, escalate rather than picking a reading.
     block did it.
 11. **§4.5's memory-layout invariant is the COORDINATOR'S ruling, not the owner's**, and it is
     overturnable at one line. It costs a deliverable nothing (the block under test stays `Optimized`),
-    which is why it was taken rather than escalated — **but it is enforced by nothing today**, and the
-    place it would break is a hand-written S7 tag map naming a deliverable block's DB. If a submission
-    reaches a deliverable block over classic S7comm, that is not a vector to fix: **stop and escalate.**
+    which is why it was taken rather than escalated. **Gate 11 now enforces it** against the tag map's
+    reach — a declared object that SHIPS is refused as *the invariant broken, not a finding*. **What is
+    still unenforced is the tag map itself**: `S7TagMap` will address any DB, and `RigWriteCli --db` /
+    `Harness.RigRead --db` are free-form. If a submission reaches a deliverable block over classic
+    S7comm, that is not a vector to fix: **stop and escalate.**
