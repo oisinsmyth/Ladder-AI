@@ -2657,6 +2657,77 @@ cell not quoted from the contract is marked `[I]` in the source.
 so every real submission gets **NOT CHECKED** on the blacklist gate — *the correct outcome, not a
 passing one*.
 
+### 🔴🔴 A COMPILE SCOPE EXISTS THAT FINDS ERRORS NONE OF OUR COMPILES FIND — 2026-08-13
+
+**The download failure has a named cause, supplied by the owner from TIA's GUI (Info → Compile):**
+
+    An internal consistency error has occurred. Please compile the program in this CPU again.
+    The following blocks could not be compiled: FC_ModbusTCP_Sample [FC8];
+
+*** THAT DETAIL IS ABSENT FROM THE OPENNESS API RESULT ENTIRELY. *** `download-probe` already walks
+the download result's message tree recursively and prints it verbatim — **that is not the gap.** On
+failure the API **throws**, and the exception's *entire* content is:
+
+    An error has occured during download: 'Software compiling completed with error.'
+
+— with its "openness detail messages (1) — this type's substitute for InnerException" carrying **the
+same string and nothing more.** The block-level detail lives only in TIA's own UI log.
+
+> #### 🚨 AND FOUR CHECKS DISAGREED WITH THE DOWNLOAD
+>
+> | check | verdict |
+> |---|---|
+> | `compile --block FC_ModbusTCP_Sample` | **clean**, `CONSISTENT: yes`, exit 0 |
+> | device compile | `Success, errors=0` |
+> | `compile-all --force` | 117 compiled, **0 errors**, 0 inconsistent |
+> | `sanity-check` | *** `OVERALL: HEALTHY`, both lines *** |
+> | **the download's internal compile** | *** FAILED, NAMING FC8 *** |
+>
+> *** SO THERE IS A COMPILE SCOPE THAT FINDS ERRORS NONE OF OUR COMPILES FIND — AND HARD RULE 4's GATE
+> IS BUILT ENTIRELY ON THE ONES THAT SAID CLEAN. *** A manual **Compile → Software (rebuild all)** in
+> the TIA GUI cleared it and the download then succeeded (`state=Success`, full load manifest).
+>
+> **This supersedes the earlier "unexplained" entry.** The temporal association with the block-number
+> re-imports was correctly *not* written up as cause — and it was not the cause. `FC_ModbusTCP_Sample`
+> is the pre-existing sample block with the dangling instance-DB reference, carried since 2026-08-12
+> as *"not ours"*.
+
+  ➜ **Under investigation, and the owner wants to be involved:** which Openness compile scope the
+    download's internal compile corresponds to, whether a `Compile()` on the **software** object (as
+    against per-block or per-device) reproduces it, and whether **any** surface — including TIA's own
+    log files on disk — carries the block-level detail. *** IF A SCOPE EXISTS THAT WE ARE NOT USING
+    AND THAT WOULD HAVE CAUGHT FC8, THAT IS A HARD-RULE-4 CHANGE. ***
+  ➜ **FC8 is deliberately NOT being deleted** — it is the only known reproducer, and the owner asked
+    for the mechanism rather than a workaround.
+
+### ✅ `sanity-check` NOW CATCHES DUPLICATE BLOCK NUMBERS — exit 19 (2026-08-13, `b9c80b3`)
+
+**562 → 586 tests.** Grouped by *** `(device, block type, number)` — and all three parts are
+load-bearing: *** block numbers are scoped to a PLC and `EnumerateBlocks` walks every device (two PLCs
+each holding FC 910 is legal); FC/FB/OB/DB are separate number spaces; but two block *groups* on one
+device share one number space, **so a collision hidden in a folder is still caught.**
+
+`DUPLICATE NUMBERS:` prints **always, including at zero** — FI-62's rule: *a count that only appears
+when non-zero is indistinguishable from a check that does not exist.*
+
+  ➜ **Exit 19, deliberately not folded into 9.** 9 means *"inconsistent, or a device failed to
+    compile"*, and the measured project was **perfectly consistent and compiled clean** — worse, *** 9's
+    DOCUMENTED REMEDY IS "COMPILE THE LISTED BLOCKS", WHICH IS EXACTLY WHAT ERASED THE ONLY SIGNAL
+    THERE WAS. *** 19 outranks 9 and 13, because every other verdict either clears itself or announces
+    itself again, **and a duplicate does neither.**
+  ➜ **`import` stays permissive on the write but earns 19 after it.** No pre-import refusal, because
+    *the commonest thing `import` does is put a block back over itself, whose number is held by
+    itself* — **a guard that fires on the normal operation gets routed around, and then protects
+    nothing.** No rollback either: that is the seam FI-63 closed. But not a warning either, because
+    the measured chain was three consecutive exit 0s **and a warning inside a green chain gets
+    skimmed.**
+  ➜ **Adjacent holes named:** everything else in `openness-cli` keys on **name, never number** —
+    `export-all` refuses on *basename* collisions, so two blocks at FC 910 with different names both
+    export cleanly at exit 0.
+  ➜ 🔴 **Residual gap stated plainly:** the tests drive `RunSanityCheck` with a hand-built result, so
+    the real gateway's call to the finder **has never run against a live project.** *A live
+    `sanity-check` against a project carrying a known duplicate would settle it.*
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
