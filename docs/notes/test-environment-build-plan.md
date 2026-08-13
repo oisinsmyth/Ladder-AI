@@ -1904,6 +1904,55 @@ expression **skips a record's validation**, so the test rebuilds through the rea
 > wider two-slot map, and **the intermittent, poll-timing-dependent form of interference** — the one
 > PC-side work explicitly cannot reach.
 
+### ✅ F-1's CODE HALF — it stayed additive, and it found a cost nobody was looking at (2026-08-13, `96188fa`)
+
+**436 → 470 tests.** *** EVERY ADDRESS, THE MAP HASH AND EVERY BYTE OF GENERATED IR ARE UNCHANGED ***
+— phase 3's golden IR tests pass without a character edited, which is what "additive rather than a
+re-layout" has to mean to be worth claiming.
+
+#### How a split read is UNEXPRESSIBLE rather than rejected — four mechanisms, each negative-tested
+
+  1. **`SlotSpan` has no register offset in the type**, so half a slot has no representation.
+  2. **The read surface takes only slot units *and returns per-slot arrays***, so a caller cannot
+     receive half a slot on the way out either.
+  3. The range is **derived inside the map**, never supplied.
+  4. *** AND THE ONE THAT ACTUALLY CATCHES THE FORBIDDEN CALL: THE PUBLIC SURFACE IS PINNED BY TEST. ***
+     A `Read(int,int)` is **indistinguishable by type** from `ReadResults(firstSlot, slotCount)`, so
+     **no type rule can catch it and only an inventory can.** Injecting exactly what X-A forbids —
+     `ReadRange(int,int)` guarded by `start % slot_size == 0` — goes red.
+
+*Too **many** whole slots is a different thing, and is checked, per X-A's own split.*
+
+> #### 🔍 FOUND WHILE BUILDING: THE INERT PHASE WAS STILL READING ONE SLOT AT A TIME
+>
+> It observes every active slot **twice per index** (D33's two checks), so it was `2K` round trips
+> where `2·ceil(K/R)` will do — *** TWO THIRDS OF THE READ TRAFFIC IN A WAVE, AND INVISIBLE IF YOU
+> ONLY LOOK AT THE POLL LOOP. *** Caught by the end-to-end round-trip test, **not by reasoning**, which
+> is the argument for having built that test at all.
+
+**A group read is trimmed to the last slot it covers.** Extending to `R`'s full reach costs the same
+transaction but reads registers nobody asked for — and registers are **~0.040 ms, not zero**. A slot
+*between* two wanted ones still rides along.
+
+**The inverted test was split, not deleted.**
+`Widening_every_slot_does_not_change_what_a_poll_costs` was **true before F-1 and is false after it**.
+The *vector* half stays (it still guards write-side register-thrift); the *result* half is inverted
+with the reason. **A deleted test leaves no trace that the property ever held.**
+`One_wide_slot_collapses_R_for_the_WHOLE_wave_set` records **F-6's subject as a measured fact and
+deliberately does not resolve it** — nothing groups, reorders or sizes anything.
+
+**13 breaks, each red and reverted byte-for-byte — and NO test-that-could-not-fail this time.** Given
+two of those in two phases, the whole-slot property is asserted *** AGAINST THE RANGES THAT ACTUALLY
+REACHED THE TRANSPORT *** — seven map shapes × six request subsets — rather than against the map's own
+arithmetic. `R` pinned to 1 fires 12 tests.
+
+  ➜ 🔴 **Owed on the device, and it is F-1's own premise:** *** THAT `MB_SERVER` SERVES A
+    120-REGISTER SIX-SLOT READ AS COHERENTLY AS A 20-REGISTER ONE-SLOT READ IS REASONED, NOT
+    MEASURED. *** A1 was measured on writes at 123 registers; this is the read side at a width no read
+    has been run at.
+  ➜ `MaxTensorWidth` is **reported, never enforced** — D36's deferral stands because `S_min` has never
+    been observed.
+
 ## PHASE 4 — THE DOWNLOAD LOOP
 
 **Cost: moderate. Mostly PC-side, and mostly already specified.**
