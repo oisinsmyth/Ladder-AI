@@ -143,6 +143,17 @@ running does not license:
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.
+- *** A COMMIT MESSAGE IS A CLAIM, NOT EVIDENCE — INCLUDING OURS. *** Measured 2026-08-13: commit
+  `f12bf1a` states *"re-export diffed byte-identical"*. **The re-export never landed.** A stale block
+  comment then sat in the controller for a month behind green checks, and the record that would have
+  exposed it instead asserted the opposite.
+    ➜ **This repo's audit trail is its commit messages**, and they are written in the same breath as
+      the work rather than after verifying it. *A claim about an artifact belongs in the message only
+      once the artifact has been looked at* — "re-exported" is checkable in one command, and was not
+      checked.
+    ➜ **Corollary for reading history:** a past message describing a *verification* is the weakest
+      evidence in the repository, weaker than the artifact it describes and weaker than the diff.
+      When a claim matters, **re-measure — do not cite the commit that says it was measured.**
 - *** A TEST THAT COULD NOT EXPRESS SUCCESS, AND SO PUNISHED ITS OWN FIX. *** Measured 2026-08-13:
   four golden-harness guards were staleness checks over **a list of things wrong with the corpus**,
   written as `[Theory]` + `MemberData` — so **every one fails with `No data found` the moment its
