@@ -22,3 +22,7 @@ NETWORK 3 "Alarms"
 
 NETWORK 4 "Output Mapping"
   CALL FC_Outputs(EN := TRUE)
+
+NETWORK 5 "Modbus Server"
+  COMMENT "Serves the harness mirror in marker memory to a Modbus TCP client. It runs ahead of the copy layer below so that the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as the copy layer last left it, and what the client writes is in place before the copy layer next reads it."
+  CALL FB_Comms_ModbusServer(iDB_Comms_ModbusServer, EN := TRUE)

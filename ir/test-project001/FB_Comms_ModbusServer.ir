@@ -1,0 +1,55 @@
+BLOCK FB FB_Comms_ModbusServer
+ROOTID 0
+NUMBER 9000
+LANGUAGE LAD
+MEMORYLAYOUT Optimized
+TITLE "Modbus TCP Server"
+COMMENT "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 8 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose register 0 is the build stamp and whose last two registers are the block-under-test observations. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; %M is used rather than a data block because bit memory has no memory-layout attribute and so cannot silently become unreadable on the wire. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    MbServer : MB_SERVER VERSION 5.3
+    Comms : TCON_IP_v4 VERSION 1.0
+      InterfaceId : HW_ANY = 64
+      ID : CONN_OUC = 16#0010
+      ConnectionType : Byte = 16#0B
+      ActiveEstablished : Bool = FALSE
+      RemoteAddress : IP_V4 VERSION 1.0
+        ADDR : Array[1..4] of Byte
+          [1] = 16#00
+          [2] = 16#00
+          [3] = 16#00
+          [4] = 16#00
+      RemotePort : UInt = 0
+      LocalPort : UInt = 503
+  CONSTANT
+
+NETWORK 1 "Serve The Harness Mirror"
+  COMMENT "Runs the Modbus TCP server on every scan. The holding-register area covers 8 words from M1000.0, which is the whole of the harness mirror. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there."
+  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 8, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)
+
+SIDECAR
+NETWORK 1
+  compileunit = 3
+  access MbServer.DISCONNECT = 21 LocalVariable
+  access Comms = 23 LocalVariable
+  access MbServer.STATUS = 24 LocalVariable
+  constant P#M1000.0 WORD 8 = 22 Any
+  fixedshape 0
+    fixedshapeuid = 25
+    instruction = MB_SERVER
+    version = 5.3
+    en = condition
+      rail = 30
+    instanceuid = 26
+    instancescope = LocalVariable
+    instancepath = MbServer
+    port DISCONNECT tag = 21 31
+    port MB_HOLD_REG literal = 22 32
+    port CONNECT tag = 23 33
+    port NDR open = 34 27
+    port DR open = 35 28
+    port ERROR open = 36 29
+    port STATUS tag = 24 37

@@ -1,0 +1,7 @@
+TAGTABLE HarnessMirror
+  ROOTID 0
+  TAGS
+    HX_ProgramVersion 1 : DWord @ %MD1000 ACCESSIBLE VISIBLE WRITABLE COMMENT "Build stamp of the downloaded IR set. Present only if this code is running."
+    HX_ScanCount 4 : DInt @ %MD1004 ACCESSIBLE VISIBLE WRITABLE COMMENT "Free-running scan counter. Wraps; scan stamps are differences from the start edge."
+    HX_HBA_R000 7 : Int @ %MW1012 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 0."
+    HX_HBA_R001 A : Int @ %MW1014 ACCESSIBLE VISIBLE WRITABLE COMMENT "Result register 1."

@@ -1,0 +1,8 @@
+DB iDB_Comms_ModbusServer
+  ROOTID 0
+  NUMBER 9000
+  INSTANCEOF FB_Comms_ModbusServer
+  COMMENT "The state of the Modbus TCP server - the server instance's own working data and the connection settings it listens with. Nothing here is retained: the connection settings come back from their start values on every warm restart, so the listening port and the passive-accept behaviour cannot drift from what the block declares."
+  INPUT
+  OUTPUT
+  MEMBERS
