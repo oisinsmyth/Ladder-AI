@@ -490,10 +490,15 @@ phase 2 with the copy-layer generator.
 >
 > **FOR THE OWNER — two open questions, plus six rulings I made so nothing blocked:**
 >
-> 1. *** MAY AN AUTHOR *CREATE* AN OBSERVABLE VALUE, OR ONLY *SURFACE* ONE THAT EXISTS? *** Reads and
->    **additive, non-interruptive** writes are ruled in, with three mechanical checks. **But a one-scan
->    coincidence usually has no existing internal value**, so observing it means computing something
->    new — *which is the case §2.6 raised in the first place.*
+> 1. ✅ *** RULED 2026-08-13 — MAY AN AUTHOR *CREATE* AN OBSERVABLE VALUE? *** It resolves on **where
+>    the computation lives**, and the concrete case forced it: four `NEVER` vectors cannot be judged
+>    without violation latches, which are computed states. *** A LATCH COMPUTED BY A HARNESS-GENERATED
+>    OBJECT IS NOT AN AUTHOR CREATING AN OBSERVABLE — IT IS THE HARNESS COMPUTING OVER WHAT THE BLOCK
+>    ALREADY EXPOSES. WHAT §2.6 FORBIDS IS ALTERING THE DELIVERABLE TO MAKE ITSELF TESTABLE. *** So:
+>    build them, **in harness-generated objects only**, with not one line of a shipped block changed.
+>    Same line the `Test[]` seam sits on — *the block used as designed, the harness doing its own
+>    arithmetic.* And a `NEVER` cannot be sampled (F-3), so a latch is **the only admissible form**,
+>    not a convenience. Overturnable.
 > 0. *** TEN RULINGS BY ME, ALL MARKED AS MINE IN THE REGISTER AND OVERTURNABLE AT ONE LINE
 >    (`AR-HBA-01…10`, verified 10/10/10 on headers, `RULING:` lines and `CHANGED:` lists).*** Flagged
 >    because several overrule readings of **your own** earlier answers. The three worth your eye:
