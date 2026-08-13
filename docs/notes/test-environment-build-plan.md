@@ -57,9 +57,11 @@ phase 2 with the copy-layer generator.
 >
 > **BUILT:** phase 0–3 complete and device-validated · **phase 4 complete** (feedback parser, the
 > corrected ladder, admission control, the queues, and the marker **merged into one atomic file**) ·
-> **5.1** contract + skill · **5.3** the loop · **6.3** coverage · **6.6** compression · **6.7**
-> cleanup/timeouts/startup/provenance · the result package · the verifiers · the assertion
-> enumerator (**agent + skill**) · `compile --station` as the gate · the armed confirm loop.
+> **5.1** contract + skill · **5.3** the loop · **PHASE 6 IS COMPLETE BUT FOR 6.5** — **6.1** wave-set
+> admission + slot colouring · **6.2** claims + the reserved range · **6.3** coverage · **6.4** the
+> result package · **6.6** compression · **6.7** cleanup/timeouts/startup/provenance · the verifiers ·
+> the assertion enumerator (**agent + skill**) · **the deployment gateway** (built, *never run*) ·
+> `compile --station` as the gate · the armed confirm loop.
 >
 > **IN FLIGHT:** *** 5.2 — THE MILESTONE. *** **Enumeration DONE** — 13 assertions over 7 clauses,
 > re-decomposition to **14** pending the §2.2 correction. Register rulings + block consistency with
