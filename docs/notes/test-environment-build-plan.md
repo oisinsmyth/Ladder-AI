@@ -202,6 +202,22 @@ phase 2 with the copy-layer generator.
 > > | **D3** | `FaultReset` is **edge**-triggered | **level**-sensitive throughout |
 > > | **D4** | **raise**-dominant | **reset**-dominant |
 > >
+> > ### ✅ D7 SETTLED WITHOUT A DOWNLOAD — AND IT IS A PREDICTED PASS
+> >
+> > `BlockedTimeThreshold` reads **`T#60S`** against a specified `T#60S`; `ClearDebounceTime` reads
+> > **`T#2S`** against `T#2S`. **No `T#45S`-class mutant is in the block** — the exact defect
+> > `AR-HBA-13` was written to expose. **Predicted in Addendum 4 BEFORE the read**, which is the only
+> > thing that makes a pass worth recording.
+> >
+> > **Read twice, independently**: the corpus export taken from the controller earlier, and a **fresh
+> > TIA export taken now**. The fresh one is what settles it — *"the reference data says so"* is
+> > exactly the shape that hid the `DB_Settings` comment for a month.
+> >
+> > 🔴 **The register note is marked NOT A SOURCE.** The specified values stay owner-sourced and must
+> > never be re-derived from what the controller holds. *** A CONFORMANCE OBSERVATION MUST NOT BECOME
+> > THE ORIGIN OF A SPECIFIED VALUE *** — that is the direction of inference `AR-HBA-13` exists to keep
+> > open, and reversing it would make the whole clause vacuous again by a different route.
+> >
 > > **NOW SIX, AND ONE OF THEM IS A PREDICTED *PASS*.** `AR-HBA-07` added **D5** (the block gates
 > > accrual through `BlockActive = HighQualified AND IO.PlantRunning`, so its stop-then-reset
 > > behaviour diverges too — checked on the rig by *stop plant → pulse reset → hopper still high;
@@ -337,6 +353,20 @@ phase 2 with the copy-layer generator.
 > > 2 name this exact path, **0 match this file's hash**"* — so it was genuinely unapproved, not
 > > assumed so. *An operator meeting an unapproved binary mid-session reads it as a wedged Portal,
 > > which has cost this project an hour.*
+> >
+> > ⚠️ **PORTAL STATE AT HANDOVER, AND ONE OF THEM IS NOT OURS.** **PID 5252** holds `GenProject1`,
+> > left running deliberately so the next invocation reuses it — **no lane is working it, the token is
+> > free.** **PID 12028 is `OPENNESS-INVISIBLE` and was NOT launched by us**: the OS sees it, Openness
+> > cannot read it at all, which is what a Portal that just died, is still starting, or has lost its
+> > endpoint looks like. **Flagged, not cleaned up** — killing stays out of scope, and a stray is an
+> > independently recorded cause of attach wedges. **Check it before the rig session.**
+> >
+> > ⚠️ **AND A CORRECTION TO MY OWN BRIEFING:** I told a lane *"the Release hashes were verified an
+> > hour ago"* when I had verified **`download-probe`'s only** — my own `openness-cli.sln` build had
+> > changed `openness-cli.exe` in between. The lane **checked before attaching rather than trusting
+> > it**, found `1 match this file's hash` (FI-74 self-approval had fired), and flagged that the next
+> > brief might carry the stale assumption. *No harm done, and the claim was still wider than the
+> > evidence behind it.*
 > >
 > > ⚠️ **APPROVED IS NOT VERIFIED.** The registry entry is written; the approval tool's own closing
 > > line is that only an actual attach proves it. **That attach is step 0 of the rig session**, not
