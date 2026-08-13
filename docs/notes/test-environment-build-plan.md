@@ -222,6 +222,35 @@ phase 2 with the copy-layer generator.
 > > **the block already conforms to.** Predicting *both* directions is what makes the exercise a
 > > prediction rather than a complaint.
 >
+> > ### ✅ TWO INDEPENDENT VECTOR SETS — 24 OF 25 EXPECTATIONS IDENTICAL
+> >
+> > Author A was **contaminated** (it read this very document — see the marker at the top) and
+> > disclosed it unprompted. Author B re-derived under an **allowlist**, reading only the register,
+> > the enumeration, the contract, the definition, and nine harness *checker* source files its own
+> > skill's Step 0 requires — none of which mention the block. **Set A survives for comparison; that
+> > comparison is the only evidence available about whether the leak bit.**
+> >
+> > **Measured: both 25 vectors, the SAME 25 assertion IDs, no invented citations, and on every
+> > assertion where both expect on a shared signal — 24 agree, 1 differs.** The one difference is on
+> > `REQ-HBA-008:741315`, **the assertion both authors independently flagged as the hardest**: A
+> > expects both outputs false, B expects both true. *** THOSE ARE TWO VALID WITNESSES OF A SYMMETRIC
+> > INVARIANT *** — the clause says the two outputs never disagree, so either co-state tests it. Not a
+> > contradiction about the specification; a design choice about which phase to witness it in.
+> >
+> > **What the pair agreed on independently is itself evidence:** the block has **no completion
+> > signal** while the contract demands one, and the enumeration's `forms:` projection is **keyed by
+> > display ordinal**, which the gate cannot look up — *both authors hit it and both re-keyed by ID.*
+> > Two independent readers finding the same artifact defect is worth more than either report.
+> >
+> > 🔴 **AND B FOUND A HOLE A DID NOT — IN THE DENOMINATOR, CAUSED BY MY OWN RULING.** *No assertion
+> > forbids the alarm raising EARLY on an uninterrupted first episode.* `REQ-HBA-002` is titled *"No
+> > alarm below threshold"*, but **AR-HBA-04** reworded it to condition on a debounced clear — so
+> > *** AN UNDER-SCALED PRESET (`T#45S` FOR `T#60S`) LEAVES ALL 25 ASSERTIONS TRUE. *** The most
+> > ordinary commissioning error there is, invisible to the coverage gate. **The clause's title
+> > survived and its content did not**, which is why it read as covered. `AR-HBA-13` restores it.
+> > *This is the D6 mechanism firing for the first time on this project: the vector author is a second
+> > reader by construction, and it caught what four consistency passes over the register did not.*
+> >
 > > 🔴 **AND THE ENUMERATOR CANNOT COMPUTE ITS OWN IDs.** `assertion-enumerator` has no `Bash` —
 > > fenced deliberately so it cannot run the converter over a block — and an assertion ID is a
 > > SHA-256. **The agent the design makes responsible for the denominator cannot produce the
