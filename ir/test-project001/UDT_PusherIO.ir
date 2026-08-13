@@ -4,7 +4,6 @@ TYPE UDT_PusherIO
     Step : Int
     Fitted : Bool
     Enable : Bool
-    AutoStartSignal : Bool COMMENT "In: C-115 handshake vocabulary (owner ruling 2026-07-17, task 09, resolution 2) - external run permission, caller-asserted, named after the site's real chained-permissive pattern (FB_MotorFwdRevSystem.IO.AutoStartSignal), not doc 06's illustrative name. Unwired by FC_ControlMain for now - no established caller need for this integration; C-115 requires the member regardless. Distinct from Enable above (FB-computed, Fitted AND Mode<>0) - that's this block's own internal readiness gate, not the external permission this member carries."
     Mode : Int
     HopperHighLevel : Bool
     ManualCycleCmd : Bool

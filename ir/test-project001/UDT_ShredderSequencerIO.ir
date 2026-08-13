@@ -2,7 +2,6 @@ TYPE UDT_ShredderSequencerIO
   ROOTID 0
   MEMBERS
     CycleStart : Bool
-    AutoStartSignal : Bool COMMENT "In: C-115 handshake vocabulary (owner ruling 2026-07-17, task 09, resolution 2) - external run permission, caller-asserted, named after the site's real chained-permissive pattern (FB_MotorFwdRevSystem.IO.AutoStartSignal), not doc 06's illustrative name. Unwired by FC_ControlMain for now - CycleStart/CycleStop already carry this sequencer's actual start/stop triggering; C-115 requires the vocabulary member regardless of whether this integration uses it."
     CycleStop : Bool
     DownstreamRunning : Bool
     SystemHealthy : Bool COMMENT "In (FC_ControlMain, from DB_Input.Control_Healthy): safety/control circuit healthy. Loss asserts StopCmd - every step aborts to Idle and a fresh CycleStart press is required after recovery, so an E-stop reset can never self-restart the plant (REQ-062)."
