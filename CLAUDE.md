@@ -16,7 +16,7 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 ## What you work on
 
 - `ir/<project>/` — LAD blocks as IR text, actual project content. Touched only by `lad-coder` (hard rule 8), never by you directly.
-- `ir/SPEC.md` — the IR format/grammar itself. As the tool's capability grows, this and its converter/openness-cli support grow too — that's project development (like `src/converter/`), not ladder-coding: edit it directly, normal software rules apply.
+- `ir/SPEC.md` — the IR format/grammar itself. As the tool's capability grows, this and its converter/openness-cli support grow too — that's project development (like `src/converter/`), not ladder-coding: edit it directly, normal software rules apply. **Governed by ADR-0010 — *no IR that the AI cannot change*: a construct the converter cannot read is a block the AI can never modify, so an `UnsupportedConstructException` on deliverable logic is a scope item, not a resting place — and anything the AI must be able to change lives in the READABLE IR, never only in the sidecar. Widening is gated on the confirm loop (ADR-0011), never on judgement.**
 - `gen/<project>/` — S6 generation-pipeline artifacts (requirements.md, architecture.md, telemetry.log). Also `lad-coder`-only.
 - `simatic-ml/<project>/` — committed raw SimaticML export corpus (reviewer-skill validation data, not a regenerable cache) — check `git ls-files`/`.gitignore` before assuming anything here is disposable. `converter drift-check --project ir/<project> --exports simatic-ml/<project>` (FI-26) detects when these `.xml` exports have silently drifted from the `.ir` (a fix not re-exported); `ExportDriftDetectorTests` guards it against a known-drift baseline (in the golden-harness suite, run by a local `dotnet test` — this project has no CI).
 - `patterns/` — proven LAD patterns, composed into generations (see workflow below). Also `lad-coder`-only.
@@ -111,13 +111,15 @@ converter to-ir|to-xml <file>       # LAD: Contact/Coil/OR-merge/negation, stand
                                     # list, and the port list is the thing the converter SUPPLIES, so accepting an unknown version means applying the WRONG TEMPLATE — it converts, imports,
                                     # and misbehaves on the controller. Both families are real and both are kept (`docs/evidence/stage-S1.md` records a live TIA `Import()` RESOLVING the V5.0/6.0
                                     # names, failing later on instance DBs rather than with the "instruction cannot be found" TIA raised for `WAIT` in that same session) — the fixtures were
-                                    # evidence about the SHAPE, never the NAME. New instructions of this shape are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited
+                                    # evidence about the SHAPE, never the NAME. **MIGRATING THE LEGACY `Modbus_*` ENTRIES ONTO THE REGISTRY IS RULED *NOT NOW* (2026-08-13, `docs/notes/deferred-items.md` D-8):**
+                                    # it would discard the live-Import evidence and rewrite committed IR text for no measured gain. Revisit ONLY on a real export that CONTRADICTS the retained names — tidiness is not a trigger.
+                                    # New instructions of this shape are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited
                                     # in lockstep. **`MB_SERVER` 5.3 is CHARACTERISED BUT DELIBERATELY NOT REGISTERED:** the block carrying it needs `Array[..] of Struct` and doubly-nested
                                     # structured interface members the converter cannot model, so the template could not be exercised end to end — and an UNEXERCISED PORT LIST is precisely what
                                     # the registry exists to prevent. `MB_SERVER` is a `<Part>`, measured: an InOut port wires as an ORDINARY SYMBOLIC `<Access>` in normal input order, so the
                                     # `<Call>`/`Section="InOut"` whitelist is IRRELEVANT to it
 converter to-ir|to-xml ...          # UNCONNECTED PORTS ARE VISIBLE IN THE IR, not hidden in the sidecar (2026-08-12): `REQ := OPEN` / `DONE => OPEN` for a deliberately unwired port, versus no
-                                    # argument at all when the port is absent from `<Wires>` entirely. That visibility is the point — under the "no IR the AI cannot change" ruling a sidecar-only
+                                    # argument at all when the port is absent from `<Wires>` entirely. That visibility is the point — under the "no IR the AI cannot change" ruling (**ADR-0010**) a sidecar-only
                                     # treatment meant an AI could not SEE the port existed, let alone write one. `OPEN` is a reserved bare word (precedent: `TRUE`/`ENO`); a tag genuinely named
                                     # `OPEN` on such a port is a hard error naming the collision, never a silent mangle
 converter to-ir|to-xml <file> --out <dir>   # FI-72: write the result THERE instead of BESIDE THE INPUT. Beside-the-input is still the default (right for the export-and-read-back loop) but it silently
@@ -147,7 +149,13 @@ converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--a
                                     # which is right for the committed corpus and wrong here — two TIA exports both declare one, so a SILENT SIDE means an input is not what the loop assumes and the
                                     # comparison is quietly weaker than it looks. That is exit 2 with the reason, never a warning (`--allow-silent-layout` is the named escape, FI-71's shape).
                                     # Exit 0 equivalent / 1 differs / **2 NOT COMPARED** — a missing or unparseable file, XML carrying no `SW.*` object, the same path twice, or a walk that localizes
-                                    # nothing while the Normalizer says they differ. EMPTY IS NOT CLEAN: none of those may exit 0. FI-24 keeps Portal out of this — the loop is the script's job, not the converter's
+                                    # nothing while the Normalizer says they differ. EMPTY IS NOT CLEAN: none of those may exit 0. FI-24 keeps Portal out of this — the loop is the script's job, not the converter's.
+                                    # 🔴 **`tools/confirm-roundtrip.ps1` IS BUILT BUT DRY-RUN ONLY. ARMING IT IS RULED (ADR-0011) AND THE FENCE IS PART OF THE RULING, NOT A REFINEMENT OF IT:** it MUTATES (the import writes,
+                                    # and the layout flip proves it is no no-op), so it must REFUSE any project path that is not the scratch project — allowlist never denylist, refusal is an exit code never a warning,
+                                    # refuse BEFORE Portal is contacted, an empty/unresolvable/ambiguous path is a refusal (empty is not clean), compare the CANONICAL resolved path, and NO override flag (`download-plan`'s
+                                    # refuse-by-name precedent). Sequencing: the Normalizer/`MemoryLayout` fix lands before a GREEN from this loop is relied on — a comparator blind to layout is a gate that passes when it
+                                    # should fail, which is worse than no gate. And `.ps1` here is ASCII-ONLY + CRLF: PS 5.1 reads a BOM-less script as ANSI, a UTF-8 em dash decodes to a QUOTE DELIMITER, and the parse error
+                                    # points a hundred lines away from the real one
 converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0
 converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint/timing) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 converter ir-hash <file.ir...> [--json]   # stable readable-IR content hash (SerializeBlockReadable/SHA-256) keying FI-17 explanation sidecars; immune to SIDECAR/UId churn; exit 1 on error

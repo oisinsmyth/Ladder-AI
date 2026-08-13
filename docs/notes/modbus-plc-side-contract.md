@@ -68,9 +68,23 @@ to record it rather than let it be quietly assumed away.
 
 ## 4. The observability floor, and what the program must do about it
 
-Already established in the harness (`TestVector.cs`): polling observes at roughly **100 ms against a
-scan of ~10 ms**, so a one-scan event is about ten times below anything a sampler can see. **No
-polling rate recovers it, and no protocol choice changes it** — this is not a Modbus limitation.
+**MEASURED ON THE RIG 2026-08-12, AND BOTH CONSTANTS THIS PARAGRAPH USED TO CARRY WERE WRONG.** It
+read *"polling observes at roughly 100 ms against a scan of ~10 ms, so a one-scan event is about ten
+times below anything a sampler can see"* — inherited from the harness (`TestVector.cs`). The
+replacements, re-derived 2026-08-13 in `PC-Client-Modbus-Spec-Draft-final.txt` §12a:
+
+- a poll is **one round trip**, so the poll period is not a chosen parameter — it is `K x RTT` for a
+  `K`-slot read set: **78 ms typical, 173 ms at the p99** [M];
+- the scan is **23.33 ms** under load, 22.64 ms idle [M], not ~10 ms;
+- so the floor is **3.3 scans typical and 7.4 at the p99** [D] — not ten. The **irreducible** floor
+  is 3 scans: even a poller running flat out at the fastest *median* measured leaves that hole.
+
+**The conclusion is unchanged and the instrumentation below is unchanged: a one-scan event is still
+structurally invisible, no polling rate recovers it, and no protocol choice changes it** — this is
+not a Modbus limitation. What changed is the size of the margin, which is now less than half what
+was argued, so nothing may spend it as slack. **And the tail adds a point the old figure could not
+make: one poll gap in 2,000 is ~95 scans wide** [M, 2,216 ms], so a *sampled* assertion is never
+guaranteed at any window under ~2.2 s of plant time — only a **latch** is immune.
 
 So the program must provide the instrumentation, or whole classes of vector are unrunnable and the
 runner will correctly refuse them rather than return a meaningless green:

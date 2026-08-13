@@ -103,6 +103,51 @@ TIA project already carry the re-arming fix (→ a plain `openness-cli export` r
 fixed `.ir` → compile gate → export)? When cleared, re-run `drift-check` to confirm MATCH and prune the 6
 from `ExportDriftDetectorTests`' baseline. `docs/16-future-ideas.md` FI-26 is the tool record.
 
+## D-8 — Migrating the legacy `Modbus_*` names onto the `(name, version)` instruction registry
+
+**Decided 2026-08-13: NOT NOW — and this is a decision with reasoning, not a TODO nobody got to.**
+The `(name, version)` registry (`SimaticMl/FixedShapeInstructions.cs`) is the right structure and is
+where new instructions of that shape go. The question here is only whether the two *legacy* entries
+already in the whitelist are rewritten onto it. They are not.
+
+**What:** TIA emits **three different spellings** of the Modbus family, and the whitelist originally
+matched **none of the real ones**:
+
+| | |
+|---|---|
+| whitelist carried | `Modbus_Master`, `Modbus_Comm_Load` — **taken from HAND-AUTHORED FIXTURES** |
+| a real FC export emits | `MB_MASTER` **2.2**, `MB_COMM_LOAD` **2.1** |
+| a real FB export emits | `MB_SERVER` **5.3** |
+
+Both families are now deliberately **kept**. Migrating would mean retiring the legacy names in favour
+of the measured ones alone.
+
+**Why not now — three reasons, in order of weight:**
+
+1. **It would discard evidence.** `docs/evidence/stage-S1.md` records a live TIA `Import()`
+   **resolving** the V5.0/6.0 `Modbus_*` names — failing later, on instance DBs, rather than with the
+   *"instruction cannot be found"* TIA raised for `WAIT` in that same session. Those names are not a
+   fixture artefact that happens to be wrong; **TIA resolved them.** The fixtures were evidence about
+   the *shape*, never about the *name* — but the import log is evidence about the name.
+2. **It would change readable IR text on committed files** for no behavioural gain, touching the
+   corpus that `drift-check` and the golden harness are pinned against.
+3. **There is no measured gain.** Nothing is currently mis-converting because both spellings are
+   accepted. Keeping both costs two table entries.
+
+**And the thing the registry actually protects is unaffected either way:** an **unknown version is
+refused**, because version is exactly what changes a port list, and the port list is what the
+converter *supplies* — accepting an unknown version means applying the wrong template, which converts,
+imports, and then misbehaves on the controller. (This is why `MB_SERVER` 5.3 is characterised and
+deliberately **not registered**: the block carrying it needs `Array[..] of Struct` and doubly-nested
+structured interface members the converter cannot yet model, so its template could never be exercised
+end to end — and an unexercised port list is precisely what the registry exists to prevent.)
+
+**Revisit trigger — one, and it is narrow: a real export that CONTRADICTS the retained names.** An
+export emitting `Modbus_Master`/`Modbus_Comm_Load` with a port list that differs from what the
+whitelist supplies, or evidence that TIA no longer resolves them, makes the legacy entries actively
+wrong rather than merely redundant. Tidiness is **not** a trigger — the entries are cheap and the
+evidence they carry is not.
+
 ## Q-04 (test-project001) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,

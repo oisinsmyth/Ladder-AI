@@ -72,12 +72,46 @@ driver recently blackholed this machine's VPN, and Modbus adds no network-stack 
 
 ## 5. Batching is mandatory, not an optimisation
 
-MEASURED, 2026-08-11: round trips over the tunnel are **79–108 ms**. `ITransport.Read` is per-tag, so
-a naive implementation costs one round trip per tag — a 50-tag assertion sweep would take ~4 seconds,
-and a scan-counter poll would cost 80 ms each.
+MEASURED ON THE RIG, 2026-08-12 — **and this supersedes the 79–108 ms figure this section carried
+until 2026-08-13, which was the wrong SHAPE rather than the wrong size**: it sat between the median
+and the p90 and understated the tail by ~60%.
+
+| | measured [M] |
+|---|---|
+| round trip, median | **71–78 ms** |
+| round trip, p90 | 89–115 ms |
+| round trip, **p99** | **136–173 ms** ← every budget and timeout keys on this |
+| round trip, worst in 2,000 samples | **2,216 ms** (0.05%) |
+| marginal cost per register | **indistinguishable from zero** — 1, 4, 8 and 16 registers cost the same within noise |
+
+`ITransport.Read` is per-tag, so a naive implementation costs one round trip per tag. Re-derived on
+the measured figures (`PC-Client-Modbus-Spec-Draft-final.txt` §12a derivation 6):
+
+- a 50-tag assertion sweep, one round trip each: **3.9 s** typical, **8.7 s at the p99** — plus a
+  50/2000 = 2.5% chance that any given sweep eats a 2,216 ms outlier;
+- the same 50 tags inside **one** FC03 (≤125 registers): **one** round trip, 78 ms typical / 173 ms
+  at the p99 — a **50x** reduction;
+- a scan-counter poll: one round trip, 78 ms typical / 173 ms at the p99.
 
 **Therefore `ModbusTransport` reads in blocks and serves tags from a snapshot.** One transaction
 fetches a contiguous register range; individual tag reads decode out of that buffer.
+
+**The zero marginal register cost makes this stronger than it was, and changes how the map should be
+laid out**: a wide read costs what a narrow one costs, so the map is laid out for the *widest legal
+read*, not the smallest sufficient one. Under the old assumption a narrow range was a saving; it is
+not, and treating it as one only buys extra round trips — the sole thing that does cost.
+
+> ⚠️ **The zero-cost figure is measured to 16 registers and INFERRED to 125.** A 125-register FC03
+> response is 259 bytes against 41 for a 16-register one — one TCP segment either way, so nothing in
+> the path changes shape. Good inference, still an inference; a sweep to 125 costs one run of the
+> existing `timing` client and would retire it. Do not quote it as measured beyond 16.
+
+**Per-request timeout floor: 3,000 ms** — derived, not chosen. One round trip in 2,000 took 2,216 ms
+[M]; a timeout below that converts a measured, routine tail event into a spurious transport failure
+at ~1 in 2,000 requests. A generous timeout costs nothing (it only elapses on a request that has
+already failed) and a tight one costs an intermittent, unattributable red. **And a retry after a
+timeout must not be indistinguishable from a lost request** — the original may still land, which on
+a write duplicates a vector and on the start-bool commit is a second T=0.
 
 Two consequences that must be explicit, not incidental:
 
