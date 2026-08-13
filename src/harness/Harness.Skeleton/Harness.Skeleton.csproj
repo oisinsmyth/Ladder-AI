@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Skeleton</RootNamespace>
+    <AssemblyName>Harness.Skeleton</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    Build-plan item 2.3 — ONE trivial block under test and ONE trivial model — plus the PC-side stand-in
+    that makes phase 2's exit criterion demonstrable without a rig.
+
+    THE EXIT CRITERION IS THE POINT: "a deliberately introduced bug in the block under test must produce
+    a RED result, and the corrected block must produce a GREEN one." A test that cannot fail has proven
+    nothing. Without a device the honest way to show that is to run the GENERATED IR — not a second C#
+    copy of what the IR is supposed to mean — so this project carries a small interpreter for exactly the
+    LAD subset the generators emit, and refuses anything outside it.
+
+    WHAT THIS IS NOT: it is not a model of the CPU, and running green here is not evidence that the block
+    compiles, downloads, or behaves the same way on a 1214C. See LadInterpreter's own remarks for the
+    list of what it deliberately does not reproduce.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+  </ItemGroup>
+
+</Project>

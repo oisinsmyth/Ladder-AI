@@ -30,4 +30,21 @@
     <PackageVersion Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
+  <!--
+    The Modbus TCP client for the test harness (build-plan item 2.4, 2026-08-13).
+
+    Phase 1's spike used RAW SOCKETS deliberately — its whole question was whether `MB_SERVER`
+    applies one request's registers within a single scan, and a library that silently retried or
+    split a request could have been mistaken for the PLC tearing. Phase 2 is not that experiment,
+    so it uses a library. NModbus is the maintained fork of NModbus4, MIT, and pure managed code.
+
+    ONE SETTING IS LOAD-BEARING AND IT IS NOT THE DEFAULT: `IModbusTransport.Retries` defaults to 3.
+    The spec forbids a retry that is indistinguishable from a lost request (a retried write is a
+    duplicated vector application; a retried start-bool commit is a SECOND T=0), so the transport
+    sets it to zero. See ModbusPolicy in Harness.Wire.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="NModbus" Version="3.0.81" />
+  </ItemGroup>
+
 </Project>

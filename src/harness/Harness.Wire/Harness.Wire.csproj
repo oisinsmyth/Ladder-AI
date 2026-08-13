@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Wire</RootNamespace>
+    <AssemblyName>Harness.Wire</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    The client half of the walking skeleton: write vector, raise start bool, poll, read results
+    (2.4), the inert establish and its two-part verify (2.5), and the version register's
+    post-download check (2.6).
+
+    NModbus, NOT raw sockets. Phase 1 used raw sockets on purpose — the question there was whether
+    `MB_SERVER` tears a multi-register write, and a library that retried or split a request could
+    have been read as the PLC tearing. Phase 2 is not that experiment.
+
+    Everything above the transport is driven through IRegisterTransport, so the whole sequence —
+    every refusal, the quiescence check, the later-scan commit rule, the settling window — is
+    testable with no device and no socket.
+  -->
+  <ItemGroup>
+    <PackageReference Include="NModbus" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
+  </ItemGroup>
+
+</Project>

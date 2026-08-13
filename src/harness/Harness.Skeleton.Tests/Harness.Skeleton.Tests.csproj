@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.Skeleton.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    The walking skeleton end to end, PC-side: generated IR -> interpreter -> simulated bit memory ->
+    Modbus register view -> the real client sequence -> the model's verdict. Phase 2's exit criterion
+    lives here, and so does the demonstration that it can go RED.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Skeleton\Harness.Skeleton.csproj" />
+  </ItemGroup>
+
+</Project>

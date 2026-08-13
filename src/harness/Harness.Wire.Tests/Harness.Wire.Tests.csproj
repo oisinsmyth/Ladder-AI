@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.Wire.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    No device and no socket. Every test here drives a RecordingTransport, which is what the
+    IRegisterTransport port is for: the write/commit/poll sequence, the two inert checks, the
+    later-scan commit rule and the settling window are all decisions above the wire, and all of
+    them are exercised with nothing plugged in.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+  </ItemGroup>
+
+</Project>
